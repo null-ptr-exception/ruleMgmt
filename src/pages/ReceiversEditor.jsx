@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import VersionModal from '../components/VersionModal'
 import { listTemplates, getTemplate, saveTemplate, deleteTemplate } from '../utils/api'
-import { bumpPatch } from '../utils/templateUtils'
+import { bumpPatch, latestVersion } from '../utils/templateUtils'
 
 const TYPE = 'receivers'
 
@@ -143,19 +143,23 @@ export default function ReceiversEditor() {
     }
   }
 
-  async function handleSave(version) {
+  async function handleSave(name, version) {
     setModal(null)
-    const name = form.templateName.trim() || selected?.name || `receivers-${Date.now()}`
-    await saveTemplate(TYPE, name, version, buildPayload())
+    const instanceName = name || `receivers-${Date.now()}`
+    await saveTemplate(TYPE, instanceName, version, buildPayload())
     await load()
-    setSelected({ name, version })
+    setSelected({ name: instanceName, version })
     setIsNew(false)
     setStatus(`Saved @ ${version}`)
     setTimeout(() => setStatus(''), 2500)
   }
 
   function openSaveModal() {
-    setModal(selected ? bumpPatch(selected.version) : 'v1.0.0')
+    const n = form.templateName?.trim() || selected?.name || ''
+    const v = selected
+      ? bumpPatch(selected.version)
+      : (n && templates[n] ? bumpPatch(latestVersion(templates[n])) : 'v1.0.0')
+    setModal({ name: n, version: v })
   }
 
   async function handleDelete() {
@@ -343,7 +347,7 @@ export default function ReceiversEditor() {
         )}
       </div>
 
-      {modal && <VersionModal defaultVersion={modal} onSave={handleSave} onCancel={() => setModal(null)} />}
+      {modal && <VersionModal defaultName={modal.name} defaultVersion={modal.version} onSave={handleSave} onCancel={() => setModal(null)} />}
     </div>
   )
 }

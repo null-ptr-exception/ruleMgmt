@@ -512,9 +512,8 @@ export default function AlertTypeEditor() {
     return out
   }
 
-  async function handleSave(version) {
+  async function handleSave(name, version) {
     setModal(null)
-    const name = form.name.trim()
     if (!name) return
     await saveTemplate(TYPE, name, version, buildPayload())
     await load()
@@ -525,11 +524,12 @@ export default function AlertTypeEditor() {
   }
 
   function openSaveModal() {
-    const existing = templates[form.name]
+    const n = form.name.trim()
+    const existing = templates[n]
     const suggested = selected
       ? bumpPatch(selected.version)
       : (existing?.length ? bumpPatch(latestVersion(existing)) : 'v1.0.0')
-    setModal(suggested)
+    setModal({ name: n, version: suggested })
   }
 
   async function handleDelete() {
@@ -779,7 +779,7 @@ export default function AlertTypeEditor() {
         )}
       </div>
 
-      {modal && <VersionModal defaultVersion={modal} onSave={handleSave} onCancel={() => setModal(null)} />}
+      {modal && <VersionModal defaultName={modal.name} defaultVersion={modal.version} onSave={handleSave} onCancel={() => setModal(null)} />}
     </div>
   )
 }

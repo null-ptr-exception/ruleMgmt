@@ -248,11 +248,24 @@ const emptyPackInstance = () => ({
   vars: {},         // { varName: value }
 })
 
+const emptyAlertTypeInstance = () => ({
+  _id: uid(),
+  alertTypeName:    '',
+  alertTypeVersion: '',
+  ruleName:         '',
+  vars:             {},   // { varName: value }
+  severity:         'warning',
+  for:              '',
+  description:      '',
+  labels:           [],
+})
+
 const emptyForm = () => ({
-  groupName:      '',
-  groupLabels:    [],   // [{key, value}]
-  packInstances:  [],   // [{ _id, packName, packVersion, alertNamePrefix, vars }]
-  rules:          [],
+  groupName:          '',
+  groupLabels:        [],   // [{key, value}]
+  packInstances:      [],   // [{ _id, packName, packVersion, alertNamePrefix, vars }]
+  alertTypeInstances: [],   // [{ _id, alertTypeName, alertTypeVersion, ruleName, vars, severity, for, description, labels }]
+  rules:              [],
   subscription: {
     enabled:         false,
     onLabels:        '',
@@ -416,11 +429,31 @@ export default function AlertSuiteEditor() {
       }
     }))
 
+    // Restore alert type instances (eagerly prime varDeclCache)
+    const rawTypeInstances = s.alertTypeInstances || []
+    const alertTypeInstances = await Promise.all(rawTypeInstances.map(async inst => {
+      if (inst.alertTypeName && inst.alertTypeVersion) {
+        await loadVarDecls(inst.alertTypeName, inst.alertTypeVersion)
+      }
+      return {
+        _id:              uid(),
+        alertTypeName:    inst.alertTypeName    || '',
+        alertTypeVersion: inst.alertTypeVersion || '',
+        ruleName:         inst.ruleName         || '',
+        vars:             inst.vars             || {},
+        severity:         inst.severity         || 'warning',
+        for:              inst.for              || '',
+        description:      inst.description      || '',
+        labels:           objectToKvArray(inst.labels || {}),
+      }
+    }))
+
     const savedSub = s.subscription || {}
     setForm({
-      groupName:   s.name || name,
+      groupName:          s.name || name,
       groupLabels,
       packInstances,
+      alertTypeInstances,
       rules,
       subscription: {
         enabled:         !!savedSub.enabled,
@@ -585,12 +618,30 @@ export default function AlertSuiteEditor() {
       })
     })
 
+    // Serialize alert type instances as rules
+    const typeInstanceRules = form.alertTypeInstances
+      .filter(inst => inst.alertTypeName && inst.alertTypeVersion)
+      .map(inst => {
+        const obj = {
+          alertTypeName:    inst.alertTypeName,
+          alertTypeVersion: inst.alertTypeVersion,
+          ruleName:         inst.ruleName,
+          vars:             inst.vars,
+          severity:         inst.severity,
+        }
+        if (inst.for) obj.for = inst.for
+        if (inst.description) obj.description = inst.description
+        const labels = kvArrayToObject(inst.labels || [])
+        if (Object.keys(labels).length) obj.labels = labels
+        return obj
+      })
+
     const manualRules = form.rules.map(serializeRule)
 
     const alertSuite = {
       name:        form.groupName,
       groupLabels: kvArrayToObject(form.groupLabels),
-      rules:       [...packExpandedRules, ...manualRules],
+      rules:       [...packExpandedRules, ...typeInstanceRules, ...manualRules],
     }
 
     if (form.subscription?.enabled) {
@@ -602,32 +653,38 @@ export default function AlertSuiteEditor() {
       }
     }
 
-    // Store pack instances and manual rules separately for UI state restoration
-    if (form.packInstances.length > 0) {
+    // Store instances and manual rules separately for UI state restoration
+    if (form.packInstances.length > 0 || form.alertTypeInstances.length > 0) {
       alertSuite.packInstances = form.packInstances.map(({ _id, ...rest }) => rest)
-      alertSuite.manualRules   = manualRules
+      alertSuite.alertTypeInstances = form.alertTypeInstances.map(({ _id, labels, ...rest }) => ({
+        ...rest,
+        ...(kvArrayToObject(labels || []) && Object.keys(kvArrayToObject(labels || [])).length
+          ? { labels: kvArrayToObject(labels) }
+          : {}),
+      }))
+      alertSuite.manualRules = manualRules
     }
 
     return { alertSuite }
   }
 
-  async function handleSave(version) {
+  async function handleSave(name, version) {
     setModal(null)
-    const name = selected?.name || form.groupName || `group-${Date.now()}`
-    await saveTemplate(TYPE, name, version, buildPayload())
+    const instanceName = name || form.groupName || `group-${Date.now()}`
+    await saveTemplate(TYPE, instanceName, version, buildPayload())
     await load()
-    setSelected({ name, version })
+    setSelected({ name: instanceName, version })
     setIsNew(false)
     setStatus(`Saved @ ${version}`)
     setTimeout(() => setStatus(''), 2500)
   }
 
   function openSaveModal() {
-    const n = selected?.name || form.groupName
+    const n = selected?.name || form.groupName || ''
     const v = selected
       ? bumpPatch(selected.version)
       : (n && templates[n] ? bumpPatch(latestVersion(templates[n])) : 'v1.0.0')
-    setModal(v)
+    setModal({ name: n, version: v })
   }
 
   // ── Pack instance CRUD ─────────────────────────────────────────────────────
@@ -648,6 +705,33 @@ export default function AlertSuiteEditor() {
     updatePackInstance(id, { packName, packVersion, vars })
   }
 
+  // ── Alert type instance CRUD ───────────────────────────────────────────────
+
+  function addAlertTypeInstance() {
+    setForm(f => ({ ...f, alertTypeInstances: [...f.alertTypeInstances, emptyAlertTypeInstance()] }))
+  }
+  function removeAlertTypeInstance(id) {
+    setForm(f => ({ ...f, alertTypeInstances: f.alertTypeInstances.filter(p => p._id !== id) }))
+  }
+  function updateAlertTypeInstance(id, changes) {
+    setForm(f => ({ ...f, alertTypeInstances: f.alertTypeInstances.map(p => p._id === id ? { ...p, ...changes } : p) }))
+  }
+  async function handleAlertTypeInstanceChange(id, field, val) {
+    updateAlertTypeInstance(id, { [field]: val })
+    const inst = form.alertTypeInstances.find(p => p._id === id)
+    const atName = field === 'alertTypeName'    ? val : inst?.alertTypeName
+    const atVer  = field === 'alertTypeVersion' ? val : inst?.alertTypeVersion
+    if (atName && atVer) {
+      const decls = await loadVarDecls(atName, atVer)
+      const existing = inst?.vars || {}
+      const vars = {}
+      for (const d of decls) vars[d.name] = existing[d.name] ?? ''
+      updateAlertTypeInstance(id, { [field]: val, vars })
+    } else {
+      updateAlertTypeInstance(id, { [field]: val, vars: {} })
+    }
+  }
+
   // ── Preview (includes pack-expanded rules) ─────────────────────────────────
 
   const allPreviewRules = useMemo(() => {
@@ -656,8 +740,24 @@ export default function AlertSuiteEditor() {
       if (!packData) return []
       return expandPackInstance(packData, inst)
     })
-    return [...packRules, ...form.rules]
-  }, [form.packInstances, form.rules, packDataCache])
+    const typeInstRules = form.alertTypeInstances
+      .filter(inst => inst.alertTypeName && inst.alertTypeVersion)
+      .map(inst => {
+        const decls = varDeclCache[`${inst.alertTypeName}@${inst.alertTypeVersion}`] || []
+        return {
+          ...emptyRule(),
+          alertTypeName:    inst.alertTypeName,
+          alertTypeVersion: inst.alertTypeVersion,
+          ruleName:         inst.ruleName,
+          vars:             decls.map(d => ({ key: d.name, value: String(inst.vars[d.name] ?? ''), type: d.type || 'string' })),
+          severity:         inst.severity,
+          for:              inst.for,
+          description:      inst.description,
+          labels:           inst.labels || [],
+        }
+      })
+    return [...packRules, ...typeInstRules, ...form.rules]
+  }, [form.packInstances, form.alertTypeInstances, form.rules, packDataCache, varDeclCache])
 
   const preview = useMemo(
     () => buildRuleGroupPreview({ ...form, rules: allPreviewRules }, product),
@@ -871,6 +971,129 @@ export default function AlertSuiteEditor() {
                         ))}
                       </div>
                     )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Alert Type Instances */}
+            <div className="form-card">
+              <div className="form-card-title">
+                Alert Type Instances
+                <button className="btn btn-secondary btn-sm" onClick={addAlertTypeInstance}>+ Add Type</button>
+              </div>
+              {form.alertTypeInstances.length === 0 ? (
+                <p className="text-muted">No type instances. Add an alert type to create a single parameterised rule from a template.</p>
+              ) : form.alertTypeInstances.map(inst => {
+                const decls = varDeclCache[`${inst.alertTypeName}@${inst.alertTypeVersion}`] || []
+                const versionsForType = inst.alertTypeName ? (alertTypes[inst.alertTypeName] || []) : []
+                return (
+                  <div key={inst._id} style={{
+                    border: '1px solid #bfdbfe', borderRadius: 6, padding: 14, marginBottom: 10,
+                    background: '#eff6ff',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <span style={{ fontWeight: 600, fontSize: 13, color: '#1d4ed8' }}>
+                        {inst.alertTypeName || 'New Type Instance'}
+                        {inst.alertTypeVersion && (
+                          <span style={{ marginLeft: 6, fontSize: 11, color: '#2563eb' }}>@ {inst.alertTypeVersion}</span>
+                        )}
+                        {decls.length > 0 && (
+                          <span style={{
+                            marginLeft: 8, fontSize: 11, background: '#dbeafe', color: '#1e40af',
+                            padding: '1px 7px', borderRadius: 4,
+                          }}>
+                            {decls.length} var{decls.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </span>
+                      <button className="btn btn-danger btn-sm" onClick={() => removeAlertTypeInstance(inst._id)}>Remove</button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <div className="form-row" style={{ marginBottom: 0 }}>
+                        <label>Alert Type</label>
+                        <select value={inst.alertTypeName}
+                          onChange={e => handleAlertTypeInstanceChange(inst._id, 'alertTypeName', e.target.value)}>
+                          <option value="">— select —</option>
+                          {Object.keys(alertTypes).map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                      {inst.alertTypeName && (
+                        <div className="form-row" style={{ marginBottom: 0 }}>
+                          <label>Version</label>
+                          <select value={inst.alertTypeVersion}
+                            onChange={e => handleAlertTypeInstanceChange(inst._id, 'alertTypeVersion', e.target.value)}>
+                            <option value="">— select —</option>
+                            {versionsForType.map(v => <option key={v} value={v}>{v}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <div className="form-row" style={{ marginBottom: 0 }}>
+                        <label>Rule Name *</label>
+                        <input type="text" value={inst.ruleName} placeholder="e.g. high-cpu"
+                          onChange={e => updateAlertTypeInstance(inst._id, { ruleName: e.target.value })} />
+                      </div>
+                    </div>
+
+                    {decls.length > 0 && (
+                      <div className="form-row" style={{ marginBottom: 10 }}>
+                        <label>Var Values</label>
+                        <table className="kv-table" style={{ width: '100%', tableLayout: 'fixed' }}>
+                          <colgroup>
+                            <col style={{ width: '28%' }} />
+                            <col style={{ width: '14%' }} />
+                            <col />
+                          </colgroup>
+                          <thead><tr><th>var name</th><th>type</th><th>value</th></tr></thead>
+                          <tbody>
+                            {decls.map(v => (
+                              <tr key={v.name}>
+                                <td>
+                                  <input type="text" value={v.name} readOnly
+                                    style={{ background: '#f9fafb', color: '#6b7280' }} />
+                                </td>
+                                <td>
+                                  <span style={{
+                                    fontSize: 11, background: '#dbeafe', color: '#1d4ed8',
+                                    padding: '2px 6px', borderRadius: 4, display: 'inline-block',
+                                  }}>{v.type || 'string'}</span>
+                                </td>
+                                <td>
+                                  <VarInput
+                                    type={v.type || 'string'}
+                                    value={inst.vars[v.name] || ''}
+                                    onChange={val => updateAlertTypeInstance(inst._id, {
+                                      vars: { ...inst.vars, [v.name]: val },
+                                    })}
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                      <div className="form-row" style={{ marginBottom: 0 }}>
+                        <label>Severity</label>
+                        <select value={inst.severity}
+                          onChange={e => updateAlertTypeInstance(inst._id, { severity: e.target.value })}>
+                          {SEVERITIES.map(s => <option key={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-row" style={{ marginBottom: 0 }}>
+                        <label>For</label>
+                        <input type="text" value={inst.for} placeholder="e.g. 5m"
+                          onChange={e => updateAlertTypeInstance(inst._id, { for: e.target.value })} />
+                      </div>
+                      <div className="form-row" style={{ marginBottom: 0 }}>
+                        <label>Description</label>
+                        <input type="text" value={inst.description} placeholder="Optional"
+                          onChange={e => updateAlertTypeInstance(inst._id, { description: e.target.value })} />
+                      </div>
+                    </div>
                   </div>
                 )
               })}
@@ -1138,7 +1361,7 @@ export default function AlertSuiteEditor() {
       </div>
 
       {modal && (
-        <VersionModal defaultVersion={modal} onSave={handleSave} onCancel={() => setModal(null)} />
+        <VersionModal defaultName={modal.name} defaultVersion={modal.version} onSave={handleSave} onCancel={() => setModal(null)} />
       )}
 
       {importOpen && (

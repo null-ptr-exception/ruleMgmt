@@ -13,7 +13,7 @@ export default function renderRouter(gitopsDir) {
     const chartDir = path.join(chartsDir, chart)
     const valuesFile = path.join(deploymentsDir, chart, `${deployment}-values.yaml`)
     const releaseName = `${chart}-${deployment}`
-    const helm = path.join(os.homedir(), 'bin', 'helm')
+    const helm = process.env.HELM_BIN || 'helm'
 
     try {
       const output = await new Promise((resolve, reject) => {

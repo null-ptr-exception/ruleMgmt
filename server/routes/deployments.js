@@ -51,7 +51,8 @@ export default function deploymentsRouter(gitopsDir) {
     const file = path.join(dir, `${req.params.deployment}-values.yaml`)
     try {
       await fs.mkdir(dir, { recursive: true })
-      await fs.writeFile(file, req.body.values, 'utf-8')
+      const content = typeof req.body.values === 'string' ? req.body.values : yaml.dump(req.body.values, { lineWidth: -1 })
+      await fs.writeFile(file, content, 'utf-8')
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

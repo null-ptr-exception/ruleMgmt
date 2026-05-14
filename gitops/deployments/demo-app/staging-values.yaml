@@ -1,4 +1,4 @@
-cpu_saturation:
+kpi_cpu_saturation:
   - cluster: staging-us
     app: api-gateway
     infoThreshold: 0.4
@@ -10,13 +10,13 @@ cpu_saturation:
     warnThreshold: 0.5
     critThreshold: 0.7
 
-mem_saturation:
+kpi_mem_saturation:
   - cluster: staging-us
     app: api-gateway
     warnThreshold: 0.85
     critThreshold: 0.95
 
-isalive:
+flip_isalive:
   - cluster: staging-us
     app: api-gateway
     forDuration: "3m"

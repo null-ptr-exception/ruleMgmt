@@ -6,7 +6,7 @@ spec:
   groups:
   - name: kpi_cpu_saturation
     rules:
-    {{- range .Values.cpu_saturation }}
+    {{- range .Values.kpi_cpu_saturation }}
     - alert: CpuSaturationInfo
       expr: (rate(node_cpu_seconds_total{cluster="{{ .cluster }}", app="{{ .app }}"}[1m]) / node_cpu_count{cluster="{{ .cluster }}", app="{{ .app }}"}) > {{ .infoThreshold }}
       for: 10m

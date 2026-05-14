@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: flip-isalive
+spec:
+  groups:
+  - name: flip_isalive
+    rules:
+    {{- range .Values.isalive }}
+    - alert: ServiceNotAlive
+      expr: up{cluster="{{ .cluster }}", app="{{ .app }}"} == 0
+      for: {{ .forDuration | default "3m" }}
+      labels:
+        severity: critical
+        cluster: "{{ .cluster }}"
+        app: "{{ .app }}"
+    {{- end }}

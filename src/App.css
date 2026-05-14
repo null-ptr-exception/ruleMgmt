@@ -387,3 +387,22 @@ select { cursor: pointer; }
   margin-bottom: 6px;
 }
 .severity-row select, .severity-row input { flex: 1; }
+
+/* ── Template Tree v2 ─────────────────────────────────────── */
+.tree-v2 { padding: 4px 0; }
+.tree-v2-group { margin-bottom: 2px; }
+.tree-v2-group-label {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 16px; cursor: pointer; font-size: 13px;
+  color: #6b7280; user-select: none;
+}
+.tree-v2-group-label:hover { background: #f3f4f6; }
+.tree-v2-arrow { font-size: 10px; transition: transform 0.15s; width: 12px; display: inline-block; }
+.tree-v2-arrow.open { transform: rotate(90deg); }
+.tree-v2-count { color: #9ca3af; font-size: 11px; margin-left: auto; }
+.tree-v2-item {
+  padding: 5px 16px; font-size: 13px; cursor: pointer; color: #374151;
+  border-radius: 4px; margin: 1px 6px;
+}
+.tree-v2-item:hover { background: #f3f4f6; }
+.tree-v2-item.active { background: #ede9fe; color: #7c3aed; font-weight: 600; }

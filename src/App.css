@@ -520,3 +520,41 @@ select { cursor: pointer; }
   padding: 10px 20px; border-top: 1px solid #e5e7eb;
   display: flex; align-items: center; gap: 12px; background: #f9fafb;
 }
+
+/* ── Template Developer Layout ────────────────────────────── */
+.template-dev-layout { display: flex; height: 100%; overflow: hidden; }
+.template-dev-sidebar {
+  width: 260px; min-width: 260px; background: #fff;
+  border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; overflow: hidden;
+}
+.template-dev-sidebar-section-header {
+  padding: 10px 16px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #9ca3af;
+  border-bottom: 1px solid #e5e7eb; border-top: 1px solid #e5e7eb;
+}
+.template-dev-sidebar-tree { flex: 1; overflow-y: auto; }
+.template-dev-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.template-dev-topbar {
+  padding: 12px 20px; border-bottom: 1px solid #e5e7eb;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.template-dev-title { font-size: 18px; font-weight: 600; color: #1a1a2e; }
+.template-dev-desc {
+  flex: 1; border: none; border-bottom: 1px solid #e5e7eb;
+  color: #6b7280; padding: 4px 0; font-size: 13px; background: transparent;
+}
+.template-dev-desc:focus { outline: none; border-bottom-color: #7c3aed; color: #1a1a2e; }
+.template-dev-topbar-actions { display: flex; gap: 6px; }
+.template-dev-split { flex: 1; display: flex; overflow: hidden; }
+.template-dev-editor { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.template-dev-editor-header {
+  padding: 8px 16px; font-size: 12px; text-transform: uppercase;
+  letter-spacing: 0.04em; color: #6b7280; border-bottom: 1px solid #e5e7eb;
+  font-weight: 600; background: #f9fafb;
+}
+.template-dev-codemirror { flex: 1; overflow: auto; }
+.template-dev-codemirror .cm-editor { height: 100%; }
+.template-dev-bottombar {
+  padding: 10px 20px; border-top: 1px solid #e5e7eb;
+  display: flex; align-items: center; gap: 12px; background: #f9fafb;
+}

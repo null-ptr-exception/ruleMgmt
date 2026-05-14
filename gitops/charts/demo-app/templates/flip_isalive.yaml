@@ -6,7 +6,7 @@ spec:
   groups:
   - name: flip_isalive
     rules:
-    {{- range .Values.isalive }}
+    {{- range .Values.flip_isalive }}
     - alert: ServiceNotAlive
       expr: up{cluster="{{ .cluster }}", app="{{ .app }}"} == 0
       for: {{ .forDuration | default "3m" }}

@@ -51,6 +51,6 @@ _meta:
         description: "How long before firing"
         default: "3m"
 
-cpu_saturation: []
-mem_saturation: []
-isalive: []
+kpi_cpu_saturation: []
+kpi_mem_saturation: []
+flip_isalive: []

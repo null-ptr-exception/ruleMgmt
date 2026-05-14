@@ -51,7 +51,7 @@ export default function AlertUserView() {
   useEffect(() => {
     if (!activeChart || !activeDeployment) return
     getDeployment(activeChart, activeDeployment).then(dep => {
-      const vals = dep.values || {}
+      const vals = dep.parsed || {}
       setAllValues(vals)
       if (activeTemplate) {
         setRows(vals[activeTemplate] || [])
@@ -66,8 +66,8 @@ export default function AlertUserView() {
       setTemplateMeta(null)
       return
     }
-    getChartTemplate(activeChart, activeTemplate).then(meta => {
-      setTemplateMeta(meta)
+    getChartTemplate(activeChart, activeTemplate).then(data => {
+      setTemplateMeta(data.meta || {})
     })
     setRows(allValues[activeTemplate] || [])
     setDirty(false)

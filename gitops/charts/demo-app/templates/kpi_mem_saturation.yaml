@@ -6,7 +6,7 @@ spec:
   groups:
   - name: kpi_mem_saturation
     rules:
-    {{- range .Values.mem_saturation }}
+    {{- range .Values.kpi_mem_saturation }}
     - alert: MemSaturationWarn
       expr: (node_memory_Active_bytes{cluster="{{ .cluster }}", app="{{ .app }}"} / node_memory_MemTotal_bytes{cluster="{{ .cluster }}", app="{{ .app }}"}) > {{ .warnThreshold }}
       for: 5m

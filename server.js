@@ -5,6 +5,8 @@ import yaml from 'js-yaml'
 import { fileURLToPath } from 'url'
 import { execFile } from 'child_process'
 import os from 'os'
+import chartsRouter from './server/routes/charts.js'
+import templatesV2Router from './server/routes/templates.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -13,6 +15,7 @@ app.use(express.json())
 const REPO_ROOT = __dirname
 const TEMPLATES_DIR = path.join(REPO_ROOT, 'templates')
 const GITOPS_DIR = path.join(REPO_ROOT, 'gitops-deploy')
+const GITOPS_DIR_V2 = path.join(REPO_ROOT, 'gitops')
 const DEFAULTS_FILE     = path.join(REPO_ROOT, 'config', 'defaults.yaml')
 const METRICS_DICT_FILE = path.join(REPO_ROOT, 'config', 'metrics.yaml')
 
@@ -602,10 +605,14 @@ app.post('/api/prune-routes', (req, res) => {
   }
 })
 
+// ─── V2 API (Helm chart management) ─────────────────────────────────────────
+app.use('/api/v2/charts', chartsRouter(GITOPS_DIR_V2))
+app.use('/api/v2/templates', templatesV2Router(GITOPS_DIR_V2))
+
 app.use(express.static(path.join(__dirname, 'dist')))
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'))
 })
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`API server → http://localhost:${PORT}`))
+app.listen(PORT, '127.0.0.1', () => console.log(`API server → http://127.0.0.1:${PORT}`))

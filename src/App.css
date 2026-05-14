@@ -468,3 +468,27 @@ select { cursor: pointer; }
   font-size: 13px; margin-top: 4px;
 }
 .vars-panel-add:hover { border-color: #7c3aed; color: #7c3aed; }
+
+/* ── Alert Table ──────────────────────────────────────────── */
+.alert-table-container { flex: 1; overflow: auto; }
+.alert-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.alert-table thead th {
+  text-align: left; padding: 8px 10px; font-weight: 500; font-size: 12px;
+  border-bottom: 2px solid #e5e7eb; position: sticky; top: 0; background: #fff;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.alert-table thead th.col-text { color: #3b82f6; }
+.alert-table thead th.col-number { color: #f97316; }
+.alert-table thead th.col-actions { color: #9ca3af; width: 70px; }
+.alert-table tbody td { padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+.alert-table tbody tr:hover { background: #f9fafb; }
+.alert-table tbody td input[type="text"],
+.alert-table tbody td input[type="number"],
+.alert-table tbody td select {
+  width: 100%; padding: 5px 8px; border: 1px solid #e5e7eb;
+  border-radius: 4px; font-size: 13px;
+}
+.alert-table tbody td input.input-text:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px #dbeafe; }
+.alert-table tbody td input.input-number:focus { border-color: #f97316; box-shadow: 0 0 0 2px #ffedd5; }
+.alert-table-empty { text-align: center; padding: 40px; color: #9ca3af; }
+.alert-table-footer { padding: 12px; }

@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kpi-cpu-saturation
+spec:
+  groups:
+  - name: kpi_cpu_saturation
+    rules:
+    {{- range .Values.cpu_saturation }}
+    - alert: CpuSaturationInfo
+      expr: (rate(node_cpu_seconds_total{cluster="{{ .cluster }}", app="{{ .app }}"}[1m]) / node_cpu_count{cluster="{{ .cluster }}", app="{{ .app }}"}) > {{ .infoThreshold }}
+      for: 10m
+      labels:
+        severity: info
+        cluster: "{{ .cluster }}"
+        app: "{{ .app }}"
+    - alert: CpuSaturationWarn
+      expr: (rate(node_cpu_seconds_total{cluster="{{ .cluster }}", app="{{ .app }}"}[1m]) / node_cpu_count{cluster="{{ .cluster }}", app="{{ .app }}"}) > {{ .warnThreshold }}
+      for: 5m
+      labels:
+        severity: warning
+        cluster: "{{ .cluster }}"
+        app: "{{ .app }}"
+    - alert: CpuSaturationCritical
+      expr: (rate(node_cpu_seconds_total{cluster="{{ .cluster }}", app="{{ .app }}"}[1m]) / node_cpu_count{cluster="{{ .cluster }}", app="{{ .app }}"}) > {{ .critThreshold }}
+      for: 2m
+      labels:
+        severity: critical
+        cluster: "{{ .cluster }}"
+        app: "{{ .app }}"
+    {{- end }}

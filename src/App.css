@@ -406,3 +406,25 @@ select { cursor: pointer; }
 }
 .tree-v2-item:hover { background: #f3f4f6; }
 .tree-v2-item.active { background: #ede9fe; color: #7c3aed; font-weight: 600; }
+
+/* ── Chart Selector ───────────────────────────────────────── */
+.chart-selector { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
+.chart-selector-label { font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 6px; }
+.chart-selector-row { display: flex; gap: 6px; align-items: center; }
+
+/* ── Deployment Selector ──────────────────────────────────── */
+.deploy-selector { padding: 8px 0; }
+.deploy-selector-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 16px; cursor: pointer; font-size: 13px; color: #374151;
+}
+.deploy-selector-item:hover { background: #f3f4f6; }
+.deploy-selector-item.active { background: #ecfdf5; color: #059669; font-weight: 600; }
+.deploy-selector-icon { font-size: 14px; }
+.deploy-selector-name { flex: 1; }
+.deploy-selector-badge {
+  font-size: 10px; background: #f3f4f6; color: #6b7280;
+  padding: 1px 6px; border-radius: 8px;
+}
+.deploy-selector-actions { padding: 4px 16px; display: flex; gap: 4px; }
+.deploy-selector-form { padding: 4px 16px; }

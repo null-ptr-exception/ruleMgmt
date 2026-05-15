@@ -94,13 +94,12 @@ export default function VariablesPanel({ vars, onChange, schema, onSchemaChange 
               </Checkbox>
             </div>
             {v.type === 'enum' && (
-              <Input size="small" placeholder="enum values (comma-separated)" value={(v.enum || []).join(', ')}
-                onChange={e => {
-                  const val = e.target.value
-                  const enumVals = val ? val.split(',').map(s => s.trim()).filter(Boolean) : undefined
-                  updateVar(i, 'enum', enumVals?.length ? enumVals : undefined)
-                }}
-                style={{ marginTop: 6 }} />
+              <Select size="small" mode="tags" placeholder="Type a value and press Enter"
+                value={v.enum || []}
+                onChange={vals => updateVar(i, 'enum', vals?.length ? vals : undefined)}
+                style={{ width: '100%', marginTop: 6 }}
+                open={false}
+              />
             )}
           </Card>
         ))}

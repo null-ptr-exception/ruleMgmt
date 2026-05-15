@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Layout, Button, Input, Select, Empty, Typography } from 'antd'
+import { Button, Input, Select, Empty, Typography } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import ChartSelector from '../components/ChartSelector'
 import VariablesPanel from '../components/VariablesPanel'
 import { schemaAlertNames, schemaToVars, updateSchemaAlert } from '../utils/schemaUtils'
 import {
@@ -15,8 +14,7 @@ import { EditorState } from '@codemirror/state'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 
-const { Sider, Content } = Layout
-const { Title, Text } = Typography
+const { Text } = Typography
 
 const yamlExtension = StreamLanguage.define(yaml)
 
@@ -130,10 +128,12 @@ export default function TemplateDevEditor() {
     setDirty(false)
   }
 
-  async function handleCreateChart(name) {
-    await createChart(name)
+  async function handleCreateChart() {
+    const name = prompt('New chart name:')
+    if (!name?.trim()) return
+    await createChart(name.trim())
     await loadCharts()
-    setActiveChart(name)
+    setActiveChart(name.trim())
   }
 
   async function handleDelete() {
@@ -199,15 +199,17 @@ export default function TemplateDevEditor() {
   }
 
   return (
-    <Layout style={{ height: '100%' }}>
-      <Sider width={260} theme="light" style={{ borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <ChartSelector charts={charts} activeChart={activeChart} onSelect={setActiveChart} onCreate={handleCreateChart} />
-      </Sider>
-      <Content style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {activeChart ? (
           <>
             <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <Title level={5} style={{ margin: 0 }}>{chartMeta.name || activeChart}</Title>
+              <Select
+                value={activeChart}
+                onChange={setActiveChart}
+                style={{ minWidth: 180 }}
+                options={charts.map(c => ({ value: c.name, label: `${c.name} (${c.templateCount} templates)` }))}
+              />
+              <Button size="small" icon={<PlusOutlined />} onClick={handleCreateChart}>New</Button>
               <Input size="small" placeholder="Description" value={chartMeta.description || ''}
                 onChange={e => { setChartMeta({ ...chartMeta, description: e.target.value }); setDirty(true) }}
                 style={{ flex: 1, maxWidth: 400 }} />
@@ -259,9 +261,8 @@ export default function TemplateDevEditor() {
             </div>
           </>
         ) : (
-          <Empty style={{ margin: 'auto' }} description="Select a chart from the sidebar or create a new one." />
+          <Empty style={{ margin: 'auto' }} description="Select a chart or create a new one." />
         )}
-      </Content>
-    </Layout>
+    </div>
   )
 }

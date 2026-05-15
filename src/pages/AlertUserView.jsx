@@ -7,7 +7,7 @@ import TemplateTree from '../components/TemplateTree'
 import AlertTable from '../components/AlertTable'
 import { schemaAlertNames, schemaToVars } from '../utils/schemaUtils'
 import {
-  listCharts, createChart,
+  listCharts,
   getChartInfo,
   listDeployments, getDeployment, saveDeployment, cloneDeployment,
   renderDeployment
@@ -127,7 +127,7 @@ export default function AlertUserView() {
   return (
     <Layout style={{ height: '100%' }}>
       <Sider width={280} theme="light" style={{ borderRight: '1px solid #f0f0f0', overflow: 'auto' }}>
-        <ChartSelector charts={charts} activeChart={activeChart} onSelect={setActiveChart} onCreate={createChart} />
+        <ChartSelector charts={charts} activeChart={activeChart} onSelect={setActiveChart} />
         {sectionHeader('Deployments')}
         <DeploymentSelector
           deployments={deployments}

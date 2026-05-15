@@ -26,7 +26,7 @@ export default function ChartSelector({ charts, activeChart, onSelect, onCreate 
           style={{ flex: 1 }}
           options={charts.map(c => ({ value: c.name, label: `${c.name} (${c.templateCount} templates)` }))}
         />
-        {!creating && (
+        {onCreate && !creating && (
           <Button icon={<PlusOutlined />} onClick={() => setCreating(true)}>New</Button>
         )}
       </Space.Compact>

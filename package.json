@@ -6,23 +6,33 @@
     "dev": "concurrently \"node server.js\" \"vite\"",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node server.js"
+    "server": "node server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "eslint 'src/**/*.{js,jsx}' 'server.js' 'server/**/*.js' --no-error-on-unmatched-pattern"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.2",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
+    "@codemirror/legacy-modes": "^6.5.3",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.42.1",
     "@prometheus-io/codemirror-promql": "^0.311.3",
+    "codemirror": "^6.0.2",
     "express": "^4.18.2",
     "js-yaml": "^4.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.60.0",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
-    "vite": "^5.1.0"
+    "eslint": "^10.3.0",
+    "vite": "^5.1.0",
+    "vitest": "^4.1.6"
   }
 }

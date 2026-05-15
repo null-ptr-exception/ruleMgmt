@@ -42,8 +42,26 @@ export default function chartsRouter(gitopsDir) {
       await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
       const chartYaml = yaml.dump({ apiVersion: 'v2', name, version: '0.1.0', type: 'application' })
       await fs.writeFile(path.join(chartDir, 'Chart.yaml'), chartYaml, 'utf-8')
-      const valuesYaml = yaml.dump({ _meta: {} })
-      await fs.writeFile(path.join(chartDir, 'values.yaml'), valuesYaml, 'utf-8')
+      await fs.writeFile(
+        path.join(chartDir, 'values.yaml'),
+        yaml.dump({ instances: [] }),
+        'utf-8'
+      )
+      const emptySchema = {
+        $schema: 'https://json-schema.org/draft-07/schema#',
+        type: 'object',
+        properties: {
+          instances: {
+            type: 'array',
+            items: { type: 'object', properties: {} }
+          }
+        }
+      }
+      await fs.writeFile(
+        path.join(chartDir, 'values.schema.json'),
+        JSON.stringify(emptySchema, null, 2),
+        'utf-8'
+      )
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

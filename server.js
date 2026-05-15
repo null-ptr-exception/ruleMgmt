@@ -602,4 +602,10 @@ app.post('/api/prune-routes', (req, res) => {
   }
 })
 
-app.listen(3001, () => console.log('API server → http://localhost:3001'))
+app.use(express.static(path.join(__dirname, 'dist')))
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'))
+})
+
+const PORT = process.env.PORT || 3001
+app.listen(PORT, () => console.log(`API server → http://localhost:${PORT}`))

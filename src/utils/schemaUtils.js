@@ -17,7 +17,8 @@ export function schemaToVars(schema, alertName) {
   const props = items.properties
   const required = new Set(items.required || [])
   return Object.entries(props).map(([name, prop]) => {
-    const v = { name, type: prop.type || 'string', description: prop.description || '', required: required.has(name) }
+    const uiType = prop.enum ? 'enum' : (prop.type || 'string')
+    const v = { name, type: uiType, description: prop.description || '', required: required.has(name) }
     if (prop.default !== undefined) v.default = prop.default
     if (prop.enum) v.enum = prop.enum
     return v
@@ -27,17 +28,22 @@ export function schemaToVars(schema, alertName) {
 /**
  * Build a full schema from a map of { alertName: vars[] }.
  */
+function varToSchemaProp(v) {
+  const isEnum = v.type === 'enum'
+  const prop = { type: isEnum ? 'string' : (v.type || 'string') }
+  if (v.description) prop.description = v.description
+  if (v.default !== undefined) prop.default = v.default
+  if (isEnum && v.enum) prop.enum = v.enum
+  return prop
+}
+
 export function varsMapToSchema(varsMap) {
   const properties = {}
   for (const [alertName, vars] of Object.entries(varsMap)) {
     const itemProps = {}
     const required = []
     for (const v of vars) {
-      const prop = { type: v.type || 'string' }
-      if (v.description) prop.description = v.description
-      if (v.default !== undefined) prop.default = v.default
-      if (v.enum) prop.enum = v.enum
-      itemProps[v.name] = prop
+      itemProps[v.name] = varToSchemaProp(v)
       if (v.required) required.push(v.name)
     }
     properties[alertName] = {
@@ -63,11 +69,7 @@ export function updateSchemaAlert(schema, alertName, vars) {
   const itemProps = {}
   const required = []
   for (const v of vars) {
-    const prop = { type: v.type || 'string' }
-    if (v.description) prop.description = v.description
-    if (v.default !== undefined) prop.default = v.default
-    if (v.enum) prop.enum = v.enum
-    itemProps[v.name] = prop
+    itemProps[v.name] = varToSchemaProp(v)
     if (v.required) required.push(v.name)
   }
   return {

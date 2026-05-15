@@ -9,6 +9,7 @@ const TYPE_OPTIONS = [
   { value: 'number', label: 'number' },
   { value: 'integer', label: 'integer' },
   { value: 'boolean', label: 'boolean' },
+  { value: 'enum', label: 'enum' },
 ]
 
 export default function VariablesPanel({ vars, onChange, schema, onSchemaChange }) {
@@ -92,7 +93,7 @@ export default function VariablesPanel({ vars, onChange, schema, onSchemaChange 
                 <Text style={{ fontSize: 11 }}>Required</Text>
               </Checkbox>
             </div>
-            {v.type === 'string' && (
+            {v.type === 'enum' && (
               <Input size="small" placeholder="enum values (comma-separated)" value={(v.enum || []).join(', ')}
                 onChange={e => {
                   const val = e.target.value

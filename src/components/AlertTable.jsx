@@ -13,50 +13,53 @@ export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, o
   const handleAdd = useCallback(() => {
     const newRow = {}
     vars.forEach(v => {
-      newRow[v.name] = v.default ?? (v.type === 'boolean' ? false : v.type === 'number' ? 0 : '')
+      if (v.default !== undefined) newRow[v.name] = v.default
+      else if (v.type === 'boolean') newRow[v.name] = false
+      else if (v.type === 'number' || v.type === 'integer') newRow[v.name] = 0
+      else newRow[v.name] = ''
     })
     onAdd(newRow)
   }, [vars, onAdd])
 
   const renderInput = (v, row, rowIdx) => {
     const val = row[v.name]
-    switch (v.type) {
-      case 'boolean':
-        return (
-          <Checkbox
-            checked={!!val}
-            onChange={e => handleCellChange(rowIdx, v.name, e.target.checked)}
-          />
-        )
-      case 'number':
-        return (
-          <InputNumber
-            size="small"
-            step="any"
-            value={val ?? ''}
-            onChange={value => handleCellChange(rowIdx, v.name, value)}
-            style={{ width: '100%' }}
-          />
-        )
-      case 'list':
-        return (
-          <Select
-            size="small"
-            value={val ?? ''}
-            onChange={value => handleCellChange(rowIdx, v.name, value)}
-            style={{ width: '100%' }}
-            options={(v.options || []).map(opt => ({ value: opt, label: opt }))}
-          />
-        )
-      default:
-        return (
-          <Input
-            size="small"
-            value={val ?? ''}
-            onChange={e => handleCellChange(rowIdx, v.name, e.target.value)}
-          />
-        )
+    if (v.type === 'boolean') {
+      return (
+        <Checkbox
+          checked={!!val}
+          onChange={e => handleCellChange(rowIdx, v.name, e.target.checked)}
+        />
+      )
     }
+    if (v.type === 'number' || v.type === 'integer') {
+      return (
+        <InputNumber
+          size="small"
+          step={v.type === 'integer' ? 1 : 'any'}
+          value={val ?? ''}
+          onChange={value => handleCellChange(rowIdx, v.name, value)}
+          style={{ width: '100%' }}
+        />
+      )
+    }
+    if (v.enum) {
+      return (
+        <Select
+          size="small"
+          value={val ?? ''}
+          onChange={value => handleCellChange(rowIdx, v.name, value)}
+          style={{ width: '100%' }}
+          options={v.enum.map(opt => ({ value: opt, label: opt }))}
+        />
+      )
+    }
+    return (
+      <Input
+        size="small"
+        value={val ?? ''}
+        onChange={e => handleCellChange(rowIdx, v.name, e.target.value)}
+      />
+    )
   }
 
   const columns = [
@@ -67,36 +70,29 @@ export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, o
       render: (_, row, rowIdx) => renderInput(v, row, rowIdx),
     })),
     {
-      title: 'Actions',
+      title: '',
       key: 'actions',
-      width: 70,
-      render: (_, _row, rowIdx) => (
-        <Button
-          type="text"
-          danger
-          size="small"
-          icon={<DeleteOutlined />}
-          onClick={() => onDelete(rowIdx)}
-        />
-      ),
-    },
+      width: 50,
+      render: (_, __, rowIdx) => (
+        <Button type="text" danger size="small" icon={<DeleteOutlined />}
+          onClick={() => onDelete(rowIdx)} />
+      )
+    }
   ]
 
   return (
     <div>
       <Table
-        columns={columns}
         dataSource={rows.map((r, i) => ({ ...r, key: i }))}
+        columns={columns}
         pagination={false}
         size="small"
         bordered
-        locale={{ emptyText: 'No alert instances' }}
       />
-      <div style={{ padding: '8px 0' }}>
-        <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={handleAdd}>
-          Add Row
-        </Button>
-      </div>
+      <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }}
+        onClick={handleAdd}>
+        Add instance
+      </Button>
     </div>
   )
 }

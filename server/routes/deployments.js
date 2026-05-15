@@ -30,10 +30,8 @@ export default function deploymentsRouter(gitopsDir) {
         try {
           const raw = await fs.readFile(path.join(dir, f), 'utf-8')
           const parsed = yaml.load(raw) || {}
-          for (const [key, value] of Object.entries(parsed)) {
-            if (key === '_meta') continue
-            if (Array.isArray(value)) alertCount += value.length
-          }
+          const instances = parsed.instances
+          if (Array.isArray(instances)) alertCount = instances.length
         } catch { /* skip unreadable */ }
         deployments.push({ name, file: f, alertCount })
       }

@@ -140,7 +140,7 @@ describe('Deployments API', () => {
   })
 
   it('creates a deployment by saving values', async () => {
-    const values = { instances: [{ threshold: 80 }] }
+    const values = { cpu_alert: [{ threshold: 80 }] }
     const { data } = await api('POST', '/api/v2/deployments/test-app/staging', { values })
     expect(data.ok).toBe(true)
   })
@@ -154,15 +154,15 @@ describe('Deployments API', () => {
 
   it('gets deployment values', async () => {
     const { data } = await api('GET', '/api/v2/deployments/test-app/staging')
-    expect(data.parsed.instances).toEqual([{ threshold: 80 }])
+    expect(data.parsed.cpu_alert).toEqual([{ threshold: 80 }])
   })
 
   it('saves deployment with string values', async () => {
-    const yamlStr = 'instances:\n  - threshold: 90\n'
+    const yamlStr = 'cpu_alert:\n  - threshold: 90\n'
     const { data } = await api('POST', '/api/v2/deployments/test-app/staging', { values: yamlStr })
     expect(data.ok).toBe(true)
     const { data: fetched } = await api('GET', '/api/v2/deployments/test-app/staging')
-    expect(fetched.parsed.instances[0].threshold).toBe(90)
+    expect(fetched.parsed.cpu_alert[0].threshold).toBe(90)
   })
 
   it('clones a deployment', async () => {

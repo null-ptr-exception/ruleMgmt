@@ -1,4 +1,4 @@
-instances:
+tablespace_usage:
   - db_name: app-db
     tablespace_name: users
     info: 40

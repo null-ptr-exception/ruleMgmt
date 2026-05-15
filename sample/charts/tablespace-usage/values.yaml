@@ -1,4 +1,4 @@
-instances:
+tablespace_usage:
   - db_name: mydb
     tablespace_name: users
     info: 30

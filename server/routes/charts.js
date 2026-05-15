@@ -44,18 +44,13 @@ export default function chartsRouter(gitopsDir) {
       await fs.writeFile(path.join(chartDir, 'Chart.yaml'), chartYaml, 'utf-8')
       await fs.writeFile(
         path.join(chartDir, 'values.yaml'),
-        yaml.dump({ instances: [] }),
+        yaml.dump({}),
         'utf-8'
       )
       const emptySchema = {
         $schema: 'https://json-schema.org/draft-07/schema#',
         type: 'object',
-        properties: {
-          instances: {
-            type: 'array',
-            items: { type: 'object', properties: {} }
-          }
-        }
+        properties: {}
       }
       await fs.writeFile(
         path.join(chartDir, 'values.schema.json'),

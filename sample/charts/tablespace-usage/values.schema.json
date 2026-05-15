@@ -2,39 +2,17 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    "instances": {
+    "tablespace_usage": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "db_name": {
-            "type": "string",
-            "description": "Database name"
-          },
-          "tablespace_name": {
-            "type": "string",
-            "description": "Tablespace name"
-          },
-          "info": {
-            "type": "number",
-            "description": "Info threshold (%)",
-            "default": 30
-          },
-          "warn": {
-            "type": "number",
-            "description": "Warning threshold (%)",
-            "default": 50
-          },
-          "critical": {
-            "type": "number",
-            "description": "Critical threshold (%)",
-            "default": 70
-          },
-          "severe": {
-            "type": "number",
-            "description": "Severe threshold (%)",
-            "default": 95
-          }
+          "db_name": { "type": "string", "description": "Database name" },
+          "tablespace_name": { "type": "string", "description": "Tablespace name" },
+          "info": { "type": "number", "description": "Info threshold (%)", "default": 30 },
+          "warn": { "type": "number", "description": "Warning threshold (%)", "default": 50 },
+          "critical": { "type": "number", "description": "Critical threshold (%)", "default": 70 },
+          "severe": { "type": "number", "description": "Severe threshold (%)", "default": 95 }
         },
         "required": ["db_name", "tablespace_name"]
       }

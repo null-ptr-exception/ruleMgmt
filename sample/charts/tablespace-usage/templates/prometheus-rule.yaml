@@ -8,7 +8,7 @@ spec:
   groups:
     - name: tablespace-usage
       rules:
-        {{- range .Values.instances }}
+        {{- range .Values.tablespace_usage }}
         - alert: tablespace-info-{{ .db_name }}-{{ .tablespace_name }}
           expr: 'tablespace_usage_percent{db="{{ .db_name }}", tablespace="{{ .tablespace_name }}"} > {{ .info }}'
           for: 10m

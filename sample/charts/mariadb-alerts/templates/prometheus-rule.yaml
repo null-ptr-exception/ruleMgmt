@@ -9,33 +9,31 @@ spec:
     # ── Latency ──────────────────────────────────────────────
     - name: mariadb-latency
       rules:
-        {{- range .Values.instances }}
+        {{- range .Values.mariadb_latency }}
         - alert: MariaDBHighQueryLatencyWarning
-          expr: mysql_global_status_slow_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} > {{ .latency_warn_ms }}
+          expr: mysql_global_status_slow_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} > {{ .warn_ms }}
           for: 5m
           labels:
             severity: warning
             instance: {{ .instance_name }}
             namespace: {{ .namespace }}
           annotations:
-            summary: "MariaDB {{ .instance_name }} query latency above {{ .latency_warn_ms }}ms"
-            description: "Slow query count on {{ .instance_name }} in {{ .namespace }} has exceeded warning threshold."
+            summary: "MariaDB {{ .instance_name }} query latency above {{ .warn_ms }}ms"
         - alert: MariaDBHighQueryLatencyCritical
-          expr: mysql_global_status_slow_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} > {{ .latency_critical_ms }}
+          expr: mysql_global_status_slow_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} > {{ .critical_ms }}
           for: 3m
           labels:
             severity: critical
             instance: {{ .instance_name }}
             namespace: {{ .namespace }}
           annotations:
-            summary: "MariaDB {{ .instance_name }} query latency above {{ .latency_critical_ms }}ms"
-            description: "Slow query count on {{ .instance_name }} in {{ .namespace }} has exceeded critical threshold."
+            summary: "MariaDB {{ .instance_name }} query latency above {{ .critical_ms }}ms"
         {{- end }}
 
     # ── Traffic ──────────────────────────────────────────────
     - name: mariadb-traffic
       rules:
-        {{- range .Values.instances }}
+        {{- range .Values.mariadb_traffic }}
         - alert: MariaDBLowTraffic
           expr: rate(mysql_global_status_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) < {{ .qps_warn }}
           for: 10m
@@ -45,57 +43,52 @@ spec:
             namespace: {{ .namespace }}
           annotations:
             summary: "MariaDB {{ .instance_name }} QPS dropped below {{ .qps_warn }}"
-            description: "Query rate on {{ .instance_name }} in {{ .namespace }} is unusually low — possible connectivity issue."
         {{- end }}
 
     # ── Errors ───────────────────────────────────────────────
     - name: mariadb-errors
       rules:
-        {{- range .Values.instances }}
+        {{- range .Values.mariadb_errors }}
         - alert: MariaDBHighErrorRateWarning
-          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .error_rate_warn }}
+          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_rate }}
           for: 5m
           labels:
             severity: warning
             instance: {{ .instance_name }}
             namespace: {{ .namespace }}
           annotations:
-            summary: "MariaDB {{ .instance_name }} error rate above {{ .error_rate_warn }}/s"
-            description: "Connection error rate on {{ .instance_name }} in {{ .namespace }} exceeds warning threshold."
+            summary: "MariaDB {{ .instance_name }} error rate above {{ .warn_rate }}/s"
         - alert: MariaDBHighErrorRateCritical
-          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .error_rate_critical }}
+          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .critical_rate }}
           for: 3m
           labels:
             severity: critical
             instance: {{ .instance_name }}
             namespace: {{ .namespace }}
           annotations:
-            summary: "MariaDB {{ .instance_name }} error rate above {{ .error_rate_critical }}/s"
-            description: "Connection error rate on {{ .instance_name }} in {{ .namespace }} exceeds critical threshold."
+            summary: "MariaDB {{ .instance_name }} error rate above {{ .critical_rate }}/s"
         {{- end }}
 
-    # ── Saturation ───────────────────────────────────────────
-    - name: mariadb-saturation
+    # ── Saturation: Connections ──────────────────────────────
+    - name: mariadb-saturation-connections
       rules:
-        {{- range .Values.instances }}
+        {{- range .Values.mariadb_saturation_connections }}
         - alert: MariaDBConnectionSaturationWarning
-          expr: (mysql_global_status_threads_connected{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_variables_max_connections{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .connections_warn_pct }}
+          expr: (mysql_global_status_threads_connected{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_variables_max_connections{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .warn_pct }}
           for: 5m
           labels:
             severity: warning
             instance: {{ .instance_name }}
             namespace: {{ .namespace }}
           annotations:
-            summary: "MariaDB {{ .instance_name }} connections above {{ .connections_warn_pct }}%"
-            description: "Connection pool on {{ .instance_name }} in {{ .namespace }} is {{ "{{" }} $value {{ "}}" }}% full."
+            summary: "MariaDB {{ .instance_name }} connections above {{ .warn_pct }}%"
         - alert: MariaDBConnectionSaturationCritical
-          expr: (mysql_global_status_threads_connected{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_variables_max_connections{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .connections_critical_pct }}
+          expr: (mysql_global_status_threads_connected{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_variables_max_connections{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .critical_pct }}
           for: 3m
           labels:
             severity: critical
             instance: {{ .instance_name }}
             namespace: {{ .namespace }}
           annotations:
-            summary: "MariaDB {{ .instance_name }} connections above {{ .connections_critical_pct }}%"
-            description: "Connection pool on {{ .instance_name }} in {{ .namespace }} is nearly exhausted."
+            summary: "MariaDB {{ .instance_name }} connections above {{ .critical_pct }}%"
         {{- end }}

@@ -3,7 +3,7 @@ import { Layout, Button, Input, Select, Empty, Typography } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import ChartSelector from '../components/ChartSelector'
 import VariablesPanel from '../components/VariablesPanel'
-import { schemaToVars, varsToSchema } from '../utils/schemaUtils'
+import { schemaAlertNames, schemaToVars, updateSchemaAlert } from '../utils/schemaUtils'
 import {
   listCharts, createChart, deleteChart,
   getChartInfo, getChartTemplateFile, saveChartTemplateFile,
@@ -20,53 +20,6 @@ const { Title, Text } = Typography
 
 const yamlExtension = StreamLanguage.define(yaml)
 
-function generateHelmTemplate(alertName, description, expr, vars) {
-  const varNames = vars.map(v => v.name)
-  const hasVars = varNames.length > 0
-
-  let rulesBlock = ''
-  if (hasVars) {
-    const labelLines = varNames
-      .filter(v => !['severity', 'for'].includes(v))
-      .map(v => `            ${v}: {{ $inst.${v} | quote }}`)
-      .join('\n')
-
-    rulesBlock = `        {{- range .Values.instances }}
-        {{- $inst := . }}
-        - alert: ${alertName || '{{ $inst.name }}'}
-          expr: ${expr || 'up == 0'}
-          for: {{ $inst.for | default "5m" }}
-          labels:
-            severity: {{ $inst.severity | default "warning" }}
-${labelLines ? labelLines + '\n' : ''}          annotations:
-            description: ${description || '{{ $inst.name }} alert fired'}
-            summary: ${alertName || '{{ $inst.name }}'}
-        {{- end }}`
-  } else {
-    rulesBlock = `        - alert: ${alertName || 'ExampleAlert'}
-          expr: ${expr || 'up == 0'}
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            description: ${description || 'Alert fired'}
-            summary: ${alertName || 'ExampleAlert'}`
-  }
-
-  return `apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
-metadata:
-  name: {{ .Release.Name }}-rules
-  labels:
-    app.kubernetes.io/managed-by: Helm
-spec:
-  groups:
-    - name: {{ .Release.Name }}
-      rules:
-${rulesBlock}
-`
-}
-
 export default function TemplateDevEditor() {
   const [charts, setCharts] = useState([])
   const [activeChart, setActiveChart] = useState(null)
@@ -75,11 +28,10 @@ export default function TemplateDevEditor() {
   const [activeFile, setActiveFile] = useState(null)
   const [fileContent, setFileContent] = useState('')
   const [schema, setSchema] = useState(null)
+  const [alertNames, setAlertNames] = useState([])
+  const [activeAlert, setActiveAlert] = useState(null)
   const [vars, setVars] = useState([])
   const [dirty, setDirty] = useState(false)
-  const [alertName, setAlertName] = useState('')
-  const [description, setDescription] = useState('')
-  const [expr, setExpr] = useState('')
   const editorRef = useRef(null)
   const viewRef = useRef(null)
 
@@ -94,12 +46,13 @@ export default function TemplateDevEditor() {
     const info = await getChartInfo(chart)
     setChartMeta(info.chartMeta || {})
     setTemplateFiles(info.templateFiles || [])
-    setSchema(info.schema)
-    setVars(schemaToVars(info.schema))
+    const s = info.schema || { $schema: 'https://json-schema.org/draft-07/schema#', type: 'object', properties: {} }
+    setSchema(s)
+    const names = schemaAlertNames(s)
+    setAlertNames(names)
+    setActiveAlert(names.length > 0 ? names[0] : null)
+    setVars(names.length > 0 ? schemaToVars(s, names[0]) : [])
     setDirty(false)
-    setAlertName('')
-    setDescription('')
-    setExpr('')
     if (info.templateFiles?.length > 0) {
       setActiveFile(info.templateFiles[0])
     } else {
@@ -118,6 +71,14 @@ export default function TemplateDevEditor() {
       setFileContent(data.content || '')
     })
   }, [activeChart, activeFile])
+
+  useEffect(() => {
+    if (activeAlert && schema) {
+      setVars(schemaToVars(schema, activeAlert))
+    } else {
+      setVars([])
+    }
+  }, [activeAlert])
 
   useEffect(() => {
     if (!editorRef.current) return
@@ -161,13 +122,11 @@ export default function TemplateDevEditor() {
 
   async function handleSave() {
     if (!activeChart) return
-    const newSchema = varsToSchema(vars)
-    await saveChartSchema(activeChart, newSchema)
+    await saveChartSchema(activeChart, schema)
     await saveChartMeta(activeChart, chartMeta)
     if (activeFile) {
       await saveChartTemplateFile(activeChart, activeFile, fileContent)
     }
-    setSchema(newSchema)
     setDirty(false)
   }
 
@@ -188,26 +147,54 @@ export default function TemplateDevEditor() {
   async function handleAddFile() {
     const name = prompt('Template file name (without .yaml):')
     if (!name || !activeChart) return
-    const content = generateHelmTemplate(alertName, description, expr, vars)
-    await saveChartTemplateFile(activeChart, name, content)
+    await saveChartTemplateFile(activeChart, name, '')
     setTemplateFiles([...templateFiles, name])
     setActiveFile(name)
   }
 
-  function handleGenerateTemplate() {
-    const content = generateHelmTemplate(alertName, description, expr, vars)
-    setFileContent(content)
+  function handleAddAlert() {
+    const name = prompt('Alert name (use underscores for grouping, e.g. mariadb_latency):')
+    if (!name) return
+    const newSchema = updateSchemaAlert(schema, name, [])
+    setSchema(newSchema)
+    setAlertNames(schemaAlertNames(newSchema))
+    setActiveAlert(name)
+    setVars([])
+    setDirty(true)
+  }
+
+  function handleRemoveAlert() {
+    if (!activeAlert || !schema) return
+    const { [activeAlert]: _, ...rest } = schema.properties
+    const newSchema = { ...schema, properties: rest }
+    setSchema(newSchema)
+    const names = schemaAlertNames(newSchema)
+    setAlertNames(names)
+    setActiveAlert(names.length > 0 ? names[0] : null)
     setDirty(true)
   }
 
   function handleVarsChange(newVars) {
+    if (!activeAlert) return
+    const newSchema = updateSchemaAlert(schema, activeAlert, newVars)
+    setSchema(newSchema)
     setVars(newVars)
     setDirty(true)
   }
 
   function handleSchemaChange(newSchema) {
     setSchema(newSchema)
-    setVars(schemaToVars(newSchema))
+    const names = schemaAlertNames(newSchema)
+    setAlertNames(names)
+    if (activeAlert && names.includes(activeAlert)) {
+      setVars(schemaToVars(newSchema, activeAlert))
+    } else if (names.length > 0) {
+      setActiveAlert(names[0])
+      setVars(schemaToVars(newSchema, names[0]))
+    } else {
+      setActiveAlert(null)
+      setVars([])
+    }
     setDirty(true)
   }
 
@@ -230,20 +217,6 @@ export default function TemplateDevEditor() {
               </div>
             </div>
 
-            <div style={{ padding: '10px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 12, alignItems: 'flex-end', background: '#fafafa' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert name pattern</Text>
-                <Input size="small" placeholder='e.g. tablespace-{{ $severity }}-{{ $inst.db_name }}' value={alertName}
-                  onChange={e => setAlertName(e.target.value)} style={{ width: 300, fontFamily: 'monospace', fontSize: 12 }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Expr template</Text>
-                <Input size="small" placeholder='e.g. tablespace_usage{db="{{ $inst.db_name }}"} > {{ $inst.threshold }}' value={expr}
-                  onChange={e => setExpr(e.target.value)} style={{ width: 400, fontFamily: 'monospace', fontSize: 12 }} />
-              </div>
-              <Button size="small" onClick={handleGenerateTemplate}>Generate template</Button>
-            </div>
-
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa' }}>
@@ -260,8 +233,23 @@ export default function TemplateDevEditor() {
                   <style>{`#template-dev-cm .cm-editor { height: 100%; }`}</style>
                 </div>
               </div>
-              <div style={{ width: 320, flexShrink: 0 }}>
-                <VariablesPanel vars={vars} onChange={handleVarsChange} schema={schema} onSchemaChange={handleSchemaChange} />
+              <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #f0f0f0' }}>
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa' }}>
+                  <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert:</Text>
+                  {alertNames.length > 0 ? (
+                    <Select size="small" value={activeAlert} onChange={a => setActiveAlert(a)} style={{ flex: 1 }}
+                      options={alertNames.map(n => ({ value: n, label: n }))} />
+                  ) : (
+                    <Text type="secondary" style={{ fontSize: 12 }}>No alerts</Text>
+                  )}
+                  <Button size="small" icon={<PlusOutlined />} onClick={handleAddAlert} />
+                  {activeAlert && (
+                    <Button size="small" danger icon={<DeleteOutlined />} onClick={handleRemoveAlert} />
+                  )}
+                </div>
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <VariablesPanel vars={vars} onChange={handleVarsChange} schema={schema} onSchemaChange={handleSchemaChange} />
+                </div>
               </div>
             </div>
 

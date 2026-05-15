@@ -48,10 +48,10 @@ export default function templatesRouter(gitopsDir) {
 
       const schema = await readSchema(schemaFile)
 
-      let values = { instances: [] }
+      let values = {}
       try {
         const raw = await fs.readFile(valuesFile, 'utf-8')
-        values = yaml.load(raw) || { instances: [] }
+        values = yaml.load(raw) || {}
       } catch { /* use default */ }
 
       let chartMeta = {}

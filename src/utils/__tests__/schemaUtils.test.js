@@ -1,95 +1,116 @@
 import { describe, it, expect } from 'vitest'
-import { schemaToVars, varsToSchema } from '../schemaUtils.js'
+import { schemaAlertNames, schemaToVars, varsMapToSchema, updateSchemaAlert } from '../schemaUtils.js'
 
-describe('schemaToVars', () => {
-  it('converts JSON Schema properties to vars array', () => {
-    const schema = {
-      type: 'object',
-      properties: {
-        instances: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              db_name: { type: 'string', description: 'Database name' },
-              threshold: { type: 'number', description: 'Alert threshold', default: 80 }
-            },
-            required: ['db_name']
-          }
+const sampleSchema = {
+  $schema: 'https://json-schema.org/draft-07/schema#',
+  type: 'object',
+  properties: {
+    cpu_alert: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          host: { type: 'string', description: 'Hostname' },
+          threshold: { type: 'number', description: 'Alert threshold', default: 80 }
+        },
+        required: ['host']
+      }
+    },
+    mem_alert: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          host: { type: 'string', description: 'Hostname' },
+          warn_pct: { type: 'number', description: 'Warning %', default: 70 }
         }
       }
     }
-    const vars = schemaToVars(schema)
+  }
+}
+
+describe('schemaAlertNames', () => {
+  it('extracts alert names from schema properties', () => {
+    expect(schemaAlertNames(sampleSchema)).toEqual(['cpu_alert', 'mem_alert'])
+  })
+
+  it('returns empty array for empty/null schema', () => {
+    expect(schemaAlertNames({})).toEqual([])
+    expect(schemaAlertNames(null)).toEqual([])
+  })
+})
+
+describe('schemaToVars', () => {
+  it('extracts vars for a specific alert name', () => {
+    const vars = schemaToVars(sampleSchema, 'cpu_alert')
     expect(vars).toEqual([
-      { name: 'db_name', type: 'string', description: 'Database name', required: true },
+      { name: 'host', type: 'string', description: 'Hostname', required: true },
       { name: 'threshold', type: 'number', description: 'Alert threshold', default: 80, required: false }
     ])
   })
 
-  it('handles enum as list type', () => {
+  it('extracts vars for another alert', () => {
+    const vars = schemaToVars(sampleSchema, 'mem_alert')
+    expect(vars).toEqual([
+      { name: 'host', type: 'string', description: 'Hostname', required: false },
+      { name: 'warn_pct', type: 'number', description: 'Warning %', default: 70, required: false }
+    ])
+  })
+
+  it('handles enum', () => {
     const schema = {
       type: 'object',
       properties: {
-        instances: {
+        sev_alert: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              severity: { type: 'string', enum: ['warning', 'critical'], description: 'Level' }
+              severity: { type: 'string', enum: ['warning', 'critical'] }
             }
           }
         }
       }
     }
-    const vars = schemaToVars(schema)
-    expect(vars).toEqual([
-      { name: 'severity', type: 'string', description: 'Level', required: false, enum: ['warning', 'critical'] }
-    ])
+    const vars = schemaToVars(schema, 'sev_alert')
+    expect(vars[0].enum).toEqual(['warning', 'critical'])
   })
 
-  it('returns empty array for empty schema', () => {
-    expect(schemaToVars({})).toEqual([])
-    expect(schemaToVars(null)).toEqual([])
+  it('returns empty for missing alert name', () => {
+    expect(schemaToVars(sampleSchema, 'nonexistent')).toEqual([])
+    expect(schemaToVars(null, 'x')).toEqual([])
   })
 })
 
-describe('varsToSchema', () => {
-  it('converts vars array to JSON Schema', () => {
-    const vars = [
-      { name: 'db_name', type: 'string', description: 'Database name', required: true },
-      { name: 'threshold', type: 'number', description: 'Alert threshold', default: 80, required: false }
-    ]
-    const schema = varsToSchema(vars)
-    expect(schema).toEqual({
-      $schema: 'https://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        instances: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              db_name: { type: 'string', description: 'Database name' },
-              threshold: { type: 'number', description: 'Alert threshold', default: 80 }
-            },
-            required: ['db_name']
-          }
-        }
-      }
+describe('varsMapToSchema', () => {
+  it('builds schema from alert-name → vars map', () => {
+    const schema = varsMapToSchema({
+      cpu_alert: [
+        { name: 'host', type: 'string', description: 'Hostname', required: true },
+        { name: 'threshold', type: 'number', default: 80 }
+      ]
     })
+    expect(schema.$schema).toBe('https://json-schema.org/draft-07/schema#')
+    expect(schema.properties.cpu_alert.type).toBe('array')
+    expect(schema.properties.cpu_alert.items.properties.host.type).toBe('string')
+    expect(schema.properties.cpu_alert.items.required).toEqual(['host'])
   })
 
-  it('includes enum in schema', () => {
-    const vars = [
-      { name: 'severity', type: 'string', description: 'Level', enum: ['warning', 'critical'] }
-    ]
-    const schema = varsToSchema(vars)
-    const props = schema.properties.instances.items.properties
-    expect(props.severity).toEqual({ type: 'string', description: 'Level', enum: ['warning', 'critical'] })
+  it('handles empty vars map', () => {
+    const schema = varsMapToSchema({})
+    expect(schema.properties).toEqual({})
   })
+})
 
-  it('returns empty schema for empty vars', () => {
-    const schema = varsToSchema([])
-    expect(schema.properties.instances.items.properties).toEqual({})
+describe('updateSchemaAlert', () => {
+  it('updates a single alert in existing schema', () => {
+    const updated = updateSchemaAlert(sampleSchema, 'cpu_alert', [
+      { name: 'host', type: 'string', required: true },
+      { name: 'threshold', type: 'number', default: 90 },
+      { name: 'duration', type: 'string', default: '5m' }
+    ])
+    expect(Object.keys(updated.properties)).toEqual(['cpu_alert', 'mem_alert'])
+    expect(updated.properties.cpu_alert.items.properties.duration.default).toBe('5m')
+    expect(updated.properties.mem_alert).toEqual(sampleSchema.properties.mem_alert)
   })
 })

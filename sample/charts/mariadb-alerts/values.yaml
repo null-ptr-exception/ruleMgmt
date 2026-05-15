@@ -1,10 +1,19 @@
-instances:
+mariadb_latency:
   - instance_name: mariadb-primary
     namespace: default
-    latency_warn_ms: 200
-    latency_critical_ms: 500
+    warn_ms: 200
+    critical_ms: 500
+mariadb_traffic:
+  - instance_name: mariadb-primary
+    namespace: default
     qps_warn: 10
-    error_rate_warn: 5
-    error_rate_critical: 20
-    connections_warn_pct: 70
-    connections_critical_pct: 90
+mariadb_errors:
+  - instance_name: mariadb-primary
+    namespace: default
+    warn_rate: 5
+    critical_rate: 20
+mariadb_saturation_connections:
+  - instance_name: mariadb-primary
+    namespace: default
+    warn_pct: 70
+    critical_pct: 90

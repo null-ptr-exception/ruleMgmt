@@ -3,9 +3,18 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 
+const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+
 export default function deploymentsRouter(gitopsDir) {
   const router = express.Router()
   const deploymentsDir = path.join(gitopsDir, 'deployments')
+
+  router.use('/:chart', (req, res, next) => {
+    if (!NAME_RE.test(req.params.chart)) {
+      return res.status(400).json({ error: 'Invalid chart name' })
+    }
+    next()
+  })
 
   // List deployments for a chart
   router.get('/:chart', async (req, res) => {
@@ -36,6 +45,9 @@ export default function deploymentsRouter(gitopsDir) {
 
   // Get deployment values
   router.get('/:chart/:deployment', async (req, res) => {
+    if (!NAME_RE.test(req.params.deployment)) {
+      return res.status(400).json({ error: 'Invalid deployment name' })
+    }
     const file = path.join(deploymentsDir, req.params.chart, `${req.params.deployment}-values.yaml`)
     try {
       const content = await fs.readFile(file, 'utf-8')
@@ -47,6 +59,9 @@ export default function deploymentsRouter(gitopsDir) {
 
   // Save deployment values
   router.post('/:chart/:deployment', async (req, res) => {
+    if (!NAME_RE.test(req.params.deployment)) {
+      return res.status(400).json({ error: 'Invalid deployment name' })
+    }
     const dir = path.join(deploymentsDir, req.params.chart)
     const file = path.join(dir, `${req.params.deployment}-values.yaml`)
     try {
@@ -61,6 +76,12 @@ export default function deploymentsRouter(gitopsDir) {
 
   // Clone a deployment
   router.post('/:chart/:deployment/clone', async (req, res) => {
+    if (!NAME_RE.test(req.params.deployment)) {
+      return res.status(400).json({ error: 'Invalid deployment name' })
+    }
+    if (!req.body.newName || !NAME_RE.test(req.body.newName)) {
+      return res.status(400).json({ error: 'Invalid newName' })
+    }
     const dir = path.join(deploymentsDir, req.params.chart)
     const srcFile = path.join(dir, `${req.params.deployment}-values.yaml`)
     const dstFile = path.join(dir, `${req.body.newName}-values.yaml`)
@@ -74,6 +95,9 @@ export default function deploymentsRouter(gitopsDir) {
 
   // Delete deployment
   router.delete('/:chart/:deployment', async (req, res) => {
+    if (!NAME_RE.test(req.params.deployment)) {
+      return res.status(400).json({ error: 'Invalid deployment name' })
+    }
     const file = path.join(deploymentsDir, req.params.chart, `${req.params.deployment}-values.yaml`)
     try {
       await fs.rm(file, { force: true })

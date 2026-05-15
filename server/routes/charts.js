@@ -52,6 +52,9 @@ export default function chartsRouter(gitopsDir) {
 
   // Delete a chart
   router.delete('/:name', async (req, res) => {
+    if (!NAME_RE.test(req.params.name)) {
+      return res.status(400).json({ error: 'Invalid chart name' })
+    }
     const chartDir = path.join(chartsDir, req.params.name)
     try {
       await fs.rm(chartDir, { recursive: true, force: true })

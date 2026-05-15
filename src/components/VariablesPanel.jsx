@@ -51,9 +51,9 @@ function VarCard({ variable, index, onUpdate, onRemove }) {
           <label>Options (comma-separated)</label>
           <input
             type="text"
-            value={variable.options || ''}
+            value={Array.isArray(variable.options) ? variable.options.join(', ') : variable.options || ''}
             placeholder="opt1, opt2, opt3"
-            onChange={e => update('options', e.target.value)}
+            onChange={e => update('options', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
           />
         </div>
       )}

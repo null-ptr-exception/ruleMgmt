@@ -3,9 +3,18 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 
+const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+
 export default function templatesRouter(gitopsDir) {
   const router = express.Router()
   const chartsDir = path.join(gitopsDir, 'charts')
+
+  router.use('/:chart', (req, res, next) => {
+    if (!NAME_RE.test(req.params.chart)) {
+      return res.status(400).json({ error: 'Invalid chart name' })
+    }
+    next()
+  })
 
   function chartPaths(chart) {
     const chartDir = path.join(chartsDir, chart)
@@ -110,8 +119,8 @@ export default function templatesRouter(gitopsDir) {
   router.post('/:chart/:template/rename', async (req, res) => {
     const { tmplDir, valuesFile } = chartPaths(req.params.chart)
     const { newName } = req.body
-    if (!newName) {
-      return res.status(400).json({ error: 'newName is required' })
+    if (!newName || !NAME_RE.test(newName)) {
+      return res.status(400).json({ error: 'Invalid newName' })
     }
     const oldFile = path.join(tmplDir, `${req.params.template}.yaml`)
     const newFile = path.join(tmplDir, `${newName}.yaml`)

@@ -126,8 +126,15 @@ export default function TemplateDevEditor() {
   }, [activeChart, activeTemplate, /* re-init when content loads */])
 
   // Sync yamlContent into editor when it changes externally (template load)
-  // We handle this by re-creating the editor above, which reads yamlContent at creation time.
-  // The effect dependency on activeChart+activeTemplate ensures recreation on selection change.
+  useEffect(() => {
+    if (!viewRef.current) return
+    const current = viewRef.current.state.doc.toString()
+    if (current !== yamlContent) {
+      viewRef.current.dispatch({
+        changes: { from: 0, to: current.length, insert: yamlContent },
+      })
+    }
+  }, [yamlContent])
 
   const handleSave = useCallback(async () => {
     if (!activeChart || !activeTemplate) return

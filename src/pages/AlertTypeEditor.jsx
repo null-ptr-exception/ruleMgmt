@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Card, Input, Button, Select, Table, Typography, Tag, Space } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import EditorLayout from '../components/EditorLayout'
 import KVEditor from '../components/KVEditor'
 import VersionModal from '../components/VersionModal'
 import { listTemplates, getTemplate, saveTemplate, deleteTemplate, getMetricsDict } from '../utils/api'
 import { kvArrayToObject, objectToKvArray, bumpPatch, latestVersion } from '../utils/templateUtils'
+
+const { Text } = Typography
 
 const TYPE = 'alert-type'
 const VAR_TYPES = ['string', 'metrics', 'op', 'func', 'time', 'int']
@@ -104,7 +109,7 @@ const emptySegment = (operator = '') => ({
   id: uid(), kind: 'metric', operator, scalar: '', metric: '', matchers: [],
   rangeFunc: '', rangeInterval: '5m', rangeOffset: '', rangeParam: '0.95',
   instantFunc: '', instantParam: '0.95', aggFunc: '', aggDim: 'by', aggLabels: '', aggParam: '',
-  varMap: {}, // field -> varName: fields with a varName output {{ .varName }} in the built expression
+  varMap: {},
 })
 const emptyOuter = () => ({ func: '', dim: 'by', aggLabels: '', param: '' })
 
@@ -114,7 +119,7 @@ function SuggestInput({ id, value, onChange, options = [], placeholder, style })
   const listId = `dl-${id}`
   return (
     <>
-      <input type="text" list={listId} value={value} placeholder={placeholder}
+      <Input size="small" list={listId} value={value} placeholder={placeholder}
         style={style} onChange={e => onChange(e.target.value)} />
       <datalist id={listId}>{options.map(o => <option key={o} value={o} />)}</datalist>
     </>
@@ -122,7 +127,7 @@ function SuggestInput({ id, value, onChange, options = [], placeholder, style })
 }
 
 const BADGE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
-const LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+const LABELS_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
 function SegmentCard({ seg, index, total, dict, onChange, onRemove, onMakeVar, onClearVar, availableVars }) {
   function set(field, val) { onChange({ ...seg, [field]: val }) }
@@ -134,7 +139,7 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove, onMakeVar, o
 
   const vm = seg.varMap || {}
   const color    = BADGE_COLORS[index % BADGE_COLORS.length]
-  const label    = LABELS[index] || String(index + 1)
+  const label    = LABELS_CHARS[index] || String(index + 1)
   const isScalar = seg.kind === 'scalar'
   const metricOpts = dict.map(m => m.name)
   const labelOpts  = dictLabels(dict, seg.metric).map(l => l.name)
@@ -162,29 +167,29 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove, onMakeVar, o
                     : (vm.metric ? `{{ .${vm.metric} }}` : seg.metric || <span style={{ color: '#9ca3af' }}>no metric</span>)}
         </span>
         {total > 1 && (
-          <button className="btn btn-ghost btn-sm" style={{ color: '#ef4444', padding: '2px 8px' }} onClick={onRemove}>Remove</button>
+          <Button type="text" danger size="small" onClick={onRemove}>Remove</Button>
         )}
       </div>
       <div style={{ padding: 12 }}>
         {isScalar && (
-          <div className="form-row" style={{ maxWidth: 260, marginBottom: 0 }}>
-            <label>Constant value</label>
+          <div style={{ maxWidth: 260, marginBottom: 0 }}>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Constant value</Text>
             <VarField {...varProps('scalar', 'threshold', 'string')}>
-              <input type="text" value={seg.scalar} placeholder="e.g. 100" onChange={e => set('scalar', e.target.value)} />
+              <Input size="small" value={seg.scalar} placeholder="e.g. 100" onChange={e => set('scalar', e.target.value)} />
             </VarField>
           </div>
         )}
         {!isScalar && (
           <>
-            <div className="form-row" style={{ marginBottom: 8 }}>
-              <label>Metric name</label>
+            <div style={{ marginBottom: 8 }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Metric name</Text>
               <VarField {...varProps('metric', 'metrics', 'metrics')}>
                 <SuggestInput id={`metric-${seg.id}`} value={seg.metric} options={metricOpts}
                   placeholder="e.g. http_requests_total" onChange={v => set('metric', v)} />
               </VarField>
             </div>
             <div style={{ marginBottom: 10 }}>
-              <label style={{ fontSize: 12, color: '#6b7280', fontWeight: 600, display: 'block', marginBottom: 4 }}>Label matchers</label>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12, fontWeight: 600 }}>Label matchers</Text>
               {seg.matchers.length > 0 && (
                 <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 6 }}>
                   <colgroup><col style={{ width: '34%' }} /><col style={{ width: '13%' }} /><col /><col style={{ width: 30 }} /></colgroup>
@@ -195,9 +200,9 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove, onMakeVar, o
                           <SuggestInput id={`lbl-${seg.id}-${i}`} value={m.label} options={labelOpts} placeholder="label" onChange={v => updateMatcher(i, 'label', v)} />
                         </td>
                         <td style={{ paddingRight: 4, paddingBottom: 4 }}>
-                          <select value={m.op} onChange={e => updateMatcher(i, 'op', e.target.value)} style={{ fontFamily: 'monospace' }}>
-                            {LABEL_OPS.map(o => <option key={o} value={o}>{o}</option>)}
-                          </select>
+                          <Select size="small" value={m.op} onChange={val => updateMatcher(i, 'op', val)}
+                            style={{ width: '100%', fontFamily: 'monospace' }}
+                            options={LABEL_OPS.map(o => ({ value: o, label: o }))} />
                         </td>
                         <td style={{ paddingRight: 4, paddingBottom: 4 }}>
                           <VarField field={`labelVal_${m.id}`} varMap={vm}
@@ -209,36 +214,35 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove, onMakeVar, o
                           </VarField>
                         </td>
                         <td style={{ paddingBottom: 4 }}>
-                          <button className="btn btn-ghost btn-icon" onClick={() => removeMatcher(i)}>×</button>
+                          <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => removeMatcher(i)} />
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
-              <button className="btn btn-ghost btn-sm" onClick={addMatcher}>+ Add matcher</button>
+              <Button size="small" icon={<PlusOutlined />} onClick={addMatcher}>Add matcher</Button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
               <div>
-                <label style={{ fontSize: 11, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Range function</label>
-                <select value={seg.rangeFunc} onChange={e => set('rangeFunc', e.target.value)} style={{ marginBottom: 5 }}>
-                  <option value="">— none —</option>
-                  {RANGE_FUNCS.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
+                <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Range function</Text>
+                <Select size="small" value={seg.rangeFunc || undefined} onChange={val => set('rangeFunc', val || '')}
+                  allowClear placeholder="-- none --" style={{ width: '100%', marginBottom: 5 }}
+                  options={RANGE_FUNCS.map(f => ({ value: f, label: f }))} />
                 {seg.rangeFunc && (
                   <>
                     <VarField {...varProps('rangeInterval', 'range', 'time')}>
-                      <input type="text" value={seg.rangeInterval} placeholder="5m" onChange={e => set('rangeInterval', e.target.value)} />
+                      <Input size="small" value={seg.rangeInterval} placeholder="5m" onChange={e => set('rangeInterval', e.target.value)} />
                     </VarField>
                     <div style={{ marginTop: 4 }}>
                       <VarField {...varProps('rangeOffset', 'offset', 'time')}>
-                        <input type="text" value={seg.rangeOffset} placeholder="offset (e.g. 1h)" onChange={e => set('rangeOffset', e.target.value)} />
+                        <Input size="small" value={seg.rangeOffset} placeholder="offset (e.g. 1h)" onChange={e => set('rangeOffset', e.target.value)} />
                       </VarField>
                     </div>
                     {showRangeParam && (
                       <div style={{ marginTop: 4 }}>
                         <VarField {...varProps('rangeParam', 'quantile', 'string')}>
-                          <input type="number" step="0.05" min="0" max="1" value={seg.rangeParam} onChange={e => set('rangeParam', e.target.value)} />
+                          <Input size="small" type="number" step="0.05" min="0" max="1" value={seg.rangeParam} onChange={e => set('rangeParam', e.target.value)} />
                         </VarField>
                       </div>
                     )}
@@ -246,37 +250,34 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove, onMakeVar, o
                 )}
               </div>
               <div>
-                <label style={{ fontSize: 11, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Instant function</label>
-                <select value={seg.instantFunc} onChange={e => set('instantFunc', e.target.value)}>
-                  <option value="">— none —</option>
-                  {INSTANT_FUNCS.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
+                <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Instant function</Text>
+                <Select size="small" value={seg.instantFunc || undefined} onChange={val => set('instantFunc', val || '')}
+                  allowClear placeholder="-- none --" style={{ width: '100%' }}
+                  options={INSTANT_FUNCS.map(f => ({ value: f, label: f }))} />
                 {showInstantParam && (
                   <div style={{ marginTop: 5 }}>
                     <VarField {...varProps('instantParam', 'param', 'string')}>
-                      <input type="number" step="0.05" min="0" max="1" value={seg.instantParam} onChange={e => set('instantParam', e.target.value)} />
+                      <Input size="small" type="number" step="0.05" min="0" max="1" value={seg.instantParam} onChange={e => set('instantParam', e.target.value)} />
                     </VarField>
                   </div>
                 )}
               </div>
               <div>
-                <label style={{ fontSize: 11, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Aggregation</label>
-                <select value={seg.aggFunc} onChange={e => set('aggFunc', e.target.value)} style={{ marginBottom: seg.aggFunc ? 5 : 0 }}>
-                  <option value="">— none —</option>
-                  {AGG_FUNCS.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
+                <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 5 }}>Aggregation</Text>
+                <Select size="small" value={seg.aggFunc || undefined} onChange={val => set('aggFunc', val || '')}
+                  allowClear placeholder="-- none --" style={{ width: '100%', marginBottom: seg.aggFunc ? 5 : 0 }}
+                  options={AGG_FUNCS.map(f => ({ value: f, label: f }))} />
                 {seg.aggFunc && showAggDim && (
                   <>
-                    <select value={seg.aggDim} onChange={e => set('aggDim', e.target.value)} style={{ width: 80, marginBottom: 4 }}>
-                      <option value="by">by</option>
-                      <option value="without">without</option>
-                    </select>
+                    <Select size="small" value={seg.aggDim} onChange={val => set('aggDim', val)}
+                      style={{ width: 80, marginBottom: 4 }}
+                      options={[{ value: 'by', label: 'by' }, { value: 'without', label: 'without' }]} />
                     <SuggestInput id={`agg-${seg.id}`} value={seg.aggLabels} options={labelOpts} placeholder="job, instance" onChange={v => set('aggLabels', v)} />
                   </>
                 )}
                 {seg.aggFunc && showAggParam && (
-                  <input type="text" style={{ marginTop: 4 }} value={seg.aggParam}
-                    placeholder={seg.aggFunc === 'quantile' ? 'φ (0.95)' : seg.aggFunc === 'count_values' ? 'label name' : 'k (5)'}
+                  <Input size="small" style={{ marginTop: 4 }} value={seg.aggParam}
+                    placeholder={seg.aggFunc === 'quantile' ? 'phi (0.95)' : seg.aggFunc === 'count_values' ? 'label name' : 'k (5)'}
                     onChange={e => set('aggParam', e.target.value)} />
                 )}
               </div>
@@ -291,13 +292,11 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove, onMakeVar, o
 function OperatorDivider({ value, onChange }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
-      <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
-      <select value={value} onChange={e => onChange(e.target.value)}
-        style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: '#6366f1',
-          border: '1.5px solid #a5b4fc', borderRadius: 6, padding: '3px 10px', background: '#eef2ff' }}>
-        {BINARY_OPS.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-      <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+      <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
+      <Select size="small" value={value} onChange={onChange}
+        style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, minWidth: 80 }}
+        options={BINARY_OPS.map(o => ({ value: o, label: o }))} />
+      <div style={{ flex: 1, height: 1, background: '#f0f0f0' }} />
     </div>
   )
 }
@@ -321,7 +320,6 @@ const emptyForm = () => ({
 })
 
 // ── VarField: wraps an input with a "make var" / "clear var" control ─────────
-// availableVars: form.vars filtered to same type, for reuse
 
 function VarField({ field, varMap, onMakeVar, onClearVar, varPrefix, varType, availableVars = [], children }) {
   const varName    = varMap?.[field]
@@ -333,23 +331,20 @@ function VarField({ field, varMap, onMakeVar, onClearVar, varPrefix, varType, av
     padding: '2px 4px', cursor: 'pointer', maxWidth: 160,
   }
 
-  // Field is already bound to a var — show select to switch, × to clear
   if (varName) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
         <select value={varName} style={selectStyle}
           onChange={e => onMakeVar(field, varPrefix, varType, e.target.value)}>
           {sameType.map(v => <option key={v.name} value={v.name}>{`{{ .${v.name} }}`}</option>)}
-          {/* fallback if varName not in sameType (e.g. type mismatch edge case) */}
           {!sameType.find(v => v.name === varName) && <option value={varName}>{`{{ .${varName} }}`}</option>}
         </select>
-        <button className="btn btn-ghost btn-icon" style={{ color: '#ef4444', fontSize: 13 }}
-          title="Remove variable" onClick={() => onClearVar(field)}>×</button>
+        <Button type="text" danger size="small" icon={<DeleteOutlined />}
+          title="Remove variable" onClick={() => onClearVar(field)} />
       </div>
     )
   }
 
-  // Not yet bound — show input + a dropdown that offers existing vars or "New"
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
       <div style={{ flex: 1 }}>{children}</div>
@@ -357,13 +352,13 @@ function VarField({ field, varMap, onMakeVar, onClearVar, varPrefix, varType, av
         padding: '2px 4px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
         color: '#7c3aed', background: '#f5f3ff', border: '1px solid #ddd6fe',
         borderRadius: 4, maxWidth: 110,
-      }} value="" title={`Bind to a template variable`}
+      }} value="" title="Bind to a template variable"
         onChange={e => {
           if (!e.target.value) return
           onMakeVar(field, varPrefix, varType, e.target.value === '__new__' ? null : e.target.value)
         }}>
         <option value="">{'{ }'}</option>
-        {sameType.map(v => <option key={v.name} value={v.name}>↑ {v.name}</option>)}
+        {sameType.map(v => <option key={v.name} value={v.name}>^ {v.name}</option>)}
         <option value="__new__">+ New var</option>
       </select>
     </div>
@@ -374,12 +369,12 @@ function VarField({ field, varMap, onMakeVar, onClearVar, varPrefix, varType, av
 
 function ModeToggle({ mode, onChange }) {
   return (
-    <div style={{ display: 'flex', borderRadius: 5, overflow: 'hidden', border: '1px solid #d1d5db', fontSize: 11 }}>
+    <div style={{ display: 'flex', borderRadius: 5, overflow: 'hidden', border: '1px solid #d9d9d9', fontSize: 11 }}>
       {[['visual', 'Visual Builder'], ['raw', 'Raw / Template']].map(([k, lbl]) => (
         <button key={k} style={{
           padding: '3px 13px', border: 'none', cursor: 'pointer', fontWeight: 600,
           background: mode === k ? '#6366f1' : '#fff',
-          color: mode === k ? '#fff' : '#6b7280',
+          color: mode === k ? '#fff' : '#8c8c8c',
         }} onClick={() => onChange(k)}>{lbl}</button>
       ))}
     </div>
@@ -396,10 +391,8 @@ export default function AlertTypeEditor() {
   const [modal, setModal]         = useState(null)
   const [status, setStatus]       = useState('')
 
-  // Expr mode: 'visual' builds PromQL visually; 'raw' edits the template string directly
   const [exprMode, setExprMode]   = useState('visual')
 
-  // PromQL builder state
   const [segments, setSegments]       = useState([emptySegment()])
   const [outer, setOuter]             = useState(emptyOuter())
   const [outerOffset, setOuterOffset] = useState('')
@@ -407,7 +400,6 @@ export default function AlertTypeEditor() {
 
   const builtQuery = useMemo(() => buildFinalQuery(segments, outer, outerOffset), [segments, outer, outerOffset])
 
-  // In visual mode, form.expr tracks the built query live
   useEffect(() => {
     if (exprMode === 'visual') setForm(f => ({ ...f, expr: builtQuery }))
   }, [exprMode, builtQuery])
@@ -433,7 +425,6 @@ export default function AlertTypeEditor() {
     })
     setSelected({ name, version })
     setIsNew(false)
-    // Reset builder and switch to raw — template vars can't be parsed back to segments
     setSegments([emptySegment()])
     setOuter(emptyOuter())
     setOuterOffset('')
@@ -452,14 +443,11 @@ export default function AlertTypeEditor() {
 
   function handleModeChange(mode) {
     if (mode === 'visual' && form.expr && form.expr !== builtQuery) {
-      // Raw textarea has content that differs from the builder output (user likely added template vars).
-      // Switching to visual will overwrite form.expr with builtQuery — confirm first.
       if (!confirm('Switching to Visual will replace your raw expression with the builder output. Continue?')) return
     }
     setExprMode(mode)
   }
 
-  // Segment handlers
   function updateSeg(id, updated) { setSegments(prev => prev.map(s => s.id === id ? updated : s)) }
   function removeSeg(id) {
     setSegments(prev => {
@@ -471,11 +459,8 @@ export default function AlertTypeEditor() {
   function addSeg()             { setSegments(prev => [...prev, emptySegment('+')]) }
   function updateSegOp(id, op)  { setSegments(prev => prev.map(s => s.id === id ? { ...s, operator: op } : s)) }
 
-  // Var-field handlers: convert a segment field to a template variable
-  // existingVarName: reuse an existing var; null: create a new one
   function makeVar(segId, field, prefix, varType, existingVarName) {
     if (existingVarName) {
-      // Reuse — just update the segment's varMap, no new entry in form.vars
       setSegments(prev => prev.map(s => s.id === segId
         ? { ...s, varMap: { ...s.varMap, [field]: existingVarName } } : s))
     } else {
@@ -549,237 +534,232 @@ export default function AlertTypeEditor() {
   const showOuterAggParam = AGG_PARAM_FUNCS.has(outer.func)
   const allLabelOpts      = [...new Set(dict.flatMap(m => m.labels.map(l => l.name)))]
   const exprPreview       = previewExpr(form.expr, form.vars)
+  const showForm          = isNew || selected
+
+  const varColumns = [
+    {
+      title: 'Name', dataIndex: 'name', width: '26%',
+      render: (_, v, i) => (
+        <Input size="small" value={v.name} placeholder="varName"
+          onChange={e => updateVar(i, 'name', e.target.value)} />
+      ),
+    },
+    {
+      title: 'Type', dataIndex: 'type', width: '16%',
+      render: (_, v, i) => (
+        <Select size="small" value={v.type} onChange={val => updateVar(i, 'type', val)}
+          style={{ width: '100%' }}
+          options={VAR_TYPES.map(t => ({ value: t, label: t }))} />
+      ),
+    },
+    {
+      title: 'Description', dataIndex: 'description',
+      render: (_, v, i) => (
+        <Input size="small" value={v.description} placeholder="what this var means"
+          onChange={e => updateVar(i, 'description', e.target.value)} />
+      ),
+    },
+    {
+      title: '', key: 'actions', width: 40,
+      render: (_, _v, i) => (
+        <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => removeVar(i)} />
+      ),
+    },
+  ]
 
   return (
-    <div className="editor-layout">
-
-      {/* ── Sidebar ── */}
-      <div className="editor-list">
-        <div className="editor-list-header">
-          Alert Types
-          <button className="btn btn-primary btn-sm" onClick={startNew}>+ New</button>
-        </div>
-        <div className="editor-list-body">
-          {Object.keys(templates).length === 0 && (
-            <div style={{ padding: '20px 14px', color: '#9ca3af', fontSize: 13 }}>No templates yet.</div>
-          )}
-          {Object.entries(templates).map(([name, versions]) => (
-            <div key={name} className="template-group">
-              <div className="template-group-name">{name}</div>
-              {versions.map(v => (
-                <div key={v}
-                  className={`template-version${selected?.name === name && selected?.version === v ? ' active' : ''}`}
-                  onClick={() => selectVersion(name, v)}>
-                  <span className="version-badge">{v}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Form ── */}
-      <div className="editor-form">
-        {!isNew && !selected ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">⚡</div>
-            <p>Select a template or click + New to create one.</p>
-          </div>
-        ) : (
-          <>
-            {/* Identity */}
-            <div className="form-card">
-              <div className="form-card-title">
+    <EditorLayout
+      title="Alert Types"
+      templates={templates}
+      selected={selected}
+      onSelect={selectVersion}
+      onNew={startNew}
+      emptyIcon="⚡"
+      emptyText="Select a template or click + New to create one."
+    >
+      {showForm && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          {/* Identity */}
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text strong style={{ fontSize: 15 }}>
                 {isNew ? 'New Alert Type' : `${selected.name} @ ${selected.version}`}
-                {status && <span className="tag">{status}</span>}
+              </Text>
+              {status && <Tag color="success">{status}</Tag>}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Name *</Text>
+                <Input value={form.name} placeholder="e.g. single-threshold"
+                  readOnly={!isNew && !!selected}
+                  style={!isNew && selected ? { background: '#fafafa', color: '#8c8c8c' } : {}}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                <div className="form-row" style={{ marginBottom: 0 }}>
-                  <label>Name *</label>
-                  <input type="text" value={form.name} placeholder="e.g. single-threshold"
-                    readOnly={!isNew && !!selected}
-                    style={!isNew && selected ? { background: '#f9fafb', color: '#6b7280' } : {}}
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-                </div>
-                <div className="form-row" style={{ marginBottom: 0 }}>
-                  <label>Description</label>
-                  <input type="text" value={form.description} placeholder="Optional"
-                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-                </div>
-                <div className="form-row" style={{ marginBottom: 0 }}>
-                  <label>For (duration, optional)</label>
-                  <input type="text" value={form.for} placeholder="e.g. 5m"
-                    onChange={e => setForm(f => ({ ...f, for: e.target.value }))} />
-                </div>
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Description</Text>
+                <Input value={form.description} placeholder="Optional"
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>For (duration, optional)</Text>
+                <Input value={form.for} placeholder="e.g. 5m"
+                  onChange={e => setForm(f => ({ ...f, for: e.target.value }))} />
               </div>
             </div>
+          </Card>
 
-            {/* Expression */}
-            <div className="form-card">
-              <div className="form-card-title">
-                Expression
+          {/* Expression */}
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text strong>Expression</Text>
+              <div style={{ marginLeft: 'auto' }}>
                 <ModeToggle mode={exprMode} onChange={handleModeChange} />
               </div>
+            </div>
 
-              {/* ── Visual Builder ── */}
-              {exprMode === 'visual' && (
-                <>
-                  {segments.map((seg, i) => (
-                    <div key={seg.id}>
-                      {i > 0 && <OperatorDivider value={seg.operator || '+'} onChange={op => updateSegOp(seg.id, op)} />}
-                      <SegmentCard seg={seg} index={i} total={segments.length} dict={dict}
-                        onChange={updated => updateSeg(seg.id, updated)}
-                        onRemove={() => removeSeg(seg.id)}
-                        onMakeVar={(field, prefix, type, existing) => makeVar(seg.id, field, prefix, type, existing)}
-                        onClearVar={field => clearVar(seg.id, field)}
-                        availableVars={form.vars} />
+            {/* Visual Builder */}
+            {exprMode === 'visual' && (
+              <>
+                {segments.map((seg, i) => (
+                  <div key={seg.id}>
+                    {i > 0 && <OperatorDivider value={seg.operator || '+'} onChange={op => updateSegOp(seg.id, op)} />}
+                    <SegmentCard seg={seg} index={i} total={segments.length} dict={dict}
+                      onChange={updated => updateSeg(seg.id, updated)}
+                      onRemove={() => removeSeg(seg.id)}
+                      onMakeVar={(field, prefix, type, existing) => makeVar(seg.id, field, prefix, type, existing)}
+                      onClearVar={field => clearVar(seg.id, field)}
+                      availableVars={form.vars} />
+                  </div>
+                ))}
+
+                <Button block size="small" style={{ marginBottom: 12 }} onClick={addSeg}>
+                  + Add metric / scalar
+                </Button>
+
+                {/* Outer aggregation */}
+                <div style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 6, padding: '10px 14px', marginBottom: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 8 }}>
+                    Outer aggregation
+                  </Text>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div style={{ minWidth: 140 }}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Function</Text>
+                      <Select size="small" value={outer.func || undefined} onChange={val => setOuter(o => ({ ...o, func: val || '' }))}
+                        allowClear placeholder="-- none --" style={{ width: '100%' }}
+                        options={AGG_FUNCS.map(f => ({ value: f, label: f }))} />
                     </div>
-                  ))}
-
-                  <button className="btn btn-secondary btn-sm" style={{ width: '100%', marginBottom: 12 }} onClick={addSeg}>
-                    + Add metric / scalar
-                  </button>
-
-                  {/* Outer aggregation */}
-                  <div style={{ background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 6, padding: '10px 14px', marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6b7280', marginBottom: 8 }}>
-                      Outer aggregation
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                      <div className="form-row" style={{ marginBottom: 0, minWidth: 140 }}>
-                        <label>Function</label>
-                        <select value={outer.func} onChange={e => setOuter(o => ({ ...o, func: e.target.value }))}>
-                          <option value="">— none —</option>
-                          {AGG_FUNCS.map(f => <option key={f} value={f}>{f}</option>)}
-                        </select>
-                      </div>
-                      {showOuterAggDim && (
-                        <>
-                          <div className="form-row" style={{ marginBottom: 0, width: 80 }}>
-                            <label>Dim</label>
-                            <select value={outer.dim} onChange={e => setOuter(o => ({ ...o, dim: e.target.value }))}>
-                              <option value="by">by</option>
-                              <option value="without">without</option>
-                            </select>
-                          </div>
-                          <div className="form-row" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
-                            <label>Labels</label>
-                            <SuggestInput id="outer-labels" value={outer.aggLabels} options={allLabelOpts}
-                              placeholder="job, instance" onChange={v => setOuter(o => ({ ...o, aggLabels: v }))} />
-                          </div>
-                        </>
-                      )}
-                      {showOuterAggParam && (
-                        <div className="form-row" style={{ marginBottom: 0, width: 120 }}>
-                          <label>{outer.func === 'quantile' ? 'φ' : outer.func === 'count_values' ? 'label' : 'k'}</label>
-                          <input type="text" value={outer.param}
-                            placeholder={outer.func === 'quantile' ? '0.95' : outer.func === 'count_values' ? 'value' : '5'}
-                            onChange={e => setOuter(o => ({ ...o, param: e.target.value }))} />
+                    {showOuterAggDim && (
+                      <>
+                        <div style={{ width: 80 }}>
+                          <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Dim</Text>
+                          <Select size="small" value={outer.dim} onChange={val => setOuter(o => ({ ...o, dim: val }))}
+                            style={{ width: '100%' }}
+                            options={[{ value: 'by', label: 'by' }, { value: 'without', label: 'without' }]} />
                         </div>
-                      )}
-                      <div className="form-row" style={{ marginBottom: 0, width: 120 }}>
-                        <label>Offset</label>
-                        <input type="text" value={outerOffset} placeholder="e.g. 1h"
-                          onChange={e => setOuterOffset(e.target.value)} />
+                        <div style={{ flex: 1, minWidth: 140 }}>
+                          <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Labels</Text>
+                          <SuggestInput id="outer-labels" value={outer.aggLabels} options={allLabelOpts}
+                            placeholder="job, instance" onChange={v => setOuter(o => ({ ...o, aggLabels: v }))} />
+                        </div>
+                      </>
+                    )}
+                    {showOuterAggParam && (
+                      <div style={{ width: 120 }}>
+                        <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
+                          {outer.func === 'quantile' ? 'phi' : outer.func === 'count_values' ? 'label' : 'k'}
+                        </Text>
+                        <Input size="small" value={outer.param}
+                          placeholder={outer.func === 'quantile' ? '0.95' : outer.func === 'count_values' ? 'value' : '5'}
+                          onChange={e => setOuter(o => ({ ...o, param: e.target.value }))} />
                       </div>
+                    )}
+                    <div style={{ width: 120 }}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Offset</Text>
+                      <Input size="small" value={outerOffset} placeholder="e.g. 1h"
+                        onChange={e => setOuterOffset(e.target.value)} />
                     </div>
                   </div>
+                </div>
 
-                  {/* Live preview */}
-                  <div style={{ background: '#0f172a', borderRadius: 6, padding: '12px 14px', marginBottom: 10 }}>
-                    <div style={{ fontSize: 10, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-                      Built expression
-                    </div>
-                    <div style={{ fontFamily: 'monospace', fontSize: 12.5, color: '#7dd3fc', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.8 }}>
-                      {builtQuery || <span style={{ color: '#334155' }}>Add a metric above…</span>}
-                    </div>
+                {/* Live preview */}
+                <div style={{ background: '#0f172a', borderRadius: 6, padding: '12px 14px', marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: '#475569', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                    Built expression
                   </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <button className="btn btn-secondary btn-sm" disabled={!builtQuery}
-                      onClick={() => handleModeChange('raw')}>
-                      Switch to Raw → replace values with {'{{ .varName }}'}
-                    </button>
-                    <span style={{ fontSize: 11, color: '#9ca3af' }}>expression saved automatically</span>
+                  <div style={{ fontFamily: 'monospace', fontSize: 12.5, color: '#7dd3fc', whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.8 }}>
+                    {builtQuery || <span style={{ color: '#334155' }}>Add a metric above...</span>}
                   </div>
-                </>
-              )}
+                </div>
 
-              {/* ── Raw / Template mode ── */}
-              {exprMode === 'raw' && (
-                <>
-                  <textarea rows={3} value={form.expr}
-                    placeholder={'{{ .func }}({{ .metrics }}[{{ .time }}]) {{ .op }} {{ .threshold }}'}
-                    onChange={e => setForm(f => ({ ...f, expr: e.target.value }))} />
-                  <span className="text-muted" style={{ display: 'block', marginTop: 4 }}>
-                    {'Replace any concrete value with {{ .varName }} · arithmetic: {{ .intVar + 10 }} · switch to Visual to rebuild from segments'}
-                  </span>
-                  {form.expr && (
-                    <div className="preview-box" style={{ marginTop: 10 }}>
-                      {exprPreview || <span style={{ color: '#475569' }}>Declare vars below to see substitution preview</span>}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Button size="small" disabled={!builtQuery}
+                    onClick={() => handleModeChange('raw')}>
+                    Switch to Raw -> replace values with {'{{ .varName }}'}
+                  </Button>
+                  <Text type="secondary" style={{ fontSize: 11 }}>expression saved automatically</Text>
+                </div>
+              </>
+            )}
 
-            {/* Var Declarations */}
-            <div className="form-card">
-              <div className="form-card-title">
-                Var Declarations
-                <button className="btn btn-secondary btn-sm" onClick={addVar}>+ Add Var</button>
-              </div>
-              <p className="text-muted" style={{ marginBottom: 10 }}>
-                Declare parameters with types. Rule Group fills in actual values.
-              </p>
-              {form.vars.length === 0 && <p className="text-muted">No vars declared yet.</p>}
-              <table className="kv-table" style={{ width: '100%', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '26%' }} />
-                  <col style={{ width: '16%' }} />
-                  <col />
-                  <col style={{ width: 32 }} />
-                </colgroup>
-                <thead>
-                  <tr><th>name</th><th>type</th><th>description</th><th></th></tr>
-                </thead>
-                <tbody>
-                  {form.vars.map((v, i) => (
-                    <tr key={i}>
-                      <td><input type="text" value={v.name} placeholder="varName" onChange={e => updateVar(i, 'name', e.target.value)} /></td>
-                      <td>
-                        <select value={v.type} onChange={e => updateVar(i, 'type', e.target.value)}>
-                          {VAR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </td>
-                      <td><input type="text" value={v.description} placeholder="what this var means" onChange={e => updateVar(i, 'description', e.target.value)} /></td>
-                      <td><button className="btn btn-ghost btn-icon" onClick={() => removeVar(i)}>×</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Raw / Template mode */}
+            {exprMode === 'raw' && (
+              <>
+                <Input.TextArea rows={3} value={form.expr}
+                  placeholder={'{{ .func }}({{ .metrics }}[{{ .time }}]) {{ .op }} {{ .threshold }}'}
+                  onChange={e => setForm(f => ({ ...f, expr: e.target.value }))} />
+                <Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 12 }}>
+                  {'Replace any concrete value with {{ .varName }} · arithmetic: {{ .intVar + 10 }} · switch to Visual to rebuild from segments'}
+                </Text>
+                {form.expr && (
+                  <div style={{
+                    marginTop: 10, fontFamily: 'monospace', fontSize: 12,
+                    background: '#f5f5f5', padding: '8px 12px', borderRadius: 4, color: '#595959',
+                  }}>
+                    {exprPreview || <span style={{ color: '#8c8c8c' }}>Declare vars below to see substitution preview</span>}
+                  </div>
+                )}
+              </>
+            )}
+          </Card>
 
-            {/* Labels */}
-            <div className="form-card">
-              <div className="form-card-title">Labels (optional)</div>
-              <KVEditor rows={form.labels}
-                onChange={rows => setForm(f => ({ ...f, labels: rows }))}
-                keyPlaceholder="label key" valuePlaceholder="value" />
+          {/* Var Declarations */}
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Text strong>Var Declarations</Text>
+              <Button size="small" icon={<PlusOutlined />} onClick={addVar}>Add Var</Button>
             </div>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 10, fontSize: 12 }}>
+              Declare parameters with types. Rule Group fills in actual values.
+            </Text>
+            <Table
+              columns={varColumns}
+              dataSource={form.vars.map((v, i) => ({ ...v, key: `var-${i}` }))}
+              pagination={false}
+              size="small"
+              bordered
+              locale={{ emptyText: 'No vars declared yet.' }}
+            />
+          </Card>
 
-            <div className="btn-row">
-              <button className="btn btn-primary" onClick={openSaveModal}
-                disabled={!form.name.trim() || !form.expr.trim()}>
-                Save as Version…
-              </button>
-              {selected && <button className="btn btn-danger" onClick={handleDelete}>Delete this version</button>}
-            </div>
-          </>
-        )}
-      </div>
+          {/* Labels */}
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <Text strong style={{ display: 'block', marginBottom: 8 }}>Labels (optional)</Text>
+            <KVEditor rows={form.labels}
+              onChange={rows => setForm(f => ({ ...f, labels: rows }))}
+              keyPlaceholder="label key" valuePlaceholder="value" />
+          </Card>
+
+          <Space>
+            <Button type="primary" onClick={openSaveModal}
+              disabled={!form.name.trim() || !form.expr.trim()}>
+              Save as Version...
+            </Button>
+            {selected && <Button danger onClick={handleDelete}>Delete this version</Button>}
+          </Space>
+        </div>
+      )}
 
       {modal && <VersionModal defaultName={modal.name} defaultVersion={modal.version} onSave={handleSave} onCancel={() => setModal(null)} />}
-    </div>
+    </EditorLayout>
   )
 }

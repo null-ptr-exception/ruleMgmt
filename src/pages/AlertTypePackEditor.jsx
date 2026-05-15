@@ -1,8 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { Card, Input, Button, Select, Table, Typography, Tag, Space } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import EditorLayout from '../components/EditorLayout'
 import KVEditor from '../components/KVEditor'
 import VersionModal from '../components/VersionModal'
 import { listTemplates, getTemplate, saveTemplate, deleteTemplate } from '../utils/api'
 import { kvArrayToObject, bumpPatch, latestVersion } from '../utils/templateUtils'
+
+const { Text } = Typography
 
 const TYPE = 'alert-type-pack'
 const VAR_TYPES = ['string', 'metrics', 'op', 'func', 'time', 'int']
@@ -63,8 +68,6 @@ function buildPackPreview(form) {
   return y.trimEnd()
 }
 
-// ── Fill template preview: replace {{ .varName }} with <varName> ──────────────
-
 function previewFill(str, vars) {
   if (!str) return ''
   const map = {}
@@ -85,8 +88,7 @@ export default function AlertTypePackEditor() {
   const [showPreview, setShowPreview] = useState(false)
 
   const load = useCallback(async () => {
-    const ts = await listTemplates(TYPE)
-    setTemplates(ts)
+    setTemplates(await listTemplates(TYPE))
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -117,13 +119,7 @@ export default function AlertTypePackEditor() {
     setIsNew(false)
   }
 
-  function startNew() {
-    setForm(emptyForm())
-    setSelected(null)
-    setIsNew(true)
-  }
-
-  // ── Var CRUD ───────────────────────────────────────────────────────────────
+  function startNew() { setForm(emptyForm()); setSelected(null); setIsNew(true) }
 
   function addVar() {
     setForm(f => ({ ...f, vars: [...f.vars, { name: '', type: 'string', description: '' }] }))
@@ -135,8 +131,6 @@ export default function AlertTypePackEditor() {
     setForm(f => ({ ...f, vars: f.vars.map((v, idx) => idx === i ? { ...v, [field]: val } : v) }))
   }
 
-  // ── Rule template CRUD ─────────────────────────────────────────────────────
-
   function addPackRule() {
     setForm(f => ({ ...f, rules: [...f.rules, emptyPackRule()] }))
   }
@@ -146,8 +140,6 @@ export default function AlertTypePackEditor() {
   function updatePackRule(id, field, val) {
     setForm(f => ({ ...f, rules: f.rules.map(r => r._id === id ? { ...r, [field]: val } : r) }))
   }
-
-  // ── Save / Delete ──────────────────────────────────────────────────────────
 
   function buildPayload() {
     return {
@@ -159,10 +151,7 @@ export default function AlertTypePackEditor() {
         ...(v.description ? { description: v.description } : {}),
       })),
       rules: form.rules.map(r => {
-        const obj = {
-          ruleName: r.ruleName,
-          expr:     r.expr,
-        }
+        const obj = { ruleName: r.ruleName, expr: r.expr }
         const lbls = kvArrayToObject((r.labels || []).filter(l => l.key.trim()))
         if (Object.keys(lbls).length) obj.labels = lbls
         if (r.for)         obj.for = r.for
@@ -200,169 +189,151 @@ export default function AlertTypePackEditor() {
   }
 
   const preview = useMemo(() => buildPackPreview(form), [form])
+  const showForm = isNew || selected
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const varColumns = [
+    {
+      title: 'Name', dataIndex: 'name', width: '28%',
+      render: (_, v, i) => (
+        <Input size="small" value={v.name} placeholder="varName"
+          onChange={e => updateVar(i, 'name', e.target.value)} />
+      ),
+    },
+    {
+      title: 'Type', dataIndex: 'type', width: '16%',
+      render: (_, v, i) => (
+        <Select size="small" value={v.type} onChange={val => updateVar(i, 'type', val)}
+          style={{ width: '100%' }}
+          options={VAR_TYPES.map(t => ({ value: t, label: t }))} />
+      ),
+    },
+    {
+      title: 'Description', dataIndex: 'description',
+      render: (_, v, i) => (
+        <Input size="small" value={v.description} placeholder="what this var means"
+          onChange={e => updateVar(i, 'description', e.target.value)} />
+      ),
+    },
+    {
+      title: '', key: 'actions', width: 40,
+      render: (_, _v, i) => (
+        <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => removeVar(i)} />
+      ),
+    },
+  ]
 
   return (
-    <div className="editor-layout">
-
-      {/* Sidebar */}
-      <div className="editor-list">
-        <div className="editor-list-header">
-          Alert Packs
-          <button className="btn btn-primary btn-sm" onClick={startNew}>+ New</button>
-        </div>
-        <div className="editor-list-body">
-          {Object.keys(templates).length === 0 && (
-            <div style={{ padding: '20px 14px', color: '#9ca3af', fontSize: 13 }}>No packs yet.</div>
-          )}
-          {Object.entries(templates).map(([name, versions]) => (
-            <div key={name} className="template-group">
-              <div className="template-group-name">{name}</div>
-              {versions.map(v => (
-                <div key={v}
-                  className={`template-version${selected?.name === name && selected?.version === v ? ' active' : ''}`}
-                  onClick={() => selectVersion(name, v)}>
-                  <span className="version-badge">{v}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Form */}
-      <div className="editor-form" style={showPreview && (isNew || selected) ? { display: 'flex', gap: 0, padding: 0, overflow: 'hidden' } : {}}>
-        {!isNew && !selected ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">📋</div>
-            <p>Select a pack or click + New to create one.</p>
-          </div>
-        ) : (
-          <div style={showPreview ? { display: 'flex', width: '100%', height: '100%', overflow: 'hidden' } : {}}>
-          <div style={showPreview ? { flex: 1, overflowY: 'auto', padding: 24, minWidth: 0 } : {}}>
-
-            {/* Identity */}
-            <div className="form-card">
-              <div className="form-card-title">
-                <span>
+    <EditorLayout
+      title="Alert Packs"
+      templates={templates}
+      selected={selected}
+      onSelect={selectVersion}
+      onNew={startNew}
+      emptyIcon="📋"
+      emptyText="Select a pack or click + New to create one."
+    >
+      {showForm && (
+        <div style={{ display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 24, minWidth: 0 }}>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Text strong style={{ fontSize: 15 }}>
                   {isNew ? 'New Alert Pack' : `${selected.name} @ ${selected.version}`}
-                  {status && <span className="tag">{status}</span>}
-                </span>
-                <button
-                  className={`btn btn-sm ${showPreview ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setShowPreview(v => !v)}
-                >
-                  {showPreview ? 'Hide Preview' : 'Show Preview'}
-                </button>
+                </Text>
+                {status && <Tag color="success">{status}</Tag>}
+                <div style={{ marginLeft: 'auto' }}>
+                  <Button size="small" type={showPreview ? 'primary' : 'default'}
+                    onClick={() => setShowPreview(v => !v)}>
+                    {showPreview ? 'Hide Preview' : 'Show Preview'}
+                  </Button>
+                </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div className="form-row" style={{ marginBottom: 0 }}>
-                  <label>Name *</label>
-                  <input type="text" value={form.name} placeholder="e.g. threshold-pair"
+                <div>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Name *</Text>
+                  <Input value={form.name} placeholder="e.g. threshold-pair"
                     readOnly={!isNew && !!selected}
-                    style={!isNew && selected ? { background: '#f9fafb', color: '#6b7280' } : {}}
+                    style={!isNew && selected ? { background: '#fafafa', color: '#8c8c8c' } : {}}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
                 </div>
-                <div className="form-row" style={{ marginBottom: 0 }}>
-                  <label>Description</label>
-                  <input type="text" value={form.description} placeholder="Optional"
+                <div>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Description</Text>
+                  <Input value={form.description} placeholder="Optional"
                     onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
                 </div>
               </div>
-            </div>
+            </Card>
 
-            {/* Shared Variables */}
-            <div className="form-card">
-              <div className="form-card-title">
-                Shared Variables
-                <button className="btn btn-secondary btn-sm" onClick={addVar}>+ Add Var</button>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Text strong>Shared Variables</Text>
+                <Button size="small" icon={<PlusOutlined />} onClick={addVar}>Add Var</Button>
               </div>
-              <p className="text-muted" style={{ marginBottom: 10 }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 10, fontSize: 12 }}>
                 Variables declared here are shared across all rule templates in this pack.
-                Use <code style={{ fontFamily: 'monospace', background: '#f1f5f9', padding: '1px 5px', borderRadius: 3 }}>{'{{ .varName }}'}</code> in rule expressions, names, and descriptions.
-                The special variable <code style={{ fontFamily: 'monospace', background: '#ede9fe', color: '#6d28d9', padding: '1px 5px', borderRadius: 3 }}>{'{{ .alertName }}'}</code> is
+                Use <code style={{ fontFamily: 'monospace', background: '#f5f5f5', padding: '1px 5px', borderRadius: 3 }}>{'{{ .varName }}'}</code> in rule expressions, names, and descriptions.
+                The special variable <code style={{ fontFamily: 'monospace', background: '#f9f0ff', color: '#722ed1', padding: '1px 5px', borderRadius: 3 }}>{'{{ .alertName }}'}</code> is
                 set by the instance's alert name prefix.
-              </p>
-              {form.vars.length === 0 && <p className="text-muted">No shared vars declared.</p>}
-              <table className="kv-table" style={{ width: '100%', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '28%' }} />
-                  <col style={{ width: '16%' }} />
-                  <col />
-                  <col style={{ width: 32 }} />
-                </colgroup>
-                <thead>
-                  <tr><th>name</th><th>type</th><th>description</th><th></th></tr>
-                </thead>
-                <tbody>
-                  {form.vars.map((v, i) => (
-                    <tr key={i}>
-                      <td><input type="text" value={v.name} placeholder="varName"
-                        onChange={e => updateVar(i, 'name', e.target.value)} /></td>
-                      <td>
-                        <select value={v.type} onChange={e => updateVar(i, 'type', e.target.value)}>
-                          {VAR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </td>
-                      <td><input type="text" value={v.description} placeholder="what this var means"
-                        onChange={e => updateVar(i, 'description', e.target.value)} /></td>
-                      <td><button className="btn btn-ghost btn-icon" onClick={() => removeVar(i)}>×</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              </Text>
+              <Table
+                columns={varColumns}
+                dataSource={form.vars.map((v, i) => ({ ...v, key: `var-${i}` }))}
+                pagination={false}
+                size="small"
+                bordered
+                locale={{ emptyText: 'No shared vars declared.' }}
+              />
+            </Card>
 
-            {/* Rule Templates */}
-            <div className="form-card">
-              <div className="form-card-title">
-                Rule Templates
-                <button className="btn btn-secondary btn-sm" onClick={addPackRule}>+ Add Rule Template</button>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Text strong>Rule Templates</Text>
+                <Button size="small" icon={<PlusOutlined />} onClick={addPackRule}>Add Rule Template</Button>
               </div>
-              <p className="text-muted" style={{ marginBottom: 12 }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
                 Each rule template is instantiated once per pack instance, with shared variable values substituted in.
-              </p>
+              </Text>
               {form.rules.map((rule, i) => {
                 const exprPreview = previewFill(rule.expr, form.vars)
                 const namePreview = previewFill(rule.ruleName, form.vars)
                 return (
-                  <div key={rule._id} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 14, marginBottom: 10 }}>
+                  <Card key={rule._id} size="small" style={{ marginBottom: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 600, fontSize: 13, color: '#6366f1' }}>
-                        Rule template {i + 1}
+                      <span>
+                        <Text strong style={{ fontSize: 13, color: '#6366f1' }}>
+                          Rule template {i + 1}
+                        </Text>
                         {namePreview && (
-                          <span style={{ marginLeft: 8, fontWeight: 400, fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }}>
+                          <Text type="secondary" style={{ marginLeft: 8, fontSize: 12, fontFamily: 'monospace' }}>
                             → {namePreview}
-                          </span>
+                          </Text>
                         )}
                       </span>
                       {form.rules.length > 1 && (
-                        <button className="btn btn-danger btn-sm" onClick={() => removePackRule(rule._id)}>Remove</button>
+                        <Button danger size="small" onClick={() => removePackRule(rule._id)}>Remove</Button>
                       )}
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                      <div className="form-row" style={{ marginBottom: 0 }}>
-                        <label>Rule Name Template *</label>
-                        <input type="text" value={rule.ruleName}
+                      <div>
+                        <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Rule Name Template *</Text>
+                        <Input size="small" value={rule.ruleName}
                           placeholder={'{{ .alertName }}-warning'}
                           onChange={e => updatePackRule(rule._id, 'ruleName', e.target.value)} />
                       </div>
-                      <div className="form-row" style={{ marginBottom: 0 }}>
-                        <label>For (duration)</label>
-                        <input type="text" value={rule.for} placeholder="e.g. 5m"
+                      <div>
+                        <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>For (duration)</Text>
+                        <Input size="small" value={rule.for} placeholder="e.g. 5m"
                           onChange={e => updatePackRule(rule._id, 'for', e.target.value)} />
                       </div>
                     </div>
 
-                    <div className="form-row" style={{ marginBottom: 10 }}>
-                      <label>
-                        Labels
-                        <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>
-                          include <code style={{ fontFamily: 'monospace', background: '#f1f5f9', padding: '0 3px', borderRadius: 2 }}>severity</code> here · values can use {'{{ .varName }}'}
-                        </span>
-                      </label>
+                    <div style={{ marginBottom: 10 }}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
+                        Labels <Text type="secondary" style={{ fontSize: 11 }}>
+                          include <code style={{ fontFamily: 'monospace', background: '#f5f5f5', padding: '0 3px', borderRadius: 2 }}>severity</code> here
+                        </Text>
+                      </Text>
                       <KVEditor
                         rows={rule.labels}
                         onChange={rows => updatePackRule(rule._id, 'labels', rows)}
@@ -371,47 +342,49 @@ export default function AlertTypePackEditor() {
                       />
                     </div>
 
-                    <div className="form-row" style={{ marginBottom: 8 }}>
-                      <label>Expression Template (PromQL)</label>
-                      <textarea rows={2} value={rule.expr}
+                    <div style={{ marginBottom: 8 }}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Expression Template (PromQL)</Text>
+                      <Input.TextArea rows={2} value={rule.expr}
                         placeholder={'{{ .metric }} > {{ .threshold }}'}
                         onChange={e => updatePackRule(rule._id, 'expr', e.target.value)} />
                       {rule.expr && (
-                        <div className="preview-box" style={{ marginTop: 5, fontSize: 11.5 }}>
+                        <div style={{
+                          marginTop: 5, fontSize: 11.5, fontFamily: 'monospace',
+                          background: '#f5f5f5', padding: '4px 8px', borderRadius: 4, color: '#595959',
+                        }}>
                           {exprPreview}
                         </div>
                       )}
                     </div>
 
-                    <div className="form-row" style={{ marginBottom: 0 }}>
-                      <label>Description Template</label>
-                      <input type="text" value={rule.description}
+                    <div>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Description Template</Text>
+                      <Input size="small" value={rule.description}
                         placeholder={'{{ .metric }} exceeded threshold on {{ $labels.instance }}'}
                         onChange={e => updatePackRule(rule._id, 'description', e.target.value)} />
                     </div>
-                  </div>
+                  </Card>
                 )
               })}
-            </div>
+            </Card>
 
-            <div className="btn-row">
-              <button className="btn btn-primary" onClick={openSaveModal}
+            <Space>
+              <Button type="primary" onClick={openSaveModal}
                 disabled={!form.name.trim() || form.rules.every(r => !r.expr.trim())}>
-                Save as Version…
-              </button>
-              {selected && <button className="btn btn-danger" onClick={handleDelete}>Delete this version</button>}
-            </div>
+                Save as Version...
+              </Button>
+              {selected && <Button danger onClick={handleDelete}>Delete this version</Button>}
+            </Space>
           </div>
 
-          {/* YAML Preview pane */}
           {showPreview && (
             <div style={{
-              width: 400, minWidth: 320, borderLeft: '1px solid #e5e7eb',
+              width: 400, minWidth: 320, borderLeft: '1px solid #f0f0f0',
               display: 'flex', flexDirection: 'column', overflow: 'hidden',
             }}>
               <div style={{
-                padding: '10px 16px', borderBottom: '1px solid #e5e7eb',
-                fontSize: 12, fontWeight: 600, color: '#6b7280',
+                padding: '10px 16px', borderBottom: '1px solid #f0f0f0',
+                fontSize: 12, fontWeight: 600, color: '#8c8c8c',
               }}>
                 YAML Preview
               </div>
@@ -426,11 +399,10 @@ export default function AlertTypePackEditor() {
               </pre>
             </div>
           )}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {modal && <VersionModal defaultName={modal.name} defaultVersion={modal.version} onSave={handleSave} onCancel={() => setModal(null)} />}
-    </div>
+    </EditorLayout>
   )
 }

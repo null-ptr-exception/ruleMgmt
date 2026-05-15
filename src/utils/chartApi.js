@@ -26,25 +26,25 @@ export async function deleteChart(name) {
   return res.json()
 }
 
-// ─── Templates ───────────────────────────────────────────────────────────────
+// ─── Templates / Chart Info ──────────────────────────────────────────────────
 
-export async function listChartTemplates(chart) {
+export async function getChartInfo(chart) {
   const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}`)
-  if (!res.ok) return []
+  if (!res.ok) return {}
   return res.json()
 }
 
-export async function getChartTemplate(chart, template) {
+export async function getChartTemplateFile(chart, template) {
   const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`)
   if (!res.ok) return {}
   return res.json()
 }
 
-export async function saveChartTemplate(chart, template, content, meta) {
+export async function saveChartTemplateFile(chart, template, content) {
   const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content, meta })
+    body: JSON.stringify({ content })
   })
   if (!res.ok) return {}
   return res.json()
@@ -53,6 +53,36 @@ export async function saveChartTemplate(chart, template, content, meta) {
 export async function deleteChartTemplate(chart, template) {
   const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`, {
     method: 'DELETE'
+  })
+  if (!res.ok) return {}
+  return res.json()
+}
+
+export async function saveChartSchema(chart, schema) {
+  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/schema`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ schema })
+  })
+  if (!res.ok) return {}
+  return res.json()
+}
+
+export async function saveChartValues(chart, values) {
+  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/values`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values })
+  })
+  if (!res.ok) return {}
+  return res.json()
+}
+
+export async function saveChartMeta(chart, chartMeta) {
+  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/chart-meta`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chartMeta })
   })
   if (!res.ok) return {}
   return res.json()

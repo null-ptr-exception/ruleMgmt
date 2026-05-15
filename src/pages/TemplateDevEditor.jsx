@@ -200,16 +200,17 @@ export default function TemplateDevEditor() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {activeChart ? (
-          <>
-            <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <Select
-                value={activeChart}
-                onChange={setActiveChart}
-                style={{ minWidth: 180 }}
-                options={charts.map(c => ({ value: c.name, label: `${c.name} (${c.templateCount} templates)` }))}
-              />
-              <Button size="small" icon={<PlusOutlined />} onClick={handleCreateChart}>New</Button>
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Select
+            value={activeChart || undefined}
+            onChange={setActiveChart}
+            placeholder="Select chart"
+            style={{ minWidth: 180 }}
+            options={charts.map(c => ({ value: c.name, label: `${c.name} (${c.templateCount} templates)` }))}
+          />
+          <Button size="small" icon={<PlusOutlined />} onClick={handleCreateChart}>New</Button>
+          {activeChart && (
+            <>
               <Input size="small" placeholder="Description" value={chartMeta.description || ''}
                 onChange={e => { setChartMeta({ ...chartMeta, description: e.target.value }); setDirty(true) }}
                 style={{ flex: 1, maxWidth: 400 }} />
@@ -217,7 +218,11 @@ export default function TemplateDevEditor() {
                 <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
                 <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
               </div>
-            </div>
+            </>
+          )}
+        </div>
+        {activeChart ? (
+          <>
 
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

@@ -245,7 +245,9 @@ export default function TemplateDevEditor() {
                 <div style={{ padding: '8px 16px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0', fontWeight: 600, background: '#fafafa' }}>
                   PrometheusRule Template
                 </div>
-                <div ref={editorRef} style={{ flex: 1, overflow: 'auto' }} className="template-dev-codemirror" />
+                <div id="template-dev-cm" ref={editorRef} style={{ flex: 1, overflow: 'auto' }}>
+                  <style>{`#template-dev-cm .cm-editor { height: 100%; }`}</style>
+                </div>
               </div>
               <VariablesPanel vars={meta.vars || []} onChange={handleVarsChange} />
             </div>

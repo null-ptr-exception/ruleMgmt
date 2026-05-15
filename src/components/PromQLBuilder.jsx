@@ -1,6 +1,7 @@
 // PromQL Visual Builder — concrete values only (no template variable binding)
 // Used in the rule group editor where you fill in real values, not templates.
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { Button } from 'antd'
 
 // ── PromQL constants ──────────────────────────────────────────────────────────
 
@@ -144,21 +145,21 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove }) {
                     : (seg.metric || <span style={{ color: '#9ca3af' }}>no metric</span>)}
         </span>
         {total > 1 && (
-          <button className="btn btn-ghost btn-sm" style={{ color: '#ef4444', padding: '2px 8px' }} onClick={onRemove}>Remove</button>
+          <Button type="text" size="small" danger style={{ padding: '2px 8px' }} onClick={onRemove}>Remove</Button>
         )}
       </div>
 
       <div style={{ padding: 12 }}>
         {isScalar && (
-          <div className="form-row" style={{ maxWidth: 260, marginBottom: 0 }}>
-            <label>Constant value</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, maxWidth: 260 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Constant value</label>
             <input type="text" value={seg.scalar} placeholder="e.g. 100" onChange={e => set('scalar', e.target.value)} />
           </div>
         )}
         {!isScalar && (
           <>
-            <div className="form-row" style={{ marginBottom: 8 }}>
-              <label>Metric name</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 8 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Metric name</label>
               <SuggestInput id={`m-${seg.id}`} value={seg.metric} options={metricOpts}
                 placeholder="e.g. http_requests_total" onChange={v => set('metric', v)} />
             </div>
@@ -184,14 +185,14 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove }) {
                             placeholder={m.op.includes('~') ? 'regex' : 'value'} onChange={v => updateMatcher(i, 'value', v)} />
                         </td>
                         <td style={{ paddingBottom: 4 }}>
-                          <button className="btn btn-ghost btn-icon" onClick={() => removeMatcher(i)}>×</button>
+                          <Button type="text" size="small" style={{ padding: '5px 8px', fontSize: 15 }} onClick={() => removeMatcher(i)}>×</Button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               )}
-              <button className="btn btn-ghost btn-sm" onClick={addMatcher}>+ Add matcher</button>
+              <Button type="text" size="small" onClick={addMatcher}>+ Add matcher</Button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
               <div>
@@ -305,9 +306,9 @@ export default function PromQLBuilder({ onChange, dict = [] }) {
         </div>
       ))}
 
-      <button className="btn btn-secondary btn-sm" style={{ width: '100%', marginBottom: 10 }} onClick={addSeg}>
+      <Button size="small" block style={{ marginBottom: 10 }} onClick={addSeg}>
         + Add metric / scalar
-      </button>
+      </Button>
 
       {/* Outer aggregation */}
       <div style={{ background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 6, padding: '10px 14px', marginBottom: 10 }}>
@@ -315,8 +316,8 @@ export default function PromQLBuilder({ onChange, dict = [] }) {
           Outer aggregation
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="form-row" style={{ marginBottom: 0, minWidth: 140 }}>
-            <label>Function</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, minWidth: 140 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Function</label>
             <select value={outer.func} onChange={e => setOuter(o => ({ ...o, func: e.target.value }))}>
               <option value="">— none —</option>
               {AGG_FUNCS.map(f => <option key={f} value={f}>{f}</option>)}
@@ -324,30 +325,30 @@ export default function PromQLBuilder({ onChange, dict = [] }) {
           </div>
           {showOuterAggDim && (
             <>
-              <div className="form-row" style={{ marginBottom: 0, width: 80 }}>
-                <label>Dim</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, width: 80 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Dim</label>
                 <select value={outer.dim} onChange={e => setOuter(o => ({ ...o, dim: e.target.value }))}>
                   <option value="by">by</option>
                   <option value="without">without</option>
                 </select>
               </div>
-              <div className="form-row" style={{ marginBottom: 0, flex: 1, minWidth: 140 }}>
-                <label>Labels</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, flex: 1, minWidth: 140 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Labels</label>
                 <SuggestInput id="b-outer-labels" value={outer.aggLabels} options={allLabelOpts}
                   placeholder="job, instance" onChange={v => setOuter(o => ({ ...o, aggLabels: v }))} />
               </div>
             </>
           )}
           {showOuterAggParam && (
-            <div className="form-row" style={{ marginBottom: 0, width: 120 }}>
-              <label>{outer.func === 'quantile' ? 'φ' : outer.func === 'count_values' ? 'label' : 'k'}</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, width: 120 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{outer.func === 'quantile' ? 'φ' : outer.func === 'count_values' ? 'label' : 'k'}</label>
               <input type="text" value={outer.param}
                 placeholder={outer.func === 'quantile' ? '0.95' : outer.func === 'count_values' ? 'value' : '5'}
                 onChange={e => setOuter(o => ({ ...o, param: e.target.value }))} />
             </div>
           )}
-          <div className="form-row" style={{ marginBottom: 0, width: 120 }}>
-            <label>Offset</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, width: 120 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Offset</label>
             <input type="text" value={outerOffset} placeholder="e.g. 1h"
               onChange={e => setOuterOffset(e.target.value)} />
           </div>

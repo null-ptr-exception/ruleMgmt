@@ -25,6 +25,9 @@ apply-sample:
 	@cp -r $(SAMPLE_DIR)/templates/. $(TMPL_DIR)/
 	@echo ">> Copying sample/gitops-deploy/ → gitops-deploy/"
 	@cp -r $(SAMPLE_DIR)/gitops-deploy/. $(GITOPS_DIR)/
+	@echo ">> Copying sample/charts/ → gitops/charts/"
+	@mkdir -p gitops/charts
+	@cp -r $(SAMPLE_DIR)/charts/. gitops/charts/
 	@echo ""
 	@echo "Done. Sample data loaded."
 	@echo "Run 'npm run dev' (or 'node server.js') to start the UI."
@@ -34,6 +37,9 @@ clean:
 	@find $(TMPL_DIR) -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 	@echo ">> Removing all content from gitops-deploy/..."
 	@find $(GITOPS_DIR) -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+	@echo ">> Removing all content from gitops/charts/..."
+	@mkdir -p gitops/charts
+	@find gitops/charts -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 	@echo ""
 	@echo "Done. Working directories are now empty."
 

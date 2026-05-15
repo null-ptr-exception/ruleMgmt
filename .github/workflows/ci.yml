@@ -31,7 +31,12 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --list 2>/dev/null | grep -q 'test' && npm run test:e2e || echo 'No e2e tests found, skipping'
+      - run: |
+          if npx playwright test --list 2>/dev/null | grep -q 'test'; then
+            npm run test:e2e
+          else
+            echo 'No e2e tests found, skipping'
+          fi
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

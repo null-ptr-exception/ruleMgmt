@@ -1,0 +1,10 @@
+instances:
+  - instance_name: mariadb-primary
+    namespace: default
+    latency_warn_ms: 200
+    latency_critical_ms: 500
+    qps_warn: 10
+    error_rate_warn: 5
+    error_rate_critical: 20
+    connections_warn_pct: 70
+    connections_critical_pct: 90

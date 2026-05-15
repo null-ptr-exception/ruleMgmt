@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "instances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": {
+            "type": "string",
+            "description": "MariaDB instance identifier"
+          },
+          "namespace": {
+            "type": "string",
+            "description": "Kubernetes namespace",
+            "default": "default"
+          },
+          "latency_warn_ms": {
+            "type": "number",
+            "description": "Query latency warning threshold (ms)",
+            "default": 200
+          },
+          "latency_critical_ms": {
+            "type": "number",
+            "description": "Query latency critical threshold (ms)",
+            "default": 500
+          },
+          "qps_warn": {
+            "type": "number",
+            "description": "Queries-per-second drop warning threshold",
+            "default": 10
+          },
+          "error_rate_warn": {
+            "type": "number",
+            "description": "Error rate warning threshold (errors/sec)",
+            "default": 5
+          },
+          "error_rate_critical": {
+            "type": "number",
+            "description": "Error rate critical threshold (errors/sec)",
+            "default": 20
+          },
+          "connections_warn_pct": {
+            "type": "number",
+            "description": "Connection saturation warning (%)",
+            "default": 70
+          },
+          "connections_critical_pct": {
+            "type": "number",
+            "description": "Connection saturation critical (%)",
+            "default": 90
+          }
+        },
+        "required": ["instance_name"]
+      }
+    }
+  }
+}

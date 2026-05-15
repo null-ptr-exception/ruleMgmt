@@ -1,0 +1,28 @@
+instances:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    latency_warn_ms: 150
+    latency_critical_ms: 400
+    qps_warn: 50
+    error_rate_warn: 3
+    error_rate_critical: 15
+    connections_warn_pct: 75
+    connections_critical_pct: 90
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    latency_warn_ms: 200
+    latency_critical_ms: 600
+    qps_warn: 20
+    error_rate_warn: 5
+    error_rate_critical: 20
+    connections_warn_pct: 70
+    connections_critical_pct: 85
+  - instance_name: mariadb-analytics
+    namespace: prod-analytics
+    latency_warn_ms: 500
+    latency_critical_ms: 2000
+    qps_warn: 5
+    error_rate_warn: 10
+    error_rate_critical: 30
+    connections_warn_pct: 60
+    connections_critical_pct: 80

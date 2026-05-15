@@ -1,4 +1,0 @@
-name: pagerduty-critical
-pagerduty_configs:
-  - routing_key: YOUR_PAGERDUTY_ROUTING_KEY
-    send_resolved: true

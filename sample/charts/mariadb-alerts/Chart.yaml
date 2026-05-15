@@ -1,0 +1,5 @@
+apiVersion: v2
+name: mariadb-alerts
+description: MariaDB alerts based on the four golden signals (latency, traffic, errors, saturation)
+version: 1.0.0
+type: application

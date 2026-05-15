@@ -863,7 +863,7 @@ export default function AlertmanagerSmartEditor() {
                     ? <Text type="secondary" style={{ fontSize: 11, marginLeft: 8 }}>pruning...</Text>
                     : prunedRouteTree
                       ? <Text type="secondary" style={{ fontSize: 11, color: '#52c41a', marginLeft: 8 }}>
-                          pruned: {form.routeRules.filter(r=>r.receiver).length} -> {prunedRouteTree.length} top-level
+                          pruned: {form.routeRules.filter(r=>r.receiver).length} {'→'} {prunedRouteTree.length} top-level
                         </Text>
                       : null
                 )}

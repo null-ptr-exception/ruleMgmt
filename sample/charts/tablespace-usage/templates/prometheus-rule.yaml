@@ -1,0 +1,48 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-tablespace-usage
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: tablespace-usage
+      rules:
+        {{- range .Values.instances }}
+        - alert: tablespace-info-{{ .db_name }}-{{ .tablespace_name }}
+          expr: 'tablespace_usage_percent{db="{{ .db_name }}", tablespace="{{ .tablespace_name }}"} > {{ .info }}'
+          for: 10m
+          labels:
+            severity: info
+            db: {{ .db_name }}
+            tablespace: {{ .tablespace_name }}
+          annotations:
+            description: 'Tablespace {{ .tablespace_name }} on {{ .db_name }} exceeds {{ .info }}%'
+        - alert: tablespace-warn-{{ .db_name }}-{{ .tablespace_name }}
+          expr: 'tablespace_usage_percent{db="{{ .db_name }}", tablespace="{{ .tablespace_name }}"} > {{ .warn }}'
+          for: 5m
+          labels:
+            severity: warning
+            db: {{ .db_name }}
+            tablespace: {{ .tablespace_name }}
+          annotations:
+            description: 'Tablespace {{ .tablespace_name }} on {{ .db_name }} exceeds {{ .warn }}%'
+        - alert: tablespace-critical-{{ .db_name }}-{{ .tablespace_name }}
+          expr: 'tablespace_usage_percent{db="{{ .db_name }}", tablespace="{{ .tablespace_name }}"} > {{ .critical }}'
+          for: 2m
+          labels:
+            severity: critical
+            db: {{ .db_name }}
+            tablespace: {{ .tablespace_name }}
+          annotations:
+            description: 'Tablespace {{ .tablespace_name }} on {{ .db_name }} exceeds {{ .critical }}%'
+        - alert: tablespace-severe-{{ .db_name }}-{{ .tablespace_name }}
+          expr: 'tablespace_usage_percent{db="{{ .db_name }}", tablespace="{{ .tablespace_name }}"} > {{ .severe }}'
+          for: 1m
+          labels:
+            severity: severe
+            db: {{ .db_name }}
+            tablespace: {{ .tablespace_name }}
+          annotations:
+            description: 'Tablespace {{ .tablespace_name }} on {{ .db_name }} exceeds {{ .severe }}%'
+        {{- end }}

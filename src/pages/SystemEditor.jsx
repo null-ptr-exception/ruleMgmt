@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Card, Input, Button, Select, Table, Typography, Tag, Space } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import EditorLayout from '../components/EditorLayout'
 import VersionModal from '../components/VersionModal'
 import { listTemplates, getTemplate, saveTemplate, deleteTemplate } from '../utils/api'
 import { bumpPatch } from '../utils/templateUtils'
+
+const { Text } = Typography
 
 const TYPE = 'system'
 
@@ -12,8 +17,8 @@ const SEVERITIES     = ['critical', 'warning', 'info', 'none']
 const emptyForm = () => ({
   templateName: '',
   systemName:   '',
-  ruleGroups:   [],   // [{name, version}]
-  routes:       [],   // [{severity, receiver}]
+  ruleGroups:   [],
+  routes:       [],
 })
 
 export default function SystemEditor() {
@@ -42,7 +47,6 @@ export default function SystemEditor() {
     const data = await getTemplate(TYPE, name, version)
     if (!data) return
     const s = data.parsed?.system || {}
-    // migrate: old single alertSuite → ruleGroups list
     let ruleGroups = []
     if (Array.isArray(s.ruleGroups)) {
       ruleGroups = s.ruleGroups.map(rg => ({ name: rg.name || '', version: rg.version || '' }))
@@ -63,14 +67,12 @@ export default function SystemEditor() {
 
   const receiverNames = Object.keys(receivers)
 
-  // ── rule groups ──
   function addRuleGroup()     { setForm(f => ({ ...f, ruleGroups: [...f.ruleGroups, emptyRuleGroup()] })) }
   function removeRuleGroup(i) { setForm(f => ({ ...f, ruleGroups: f.ruleGroups.filter((_, idx) => idx !== i) })) }
   function updateRuleGroup(i, field, val) {
     setForm(f => ({ ...f, ruleGroups: f.ruleGroups.map((rg, idx) => idx === i ? { ...rg, [field]: val } : rg) }))
   }
 
-  // ── routes ──
   function addRoute()     { setForm(f => ({ ...f, routes: [...f.routes, emptyRoute()] })) }
   function removeRoute(i) { setForm(f => ({ ...f, routes: f.routes.filter((_, idx) => idx !== i) })) }
   function updateRoute(i, field, val) {
@@ -107,157 +109,170 @@ export default function SystemEditor() {
     await load()
   }
 
+  const showForm = isNew || selected
+
+  const ruleGroupColumns = [
+    {
+      title: 'Rule Group',
+      dataIndex: 'name',
+      render: (_, rg, i) => (
+        <Select
+          size="small"
+          value={rg.name || undefined}
+          onChange={val => updateRuleGroup(i, 'name', val)}
+          placeholder="— select rule group —"
+          style={{ width: '100%' }}
+          options={Object.keys(suites).map(n => ({ value: n, label: n }))}
+        />
+      ),
+    },
+    {
+      title: 'Version',
+      dataIndex: 'version',
+      width: 160,
+      render: (_, rg, i) => (
+        <Select
+          size="small"
+          value={rg.version || undefined}
+          onChange={val => updateRuleGroup(i, 'version', val)}
+          placeholder="— version —"
+          style={{ width: '100%' }}
+          options={(suites[rg.name] || []).map(v => ({ value: v, label: v }))}
+        />
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 40,
+      render: (_, _rg, i) => (
+        <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => removeRuleGroup(i)} />
+      ),
+    },
+  ]
+
+  const routeColumns = [
+    {
+      title: 'Severity',
+      dataIndex: 'severity',
+      width: 140,
+      render: (_, route, i) => (
+        <Select
+          size="small"
+          value={route.severity}
+          onChange={val => updateRoute(i, 'severity', val)}
+          style={{ width: '100%' }}
+          options={SEVERITIES.map(s => ({ value: s, label: s }))}
+        />
+      ),
+    },
+    {
+      title: 'Receiver',
+      dataIndex: 'receiver',
+      render: (_, route, i) => (
+        <Input
+          size="small"
+          value={route.receiver}
+          placeholder="receiver name"
+          onChange={e => updateRoute(i, 'receiver', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 40,
+      render: (_, _route, i) => (
+        <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => removeRoute(i)} />
+      ),
+    },
+  ]
+
   return (
-    <div className="editor-layout">
-      <div className="editor-list">
-        <div className="editor-list-header">
-          System
-          <button className="btn btn-primary btn-sm" onClick={startNew}>+ New</button>
-        </div>
-        <div className="editor-list-body">
-          {Object.keys(templates).length === 0 && (
-            <div style={{ padding: '20px 14px', color: '#9ca3af', fontSize: 13 }}>No system templates yet.</div>
-          )}
-          {Object.entries(templates).map(([name, versions]) => (
-            <div key={name} className="template-group">
-              <div className="template-group-name">{name}</div>
-              {versions.map(v => (
-                <div key={v}
-                  className={`template-version${selected?.name === name && selected?.version === v ? ' active' : ''}`}
-                  onClick={() => selectVersion(name, v)}>
-                  <span className="version-badge">{v}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="editor-form">
-        {!isNew && !selected ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">🔧</div>
-            <p>Select a system template or click + New.</p>
-          </div>
-        ) : (
-          <>
-            {/* ── Identity ── */}
-            <div className="form-card">
-              <div className="form-card-title">
+    <EditorLayout
+      title="System"
+      templates={templates}
+      selected={selected}
+      onSelect={selectVersion}
+      onNew={startNew}
+      emptyIcon="🔧"
+      emptyText="Select a system template or click + New."
+    >
+      {showForm && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text strong style={{ fontSize: 15 }}>
                 {selected ? `${selected.name} @ ${selected.version}` : 'New System'}
-                {status && <span className="tag">{status}</span>}
+              </Text>
+              {status && <Tag color="success">{status}</Tag>}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Template Name *</Text>
+                <Input
+                  value={form.templateName}
+                  placeholder="e.g. mysql-system"
+                  readOnly={!isNew && !!selected}
+                  style={!isNew && selected ? { background: '#fafafa', color: '#8c8c8c' } : {}}
+                  onChange={e => setForm(f => ({ ...f, templateName: e.target.value }))}
+                />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div className="form-row">
-                  <label>Template Name *</label>
-                  <input type="text" value={form.templateName}
-                    placeholder="e.g. mysql-system"
-                    readOnly={!isNew && !!selected}
-                    style={!isNew && selected ? { background: '#f9fafb', color: '#6b7280' } : {}}
-                    onChange={e => setForm(f => ({ ...f, templateName: e.target.value }))} />
-                </div>
-                <div className="form-row">
-                  <label>Config Name</label>
-                  <input type="text" value={form.systemName}
-                    placeholder="AlertmanagerConfig metadata.name"
-                    onChange={e => setForm(f => ({ ...f, systemName: e.target.value }))} />
-                </div>
+              <div>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Config Name</Text>
+                <Input
+                  value={form.systemName}
+                  placeholder="AlertmanagerConfig metadata.name"
+                  onChange={e => setForm(f => ({ ...f, systemName: e.target.value }))}
+                />
               </div>
             </div>
+          </Card>
 
-            {/* ── Rule Groups ── */}
-            <div className="form-card">
-              <div className="form-card-title">
-                Rule Groups
-                <button className="btn btn-secondary btn-sm" onClick={addRuleGroup}>+ Add</button>
-              </div>
-              <p className="text-muted" style={{ marginBottom: 10 }}>
-                Each rule group becomes a Helm subchart dependency → generates a PrometheusRule.
-              </p>
-              {form.ruleGroups.length === 0 && <p className="text-muted">No rule groups added.</p>}
-              <table className="kv-table" style={{ width: '100%' }}>
-                <colgroup>
-                  <col /><col style={{ width: 160 }} /><col style={{ width: 32 }} />
-                </colgroup>
-                <thead><tr><th>Rule Group</th><th>Version</th><th></th></tr></thead>
-                <tbody>
-                  {form.ruleGroups.map((rg, i) => {
-                    const versions = suites[rg.name] || []
-                    return (
-                      <tr key={i}>
-                        <td>
-                          <select value={rg.name}
-                            onChange={e => updateRuleGroup(i, 'name', e.target.value)}>
-                            <option value="">— select rule group —</option>
-                            {Object.keys(suites).map(n => <option key={n} value={n}>{n}</option>)}
-                          </select>
-                        </td>
-                        <td>
-                          <select value={rg.version}
-                            onChange={e => updateRuleGroup(i, 'version', e.target.value)}>
-                            <option value="">— version —</option>
-                            {versions.map(v => <option key={v} value={v}>{v}</option>)}
-                          </select>
-                        </td>
-                        <td>
-                          <button className="btn btn-ghost btn-icon" onClick={() => removeRuleGroup(i)}>×</button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text strong>Rule Groups</Text>
+              <Button size="small" icon={<PlusOutlined />} onClick={addRuleGroup}>Add</Button>
             </div>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 10, fontSize: 12 }}>
+              Each rule group becomes a Helm subchart dependency → generates a PrometheusRule.
+            </Text>
+            <Table
+              columns={ruleGroupColumns}
+              dataSource={form.ruleGroups.map((rg, i) => ({ ...rg, key: i }))}
+              pagination={false}
+              size="small"
+              bordered
+              locale={{ emptyText: 'No rule groups added.' }}
+            />
+          </Card>
 
-            {/* ── Routes ── */}
-            <div className="form-card">
-              <div className="form-card-title">
-                Severity → Receiver Routes
-                <button className="btn btn-secondary btn-sm" onClick={addRoute}>+ Add</button>
-              </div>
-              <p className="text-muted" style={{ marginBottom: 10 }}>
-                Routes in the AlertmanagerConfig. Receiver names get the product prefix on render.
-              </p>
-              {form.routes.length === 0 && <p className="text-muted">No routes configured.</p>}
-              <table className="kv-table" style={{ width: '100%' }}>
-                <colgroup>
-                  <col style={{ width: 140 }} /><col /><col style={{ width: 32 }} />
-                </colgroup>
-                <thead><tr><th>Severity</th><th>Receiver</th><th></th></tr></thead>
-                <tbody>
-                  {form.routes.map((route, i) => (
-                    <tr key={i}>
-                      <td>
-                        <select value={route.severity} onChange={e => updateRoute(i, 'severity', e.target.value)}>
-                          {SEVERITIES.map(s => <option key={s}>{s}</option>)}
-                        </select>
-                      </td>
-                      <td>
-                        <input type="text" list={`recv-${i}`} value={route.receiver}
-                          placeholder="receiver name"
-                          onChange={e => updateRoute(i, 'receiver', e.target.value)} />
-                        <datalist id={`recv-${i}`}>
-                          {receiverNames.map(n => <option key={n} value={n} />)}
-                        </datalist>
-                      </td>
-                      <td>
-                        <button className="btn btn-ghost btn-icon" onClick={() => removeRoute(i)}>×</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text strong>Severity → Receiver Routes</Text>
+              <Button size="small" icon={<PlusOutlined />} onClick={addRoute}>Add</Button>
             </div>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 10, fontSize: 12 }}>
+              Routes in the AlertmanagerConfig. Receiver names get the product prefix on render.
+            </Text>
+            <Table
+              columns={routeColumns}
+              dataSource={form.routes.map((r, i) => ({ ...r, key: i }))}
+              pagination={false}
+              size="small"
+              bordered
+              locale={{ emptyText: 'No routes configured.' }}
+            />
+          </Card>
 
-            <div className="btn-row">
-              <button className="btn btn-primary" onClick={openSaveModal}>Save as Version…</button>
-              {selected && <button className="btn btn-danger" onClick={handleDelete}>Delete this version</button>}
-            </div>
-          </>
-        )}
-      </div>
+          <Space>
+            <Button type="primary" onClick={openSaveModal}>Save as Version…</Button>
+            {selected && <Button danger onClick={handleDelete}>Delete this version</Button>}
+          </Space>
+        </div>
+      )}
 
       {modal && <VersionModal defaultVersion={modal} onSave={handleSave} onCancel={() => setModal(null)} />}
-    </div>
+    </EditorLayout>
   )
 }

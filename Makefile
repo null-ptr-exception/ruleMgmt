@@ -1,4 +1,4 @@
-.PHONY: help apply-sample clean
+.PHONY: help apply-sample clean up down
 
 SAMPLE_DIR  := sample
 TMPL_DIR    := templates
@@ -36,3 +36,9 @@ clean:
 	@find $(GITOPS_DIR) -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 	@echo ""
 	@echo "Done. Working directories are now empty."
+
+up:
+	docker compose up --build -d
+
+down:
+	docker compose down --volumes

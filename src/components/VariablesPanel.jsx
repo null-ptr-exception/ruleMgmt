@@ -1,102 +1,109 @@
-import { Card, Input, Select, Button, Typography } from 'antd'
+import { useState, useEffect } from 'react'
+import { Card, Input, Select, Button, Checkbox, Typography } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
 
-function VarCard({ variable, index, onUpdate, onRemove }) {
-  function update(field, val) {
-    onUpdate(index, { ...variable, [field]: val })
+const TYPE_OPTIONS = [
+  { value: 'string', label: 'string' },
+  { value: 'number', label: 'number' },
+  { value: 'integer', label: 'integer' },
+  { value: 'boolean', label: 'boolean' },
+]
+
+export default function VariablesPanel({ vars, onChange, schema, onSchemaChange }) {
+  const [rawMode, setRawMode] = useState(false)
+  const [rawText, setRawText] = useState('')
+
+  useEffect(() => {
+    if (rawMode && schema) {
+      setRawText(JSON.stringify(schema, null, 2))
+    }
+  }, [rawMode, schema])
+
+  function handleRawSave() {
+    try {
+      const parsed = JSON.parse(rawText)
+      onSchemaChange(parsed)
+    } catch { /* invalid JSON, ignore */ }
   }
 
-  return (
-    <Card size="small" style={{ marginBottom: 10 }} styles={{ body: { padding: 12 } }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <Input
-          value={variable.name}
-          placeholder="variable_name"
-          onChange={e => update('name', e.target.value)}
-          variant="borderless"
-          style={{ fontWeight: 600, fontSize: 14, flex: 1, padding: 0 }}
-        />
-        <Select
-          value={variable.type}
-          onChange={val => update('type', val)}
-          size="small"
-          style={{ width: 90 }}
-          options={[
-            { value: 'text', label: 'text' },
-            { value: 'number', label: 'number' },
-            { value: 'list', label: 'list' },
-            { value: 'boolean', label: 'boolean' },
-          ]}
-        />
-        <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => onRemove(index)} />
-      </div>
-      <div style={{ marginBottom: 8 }}>
-        <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase' }}>Description</Text>
-        <Input
-          size="small"
-          value={variable.description}
-          placeholder="What this variable controls"
-          onChange={e => update('description', e.target.value)}
-        />
-      </div>
-      <div style={{ marginBottom: 8 }}>
-        <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase' }}>Default</Text>
-        <Input
-          size="small"
-          value={variable.default}
-          placeholder="Default value"
-          onChange={e => update('default', e.target.value)}
-        />
-      </div>
-      {variable.type === 'list' && (
-        <div>
-          <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase' }}>Options (comma-separated)</Text>
-          <Input
-            size="small"
-            value={Array.isArray(variable.options) ? variable.options.join(', ') : variable.options || ''}
-            placeholder="opt1, opt2, opt3"
-            onChange={e => update('options', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-          />
-        </div>
-      )}
-    </Card>
-  )
-}
+  function updateVar(index, field, value) {
+    const updated = vars.map((v, i) => i === index ? { ...v, [field]: value } : v)
+    onChange(updated)
+  }
 
-export default function VariablesPanel({ vars, onChange }) {
-  function updateVar(index, updated) {
-    const next = vars.map((v, i) => i === index ? updated : v)
-    onChange(next)
+  function addVar() {
+    onChange([...vars, { name: '', type: 'string', description: '', required: false }])
   }
 
   function removeVar(index) {
     onChange(vars.filter((_, i) => i !== index))
   }
 
-  function addVar() {
-    onChange([...vars, { name: '', type: 'text', description: '', default: '' }])
+  if (rawMode) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid #f0f0f0' }}>
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text strong style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8c8c8c' }}>
+            values.schema.json
+          </Text>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <Button size="small" type="primary" onClick={handleRawSave}>Apply</Button>
+            <Button size="small" onClick={() => setRawMode(false)}>Visual</Button>
+          </div>
+        </div>
+        <textarea
+          value={rawText}
+          onChange={e => setRawText(e.target.value)}
+          style={{
+            flex: 1, fontFamily: 'monospace', fontSize: 12, padding: 12,
+            border: 'none', outline: 'none', resize: 'none', background: '#fafafa'
+          }}
+        />
+      </div>
+    )
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: '1px solid #f0f0f0', width: 340, flexShrink: 0 }}>
-      <div style={{ padding: '10px 16px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0', fontWeight: 600 }}>
-        Variables
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid #f0f0f0' }}>
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text strong style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8c8c8c' }}>
+          Variables
+        </Text>
+        <Button size="small" onClick={() => setRawMode(true)}>Raw</Button>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
         {vars.map((v, i) => (
-          <VarCard
-            key={i}
-            variable={v}
-            index={i}
-            onUpdate={updateVar}
-            onRemove={removeVar}
-          />
+          <Card key={i} size="small" style={{ marginBottom: 10 }} styles={{ body: { padding: 12 } }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Input size="small" placeholder="name" value={v.name}
+                onChange={e => updateVar(i, 'name', e.target.value)} style={{ flex: 1, fontWeight: 600 }} />
+              <Select size="small" value={v.type} options={TYPE_OPTIONS} style={{ width: 90 }}
+                onChange={val => updateVar(i, 'type', val)} />
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => removeVar(i)} />
+            </div>
+            <Input size="small" placeholder="description" value={v.description || ''}
+              onChange={e => updateVar(i, 'description', e.target.value)} style={{ marginBottom: 6 }} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Input size="small" placeholder="default" value={v.default ?? ''}
+                onChange={e => updateVar(i, 'default', e.target.value)} style={{ flex: 1 }} />
+              <Checkbox checked={!!v.required} onChange={e => updateVar(i, 'required', e.target.checked)}>
+                <Text style={{ fontSize: 11 }}>Required</Text>
+              </Checkbox>
+            </div>
+            {v.type === 'string' && (
+              <Input size="small" placeholder="enum values (comma-separated)" value={(v.enum || []).join(', ')}
+                onChange={e => {
+                  const val = e.target.value
+                  const enumVals = val ? val.split(',').map(s => s.trim()).filter(Boolean) : undefined
+                  updateVar(i, 'enum', enumVals?.length ? enumVals : undefined)
+                }}
+                style={{ marginTop: 6 }} />
+            )}
+          </Card>
         ))}
-        <Button type="dashed" block icon={<PlusOutlined />} onClick={addVar}>
-          Add Variable
-        </Button>
+        <Button type="dashed" block icon={<PlusOutlined />} onClick={addVar}>Add variable</Button>
       </div>
     </div>
   )

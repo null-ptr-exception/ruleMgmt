@@ -73,42 +73,63 @@ describe('Charts API', () => {
 })
 
 describe('Templates API', () => {
-  it('lists templates (initially empty)', async () => {
+  it('gets chart info (initially no templates)', async () => {
     const { data } = await api('GET', '/api/v2/templates/test-app')
-    expect(data).toEqual([])
+    expect(data.templateFiles).toEqual([])
+    expect(data.schema).toBeTruthy()
+    expect(data.chartMeta).toBeTruthy()
   })
 
-  it('creates a template', async () => {
+  it('creates a template file', async () => {
     const { data } = await api('POST', '/api/v2/templates/test-app/cpu-alert', {
       content: 'groups:\n  - name: cpu\n    rules: []\n',
-      meta: { description: 'CPU alert', vars: [{ name: 'threshold', type: 'number' }] },
     })
     expect(data.ok).toBe(true)
   })
 
-  it('lists templates after creation', async () => {
+  it('lists template files after creation', async () => {
     const { data } = await api('GET', '/api/v2/templates/test-app')
-    expect(data).toHaveLength(1)
-    expect(data[0].name).toBe('cpu-alert')
-    expect(data[0].description).toBe('CPU alert')
+    expect(data.templateFiles).toHaveLength(1)
+    expect(data.templateFiles[0]).toBe('cpu-alert')
   })
 
-  it('gets template content and meta', async () => {
+  it('gets template file content', async () => {
     const { data } = await api('GET', '/api/v2/templates/test-app/cpu-alert')
     expect(data.content).toContain('groups:')
-    expect(data.meta.vars).toHaveLength(1)
   })
 
-  it('renames a template', async () => {
+  it('saves and reads schema', async () => {
+    const schema = {
+      $schema: 'https://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        instances: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              threshold: { type: 'number', description: 'Alert threshold' }
+            }
+          }
+        }
+      }
+    }
+    const { data: saveResult } = await api('POST', '/api/v2/templates/test-app/schema', { schema })
+    expect(saveResult.ok).toBe(true)
+    const { data: info } = await api('GET', '/api/v2/templates/test-app')
+    expect(info.schema.properties.instances.items.properties.threshold.type).toBe('number')
+  })
+
+  it('renames a template file', async () => {
     await api('POST', '/api/v2/templates/test-app/cpu-alert/rename', { newName: 'cpu-sat' })
     const { data } = await api('GET', '/api/v2/templates/test-app')
-    expect(data[0].name).toBe('cpu-sat')
+    expect(data.templateFiles[0]).toBe('cpu-sat')
   })
 
-  it('deletes a template', async () => {
+  it('deletes a template file', async () => {
     await api('DELETE', '/api/v2/templates/test-app/cpu-sat')
     const { data } = await api('GET', '/api/v2/templates/test-app')
-    expect(data).toEqual([])
+    expect(data.templateFiles).toEqual([])
   })
 })
 
@@ -119,7 +140,7 @@ describe('Deployments API', () => {
   })
 
   it('creates a deployment by saving values', async () => {
-    const values = { kpi_cpu: [{ threshold: 80 }] }
+    const values = { instances: [{ threshold: 80 }] }
     const { data } = await api('POST', '/api/v2/deployments/test-app/staging', { values })
     expect(data.ok).toBe(true)
   })
@@ -128,19 +149,20 @@ describe('Deployments API', () => {
     const { data } = await api('GET', '/api/v2/deployments/test-app')
     expect(data).toHaveLength(1)
     expect(data[0].name).toBe('staging')
+    expect(data[0].alertCount).toBe(1)
   })
 
   it('gets deployment values', async () => {
     const { data } = await api('GET', '/api/v2/deployments/test-app/staging')
-    expect(data.parsed.kpi_cpu).toEqual([{ threshold: 80 }])
+    expect(data.parsed.instances).toEqual([{ threshold: 80 }])
   })
 
   it('saves deployment with string values', async () => {
-    const yamlStr = 'kpi_cpu:\n  - threshold: 90\n'
+    const yamlStr = 'instances:\n  - threshold: 90\n'
     const { data } = await api('POST', '/api/v2/deployments/test-app/staging', { values: yamlStr })
     expect(data.ok).toBe(true)
     const { data: fetched } = await api('GET', '/api/v2/deployments/test-app/staging')
-    expect(fetched.parsed.kpi_cpu[0].threshold).toBe(90)
+    expect(fetched.parsed.instances[0].threshold).toBe(90)
   })
 
   it('clones a deployment', async () => {

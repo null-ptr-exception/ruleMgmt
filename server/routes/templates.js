@@ -66,31 +66,7 @@ export default function templatesRouter(gitopsDir) {
     }
   })
 
-  // Get a single template file's content
-  router.get('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req.params.chart)
-    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
-    try {
-      const content = await fs.readFile(tmplFile, 'utf-8')
-      res.json({ content })
-    } catch {
-      res.status(404).json({ error: 'Template not found' })
-    }
-  })
-
-  // Save a template file's content
-  router.post('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req.params.chart)
-    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
-    const { content } = req.body
-    try {
-      await fs.mkdir(tmplDir, { recursive: true })
-      await fs.writeFile(tmplFile, content, 'utf-8')
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+  // --- Chart-level endpoints (must be before /:chart/:template) ---
 
   // Save chart-level schema
   router.post('/:chart/schema', async (req, res) => {
@@ -129,18 +105,6 @@ export default function templatesRouter(gitopsDir) {
     }
   })
 
-  // Delete a template file
-  router.delete('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req.params.chart)
-    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
-    try {
-      await fs.rm(tmplFile, { force: true })
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
   // Rename a template file
   router.post('/:chart/:template/rename', async (req, res) => {
     const { tmplDir } = chartPaths(req.params.chart)
@@ -152,6 +116,46 @@ export default function templatesRouter(gitopsDir) {
     const newFile = path.join(tmplDir, `${newName}.yaml`)
     try {
       await fs.rename(oldFile, newFile)
+      res.json({ ok: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // --- Template file endpoints ---
+
+  // Get a single template file's content
+  router.get('/:chart/:template', async (req, res) => {
+    const { tmplDir } = chartPaths(req.params.chart)
+    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
+    try {
+      const content = await fs.readFile(tmplFile, 'utf-8')
+      res.json({ content })
+    } catch {
+      res.status(404).json({ error: 'Template not found' })
+    }
+  })
+
+  // Save a template file's content
+  router.post('/:chart/:template', async (req, res) => {
+    const { tmplDir } = chartPaths(req.params.chart)
+    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
+    const { content } = req.body
+    try {
+      await fs.mkdir(tmplDir, { recursive: true })
+      await fs.writeFile(tmplFile, content, 'utf-8')
+      res.json({ ok: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Delete a template file
+  router.delete('/:chart/:template', async (req, res) => {
+    const { tmplDir } = chartPaths(req.params.chart)
+    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
+    try {
+      await fs.rm(tmplFile, { force: true })
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

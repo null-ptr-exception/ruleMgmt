@@ -13,6 +13,7 @@
     "lint": "eslint 'src/**/*.{js,jsx}' 'server.js' 'server/**/*.js' --no-error-on-unmatched-pattern"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.2.3",
     "@codemirror/autocomplete": "^6.20.2",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
@@ -20,6 +21,7 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.42.1",
     "@prometheus-io/codemirror-promql": "^0.311.3",
+    "antd": "^6.4.2",
     "codemirror": "^6.0.2",
     "express": "^4.18.2",
     "js-yaml": "^4.1.0",

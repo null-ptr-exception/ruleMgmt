@@ -1,6 +1,7 @@
-// Right-side panel for declaring template variables
-// vars: [{ name, type, description, default, options }]
-// onChange: (updatedVars) => void
+import { Card, Input, Select, Button, Typography } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+
+const { Text } = Typography
 
 function VarCard({ variable, index, onUpdate, onRemove }) {
   function update(field, val) {
@@ -8,56 +9,59 @@ function VarCard({ variable, index, onUpdate, onRemove }) {
   }
 
   return (
-    <div className="var-card">
-      <div className="var-card-header">
-        <input
-          className="var-card-name"
+    <Card size="small" style={{ marginBottom: 10 }} styles={{ body: { padding: 12 } }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <Input
           value={variable.name}
           placeholder="variable_name"
           onChange={e => update('name', e.target.value)}
+          variant="borderless"
+          style={{ fontWeight: 600, fontSize: 14, flex: 1, padding: 0 }}
         />
-        <select
-          className={`var-type-badge type-${variable.type}`}
+        <Select
           value={variable.type}
-          onChange={e => update('type', e.target.value)}
-        >
-          <option value="text">text</option>
-          <option value="number">number</option>
-          <option value="list">list</option>
-          <option value="boolean">boolean</option>
-        </select>
-        <button className="btn btn-ghost btn-icon var-card-remove" onClick={() => onRemove(index)} title="Remove">×</button>
+          onChange={val => update('type', val)}
+          size="small"
+          style={{ width: 90 }}
+          options={[
+            { value: 'text', label: 'text' },
+            { value: 'number', label: 'number' },
+            { value: 'list', label: 'list' },
+            { value: 'boolean', label: 'boolean' },
+          ]}
+        />
+        <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => onRemove(index)} />
       </div>
-      <div className="var-card-field">
-        <label>Description</label>
-        <input
-          type="text"
+      <div style={{ marginBottom: 8 }}>
+        <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase' }}>Description</Text>
+        <Input
+          size="small"
           value={variable.description}
           placeholder="What this variable controls"
           onChange={e => update('description', e.target.value)}
         />
       </div>
-      <div className="var-card-field">
-        <label>Default</label>
-        <input
-          type="text"
+      <div style={{ marginBottom: 8 }}>
+        <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase' }}>Default</Text>
+        <Input
+          size="small"
           value={variable.default}
           placeholder="Default value"
           onChange={e => update('default', e.target.value)}
         />
       </div>
       {variable.type === 'list' && (
-        <div className="var-card-field">
-          <label>Options (comma-separated)</label>
-          <input
-            type="text"
+        <div>
+          <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase' }}>Options (comma-separated)</Text>
+          <Input
+            size="small"
             value={Array.isArray(variable.options) ? variable.options.join(', ') : variable.options || ''}
             placeholder="opt1, opt2, opt3"
             onChange={e => update('options', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
           />
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -76,9 +80,11 @@ export default function VariablesPanel({ vars, onChange }) {
   }
 
   return (
-    <div className="vars-panel">
-      <div className="vars-panel-header">Variables</div>
-      <div className="vars-panel-list">
+    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: '1px solid #f0f0f0', width: 340, flexShrink: 0 }}>
+      <div style={{ padding: '10px 16px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0', fontWeight: 600 }}>
+        Variables
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
         {vars.map((v, i) => (
           <VarCard
             key={i}
@@ -88,7 +94,9 @@ export default function VariablesPanel({ vars, onChange }) {
             onRemove={removeVar}
           />
         ))}
-        <button className="vars-panel-add" onClick={addVar}>+ Add Variable</button>
+        <Button type="dashed" block icon={<PlusOutlined />} onClick={addVar}>
+          Add Variable
+        </Button>
       </div>
     </div>
   )

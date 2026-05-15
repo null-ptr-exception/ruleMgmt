@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Layout, Button, Breadcrumb, Typography, Tag, Empty, Divider } from 'antd'
+import { SaveOutlined } from '@ant-design/icons'
 import ChartSelector from '../components/ChartSelector'
 import DeploymentSelector from '../components/DeploymentSelector'
 import TemplateTree from '../components/TemplateTree'
@@ -7,6 +9,9 @@ import {
   listCharts, createChart, listChartTemplates, getChartTemplate,
   listDeployments, getDeployment, saveDeployment, cloneDeployment, renderDeployment
 } from '../utils/chartApi'
+
+const { Sider, Content } = Layout
+const { Title, Text } = Typography
 
 export default function AlertUserView() {
   const [charts, setCharts]               = useState([])
@@ -21,7 +26,6 @@ export default function AlertUserView() {
   const [dirty, setDirty]                   = useState(false)
   const [saveStatus, setSaveStatus]         = useState('')
 
-  // Load charts on mount
   useEffect(() => {
     listCharts().then(c => {
       setCharts(c)
@@ -29,7 +33,6 @@ export default function AlertUserView() {
     })
   }, [])
 
-  // When chart changes: load templates + deployments, clear selections
   useEffect(() => {
     if (!activeChart) return
     setActiveDeployment(null)
@@ -47,7 +50,6 @@ export default function AlertUserView() {
     })
   }, [activeChart])
 
-  // When deployment changes: load values
   useEffect(() => {
     if (!activeChart || !activeDeployment) return
     getDeployment(activeChart, activeDeployment).then(dep => {
@@ -60,7 +62,6 @@ export default function AlertUserView() {
     })
   }, [activeChart, activeDeployment])
 
-  // When template changes: load meta, extract rows from allValues
   useEffect(() => {
     if (!activeChart || !activeTemplate) {
       setTemplateMeta(null)
@@ -73,10 +74,7 @@ export default function AlertUserView() {
     setDirty(false)
   }, [activeChart, activeTemplate])
 
-  const handleChartSelect = useCallback((name) => {
-    setActiveChart(name)
-  }, [])
-
+  const handleChartSelect = useCallback((name) => { setActiveChart(name) }, [])
   const handleChartCreate = useCallback(async (name) => {
     await createChart(name)
     const c = await listCharts()
@@ -84,10 +82,7 @@ export default function AlertUserView() {
     setActiveChart(name)
   }, [])
 
-  const handleDeploymentSelect = useCallback((name) => {
-    setActiveDeployment(name)
-  }, [])
-
+  const handleDeploymentSelect = useCallback((name) => { setActiveDeployment(name) }, [])
   const handleDeploymentCreate = useCallback(async (name) => {
     await saveDeployment(activeChart, name, {})
     const d = await listDeployments(activeChart)
@@ -102,9 +97,7 @@ export default function AlertUserView() {
     setActiveDeployment(newName)
   }, [activeChart])
 
-  const handleTemplateSelect = useCallback((name) => {
-    setActiveTemplate(name)
-  }, [])
+  const handleTemplateSelect = useCallback((name) => { setActiveTemplate(name) }, [])
 
   const handleSave = useCallback(async () => {
     if (!activeChart || !activeDeployment || !activeTemplate) return
@@ -113,68 +106,58 @@ export default function AlertUserView() {
     setAllValues(merged)
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
-    // fire and forget render
     renderDeployment(activeChart, activeDeployment)
-    // refresh deployment list for counts
     listDeployments(activeChart).then(d => setDeployments(d))
   }, [activeChart, activeDeployment, activeTemplate, allValues, rows])
 
-  // Empty state message
-  const renderEmptyState = () => {
-    if (!activeChart) return <div className="empty-state"><div className="empty-state-icon">📦</div><p>Select a chart to get started</p></div>
-    if (!activeDeployment) return <div className="empty-state"><div className="empty-state-icon">📁</div><p>Select a deployment from the sidebar</p></div>
-    if (!activeTemplate) return <div className="empty-state"><div className="empty-state-icon">📄</div><p>Select a template from the sidebar</p></div>
-    return null
-  }
-
   const showMain = activeChart && activeDeployment && activeTemplate
 
+  const sectionHeader = (text) => (
+    <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8c8c8c', borderTop: '1px solid #f0f0f0' }}>
+      {text}
+    </div>
+  )
+
   return (
-    <div className="alert-user-layout">
-      <div className="alert-user-sidebar">
+    <Layout style={{ height: '100%' }}>
+      <Sider width={260} theme="light" style={{ borderRight: '1px solid #f0f0f0', overflow: 'auto' }}>
         <ChartSelector
           charts={charts}
           activeChart={activeChart}
           onSelect={handleChartSelect}
           onCreate={handleChartCreate}
         />
-
-        <div className="alert-user-sidebar-section">
-          <div className="alert-user-sidebar-section-header">Deployments</div>
-          <DeploymentSelector
-            deployments={deployments}
-            activeDeployment={activeDeployment}
-            onSelect={handleDeploymentSelect}
-            onCreate={handleDeploymentCreate}
-            onClone={handleDeploymentClone}
-          />
-        </div>
-
-        <div className="alert-user-sidebar-section" style={{ flex: 1, overflow: 'auto' }}>
-          <div className="alert-user-sidebar-section-header">Alert Templates</div>
-          <TemplateTree
-            templates={templates}
-            activeTemplate={activeTemplate}
-            onSelect={handleTemplateSelect}
-          />
-        </div>
-      </div>
-
-      <div className="alert-user-main">
+        {sectionHeader('Deployments')}
+        <DeploymentSelector
+          deployments={deployments}
+          activeDeployment={activeDeployment}
+          onSelect={handleDeploymentSelect}
+          onCreate={handleDeploymentCreate}
+          onClone={handleDeploymentClone}
+        />
+        {sectionHeader('Alert Templates')}
+        <TemplateTree
+          templates={templates}
+          activeTemplate={activeTemplate}
+          onSelect={handleTemplateSelect}
+        />
+      </Sider>
+      <Content style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {showMain ? (
           <>
-            <div className="alert-user-breadcrumb">
-              <span className="alert-user-bc-deploy">{activeDeployment}</span>
-              <span className="alert-user-bc-sep">/</span>
-              <span className="alert-user-bc-template">{activeTemplate}</span>
+            <div style={{ padding: '8px 20px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
+              <Breadcrumb items={[
+                { title: activeDeployment },
+                { title: activeTemplate },
+              ]} />
             </div>
-            <div className="alert-user-header">
-              <h2>{activeTemplate}</h2>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0' }}>
+              <Title level={4} style={{ margin: 0 }}>{activeTemplate}</Title>
               {templateMeta?.description && (
-                <p className="text-muted">{templateMeta.description}</p>
+                <Text type="secondary">{templateMeta.description}</Text>
               )}
             </div>
-            <div className="alert-user-table-area">
+            <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
               <AlertTable
                 vars={templateMeta?.vars || []}
                 rows={rows}
@@ -183,18 +166,25 @@ export default function AlertUserView() {
                 onAdd={newRow => { setRows(r => [...r, newRow]); setDirty(true) }}
               />
             </div>
-            <div className="alert-user-bottombar">
-              <button className="btn btn-primary" onClick={handleSave} disabled={!dirty}>
+            <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fafafa' }}>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>
                 Save
-              </button>
-              {saveStatus && <span className="text-muted">{saveStatus}</span>}
-              {dirty && <span className="tag">Unsaved changes</span>}
+              </Button>
+              {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
+              {dirty && <Tag color="warning">Unsaved changes</Tag>}
             </div>
           </>
         ) : (
-          renderEmptyState()
+          <Empty
+            style={{ margin: 'auto' }}
+            description={
+              !activeChart ? 'Select a chart to get started' :
+              !activeDeployment ? 'Select a deployment from the sidebar' :
+              'Select a template from the sidebar'
+            }
+          />
         )}
-      </div>
-    </div>
+      </Content>
+    </Layout>
   )
 }

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
+import { Table, Button, Input, InputNumber, Select, Checkbox } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 
-// Editable table for alert instances, columns driven by template variable declarations
 export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, onAdd }) {
   const handleCellChange = useCallback((rowIdx, varName, value) => {
     const updated = rows.map((r, i) =>
@@ -17,50 +18,40 @@ export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, o
     onAdd(newRow)
   }, [vars, onAdd])
 
-  const colCount = vars.length + 1 // +1 for actions
-
-  const typeClass = (type) => {
-    if (type === 'number') return 'col-number'
-    return 'col-text'
-  }
-
   const renderInput = (v, row, rowIdx) => {
     const val = row[v.name]
     switch (v.type) {
       case 'boolean':
         return (
-          <input
-            type="checkbox"
+          <Checkbox
             checked={!!val}
             onChange={e => handleCellChange(rowIdx, v.name, e.target.checked)}
           />
         )
       case 'number':
         return (
-          <input
-            type="number"
+          <InputNumber
+            size="small"
             step="any"
-            className="input-number"
             value={val ?? ''}
-            onChange={e => handleCellChange(rowIdx, v.name, e.target.value === '' ? '' : Number(e.target.value))}
+            onChange={value => handleCellChange(rowIdx, v.name, value)}
+            style={{ width: '100%' }}
           />
         )
       case 'list':
         return (
-          <select
+          <Select
+            size="small"
             value={val ?? ''}
-            onChange={e => handleCellChange(rowIdx, v.name, e.target.value)}
-          >
-            {(v.options || []).map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
+            onChange={value => handleCellChange(rowIdx, v.name, value)}
+            style={{ width: '100%' }}
+            options={(v.options || []).map(opt => ({ value: opt, label: opt }))}
+          />
         )
-      default: // text
+      default:
         return (
-          <input
-            type="text"
-            className="input-text"
+          <Input
+            size="small"
             value={val ?? ''}
             onChange={e => handleCellChange(rowIdx, v.name, e.target.value)}
           />
@@ -68,48 +59,43 @@ export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, o
     }
   }
 
+  const columns = [
+    ...vars.map(v => ({
+      title: v.name,
+      dataIndex: v.name,
+      key: v.name,
+      render: (_, row, rowIdx) => renderInput(v, row, rowIdx),
+    })),
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 70,
+      render: (_, _row, rowIdx) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => onDelete(rowIdx)}
+        />
+      ),
+    },
+  ]
+
   return (
-    <div className="alert-table-container">
-      <table className="alert-table">
-        <thead>
-          <tr>
-            {vars.map(v => (
-              <th key={v.name} className={typeClass(v.type)} title={v.description || ''}>
-                {v.name}
-              </th>
-            ))}
-            <th className="col-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={colCount} className="alert-table-empty">
-                No alert instances
-              </td>
-            </tr>
-          ) : (
-            rows.map((row, rowIdx) => (
-              <tr key={rowIdx}>
-                {vars.map(v => (
-                  <td key={v.name}>{renderInput(v, row, rowIdx)}</td>
-                ))}
-                <td>
-                  <button
-                    className="btn btn-ghost btn-icon"
-                    onClick={() => onDelete(rowIdx)}
-                    title="Delete"
-                  >
-                    ×
-                  </button>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-      <div className="alert-table-footer">
-        <button className="btn btn-ghost btn-sm" onClick={handleAdd}>+ Add Row</button>
+    <div>
+      <Table
+        columns={columns}
+        dataSource={rows.map((r, i) => ({ ...r, key: i }))}
+        pagination={false}
+        size="small"
+        bordered
+        locale={{ emptyText: 'No alert instances' }}
+      />
+      <div style={{ padding: '8px 0' }}>
+        <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={handleAdd}>
+          Add Row
+        </Button>
       </div>
     </div>
   )

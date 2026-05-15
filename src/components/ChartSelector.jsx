@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Select, Button, Input, Space } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 
 export default function ChartSelector({ charts, activeChart, onSelect, onCreate }) {
   const [creating, setCreating] = useState(false)
@@ -13,44 +15,33 @@ export default function ChartSelector({ charts, activeChart, onSelect, onCreate 
   }
 
   return (
-    <div className="chart-selector">
-      <span className="chart-selector-label">Chart</span>
-      <div className="chart-selector-row">
-        <select
-          value={activeChart || ''}
-          onChange={e => onSelect(e.target.value)}
-          style={{ flex: 1 }}
-        >
-          {charts.map(c => (
-            <option key={c.name} value={c.name}>
-              {c.name} ({c.templateCount} templates)
-            </option>
-          ))}
-        </select>
-        {!creating && (
-          <button className="btn btn-sm btn-secondary" onClick={() => setCreating(true)}>
-            + New
-          </button>
-        )}
+    <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+        Chart
       </div>
+      <Space.Compact style={{ width: '100%' }}>
+        <Select
+          value={activeChart || undefined}
+          onChange={onSelect}
+          style={{ flex: 1 }}
+          options={charts.map(c => ({ value: c.name, label: `${c.name} (${c.templateCount} templates)` }))}
+        />
+        {!creating && (
+          <Button icon={<PlusOutlined />} onClick={() => setCreating(true)}>New</Button>
+        )}
+      </Space.Compact>
       {creating && (
-        <div className="chart-selector-row" style={{ marginTop: 6 }}>
-          <input
-            type="text"
+        <Space.Compact style={{ width: '100%', marginTop: 6 }}>
+          <Input
             value={newName}
             onChange={e => setNewName(e.target.value)}
             placeholder="New chart name"
             autoFocus
-            onKeyDown={e => e.key === 'Enter' && handleCreate()}
-            style={{ flex: 1 }}
+            onPressEnter={handleCreate}
           />
-          <button className="btn btn-sm btn-primary" onClick={handleCreate} disabled={!newName.trim()}>
-            Create
-          </button>
-          <button className="btn btn-sm btn-ghost" onClick={() => { setCreating(false); setNewName('') }}>
-            Cancel
-          </button>
-        </div>
+          <Button type="primary" onClick={handleCreate} disabled={!newName.trim()}>Create</Button>
+          <Button onClick={() => { setCreating(false); setNewName('') }}>Cancel</Button>
+        </Space.Compact>
       )}
     </div>
   )

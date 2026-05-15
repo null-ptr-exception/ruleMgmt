@@ -1,7 +1,11 @@
 import { useState } from 'react'
+import { List, Button, Input, Select, Space, Badge, Typography } from 'antd'
+import { FolderOutlined, PlusOutlined, CopyOutlined } from '@ant-design/icons'
+
+const { Text } = Typography
 
 export default function DeploymentSelector({ deployments, activeDeployment, onSelect, onCreate, onClone }) {
-  const [mode, setMode]         = useState(null) // null | 'new' | 'clone'
+  const [mode, setMode]         = useState(null)
   const [newName, setNewName]   = useState('')
   const [cloneSource, setCloneSource] = useState('')
 
@@ -22,68 +26,74 @@ export default function DeploymentSelector({ deployments, activeDeployment, onSe
   }
 
   return (
-    <div className="deploy-selector">
-      {deployments.map(d => (
-        <div
-          key={d.name}
-          className={`deploy-selector-item${d.name === activeDeployment ? ' active' : ''}`}
-          onClick={() => onSelect(d.name)}
-        >
-          <span className="deploy-selector-icon">📁</span>
-          <span className="deploy-selector-name">{d.name}</span>
-          <span className="deploy-selector-badge">{d.alertCount}</span>
-        </div>
-      ))}
+    <div style={{ padding: '4px 0' }}>
+      <List
+        size="small"
+        dataSource={deployments}
+        renderItem={d => (
+          <List.Item
+            onClick={() => onSelect(d.name)}
+            style={{
+              cursor: 'pointer',
+              padding: '6px 16px',
+              background: d.name === activeDeployment ? '#f6ffed' : undefined,
+              fontWeight: d.name === activeDeployment ? 600 : undefined,
+            }}
+          >
+            <FolderOutlined style={{ marginRight: 8, color: '#faad14' }} />
+            <Text style={{ flex: 1 }}>{d.name}</Text>
+            <Badge count={d.alertCount} showZero color="#d9d9d9" style={{ color: '#595959' }} />
+          </List.Item>
+        )}
+      />
 
-      <div className="deploy-selector-actions">
+      <div style={{ padding: '4px 16px', display: 'flex', gap: 4 }}>
         {mode === null && (
           <>
-            <button className="btn btn-sm btn-secondary" onClick={() => setMode('new')}>+ New</button>
-            <button className="btn btn-sm btn-secondary" onClick={() => { setMode('clone'); setCloneSource(deployments[0]?.name || '') }}>Clone</button>
+            <Button size="small" icon={<PlusOutlined />} onClick={() => setMode('new')}>New</Button>
+            <Button size="small" icon={<CopyOutlined />} onClick={() => { setMode('clone'); setCloneSource(deployments[0]?.name || '') }}>Clone</Button>
           </>
         )}
       </div>
 
       {mode === 'new' && (
-        <div className="deploy-selector-form">
-          <input
-            type="text"
+        <div style={{ padding: '4px 16px' }}>
+          <Input
+            size="small"
             value={newName}
             onChange={e => setNewName(e.target.value)}
             placeholder="New deployment name"
             autoFocus
-            onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            onPressEnter={handleCreate}
           />
-          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-            <button className="btn btn-sm btn-primary" onClick={handleCreate} disabled={!newName.trim()}>OK</button>
-            <button className="btn btn-sm btn-ghost" onClick={reset}>Cancel</button>
-          </div>
+          <Space style={{ marginTop: 4 }}>
+            <Button size="small" type="primary" onClick={handleCreate} disabled={!newName.trim()}>OK</Button>
+            <Button size="small" onClick={reset}>Cancel</Button>
+          </Space>
         </div>
       )}
 
       {mode === 'clone' && (
-        <div className="deploy-selector-form">
-          <select
+        <div style={{ padding: '4px 16px' }}>
+          <Select
+            size="small"
             value={cloneSource}
-            onChange={e => setCloneSource(e.target.value)}
-            style={{ marginBottom: 4 }}
-          >
-            {deployments.map(d => (
-              <option key={d.name} value={d.name}>{d.name}</option>
-            ))}
-          </select>
-          <input
-            type="text"
+            onChange={setCloneSource}
+            style={{ width: '100%', marginBottom: 4 }}
+            options={deployments.map(d => ({ value: d.name, label: d.name }))}
+          />
+          <Input
+            size="small"
             value={newName}
             onChange={e => setNewName(e.target.value)}
             placeholder="New deployment name"
             autoFocus
-            onKeyDown={e => e.key === 'Enter' && handleClone()}
+            onPressEnter={handleClone}
           />
-          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-            <button className="btn btn-sm btn-primary" onClick={handleClone} disabled={!newName.trim() || !cloneSource}>OK</button>
-            <button className="btn btn-sm btn-ghost" onClick={reset}>Cancel</button>
-          </div>
+          <Space style={{ marginTop: 4 }}>
+            <Button size="small" type="primary" onClick={handleClone} disabled={!newName.trim() || !cloneSource}>OK</Button>
+            <Button size="small" onClick={reset}>Cancel</Button>
+          </Space>
         </div>
       )}
     </div>

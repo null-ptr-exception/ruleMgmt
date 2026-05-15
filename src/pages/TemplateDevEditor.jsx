@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { Layout, Button, Input, Empty, Typography } from 'antd'
+import { SaveOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import ChartSelector from '../components/ChartSelector'
 import TemplateTree from '../components/TemplateTree'
 import VariablesPanel from '../components/VariablesPanel'
@@ -11,6 +13,9 @@ import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'
 import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
+
+const { Sider, Content } = Layout
+const { Title, Text } = Typography
 
 const yamlExtension = StreamLanguage.define(yaml)
 
@@ -42,7 +47,6 @@ export default function TemplateDevEditor() {
   const viewRef = useRef(null)
   const editorKeyRef = useRef('')
 
-  // Load charts on mount
   useEffect(() => {
     listCharts().then(c => {
       setCharts(c)
@@ -50,7 +54,6 @@ export default function TemplateDevEditor() {
     })
   }, [])
 
-  // Load templates when chart changes
   useEffect(() => {
     if (!activeChart) return
     listChartTemplates(activeChart).then(t => {
@@ -62,7 +65,6 @@ export default function TemplateDevEditor() {
     })
   }, [activeChart])
 
-  // Load template content when selection changes
   useEffect(() => {
     if (!activeChart || !activeTemplate) return
     getChartTemplate(activeChart, activeTemplate).then(data => {
@@ -75,11 +77,8 @@ export default function TemplateDevEditor() {
     })
   }, [activeChart, activeTemplate])
 
-  // CodeMirror: destroy and recreate when template changes
   useEffect(() => {
-    const key = `${activeChart}::${activeTemplate}`
     if (!editorRef.current || !activeTemplate) {
-      // Destroy any existing view if no template selected
       if (viewRef.current) {
         viewRef.current.destroy()
         viewRef.current = null
@@ -88,7 +87,6 @@ export default function TemplateDevEditor() {
       return
     }
 
-    // Destroy old view
     if (viewRef.current) {
       viewRef.current.destroy()
       viewRef.current = null
@@ -115,7 +113,7 @@ export default function TemplateDevEditor() {
       state,
       parent: editorRef.current
     })
-    editorKeyRef.current = key
+    editorKeyRef.current = `${activeChart}::${activeTemplate}`
 
     return () => {
       if (viewRef.current) {
@@ -123,9 +121,8 @@ export default function TemplateDevEditor() {
         viewRef.current = null
       }
     }
-  }, [activeChart, activeTemplate, /* re-init when content loads */])
+  }, [activeChart, activeTemplate])
 
-  // Sync yamlContent into editor when it changes externally (template load)
   useEffect(() => {
     if (!viewRef.current) return
     const current = viewRef.current.state.doc.toString()
@@ -185,91 +182,83 @@ export default function TemplateDevEditor() {
   }, [])
 
   return (
-    <div className="template-dev-layout">
-      {/* Sidebar */}
-      <div className="template-dev-sidebar">
+    <Layout style={{ height: '100%' }}>
+      <Sider width={260} theme="light" style={{ borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <ChartSelector
           charts={charts}
           activeChart={activeChart}
           onSelect={setActiveChart}
           onCreate={handleCreateChart}
         />
-        <div className="template-dev-sidebar-section-header">Templates</div>
-        <div className="template-dev-sidebar-tree">
+        <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0', borderTop: '1px solid #f0f0f0' }}>
+          Templates
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
           <TemplateTree
             templates={templates}
             activeTemplate={activeTemplate}
             onSelect={setActiveTemplate}
           />
         </div>
-        {/* New template form */}
         {creating ? (
-          <div className="inline-add" style={{ borderTop: '1px solid #e5e7eb', padding: '8px 12px' }}>
-            <input
-              type="text"
+          <div style={{ borderTop: '1px solid #f0f0f0', padding: '8px 12px' }}>
+            <Input
+              size="small"
               value={newTemplateName}
               onChange={e => setNewTemplateName(e.target.value)}
               placeholder="template-name"
               autoFocus
-              onKeyDown={e => e.key === 'Enter' && handleCreateTemplate()}
+              onPressEnter={handleCreateTemplate}
+              style={{ marginBottom: 4 }}
             />
-            <button className="btn btn-sm btn-primary" onClick={handleCreateTemplate} disabled={!newTemplateName.trim()}>
-              Create
-            </button>
-            <button className="btn btn-sm btn-ghost" onClick={() => { setCreating(false); setNewTemplateName('') }}>
-              Cancel
-            </button>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <Button size="small" type="primary" onClick={handleCreateTemplate} disabled={!newTemplateName.trim()}>Create</Button>
+              <Button size="small" onClick={() => { setCreating(false); setNewTemplateName('') }}>Cancel</Button>
+            </div>
           </div>
         ) : (
-          <div style={{ padding: '8px 12px', borderTop: '1px solid #e5e7eb' }}>
-            <button className="btn btn-sm btn-secondary" style={{ width: '100%' }} onClick={() => setCreating(true)}>
-              + New Template
-            </button>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid #f0f0f0' }}>
+            <Button block size="small" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
+              New Template
+            </Button>
           </div>
         )}
-      </div>
+      </Sider>
 
-      {/* Main area */}
-      <div className="template-dev-main">
+      <Content style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {activeTemplate ? (
           <>
-            {/* Top bar */}
-            <div className="template-dev-topbar">
-              <span className="template-dev-title">{activeTemplate}</span>
-              <input
-                className="template-dev-desc"
-                type="text"
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <Title level={4} style={{ margin: 0 }}>{activeTemplate}</Title>
+              <Input
                 value={meta.description}
                 onChange={handleDescChange}
                 placeholder="Template description..."
+                variant="borderless"
+                style={{ flex: 1, color: '#8c8c8c' }}
               />
-              <div className="template-dev-topbar-actions">
-                <button className="btn btn-sm btn-danger" onClick={handleDelete}>Delete</button>
-              </div>
+              <Button danger size="small" icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
             </div>
 
-            {/* Split pane: editor + variables */}
-            <div className="template-dev-split">
-              <div className="template-dev-editor">
-                <div className="template-dev-editor-header">PrometheusRule Template</div>
-                <div className="template-dev-codemirror" ref={editorRef} />
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ padding: '8px 16px', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0', fontWeight: 600, background: '#fafafa' }}>
+                  PrometheusRule Template
+                </div>
+                <div ref={editorRef} style={{ flex: 1, overflow: 'auto' }} className="template-dev-codemirror" />
               </div>
               <VariablesPanel vars={meta.vars || []} onChange={handleVarsChange} />
             </div>
 
-            {/* Bottom bar */}
-            <div className="template-dev-bottombar">
-              <button className="btn btn-primary" onClick={handleSave}>Save</button>
-              {dirty && <span className="text-muted">Unsaved changes</span>}
+            <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fafafa' }}>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>Save</Button>
+              {dirty && <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>}
             </div>
           </>
         ) : (
-          <div className="empty-state">
-            <div className="empty-state-icon">&#128196;</div>
-            <p>Select a template from the sidebar or create a new one to start editing.</p>
-          </div>
+          <Empty style={{ margin: 'auto' }} description="Select a template from the sidebar or create a new one to start editing." />
         )}
-      </div>
-    </div>
+      </Content>
+    </Layout>
   )
 }

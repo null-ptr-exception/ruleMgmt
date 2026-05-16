@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Button, Input, Select, Empty, Typography, Switch } from 'antd'
-import { SaveOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import RuleBuilder from '../components/RuleBuilder'
+import { Button, Input, Select, Empty, Typography, Switch, Collapse } from 'antd'
+import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 import { schemaAlertNames } from '../utils/schemaUtils'
 import { generatePrometheusRule } from '../utils/templateGenerator'
 import {
   listCharts, createChart, deleteChart,
-  getChartInfo, getChartTemplateFile, saveChartTemplateFile,
+  getChartInfo, saveChartTemplateFile,
   saveChartSchema, saveChartMeta
 } from '../utils/chartApi'
 
@@ -16,21 +15,35 @@ import { StreamLanguage } from '@codemirror/language'
 import { yaml } from '@codemirror/legacy-modes/mode/yaml'
 
 const { Text } = Typography
+const { TextArea } = Input
 
 const yamlExtension = StreamLanguage.define(yaml)
+
+const SEVERITY_OPTIONS = [
+  { value: 'info', label: 'info' },
+  { value: 'warning', label: 'warning' },
+  { value: 'critical', label: 'critical' },
+]
+
+const TYPE_OPTIONS = [
+  { value: 'string', label: 'string' },
+  { value: 'number', label: 'number' },
+  { value: 'integer', label: 'integer' },
+  { value: 'boolean', label: 'boolean' },
+  { value: 'enum', label: 'enum' },
+]
 
 export default function TemplateDevEditor() {
   const [charts, setCharts] = useState([])
   const [activeChart, setActiveChart] = useState(null)
   const [chartMeta, setChartMeta] = useState({})
-  const [templateFiles, setTemplateFiles] = useState([])
-  const [activeFile, setActiveFile] = useState(null)
-  const [fileContent, setFileContent] = useState('')
   const [schema, setSchema] = useState(null)
   const [alertNames, setAlertNames] = useState([])
   const [activeAlert, setActiveAlert] = useState(null)
   const [dirty, setDirty] = useState(false)
+  const [yamlExpanded, setYamlExpanded] = useState(false)
   const [editorEditable, setEditorEditable] = useState(false)
+  const [fileContent, setFileContent] = useState('')
   const editorRef = useRef(null)
   const viewRef = useRef(null)
 
@@ -44,7 +57,6 @@ export default function TemplateDevEditor() {
   const loadChart = useCallback(async (chart) => {
     const info = await getChartInfo(chart)
     setChartMeta(info.chartMeta || {})
-    setTemplateFiles(info.templateFiles || [])
     const s = info.schema || { $schema: 'https://json-schema.org/draft-07/schema#', type: 'object', properties: {} }
     setSchema(s)
     const names = schemaAlertNames(s)
@@ -52,12 +64,6 @@ export default function TemplateDevEditor() {
     setActiveAlert(names.length > 0 ? names[0] : null)
     setDirty(false)
     setEditorEditable(false)
-    if (info.templateFiles?.length > 0) {
-      setActiveFile(info.templateFiles[0])
-    } else {
-      setActiveFile(null)
-      setFileContent('')
-    }
   }, [])
 
   useEffect(() => {
@@ -65,28 +71,17 @@ export default function TemplateDevEditor() {
   }, [activeChart, loadChart])
 
   useEffect(() => {
-    if (!activeChart || !activeFile) return
-    getChartTemplateFile(activeChart, activeFile).then(data => {
-      setFileContent(data.content || '')
-    })
-  }, [activeChart, activeFile])
-
-  // Regenerate YAML when schema changes and editor is not in manual mode
-  useEffect(() => {
-    if (!editorEditable && schema && activeChart) {
-      const generated = generatePrometheusRule(schema, `{{ .Release.Name }}`)
-      setFileContent(generated)
+    if (!editorEditable && schema) {
+      setFileContent(generatePrometheusRule(schema, '{{ .Release.Name }}'))
     }
   }, [schema, editorEditable])
 
-  // CodeMirror setup
   useEffect(() => {
-    if (!editorRef.current) return
+    if (!editorRef.current || !yamlExpanded) return
     if (viewRef.current) {
       viewRef.current.destroy()
       viewRef.current = null
     }
-    if (!activeFile && !schema) return
 
     const extensions = [
       basicSetup,
@@ -109,7 +104,7 @@ export default function TemplateDevEditor() {
         viewRef.current = null
       }
     }
-  }, [activeChart, activeFile, editorEditable])
+  }, [yamlExpanded, editorEditable, activeChart])
 
   useEffect(() => {
     if (!viewRef.current) return
@@ -125,10 +120,8 @@ export default function TemplateDevEditor() {
     if (!activeChart) return
     await saveChartSchema(activeChart, schema)
     await saveChartMeta(activeChart, chartMeta)
-    if (activeFile) {
-      const content = editorEditable ? fileContent : generatePrometheusRule(schema, `{{ .Release.Name }}`)
-      await saveChartTemplateFile(activeChart, activeFile, content)
-    }
+    const content = editorEditable ? fileContent : generatePrometheusRule(schema, '{{ .Release.Name }}')
+    await saveChartTemplateFile(activeChart, 'prometheus-rule', content)
     setDirty(false)
   }
 
@@ -149,7 +142,7 @@ export default function TemplateDevEditor() {
   }
 
   function handleAddAlert() {
-    const name = prompt('Alert group name (use underscores, e.g. mariadb_saturation_disk):')
+    const name = prompt('Alert group name (e.g. mariadb_saturation_disk):')
     if (!name || !schema) return
     const newSchema = {
       ...schema,
@@ -171,6 +164,7 @@ export default function TemplateDevEditor() {
 
   function handleRemoveAlert() {
     if (!activeAlert || !schema) return
+    if (!confirm(`Remove alert group "${activeAlert}"?`)) return
     const { [activeAlert]: _, ...rest } = schema.properties
     const newSchema = { ...schema, properties: rest }
     setSchema(newSchema)
@@ -180,20 +174,92 @@ export default function TemplateDevEditor() {
     setDirty(true)
   }
 
-  function handleAlertDefChange(newDef) {
+  function updateAlertDef(field, value) {
     if (!activeAlert || !schema) return
+    const alertDef = schema.properties[activeAlert]
     const newSchema = {
       ...schema,
-      properties: { ...schema.properties, [activeAlert]: newDef }
+      properties: { ...schema.properties, [activeAlert]: { ...alertDef, [field]: value } }
     }
     setSchema(newSchema)
     setDirty(true)
   }
 
-  const activeAlertDef = activeAlert ? schema?.properties?.[activeAlert] : null
+  function updateItems(newProps, newRequired) {
+    if (!activeAlert || !schema) return
+    const alertDef = schema.properties[activeAlert]
+    const newSchema = {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        [activeAlert]: {
+          ...alertDef,
+          items: {
+            type: 'object',
+            properties: newProps,
+            ...(newRequired.length > 0 ? { required: newRequired } : {})
+          }
+        }
+      }
+    }
+    setSchema(newSchema)
+    setDirty(true)
+  }
+
+  const alertDef = activeAlert ? schema?.properties?.[activeAlert] : null
+  const props = alertDef?.items?.properties || {}
+  const required = new Set(alertDef?.items?.required || [])
+
+  const selectors = Object.entries(props).filter(([, p]) => p['x-var-type'] !== 'threshold')
+  const thresholds = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'threshold')
+
+  function addVariable(varType) {
+    const newName = ''
+    const newProp = { type: varType === 'threshold' ? 'number' : 'string', 'x-var-type': varType }
+    if (varType === 'threshold') newProp['x-severity'] = 'warning'
+    const newProps = { ...props, [newName]: newProp }
+    const newRequired = [...required]
+    updateItems(newProps, newRequired)
+  }
+
+  function removeVariable(name) {
+    const { [name]: _, ...rest } = props
+    const newRequired = [...required].filter(r => r !== name)
+    updateItems(rest, newRequired)
+  }
+
+  function updateVariable(oldName, newName, updates) {
+    const entries = Object.entries(props).map(([k, v]) => {
+      if (k === oldName) return [newName, { ...v, ...updates }]
+      return [k, v]
+    })
+    const newProps = Object.fromEntries(entries)
+    let newRequired = [...required]
+    if (required.has(oldName)) {
+      newRequired = newRequired.filter(r => r !== oldName)
+      if (updates.required !== false) newRequired.push(newName)
+    } else if (updates.required) {
+      newRequired.push(newName)
+    }
+    updateItems(newProps, newRequired)
+  }
+
+  function groupAlertsByPrefix() {
+    const groups = {}
+    for (const name of alertNames) {
+      const parts = name.split('_')
+      const prefix = parts.length > 2 ? `${parts[0]}_${parts[1]}` : parts[0]
+      if (!groups[prefix]) groups[prefix] = []
+      groups[prefix].push(name)
+    }
+    return groups
+  }
+
+  const groupedAlerts = groupAlertsByPrefix()
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Top bar */}
       <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <Select
           value={activeChart || undefined}
@@ -218,37 +284,167 @@ export default function TemplateDevEditor() {
 
       {activeChart ? (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* YAML Preview */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa' }}>
-              <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Generated YAML</Text>
-              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 11, color: '#8c8c8c' }}>Edit manually</Text>
-                <Switch size="small" checked={editorEditable} onChange={setEditorEditable} />
-              </div>
+          {/* Left sidebar - alert groups */}
+          <div style={{ width: 220, flexShrink: 0, borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert Groups</Text>
+              <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleAddAlert} />
             </div>
-            <div id="template-dev-cm" ref={editorRef} style={{ flex: 1, overflow: 'auto' }}>
-              <style>{`#template-dev-cm .cm-editor { height: 100%; }`}</style>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+              {Object.entries(groupedAlerts).map(([prefix, names]) => (
+                <div key={prefix} style={{ marginBottom: 2 }}>
+                  <div style={{ padding: '4px 12px', fontSize: 10, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>
+                    {prefix}
+                  </div>
+                  {names.map(name => {
+                    const shortName = name.replace(`${prefix}_`, '')
+                    return (
+                      <div
+                        key={name}
+                        onClick={() => setActiveAlert(name)}
+                        style={{
+                          padding: '6px 12px 6px 20px',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          background: activeAlert === name ? '#e6f4ff' : 'transparent',
+                          borderRight: activeAlert === name ? '2px solid #1677ff' : '2px solid transparent',
+                          color: activeAlert === name ? '#1677ff' : '#333',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {shortName}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Rule Builder Panel */}
-          <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #f0f0f0' }}>
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa' }}>
-              <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert Group:</Text>
-              {alertNames.length > 0 ? (
-                <Select size="small" value={activeAlert} onChange={setActiveAlert} style={{ flex: 1 }}
-                  options={alertNames.map(n => ({ value: n, label: n }))} />
-              ) : (
-                <Text type="secondary" style={{ fontSize: 12 }}>No alert groups</Text>
+          {/* Main content - rule builder */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {alertDef ? (
+              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+                {/* Alert group header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                  <Text strong style={{ fontSize: 16 }}>{activeAlert}</Text>
+                  <Button size="small" danger icon={<DeleteOutlined />} onClick={handleRemoveAlert}>Remove</Button>
+                </div>
+
+                {/* PromQL */}
+                <div style={{ marginBottom: 20 }}>
+                  <Text style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 6 }}>PromQL Expression</Text>
+                  <TextArea
+                    rows={3}
+                    placeholder='rate(metric{namespace="{{ .namespace }}"}[5m]) > {{ THRESHOLD }}'
+                    value={alertDef['x-promql'] || ''}
+                    onChange={e => updateAlertDef('x-promql', e.target.value)}
+                    style={{ fontFamily: 'monospace', fontSize: 13 }}
+                  />
+                  <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                    Use {'{{ .var_name }}'} for selectors, {'{{ THRESHOLD }}'} for threshold placeholder
+                  </Text>
+                </div>
+
+                {/* For duration */}
+                <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'center' }}>
+                  <div>
+                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>For Duration</Text>
+                    <Input size="small" value={alertDef['x-for'] || '5m'} onChange={e => updateAlertDef('x-for', e.target.value)} style={{ width: 80 }} />
+                  </div>
+                  <div style={{ marginTop: 18 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={alertDef['x-custom-template'] || false}
+                        onChange={e => updateAlertDef('x-custom-template', e.target.checked)} />
+                      <Text style={{ fontSize: 12 }}>Custom template (skip generation)</Text>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Selectors */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Selectors</Text>
+                    <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
+                    <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => addVariable('selector')}>Add</Button>
+                  </div>
+                  {selectors.length === 0 && <Text type="secondary" style={{ fontSize: 12 }}>No selectors defined</Text>}
+                  {selectors.map(([name, prop]) => (
+                    <div key={name} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                      <Input size="small" value={name} placeholder="name"
+                        onChange={e => updateVariable(name, e.target.value, {})}
+                        style={{ width: 140, fontWeight: 600 }} />
+                      <Select size="small" value={prop.type || 'string'} options={TYPE_OPTIONS} style={{ width: 80 }}
+                        onChange={val => updateVariable(name, name, { type: val })} />
+                      <Input size="small" value={prop.description || ''} placeholder="description"
+                        onChange={e => updateVariable(name, name, { description: e.target.value })}
+                        style={{ flex: 1 }} />
+                      <Input size="small" value={prop.default ?? ''} placeholder="default" style={{ width: 100 }}
+                        onChange={e => updateVariable(name, name, { default: e.target.value || undefined })} />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                        <input type="checkbox" checked={required.has(name)}
+                          onChange={e => updateVariable(name, name, { required: e.target.checked })} />
+                        <Text style={{ fontSize: 11 }}>Req</Text>
+                      </label>
+                      <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => removeVariable(name)} />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Thresholds */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Thresholds</Text>
+                    <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
+                    <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => addVariable('threshold')}>Add</Button>
+                  </div>
+                  {thresholds.length === 0 && <Text type="secondary" style={{ fontSize: 12 }}>No thresholds defined</Text>}
+                  {thresholds.map(([name, prop]) => (
+                    <div key={name} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                      <Input size="small" value={name} placeholder="name"
+                        onChange={e => updateVariable(name, e.target.value, {})}
+                        style={{ width: 140, fontWeight: 600 }} />
+                      <Select size="small" value={prop['x-severity'] || 'warning'} options={SEVERITY_OPTIONS} style={{ width: 90 }}
+                        onChange={val => updateVariable(name, name, { 'x-severity': val })} />
+                      <Input size="small" value={prop.description || ''} placeholder="description"
+                        onChange={e => updateVariable(name, name, { description: e.target.value })}
+                        style={{ flex: 1 }} />
+                      <Input size="small" value={prop.default ?? ''} placeholder="default" style={{ width: 80 }}
+                        onChange={e => {
+                          const v = e.target.value
+                          updateVariable(name, name, { default: v === '' ? undefined : (isNaN(Number(v)) ? v : Number(v)) })
+                        }} />
+                      <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => removeVariable(name)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <Empty style={{ margin: 'auto' }} description="Select or create an alert group" />
+            )}
+
+            {/* Collapsible YAML preview */}
+            <div style={{ borderTop: '1px solid #f0f0f0' }}>
+              <div
+                onClick={() => setYamlExpanded(!yamlExpanded)}
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: '#fafafa' }}
+              >
+                {yamlExpanded ? <DownOutlined style={{ fontSize: 10 }} /> : <RightOutlined style={{ fontSize: 10 }} />}
+                <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Generated YAML</Text>
+                {yamlExpanded && (
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 11, color: '#8c8c8c' }}>Edit manually</Text>
+                    <Switch size="small" checked={editorEditable} onChange={setEditorEditable} />
+                  </div>
+                )}
+              </div>
+              {yamlExpanded && (
+                <div id="template-dev-cm" ref={editorRef} style={{ height: 300, overflow: 'auto', borderTop: '1px solid #f0f0f0' }}>
+                  <style>{`#template-dev-cm .cm-editor { height: 100%; }`}</style>
+                </div>
               )}
-              <Button size="small" icon={<PlusOutlined />} onClick={handleAddAlert} />
-              {activeAlert && (
-                <Button size="small" danger icon={<DeleteOutlined />} onClick={handleRemoveAlert} />
-              )}
-            </div>
-            <div style={{ flex: 1, overflow: 'hidden' }}>
-              <RuleBuilder alertDef={activeAlertDef} alertName={activeAlert} onChange={handleAlertDefChange} />
             </div>
           </div>
         </div>
@@ -256,10 +452,11 @@ export default function TemplateDevEditor() {
         <Empty style={{ margin: 'auto' }} description="Select a chart or create a new one." />
       )}
 
-      {activeChart && (
-        <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fafafa' }}>
-          <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
-          {dirty && <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>}
+      {/* Bottom status bar */}
+      {activeChart && dirty && (
+        <div style={{ padding: '8px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fffbe6' }}>
+          <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>
+          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={handleSave}>Save</Button>
         </div>
       )}
     </div>

@@ -2,40 +2,54 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
-    "mariadb_latency": {
+    "mariadb_latency_slow_queries": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "instance_name": { "type": "string", "description": "MariaDB instance identifier" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
-          "warn_ms": { "type": "number", "description": "Warning threshold (ms)", "default": 200 },
-          "critical_ms": { "type": "number", "description": "Critical threshold (ms)", "default": 500 }
+          "warn_threshold": { "type": "number", "description": "Slow queries/sec warning threshold", "default": 1 },
+          "critical_threshold": { "type": "number", "description": "Slow queries/sec critical threshold", "default": 5 }
         },
         "required": ["instance_name"]
       }
     },
-    "mariadb_traffic": {
+    "mariadb_traffic_qps": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "instance_name": { "type": "string", "description": "MariaDB instance identifier" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
-          "qps_warn": { "type": "number", "description": "QPS drop warning threshold", "default": 10 }
+          "min_qps": { "type": "number", "description": "Low QPS warning threshold", "default": 10 },
+          "max_qps": { "type": "number", "description": "High QPS warning threshold", "default": 10000 }
         },
         "required": ["instance_name"]
       }
     },
-    "mariadb_errors": {
+    "mariadb_errors_connections": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "instance_name": { "type": "string", "description": "MariaDB instance identifier" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
-          "warn_rate": { "type": "number", "description": "Error rate warning (errors/sec)", "default": 5 },
-          "critical_rate": { "type": "number", "description": "Error rate critical (errors/sec)", "default": 20 }
+          "warn_rate": { "type": "number", "description": "Connection errors/sec warning", "default": 5 },
+          "critical_rate": { "type": "number", "description": "Connection errors/sec critical", "default": 20 }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_errors_aborted": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
+          "aborted_clients_rate": { "type": "number", "description": "Aborted clients/sec warning", "default": 3 },
+          "aborted_connects_rate": { "type": "number", "description": "Aborted connects/sec warning", "default": 3 }
         },
         "required": ["instance_name"]
       }
@@ -51,6 +65,71 @@
           "critical_pct": { "type": "number", "description": "Connection saturation critical (%)", "default": 90 }
         },
         "required": ["instance_name"]
+      }
+    },
+    "mariadb_saturation_buffer_pool": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
+          "warn_pct": { "type": "number", "description": "Buffer pool usage warning (%)", "default": 85 },
+          "critical_pct": { "type": "number", "description": "Buffer pool usage critical (%)", "default": 95 }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_saturation_cpu": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
+          "warn_pct": { "type": "number", "description": "CPU usage warning (%)", "default": 80 },
+          "critical_pct": { "type": "number", "description": "CPU usage critical (%)", "default": 95 }
+        },
+        "required": ["pod_regex"]
+      }
+    },
+    "mariadb_saturation_memory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
+          "warn_pct": { "type": "number", "description": "Memory usage warning (%)", "default": 80 },
+          "critical_pct": { "type": "number", "description": "Memory usage critical (%)", "default": 95 }
+        },
+        "required": ["pod_regex"]
+      }
+    },
+    "mariadb_saturation_disk": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pvc_regex": { "type": "string", "description": "PVC name regex for MariaDB volumes" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
+          "warn_pct": { "type": "number", "description": "Disk usage warning (%)", "default": 75 },
+          "critical_pct": { "type": "number", "description": "Disk usage critical (%)", "default": 90 }
+        },
+        "required": ["pvc_regex"]
+      }
+    },
+    "mariadb_traffic_network": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default" },
+          "receive_bytes_threshold": { "type": "number", "description": "Network receive bytes/sec threshold", "default": 104857600 },
+          "transmit_bytes_threshold": { "type": "number", "description": "Network transmit bytes/sec threshold", "default": 104857600 }
+        },
+        "required": ["pod_regex"]
       }
     }
   }

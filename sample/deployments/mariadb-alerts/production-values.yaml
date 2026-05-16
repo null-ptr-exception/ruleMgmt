@@ -1,27 +1,30 @@
-mariadb_latency:
+mariadb_latency_slow_queries:
   - instance_name: mariadb-primary
     namespace: prod-db
-    warn_ms: 150
-    critical_ms: 400
+    warn_threshold: 0.5
+    critical_threshold: 3
   - instance_name: mariadb-replica-01
     namespace: prod-db
-    warn_ms: 200
-    critical_ms: 600
+    warn_threshold: 1
+    critical_threshold: 5
   - instance_name: mariadb-analytics
     namespace: prod-analytics
-    warn_ms: 500
-    critical_ms: 2000
-mariadb_traffic:
+    warn_threshold: 2
+    critical_threshold: 10
+mariadb_traffic_qps:
   - instance_name: mariadb-primary
     namespace: prod-db
-    qps_warn: 50
+    min_qps: 50
+    max_qps: 15000
   - instance_name: mariadb-replica-01
     namespace: prod-db
-    qps_warn: 20
+    min_qps: 20
+    max_qps: 10000
   - instance_name: mariadb-analytics
     namespace: prod-analytics
-    qps_warn: 5
-mariadb_errors:
+    min_qps: 5
+    max_qps: 5000
+mariadb_errors_connections:
   - instance_name: mariadb-primary
     namespace: prod-db
     warn_rate: 3
@@ -30,6 +33,15 @@ mariadb_errors:
     namespace: prod-db
     warn_rate: 5
     critical_rate: 20
+mariadb_errors_aborted:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    aborted_clients_rate: 2
+    aborted_connects_rate: 2
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    aborted_clients_rate: 3
+    aborted_connects_rate: 3
 mariadb_saturation_connections:
   - instance_name: mariadb-primary
     namespace: prod-db
@@ -43,3 +55,60 @@ mariadb_saturation_connections:
     namespace: prod-analytics
     warn_pct: 60
     critical_pct: 80
+mariadb_saturation_buffer_pool:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    warn_pct: 85
+    critical_pct: 95
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    warn_pct: 80
+    critical_pct: 90
+mariadb_saturation_cpu:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    warn_pct: 80
+    critical_pct: 95
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    warn_pct: 70
+    critical_pct: 90
+  - pod_regex: mariadb-analytics-.*
+    namespace: prod-analytics
+    warn_pct: 85
+    critical_pct: 95
+mariadb_saturation_memory:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    warn_pct: 80
+    critical_pct: 95
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    warn_pct: 75
+    critical_pct: 90
+  - pod_regex: mariadb-analytics-.*
+    namespace: prod-analytics
+    warn_pct: 85
+    critical_pct: 95
+mariadb_saturation_disk:
+  - pvc_regex: data-mariadb-primary-.*
+    namespace: prod-db
+    warn_pct: 75
+    critical_pct: 90
+  - pvc_regex: data-mariadb-replica-.*
+    namespace: prod-db
+    warn_pct: 70
+    critical_pct: 85
+  - pvc_regex: data-mariadb-analytics-.*
+    namespace: prod-analytics
+    warn_pct: 80
+    critical_pct: 90
+mariadb_traffic_network:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    receive_bytes_threshold: 104857600
+    transmit_bytes_threshold: 104857600
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    receive_bytes_threshold: 52428800
+    transmit_bytes_threshold: 52428800

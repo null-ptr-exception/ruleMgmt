@@ -11,19 +11,40 @@ mariadb_latency_slow_queries:
     namespace: prod-analytics
     warn_threshold: 2
     critical_threshold: 10
-mariadb_traffic_qps:
+mariadb_traffic_qps_low:
   - instance_name: mariadb-primary
     namespace: prod-db
     min_qps: 50
-    max_qps: 15000
   - instance_name: mariadb-replica-01
     namespace: prod-db
     min_qps: 20
-    max_qps: 10000
   - instance_name: mariadb-analytics
     namespace: prod-analytics
     min_qps: 5
+mariadb_traffic_qps_high:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    max_qps: 15000
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    max_qps: 10000
+  - instance_name: mariadb-analytics
+    namespace: prod-analytics
     max_qps: 5000
+mariadb_traffic_network_receive:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    warn_bytes: 104857600
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    warn_bytes: 52428800
+mariadb_traffic_network_transmit:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    warn_bytes: 104857600
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    warn_bytes: 52428800
 mariadb_errors_connections:
   - instance_name: mariadb-primary
     namespace: prod-db
@@ -33,15 +54,20 @@ mariadb_errors_connections:
     namespace: prod-db
     warn_rate: 5
     critical_rate: 20
-mariadb_errors_aborted:
+mariadb_errors_aborted_clients:
   - instance_name: mariadb-primary
     namespace: prod-db
-    aborted_clients_rate: 2
-    aborted_connects_rate: 2
+    warn_rate: 2
   - instance_name: mariadb-replica-01
     namespace: prod-db
-    aborted_clients_rate: 3
-    aborted_connects_rate: 3
+    warn_rate: 3
+mariadb_errors_aborted_connects:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    warn_rate: 2
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    warn_rate: 3
 mariadb_saturation_connections:
   - instance_name: mariadb-primary
     namespace: prod-db
@@ -103,12 +129,3 @@ mariadb_saturation_disk:
     namespace: prod-analytics
     warn_pct: 80
     critical_pct: 90
-mariadb_traffic_network:
-  - pod_regex: mariadb-primary-.*
-    namespace: prod-db
-    receive_bytes_threshold: 104857600
-    transmit_bytes_threshold: 104857600
-  - pod_regex: mariadb-replica-.*
-    namespace: prod-db
-    receive_bytes_threshold: 52428800
-    transmit_bytes_threshold: 52428800

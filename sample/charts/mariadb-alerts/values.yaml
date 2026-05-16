@@ -3,21 +3,35 @@ mariadb_latency_slow_queries:
     namespace: default
     warn_threshold: 1
     critical_threshold: 5
-mariadb_traffic_qps:
+mariadb_traffic_qps_low:
   - instance_name: mariadb-primary
     namespace: default
     min_qps: 10
+mariadb_traffic_qps_high:
+  - instance_name: mariadb-primary
+    namespace: default
     max_qps: 10000
+mariadb_traffic_network_receive:
+  - pod_regex: mariadb-.*
+    namespace: default
+    warn_bytes: 104857600
+mariadb_traffic_network_transmit:
+  - pod_regex: mariadb-.*
+    namespace: default
+    warn_bytes: 104857600
 mariadb_errors_connections:
   - instance_name: mariadb-primary
     namespace: default
     warn_rate: 5
     critical_rate: 20
-mariadb_errors_aborted:
+mariadb_errors_aborted_clients:
   - instance_name: mariadb-primary
     namespace: default
-    aborted_clients_rate: 3
-    aborted_connects_rate: 3
+    warn_rate: 3
+mariadb_errors_aborted_connects:
+  - instance_name: mariadb-primary
+    namespace: default
+    warn_rate: 3
 mariadb_saturation_connections:
   - instance_name: mariadb-primary
     namespace: default
@@ -43,8 +57,3 @@ mariadb_saturation_disk:
     namespace: default
     warn_pct: 75
     critical_pct: 90
-mariadb_traffic_network:
-  - pod_regex: mariadb-.*
-    namespace: default
-    receive_bytes_threshold: 104857600
-    transmit_bytes_threshold: 104857600

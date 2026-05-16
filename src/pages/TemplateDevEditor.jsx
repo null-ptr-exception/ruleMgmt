@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Button, Input, Select, Empty, Typography } from 'antd'
+import { Button, Input, Select, Empty, Typography, Switch } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
-import VariablesPanel from '../components/VariablesPanel'
-import { schemaAlertNames, schemaToVars, updateSchemaAlert } from '../utils/schemaUtils'
+import RuleBuilder from '../components/RuleBuilder'
+import { schemaAlertNames } from '../utils/schemaUtils'
+import { generatePrometheusRule } from '../utils/templateGenerator'
 import {
   listCharts, createChart, deleteChart,
   getChartInfo, getChartTemplateFile, saveChartTemplateFile,
-  saveChartSchema, saveChartMeta, deleteChartTemplate
+  saveChartSchema, saveChartMeta
 } from '../utils/chartApi'
 
 import { EditorView, basicSetup } from 'codemirror'
@@ -28,8 +29,8 @@ export default function TemplateDevEditor() {
   const [schema, setSchema] = useState(null)
   const [alertNames, setAlertNames] = useState([])
   const [activeAlert, setActiveAlert] = useState(null)
-  const [vars, setVars] = useState([])
   const [dirty, setDirty] = useState(false)
+  const [editorEditable, setEditorEditable] = useState(false)
   const editorRef = useRef(null)
   const viewRef = useRef(null)
 
@@ -49,8 +50,8 @@ export default function TemplateDevEditor() {
     const names = schemaAlertNames(s)
     setAlertNames(names)
     setActiveAlert(names.length > 0 ? names[0] : null)
-    setVars(names.length > 0 ? schemaToVars(s, names[0]) : [])
     setDirty(false)
+    setEditorEditable(false)
     if (info.templateFiles?.length > 0) {
       setActiveFile(info.templateFiles[0])
     } else {
@@ -70,31 +71,33 @@ export default function TemplateDevEditor() {
     })
   }, [activeChart, activeFile])
 
+  // Regenerate YAML when schema changes and editor is not in manual mode
   useEffect(() => {
-    if (activeAlert && schema) {
-      setVars(schemaToVars(schema, activeAlert))
-    } else {
-      setVars([])
+    if (!editorEditable && schema && activeChart) {
+      const generated = generatePrometheusRule(schema, `{{ .Release.Name }}`)
+      setFileContent(generated)
     }
-  }, [activeAlert])
+  }, [schema, editorEditable])
 
+  // CodeMirror setup
   useEffect(() => {
     if (!editorRef.current) return
     if (viewRef.current) {
       viewRef.current.destroy()
       viewRef.current = null
     }
-    if (!activeFile) return
+    if (!activeFile && !schema) return
 
     const extensions = [
       basicSetup,
       yamlExtension,
-      EditorView.updateListener.of(update => {
+      EditorState.readOnly.of(!editorEditable),
+      ...(editorEditable ? [EditorView.updateListener.of(update => {
         if (update.docChanged) {
           setFileContent(update.state.doc.toString())
           setDirty(true)
         }
-      }),
+      })] : []),
     ]
 
     const state = EditorState.create({ doc: fileContent, extensions })
@@ -106,7 +109,7 @@ export default function TemplateDevEditor() {
         viewRef.current = null
       }
     }
-  }, [activeChart, activeFile])
+  }, [activeChart, activeFile, editorEditable])
 
   useEffect(() => {
     if (!viewRef.current) return
@@ -123,7 +126,8 @@ export default function TemplateDevEditor() {
     await saveChartSchema(activeChart, schema)
     await saveChartMeta(activeChart, chartMeta)
     if (activeFile) {
-      await saveChartTemplateFile(activeChart, activeFile, fileContent)
+      const content = editorEditable ? fileContent : generatePrometheusRule(schema, `{{ .Release.Name }}`)
+      await saveChartTemplateFile(activeChart, activeFile, content)
     }
     setDirty(false)
   }
@@ -144,22 +148,24 @@ export default function TemplateDevEditor() {
     await loadCharts()
   }
 
-  async function handleAddFile() {
-    const name = prompt('Template file name (without .yaml):')
-    if (!name || !activeChart) return
-    await saveChartTemplateFile(activeChart, name, '')
-    setTemplateFiles([...templateFiles, name])
-    setActiveFile(name)
-  }
-
   function handleAddAlert() {
-    const name = prompt('Alert name (use underscores for grouping, e.g. mariadb_latency):')
-    if (!name) return
-    const newSchema = updateSchemaAlert(schema, name, [])
+    const name = prompt('Alert group name (use underscores, e.g. mariadb_saturation_disk):')
+    if (!name || !schema) return
+    const newSchema = {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        [name]: {
+          type: 'array',
+          'x-promql': '',
+          'x-for': '5m',
+          items: { type: 'object', properties: {} }
+        }
+      }
+    }
     setSchema(newSchema)
     setAlertNames(schemaAlertNames(newSchema))
     setActiveAlert(name)
-    setVars([])
     setDirty(true)
   }
 
@@ -174,100 +180,88 @@ export default function TemplateDevEditor() {
     setDirty(true)
   }
 
-  function handleVarsChange(newVars) {
-    if (!activeAlert) return
-    const newSchema = updateSchemaAlert(schema, activeAlert, newVars)
+  function handleAlertDefChange(newDef) {
+    if (!activeAlert || !schema) return
+    const newSchema = {
+      ...schema,
+      properties: { ...schema.properties, [activeAlert]: newDef }
+    }
     setSchema(newSchema)
-    setVars(newVars)
     setDirty(true)
   }
 
-  function handleSchemaChange(newSchema) {
-    setSchema(newSchema)
-    const names = schemaAlertNames(newSchema)
-    setAlertNames(names)
-    if (activeAlert && names.includes(activeAlert)) {
-      setVars(schemaToVars(newSchema, activeAlert))
-    } else if (names.length > 0) {
-      setActiveAlert(names[0])
-      setVars(schemaToVars(newSchema, names[0]))
-    } else {
-      setActiveAlert(null)
-      setVars([])
-    }
-    setDirty(true)
-  }
+  const activeAlertDef = activeAlert ? schema?.properties?.[activeAlert] : null
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Select
-            value={activeChart || undefined}
-            onChange={setActiveChart}
-            placeholder="Select chart"
-            style={{ minWidth: 180 }}
-            options={charts.map(c => ({ value: c.name, label: `${c.name} (${c.templateCount} templates)` }))}
-          />
-          <Button size="small" icon={<PlusOutlined />} onClick={handleCreateChart}>New</Button>
-          {activeChart && (
-            <>
-              <Input size="small" placeholder="Description" value={chartMeta.description || ''}
-                onChange={e => { setChartMeta({ ...chartMeta, description: e.target.value }); setDirty(true) }}
-                style={{ flex: 1, maxWidth: 400 }} />
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
-                <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
-              </div>
-            </>
-          )}
-        </div>
-        {activeChart ? (
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <Select
+          value={activeChart || undefined}
+          onChange={setActiveChart}
+          placeholder="Select chart"
+          style={{ minWidth: 180 }}
+          options={charts.map(c => ({ value: c.name, label: `${c.name} (${c.templateCount} templates)` }))}
+        />
+        <Button size="small" icon={<PlusOutlined />} onClick={handleCreateChart}>New</Button>
+        {activeChart && (
           <>
-
-            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa' }}>
-                  <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Template file:</Text>
-                  {templateFiles.length > 0 ? (
-                    <Select size="small" value={activeFile} onChange={setActiveFile} style={{ width: 200 }}
-                      options={templateFiles.map(f => ({ value: f, label: `${f}.yaml` }))} />
-                  ) : (
-                    <Text type="secondary" style={{ fontSize: 12 }}>No template files</Text>
-                  )}
-                  <Button size="small" icon={<PlusOutlined />} onClick={handleAddFile}>Add file</Button>
-                </div>
-                <div id="template-dev-cm" ref={editorRef} style={{ flex: 1, overflow: 'auto' }}>
-                  <style>{`#template-dev-cm .cm-editor { height: 100%; }`}</style>
-                </div>
-              </div>
-              <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #f0f0f0' }}>
-                <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa' }}>
-                  <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert:</Text>
-                  {alertNames.length > 0 ? (
-                    <Select size="small" value={activeAlert} onChange={a => setActiveAlert(a)} style={{ flex: 1 }}
-                      options={alertNames.map(n => ({ value: n, label: n }))} />
-                  ) : (
-                    <Text type="secondary" style={{ fontSize: 12 }}>No alerts</Text>
-                  )}
-                  <Button size="small" icon={<PlusOutlined />} onClick={handleAddAlert} />
-                  {activeAlert && (
-                    <Button size="small" danger icon={<DeleteOutlined />} onClick={handleRemoveAlert} />
-                  )}
-                </div>
-                <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <VariablesPanel vars={vars} onChange={handleVarsChange} schema={schema} onSchemaChange={handleSchemaChange} />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fafafa' }}>
+            <Input size="small" placeholder="Description" value={chartMeta.description || ''}
+              onChange={e => { setChartMeta({ ...chartMeta, description: e.target.value }); setDirty(true) }}
+              style={{ flex: 1, maxWidth: 400 }} />
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
               <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
-              {dirty && <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>}
+              <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
             </div>
           </>
-        ) : (
-          <Empty style={{ margin: 'auto' }} description="Select a chart or create a new one." />
         )}
+      </div>
+
+      {activeChart ? (
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* YAML Preview */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa' }}>
+              <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Generated YAML</Text>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 11, color: '#8c8c8c' }}>Edit manually</Text>
+                <Switch size="small" checked={editorEditable} onChange={setEditorEditable} />
+              </div>
+            </div>
+            <div id="template-dev-cm" ref={editorRef} style={{ flex: 1, overflow: 'auto' }}>
+              <style>{`#template-dev-cm .cm-editor { height: 100%; }`}</style>
+            </div>
+          </div>
+
+          {/* Rule Builder Panel */}
+          <div style={{ width: 380, flexShrink: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #f0f0f0' }}>
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, background: '#fafafa' }}>
+              <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert Group:</Text>
+              {alertNames.length > 0 ? (
+                <Select size="small" value={activeAlert} onChange={setActiveAlert} style={{ flex: 1 }}
+                  options={alertNames.map(n => ({ value: n, label: n }))} />
+              ) : (
+                <Text type="secondary" style={{ fontSize: 12 }}>No alert groups</Text>
+              )}
+              <Button size="small" icon={<PlusOutlined />} onClick={handleAddAlert} />
+              {activeAlert && (
+                <Button size="small" danger icon={<DeleteOutlined />} onClick={handleRemoveAlert} />
+              )}
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <RuleBuilder alertDef={activeAlertDef} alertName={activeAlert} onChange={handleAlertDefChange} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <Empty style={{ margin: 'auto' }} description="Select a chart or create a new one." />
+      )}
+
+      {activeChart && (
+        <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fafafa' }}>
+          <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
+          {dirty && <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>}
+        </div>
+      )}
     </div>
   )
 }

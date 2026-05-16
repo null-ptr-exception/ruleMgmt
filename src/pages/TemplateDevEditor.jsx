@@ -44,8 +44,29 @@ export default function TemplateDevEditor() {
   const [yamlExpanded, setYamlExpanded] = useState(false)
   const [editorEditable, setEditorEditable] = useState(false)
   const [fileContent, setFileContent] = useState('')
+  const [sidebarWidth, setSidebarWidth] = useState(220)
+  const resizingRef = useRef(false)
   const editorRef = useRef(null)
   const viewRef = useRef(null)
+
+  function handleResizeStart(e) {
+    e.preventDefault()
+    resizingRef.current = true
+    const startX = e.clientX
+    const startWidth = sidebarWidth
+    function onMove(ev) {
+      if (!resizingRef.current) return
+      const newWidth = Math.max(140, Math.min(400, startWidth + ev.clientX - startX))
+      setSidebarWidth(newWidth)
+    }
+    function onUp() {
+      resizingRef.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   const loadCharts = useCallback(async () => {
     const c = await listCharts()
@@ -285,7 +306,7 @@ export default function TemplateDevEditor() {
       {activeChart ? (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* Left sidebar - alert groups */}
-          <div style={{ width: 220, flexShrink: 0, borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', background: '#fafafa' }}>
+          <div style={{ width: sidebarWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fafafa', position: 'relative' }}>
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert Groups</Text>
               <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleAddAlert} />
@@ -321,6 +342,13 @@ export default function TemplateDevEditor() {
                 </div>
               ))}
             </div>
+            {/* Resize handle */}
+            <div
+              onMouseDown={handleResizeStart}
+              style={{ position: 'absolute', top: 0, right: 0, width: 4, height: '100%', cursor: 'col-resize', background: 'transparent' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#d9d9d9'}
+              onMouseLeave={e => { if (!resizingRef.current) e.currentTarget.style.background = 'transparent' }}
+            />
           </div>
 
           {/* Main content - rule builder */}

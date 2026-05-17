@@ -1,7 +1,0 @@
-tablespace_usage:
-  - db_name: mydb
-    tablespace_name: users
-    info: 30
-    warn: 50
-    critical: 70
-    severe: 95

@@ -1,5 +1,0 @@
-apiVersion: v2
-name: tablespace-usage
-description: Database tablespace utilization alerts with multi-tier severity
-version: 1.0.0
-type: application

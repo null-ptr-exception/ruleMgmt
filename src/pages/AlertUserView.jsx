@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Layout, Button, Modal, Typography, Empty } from 'antd'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Button, Modal, Typography, Empty } from 'antd'
 import { SaveOutlined, EyeOutlined } from '@ant-design/icons'
 import ChartSelector from '../components/ChartSelector'
 import DeploymentSelector from '../components/DeploymentSelector'
@@ -13,7 +13,6 @@ import {
   renderDeployment
 } from '../utils/chartApi'
 
-const { Sider, Content } = Layout
 const { Title, Text } = Typography
 
 export default function AlertUserView() {
@@ -32,6 +31,32 @@ export default function AlertUserView() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
   const [chartDescription, setChartDescription] = useState('')
+  const [sidebarWidth, setSidebarWidth] = useState(280)
+  const resizingRef = useRef(false)
+
+  function handleResizeStart(e) {
+    e.preventDefault()
+    resizingRef.current = true
+    const startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX
+    const startWidth = sidebarWidth
+    function onMove(ev) {
+      if (!resizingRef.current) return
+      const clientX = ev.type === 'touchmove' ? ev.touches[0].clientX : ev.clientX
+      const newWidth = Math.max(180, Math.min(450, startWidth + clientX - startX))
+      setSidebarWidth(newWidth)
+    }
+    function onUp() {
+      resizingRef.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onUp)
+  }
 
   useEffect(() => {
     listCharts().then(c => {
@@ -125,8 +150,8 @@ export default function AlertUserView() {
   const showMain = activeChart && activeDeployment && activeAlert
 
   return (
-    <Layout style={{ height: '100%' }}>
-      <Sider width={280} theme="light" style={{ borderRight: '1px solid #f0f0f0', overflow: 'auto' }}>
+    <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
+      <div style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'auto', background: '#fff', position: 'relative' }}>
         <ChartSelector charts={charts} activeChart={activeChart} onSelect={setActiveChart} />
         {sectionHeader('Deployments')}
         <DeploymentSelector
@@ -142,8 +167,21 @@ export default function AlertUserView() {
           activeTemplate={activeAlert}
           onSelect={setActiveAlert}
         />
-      </Sider>
-      <Content style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleResizeStart}
+          onTouchStart={handleResizeStart}
+          style={{ position: 'absolute', top: 0, right: -2, width: 5, height: '100%', cursor: 'col-resize', zIndex: 10 }}
+        >
+          <div style={{
+            position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+            width: 14, height: 28, borderRadius: 4, background: '#d9d9d9', border: '1px solid #bfbfbf',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 10, color: '#8c8c8c', letterSpacing: 1, touchAction: 'none'
+          }}>⋮</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
         {showMain ? (
           <>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
@@ -183,7 +221,7 @@ export default function AlertUserView() {
               'Select an alert template from the sidebar'
             } />
         )}
-      </Content>
-    </Layout>
+      </div>
+    </div>
   )
 }

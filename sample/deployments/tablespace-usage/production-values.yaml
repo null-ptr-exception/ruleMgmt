@@ -1,0 +1,43 @@
+tablespace_usage:
+  - db_name: oracle-prod-01
+    tablespace_name: USERS
+    info: 30
+    warn: 50
+    critical: 70
+    severe: 95
+  - db_name: oracle-prod-01
+    tablespace_name: ORDERS
+    info: 25
+    warn: 45
+    critical: 65
+    severe: 90
+  - db_name: oracle-prod-01
+    tablespace_name: INVENTORY
+    info: 30
+    warn: 50
+    critical: 70
+    severe: 95
+  - db_name: oracle-prod-01
+    tablespace_name: AUDIT_LOG
+    info: 40
+    warn: 60
+    critical: 80
+    severe: 95
+  - db_name: oracle-prod-02
+    tablespace_name: USERS
+    info: 30
+    warn: 50
+    critical: 70
+    severe: 95
+  - db_name: oracle-prod-02
+    tablespace_name: SESSIONS
+    info: 35
+    warn: 55
+    critical: 75
+    severe: 92
+  - db_name: oracle-prod-02
+    tablespace_name: TEMP
+    info: 50
+    warn: 70
+    critical: 85
+    severe: 98

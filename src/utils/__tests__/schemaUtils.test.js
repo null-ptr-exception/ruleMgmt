@@ -114,3 +114,43 @@ describe('updateSchemaAlert', () => {
     expect(updated.properties.mem_alert).toEqual(sampleSchema.properties.mem_alert)
   })
 })
+
+describe('schema with x- extensions', () => {
+  const extSchema = {
+    type: 'object',
+    properties: {
+      disk_alert: {
+        type: 'array',
+        'x-promql': 'disk_usage > {{ THRESHOLD }}',
+        'x-for': '10m',
+        items: {
+          type: 'object',
+          properties: {
+            host: { type: 'string', description: 'Host', 'x-var-type': 'selector' },
+            warn_pct: { type: 'number', description: 'Warning', default: 80, 'x-var-type': 'threshold', 'x-severity': 'warning' }
+          },
+          required: ['host']
+        }
+      }
+    }
+  }
+
+  it('schemaAlertNames ignores x- fields at property level', () => {
+    expect(schemaAlertNames(extSchema)).toEqual(['disk_alert'])
+  })
+
+  it('schemaToVars extracts vars ignoring x- fields', () => {
+    const vars = schemaToVars(extSchema, 'disk_alert')
+    expect(vars).toHaveLength(2)
+    expect(vars[0]).toEqual({ name: 'host', type: 'string', description: 'Host', required: true })
+    expect(vars[1]).toEqual({ name: 'warn_pct', type: 'number', description: 'Warning', default: 80, required: false })
+  })
+
+  it('schemaToVars does not include x-var-type or x-severity in output', () => {
+    const vars = schemaToVars(extSchema, 'disk_alert')
+    for (const v of vars) {
+      expect(v).not.toHaveProperty('x-var-type')
+      expect(v).not.toHaveProperty('x-severity')
+    }
+  })
+})

@@ -120,6 +120,35 @@ describe('Templates API', () => {
     expect(info.schema.properties.instances.items.properties.threshold.type).toBe('number')
   })
 
+  it('preserves x- extensions in schema', async () => {
+    const schema = {
+      $schema: 'https://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        disk_alert: {
+          type: 'array',
+          'x-promql': 'disk_usage{ns="{{ .namespace }}"} > {{ THRESHOLD }}',
+          'x-for': '10m',
+          items: {
+            type: 'object',
+            properties: {
+              namespace: { type: 'string', 'x-var-type': 'selector' },
+              warn_pct: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
+            }
+          }
+        }
+      }
+    }
+    await api('POST', '/api/v2/templates/test-app/schema', { schema })
+    const { data: info } = await api('GET', '/api/v2/templates/test-app')
+    const disk = info.schema.properties.disk_alert
+    expect(disk['x-promql']).toContain('{{ THRESHOLD }}')
+    expect(disk['x-for']).toBe('10m')
+    expect(disk.items.properties.namespace['x-var-type']).toBe('selector')
+    expect(disk.items.properties.warn_pct['x-var-type']).toBe('threshold')
+    expect(disk.items.properties.warn_pct['x-severity']).toBe('warning')
+  })
+
   it('renames a template file', async () => {
     await api('POST', '/api/v2/templates/test-app/cpu-alert/rename', { newName: 'cpu-sat' })
     const { data } = await api('GET', '/api/v2/templates/test-app')

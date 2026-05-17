@@ -52,20 +52,25 @@ export default function TemplateDevEditor() {
   function handleResizeStart(e) {
     e.preventDefault()
     resizingRef.current = true
-    const startX = e.clientX
+    const startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX
     const startWidth = sidebarWidth
     function onMove(ev) {
       if (!resizingRef.current) return
-      const newWidth = Math.max(140, Math.min(400, startWidth + ev.clientX - startX))
+      const clientX = ev.type === 'touchmove' ? ev.touches[0].clientX : ev.clientX
+      const newWidth = Math.max(140, Math.min(400, startWidth + clientX - startX))
       setSidebarWidth(newWidth)
     }
     function onUp() {
       resizingRef.current = false
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onUp)
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onUp)
   }
 
   const loadCharts = useCallback(async () => {
@@ -342,13 +347,19 @@ export default function TemplateDevEditor() {
                 </div>
               ))}
             </div>
-            {/* Resize handle */}
+            {/* Resize handle - full height line + visible grip */}
             <div
               onMouseDown={handleResizeStart}
-              style={{ position: 'absolute', top: 0, right: 0, width: 4, height: '100%', cursor: 'col-resize', background: 'transparent' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#d9d9d9'}
-              onMouseLeave={e => { if (!resizingRef.current) e.currentTarget.style.background = 'transparent' }}
-            />
+              onTouchStart={handleResizeStart}
+              style={{ position: 'absolute', top: 0, right: -2, width: 5, height: '100%', cursor: 'col-resize', zIndex: 10 }}
+            >
+              <div style={{
+                position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+                width: 14, height: 28, borderRadius: 4, background: '#d9d9d9', border: '1px solid #bfbfbf',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, color: '#8c8c8c', letterSpacing: 1, touchAction: 'none'
+              }}>⋮</div>
+            </div>
           </div>
 
           {/* Main content - rule builder */}

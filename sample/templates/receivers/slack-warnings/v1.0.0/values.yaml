@@ -1,5 +1,0 @@
-name: slack-warnings
-slack_configs:
-  - api_url: https://hooks.slack.com/services/YOUR_WEBHOOK_URL
-    channel: '#alerts-warning'
-    send_resolved: true

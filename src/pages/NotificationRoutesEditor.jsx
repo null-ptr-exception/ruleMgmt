@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Card, Input, Button, Select, Typography, Tag, Space, Empty, Collapse, Checkbox } from 'antd'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Card, Input, Button, Select, Typography, Tag, Space, Empty, Checkbox } from 'antd'
 import { DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
-const { TextArea } = Input
 
 const MATCHER_OPS = ['=', '!=', '=~', '!~']
 
@@ -289,8 +288,6 @@ export default function NotificationRoutesEditor() {
   const [dirty, setDirty] = useState(false)
   const [status, setStatus] = useState('')
   const [yamlExpanded, setYamlExpanded] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(200)
-  const resizingRef = useRef(false)
 
   const loadConfigs = useCallback(async () => {
     const res = await fetch('/api/v2/alertmanager-configs')
@@ -350,89 +347,36 @@ export default function NotificationRoutesEditor() {
 
   const preview = useMemo(() => buildYAML(form), [form])
 
-  const handleResizeStart = useCallback((e) => {
-    e.preventDefault()
-    resizingRef.current = true
-    const startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX
-    const startWidth = sidebarWidth
-    function onMove(ev) {
-      const clientX = ev.type === 'touchmove' ? ev.touches[0].clientX : ev.clientX
-      setSidebarWidth(Math.max(120, Math.min(400, startWidth + clientX - startX)))
-    }
-    function onUp() {
-      resizingRef.current = false
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      document.removeEventListener('touchmove', onMove)
-      document.removeEventListener('touchend', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    document.addEventListener('touchmove', onMove)
-    document.addEventListener('touchend', onUp)
-  }, [sidebarWidth])
-
   const showForm = selected !== null || form.configName.trim() !== ''
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      {/* Sidebar */}
-      <div style={{ width: sidebarWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fafafa', borderRight: '1px solid #f0f0f0', position: 'relative' }}>
-        <div style={{ padding: '12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Configs</Text>
-          <Button size="small" type="text" icon={<PlusOutlined />} onClick={startNew} />
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-          {configs.map(name => (
-            <div
-              key={name}
-              onClick={() => selectConfig(name)}
-              style={{
-                padding: '8px 12px', cursor: 'pointer', fontSize: 12,
-                background: selected === name ? '#e6f4ff' : 'transparent',
-                borderRight: selected === name ? '2px solid #1677ff' : '2px solid transparent',
-                color: selected === name ? '#1677ff' : '#333',
-              }}
-            >
-              {name}
-            </div>
-          ))}
-          {configs.length === 0 && (
-            <Text type="secondary" style={{ padding: 12, display: 'block', fontSize: 12 }}>No configs yet</Text>
-          )}
-        </div>
-        <div
-          onMouseDown={handleResizeStart}
-          onTouchStart={handleResizeStart}
-          style={{ position: 'absolute', top: 0, right: -2, width: 5, height: '100%', cursor: 'col-resize', zIndex: 10 }}
-        >
-          <div style={{
-            position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
-            width: 14, height: 28, borderRadius: 4, background: '#d9d9d9', border: '1px solid #bfbfbf',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, color: '#8c8c8c', letterSpacing: 1, touchAction: 'none'
-          }}>⋮</div>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Top bar */}
+      <div style={{ padding: '10px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fafafa' }}>
+        <Select
+          value={selected || undefined}
+          onChange={val => val ? selectConfig(val) : startNew()}
+          placeholder="Select a config..."
+          style={{ width: 260 }}
+          allowClear
+          onClear={startNew}
+          options={configs.map(name => ({ value: name, label: name }))}
+        />
+        <Button icon={<PlusOutlined />} onClick={startNew}>New</Button>
+        {status && <Tag color="success">{status}</Tag>}
+        {dirty && <Tag color="warning">unsaved</Tag>}
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {!showForm && !selected ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Empty description="Select a config or click + to create one" />
-          </div>
-        ) : (
-          <>
-            <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+      {!showForm ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Empty description="Select a config or create a new one" />
+        </div>
+      ) : (
+        <>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
               {/* Identity */}
               <Card size="small" style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                  <Text strong style={{ fontSize: 15 }}>
-                    {selected ? selected : 'New Config'}
-                  </Text>
-                  {status && <Tag color="success">{status}</Tag>}
-                  {dirty && <Tag color="warning">unsaved</Tag>}
-                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Config Name *</Text>
@@ -578,7 +522,6 @@ export default function NotificationRoutesEditor() {
             </div>
           </>
         )}
-      </div>
     </div>
   )
 }

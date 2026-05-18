@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "mariadb_latency_slow_queries": {
+      "type": "array",
+      "x-promql": "rate(mysql_global_status_slow_queries{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"}[5m]) > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_threshold": { "type": "number", "description": "Slow queries/sec warning", "default": 1, "x-var-type": "threshold", "x-severity": "warning" },
+          "critical_threshold": { "type": "number", "description": "Slow queries/sec critical", "default": 5, "x-var-type": "threshold", "x-severity": "critical" }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_traffic_qps_low": {
+      "type": "array",
+      "x-promql": "rate(mysql_global_status_questions{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"}[5m]) < {{ THRESHOLD }}",
+      "x-for": "10m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "min_qps": { "type": "number", "description": "Minimum QPS threshold", "default": 10, "x-var-type": "threshold", "x-severity": "warning" }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_traffic_qps_high": {
+      "type": "array",
+      "x-promql": "rate(mysql_global_status_questions{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"}[5m]) > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "max_qps": { "type": "number", "description": "Maximum QPS threshold", "default": 10000, "x-var-type": "threshold", "x-severity": "warning" }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_traffic_network_receive": {
+      "type": "array",
+      "x-promql": "rate(container_network_receive_bytes_total{namespace=\"{{ .namespace }}\", pod=~\"{{ .pod_regex }}\"}[5m]) > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_bytes": { "type": "number", "description": "Receive bytes/sec warning", "default": 104857600, "x-var-type": "threshold", "x-severity": "warning" }
+        },
+        "required": ["pod_regex"]
+      }
+    },
+    "mariadb_traffic_network_transmit": {
+      "type": "array",
+      "x-promql": "rate(container_network_transmit_bytes_total{namespace=\"{{ .namespace }}\", pod=~\"{{ .pod_regex }}\"}[5m]) > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_bytes": { "type": "number", "description": "Transmit bytes/sec warning", "default": 104857600, "x-var-type": "threshold", "x-severity": "warning" }
+        },
+        "required": ["pod_regex"]
+      }
+    },
+    "mariadb_errors_connections": {
+      "type": "array",
+      "x-promql": "rate(mysql_global_status_connection_errors_total{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"}[5m]) > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_rate": { "type": "number", "description": "Connection errors/sec warning", "default": 5, "x-var-type": "threshold", "x-severity": "warning" },
+          "critical_rate": { "type": "number", "description": "Connection errors/sec critical", "default": 20, "x-var-type": "threshold", "x-severity": "critical" }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_errors_aborted_clients": {
+      "type": "array",
+      "x-promql": "rate(mysql_global_status_aborted_clients{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"}[5m]) > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_rate": { "type": "number", "description": "Aborted clients/sec warning", "default": 3, "x-var-type": "threshold", "x-severity": "warning" }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_errors_aborted_connects": {
+      "type": "array",
+      "x-promql": "rate(mysql_global_status_aborted_connects{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"}[5m]) > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_rate": { "type": "number", "description": "Aborted connects/sec warning", "default": 3, "x-var-type": "threshold", "x-severity": "warning" }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_saturation_connections": {
+      "type": "array",
+      "x-promql": "(mysql_global_status_threads_connected{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"} / mysql_global_variables_max_connections{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"}) * 100 > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_pct": { "type": "number", "description": "Connection saturation warning (%)", "default": 70, "x-var-type": "threshold", "x-severity": "warning" },
+          "critical_pct": { "type": "number", "description": "Connection saturation critical (%)", "default": 90, "x-var-type": "threshold", "x-severity": "critical" }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_saturation_buffer_pool": {
+      "type": "array",
+      "x-promql": "(1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace=\"{{ .namespace }}\", instance=\"{{ .instance_name }}\"}) * 100 > {{ THRESHOLD }}",
+      "x-for": "10m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_pct": { "type": "number", "description": "Buffer pool usage warning (%)", "default": 85, "x-var-type": "threshold", "x-severity": "warning" },
+          "critical_pct": { "type": "number", "description": "Buffer pool usage critical (%)", "default": 95, "x-var-type": "threshold", "x-severity": "critical" }
+        },
+        "required": ["instance_name"]
+      }
+    },
+    "mariadb_saturation_cpu": {
+      "type": "array",
+      "x-promql": "(rate(container_cpu_usage_seconds_total{namespace=\"{{ .namespace }}\", pod=~\"{{ .pod_regex }}\"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace=\"{{ .namespace }}\", pod=~\"{{ .pod_regex }}\", resource=\"cpu\"}) * 100 > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_pct": { "type": "number", "description": "CPU usage warning (%)", "default": 80, "x-var-type": "threshold", "x-severity": "warning" },
+          "critical_pct": { "type": "number", "description": "CPU usage critical (%)", "default": 95, "x-var-type": "threshold", "x-severity": "critical" }
+        },
+        "required": ["pod_regex"]
+      }
+    },
+    "mariadb_saturation_memory": {
+      "type": "array",
+      "x-promql": "(container_memory_working_set_bytes{namespace=\"{{ .namespace }}\", pod=~\"{{ .pod_regex }}\"} / on(namespace, pod) kube_pod_container_resource_limits{namespace=\"{{ .namespace }}\", pod=~\"{{ .pod_regex }}\", resource=\"memory\"}) * 100 > {{ THRESHOLD }}",
+      "x-for": "5m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_pct": { "type": "number", "description": "Memory usage warning (%)", "default": 80, "x-var-type": "threshold", "x-severity": "warning" },
+          "critical_pct": { "type": "number", "description": "Memory usage critical (%)", "default": 95, "x-var-type": "threshold", "x-severity": "critical" }
+        },
+        "required": ["pod_regex"]
+      }
+    },
+    "mariadb_saturation_disk": {
+      "type": "array",
+      "x-promql": "(kubelet_volume_stats_used_bytes{namespace=\"{{ .namespace }}\", persistentvolumeclaim=~\"{{ .pvc_regex }}\"} / kubelet_volume_stats_capacity_bytes{namespace=\"{{ .namespace }}\", persistentvolumeclaim=~\"{{ .pvc_regex }}\"}) * 100 > {{ THRESHOLD }}",
+      "x-for": "10m",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pvc_regex": { "type": "string", "description": "PVC name regex for MariaDB volumes", "x-var-type": "selector" },
+          "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
+          "warn_pct": { "type": "number", "description": "Disk usage warning (%)", "default": 75, "x-var-type": "threshold", "x-severity": "warning" },
+          "critical_pct": { "type": "number", "description": "Disk usage critical (%)", "default": 90, "x-var-type": "threshold", "x-severity": "critical" }
+        },
+        "required": ["pvc_regex"]
+      }
+    }
+  }
+}

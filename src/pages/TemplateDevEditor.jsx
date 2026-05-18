@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Input, Select, Empty, Typography, Switch, Collapse } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 import { schemaAlertNames } from '../utils/schemaUtils'
+import TemplateTree from '../components/TemplateTree'
 import { generatePrometheusRule } from '../utils/templateGenerator'
 import {
   listCharts, createChart, deleteChart,
@@ -270,18 +271,6 @@ export default function TemplateDevEditor() {
     updateItems(newProps, newRequired)
   }
 
-  function groupAlertsByPrefix() {
-    const groups = {}
-    for (const name of alertNames) {
-      const parts = name.split('_')
-      const prefix = parts.length > 2 ? `${parts[0]}_${parts[1]}` : parts[0]
-      if (!groups[prefix]) groups[prefix] = []
-      groups[prefix].push(name)
-    }
-    return groups
-  }
-
-  const groupedAlerts = groupAlertsByPrefix()
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -316,36 +305,12 @@ export default function TemplateDevEditor() {
               <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert Groups</Text>
               <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleAddAlert} />
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
-              {Object.entries(groupedAlerts).map(([prefix, names]) => (
-                <div key={prefix} style={{ marginBottom: 2 }}>
-                  <div style={{ padding: '4px 12px', fontSize: 10, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>
-                    {prefix}
-                  </div>
-                  {names.map(name => {
-                    const shortName = name.replace(`${prefix}_`, '')
-                    return (
-                      <div
-                        key={name}
-                        onClick={() => setActiveAlert(name)}
-                        style={{
-                          padding: '6px 12px 6px 20px',
-                          cursor: 'pointer',
-                          fontSize: 12,
-                          background: activeAlert === name ? '#e6f4ff' : 'transparent',
-                          borderRight: activeAlert === name ? '2px solid #1677ff' : '2px solid transparent',
-                          color: activeAlert === name ? '#1677ff' : '#333',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {shortName}
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              <TemplateTree
+                templates={alertNames}
+                activeTemplate={activeAlert}
+                onSelect={setActiveAlert}
+              />
             </div>
             {/* Resize handle - full height line + visible grip */}
             <div

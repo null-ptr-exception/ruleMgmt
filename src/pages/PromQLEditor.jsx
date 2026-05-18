@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Button } from 'antd'
 import { getMetricsDict, saveMetricsDict, saveTemplate, listTemplates } from '../utils/api'
 import { latestVersion, bumpPatch } from '../utils/templateUtils'
 
@@ -204,8 +205,8 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove }) {
             : (seg.metric || <span style={{ color: '#9ca3af' }}>no metric</span>)}
         </span>
         {total > 1 && (
-          <button className="btn btn-ghost btn-sm" style={{ color: '#ef4444', padding: '2px 8px' }}
-            onClick={onRemove}>Remove</button>
+          <Button type="text" size="small" danger style={{ padding: '2px 8px' }}
+            onClick={onRemove}>Remove</Button>
         )}
       </div>
 
@@ -213,8 +214,8 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove }) {
 
         {/* Scalar */}
         {isScalar && (
-          <div className="form-row" style={{ maxWidth: 240 }}>
-            <label>Constant value</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 12, maxWidth: 240 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Constant value</label>
             <input type="text" value={seg.scalar} placeholder="e.g. 100  or  0.95"
               onChange={e => set('scalar', e.target.value)} />
           </div>
@@ -222,8 +223,8 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove }) {
 
         {/* Metric + Labels */}
         {!isScalar && <>
-          <div className="form-row" style={{ marginBottom: 10 }}>
-            <label>Metric name</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Metric name</label>
             <SuggestInput id={`metric-${seg.id}`} value={seg.metric}
               options={metricOpts} placeholder="e.g. http_requests_total"
               onChange={v => set('metric', v)} />
@@ -264,7 +265,7 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove }) {
                             onChange={v => updateMatcher(i, 'value', v)} />
                         </td>
                         <td style={{ paddingBottom: 4 }}>
-                          <button className="btn btn-ghost btn-icon" onClick={() => removeMatcher(i)}>×</button>
+                          <Button type="text" size="small" style={{ padding: '5px 8px', fontSize: 15 }} onClick={() => removeMatcher(i)}>×</Button>
                         </td>
                       </tr>
                     )
@@ -272,7 +273,7 @@ function SegmentCard({ seg, index, total, dict, onChange, onRemove }) {
                 </tbody>
               </table>
             )}
-            <button className="btn btn-ghost btn-sm" onClick={addMatcher}>+ Add matcher</button>
+            <Button type="text" size="small" onClick={addMatcher}>+ Add matcher</Button>
           </div>
 
           {/* Range / Instant / Agg */}
@@ -422,11 +423,11 @@ function DictEditor({ savedDict, onSave }) {
   }
 
   return (
-    <div className="form-card" style={{ marginTop: 16 }}>
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 20, marginBottom: 16, marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', flex: 1 }}
           onClick={() => setOpen(o => !o)}>
-          <span className="form-card-title" style={{ margin: 0 }}>Metrics Dictionary</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: 0 }}>Metrics Dictionary</span>
           <span style={{ fontSize: 11, color: '#9ca3af' }}>
             {local.length} metric{local.length !== 1 ? 's' : ''} · config/metrics.yaml
           </span>
@@ -434,9 +435,9 @@ function DictEditor({ savedDict, onSave }) {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {open && (
-            <button className="btn btn-primary btn-sm" disabled={!dirty || saving} onClick={handleSave}>
+            <Button type="primary" size="small" disabled={!dirty || saving} onClick={handleSave}>
               {saving ? 'Saving…' : 'Save to file'}
-            </button>
+            </Button>
           )}
           <span style={{ fontSize: 12, color: '#6b7280', cursor: 'pointer' }}
             onClick={() => setOpen(o => !o)}>{open ? '▲' : '▼'}</span>
@@ -475,8 +476,8 @@ function DictEditor({ savedDict, onSave }) {
                     </span>
                     <span style={{ fontSize: 11, color: '#9ca3af', userSelect: 'none', cursor: 'pointer', width: 14, textAlign: 'center' }}
                       onClick={() => toggleMetric(mi)}>{isExpanded ? '▼' : '▶'}</span>
-                    <button className="btn btn-ghost btn-icon" style={{ color: '#ef4444' }}
-                      onClick={() => removeMetric(mi)}>×</button>
+                    <Button type="text" size="small" style={{ padding: '5px 8px', fontSize: 15 }}
+                      onClick={() => removeMetric(mi)}>×</Button>
                   </div>
                 </div>
 
@@ -484,14 +485,14 @@ function DictEditor({ savedDict, onSave }) {
                 {isExpanded && (
                   <div style={{ padding: '10px 12px 10px 16px' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-                      <div className="form-row" style={{ marginBottom: 0 }}>
-                        <label>Metric name</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Metric name</label>
                         <input type="text" value={m.name} placeholder="metric_name_total"
                           onClick={e => e.stopPropagation()}
                           onChange={e => setMetricField(mi, 'name', e.target.value)} />
                       </div>
-                      <div className="form-row" style={{ marginBottom: 0 }}>
-                        <label>Description</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0 }}>
+                        <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</label>
                         <input type="text" value={m.description || ''} placeholder="optional"
                           onClick={e => e.stopPropagation()}
                           onChange={e => setMetricField(mi, 'description', e.target.value)} />
@@ -509,17 +510,17 @@ function DictEditor({ savedDict, onSave }) {
                         <input type="text" value={(l.values || []).join(', ')}
                           placeholder="value1, value2, … (optional)"
                           onChange={e => setLabelField(mi, li, 'values', e.target.value)} />
-                        <button className="btn btn-ghost btn-icon" onClick={() => removeLabel(mi, li)}>×</button>
+                        <Button type="text" size="small" style={{ padding: '5px 8px', fontSize: 15 }} onClick={() => removeLabel(mi, li)}>×</Button>
                       </div>
                     ))}
-                    <button className="btn btn-ghost btn-sm" onClick={() => addLabel(mi)}>+ Add label</button>
+                    <Button type="text" size="small" onClick={() => addLabel(mi)}>+ Add label</Button>
                   </div>
                   </div>
                 )}
               </div>
             )
           })}
-          <button className="btn btn-secondary btn-sm" onClick={addMetric}>+ Add metric</button>
+          <Button size="small" onClick={addMetric}>+ Add metric</Button>
         </div>
       )}
     </div>
@@ -630,8 +631,8 @@ export default function PromQLEditor({ onNavigate }) {
     <div style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
 
       {/* ── Live Preview ── */}
-      <div className="form-card" style={{ marginBottom: 20 }}>
-        <div className="form-card-title" style={{ marginBottom: 10 }}>PromQL Preview</div>
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 20, marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>PromQL Preview</div>
         <div style={{
           background: '#0f172a', color: '#7dd3fc', fontFamily: 'monospace',
           fontSize: 13, padding: '14px 16px', borderRadius: 6,
@@ -640,21 +641,21 @@ export default function PromQLEditor({ onNavigate }) {
           {query || <span style={{ color: '#475569' }}>Add a metric below…</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-          <button className="btn btn-primary btn-sm" onClick={handleCopy} disabled={!query}>
+          <Button type="primary" size="small" onClick={handleCopy} disabled={!query}>
             {copied ? 'Copied!' : 'Copy'}
-          </button>
-          <button className="btn btn-secondary btn-sm" onClick={handleAddPanel} disabled={!query}>
+          </Button>
+          <Button size="small" onClick={handleAddPanel} disabled={!query}>
             + Save panel
-          </button>
-          <button className="btn btn-secondary btn-sm" disabled={!query}
+          </Button>
+          <Button size="small" disabled={!query}
             onClick={openSaveAs}
             style={{ background: '#ede9fe', color: '#7c3aed', border: '1px solid #c4b5fd' }}>
             Save as Alert Type…
-          </button>
-          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }}
+          </Button>
+          <Button type="text" size="small" style={{ marginLeft: 'auto' }}
             onClick={() => { setSegments([emptySegment()]); setOuter(emptyOuter()); setOuterOffset('') }}>
             Clear all
-          </button>
+          </Button>
         </div>
 
         {/* Save-as-Alert-Type inline form */}
@@ -667,23 +668,23 @@ export default function PromQLEditor({ onNavigate }) {
               Save as Alert Type
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 160px 120px', gap: 8, marginBottom: 8 }}>
-              <div className="form-row" style={{ marginBottom: 0 }}>
-                <label>Alert Type name *</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Alert Type name *</label>
                 <input type="text" value={saveName} placeholder="e.g. high-cpu"
                   onChange={e => setSaveName(e.target.value)} />
               </div>
-              <div className="form-row" style={{ marginBottom: 0 }}>
-                <label>Version</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Version</label>
                 <input type="text" value={saveVer} placeholder="v1.0.0"
                   onChange={e => setSaveVer(e.target.value)} />
               </div>
-              <div className="form-row" style={{ marginBottom: 0 }}>
-                <label>Description</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</label>
                 <input type="text" value={saveDesc} placeholder="optional"
                   onChange={e => setSaveDesc(e.target.value)} />
               </div>
-              <div className="form-row" style={{ marginBottom: 0 }}>
-                <label>For (default)</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0 }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>For (default)</label>
                 <input type="text" value={saveFor} placeholder="e.g. 5m"
                   onChange={e => setSaveFor(e.target.value)} />
               </div>
@@ -693,19 +694,19 @@ export default function PromQLEditor({ onNavigate }) {
               expr: {query}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button className="btn btn-primary btn-sm" disabled={!saveName.trim()}
-                onClick={handleSaveAsAlertType}>Save</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setSaveAs(false); setSaveStatus('') }}>
+              <Button type="primary" size="small" disabled={!saveName.trim()}
+                onClick={handleSaveAsAlertType}>Save</Button>
+              <Button type="text" size="small" onClick={() => { setSaveAs(false); setSaveStatus('') }}>
                 Cancel
-              </button>
+              </Button>
               {saveStatus && (
                 <span style={{ fontSize: 12, color: '#059669', fontWeight: 600 }}>
                   {saveStatus}
                   {onNavigate && (
-                    <button className="btn btn-ghost btn-sm" style={{ marginLeft: 8, color: '#7c3aed' }}
+                    <Button type="text" size="small" style={{ marginLeft: 8, color: '#7c3aed' }}
                       onClick={() => onNavigate('alert-type')}>
                       → Edit in Alert Type
-                    </button>
+                    </Button>
                   )}
                 </span>
               )}
@@ -726,49 +727,49 @@ export default function PromQLEditor({ onNavigate }) {
         </div>
       ))}
 
-      <button className="btn btn-secondary" style={{ width: '100%', marginTop: 12 }} onClick={addSeg}>
+      <Button style={{ width: '100%', marginTop: 12 }} onClick={addSeg}>
         + Add metric
-      </button>
+      </Button>
 
       {/* ── Outer aggregation ── */}
-      <div className="form-card" style={{ marginTop: 16 }}>
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 20, marginBottom: 16, marginTop: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
           letterSpacing: '0.08em', color: '#6b7280', marginBottom: 10 }}>
           Outer aggregation (wraps entire expression)
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div className="form-row" style={{ marginBottom: 0, minWidth: 150 }}>
-            <label>Function</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, minWidth: 150 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Function</label>
             <select value={outer.func} onChange={e => setOuter(o => ({ ...o, func: e.target.value }))}>
               <option value="">— none —</option>
               {AGG_FUNCS.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
           {showOuterAggDim && <>
-            <div className="form-row" style={{ marginBottom: 0, width: 80 }}>
-              <label>Dim</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, width: 80 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Dim</label>
               <select value={outer.dim} onChange={e => setOuter(o => ({ ...o, dim: e.target.value }))}>
                 <option value="by">by</option>
                 <option value="without">without</option>
               </select>
             </div>
-            <div className="form-row" style={{ marginBottom: 0, flex: 1 }}>
-              <label>Labels</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Labels</label>
               <SuggestInput id="outer-agg-labels" value={outer.aggLabels}
                 options={allLabelOpts} placeholder="job, instance"
                 onChange={v => setOuter(o => ({ ...o, aggLabels: v }))} />
             </div>
           </>}
           {showOuterAggParam && (
-            <div className="form-row" style={{ marginBottom: 0, width: 120 }}>
-              <label>{outer.func === 'quantile' ? 'φ' : outer.func === 'count_values' ? 'label' : 'k'}</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, width: 120 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{outer.func === 'quantile' ? 'φ' : outer.func === 'count_values' ? 'label' : 'k'}</label>
               <input type="text" value={outer.param}
                 placeholder={outer.func === 'quantile' ? '0.95' : outer.func === 'count_values' ? 'value' : '5'}
                 onChange={e => setOuter(o => ({ ...o, param: e.target.value }))} />
             </div>
           )}
-          <div className="form-row" style={{ marginBottom: 0, width: 140 }}>
-            <label>Offset</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 0, width: 140 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Offset</label>
             <input type="text" value={outerOffset} placeholder="e.g. 1h"
               onChange={e => setOuterOffset(e.target.value)} />
           </div>
@@ -780,8 +781,8 @@ export default function PromQLEditor({ onNavigate }) {
 
       {/* ── Saved Panels ── */}
       {panels.length > 0 && (
-        <div className="form-card" style={{ marginTop: 16 }}>
-          <div className="form-card-title">Saved Panels</div>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 20, marginBottom: 16, marginTop: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>Saved Panels</div>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <colgroup><col style={{ width: '18%' }} /><col /><col style={{ width: 40 }} /></colgroup>
             <thead>
@@ -797,8 +798,8 @@ export default function PromQLEditor({ onNavigate }) {
                   <td style={{ padding: '8px 8px', fontFamily: 'monospace', fontSize: 12,
                     color: '#1e40af', wordBreak: 'break-all' }}>{p.query}</td>
                   <td>
-                    <button className="btn btn-ghost btn-icon"
-                      onClick={() => setPanels(pp => pp.filter((_, idx) => idx !== i))}>×</button>
+                    <Button type="text" size="small" style={{ padding: '5px 8px', fontSize: 15 }}
+                      onClick={() => setPanels(pp => pp.filter((_, idx) => idx !== i))}>×</Button>
                   </td>
                 </tr>
               ))}

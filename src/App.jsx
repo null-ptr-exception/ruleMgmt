@@ -24,14 +24,7 @@ const menuItems = [
     children: [
       { key: 'template-dev', label: 'Templates', icon: <ToolOutlined /> },
       { key: 'alert-user', label: 'Alerts', icon: <BellOutlined /> },
-    ],
-  },
-  {
-    key: 'notification-rules',
-    label: 'Notification Rules',
-    type: 'group',
-    children: [
-      { key: 'notifications', label: 'Notification Routes', icon: <BranchesOutlined /> },
+      { key: 'notifications', label: 'Routes', icon: <BranchesOutlined /> },
     ],
   },
   {

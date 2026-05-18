@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Layout, Card, Input, Button, Select, Typography, Tag, Space, Badge } from 'antd'
+import { PlusOutlined, DeleteOutlined, EditOutlined, FolderOutlined, FolderOpenOutlined } from '@ant-design/icons'
+import KVEditor from '../components/KVEditor'
 import {
   getProduct, setProduct,
   listSites, createSite, deleteSite,
@@ -7,21 +10,19 @@ import {
   listTemplates, getChartMeta, runHelmRender,
   getDefaults, saveDefaults,
 } from '../utils/api'
-import KVEditor from '../components/KVEditor'
 import { objectToKvArray, kvArrayToObject } from '../utils/templateUtils'
+
+const { Sider, Content } = Layout
+const { Text, Title } = Typography
 
 const STAGES = ['DEV', 'TEST', 'STG', 'PROD']
 
-// Build the Chart.yaml object for a gitops stage
 function buildStageChart(relunit, stage, chartName, chartVersion, amconfigName, amconfigVersion) {
-  // chartVersion has 'v' prefix in folder name; strip it for the Helm semver field
   const semver = chartVersion.replace(/^v/, '')
-  // 5 levels up from stage folder to repo root:
-  // gitops-deploy / product / site / relunit / stage  →  ../../../../../
   const repoPath = `../../../../../templates/amconfig/${amconfigName}/${amconfigVersion}`
   return {
     apiVersion: 'v2',
-    name: `${relunit}-${stage}`.toLowerCase(),  // Helm release names must be lowercase
+    name: `${relunit}-${stage}`.toLowerCase(),
     description: `Gitops deploy chart for ${relunit}/${stage}`,
     type: 'application',
     version: '0.1.0',
@@ -33,8 +34,6 @@ function buildStageChart(relunit, stage, chartName, chartVersion, amconfigName, 
   }
 }
 
-// Build scoped values.yaml: { chartName: { ...overrides } }
-// Must use {} not null — null causes "type mismatch" in Helm templates
 function buildStageValues(chartName, overrides) {
   const obj = kvArrayToObject(overrides)
   return { [chartName]: Object.keys(obj).length ? obj : {} }
@@ -46,32 +45,27 @@ export default function GitopsEditor() {
   const [productInput, setProductInput]  = useState('')
   const [sites, setSites]              = useState([])
   const [relunits, setRelunits]        = useState({})
-  const [selection, setSelection]      = useState(null) // { site, relunit, stage }
+  const [selection, setSelection]      = useState(null)
   const [amconfigs, setAmconfigs]       = useState({})
 
-  // Add UI state
   const [addSite, setAddSite]          = useState(false)
   const [addSiteVal, setAddSiteVal]    = useState('')
   const [addRelunit, setAddRelunit]    = useState(null)
   const [addRelVal, setAddRelVal]      = useState('')
 
-  // Stage form
   const [stageForm, setStageForm]      = useState({
     systemName: '', systemVersion: '',
-    chartName: '', chartSemver: '',   // from system chart's Chart.yaml
+    chartName: '', chartSemver: '',
     overrides: [],
   })
   const [stageStatus, setStageStatus]  = useState('')
 
-  // Helm render
   const [helmRunning, setHelmRunning]  = useState(false)
   const [helmOutput, setHelmOutput]    = useState('')
   const [helmOk, setHelmOk]           = useState(null)
 
-  // Enabled stages cache: { "site/rel/stage": bool }
   const [enabledStages, setEnabledStages] = useState({})
 
-  // Product prefix settings (from config/defaults.yaml)
   const [defaults, setDefaults]           = useState({})
   const [productPfx, setProductPfx]       = useState('')
   const [productPfxInput, setProductPfxInput] = useState('')
@@ -102,7 +96,6 @@ export default function GitopsEditor() {
     })
   }, [])
 
-  // Refresh enabled-stages map whenever tree changes
   useEffect(() => {
     async function checkStages() {
       if (!product) return
@@ -120,7 +113,6 @@ export default function GitopsEditor() {
     checkStages()
   }, [product, sites, relunits])
 
-  // When system name or version changes, fetch chart metadata
   useEffect(() => {
     async function fetchMeta() {
       const { systemName, systemVersion } = stageForm
@@ -140,16 +132,12 @@ export default function GitopsEditor() {
     fetchMeta()
   }, [stageForm.systemName, stageForm.systemVersion])
 
-  // ── Product actions ────────────────────────────────────────────────────────
-
   async function handleSetProduct() {
     if (!productInput.trim()) return
     await setProduct(product, productInput.trim())
     setEditProduct(false)
     await loadAll()
   }
-
-  // ── Site / relunit actions ────────────────────────────────────────────────
 
   async function handleAddSite() {
     if (!addSiteVal.trim() || !product) return
@@ -179,15 +167,12 @@ export default function GitopsEditor() {
     await loadAll()
   }
 
-  // ── Stage actions ─────────────────────────────────────────────────────────
-
   async function selectStage(site, relunit, stage) {
     setSelection({ site, relunit, stage })
     setHelmOutput(''); setHelmOk(null)
     const d = await getStage(product, site, relunit, stage)
     const p = d.parsed || {}
 
-    // Restore amconfig name + version from Chart.yaml dependency repository URL
     let amconfigName = ''
     let amconfigVersion = ''
     let chartName = ''
@@ -198,7 +183,6 @@ export default function GitopsEditor() {
       chartName = dep.name || ''
     }
 
-    // Extract stored values from under the chartName key (scoped values)
     const overrideKey = chartName || Object.keys(p)[0] || ''
     const overrides = p[overrideKey]
       ? objectToKvArray(p[overrideKey])
@@ -222,11 +206,9 @@ export default function GitopsEditor() {
         setSelection(null); setHelmOutput(''); setHelmOk(null)
       }
     } else {
-      // Enable: create minimal Chart.yaml + empty values.yaml
       await saveStage(product, site, relunit, stage, {}, null)
       await selectStage(site, relunit, stage)
     }
-    // Refresh enabled map
     setEnabledStages(prev => ({ ...prev, [`${site}/${relunit}/${stage}`]: !currentlyEnabled }))
   }
 
@@ -235,10 +217,8 @@ export default function GitopsEditor() {
     const { site, relunit, stage } = selection
     const { systemName, systemVersion, chartName, chartSemver, overrides } = stageForm
 
-    // Build values.yaml with chart-name-scoped overrides
     const valData = buildStageValues(chartName || 'system', overrides)
 
-    // Build Chart.yaml if system is selected
     let chartData = null
     if (systemName && systemVersion && chartName) {
       chartData = buildStageChart(relunit, stage, chartName, systemVersion, systemName, systemVersion)
@@ -275,64 +255,67 @@ export default function GitopsEditor() {
     ? `amconfig/${stageForm.systemName}/${stageForm.systemVersion}`
     : null
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
-    <div className="gitops-layout">
-      {/* ── Tree panel ── */}
-      <div className="gitops-tree">
+    <Layout style={{ height: '100%' }}>
+      <Sider width={280} theme="light" style={{ borderRight: '1px solid #f0f0f0', overflowY: 'auto' }}>
         {/* Product */}
-        <div style={{ padding: '10px 14px', borderBottom: '1px solid #e5e7eb', marginBottom: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid #f0f0f0' }}>
+          <Text type="secondary" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Product
-          </div>
+          </Text>
           {editingProduct ? (
-            <div className="inline-add">
-              <input type="text" value={productInput} autoFocus
+            <Space.Compact style={{ marginTop: 6, width: '100%' }}>
+              <Input size="small" value={productInput} autoFocus
                 onChange={e => setProductInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleSetProduct(); if (e.key === 'Escape') setEditProduct(false) }} />
-              <button className="btn btn-primary btn-sm" onClick={handleSetProduct}>OK</button>
-            </div>
+              <Button size="small" type="primary" onClick={handleSetProduct}>OK</Button>
+            </Space.Compact>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: 14, color: product ? '#1a1a2e' : '#9ca3af' }}>
-                {product || '— not set —'}
-              </span>
-              <button className="btn btn-ghost btn-sm" onClick={() => setEditProduct(true)}>✏️</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <Text strong style={{ fontSize: 14 }}>
+                {product || <Text type="secondary">— not set —</Text>}
+              </Text>
+              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => setEditProduct(true)} />
             </div>
           )}
         </div>
 
-        {/* Sites */}
+        {/* Sites tree */}
         {product && (
           <>
             {sites.map(site => (
               <div key={site}>
-                <div className="tree-node indent-1" style={{ justifyContent: 'space-between' }}>
-                  <span>📁 {site}</span>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button className="btn btn-ghost btn-icon" style={{ fontSize: 12, padding: '2px 6px' }}
-                      onClick={() => { setAddRelunit(site); setAddRelVal('') }} title="Add relunit">+</button>
-                    <button className="btn btn-ghost btn-icon" style={{ fontSize: 12, padding: '2px 6px', color: '#dc2626' }}
-                      onClick={() => handleDeleteSite(site)} title="Delete site">×</button>
-                  </div>
+                <div style={{ padding: '6px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Space size={4}>
+                    <FolderOutlined style={{ color: '#faad14' }} />
+                    <Text>{site}</Text>
+                  </Space>
+                  <Space size={2}>
+                    <Button type="text" size="small" icon={<PlusOutlined />}
+                      onClick={() => { setAddRelunit(site); setAddRelVal('') }} />
+                    <Button type="text" danger size="small" icon={<DeleteOutlined />}
+                      onClick={() => handleDeleteSite(site)} />
+                  </Space>
                 </div>
 
                 {addRelunit === site && (
-                  <div className="inline-add" style={{ paddingLeft: 28 }}>
-                    <input type="text" value={addRelVal} placeholder="relunit name" autoFocus
+                  <Space.Compact style={{ padding: '2px 14px 2px 28px', width: '100%' }}>
+                    <Input size="small" value={addRelVal} placeholder="relunit name" autoFocus
                       onChange={e => setAddRelVal(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') handleAddRelunit(site); if (e.key === 'Escape') setAddRelunit(null) }} />
-                    <button className="btn btn-primary btn-sm" onClick={() => handleAddRelunit(site)}>Add</button>
-                  </div>
+                    <Button size="small" type="primary" onClick={() => handleAddRelunit(site)}>Add</Button>
+                  </Space.Compact>
                 )}
 
                 {(relunits[site] || []).map(rel => (
                   <div key={rel}>
-                    <div className="tree-node indent-2" style={{ justifyContent: 'space-between' }}>
-                      <span>📂 {rel}</span>
-                      <button className="btn btn-ghost btn-icon" style={{ fontSize: 12, padding: '2px 6px', color: '#dc2626' }}
-                        onClick={() => handleDeleteRelunit(site, rel)} title="Delete relunit">×</button>
+                    <div style={{ padding: '4px 14px 4px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Space size={4}>
+                        <FolderOpenOutlined style={{ color: '#1677ff' }} />
+                        <Text>{rel}</Text>
+                      </Space>
+                      <Button type="text" danger size="small" icon={<DeleteOutlined />}
+                        onClick={() => handleDeleteRelunit(site, rel)} />
                     </div>
 
                     {STAGES.map(stage => {
@@ -340,22 +323,25 @@ export default function GitopsEditor() {
                       const enabled = enabledStages[key]
                       const isSelected = selection?.site === site && selection?.relunit === rel && selection?.stage === stage
                       return (
-                        <div key={stage}
-                          className={`tree-node stage-node${enabled ? ' enabled' : ''}${isSelected ? ' selected' : ''}`}
-                          style={{ justifyContent: 'space-between' }}
-                        >
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: enabled ? 'pointer' : 'default' }}
+                        <div key={stage} style={{
+                          padding: '3px 14px 3px 48px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          background: isSelected ? '#e6f4ff' : undefined,
+                        }}>
+                          <Space size={6}
+                            style={{ cursor: enabled ? 'pointer' : 'default' }}
                             onClick={() => enabled && selectStage(site, rel, stage)}>
-                            <span className={`stage-dot${enabled ? ' enabled' : ''}`}></span>
-                            {stage}
-                          </span>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            style={{ fontSize: 11, padding: '1px 6px', color: enabled ? '#dc2626' : '#059669' }}
+                            <Badge status={enabled ? 'success' : 'default'} />
+                            <Text style={{ color: enabled ? undefined : '#8c8c8c' }}>{stage}</Text>
+                          </Space>
+                          <Button
+                            type="text"
+                            size="small"
+                            style={{ fontSize: 11, color: enabled ? '#ff4d4f' : '#52c41a' }}
                             onClick={() => handleToggleStage(site, rel, stage, !!enabled)}
                           >
                             {enabled ? 'off' : 'on'}
-                          </button>
+                          </Button>
                         </div>
                       )
                     })}
@@ -365,109 +351,113 @@ export default function GitopsEditor() {
             ))}
 
             {addSite ? (
-              <div className="inline-add" style={{ marginTop: 4 }}>
-                <input type="text" value={addSiteVal} placeholder="site name" autoFocus
+              <Space.Compact style={{ padding: '8px 14px', width: '100%' }}>
+                <Input size="small" value={addSiteVal} placeholder="site name" autoFocus
                   onChange={e => setAddSiteVal(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleAddSite(); if (e.key === 'Escape') setAddSite(false) }} />
-                <button className="btn btn-primary btn-sm" onClick={handleAddSite}>Add</button>
-              </div>
+                <Button size="small" type="primary" onClick={handleAddSite}>Add</Button>
+              </Space.Compact>
             ) : (
               <div style={{ padding: '8px 14px' }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setAddSite(true); setAddSiteVal('') }}>+ Add Site</button>
+                <Button type="dashed" size="small" icon={<PlusOutlined />}
+                  onClick={() => { setAddSite(true); setAddSiteVal('') }}>Add Site</Button>
               </div>
             )}
           </>
         )}
-      </div>
+      </Sider>
 
-      {/* ── Detail panel ── */}
-      <div className="gitops-detail">
+      <Content style={{ overflowY: 'auto', padding: 24 }}>
         {/* Product prefix settings */}
-        <div className="form-card" style={{ marginBottom: 16 }}>
-          <div className="form-card-title" style={{ marginBottom: 8 }}>
-            Alert Product Prefix
-            <span className="text-muted" style={{ fontSize: 11 }}>
+        <Card size="small" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Text strong>Alert Product Prefix</Text>
+            <Text type="secondary" style={{ fontSize: 11 }}>
               prefixes rendered resource names ({'{product}-{name}'})
-            </span>
+            </Text>
           </div>
           {productPfxEditing ? (
-            <div className="inline-add" style={{ padding: 0 }}>
-              <input type="text" value={productPfxInput} autoFocus placeholder="e.g. mysql"
+            <Space.Compact>
+              <Input size="small" value={productPfxInput} autoFocus placeholder="e.g. mysql"
                 onChange={e => setProductPfxInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleSaveProductPfx(); if (e.key === 'Escape') setProductPfxEditing(false) }} />
-              <button className="btn btn-primary btn-sm" onClick={handleSaveProductPfx}>Save</button>
-              <button className="btn btn-ghost btn-sm" onClick={() => setProductPfxEditing(false)}>Cancel</button>
-            </div>
+              <Button size="small" type="primary" onClick={handleSaveProductPfx}>Save</Button>
+              <Button size="small" onClick={() => setProductPfxEditing(false)}>Cancel</Button>
+            </Space.Compact>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <code style={{ background: '#f3f4f6', padding: '3px 10px', borderRadius: 4, fontSize: 13, minWidth: 60 }}>
+            <Space>
+              <code style={{ background: '#f5f5f5', padding: '3px 10px', borderRadius: 4, fontSize: 13 }}>
                 {productPfx || '(none)'}
               </code>
-              <button className="btn btn-ghost btn-sm" onClick={() => { setProductPfxInput(productPfx); setProductPfxEditing(true) }}>
+              <Button size="small" onClick={() => { setProductPfxInput(productPfx); setProductPfxEditing(true) }}>
                 Edit
-              </button>
-            </div>
+              </Button>
+            </Space>
           )}
-        </div>
+        </Card>
 
         {!selection ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">🚀</div>
-            <p>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: '#8c8c8c' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🚀</div>
+            <Text type="secondary">
               {!product
                 ? 'Set a product name on the left to get started.'
                 : 'Toggle a stage "on" then click it to edit.'}
-            </p>
+            </Text>
           </div>
         ) : (
           <>
-            {/* Header */}
-            <div className="form-card">
-              <div className="form-card-title">
-                <span>
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Text strong style={{ fontSize: 15 }}>
                   {product} / {selection.site} / {selection.relunit} / {selection.stage}
-                </span>
-                {stageStatus && <span className="tag">{stageStatus}</span>}
+                </Text>
+                {stageStatus && <Tag color="success">{stageStatus}</Tag>}
               </div>
 
-              {/* System ref badge */}
               {systemRef && (
-                <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>ref:</span>
-                  <code style={{ background: '#f3f4f6', padding: '2px 8px', borderRadius: 4, fontSize: 12, color: '#7c3aed' }}>
-                    {systemRef}
-                  </code>
+                <div style={{ marginBottom: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase' }}>ref: </Text>
+                  <Tag color="purple">{systemRef}</Tag>
                 </div>
               )}
 
-              <p className="text-muted" style={{ marginBottom: 12 }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
                 Output: <code>gitops-deploy/{product}/{selection.site}/{selection.relunit}/{selection.stage}/</code>
-              </p>
+              </Text>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div className="form-row">
-                  <label>AM Config Template</label>
-                  <select value={stageForm.systemName}
-                    onChange={e => setStageForm(f => ({ ...f, systemName: e.target.value, systemVersion: '', chartName: '', chartSemver: '' }))}>
-                    <option value="">— select amconfig —</option>
-                    {Object.keys(amconfigs).map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
+                <div>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>AM Config Template</Text>
+                  <Select
+                    value={stageForm.systemName || undefined}
+                    onChange={val => setStageForm(f => ({ ...f, systemName: val, systemVersion: '', chartName: '', chartSemver: '' }))}
+                    placeholder="— select amconfig —"
+                    style={{ width: '100%' }}
+                    options={Object.keys(amconfigs).map(n => ({ value: n, label: n }))}
+                    allowClear
+                  />
                 </div>
-                <div className="form-row">
-                  <label>Version</label>
-                  <select value={stageForm.systemVersion}
-                    onChange={e => setStageForm(f => ({ ...f, systemVersion: e.target.value, chartName: '', chartSemver: '' }))}>
-                    <option value="">— select version —</option>
-                    {systemVersions.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
+                <div>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Version</Text>
+                  <Select
+                    value={stageForm.systemVersion || undefined}
+                    onChange={val => setStageForm(f => ({ ...f, systemVersion: val, chartName: '', chartSemver: '' }))}
+                    placeholder="— select version —"
+                    style={{ width: '100%' }}
+                    options={systemVersions.map(v => ({ value: v, label: v }))}
+                    allowClear
+                  />
                 </div>
               </div>
 
-              {/* Generated Chart.yaml preview */}
               {stageForm.chartName && stageForm.systemVersion && (
                 <div style={{ marginTop: 12 }}>
-                  <div className="preview-label">Auto-generated Chart.yaml</div>
-                  <div className="preview-box" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 11, fontWeight: 600 }}>Auto-generated Chart.yaml</Text>
+                  <pre style={{
+                    background: '#0f172a', color: '#7dd3fc', padding: 12, borderRadius: 6,
+                    fontSize: 12, lineHeight: 1.6, marginTop: 4, overflow: 'auto',
+                  }}>
                     {[
                       `apiVersion: v2`,
                       `name: ${selection.relunit}-${selection.stage}`,
@@ -477,19 +467,18 @@ export default function GitopsEditor() {
                       `    version: "${stageForm.chartSemver}"`,
                       `    repository: "file://../../../../../templates/amconfig/${stageForm.systemName}/${stageForm.systemVersion}"`,
                     ].join('\n')}
-                  </div>
+                  </pre>
                 </div>
               )}
-            </div>
+            </Card>
 
-            {/* Override values */}
-            <div className="form-card">
-              <div className="form-card-title">
-                Deploy Override Values
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Text strong>Deploy Override Values</Text>
                 {stageForm.chartName && (
-                  <span className="text-muted" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
                     scoped under <code>{stageForm.chartName}:</code>
-                  </span>
+                  </Text>
                 )}
               </div>
               <KVEditor
@@ -497,45 +486,42 @@ export default function GitopsEditor() {
                 onChange={rows => setStageForm(f => ({ ...f, overrides: rows }))}
                 keyPlaceholder="key" valuePlaceholder="value"
               />
-            </div>
+            </Card>
 
-            {/* Actions */}
-            <div className="btn-row" style={{ marginBottom: 16 }}>
-              <button className="btn btn-primary" onClick={handleSaveStage}
+            <Space style={{ marginBottom: 16 }}>
+              <Button type="primary" onClick={handleSaveStage}
                 disabled={!stageForm.systemName || !stageForm.systemVersion}>
                 Save values.yaml + Chart.yaml
-              </button>
-              <button className="btn btn-secondary" onClick={handleRunHelm}
-                disabled={helmRunning}
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              </Button>
+              <Button onClick={handleRunHelm} disabled={helmRunning}>
                 {helmRunning ? '⏳ Running…' : '▶ Run helm template'}
-              </button>
-              <button className="btn btn-danger"
+              </Button>
+              <Button danger
                 onClick={() => handleToggleStage(selection.site, selection.relunit, selection.stage, true)}>
                 Disable Stage
-              </button>
-            </div>
+              </Button>
+            </Space>
 
-            {/* Helm output */}
             {helmOutput && (
-              <div className="form-card">
-                <div className="form-card-title">
-                  Helm Output
-                  {helmOk === true  && <span className="tag" style={{ background: '#d1fae5', color: '#059669' }}>✓ success</span>}
-                  {helmOk === false && <span className="tag" style={{ background: '#fee2e2', color: '#dc2626' }}>✗ error</span>}
+              <Card size="small">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Text strong>Helm Output</Text>
+                  {helmOk === true  && <Tag color="success">✓ success</Tag>}
+                  {helmOk === false && <Tag color="error">✗ error</Tag>}
                 </div>
-                <div className="preview-box" style={{
+                <pre style={{
                   maxHeight: 500, overflowY: 'auto', fontSize: 12,
+                  background: '#0f172a', borderRadius: 6, padding: 12,
                   color: helmOk === false ? '#fca5a5' : '#a5f3fc',
                   whiteSpace: 'pre',
                 }}>
                   {helmOutput}
-                </div>
-              </div>
+                </pre>
+              </Card>
             )}
           </>
         )}
-      </div>
-    </div>
+      </Content>
+    </Layout>
   )
 }

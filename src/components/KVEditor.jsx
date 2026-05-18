@@ -1,5 +1,6 @@
-// Generic key-value row editor
-// rows: [{key, value}]   onChange: (rows) => void
+import { Table, Input, Button } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+
 export default function KVEditor({ rows, onChange, keyPlaceholder = 'key', valuePlaceholder = 'value' }) {
   function update(i, field, val) {
     const next = rows.map((r, idx) => idx === i ? { ...r, [field]: val } : r)
@@ -14,43 +15,62 @@ export default function KVEditor({ rows, onChange, keyPlaceholder = 'key', value
     onChange(rows.filter((_, idx) => idx !== i))
   }
 
+  const columns = [
+    {
+      title: keyPlaceholder,
+      dataIndex: 'key',
+      render: (_, row, i) => (
+        <Input
+          size="small"
+          value={row.key}
+          placeholder={keyPlaceholder}
+          onChange={e => update(i, 'key', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: valuePlaceholder,
+      dataIndex: 'value',
+      render: (_, row, i) => (
+        <Input
+          size="small"
+          value={row.value}
+          placeholder={valuePlaceholder}
+          onChange={e => update(i, 'value', e.target.value)}
+        />
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 40,
+      render: (_, _row, i) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => remove(i)}
+        />
+      ),
+    },
+  ]
+
   return (
     <div>
-      <table className="kv-table">
-        <thead>
-          <tr>
-            <th>{keyPlaceholder}</th>
-            <th>{valuePlaceholder}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i}>
-              <td>
-                <input
-                  type="text"
-                  value={row.key}
-                  placeholder={keyPlaceholder}
-                  onChange={e => update(i, 'key', e.target.value)}
-                />
-              </td>
-              <td>
-                <input
-                  type="text"
-                  value={row.value}
-                  placeholder={valuePlaceholder}
-                  onChange={e => update(i, 'value', e.target.value)}
-                />
-              </td>
-              <td>
-                <button className="btn btn-ghost btn-icon" onClick={() => remove(i)} title="Remove">×</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button className="btn btn-ghost btn-sm" style={{ marginTop: 6 }} onClick={add}>+ Add row</button>
+      <Table
+        columns={columns}
+        dataSource={rows.map((r, i) => ({ ...r, key: `row-${i}` }))}
+        pagination={false}
+        size="small"
+        bordered
+        locale={{ emptyText: 'No rows' }}
+      />
+      <div style={{ padding: '8px 0' }}>
+        <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={add}>
+          Add row
+        </Button>
+      </div>
     </div>
   )
 }

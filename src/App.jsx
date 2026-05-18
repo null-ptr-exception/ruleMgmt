@@ -1,49 +1,100 @@
 import { useState } from 'react'
-import AlertTypeEditor from './pages/AlertTypeEditor'
-import AlertSuiteEditor from './pages/AlertSuiteEditor'
+import { Layout, Menu, theme } from 'antd'
+import {
+  ToolOutlined,
+  BellOutlined,
+  SoundOutlined,
+  BranchesOutlined,
+  RocketOutlined,
+  BarChartOutlined,
+} from '@ant-design/icons'
 import ReceiversEditor from './pages/ReceiversEditor'
 import GitopsEditor from './pages/GitopsEditor'
 import PromQLEditor from './pages/PromQLEditor'
 import AlertmanagerSmartEditor from './pages/AlertmanagerSmartEditor'
-import AlertTypePackEditor from './pages/AlertTypePackEditor'
+import TemplateDevEditor from './pages/TemplateDevEditor'
+import AlertUserView from './pages/AlertUserView'
+import './App.css'
 
-const NAV_ITEMS = [
-  { id: 'alert-type',   label: 'Alert Type',        icon: '⚡' },
-  { id: 'alert-pack',   label: 'Alert Pack',         icon: '📋' },
-  { id: 'alert-suite',  label: 'Rule Group',         icon: '📦' },
-  { id: 'receivers',    label: 'Receivers',          icon: '📣' },
-  { id: 'amconfig',     label: 'AM Config',          icon: '🔀' },
-  { id: 'gitops',       label: 'Gitops Deploy',      icon: '🚀' },
-  { id: 'promql',       label: 'PromQL Builder',     icon: '📊' },
+const { Sider, Content } = Layout
+
+const menuItems = [
+  {
+    key: 'alert-rules',
+    label: 'Alert Rules',
+    type: 'group',
+    children: [
+      { key: 'template-dev', label: 'Templates', icon: <ToolOutlined /> },
+      { key: 'alert-user', label: 'Alerts', icon: <BellOutlined /> },
+    ],
+  },
+  {
+    key: 'notification-rules',
+    label: 'Notification Rules',
+    type: 'group',
+    children: [
+      { key: 'receivers', label: 'Receivers', icon: <SoundOutlined /> },
+      { key: 'amconfig', label: 'Notifications', icon: <BranchesOutlined /> },
+    ],
+  },
+  {
+    key: 'tools',
+    label: 'Tools',
+    type: 'group',
+    children: [
+      { key: 'gitops', label: 'Gitops Deploy', icon: <RocketOutlined /> },
+      { key: 'promql', label: 'PromQL Builder', icon: <BarChartOutlined /> },
+    ],
+  },
 ]
 
 export default function App() {
-  const [page, setPage] = useState('alert-type')
+  const [page, setPage] = useState('alert-user')
+  const [collapsed, setCollapsed] = useState(false)
+  const { token } = theme.useToken()
 
   return (
-    <div className="app">
-      <nav className="sidebar">
-        <div className="sidebar-title">Alert Template UI</div>
-        {NAV_ITEMS.map(item => (
-          <button
-            key={item.id}
-            className={`nav-item${page === item.id ? ' active' : ''}`}
-            onClick={() => setPage(item.id)}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            {item.label}
-          </button>
-        ))}
-      </nav>
-      <main className="content">
-        {page === 'alert-type'  && <AlertTypeEditor />}
-        {page === 'alert-pack'  && <AlertTypePackEditor />}
-        {page === 'alert-suite' && <AlertSuiteEditor />}
-        {page === 'receivers'   && <ReceiversEditor />}
-        {page === 'amconfig'    && <AlertmanagerSmartEditor />}
-        {page === 'gitops'      && <GitopsEditor />}
-        {page === 'promql'      && <PromQLEditor onNavigate={setPage} />}
-      </main>
-    </div>
+    <Layout style={{ minHeight: '100vh' }}>
+      <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        breakpoint="md"
+        theme="dark"
+        width={200}
+      >
+        <div style={{
+          height: 40,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          padding: collapsed ? 0 : '0 16px',
+          margin: '12px 0',
+          color: token.colorPrimary,
+          fontWeight: 700,
+          fontSize: 14,
+          letterSpacing: '0.03em',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+        }}>
+          {collapsed ? 'AT' : 'Alert Template UI'}
+        </div>
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[page]}
+          onClick={({ key }) => setPage(key)}
+          items={menuItems}
+        />
+      </Sider>
+      <Content style={{ overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {page === 'template-dev' && <TemplateDevEditor />}
+        {page === 'alert-user'   && <AlertUserView />}
+        {page === 'receivers'    && <ReceiversEditor />}
+        {page === 'amconfig'     && <AlertmanagerSmartEditor />}
+        {page === 'gitops'       && <GitopsEditor />}
+        {page === 'promql'       && <PromQLEditor onNavigate={setPage} />}
+      </Content>
+    </Layout>
   )
 }

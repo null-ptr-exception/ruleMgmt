@@ -1,0 +1,12 @@
+name,cluster,app,threshold
+kpi_cpu_saturation,staging,api-gateway,
+kpi_cpu_saturation,staging,worker,0.75
+kpi_cpu_saturation,staging,payment-svc,
+kpi_mem_saturation,staging,api-gateway,
+kpi_mem_saturation,staging,worker,0.8
+kpi_mem_saturation,staging,payment-svc,
+kpi_disk_saturation,staging,api-gateway,0.8
+kpi_disk_saturation,staging,worker,0.8
+svc_isalive,staging,api-gateway,
+svc_isalive,staging,worker,
+svc_isalive,staging,payment-svc,

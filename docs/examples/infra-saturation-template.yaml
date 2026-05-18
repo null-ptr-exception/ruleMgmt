@@ -1,0 +1,20 @@
+# alert-template.yaml — infra-saturation chart
+# Import via: TemplateDevEditor → Import Wizard → Step 1 (Template 定義)
+
+preset: single-threshold-3tier   # 全域預設 preset
+threshold: 0.9                   # 全域預設 critical threshold（info=50%, warn=75%）
+
+tree:
+  kpi:
+    children:
+      cpu_saturation:
+        metricExpr: rate(node_cpu_seconds_total{mode="user"}[1m]) / scalar(count(node_cpu_seconds_total{mode="user"}))
+      mem_saturation:
+        metricExpr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+      disk_saturation:
+        metricExpr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs"})
+  svc:
+    preset: absence-check         # 覆寫 preset：無 threshold，固定 critical
+    children:
+      isalive:
+        metricExpr: up

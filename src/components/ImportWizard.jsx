@@ -396,9 +396,7 @@ export default function ImportWizard({ open, chart, onClose, onImported }) {
     }
     if (step === 1) {
       if (dataErrors.length > 0) return
-    }
-    if (step === 2) {
-      handlePreview()
+      handlePreview()   // kick off async before advancing; step 2 shows spinner
     }
     setStep(s => s + 1)
   }

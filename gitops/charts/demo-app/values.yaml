@@ -1,0 +1,56 @@
+_meta:
+  kpi_cpu_saturation:
+    description: "CPU saturation alert with multi-tier severity thresholds"
+    vars:
+      - name: cluster
+        type: text
+        description: "Target cluster name"
+      - name: app
+        type: text
+        description: "Application name"
+      - name: infoThreshold
+        type: number
+        description: "Info tier threshold"
+        default: 0.4
+      - name: warnThreshold
+        type: number
+        description: "Warning tier threshold"
+        default: 0.6
+      - name: critThreshold
+        type: number
+        description: "Critical tier threshold"
+        default: 0.8
+  kpi_mem_saturation:
+    description: "Memory saturation alert"
+    vars:
+      - name: cluster
+        type: text
+        description: "Target cluster name"
+      - name: app
+        type: text
+        description: "Application name"
+      - name: warnThreshold
+        type: number
+        description: "Warning threshold"
+        default: 0.85
+      - name: critThreshold
+        type: number
+        description: "Critical threshold"
+        default: 0.95
+  flip_isalive:
+    description: "Service liveness check — alerts when up metric is 0"
+    vars:
+      - name: cluster
+        type: text
+        description: "Target cluster name"
+      - name: app
+        type: text
+        description: "Application name"
+      - name: forDuration
+        type: text
+        description: "How long before firing"
+        default: "3m"
+
+kpi_cpu_saturation: []
+kpi_mem_saturation: []
+flip_isalive: []

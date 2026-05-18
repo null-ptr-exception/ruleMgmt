@@ -1,0 +1,195 @@
+mariadb_latency_slow_queries:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    warn_threshold: 0.5
+    critical_threshold: 3
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    warn_threshold: 1
+    critical_threshold: 5
+  - instance_name: mariadb-replica-02
+    namespace: prod-db
+    warn_threshold: 1
+    critical_threshold: 5
+  - instance_name: mariadb-analytics
+    namespace: prod-analytics
+    warn_threshold: 2
+    critical_threshold: 10
+  - instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_threshold: 0.3
+    critical_threshold: 2
+mariadb_traffic_qps_low:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    min_qps: 50
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    min_qps: 20
+  - instance_name: mariadb-replica-02
+    namespace: prod-db
+    min_qps: 20
+  - instance_name: mariadb-analytics
+    namespace: prod-analytics
+    min_qps: 5
+  - instance_name: mariadb-orders
+    namespace: prod-commerce
+    min_qps: 100
+mariadb_traffic_qps_high:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    max_qps: 15000
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    max_qps: 10000
+  - instance_name: mariadb-replica-02
+    namespace: prod-db
+    max_qps: 10000
+  - instance_name: mariadb-analytics
+    namespace: prod-analytics
+    max_qps: 5000
+  - instance_name: mariadb-orders
+    namespace: prod-commerce
+    max_qps: 20000
+mariadb_traffic_network_receive:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    warn_bytes: 104857600
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    warn_bytes: 52428800
+  - pod_regex: mariadb-orders-.*
+    namespace: prod-commerce
+    warn_bytes: 209715200
+mariadb_traffic_network_transmit:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    warn_bytes: 104857600
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    warn_bytes: 52428800
+  - pod_regex: mariadb-orders-.*
+    namespace: prod-commerce
+    warn_bytes: 209715200
+mariadb_errors_connections:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    warn_rate: 3
+    critical_rate: 15
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    warn_rate: 5
+    critical_rate: 20
+  - instance_name: mariadb-replica-02
+    namespace: prod-db
+    warn_rate: 5
+    critical_rate: 20
+  - instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_rate: 2
+    critical_rate: 10
+mariadb_errors_aborted_clients:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    warn_rate: 2
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    warn_rate: 3
+  - instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_rate: 1
+mariadb_errors_aborted_connects:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    warn_rate: 2
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    warn_rate: 3
+  - instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_rate: 1
+mariadb_saturation_connections:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    warn_pct: 75
+    critical_pct: 90
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    warn_pct: 70
+    critical_pct: 85
+  - instance_name: mariadb-replica-02
+    namespace: prod-db
+    warn_pct: 70
+    critical_pct: 85
+  - instance_name: mariadb-analytics
+    namespace: prod-analytics
+    warn_pct: 60
+    critical_pct: 80
+  - instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_pct: 80
+    critical_pct: 95
+mariadb_saturation_buffer_pool:
+  - instance_name: mariadb-primary
+    namespace: prod-db
+    warn_pct: 85
+    critical_pct: 95
+  - instance_name: mariadb-replica-01
+    namespace: prod-db
+    warn_pct: 80
+    critical_pct: 90
+  - instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_pct: 85
+    critical_pct: 95
+mariadb_saturation_cpu:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    warn_pct: 80
+    critical_pct: 95
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    warn_pct: 70
+    critical_pct: 90
+  - pod_regex: mariadb-analytics-.*
+    namespace: prod-analytics
+    warn_pct: 85
+    critical_pct: 95
+  - pod_regex: mariadb-orders-.*
+    namespace: prod-commerce
+    warn_pct: 75
+    critical_pct: 90
+mariadb_saturation_memory:
+  - pod_regex: mariadb-primary-.*
+    namespace: prod-db
+    warn_pct: 80
+    critical_pct: 95
+  - pod_regex: mariadb-replica-.*
+    namespace: prod-db
+    warn_pct: 75
+    critical_pct: 90
+  - pod_regex: mariadb-analytics-.*
+    namespace: prod-analytics
+    warn_pct: 85
+    critical_pct: 95
+  - pod_regex: mariadb-orders-.*
+    namespace: prod-commerce
+    warn_pct: 80
+    critical_pct: 95
+mariadb_saturation_disk:
+  - pvc_regex: data-mariadb-primary-.*
+    namespace: prod-db
+    warn_pct: 75
+    critical_pct: 90
+  - pvc_regex: data-mariadb-replica-.*
+    namespace: prod-db
+    warn_pct: 70
+    critical_pct: 85
+  - pvc_regex: data-mariadb-analytics-.*
+    namespace: prod-analytics
+    warn_pct: 80
+    critical_pct: 90
+  - pvc_regex: data-mariadb-orders-.*
+    namespace: prod-commerce
+    warn_pct: 75
+    critical_pct: 90

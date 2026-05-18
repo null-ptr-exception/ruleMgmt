@@ -1,0 +1,252 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-alerts
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-latency-slow-queries
+      rules:
+        {{- range .Values.mariadb_latency_slow_queries }}
+        - alert: MariadbLatencySlowQueries_WarnThreshold
+          expr: rate(mysql_global_status_slow_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_threshold }}
+          for: 5m
+          labels:
+            severity: warning
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbLatencySlowQueries_WarnThreshold triggered on {{ .instance_name }}"
+        - alert: MariadbLatencySlowQueries_CriticalThreshold
+          expr: rate(mysql_global_status_slow_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .critical_threshold }}
+          for: 5m
+          labels:
+            severity: critical
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbLatencySlowQueries_CriticalThreshold triggered on {{ .instance_name }}"
+        {{- end }}
+
+    - name: mariadb-traffic-qps-low
+      rules:
+        {{- range .Values.mariadb_traffic_qps_low }}
+        - alert: MariadbTrafficQpsLow_MinQps
+          expr: rate(mysql_global_status_questions{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) < {{ .min_qps }}
+          for: 10m
+          labels:
+            severity: warning
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbTrafficQpsLow_MinQps triggered on {{ .instance_name }}"
+        {{- end }}
+
+    - name: mariadb-traffic-qps-high
+      rules:
+        {{- range .Values.mariadb_traffic_qps_high }}
+        - alert: MariadbTrafficQpsHigh_MaxQps
+          expr: rate(mysql_global_status_questions{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .max_qps }}
+          for: 5m
+          labels:
+            severity: warning
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbTrafficQpsHigh_MaxQps triggered on {{ .instance_name }}"
+        {{- end }}
+
+    - name: mariadb-traffic-network-receive
+      rules:
+        {{- range .Values.mariadb_traffic_network_receive }}
+        - alert: MariadbTrafficNetworkReceive_WarnBytes
+          expr: rate(container_network_receive_bytes_total{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"}[5m]) > {{ .warn_bytes }}
+          for: 5m
+          labels:
+            severity: warning
+            pod_regex: "{{ .pod_regex }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbTrafficNetworkReceive_WarnBytes triggered on {{ .pod_regex }}"
+        {{- end }}
+
+    - name: mariadb-traffic-network-transmit
+      rules:
+        {{- range .Values.mariadb_traffic_network_transmit }}
+        - alert: MariadbTrafficNetworkTransmit_WarnBytes
+          expr: rate(container_network_transmit_bytes_total{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"}[5m]) > {{ .warn_bytes }}
+          for: 5m
+          labels:
+            severity: warning
+            pod_regex: "{{ .pod_regex }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbTrafficNetworkTransmit_WarnBytes triggered on {{ .pod_regex }}"
+        {{- end }}
+
+    - name: mariadb-errors-connections
+      rules:
+        {{- range .Values.mariadb_errors_connections }}
+        - alert: MariadbErrorsConnections_WarnRate
+          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_rate }}
+          for: 5m
+          labels:
+            severity: warning
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbErrorsConnections_WarnRate triggered on {{ .instance_name }}"
+        - alert: MariadbErrorsConnections_CriticalRate
+          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .critical_rate }}
+          for: 5m
+          labels:
+            severity: critical
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbErrorsConnections_CriticalRate triggered on {{ .instance_name }}"
+        {{- end }}
+
+    - name: mariadb-errors-aborted-clients
+      rules:
+        {{- range .Values.mariadb_errors_aborted_clients }}
+        - alert: MariadbErrorsAbortedClients_WarnRate
+          expr: rate(mysql_global_status_aborted_clients{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_rate }}
+          for: 5m
+          labels:
+            severity: warning
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbErrorsAbortedClients_WarnRate triggered on {{ .instance_name }}"
+        {{- end }}
+
+    - name: mariadb-errors-aborted-connects
+      rules:
+        {{- range .Values.mariadb_errors_aborted_connects }}
+        - alert: MariadbErrorsAbortedConnects_WarnRate
+          expr: rate(mysql_global_status_aborted_connects{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_rate }}
+          for: 5m
+          labels:
+            severity: warning
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbErrorsAbortedConnects_WarnRate triggered on {{ .instance_name }}"
+        {{- end }}
+
+    - name: mariadb-saturation-connections
+      rules:
+        {{- range .Values.mariadb_saturation_connections }}
+        - alert: MariadbSaturationConnections_WarnPct
+          expr: (mysql_global_status_threads_connected{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_variables_max_connections{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .warn_pct }}
+          for: 5m
+          labels:
+            severity: warning
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationConnections_WarnPct triggered on {{ .instance_name }}"
+        - alert: MariadbSaturationConnections_CriticalPct
+          expr: (mysql_global_status_threads_connected{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_variables_max_connections{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .critical_pct }}
+          for: 5m
+          labels:
+            severity: critical
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationConnections_CriticalPct triggered on {{ .instance_name }}"
+        {{- end }}
+
+    - name: mariadb-saturation-buffer-pool
+      rules:
+        {{- range .Values.mariadb_saturation_buffer_pool }}
+        - alert: MariadbSaturationBufferPool_WarnPct
+          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .warn_pct }}
+          for: 10m
+          labels:
+            severity: warning
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationBufferPool_WarnPct triggered on {{ .instance_name }}"
+        - alert: MariadbSaturationBufferPool_CriticalPct
+          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .critical_pct }}
+          for: 10m
+          labels:
+            severity: critical
+            instance_name: "{{ .instance_name }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationBufferPool_CriticalPct triggered on {{ .instance_name }}"
+        {{- end }}
+
+    - name: mariadb-saturation-cpu
+      rules:
+        {{- range .Values.mariadb_saturation_cpu }}
+        - alert: MariadbSaturationCpu_WarnPct
+          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}", resource="cpu"}) * 100 > {{ .warn_pct }}
+          for: 5m
+          labels:
+            severity: warning
+            pod_regex: "{{ .pod_regex }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationCpu_WarnPct triggered on {{ .pod_regex }}"
+        - alert: MariadbSaturationCpu_CriticalPct
+          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}", resource="cpu"}) * 100 > {{ .critical_pct }}
+          for: 5m
+          labels:
+            severity: critical
+            pod_regex: "{{ .pod_regex }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationCpu_CriticalPct triggered on {{ .pod_regex }}"
+        {{- end }}
+
+    - name: mariadb-saturation-memory
+      rules:
+        {{- range .Values.mariadb_saturation_memory }}
+        - alert: MariadbSaturationMemory_WarnPct
+          expr: (container_memory_working_set_bytes{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}", resource="memory"}) * 100 > {{ .warn_pct }}
+          for: 5m
+          labels:
+            severity: warning
+            pod_regex: "{{ .pod_regex }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationMemory_WarnPct triggered on {{ .pod_regex }}"
+        - alert: MariadbSaturationMemory_CriticalPct
+          expr: (container_memory_working_set_bytes{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}", resource="memory"}) * 100 > {{ .critical_pct }}
+          for: 5m
+          labels:
+            severity: critical
+            pod_regex: "{{ .pod_regex }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationMemory_CriticalPct triggered on {{ .pod_regex }}"
+        {{- end }}
+
+    - name: mariadb-saturation-disk
+      rules:
+        {{- range .Values.mariadb_saturation_disk }}
+        - alert: MariadbSaturationDisk_WarnPct
+          expr: (kubelet_volume_stats_used_bytes{namespace="{{ .namespace }}", persistentvolumeclaim=~"{{ .pvc_regex }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ .namespace }}", persistentvolumeclaim=~"{{ .pvc_regex }}"}) * 100 > {{ .warn_pct }}
+          for: 10m
+          labels:
+            severity: warning
+            pvc_regex: "{{ .pvc_regex }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationDisk_WarnPct triggered on {{ .pvc_regex }}"
+        - alert: MariadbSaturationDisk_CriticalPct
+          expr: (kubelet_volume_stats_used_bytes{namespace="{{ .namespace }}", persistentvolumeclaim=~"{{ .pvc_regex }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ .namespace }}", persistentvolumeclaim=~"{{ .pvc_regex }}"}) * 100 > {{ .critical_pct }}
+          for: 10m
+          labels:
+            severity: critical
+            pvc_regex: "{{ .pvc_regex }}"
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "MariadbSaturationDisk_CriticalPct triggered on {{ .pvc_regex }}"
+        {{- end }}

@@ -21,7 +21,7 @@ test.describe('Template Editor View', () => {
     const option = page.locator('.ant-select-item-option').first()
     if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
       await option.click()
-      await expect(page.locator('.ant-menu, [class*="sidebar"]').nth(1)).toBeVisible({ timeout: 5000 })
+      await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
     }
   })
 })

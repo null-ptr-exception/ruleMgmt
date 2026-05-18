@@ -25,15 +25,19 @@ apply-sample:
 	@echo ">> Copying sample/deployments/ → gitops/deployments/"
 	@mkdir -p gitops/deployments
 	@cp -r $(SAMPLE_DIR)/deployments/. gitops/deployments/
+	@echo ">> Copying sample/alertmanager-configs/ → gitops/alertmanager-configs/"
+	@mkdir -p gitops/alertmanager-configs
+	@if [ -d $(SAMPLE_DIR)/alertmanager-configs ]; then cp -r $(SAMPLE_DIR)/alertmanager-configs/. gitops/alertmanager-configs/; fi
 	@echo ""
 	@echo "Done. Sample data loaded."
 	@echo "Run 'npm run dev' (or 'node server.js') to start the UI."
 
 clean:
 	@echo ">> Removing all content from gitops/..."
-	@mkdir -p gitops/charts gitops/deployments
+	@mkdir -p gitops/charts gitops/deployments gitops/alertmanager-configs
 	@find gitops/charts -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 	@find gitops/deployments -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+	@find gitops/alertmanager-configs -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 	@echo ""
 	@echo "Done. Working directories are now empty."
 

@@ -9,6 +9,7 @@ import chartsRouter from './server/routes/charts.js'
 import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
 import renderRouter from './server/routes/render.js'
+import alertmanagerConfigsRouter from './server/routes/alertmanagerConfigs.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -612,6 +613,7 @@ app.use('/api/v2/charts', chartsRouter(GITOPS_DIR_V2))
 app.use('/api/v2/templates', templatesV2Router(GITOPS_DIR_V2))
 app.use('/api/v2/deployments', deploymentsRouter(GITOPS_DIR_V2))
 app.use('/api/v2/render', renderRouter(GITOPS_DIR_V2))
+app.use('/api/v2/alertmanager-configs', alertmanagerConfigsRouter(GITOPS_DIR_V2))
 
 app.use(express.static(path.join(__dirname, 'dist')))
 app.get('*', (req, res) => {

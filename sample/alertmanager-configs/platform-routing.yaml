@@ -1,0 +1,59 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: platform-routing
+spec:
+  route:
+    receiver: "default-slack"
+    matchers:
+      - name: namespace
+        matchType: "=~"
+        value: "production|staging"
+    routes:
+      - receiver: "critical-pagerduty"
+        matchers:
+          - name: severity
+            matchType: "="
+            value: "critical"
+      - receiver: "warning-slack"
+        matchers:
+          - name: severity
+            matchType: "="
+            value: "warning"
+      - receiver: "db-team-slack"
+        matchers:
+          - name: alertname
+            matchType: "=~"
+            value: "Mariadb.*"
+  receivers:
+    - name: "default-slack"
+      slackConfigs:
+        - apiURL: "https://hooks.slack.com/services/T00/B00/default"
+          channel: "#alerts-all"
+          sendResolved: true
+    - name: "critical-pagerduty"
+      pagerdutyConfigs:
+        - routingKey: "pd-routing-key-critical"
+          sendResolved: true
+    - name: "warning-slack"
+      slackConfigs:
+        - apiURL: "https://hooks.slack.com/services/T00/B00/warnings"
+          channel: "#alerts-warning"
+          sendResolved: true
+    - name: "db-team-slack"
+      slackConfigs:
+        - apiURL: "https://hooks.slack.com/services/T00/B00/db-team"
+          channel: "#db-alerts"
+          sendResolved: true
+  inhibitRules:
+    - sourceMatch:
+        - name: severity
+          matchType: "="
+          value: "critical"
+      targetMatch:
+        - name: severity
+          matchType: "="
+          value: "warning"
+      equal:
+        - "alertname"
+        - "namespace"

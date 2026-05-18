@@ -3,15 +3,13 @@ import { Layout, Menu, theme } from 'antd'
 import {
   ToolOutlined,
   BellOutlined,
-  SoundOutlined,
   BranchesOutlined,
   RocketOutlined,
   BarChartOutlined,
 } from '@ant-design/icons'
-import ReceiversEditor from './pages/ReceiversEditor'
+import NotificationRoutesEditor from './pages/NotificationRoutesEditor'
 import GitopsEditor from './pages/GitopsEditor'
 import PromQLEditor from './pages/PromQLEditor'
-import AlertmanagerSmartEditor from './pages/AlertmanagerSmartEditor'
 import TemplateDevEditor from './pages/TemplateDevEditor'
 import AlertUserView from './pages/AlertUserView'
 import './App.css'
@@ -33,8 +31,7 @@ const menuItems = [
     label: 'Notification Rules',
     type: 'group',
     children: [
-      { key: 'receivers', label: 'Receivers', icon: <SoundOutlined /> },
-      { key: 'amconfig', label: 'Notifications', icon: <BranchesOutlined /> },
+      { key: 'notifications', label: 'Notification Routes', icon: <BranchesOutlined /> },
     ],
   },
   {
@@ -90,8 +87,7 @@ export default function App() {
       <Content style={{ overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {page === 'template-dev' && <TemplateDevEditor />}
         {page === 'alert-user'   && <AlertUserView />}
-        {page === 'receivers'    && <ReceiversEditor />}
-        {page === 'amconfig'     && <AlertmanagerSmartEditor />}
+        {page === 'notifications' && <NotificationRoutesEditor />}
         {page === 'gitops'       && <GitopsEditor />}
         {page === 'promql'       && <PromQLEditor onNavigate={setPage} />}
       </Content>

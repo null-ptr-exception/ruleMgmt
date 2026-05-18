@@ -15,6 +15,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: azure/setup-helm@v4
+      - run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest
       - run: npm ci
       - run: npm run lint
       - run: npm test

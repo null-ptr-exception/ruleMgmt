@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Card, Input, Button, Checkbox, Select, Typography, Tag, Space } from 'antd'
+import { PlusOutlined, DeleteOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
+import EditorLayout from '../components/EditorLayout'
 import VersionModal from '../components/VersionModal'
 import { listTemplates, getTemplate, saveTemplate, deleteTemplate } from '../utils/api'
 import { bumpPatch, latestVersion } from '../utils/templateUtils'
 
+const { Text } = Typography
+
 const TYPE = 'receivers'
 
-// ── Per-entry factories ────────────────────────────────────────────────────────
 const newWebhook    = () => ({ url: '', send_resolved: true })
 const newEmail      = () => ({ to: '', from: '', smarthost: '' })
 const newSlack      = () => ({ api_url: '', channel: '' })
@@ -19,40 +23,41 @@ const emptyReceiver = () => ({
 })
 const emptyForm = () => ({ templateName: '', receivers: [emptyReceiver()] })
 
-// ── Config section component ───────────────────────────────────────────────────
 function ConfigSection({ title, icon, rows, onAdd, onRemove, onUpdate, children }) {
   const [open, setOpen] = useState(true)
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, marginBottom: 10 }}>
+    <Card size="small" style={{ marginBottom: 10 }} styles={{ body: { padding: 0 } }}>
       <div
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '8px 12px', background: '#f9fafb', borderRadius: open ? '6px 6px 0 0' : 6,
-          cursor: 'pointer', borderBottom: open ? '1px solid #e5e7eb' : 'none' }}
+        style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '8px 12px', cursor: 'pointer',
+        }}
         onClick={() => setOpen(o => !o)}
       >
-        <span style={{ fontWeight: 600, fontSize: 13 }}>{icon} {title}</span>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
-          <span className="text-muted">{rows.length} entr{rows.length === 1 ? 'y' : 'ies'}</span>
-          <button className="btn btn-secondary btn-sm" onClick={onAdd}>+ Add</button>
-          <span style={{ color: '#9ca3af', fontSize: 16 }}>{open ? '▾' : '▸'}</span>
-        </div>
+        <Text strong style={{ fontSize: 13 }}>{icon} {title}</Text>
+        <Space size={8} onClick={e => e.stopPropagation()}>
+          <Text type="secondary" style={{ fontSize: 12 }}>{rows.length} entr{rows.length === 1 ? 'y' : 'ies'}</Text>
+          <Button size="small" onClick={onAdd} icon={<PlusOutlined />}>Add</Button>
+          {open ? <DownOutlined style={{ color: '#8c8c8c' }} /> : <RightOutlined style={{ color: '#8c8c8c' }} />}
+        </Space>
       </div>
       {open && (
-        <div style={{ padding: 12 }}>
-          {rows.length === 0 && <p className="text-muted">No entries. Click + Add to add one.</p>}
+        <div style={{ padding: 12, borderTop: '1px solid #f0f0f0' }}>
+          {rows.length === 0 && <Text type="secondary">No entries. Click + Add to add one.</Text>}
           {rows.map((row, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10,
-              padding: 10, background: '#f9fafb', borderRadius: 6 }}>
+            <div key={i} style={{
+              display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 10,
+              padding: 10, background: '#fafafa', borderRadius: 6,
+            }}>
               <div style={{ flex: 1 }}>
                 {children(row, i, (field, val) => onUpdate(i, field, val))}
               </div>
-              <button className="btn btn-danger btn-sm" style={{ marginTop: 2 }}
-                onClick={() => onRemove(i)}>Remove</button>
+              <Button danger size="small" onClick={() => onRemove(i)}>Remove</Button>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -93,7 +98,6 @@ export default function ReceiversEditor() {
     setIsNew(true)
   }
 
-  // Generic updaters for a receiver's config section entries
   function updateConfigEntry(ri, section, ei, field, val) {
     setForm(f => ({
       ...f,
@@ -169,185 +173,166 @@ export default function ReceiversEditor() {
     await load()
   }
 
+  const showForm = isNew || selected
+
   return (
-    <div className="editor-layout">
-      <div className="editor-list">
-        <div className="editor-list-header">
-          Receivers
-          <button className="btn btn-primary btn-sm" onClick={startNew}>+ New</button>
-        </div>
-        <div className="editor-list-body">
-          {Object.keys(templates).length === 0 && (
-            <div style={{ padding: '20px 14px', color: '#9ca3af', fontSize: 13 }}>No receivers yet.</div>
-          )}
-          {Object.entries(templates).map(([name, versions]) => (
-            <div key={name} className="template-group">
-              <div className="template-group-name">{name}</div>
-              {versions.map(v => (
-                <div key={v}
-                  className={`template-version${selected?.name === name && selected?.version === v ? ' active' : ''}`}
-                  onClick={() => selectVersion(name, v)}>
-                  <span className="version-badge">{v}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="editor-form">
-        {!isNew && !selected ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">📣</div>
-            <p>Select a receiver template or click + New.</p>
-          </div>
-        ) : (
-          <>
-            <div className="form-card">
-              <div className="form-card-title">
+    <EditorLayout
+      title="Receivers"
+      templates={templates}
+      selected={selected}
+      onSelect={selectVersion}
+      onNew={startNew}
+      emptyIcon="📣"
+      emptyText="Select a receiver template or click + New."
+    >
+      {showForm && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Text strong style={{ fontSize: 15 }}>
                 {selected ? `${selected.name} @ ${selected.version}` : 'New Receivers'}
-                {status && <span className="tag">{status}</span>}
-                <button className="btn btn-secondary btn-sm" onClick={addReceiver}>+ Add Receiver</button>
+              </Text>
+              {status && <Tag color="success">{status}</Tag>}
+              <div style={{ marginLeft: 'auto' }}>
+                <Button size="small" icon={<PlusOutlined />} onClick={addReceiver}>Add Receiver</Button>
               </div>
-              <div className="form-row" style={{ marginBottom: 10 }}>
-                <label>Template Name *</label>
-                <input type="text" value={form.templateName}
-                  placeholder="e.g. mysql-receivers"
-                  readOnly={!isNew && !!selected}
-                  style={!isNew && selected ? { background: '#f9fafb', color: '#6b7280' } : {}}
-                  onChange={e => setForm(f => ({ ...f, templateName: e.target.value }))} />
-              </div>
-              <p className="text-muted">
-                Follows Alertmanager receivers format. Receiver names will get product prefix when rendered.
-              </p>
             </div>
+            <div style={{ marginBottom: 10 }}>
+              <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Template Name *</Text>
+              <Input
+                value={form.templateName}
+                placeholder="e.g. mysql-receivers"
+                readOnly={!isNew && !!selected}
+                style={!isNew && selected ? { background: '#fafafa', color: '#8c8c8c' } : {}}
+                onChange={e => setForm(f => ({ ...f, templateName: e.target.value }))}
+              />
+            </div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Follows Alertmanager receivers format. Receiver names will get product prefix when rendered.
+            </Text>
+          </Card>
 
-            {form.receivers.map((r, ri) => (
-              <div key={ri} className="form-card">
-                <div className="form-card-title">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span>Receiver {ri + 1}</span>
-                    {r.name && <span className="tag">{r.name}</span>}
+          {form.receivers.map((r, ri) => (
+            <Card key={ri} size="small" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <Text strong>Receiver {ri + 1}</Text>
+                {r.name && <Tag>{r.name}</Tag>}
+                {form.receivers.length > 1 && (
+                  <Button danger size="small" onClick={() => removeReceiver(ri)} style={{ marginLeft: 'auto' }}>Remove</Button>
+                )}
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>Receiver Name *</Text>
+                <Input
+                  value={r.name}
+                  placeholder="e.g. platform-receiver"
+                  onChange={e => updateReceiver(ri, 'name', e.target.value)}
+                />
+              </div>
+
+              <ConfigSection
+                title="webhook_configs" icon="🪝"
+                rows={r.webhook_configs}
+                onAdd={() => addConfigEntry(ri, 'webhook_configs', newWebhook)}
+                onRemove={ei => removeConfigEntry(ri, 'webhook_configs', ei)}
+                onUpdate={(ei, field, val) => updateConfigEntry(ri, 'webhook_configs', ei, field, val)}
+              >
+                {(row, ei, set) => (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>URL</Text>
+                      <Input size="small" value={row.url} placeholder="https://..."
+                        onChange={e => set('url', e.target.value)} />
+                    </div>
+                    <div style={{ minWidth: 130 }}>
+                      <Text type="secondary" style={{ fontSize: 11 }}>Send Resolved</Text>
+                      <div style={{ paddingTop: 4 }}>
+                        <Checkbox checked={row.send_resolved}
+                          onChange={e => set('send_resolved', e.target.checked)}>yes</Checkbox>
+                      </div>
+                    </div>
                   </div>
-                  {form.receivers.length > 1 && (
-                    <button className="btn btn-danger btn-sm" onClick={() => removeReceiver(ri)}>Remove</button>
-                  )}
-                </div>
+                )}
+              </ConfigSection>
 
-                <div className="form-row" style={{ marginBottom: 14 }}>
-                  <label>Receiver Name *</label>
-                  <input type="text" value={r.name} placeholder="e.g. platform-receiver"
-                    onChange={e => updateReceiver(ri, 'name', e.target.value)} />
-                </div>
-
-                {/* webhook_configs */}
-                <ConfigSection
-                  title="webhook_configs" icon="🪝"
-                  rows={r.webhook_configs}
-                  onAdd={() => addConfigEntry(ri, 'webhook_configs', newWebhook)}
-                  onRemove={ei => removeConfigEntry(ri, 'webhook_configs', ei)}
-                  onUpdate={(ei, field, val) => updateConfigEntry(ri, 'webhook_configs', ei, field, val)}
-                >
-                  {(row, ei, set) => (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center' }}>
-                      <div className="form-row">
-                        <label>URL</label>
-                        <input type="text" value={row.url} placeholder="https://..."
-                          onChange={e => set('url', e.target.value)} />
-                      </div>
-                      <div className="form-row" style={{ minWidth: 130 }}>
-                        <label style={{ whiteSpace: 'nowrap' }}>Send Resolved</label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 4, cursor: 'pointer' }}>
-                          <input type="checkbox" checked={row.send_resolved}
-                            onChange={e => set('send_resolved', e.target.checked)} />
-                          yes
-                        </label>
-                      </div>
+              <ConfigSection
+                title="email_configs" icon="✉️"
+                rows={r.email_configs}
+                onAdd={() => addConfigEntry(ri, 'email_configs', newEmail)}
+                onRemove={ei => removeConfigEntry(ri, 'email_configs', ei)}
+                onUpdate={(ei, field, val) => updateConfigEntry(ri, 'email_configs', ei, field, val)}
+              >
+                {(row, ei, set) => (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>To</Text>
+                      <Input size="small" value={row.to} placeholder="team@example.com"
+                        onChange={e => set('to', e.target.value)} />
                     </div>
-                  )}
-                </ConfigSection>
-
-                {/* email_configs */}
-                <ConfigSection
-                  title="email_configs" icon="✉️"
-                  rows={r.email_configs}
-                  onAdd={() => addConfigEntry(ri, 'email_configs', newEmail)}
-                  onRemove={ei => removeConfigEntry(ri, 'email_configs', ei)}
-                  onUpdate={(ei, field, val) => updateConfigEntry(ri, 'email_configs', ei, field, val)}
-                >
-                  {(row, ei, set) => (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                      <div className="form-row">
-                        <label>To</label>
-                        <input type="text" value={row.to} placeholder="team@example.com"
-                          onChange={e => set('to', e.target.value)} />
-                      </div>
-                      <div className="form-row">
-                        <label>From</label>
-                        <input type="text" value={row.from} placeholder="alertmanager@example.com"
-                          onChange={e => set('from', e.target.value)} />
-                      </div>
-                      <div className="form-row">
-                        <label>Smarthost</label>
-                        <input type="text" value={row.smarthost} placeholder="smtp.example.com:587"
-                          onChange={e => set('smarthost', e.target.value)} />
-                      </div>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>From</Text>
+                      <Input size="small" value={row.from} placeholder="alertmanager@example.com"
+                        onChange={e => set('from', e.target.value)} />
                     </div>
-                  )}
-                </ConfigSection>
-
-                {/* slack_configs */}
-                <ConfigSection
-                  title="slack_configs" icon="💬"
-                  rows={r.slack_configs}
-                  onAdd={() => addConfigEntry(ri, 'slack_configs', newSlack)}
-                  onRemove={ei => removeConfigEntry(ri, 'slack_configs', ei)}
-                  onUpdate={(ei, field, val) => updateConfigEntry(ri, 'slack_configs', ei, field, val)}
-                >
-                  {(row, ei, set) => (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <div className="form-row">
-                        <label>API URL</label>
-                        <input type="text" value={row.api_url} placeholder="https://hooks.slack.com/..."
-                          onChange={e => set('api_url', e.target.value)} />
-                      </div>
-                      <div className="form-row">
-                        <label>Channel</label>
-                        <input type="text" value={row.channel} placeholder="#alerts-critical"
-                          onChange={e => set('channel', e.target.value)} />
-                      </div>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>Smarthost</Text>
+                      <Input size="small" value={row.smarthost} placeholder="smtp.example.com:587"
+                        onChange={e => set('smarthost', e.target.value)} />
                     </div>
-                  )}
-                </ConfigSection>
+                  </div>
+                )}
+              </ConfigSection>
 
-                {/* pagerduty_configs */}
-                <ConfigSection
-                  title="pagerduty_configs" icon="🔔"
-                  rows={r.pagerduty_configs}
-                  onAdd={() => addConfigEntry(ri, 'pagerduty_configs', newPagerduty)}
-                  onRemove={ei => removeConfigEntry(ri, 'pagerduty_configs', ei)}
-                  onUpdate={(ei, field, val) => updateConfigEntry(ri, 'pagerduty_configs', ei, field, val)}
-                >
-                  {(row, ei, set) => (
-                    <div className="form-row">
-                      <label>Routing Key</label>
-                      <input type="text" value={row.routing_key} placeholder="your-routing-key"
-                        onChange={e => set('routing_key', e.target.value)} />
+              <ConfigSection
+                title="slack_configs" icon="💬"
+                rows={r.slack_configs}
+                onAdd={() => addConfigEntry(ri, 'slack_configs', newSlack)}
+                onRemove={ei => removeConfigEntry(ri, 'slack_configs', ei)}
+                onUpdate={(ei, field, val) => updateConfigEntry(ri, 'slack_configs', ei, field, val)}
+              >
+                {(row, ei, set) => (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>API URL</Text>
+                      <Input size="small" value={row.api_url} placeholder="https://hooks.slack.com/..."
+                        onChange={e => set('api_url', e.target.value)} />
                     </div>
-                  )}
-                </ConfigSection>
-              </div>
-            ))}
+                    <div>
+                      <Text type="secondary" style={{ fontSize: 11 }}>Channel</Text>
+                      <Input size="small" value={row.channel} placeholder="#alerts-critical"
+                        onChange={e => set('channel', e.target.value)} />
+                    </div>
+                  </div>
+                )}
+              </ConfigSection>
 
-            <div className="btn-row">
-              <button className="btn btn-primary" onClick={openSaveModal}>Save as Version…</button>
-              {selected && <button className="btn btn-danger" onClick={handleDelete}>Delete this version</button>}
-            </div>
-          </>
-        )}
-      </div>
+              <ConfigSection
+                title="pagerduty_configs" icon="🔔"
+                rows={r.pagerduty_configs}
+                onAdd={() => addConfigEntry(ri, 'pagerduty_configs', newPagerduty)}
+                onRemove={ei => removeConfigEntry(ri, 'pagerduty_configs', ei)}
+                onUpdate={(ei, field, val) => updateConfigEntry(ri, 'pagerduty_configs', ei, field, val)}
+              >
+                {(row, ei, set) => (
+                  <div>
+                    <Text type="secondary" style={{ fontSize: 11 }}>Routing Key</Text>
+                    <Input size="small" value={row.routing_key} placeholder="your-routing-key"
+                      onChange={e => set('routing_key', e.target.value)} />
+                  </div>
+                )}
+              </ConfigSection>
+            </Card>
+          ))}
+
+          <Space>
+            <Button type="primary" onClick={openSaveModal}>Save as Version…</Button>
+            {selected && <Button danger onClick={handleDelete}>Delete this version</Button>}
+          </Space>
+        </div>
+      )}
 
       {modal && <VersionModal defaultName={modal.name} defaultVersion={modal.version} onSave={handleSave} onCancel={() => setModal(null)} />}
-    </div>
+    </EditorLayout>
   )
 }

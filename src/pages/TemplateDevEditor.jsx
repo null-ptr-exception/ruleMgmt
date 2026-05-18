@@ -9,6 +9,7 @@ import {
   getChartInfo, saveChartTemplateFile,
   saveChartSchema, saveChartMeta
 } from '../utils/chartApi'
+import ImportWizard from '../components/ImportWizard'
 
 import { EditorView, basicSetup } from 'codemirror'
 import { EditorState } from '@codemirror/state'
@@ -46,6 +47,7 @@ export default function TemplateDevEditor() {
   const [editorEditable, setEditorEditable] = useState(false)
   const [fileContent, setFileContent] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(220)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const resizingRef = useRef(false)
   const editorRef = useRef(null)
   const viewRef = useRef(null)
@@ -303,7 +305,10 @@ export default function TemplateDevEditor() {
           <div style={{ width: sidebarWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fafafa', position: 'relative' }}>
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Alert Groups</Text>
-              <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleAddAlert} />
+              <div style={{ display: 'flex', gap: 4 }}>
+                <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleAddAlert} />
+                <Button size="small" type="dashed" onClick={() => setWizardOpen(true)} style={{ fontSize: 10 }}>Import</Button>
+              </div>
             </div>
             <div style={{ flex: 1, overflowY: 'auto' }}>
               <TemplateTree
@@ -463,6 +468,13 @@ export default function TemplateDevEditor() {
           <Button size="small" type="primary" icon={<SaveOutlined />} onClick={handleSave}>Save</Button>
         </div>
       )}
+
+      <ImportWizard
+        open={wizardOpen}
+        chart={activeChart}
+        onClose={() => setWizardOpen(false)}
+        onImported={() => { loadChart(activeChart) }}
+      />
     </div>
   )
 }

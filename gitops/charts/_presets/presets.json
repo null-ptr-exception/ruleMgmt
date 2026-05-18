@@ -1,0 +1,39 @@
+{
+  "multi-tier-threshold": {
+    "name": "Multi-Tier Threshold",
+    "description": "3-tier (info / warn / crit) alert for any metric comparison",
+    "promqlTemplate": "METRIC_EXPR > {{ THRESHOLD }}",
+    "forDuration": "5m",
+    "vars": [
+      { "name": "cluster",       "type": "string", "xVarType": "selector",  "description": "Target cluster" },
+      { "name": "app",           "type": "string", "xVarType": "selector",  "description": "Target application" },
+      { "name": "infoThreshold", "type": "number", "xVarType": "threshold", "xSeverity": "info",     "default": 0.4, "description": "Info tier threshold" },
+      { "name": "warnThreshold", "type": "number", "xVarType": "threshold", "xSeverity": "warning",  "default": 0.6, "description": "Warning tier threshold" },
+      { "name": "critThreshold", "type": "number", "xVarType": "threshold", "xSeverity": "critical", "default": 0.8, "description": "Critical tier threshold" }
+    ]
+  },
+  "warn-crit-threshold": {
+    "name": "Warn / Crit Threshold",
+    "description": "2-tier (warn / crit) alert for any metric comparison",
+    "promqlTemplate": "METRIC_EXPR > {{ THRESHOLD }}",
+    "forDuration": "5m",
+    "vars": [
+      { "name": "cluster",       "type": "string", "xVarType": "selector",  "description": "Target cluster" },
+      { "name": "app",           "type": "string", "xVarType": "selector",  "description": "Target application" },
+      { "name": "warnThreshold", "type": "number", "xVarType": "threshold", "xSeverity": "warning",  "default": 0.7, "description": "Warning tier threshold" },
+      { "name": "critThreshold", "type": "number", "xVarType": "threshold", "xSeverity": "critical", "default": 0.9, "description": "Critical tier threshold" }
+    ]
+  },
+  "absence-check": {
+    "name": "Absence Check",
+    "description": "Service liveness — fires when metric equals 0 (e.g. up == 0)",
+    "promqlTemplate": "METRIC_EXPR == 0",
+    "forDuration": "3m",
+    "fixedAlert": true,
+    "fixedSeverity": "critical",
+    "vars": [
+      { "name": "cluster", "type": "string", "xVarType": "selector", "description": "Target cluster" },
+      { "name": "app",     "type": "string", "xVarType": "selector", "description": "Target application" }
+    ]
+  }
+}

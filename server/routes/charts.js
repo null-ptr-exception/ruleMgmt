@@ -17,6 +17,7 @@ export default function chartsRouter(gitopsDir) {
       const charts = []
       for (const e of entries) {
         if (!e.isDirectory()) continue
+        if (e.name.startsWith('_')) continue  // reserved dirs (e.g. _presets)
         const tmplDir = path.join(chartsDir, e.name, 'templates')
         let templateCount = 0
         try {

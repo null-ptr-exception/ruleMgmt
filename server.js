@@ -10,6 +10,8 @@ import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
 import renderRouter from './server/routes/render.js'
 import alertmanagerConfigsRouter from './server/routes/alertmanagerConfigs.js'
+import presetsRouter from './server/routes/presets.js'
+import importRouter from './server/routes/import.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -614,6 +616,8 @@ app.use('/api/v2/templates', templatesV2Router(GITOPS_DIR_V2))
 app.use('/api/v2/deployments', deploymentsRouter(GITOPS_DIR_V2))
 app.use('/api/v2/render', renderRouter(GITOPS_DIR_V2))
 app.use('/api/v2/alertmanager-configs', alertmanagerConfigsRouter(GITOPS_DIR_V2))
+app.use('/api/v2/presets', presetsRouter(GITOPS_DIR_V2))
+app.use('/api/v2/import', importRouter(GITOPS_DIR_V2))
 
 app.use(express.static(path.join(__dirname, 'dist')))
 app.get('*', (req, res) => {

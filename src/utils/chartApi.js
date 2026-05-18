@@ -130,6 +130,38 @@ export async function deleteDeployment(chart, deployment) {
   return res.json()
 }
 
+// ─── Presets ─────────────────────────────────────────────────────────────────
+
+export async function listPresets() {
+  const res = await fetch(`${BASE}/presets`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+// ─── Import ──────────────────────────────────────────────────────────────────
+
+export async function importPreview(payload) {
+  const res = await fetch(`${BASE}/import/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Preview failed')
+  return data
+}
+
+export async function saveImport(payload) {
+  const res = await fetch(`${BASE}/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Import failed')
+  return data
+}
+
 // ─── Render ──────────────────────────────────────────────────────────────────
 
 export async function renderDeployment(chart, deployment) {

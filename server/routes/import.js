@@ -10,6 +10,7 @@ export default function importRouter(gitopsDir) {
   const router = express.Router()
   const presetsFile = path.join(gitopsDir, 'charts', '_presets', 'presets.json')
   const chartsDir = path.join(gitopsDir, 'charts')
+  const deploymentsDir = path.join(gitopsDir, 'deployments')
 
   async function loadPresets() {
     const raw = await fs.readFile(presetsFile, 'utf-8')
@@ -330,7 +331,9 @@ export default function importRouter(gitopsDir) {
       await fs.writeFile(schemaFile, JSON.stringify(mergedSchema, null, 2), 'utf-8')
       await fs.writeFile(path.join(tmplDir, 'prometheus-rule.yaml'), templateYamlOutput, 'utf-8')
 
-      const depValuesFile = path.join(chartDir, `${depName}-values.yaml`)
+      const depDir = path.join(deploymentsDir, chart)
+      const depValuesFile = path.join(depDir, `${depName}-values.yaml`)
+      await fs.mkdir(depDir, { recursive: true })
       let existingDepValues = {}
       try {
         const raw = await fs.readFile(depValuesFile, 'utf-8')

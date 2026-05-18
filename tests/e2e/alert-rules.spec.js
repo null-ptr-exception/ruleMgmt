@@ -13,7 +13,6 @@ test.describe('Alert Rules (Alert User) View', () => {
     await expect(groups.first()).toBeVisible()
     const texts = await groups.allTextContents()
     expect(texts).toContain('Alert Rules')
-    expect(texts).toContain('Notification Rules')
     expect(texts).toContain('Tools')
   })
 
@@ -37,7 +36,7 @@ test.describe('Alert Rules (Alert User) View', () => {
 
   test('can navigate between all sidebar items', async ({ page }) => {
     await page.goto('/')
-    const navItems = ['Templates', 'Alerts', 'Notification Routes', 'Gitops Deploy', 'PromQL Builder']
+    const navItems = ['Templates', 'Alerts', 'Routes', 'Gitops Deploy', 'PromQL Builder']
     for (const label of navItems) {
       const item = page.locator('.ant-menu-item').filter({ hasText: label })
       await item.click()

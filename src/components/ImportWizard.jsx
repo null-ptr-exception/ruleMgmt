@@ -1,269 +1,279 @@
-import { useState, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import {
-  Modal, Steps, Button, Card, Radio, Space, Input, Alert,
-  Table, Typography, Tag, Spin, Descriptions, Divider
+  Modal, Steps, Button, Space, Input, Alert,
+  Table, Typography, Tag, Spin, Descriptions, Divider, Upload
 } from 'antd'
-import { CheckCircleOutlined, WarningOutlined } from '@ant-design/icons'
+import { UploadOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import jsYaml from 'js-yaml'
-import { buildTree } from '../utils/treeGrouping'
-import TemplateTree from './TemplateTree'
-import { listPresets, importPreview, saveImport } from '../utils/chartApi'
+import { parseTemplate, importPreview, saveImport } from '../utils/chartApi'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 const { TextArea } = Input
 
-// ─── Simple CSV parser ────────────────────────────────────────────────────────
+// ─── CSV parser ───────────────────────────────────────────────────────────────
 
 function parseCsv(text) {
-  const lines = text.trim().split(/\r?\n/)
-  if (lines.length < 2) return { headers: [], rows: [] }
+  const lines = text.trim().split(/\r?\n/).filter(l => l.trim())
+  if (lines.length < 2) return []
   const headers = lines[0].split(',').map(h => h.trim())
-  const rows = lines.slice(1).map(line => {
+  return lines.slice(1).map(line => {
     const vals = line.split(',').map(v => v.trim())
     const row = {}
     headers.forEach((h, i) => {
-      const val = vals[i] ?? ''
-      row[h] = isNaN(val) || val === '' ? val : Number(val)
+      const v = vals[i] ?? ''
+      row[h] = v === '' ? undefined : (isNaN(v) ? v : Number(v))
     })
     return row
-  }).filter(r => Object.values(r).some(v => v !== ''))
-  return { headers, rows }
+  }).filter(r => Object.values(r).some(v => v !== undefined))
 }
 
-function parseYamlRows(text) {
-  const parsed = jsYaml.load(text)
-  if (!Array.isArray(parsed)) throw new Error('YAML must be a list of objects')
-  return parsed
+function parseDataFile(text, ext) {
+  if (ext === 'yaml' || ext === 'yml') {
+    const parsed = jsYaml.load(text)
+    if (!Array.isArray(parsed)) throw new Error('YAML must be a list of objects')
+    return parsed
+  }
+  return parseCsv(text)
 }
 
-// ─── Step 1 — Preset selection ────────────────────────────────────────────────
+// ─── File upload helper ───────────────────────────────────────────────────────
 
-function StepSelectPreset({ presets, selected, onSelect }) {
-  if (!presets.length) return <Spin tip="Loading presets..." />
+function FileOrPaste({ value, onChange, placeholder, accept = '.yaml,.yml,.csv' }) {
+  const fileRef = useRef(null)
+
+  function handleFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => onChange(ev.target.result, file.name.split('.').pop().toLowerCase())
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
   return (
-    <Space direction="vertical" style={{ width: '100%' }}>
-      {presets.map(p => (
-        <Card
-          key={p.id}
-          size="small"
-          hoverable
-          style={{ border: selected === p.id ? '2px solid #1677ff' : '1px solid #d9d9d9', cursor: 'pointer' }}
-          onClick={() => onSelect(p.id)}
-        >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <Radio checked={selected === p.id} onChange={() => onSelect(p.id)} />
-            <div style={{ flex: 1 }}>
-              <Text strong>{p.name}</Text>
-              {p.fixedAlert && <Tag color="red" style={{ marginLeft: 8 }}>Fixed Alert</Tag>}
-              <br />
-              <Text type="secondary" style={{ fontSize: 12 }}>{p.description}</Text>
-              <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {(p.vars || []).filter(v => v.xVarType === 'threshold').map(v => (
-                  <Tag key={v.name} color={
-                    v.xSeverity === 'critical' ? 'red' : v.xSeverity === 'warning' ? 'orange' : 'blue'
-                  }>{v.xSeverity}</Tag>
-                ))}
-                <Text style={{ fontSize: 11, color: '#8c8c8c' }}>for: {p.forDuration}</Text>
-              </div>
-            </div>
-          </div>
-        </Card>
-      ))}
-    </Space>
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+        <Button size="small" icon={<UploadOutlined />} onClick={() => fileRef.current?.click()}>
+          Upload file
+        </Button>
+        <Text type="secondary" style={{ fontSize: 11, lineHeight: '24px' }}>or paste below</Text>
+        <input ref={fileRef} type="file" accept={accept} style={{ display: 'none' }} onChange={handleFile} />
+      </div>
+      <TextArea
+        rows={10}
+        placeholder={placeholder}
+        value={value}
+        onChange={e => onChange(e.target.value, null)}
+        style={{ fontFamily: 'monospace', fontSize: 12 }}
+      />
+    </div>
   )
 }
 
-// ─── Step 2 — Table import ────────────────────────────────────────────────────
+// ─── Step 1 — Template YAML ───────────────────────────────────────────────────
 
-function StepImportTable({ rows, onRows, errors }) {
-  const [mode, setMode] = useState('csv')
-  const [raw, setRaw] = useState('')
-  const [parseError, setParseError] = useState(null)
+const TEMPLATE_PLACEHOLDER = `preset: single-threshold-3tier
+threshold: 0.9          # global default
 
-  function handleParse() {
-    setParseError(null)
-    try {
-      const parsed = mode === 'csv' ? parseCsv(raw).rows : parseYamlRows(raw)
-      onRows(parsed)
-    } catch (e) {
-      setParseError(e.message)
-    }
-  }
+tree:
+  kpi:
+    threshold: 0.85     # overrides for kpi subtree
+    children:
+      cpu_saturation:
+        metricExpr: rate(node_cpu_seconds_total{mode="user"}[1m])
+      mem_saturation:
+        metricExpr: node_memory_MemUsed_bytes / node_memory_MemTotal_bytes
+        threshold: 0.95 # leaf-level override
+  svc:
+    preset: absence-check
+    children:
+      isalive:
+        metricExpr: up`
 
-  const leafNames = [...new Set((rows || []).map(r => r.name).filter(Boolean))]
-  const treeData = leafNames.length > 0 ? buildTree(leafNames) : []
+const SEVERITY_COLOR = { info: 'blue', warning: 'orange', critical: 'red' }
 
-  const tableColumns = rows.length > 0
-    ? Object.keys(rows[0]).map(k => ({ title: k, dataIndex: k, key: k, render: v => String(v ?? '') }))
-    : []
-
+function StepTemplate({ raw, onChange, leafDefs, errors, loading, onParse }) {
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
-      <Radio.Group value={mode} onChange={e => setMode(e.target.value)} style={{ marginBottom: 8 }}>
-        <Radio.Button value="csv">CSV</Radio.Button>
-        <Radio.Button value="yaml">YAML</Radio.Button>
-      </Radio.Group>
-
-      <TextArea
-        rows={8}
-        placeholder={mode === 'csv'
-          ? 'name,cluster,app,warnThreshold,critThreshold\nkpi_cpu_saturation,staging,api-gw,0.7,0.9'
-          : '- name: kpi_cpu_saturation\n  cluster: staging\n  app: api-gw\n  warnThreshold: 0.7\n  critThreshold: 0.9'
-        }
+      <FileOrPaste
         value={raw}
-        onChange={e => setRaw(e.target.value)}
-        style={{ fontFamily: 'monospace', fontSize: 12 }}
+        onChange={(text) => onChange(text)}
+        placeholder={TEMPLATE_PLACEHOLDER}
+        accept=".yaml,.yml"
       />
+      <Button onClick={onParse} type="primary" size="small" loading={loading} disabled={!raw.trim()}>
+        Parse template
+      </Button>
 
-      <Button onClick={handleParse} type="default" size="small">Parse</Button>
-
-      {parseError && <Alert type="error" message={parseError} />}
-      {errors && errors.length > 0 && (
-        <Alert type="warning" message={
-          <ul style={{ margin: 0, paddingLeft: 20 }}>{errors.map((e, i) => <li key={i}>{e}</li>)}</ul>
+      {errors?.length > 0 && (
+        <Alert type="error" message={
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            {errors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
         } />
       )}
 
-      {rows.length > 0 && (
+      {leafDefs && Object.keys(leafDefs).length > 0 && (
         <>
-          <Divider style={{ margin: '12px 0' }} />
-          <Text strong style={{ fontSize: 12 }}>Preview — {rows.length} rows, {leafNames.length} unique names</Text>
+          <Divider style={{ margin: '10px 0' }} />
+          <Text strong style={{ fontSize: 12 }}>
+            {Object.keys(leafDefs).length} leaf nodes found
+          </Text>
           <Table
             size="small"
-            dataSource={rows.map((r, i) => ({ ...r, _key: i }))}
-            columns={tableColumns}
-            rowKey="_key"
-            pagination={{ pageSize: 5 }}
-            scroll={{ x: true }}
+            dataSource={Object.entries(leafDefs).map(([name, def]) => ({ key: name, name, ...def }))}
+            columns={[
+              { title: 'Leaf', dataIndex: 'name', key: 'name', render: v => <Text code style={{ fontSize: 11 }}>{v}</Text> },
+              { title: 'Preset', dataIndex: 'preset', key: 'preset', render: v => <Tag>{v}</Tag> },
+              { title: 'Threshold', dataIndex: 'threshold', key: 'threshold', render: v => v ?? <Text type="secondary">—</Text> },
+              { title: 'metricExpr', dataIndex: 'metricExpr', key: 'metricExpr',
+                render: v => <Text style={{ fontFamily: 'monospace', fontSize: 11 }}>{v}</Text> },
+            ]}
+            pagination={false}
           />
-          <Text strong style={{ fontSize: 12, marginTop: 8, display: 'block' }}>Tree structure</Text>
-          <div style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 4, padding: 8, maxHeight: 200, overflowY: 'auto' }}>
-            <TemplateTree templates={leafNames} activeTemplate={null} onSelect={() => {}} />
-          </div>
         </>
       )}
     </Space>
   )
 }
 
-// ─── Step 3 — Leaf configuration ──────────────────────────────────────────────
+// ─── Step 2 — Alert data ──────────────────────────────────────────────────────
 
-const SEVERITY_COLOR = { info: 'blue', warning: 'orange', critical: 'red' }
+const DATA_PLACEHOLDER_CSV = `name,cluster,app,threshold
+kpi_cpu_saturation,staging,api-gateway,
+kpi_cpu_saturation,staging,worker,0.75
+kpi_mem_saturation,staging,api-gateway,
+svc_isalive,staging,api-gateway,`
 
-function StepConfigLeaves({ preset, leafNames, leaves, onChange }) {
-  const thresholdVars = (preset?.vars || []).filter(v => v.xVarType === 'threshold')
-  const hasThresholdBase = (preset?.vars || []).some(v => v.xVarType === 'threshold-base')
-  const tiers = preset?.tiers || []
+const DATA_PLACEHOLDER_YAML = `- name: kpi_cpu_saturation
+  cluster: staging
+  app: api-gateway
+- name: kpi_cpu_saturation
+  cluster: staging
+  app: worker
+  threshold: 0.75
+- name: svc_isalive
+  cluster: staging
+  app: api-gateway`
 
-  function setLeaf(name, field, value) {
-    const next = leaves.map(l => l.name === name ? { ...l, [field]: value } : l)
-    onChange(next)
+function StepData({ raw, onChange, rows, errors, leafDefs, onParse }) {
+  const [ext, setExt] = useState('csv')
+
+  function handleChange(text, fileExt) {
+    if (fileExt) setExt(fileExt)
+    onChange(text)
   }
 
-  function toggleTier(name, severity) {
-    const leaf = leaves.find(l => l.name === name)
-    const current = leaf?.overrideTiers || thresholdVars.map(v => v.xSeverity)
-    const next = current.includes(severity)
-      ? current.filter(s => s !== severity)
-      : [...current, severity]
-    setLeaf(name, 'overrideTiers', next.length === thresholdVars.length ? null : next)
-  }
+  const leafNames = leafDefs ? new Set(Object.keys(leafDefs)) : null
+  const unknownLeaves = leafNames
+    ? [...new Set((rows || []).map(r => r.name).filter(n => n && !leafNames.has(n)))]
+    : []
+
+  const tableColumns = (rows || []).length > 0
+    ? Object.keys(rows[0]).map(k => ({
+        title: k, dataIndex: k, key: k,
+        render: v => v === undefined ? <Text type="secondary">—</Text> : String(v)
+      }))
+    : []
 
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
-      <Text type="secondary" style={{ fontSize: 12 }}>
-        For each alert leaf, define the metric expression. <code>METRIC_EXPR</code> in the preset template will be replaced with this value at import time.
-      </Text>
+      <FileOrPaste
+        value={raw}
+        onChange={handleChange}
+        placeholder={ext === 'yaml' || ext === 'yml' ? DATA_PLACEHOLDER_YAML : DATA_PLACEHOLDER_CSV}
+        accept=".yaml,.yml,.csv"
+      />
+      <Button onClick={() => { try { onParse(raw, ext) } catch(e) { onParse(raw, 'csv') } }}
+        type="primary" size="small" disabled={!raw.trim()}>
+        Parse data
+      </Button>
 
-      {hasThresholdBase && tiers.length > 0 && (
-        <Alert type="info" showIcon message={
-          <span>
-            Tiers auto-derived from single <code>threshold</code> column:&nbsp;
-            {tiers.map(t => (
-              <Tag key={t.severity} color={SEVERITY_COLOR[t.severity] || 'default'}>
-                {t.severity} = {t.ratio * 100}%
-              </Tag>
-            ))}
-          </span>
+      {errors?.length > 0 && (
+        <Alert type="error" message={
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            {errors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
         } />
       )}
 
-      {leaves.map(leaf => {
-        const activeTiers = leaf.overrideTiers || thresholdVars.map(v => v.xSeverity)
-        const hasMetricExpr = leaf.metricExpr && leaf.metricExpr.trim()
-        const clusterInExpr = hasMetricExpr && (leaf.metricExpr.includes('{cluster=') || leaf.metricExpr.includes('{app='))
-        return (
-          <Card key={leaf.name} size="small" title={<Text code>{leaf.name}</Text>}>
-            <div style={{ marginBottom: 8 }}>
-              <Text style={{ fontSize: 12, fontWeight: 600 }}>Metric Expression</Text>
-              <Input
-                placeholder={`e.g. rate(node_cpu_seconds_total{mode="user"}[1m])`}
-                value={leaf.metricExpr || ''}
-                onChange={e => setLeaf(leaf.name, 'metricExpr', e.target.value)}
-                style={{ fontFamily: 'monospace', marginTop: 4 }}
-                status={!hasMetricExpr ? 'error' : ''}
-              />
-              {!hasMetricExpr && <Text type="danger" style={{ fontSize: 11 }}>Required</Text>}
-              {clusterInExpr && (
-                <Alert type="warning" showIcon style={{ marginTop: 4, fontSize: 11 }}
-                  message="Expression contains {cluster= or {app= — these are typically handled by selector variables, not hardcoded in the expression." />
-              )}
-            </div>
+      {unknownLeaves.length > 0 && (
+        <Alert type="warning" message={
+          <span>Unknown leaf names (not in template): {unknownLeaves.map(n => <Tag key={n}>{n}</Tag>)}</span>
+        } />
+      )}
 
-            {/* Tier toggle — only for explicit threshold vars (not threshold-base) */}
-            {thresholdVars.length > 0 && !preset.fixedAlert && !hasThresholdBase && (
-              <div>
-                <Text style={{ fontSize: 12, fontWeight: 600 }}>Active Tiers</Text>
-                <div style={{ marginTop: 4, display: 'flex', gap: 6 }}>
-                  {thresholdVars.map(v => (
-                    <Tag
-                      key={v.xSeverity}
-                      color={activeTiers.includes(v.xSeverity) ? (SEVERITY_COLOR[v.xSeverity] || 'default') : 'default'}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => toggleTier(leaf.name, v.xSeverity)}
-                    >
-                      {v.xSeverity}
-                    </Tag>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-        )
-      })}
+      {(rows || []).length > 0 && (
+        <>
+          <Divider style={{ margin: '10px 0' }} />
+          <Text strong style={{ fontSize: 12 }}>{rows.length} rows</Text>
+          <Table
+            size="small"
+            dataSource={(rows || []).map((r, i) => ({ ...r, _key: i }))}
+            columns={tableColumns}
+            rowKey="_key"
+            pagination={{ pageSize: 6 }}
+            scroll={{ x: true }}
+          />
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            Empty threshold = inherit from template default
+          </Text>
+        </>
+      )}
     </Space>
   )
 }
 
-// ─── Step 4 — Preview ─────────────────────────────────────────────────────────
+// ─── Step 3 — Preview ─────────────────────────────────────────────────────────
 
 function StepPreview({ previewData, loading, error }) {
-  if (loading) return <Spin tip="Generating preview..." />
+  if (loading) return <Spin tip="Generating preview..." style={{ display: 'block', margin: '40px auto' }} />
   if (error) return <Alert type="error" message={error} />
   if (!previewData) return null
 
-  const { stats, templatePreview } = previewData
+  const { stats, templatePreview, valuesPreview } = previewData
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
-      <Descriptions size="small" bordered column={2}>
+      <Descriptions size="small" bordered column={3}>
         <Descriptions.Item label="Leaves">{stats?.leaves ?? 0}</Descriptions.Item>
         <Descriptions.Item label="Alert rules">{stats?.rules ?? 0}</Descriptions.Item>
+        <Descriptions.Item label="Instances">{stats?.instances ?? 0}</Descriptions.Item>
       </Descriptions>
-      <Text strong style={{ fontSize: 12 }}>Generated PrometheusRule Template</Text>
-      <pre style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 4, padding: 12, maxHeight: 340, overflow: 'auto', fontSize: 11, margin: 0 }}>
+
+      <Text strong style={{ fontSize: 12 }}>PrometheusRule template</Text>
+      <pre style={{
+        background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 4,
+        padding: 12, maxHeight: 260, overflow: 'auto', fontSize: 11, margin: 0
+      }}>
         {templatePreview}
       </pre>
+
+      {valuesPreview && Object.keys(valuesPreview).length > 0 && (
+        <>
+          <Text strong style={{ fontSize: 12 }}>Resolved values (first instance per leaf)</Text>
+          <pre style={{
+            background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 4,
+            padding: 12, maxHeight: 180, overflow: 'auto', fontSize: 11, margin: 0
+          }}>
+            {Object.entries(valuesPreview).map(([name, rows]) =>
+              `${name}:\n` + rows.slice(0, 1).map(r =>
+                Object.entries(r).map(([k, v]) => `  ${k}: ${v}`).join('\n')
+              ).join('\n')
+            ).join('\n\n')}
+          </pre>
+        </>
+      )}
     </Space>
   )
 }
 
-// ─── Step 5 — Confirm & save ──────────────────────────────────────────────────
+// ─── Step 4 — Confirm ─────────────────────────────────────────────────────────
 
 function StepConfirm({ deployment, onDeployment, stats }) {
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
       <Alert type="success" showIcon icon={<CheckCircleOutlined />}
-        message={`Ready to import: ${stats?.leaves ?? 0} leaves, ${stats?.rules ?? 0} alert rules`} />
+        message={`Ready: ${stats?.leaves ?? 0} leaves, ${stats?.rules ?? 0} rules, ${stats?.instances ?? 0} instances`} />
       <div>
         <Text style={{ fontSize: 12, fontWeight: 600 }}>Deployment name</Text>
         <Input
@@ -273,7 +283,7 @@ function StepConfirm({ deployment, onDeployment, stats }) {
           style={{ marginTop: 4 }}
         />
         <Text type="secondary" style={{ fontSize: 11 }}>
-          Values will be saved as <code>{deployment || 'default'}-values.yaml</code>
+          Values saved as <Text code>{deployment || 'default'}-values.yaml</Text>
         </Text>
       </div>
     </Space>
@@ -282,56 +292,61 @@ function StepConfirm({ deployment, onDeployment, stats }) {
 
 // ─── Main wizard ──────────────────────────────────────────────────────────────
 
-const STEPS = ['Select Preset', 'Import Table', 'Configure Leaves', 'Preview', 'Confirm & Save']
+const STEPS = ['Template 定義', 'Alert 資料', 'Preview', '確認儲存']
 
 export default function ImportWizard({ open, chart, onClose, onImported }) {
   const [step, setStep] = useState(0)
-  const [presets, setPresets] = useState([])
-  const [selectedPreset, setSelectedPreset] = useState(null)
-  const [rows, setRows] = useState([])
-  const [tableErrors, setTableErrors] = useState([])
-  const [leaves, setLeaves] = useState([])
+
+  // Step 1
+  const [templateRaw, setTemplateRaw] = useState('')
+  const [leafDefs, setLeafDefs] = useState(null)
+  const [templateErrors, setTemplateErrors] = useState([])
+  const [templateLoading, setTemplateLoading] = useState(false)
+
+  // Step 2
+  const [dataRaw, setDataRaw] = useState('')
+  const [dataRows, setDataRows] = useState([])
+  const [dataErrors, setDataErrors] = useState([])
+
+  // Step 3
   const [previewData, setPreviewData] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState(null)
+
+  // Step 4
   const [deployment, setDeployment] = useState('staging')
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    if (open) listPresets().then(setPresets)
-  }, [open])
-
-  // Sync leaves when rows or preset change
-  useEffect(() => {
-    if (!rows.length) return
-    const uniqueNames = [...new Set(rows.map(r => r.name).filter(Boolean))]
-    setLeaves(prev => {
-      const prevMap = Object.fromEntries(prev.map(l => [l.name, l]))
-      return uniqueNames.map(name => prevMap[name] || { name, metricExpr: '', overrideTiers: null })
-    })
-  }, [rows, selectedPreset])
-
-  function validateStep2() {
-    const errs = []
-    if (rows.length === 0) { errs.push('No rows imported'); return errs }
-    const names = rows.map(r => r.name).filter(Boolean)
-    if (names.length === 0) errs.push('No "name" column found')
-
-    const preset = presets.find(p => p.id === selectedPreset)
-    const hasThresholdBase = preset?.vars?.some(v => v.xVarType === 'threshold-base')
-
-    rows.forEach((r, i) => {
-      if (!r.cluster) errs.push(`Row ${i + 1}: missing cluster`)
-      if (!r.app) errs.push(`Row ${i + 1}: missing app`)
-      if (hasThresholdBase && (r.threshold === undefined || r.threshold === '')) {
-        errs.push(`Row ${i + 1}: missing threshold`)
-      }
-    })
-    return errs
+  async function handleParseTemplate() {
+    setTemplateLoading(true)
+    setTemplateErrors([])
+    setLeafDefs(null)
+    try {
+      const result = await parseTemplate(templateRaw)
+      setLeafDefs(result.leafDefs)
+      setTemplateErrors(result.errors || [])
+    } catch (e) {
+      setTemplateErrors([e.message])
+    } finally {
+      setTemplateLoading(false)
+    }
   }
 
-  function validateStep3() {
-    return leaves.filter(l => !l.metricExpr?.trim()).map(l => `Leaf "${l.name}" is missing metricExpr`)
+  function handleParseData(raw, ext) {
+    setDataErrors([])
+    try {
+      const rows = parseDataFile(raw, ext || 'csv')
+      const errs = []
+      rows.forEach((r, i) => {
+        if (!r.name) errs.push(`Row ${i + 1}: missing name`)
+        if (!r.cluster) errs.push(`Row ${i + 1}: missing cluster`)
+        if (!r.app) errs.push(`Row ${i + 1}: missing app`)
+      })
+      setDataRows(rows)
+      setDataErrors(errs)
+    } catch (e) {
+      setDataErrors([e.message])
+    }
   }
 
   async function handlePreview() {
@@ -339,13 +354,7 @@ export default function ImportWizard({ open, chart, onClose, onImported }) {
     setPreviewError(null)
     setPreviewData(null)
     try {
-      const data = await importPreview({
-        chart,
-        deployment,
-        presetId: selectedPreset,
-        leaves,
-        rows,
-      })
+      const data = await importPreview({ chart, deployment, templateYaml: templateRaw, dataRows })
       setPreviewData(data)
     } catch (e) {
       setPreviewError(e.message)
@@ -357,13 +366,7 @@ export default function ImportWizard({ open, chart, onClose, onImported }) {
   async function handleSave() {
     setSaving(true)
     try {
-      await saveImport({
-        chart,
-        deployment,
-        presetId: selectedPreset,
-        leaves,
-        rows,
-      })
+      await saveImport({ chart, deployment, templateYaml: templateRaw, dataRows })
       onImported?.()
       handleClose()
     } catch (e) {
@@ -375,10 +378,12 @@ export default function ImportWizard({ open, chart, onClose, onImported }) {
 
   function handleClose() {
     setStep(0)
-    setSelectedPreset(null)
-    setRows([])
-    setTableErrors([])
-    setLeaves([])
+    setTemplateRaw('')
+    setLeafDefs(null)
+    setTemplateErrors([])
+    setDataRaw('')
+    setDataRows([])
+    setDataErrors([])
     setPreviewData(null)
     setPreviewError(null)
     setDeployment('staging')
@@ -386,37 +391,31 @@ export default function ImportWizard({ open, chart, onClose, onImported }) {
   }
 
   function tryNext() {
+    if (step === 0) {
+      if (!leafDefs || Object.keys(leafDefs).length === 0 || templateErrors.length > 0) return
+    }
     if (step === 1) {
-      const errs = validateStep2()
-      setTableErrors(errs)
-      if (errs.length > 0) return
+      if (dataErrors.length > 0) return
     }
     if (step === 2) {
-      const errs = validateStep3()
-      if (errs.length > 0) { setTableErrors(errs); return }
-      setTableErrors([])
       handlePreview()
     }
-    if (step === 3 && !previewData) return
     setStep(s => s + 1)
   }
 
   const canNext = (() => {
-    if (step === 0) return !!selectedPreset
-    if (step === 1) return rows.length > 0
-    if (step === 2) return leaves.every(l => l.metricExpr?.trim())
-    if (step === 3) return !!previewData && !previewLoading
+    if (step === 0) return !!leafDefs && Object.keys(leafDefs).length > 0 && templateErrors.length === 0
+    if (step === 1) return dataRows.length > 0 && dataErrors.length === 0
+    if (step === 2) return !!previewData && !previewLoading
     return true
   })()
-
-  const preset = presets.find(p => p.id === selectedPreset)
 
   return (
     <Modal
       title="Import Wizard"
       open={open}
       onCancel={handleClose}
-      width={680}
+      width={720}
       footer={
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <Button onClick={handleClose}>Cancel</Button>
@@ -425,9 +424,7 @@ export default function ImportWizard({ open, chart, onClose, onImported }) {
             {step < STEPS.length - 1 ? (
               <Button type="primary" disabled={!canNext} onClick={tryNext}>Next</Button>
             ) : (
-              <Button type="primary" loading={saving} onClick={handleSave}>
-                Import
-              </Button>
+              <Button type="primary" loading={saving} onClick={handleSave}>Import</Button>
             )}
           </div>
         </div>
@@ -440,20 +437,31 @@ export default function ImportWizard({ open, chart, onClose, onImported }) {
         style={{ marginBottom: 24 }}
       />
 
-      <div style={{ minHeight: 200 }}>
+      <div style={{ minHeight: 240 }}>
         {step === 0 && (
-          <StepSelectPreset presets={presets} selected={selectedPreset} onSelect={setSelectedPreset} />
+          <StepTemplate
+            raw={templateRaw}
+            onChange={setTemplateRaw}
+            leafDefs={leafDefs}
+            errors={templateErrors}
+            loading={templateLoading}
+            onParse={handleParseTemplate}
+          />
         )}
         {step === 1 && (
-          <StepImportTable rows={rows} onRows={r => { setRows(r); setTableErrors([]) }} errors={tableErrors} />
+          <StepData
+            raw={dataRaw}
+            onChange={setDataRaw}
+            rows={dataRows}
+            errors={dataErrors}
+            leafDefs={leafDefs}
+            onParse={handleParseData}
+          />
         )}
         {step === 2 && (
-          <StepConfigLeaves preset={preset} leafNames={[...new Set(rows.map(r => r.name).filter(Boolean))]} leaves={leaves} onChange={setLeaves} />
-        )}
-        {step === 3 && (
           <StepPreview previewData={previewData} loading={previewLoading} error={previewError} />
         )}
-        {step === 4 && (
+        {step === 3 && (
           <StepConfirm deployment={deployment} onDeployment={setDeployment} stats={previewData?.stats} />
         )}
       </div>

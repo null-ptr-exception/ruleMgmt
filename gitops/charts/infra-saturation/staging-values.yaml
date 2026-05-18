@@ -1,0 +1,53 @@
+kpi_cpu_saturation:
+  - cluster: staging
+    app: api-gateway
+    infoThreshold: 0.45
+    warnThreshold: 0.675
+    critThreshold: 0.9
+  - cluster: staging
+    app: worker
+    infoThreshold: 0.375
+    warnThreshold: 0.5625
+    critThreshold: 0.75
+  - cluster: staging
+    app: payment-svc
+    infoThreshold: 0.45
+    warnThreshold: 0.675
+    critThreshold: 0.9
+
+kpi_mem_saturation:
+  - cluster: staging
+    app: api-gateway
+    infoThreshold: 0.45
+    warnThreshold: 0.675
+    critThreshold: 0.9
+  - cluster: staging
+    app: worker
+    infoThreshold: 0.4
+    warnThreshold: 0.6
+    critThreshold: 0.8
+  - cluster: staging
+    app: payment-svc
+    infoThreshold: 0.45
+    warnThreshold: 0.675
+    critThreshold: 0.9
+
+kpi_disk_saturation:
+  - cluster: staging
+    app: api-gateway
+    infoThreshold: 0.4
+    warnThreshold: 0.6
+    critThreshold: 0.8
+  - cluster: staging
+    app: worker
+    infoThreshold: 0.4
+    warnThreshold: 0.6
+    critThreshold: 0.8
+
+svc_isalive:
+  - cluster: staging
+    app: api-gateway
+  - cluster: staging
+    app: worker
+  - cluster: staging
+    app: payment-svc

@@ -1,0 +1,65 @@
+kpi_cpu_saturation:
+  - cluster: prod
+    app: api-gateway
+    infoThreshold: 0.475
+    warnThreshold: 0.7125
+    critThreshold: 0.95
+  - cluster: prod
+    app: worker
+    infoThreshold: 0.425
+    warnThreshold: 0.6375
+    critThreshold: 0.85
+  - cluster: prod
+    app: payment-svc
+    infoThreshold: 0.475
+    warnThreshold: 0.7125
+    critThreshold: 0.95
+  - cluster: prod
+    app: order-svc
+    infoThreshold: 0.475
+    warnThreshold: 0.7125
+    critThreshold: 0.95
+
+kpi_mem_saturation:
+  - cluster: prod
+    app: api-gateway
+    infoThreshold: 0.475
+    warnThreshold: 0.7125
+    critThreshold: 0.95
+  - cluster: prod
+    app: worker
+    infoThreshold: 0.45
+    warnThreshold: 0.675
+    critThreshold: 0.9
+  - cluster: prod
+    app: payment-svc
+    infoThreshold: 0.475
+    warnThreshold: 0.7125
+    critThreshold: 0.95
+  - cluster: prod
+    app: order-svc
+    infoThreshold: 0.475
+    warnThreshold: 0.7125
+    critThreshold: 0.95
+
+kpi_disk_saturation:
+  - cluster: prod
+    app: api-gateway
+    infoThreshold: 0.45
+    warnThreshold: 0.675
+    critThreshold: 0.9
+  - cluster: prod
+    app: worker
+    infoThreshold: 0.45
+    warnThreshold: 0.675
+    critThreshold: 0.9
+
+svc_isalive:
+  - cluster: prod
+    app: api-gateway
+  - cluster: prod
+    app: worker
+  - cluster: prod
+    app: payment-svc
+  - cluster: prod
+    app: order-svc

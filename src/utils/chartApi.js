@@ -140,6 +140,17 @@ export async function listPresets() {
 
 // ─── Import ──────────────────────────────────────────────────────────────────
 
+export async function parseTemplate(templateYaml) {
+  const res = await fetch(`${BASE}/import/parse-template`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ templateYaml }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Parse failed')
+  return data
+}
+
 export async function importPreview(payload) {
   const res = await fetch(`${BASE}/import/preview`, {
     method: 'POST',

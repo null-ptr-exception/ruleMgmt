@@ -1,0 +1,5 @@
+apiVersion: v2
+name: infra-saturation
+version: 0.1.0
+type: application
+description: Infrastructure saturation alerts — CPU, memory, disk utilisation and service liveness

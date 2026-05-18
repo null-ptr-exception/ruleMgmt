@@ -26,31 +26,59 @@ export default function importRouter(gitopsDir) {
   }
 
   /**
-   * Build a schema property for one leaf from a preset + metricExpr.
+   * Recursively resolve tree YAML into a flat leaf map.
+   * Inheritance: child inherits parent's preset/threshold unless it overrides.
    *
-   * Supports two threshold modes:
-   *  - xVarType "threshold": one schema var per tier (existing behaviour)
-   *  - xVarType "threshold-base": single table column; expands to one var per
-   *    tier defined in preset.tiers[], ratios stored as x-ratio for row transform
+   * Input tree node shape:
+   *   { preset?, threshold?, thresholds?, metricExpr?, children?: { ... } }
    *
-   * For fixedAlert presets (absence-check), sets x-custom-template: true.
+   * Output: { [leafName]: { preset, threshold, thresholds, metricExpr } }
    */
-  function buildLeafSchemaProp(preset, leaf) {
-    const promql = preset.promqlTemplate.replace('METRIC_EXPR', leaf.metricExpr)
-    const itemProps = {}
-    const activeTiers = leaf.overrideTiers || null
+  function resolveTree(nodes, inherited = {}) {
+    const leaves = {}
+    for (const [key, def] of Object.entries(nodes || {})) {
+      if (!def || typeof def !== 'object') continue
 
-    for (const v of preset.vars) {
+      const ctx = {
+        preset:     def.preset     ?? inherited.preset,
+        threshold:  def.threshold  !== undefined ? def.threshold  : inherited.threshold,
+        thresholds: def.thresholds ?? inherited.thresholds,
+      }
+
+      if (def.children && Object.keys(def.children).length > 0) {
+        const childLeaves = resolveTree(def.children, ctx)
+        for (const [childKey, childLeaf] of Object.entries(childLeaves)) {
+          leaves[`${key}_${childKey}`] = childLeaf
+        }
+      } else if (def.metricExpr) {
+        leaves[key] = {
+          preset:     ctx.preset,
+          threshold:  ctx.threshold,
+          thresholds: ctx.thresholds,
+          metricExpr: def.metricExpr,
+        }
+      }
+    }
+    return leaves
+  }
+
+  /**
+   * Build a JSON Schema property for one leaf.
+   * Supports: threshold-base (tiers[]), multi-var threshold, fixedAlert.
+   */
+  function buildLeafSchemaProp(preset, metricExpr) {
+    const promql = preset.promqlTemplate.replace('METRIC_EXPR', metricExpr)
+    const itemProps = {}
+
+    for (const v of (preset.vars || [])) {
       if (v.xVarType === 'threshold-base') {
-        // Expand to one schema property per tier
         for (const tier of (preset.tiers || [])) {
-          if (activeTiers && !activeTiers.includes(tier.severity)) continue
           itemProps[tier.name] = {
             type: 'number',
             'x-var-type': 'threshold',
             'x-severity': tier.severity,
             'x-ratio': tier.ratio,
-            description: `${tier.severity} threshold (${tier.ratio * 100}% of base threshold)`,
+            description: `${tier.severity} threshold (${tier.ratio * 100}% of base)`,
           }
         }
       } else {
@@ -58,15 +86,12 @@ export default function importRouter(gitopsDir) {
         if (v.description) prop.description = v.description
         if (v.default !== undefined) prop.default = v.default
         if (v.xVarType) prop['x-var-type'] = v.xVarType
-        if (v.xSeverity) {
-          if (activeTiers && !activeTiers.includes(v.xSeverity)) continue
-          prop['x-severity'] = v.xSeverity
-        }
+        if (v.xSeverity) prop['x-severity'] = v.xSeverity
         itemProps[v.name] = prop
       }
     }
 
-    const required = preset.vars
+    const required = (preset.vars || [])
       .filter(v => v.xVarType === 'selector')
       .map(v => v.name)
 
@@ -91,30 +116,52 @@ export default function importRouter(gitopsDir) {
   }
 
   /**
-   * If the preset uses threshold-base, expand each row's single `threshold`
-   * column into per-tier values using the ratios defined in preset.tiers.
-   * Returns rows unchanged for presets without threshold-base vars.
+   * Expand a single data row using the leaf's resolved threshold defaults.
+   * - threshold-base preset: expand single value into tier values via ratios
+   * - multi-var preset: map threshold / thresholds to named vars
+   * - fixedAlert: selectors only, no threshold vars
    */
-  function expandThresholdBaseRows(preset, rows) {
-    const baseVar = (preset.vars || []).find(v => v.xVarType === 'threshold-base')
-    if (!baseVar || !preset.tiers) return rows
+  function resolveRow(row, leafDef, preset) {
+    const { name: _name, threshold: rowThreshold, ...selectors } = row
 
-    return rows.map(row => {
-      const base = Number(row[baseVar.name])
-      if (isNaN(base)) return row
-      const expanded = { ...row }
-      delete expanded[baseVar.name]
-      for (const tier of preset.tiers) {
-        expanded[tier.name] = Math.round(base * tier.ratio * 10000) / 10000
-      }
+    // Resolve base threshold: row override > leaf template default
+    const hasOverride = rowThreshold !== undefined && rowThreshold !== ''
+    const baseThreshold = hasOverride ? Number(rowThreshold) : leafDef.threshold
+
+    const expanded = { ...selectors }
+
+    if (preset.fixedAlert) {
       return expanded
-    })
+    }
+
+    if (preset.tiers) {
+      // single-threshold-3tier pattern: derive each tier from base × ratio
+      for (const tier of preset.tiers) {
+        expanded[tier.name] = Math.round(baseThreshold * tier.ratio * 10000) / 10000
+      }
+    } else {
+      // multi-var threshold: map to named vars
+      // leafDef.thresholds = { info: 0.4, warn: 0.6, crit: 0.8 } (severity-keyed)
+      const thresholdVars = (preset.vars || []).filter(v => v.xVarType === 'threshold')
+      for (const v of thresholdVars) {
+        const severityVal = leafDef.thresholds?.[v.xSeverity]
+        expanded[v.name] = severityVal ?? baseThreshold ?? v.default ?? 0
+      }
+    }
+
+    return expanded
   }
 
-  /**
-   * Generate a fixed Helm template snippet for absence-check-style presets.
-   * One alert per selector combination (cluster/app), no threshold tiers.
-   */
+  function groupRowsByName(rows) {
+    const map = {}
+    for (const { name, ...rest } of rows) {
+      if (!name) continue
+      if (!map[name]) map[name] = []
+      map[name].push(rest)
+    }
+    return map
+  }
+
   function generateFixedAlertSnippet(alertGroup, schemaProp) {
     const forDuration = schemaProp['x-for'] || '3m'
     const severity = schemaProp['x-fixed-severity'] || 'critical'
@@ -126,9 +173,7 @@ export default function importRouter(gitopsDir) {
 
     const alertName = alertGroup.replace(/_/g, '-').replace(/(?:^|-)([a-z])/g, (_, c) => c.toUpperCase())
     const labelLines = [`            severity: ${severity}`]
-    for (const sel of selectors) {
-      labelLines.push(`            ${sel}: "{{ .${sel} }}"`)
-    }
+    for (const sel of selectors) labelLines.push(`            ${sel}: "{{ .${sel} }}"`)
 
     const rule =
       `        - alert: ${alertName}\n` +
@@ -148,32 +193,21 @@ export default function importRouter(gitopsDir) {
     )
   }
 
-  /**
-   * Build full PrometheusRule YAML from merged schema.
-   * Handles x-custom-template groups with their own snippet generator.
-   */
   function buildFullTemplate(mergedSchema, releaseName) {
-    const groups = []
-
+    const fixedGroups = []
     for (const [alertGroup, alertDef] of Object.entries(mergedSchema.properties || {})) {
       if (alertGroup.startsWith('$')) continue
-
-      if (alertDef['x-custom-template']) {
-        if (alertDef['x-fixed-alert']) {
-          groups.push(generateFixedAlertSnippet(alertGroup, alertDef))
-        }
-        continue
+      if (alertDef['x-custom-template'] && alertDef['x-fixed-alert']) {
+        fixedGroups.push(generateFixedAlertSnippet(alertGroup, alertDef))
       }
     }
 
     const standardYaml = generatePrometheusRule(mergedSchema, releaseName)
 
-    if (groups.length === 0) return standardYaml
+    if (fixedGroups.length === 0) return standardYaml
 
-    // Merge: insert fixed-alert groups into the standard yaml's groups section
-    const fixedGroupsBlock = groups.join('\n\n')
+    const fixedBlock = fixedGroups.join('\n\n')
     if (!standardYaml.includes('  groups:')) {
-      // No standard groups; build minimal wrapper
       const name = releaseName || '{{ .Release.Name }}'
       return (
         `apiVersion: monitoring.coreos.com/v1\n` +
@@ -184,96 +218,117 @@ export default function importRouter(gitopsDir) {
         `    app.kubernetes.io/managed-by: Helm\n` +
         `spec:\n` +
         `  groups:\n` +
-        fixedGroupsBlock + '\n'
+        fixedBlock + '\n'
       )
     }
-
-    return standardYaml.replace(/(\n  groups:\n)/, `$1${fixedGroupsBlock}\n\n`)
+    return standardYaml.replace(/(\n  groups:\n)/, `$1${fixedBlock}\n\n`)
   }
 
-  function groupRowsByName(rows) {
-    const map = {}
-    for (const row of rows) {
-      const n = row.name
-      if (!n) continue
-      if (!map[n]) map[n] = []
-      const { name: _name, ...rest } = row
-      map[n].push(rest)
+  // ── POST /api/v2/import/parse-template ────────────────────────────────────
+  // Validate and parse template YAML, return leaf summary for UI preview.
+
+  router.post('/parse-template', async (req, res) => {
+    const { templateYaml } = req.body
+    if (!templateYaml) return res.status(400).json({ error: 'templateYaml required' })
+    try {
+      const doc = yaml.load(templateYaml)
+      const presets = await loadPresets()
+      const globalCtx = {
+        preset:    doc.preset,
+        threshold: doc.threshold,
+      }
+      const leafDefs = resolveTree(doc.tree || {}, globalCtx)
+
+      const errors = []
+      for (const [name, def] of Object.entries(leafDefs)) {
+        if (!def.preset || !presets[def.preset]) errors.push(`Leaf "${name}": unknown preset "${def.preset}"`)
+        if (!def.metricExpr) errors.push(`Leaf "${name}": missing metricExpr`)
+        if (!presets[def.preset]?.fixedAlert && def.threshold == null && !def.thresholds) {
+          errors.push(`Leaf "${name}": no threshold defined (set at leaf, parent, or global level)`)
+        }
+      }
+
+      res.json({ leafDefs, errors })
+    } catch (err) {
+      res.status(400).json({ error: err.message })
     }
-    return map
-  }
+  })
+
+  // ── POST /api/v2/import/preview and POST /api/v2/import ──────────────────
 
   async function handleImport(req, res, dryRun) {
-    const { chart, deployment, presetId, leaves, rows } = req.body
+    const { chart, deployment, templateYaml, dataRows } = req.body
 
     if (!chart || !NAME_RE.test(chart)) {
       return res.status(400).json({ error: 'Invalid chart name' })
     }
-    if (!presetId) return res.status(400).json({ error: 'presetId required' })
-    if (!Array.isArray(leaves) || leaves.length === 0) {
-      return res.status(400).json({ error: 'leaves[] required' })
-    }
-    if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: 'rows[] required' })
-    }
+    if (!templateYaml) return res.status(400).json({ error: 'templateYaml required' })
 
     try {
       const presets = await loadPresets()
-      const preset = presets[presetId]
-      if (!preset) return res.status(400).json({ error: `Preset '${presetId}' not found` })
+
+      const doc = yaml.load(templateYaml)
+      const globalCtx = { preset: doc.preset, threshold: doc.threshold }
+      const leafDefs = resolveTree(doc.tree || {}, globalCtx)
+
+      if (Object.keys(leafDefs).length === 0) {
+        return res.status(400).json({ error: 'No valid leaf nodes found in template YAML' })
+      }
+
+      // Build schema properties for each leaf
+      const newProps = {}
+      for (const [leafName, leafDef] of Object.entries(leafDefs)) {
+        const preset = presets[leafDef.preset]
+        if (!preset) return res.status(400).json({ error: `Unknown preset "${leafDef.preset}" for leaf "${leafName}"` })
+        newProps[leafName] = buildLeafSchemaProp(preset, leafDef.metricExpr)
+      }
 
       const chartDir = path.join(chartsDir, chart)
       const schemaFile = path.join(chartDir, 'values.schema.json')
       const tmplDir = path.join(chartDir, 'templates')
 
       const existingSchema = await readSchema(schemaFile)
-
-      // Build new leaf schema properties
-      const newProps = {}
-      for (const leaf of leaves) {
-        if (!leaf.name || !leaf.metricExpr) {
-          return res.status(400).json({ error: `Leaf '${leaf.name}' missing metricExpr` })
-        }
-        newProps[leaf.name] = buildLeafSchemaProp(preset, leaf)
-      }
-
-      // Merge: new leaves override existing same-named properties
       const mergedSchema = {
         ...existingSchema,
-        properties: {
-          ...existingSchema.properties,
-          ...newProps,
-        },
+        properties: { ...existingSchema.properties, ...newProps },
       }
 
-      const templateYaml = buildFullTemplate(mergedSchema, '{{ .Release.Name }}')
+      const templateYamlOutput = buildFullTemplate(mergedSchema, '{{ .Release.Name }}')
 
-      const expandedRows = expandThresholdBaseRows(preset, rows)
+      // Resolve data rows: threshold inheritance + tier expansion
+      const rows = Array.isArray(dataRows) ? dataRows : []
+      const expandedRows = rows.map(row => {
+        const leafDef = leafDefs[row.name]
+        if (!leafDef) return null
+        const preset = presets[leafDef.preset]
+        return { name: row.name, ...resolveRow(row, leafDef, preset) }
+      }).filter(Boolean)
+
       const rowsByName = groupRowsByName(expandedRows)
+
       const stats = {
-        leaves: leaves.length,
+        leaves: Object.keys(leafDefs).length,
         rules: Object.values(newProps).reduce((acc, prop) => {
           if (prop['x-fixed-alert']) return acc + 1
-          const thresholds = Object.values(prop.items?.properties || {}).filter(p => p['x-var-type'] === 'threshold')
-          return acc + thresholds.length
+          return acc + Object.values(prop.items?.properties || {}).filter(p => p['x-var-type'] === 'threshold').length
         }, 0),
+        instances: expandedRows.length,
       }
 
       if (dryRun) {
         return res.json({
+          leafDefs,
           schemaPreview: mergedSchema,
-          templatePreview: templateYaml,
+          templatePreview: templateYamlOutput,
           valuesPreview: rowsByName,
           stats,
         })
       }
 
-      // Save: write schema, template, and deployment values
       const depName = deployment && NAME_RE.test(deployment) ? deployment : 'default'
-
       await fs.mkdir(tmplDir, { recursive: true })
       await fs.writeFile(schemaFile, JSON.stringify(mergedSchema, null, 2), 'utf-8')
-      await fs.writeFile(path.join(tmplDir, 'prometheus-rule.yaml'), templateYaml, 'utf-8')
+      await fs.writeFile(path.join(tmplDir, 'prometheus-rule.yaml'), templateYamlOutput, 'utf-8')
 
       const depValuesFile = path.join(chartDir, `${depName}-values.yaml`)
       let existingDepValues = {}

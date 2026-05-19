@@ -5,9 +5,11 @@ import os from 'os'
 import express from 'express'
 import git from '../../server/lib/git.js'
 
-let server, baseURL, tmpDir
+let server, baseURL, tmpDir, app
 
 beforeAll(async () => {
+  process.env.JUPYTERHUB_USER = 'testuser'
+
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'git-api-test-'))
   await git(tmpDir, 'init')
   await fs.writeFile(path.join(tmpDir, 'README.md'), 'init')
@@ -16,11 +18,10 @@ beforeAll(async () => {
 
   const { default: gitRouter } = await import('../../server/routes/git.js')
 
-  const app = express()
+  app = express()
   app.use(express.json())
   app.use((req, res, next) => {
     req.gitopsDir = tmpDir
-    req.session = { user: { username: 'testuser', accessToken: 'fake-token' } }
     next()
   })
   app.use('/api/v2/git', gitRouter())
@@ -34,6 +35,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  delete process.env.JUPYTERHUB_USER
   if (server) await new Promise(resolve => server.close(resolve))
   if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true })
 })
@@ -93,5 +95,25 @@ describe('Git API', () => {
   it('POST /sync returns 404 when no remote', async () => {
     const { status } = await api('POST', '/api/v2/git/sync')
     expect(status).toBe(404)
+  })
+
+  it('GET /status reports recoveredFromWip when latest commit is wip', async () => {
+    await fs.writeFile(path.join(tmpDir, 'wip-file.txt'), 'wip content')
+    await git(tmpDir, 'add', '-A')
+    await git(tmpDir, 'commit', '-m', 'wip')
+
+    const res = await api('GET', '/api/v2/git/status')
+    expect(res.status).toBe(200)
+    expect(res.data.recoveredFromWip).toBe(true)
+  })
+
+  it('GET /status reports recoveredFromWip false for normal commits', async () => {
+    await fs.writeFile(path.join(tmpDir, 'normal.txt'), 'content')
+    await git(tmpDir, 'add', '-A')
+    await git(tmpDir, 'commit', '-m', 'add normal file')
+
+    const res = await api('GET', '/api/v2/git/status')
+    expect(res.status).toBe(200)
+    expect(res.data.recoveredFromWip).toBe(false)
   })
 })

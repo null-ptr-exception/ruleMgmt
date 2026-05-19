@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { apiFetch } from '../lib/apiFetch.js'
 import { Card, Input, Button, Select, Typography, Tag, Space, Empty, Checkbox } from 'antd'
 import { DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 
@@ -290,14 +291,14 @@ export default function NotificationRoutesEditor() {
   const [yamlExpanded, setYamlExpanded] = useState(false)
 
   const loadConfigs = useCallback(async () => {
-    const res = await fetch('/api/v2/alertmanager-configs')
+    const res = await apiFetch('/api/v2/alertmanager-configs')
     if (res.ok) setConfigs(await res.json())
   }, [])
 
   useEffect(() => { loadConfigs() }, [loadConfigs])
 
   async function selectConfig(name) {
-    const res = await fetch(`/api/v2/alertmanager-configs/${name}`)
+    const res = await apiFetch(`/api/v2/alertmanager-configs/${name}`)
     if (!res.ok) return
     const { parsed } = await res.json()
     const f = parseYAMLToForm(parsed)
@@ -322,7 +323,7 @@ export default function NotificationRoutesEditor() {
     const name = form.configName.trim()
     if (!name) return
     const content = buildYAML(form)
-    const res = await fetch(`/api/v2/alertmanager-configs/${name}`, {
+    const res = await apiFetch(`/api/v2/alertmanager-configs/${name}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content }),
@@ -338,7 +339,7 @@ export default function NotificationRoutesEditor() {
 
   async function handleDelete() {
     if (!selected || !confirm(`Delete ${selected}?`)) return
-    await fetch(`/api/v2/alertmanager-configs/${selected}`, { method: 'DELETE' })
+    await apiFetch(`/api/v2/alertmanager-configs/${selected}`, { method: 'DELETE' })
     setSelected(null)
     setForm(emptyForm())
     setDirty(false)

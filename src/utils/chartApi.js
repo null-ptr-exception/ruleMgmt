@@ -1,15 +1,17 @@
+import { apiFetch } from '../lib/apiFetch.js'
+
 const BASE = '/api/v2'
 
 // ─── Charts ──────────────────────────────────────────────────────────────────
 
 export async function listCharts() {
-  const res = await fetch(`${BASE}/charts`)
+  const res = await apiFetch(`${BASE}/charts`)
   if (!res.ok) return []
   return res.json()
 }
 
 export async function createChart(name) {
-  const res = await fetch(`${BASE}/charts`, {
+  const res = await apiFetch(`${BASE}/charts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name })
@@ -19,7 +21,7 @@ export async function createChart(name) {
 }
 
 export async function deleteChart(name) {
-  const res = await fetch(`${BASE}/charts/${encodeURIComponent(name)}`, {
+  const res = await apiFetch(`${BASE}/charts/${encodeURIComponent(name)}`, {
     method: 'DELETE'
   })
   if (!res.ok) return {}
@@ -29,19 +31,19 @@ export async function deleteChart(name) {
 // ─── Templates / Chart Info ──────────────────────────────────────────────────
 
 export async function getChartInfo(chart) {
-  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}`)
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}`)
   if (!res.ok) return {}
   return res.json()
 }
 
 export async function getChartTemplateFile(chart, template) {
-  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`)
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`)
   if (!res.ok) return {}
   return res.json()
 }
 
 export async function saveChartTemplateFile(chart, template, content) {
-  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`, {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content })
@@ -51,7 +53,7 @@ export async function saveChartTemplateFile(chart, template, content) {
 }
 
 export async function deleteChartTemplate(chart, template) {
-  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`, {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`, {
     method: 'DELETE'
   })
   if (!res.ok) return {}
@@ -59,7 +61,7 @@ export async function deleteChartTemplate(chart, template) {
 }
 
 export async function saveChartSchema(chart, schema) {
-  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/schema`, {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/schema`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ schema })
@@ -69,7 +71,7 @@ export async function saveChartSchema(chart, schema) {
 }
 
 export async function saveChartValues(chart, values) {
-  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/values`, {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/values`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ values })
@@ -79,7 +81,7 @@ export async function saveChartValues(chart, values) {
 }
 
 export async function saveChartMeta(chart, chartMeta) {
-  const res = await fetch(`${BASE}/templates/${encodeURIComponent(chart)}/chart-meta`, {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/chart-meta`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chartMeta })
@@ -91,19 +93,19 @@ export async function saveChartMeta(chart, chartMeta) {
 // ─── Deployments ─────────────────────────────────────────────────────────────
 
 export async function listDeployments(chart) {
-  const res = await fetch(`${BASE}/deployments/${encodeURIComponent(chart)}`)
+  const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}`)
   if (!res.ok) return []
   return res.json()
 }
 
 export async function getDeployment(chart, deployment) {
-  const res = await fetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}`)
+  const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}`)
   if (!res.ok) return {}
   return res.json()
 }
 
 export async function saveDeployment(chart, deployment, values) {
-  const res = await fetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}`, {
+  const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ values })
@@ -113,7 +115,7 @@ export async function saveDeployment(chart, deployment, values) {
 }
 
 export async function cloneDeployment(chart, source, newName) {
-  const res = await fetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(source)}/clone`, {
+  const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(source)}/clone`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ newName })
@@ -123,7 +125,7 @@ export async function cloneDeployment(chart, source, newName) {
 }
 
 export async function deleteDeployment(chart, deployment) {
-  const res = await fetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}`, {
+  const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}`, {
     method: 'DELETE'
   })
   if (!res.ok) return {}
@@ -133,7 +135,7 @@ export async function deleteDeployment(chart, deployment) {
 // ─── Render ──────────────────────────────────────────────────────────────────
 
 export async function renderDeployment(chart, deployment) {
-  const res = await fetch(`${BASE}/render/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}`, {
+  const res = await apiFetch(`${BASE}/render/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: '{}'

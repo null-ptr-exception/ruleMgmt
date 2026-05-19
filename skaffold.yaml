@@ -1,0 +1,27 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: rulemgmt
+build:
+  artifacts:
+    - image: rulemgmt
+      docker:
+        dockerfile: Dockerfile
+  local:
+    push: false
+deploy:
+  helm:
+    releases:
+      - name: jupyterhub
+        remoteChart: jupyterhub
+        repo: https://hub.jupyter.org/helm-chart/
+        version: "4.1.0"
+        namespace: default
+        valuesFiles:
+          - k8s/jupyterhub-values.yaml
+          - k8s/dev-values.yaml
+        setValueTemplates:
+          singleuser.image.name: "{{.IMAGE_FULLY_QUALIFIED_rulemgmt}}"
+  kubectl:
+    manifests:
+      - k8s/init-clone-configmap.yaml

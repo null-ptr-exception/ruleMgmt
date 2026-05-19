@@ -1,6 +1,12 @@
 #!/bin/sh
 set -e
 
+if [ -d /data/gitops/.git ]; then
+  echo "Workspace already initialized, skipping clone"
+  chown -R 1000:1000 /data/gitops
+  exit 0
+fi
+
 REPO_URL="https://oauth2:${GITLAB_TOKEN}@${GITLAB_HOST}/${GITLAB_PROJECT}.git"
 USER_BRANCH="rulemgmt/${JUPYTERHUB_USER}"
 

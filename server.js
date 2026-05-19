@@ -57,6 +57,12 @@ baseRouter.use('/api/v2/render', setGitopsDir, renderRouter())
 baseRouter.use('/api/v2/git', setGitopsDir, gitRouter())
 baseRouter.use('/api/v2/folders', setGitopsDir, foldersRouter())
 
+baseRouter.get('/api/v2/user', (req, res) => {
+  const user = process.env.JUPYTERHUB_USER || null
+  const logoutUrl = process.env.JUPYTERHUB_BASE_URL ? `${process.env.JUPYTERHUB_BASE_URL}hub/logout` : null
+  res.json({ user, logoutUrl })
+})
+
 // Static assets + SPA fallback with base path injection
 const indexHtml = readFileSync(path.join(__dirname, 'dist', 'index.html'), 'utf-8')
 

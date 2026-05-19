@@ -47,15 +47,7 @@ export default function gitRouter() {
         } catch { /* fetch failed */ }
       }
 
-      let recoveredFromWip = false
-      try {
-        const lastMsg = (await git(cwd, 'log', '-1', '--format=%s')).trim()
-        recoveredFromWip = lastMsg === 'wip'
-      } catch {
-        // empty repo, no commits
-      }
-
-      res.json({ branch, changes, changeCount, behindMain, hasRemote: remote, recoveredFromWip })
+      res.json({ branch, changes, changeCount, behindMain, hasRemote: remote })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -86,9 +78,6 @@ export default function gitRouter() {
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
-    const username = process.env.JUPYTERHUB_USER || 'user'
-    const branch = req.body.branch || `${username}/draft`
-
     try {
       await git(cwd, 'add', '-A')
       const statusRaw = await git(cwd, 'status', '--porcelain')
@@ -96,15 +85,7 @@ export default function gitRouter() {
         return res.status(400).json({ error: 'commit changes before pushing' })
       }
 
-      const currentBranch = await getBranch(cwd)
-      if (currentBranch !== branch) {
-        try {
-          await git(cwd, 'checkout', '-b', branch)
-        } catch {
-          await git(cwd, 'checkout', branch)
-        }
-      }
-
+      const branch = await getBranch(cwd)
       const token = process.env.GITLAB_TOKEN
       if (token) {
         await pushWithToken(cwd, branch, token)

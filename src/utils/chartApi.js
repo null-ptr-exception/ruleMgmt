@@ -2,6 +2,14 @@ import { apiFetch } from '../lib/apiFetch.js'
 
 const BASE = '/api/v2'
 
+// ─── User ───────────────────────────────────────────────────────────────────
+
+export async function getUserInfo() {
+  const res = await apiFetch(`${BASE}/user`)
+  if (!res.ok) return { user: null, logoutUrl: null }
+  return res.json()
+}
+
 // ─── Charts ──────────────────────────────────────────────────────────────────
 
 export async function listCharts() {

@@ -4,12 +4,12 @@ import { execFile } from 'child_process'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
-export default function renderRouter(gitopsDir) {
+export default function renderRouter() {
   const router = express.Router()
-  const chartsDir = path.join(gitopsDir, 'charts')
-  const deploymentsDir = path.join(gitopsDir, 'deployments')
 
   router.post('/:chart/:deployment', async (req, res) => {
+    const chartsDir = path.join(req.gitopsDir, 'charts')
+    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
     const { chart, deployment } = req.params
     if (!NAME_RE.test(chart) || !NAME_RE.test(deployment)) {
       return res.status(400).json({ error: 'Invalid chart or deployment name' })

@@ -29,7 +29,7 @@ export default function chartsRouter() {
     const chartDir = path.join(chartsDir, name)
     try {
       await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
-      const chartYaml = yaml.dump({ apiVersion: 'v2', name, version: '0.1.0', type: 'alert-templates' })
+      const chartYaml = yaml.dump({ apiVersion: 'v2', name, version: '0.1.0', type: 'application', annotations: { app: 'alertforge' } })
       await fs.writeFile(path.join(chartDir, 'Chart.yaml'), chartYaml, 'utf-8')
       await fs.writeFile(path.join(chartDir, 'values.yaml'), yaml.dump({}), 'utf-8')
       const emptySchema = {

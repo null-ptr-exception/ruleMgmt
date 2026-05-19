@@ -31,12 +31,12 @@ describe('chartDiscovery', () => {
     expect(getDeploymentsDir('/workspace')).toBe('/workspace/deployments')
   })
 
-  it('finds charts with type: alert-templates', async () => {
+  it('finds charts with annotations.app: alertforge', async () => {
     const chartsDir = path.join(tmpDir, 'charts')
     const chartDir = path.join(chartsDir, 'my-alerts')
     fs.mkdirSync(path.join(chartDir, 'templates'), { recursive: true })
     fs.writeFileSync(path.join(chartDir, 'Chart.yaml'),
-      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: alert-templates\n')
+      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
     fs.writeFileSync(path.join(chartDir, 'values.yaml'), 'foo: bar\n')
     fs.writeFileSync(path.join(chartDir, 'templates', 'rule.yaml'), 'template content')
 
@@ -47,7 +47,7 @@ describe('chartDiscovery', () => {
     expect(results[0].templateCount).toBe(1)
   })
 
-  it('ignores charts without type: alert-templates', async () => {
+  it('ignores charts without annotations.app: alertforge', async () => {
     const chartsDir = path.join(tmpDir, 'charts')
     const chartDir = path.join(chartsDir, 'regular-chart')
     fs.mkdirSync(chartDir, { recursive: true })

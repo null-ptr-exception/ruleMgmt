@@ -25,7 +25,7 @@ export async function findAlertTemplateCharts(chartsDir) {
     try {
       const raw = await fs.readFile(chartYamlPath, 'utf-8')
       const meta = yaml.load(raw) || {}
-      if (meta.type !== 'alert-templates') continue
+      if (!meta.annotations || meta.annotations.app !== 'alertforge') continue
 
       let templateCount = 0
       try {
@@ -59,13 +59,21 @@ export async function scaffoldSamplesIfNeeded(chartsDir, sampleDir) {
     if (!e.isDirectory()) continue
     await copyDirRecursive(path.join(sampleChartsDir, e.name), path.join(chartsDir, e.name))
 
-    // Ensure type: alert-templates in the copied Chart.yaml
     const chartYamlPath = path.join(chartsDir, e.name, 'Chart.yaml')
     try {
       const raw = await fs.readFile(chartYamlPath, 'utf-8')
       const meta = yaml.load(raw) || {}
-      if (meta.type !== 'alert-templates') {
-        meta.type = 'alert-templates'
+      let changed = false
+      if (!meta.annotations || meta.annotations.app !== 'alertforge') {
+        if (!meta.annotations) meta.annotations = {}
+        meta.annotations.app = 'alertforge'
+        changed = true
+      }
+      if (!meta.type || meta.type === 'alert-templates') {
+        meta.type = 'application'
+        changed = true
+      }
+      if (changed) {
         await fs.writeFile(chartYamlPath, yaml.dump(meta, { lineWidth: -1 }), 'utf-8')
       }
     } catch { /* skip */ }

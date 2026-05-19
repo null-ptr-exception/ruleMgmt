@@ -6,7 +6,7 @@ import path from 'path'
 import os from 'os'
 import chartsRouter from '../../server/routes/charts.js'
 
-describe('GET /api/v2/charts filters by alert-templates', () => {
+describe('GET /api/v2/charts filters by annotations.app: alertforge', () => {
   let tmpDir, app
 
   beforeEach(() => {
@@ -24,12 +24,12 @@ describe('GET /api/v2/charts filters by alert-templates', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('returns only charts with type: alert-templates', async () => {
+  it('returns only charts with annotations.app: alertforge', async () => {
     const chartsDir = path.join(tmpDir, 'charts')
     const alertChart = path.join(chartsDir, 'my-alerts', 'templates')
     fs.mkdirSync(alertChart, { recursive: true })
     fs.writeFileSync(path.join(chartsDir, 'my-alerts', 'Chart.yaml'),
-      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: alert-templates\n')
+      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
     fs.writeFileSync(path.join(alertChart, 'rule.yaml'), 'content')
 
     fs.mkdirSync(path.join(chartsDir, 'regular'), { recursive: true })
@@ -48,7 +48,7 @@ describe('GET /api/v2/charts filters by alert-templates', () => {
     const alertChart = path.join(customDir, 'test-alerts', 'templates')
     fs.mkdirSync(alertChart, { recursive: true })
     fs.writeFileSync(path.join(customDir, 'test-alerts', 'Chart.yaml'),
-      'apiVersion: v2\nname: test-alerts\nversion: 0.1.0\ntype: alert-templates\n')
+      'apiVersion: v2\nname: test-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
     fs.writeFileSync(path.join(alertChart, 'rule.yaml'), 'content')
 
     const origEnv = process.env.CHARTS_DIR

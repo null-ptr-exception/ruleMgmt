@@ -16,7 +16,7 @@ export default function templatesRouter() {
   })
 
   function chartPaths(req, chart) {
-    const chartsDir = path.join(req.gitopsDir, 'charts')
+    const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
     const chartDir = path.join(chartsDir, chart)
     return {
       chartDir,

@@ -5,6 +5,16 @@ import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
+function resolveDeploymentDir(req) {
+  const folder = req.query.folder
+  if (folder) {
+    if (folder.includes('..')) return null
+    return path.join(req.gitopsDir, folder)
+  }
+  const deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments')
+  return path.join(deploymentsDir, req.params.chart)
+}
+
 export default function deploymentsRouter() {
   const router = express.Router()
 
@@ -15,10 +25,9 @@ export default function deploymentsRouter() {
     next()
   })
 
-  // List deployments for a chart
   router.get('/:chart', async (req, res) => {
-    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
-    const dir = path.join(deploymentsDir, req.params.chart)
+    const dir = resolveDeploymentDir(req)
+    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     try {
       await fs.mkdir(dir, { recursive: true })
       const files = await fs.readdir(dir)
@@ -42,13 +51,13 @@ export default function deploymentsRouter() {
     }
   })
 
-  // Get deployment values
   router.get('/:chart/:deployment', async (req, res) => {
-    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
+    const dir = resolveDeploymentDir(req)
+    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const file = path.join(deploymentsDir, req.params.chart, `${req.params.deployment}-values.yaml`)
+    const file = path.join(dir, `${req.params.deployment}-values.yaml`)
     try {
       const content = await fs.readFile(file, 'utf-8')
       res.json({ content, parsed: yaml.load(content) })
@@ -57,13 +66,12 @@ export default function deploymentsRouter() {
     }
   })
 
-  // Save deployment values
   router.post('/:chart/:deployment', async (req, res) => {
-    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
+    const dir = resolveDeploymentDir(req)
+    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const dir = path.join(deploymentsDir, req.params.chart)
     const file = path.join(dir, `${req.params.deployment}-values.yaml`)
     try {
       await fs.mkdir(dir, { recursive: true })
@@ -75,16 +83,15 @@ export default function deploymentsRouter() {
     }
   })
 
-  // Clone a deployment
   router.post('/:chart/:deployment/clone', async (req, res) => {
-    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
+    const dir = resolveDeploymentDir(req)
+    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     if (!req.body.newName || !NAME_RE.test(req.body.newName)) {
       return res.status(400).json({ error: 'Invalid newName' })
     }
-    const dir = path.join(deploymentsDir, req.params.chart)
     const srcFile = path.join(dir, `${req.params.deployment}-values.yaml`)
     const dstFile = path.join(dir, `${req.body.newName}-values.yaml`)
     try {
@@ -95,13 +102,13 @@ export default function deploymentsRouter() {
     }
   })
 
-  // Delete deployment
   router.delete('/:chart/:deployment', async (req, res) => {
-    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
+    const dir = resolveDeploymentDir(req)
+    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const file = path.join(deploymentsDir, req.params.chart, `${req.params.deployment}-values.yaml`)
+    const file = path.join(dir, `${req.params.deployment}-values.yaml`)
     try {
       await fs.rm(file, { force: true })
       res.json({ ok: true })

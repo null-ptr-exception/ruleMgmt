@@ -15,6 +15,8 @@ export default [
         window: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
         HTMLElement: 'readonly',
       },
       parserOptions: {

@@ -1,20 +1,32 @@
 # alert-template.yaml — infra-saturation chart
 # Import via: TemplateDevEditor → Import Wizard → Step 1 (Template 定義)
+#
+# exprTemplate 說明：
+#   在 root 或 group 層定義 exprTemplate，leaf 只需填 metric 即可。
+#   系統自動將 metric 代入 {{metric}} 組成完整的 metricExpr。
+#   若個別 leaf 需要不同的 expr 形狀，可直接用 metricExpr: 覆蓋（向下相容）。
 
 preset: single-threshold-3tier   # 全域預設 preset
 threshold: 0.9                   # 全域預設 critical threshold（info=50%, warn=75%）
 
 tree:
   kpi:
+    # mem / disk saturation 共用同一個 expr 形狀：1 - (available / total)
+    # cpu 不符合此形狀，用 metricExpr: 單獨覆蓋
+    exprTemplate: "1 - ({{metric}})"
     children:
       cpu_saturation:
+        # 與 kpi exprTemplate 形狀不同，直接用完整 metricExpr
         metricExpr: rate(node_cpu_seconds_total{mode="user"}[1m]) / scalar(count(node_cpu_seconds_total{mode="user"}))
       mem_saturation:
-        metricExpr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+        # metric 代入 exprTemplate → 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+        metric: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
       disk_saturation:
-        metricExpr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs"})
+        # metric 代入 exprTemplate → 1 - (node_filesystem_avail_bytes{...} / node_filesystem_size_bytes{...})
+        metric: node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs"}
+
   svc:
     preset: absence-check         # 覆寫 preset：無 threshold，固定 critical
     children:
       isalive:
-        metricExpr: up
+        metric: up                # exprTemplate 預設為 {{metric}}，等同 metricExpr: up

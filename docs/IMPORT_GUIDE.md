@@ -27,20 +27,28 @@ threshold: 0.9                   # 全域預設 critical threshold
 tree:
   <group>:
     threshold: 0.85              # 選填：覆寫此子樹的 threshold
+    exprTemplate: "1 - ({{metric}})"  # 選填：expr 外殼，{{metric}} 為代入點
     children:
       <leaf>:
-        metricExpr: <PromQL>     # 必填：metric expression（不含比較運算子）
+        metric: <PromQL 片段>    # 代入 exprTemplate → 組成完整 metricExpr
       <leaf>:
-        metricExpr: <PromQL>
+        metric: <PromQL 片段>
         threshold: 0.95          # 選填：leaf 層再次覆寫
+      <leaf>:
+        metricExpr: <完整 PromQL> # 直接指定完整 expr，忽略 exprTemplate（向下相容）
   <group>:
     preset: absence-check        # 選填：覆寫此子樹的 preset
     children:
       <leaf>:
-        metricExpr: <PromQL>
+        metric: <PromQL>         # exprTemplate 預設 {{metric}}，等同 metricExpr
 ```
 
 **Threshold 繼承順序**：leaf 自身 > 父 group > 全域 > preset default
+
+**MetricExpr 解析順序**：
+1. `metricExpr`（leaf 直接定義）→ 使用原值，忽略 exprTemplate
+2. `metric` + 就近 `exprTemplate` → `exprTemplate.replace('{{metric}}', metric)`
+3. `metric` 無 exprTemplate → 等同 `metricExpr: <metric>`（`{{metric}}` identity）
 
 **可用 Preset**：
 

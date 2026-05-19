@@ -28,10 +28,19 @@ export default function importRouter(gitopsDir) {
 
   /**
    * Recursively resolve tree YAML into a flat leaf map.
-   * Inheritance: child inherits parent's preset/threshold unless it overrides.
+   * Inheritance: child inherits parent's preset / threshold / exprTemplate unless it overrides.
    *
    * Input tree node shape:
-   *   { preset?, threshold?, thresholds?, metricExpr?, children?: { ... } }
+   *   {
+   *     preset?,        // inherited
+   *     threshold?,     // inherited
+   *     thresholds?,    // inherited
+   *     exprTemplate?,  // inherited — e.g. "1 - ({{metric}})"
+   *     children?: { ... }
+   *     // --- leaf-only ---
+   *     metric?,        // substituted into nearest exprTemplate → metricExpr
+   *     metricExpr?,    // full override; takes priority over metric + exprTemplate
+   *   }
    *
    * Output: { [leafName]: { preset, threshold, thresholds, metricExpr } }
    */
@@ -41,9 +50,10 @@ export default function importRouter(gitopsDir) {
       if (!def || typeof def !== 'object') continue
 
       const ctx = {
-        preset:     def.preset     ?? inherited.preset,
-        threshold:  def.threshold  !== undefined ? def.threshold  : inherited.threshold,
-        thresholds: def.thresholds ?? inherited.thresholds,
+        preset:       def.preset       ?? inherited.preset,
+        threshold:    def.threshold    !== undefined ? def.threshold  : inherited.threshold,
+        thresholds:   def.thresholds   ?? inherited.thresholds,
+        exprTemplate: def.exprTemplate ?? inherited.exprTemplate,
       }
 
       if (def.children && Object.keys(def.children).length > 0) {
@@ -51,12 +61,18 @@ export default function importRouter(gitopsDir) {
         for (const [childKey, childLeaf] of Object.entries(childLeaves)) {
           leaves[`${key}_${childKey}`] = childLeaf
         }
-      } else if (def.metricExpr) {
+      } else if (def.metricExpr || def.metric) {
+        // metricExpr (full expr) beats metric + exprTemplate
+        let metricExpr = def.metricExpr
+        if (!metricExpr && def.metric) {
+          const tmpl = ctx.exprTemplate || '{{metric}}'
+          metricExpr = tmpl.replace(/\{\{metric\}\}/g, def.metric)
+        }
         leaves[key] = {
           preset:     ctx.preset,
           threshold:  ctx.threshold,
           thresholds: ctx.thresholds,
-          metricExpr: def.metricExpr,
+          metricExpr,
         }
       }
     }
@@ -243,7 +259,7 @@ export default function importRouter(gitopsDir) {
       const errors = []
       for (const [name, def] of Object.entries(leafDefs)) {
         if (!def.preset || !presets[def.preset]) errors.push(`Leaf "${name}": unknown preset "${def.preset}"`)
-        if (!def.metricExpr) errors.push(`Leaf "${name}": missing metricExpr`)
+        if (!def.metricExpr) errors.push(`Leaf "${name}": missing metricExpr (or metric + exprTemplate)`)
         if (!presets[def.preset]?.fixedAlert && def.threshold == null && !def.thresholds) {
           errors.push(`Leaf "${name}": no threshold defined (set at leaf, parent, or global level)`)
         }

@@ -27,11 +27,3 @@ deploy:
         repo: https://hub.jupyter.org/helm-chart/
   kubectl:
     defaultNamespace: default
-    hooks:
-      before:
-        - host:
-            command:
-              - kubectl
-              - apply
-              - -f
-              - k8s/init-clone-configmap.yaml

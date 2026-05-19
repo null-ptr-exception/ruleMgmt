@@ -18,6 +18,7 @@ hub:
   extraConfig:
     branding: |
       c.JupyterHub.template_vars["announcement"] = """<style>
+      .announcement { background: none !important; border: none !important; padding: 0 !important; margin: 0 !important; min-height: 0 !important; }
       .navbar-brand img { display: none !important; }
       .navbar-brand span { display: none !important; }
       .navbar-brand { display: flex !important; align-items: center; text-decoration: none !important; }
@@ -71,11 +72,6 @@ singleuser:
     type: dynamic
     capacity: 256Mi
     homeMountPath: /data/gitops
-    extraVolumes:
-      - name: init-scripts
-        configMap:
-          name: rulemgmt-init-scripts
-          defaultMode: 0755
   memory:
     guarantee: 256M
     limit: 512M
@@ -85,12 +81,39 @@ singleuser:
   initContainers:
     - name: git-clone
       image: alpine/git:latest
-      command: ["/bin/sh", "/scripts/init-clone.sh"]
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          if [ -d /data/gitops/.git ]; then
+            echo "Workspace already initialized, skipping clone"
+            chown -R 1000:1000 /data/gitops
+            exit 0
+          fi
+          if [ -d /data/gitops ] && [ "$(ls -A /data/gitops)" ]; then
+            echo "Cleaning stale workspace (no .git found)"
+            rm -rf /data/gitops/*
+            rm -rf /data/gitops/.[!.]*
+          fi
+          REPO_URL="https://oauth2:$GITLAB_TOKEN@$GITLAB_HOST/$GITLAB_PROJECT.git"
+          USER_BRANCH="rulemgmt/$JUPYTERHUB_USER"
+          if git ls-remote --heads "$REPO_URL" "$USER_BRANCH" 2>/dev/null | grep -q .; then
+            echo "Cloning existing branch: $USER_BRANCH"
+            git clone -b "$USER_BRANCH" "$REPO_URL" /data/gitops
+          else
+            echo "Creating new branch: $USER_BRANCH"
+            git clone "$REPO_URL" /data/gitops
+            cd /data/gitops
+            git checkout -b "$USER_BRANCH"
+          fi
+          cd /data/gitops
+          git config user.name "$JUPYTERHUB_USER"
+          git config user.email "$JUPYTERHUB_USER@rulemgmt"
+          chown -R 1000:1000 /data/gitops
       volumeMounts:
         - name: volume-{username}
           mountPath: /data/gitops
-        - name: init-scripts
-          mountPath: /scripts
   extraContainers: []
 
 cull:

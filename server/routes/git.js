@@ -113,6 +113,86 @@ export default function gitRouter() {
     }
   })
 
+  router.get('/log', async (req, res) => {
+    const cwd = req.gitopsDir
+    const limit = parseInt(req.query.limit, 10) || 20
+
+    try {
+      const SEP = '---GIT-LOG-SEP---'
+      const format = `%H${SEP}%h${SEP}%s${SEP}%an${SEP}%aI`
+      const raw = await git(cwd, 'log', `--format=${format}`, `-n`, `${limit}`)
+      const commits = []
+
+      for (const line of raw.trim().split('\n')) {
+        if (!line) continue
+        const [sha, shortSha, message, author, date] = line.split(SEP)
+        let files = []
+        try {
+          const diffTree = await git(cwd, 'diff-tree', '--no-commit-id', '-r', '--name-status', sha)
+          files = diffTree.trim().split('\n').filter(Boolean).map(l => {
+            const [statusCode, ...parts] = l.split('\t')
+            const file = parts.join('\t')
+            const status = statusCode.startsWith('A') ? 'A' : statusCode.startsWith('D') ? 'D' : 'M'
+            return { file, status }
+          })
+        } catch { /* initial commit has no parent */ }
+        commits.push({ sha, shortSha, message, author, date, files })
+      }
+
+      res.json(commits)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  router.get('/diff', async (req, res) => {
+    const cwd = req.gitopsDir
+    const file = req.query.file
+    const ref = req.query.ref
+
+    if (!file) return res.status(400).json({ error: 'file param required' })
+
+    try {
+      let original = ''
+      let modified = ''
+
+      if (ref) {
+        try { original = await git(cwd, 'show', `${ref}~1:${file}`) } catch { original = '' }
+        try { modified = await git(cwd, 'show', `${ref}:${file}`) } catch { modified = '' }
+      } else {
+        try { original = await git(cwd, 'show', `HEAD:${file}`) } catch { original = '' }
+        try {
+          const filePath = path.join(cwd, file)
+          modified = await fs.readFile(filePath, 'utf8')
+        } catch { modified = '' }
+      }
+
+      res.json({ file, original, modified })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  router.post('/pull', async (req, res) => {
+    const cwd = req.gitopsDir
+    const remote = hasRemote()
+    if (!remote) return res.status(404).json({ error: 'no remote configured' })
+
+    try {
+      const statusRaw = await git(cwd, 'status', '--porcelain')
+      if (statusRaw.trim()) {
+        return res.status(409).json({ error: 'commit or discard changes before pulling' })
+      }
+
+      const branch = await getBranch(cwd)
+      await git(cwd, 'pull', '--rebase', 'origin', branch)
+      const head = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
+      res.json({ status: 'ok', head })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   router.post('/sync', async (req, res) => {
     const cwd = req.gitopsDir
     const remote = hasRemote()

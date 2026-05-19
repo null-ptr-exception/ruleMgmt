@@ -1,0 +1,9 @@
+apiVersion: v2
+name: unit-1-prod
+description: Gitops deploy chart for my-product / site-a / unit-1 / PROD
+type: application
+version: 0.1.0
+dependencies:
+  - name: platform-routing
+    version: 1.0.0
+    repository: file://../../../../../templates/amconfig/platform-routing/v1.0.0

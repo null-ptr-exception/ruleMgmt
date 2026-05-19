@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Button, Badge, Modal, Input, Tag, Tooltip, Space } from 'antd'
+import { apiFetch } from '../lib/apiFetch.js'
+import { Button, Badge, Modal, Input, Tag, Tooltip, Space, Popover, Typography } from 'antd'
 import {
   BranchesOutlined,
   CloudUploadOutlined,
@@ -16,13 +17,13 @@ export default function GitStatusBar({ gitStatus, onRefresh }) {
   const [pushBranch, setPushBranch] = useState('')
   const [loading, setLoading] = useState(null)
 
-  const { branch, changeCount, behindMain, hasRemote } = gitStatus
+  const { branch, changes, changeCount, behindMain, hasRemote, recoveredFromWip } = gitStatus
 
   async function handleCommit() {
     if (!commitMessage.trim()) return
     setLoading('commit')
     try {
-      const res = await fetch('/api/v2/git/commit', {
+      const res = await apiFetch('/api/v2/git/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: commitMessage }),
@@ -40,7 +41,7 @@ export default function GitStatusBar({ gitStatus, onRefresh }) {
   async function handlePush() {
     setLoading('push')
     try {
-      const res = await fetch('/api/v2/git/push', {
+      const res = await apiFetch('/api/v2/git/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ branch: pushBranch || undefined }),
@@ -62,7 +63,7 @@ export default function GitStatusBar({ gitStatus, onRefresh }) {
       okText: 'Discard',
       okType: 'danger',
       onOk: async () => {
-        await fetch('/api/v2/git/discard', { method: 'POST' })
+        await apiFetch('/api/v2/git/discard', { method: 'POST' })
         onRefresh()
       },
     })
@@ -74,7 +75,7 @@ export default function GitStatusBar({ gitStatus, onRefresh }) {
       icon: <SyncOutlined />,
       content: 'This will reset your workspace to the latest main branch.',
       onOk: async () => {
-        await fetch('/api/v2/git/sync', { method: 'POST' })
+        await apiFetch('/api/v2/git/sync', { method: 'POST' })
         onRefresh()
       },
     })
@@ -95,9 +96,27 @@ export default function GitStatusBar({ gitStatus, onRefresh }) {
         <Tag icon={<BranchesOutlined />} color="default">{branch || '...'}</Tag>
 
         {changeCount > 0 && (
-          <Badge count={changeCount} size="small" offset={[0, 0]}>
-            <Tag color="blue">{changeCount} change{changeCount !== 1 ? 's' : ''}</Tag>
-          </Badge>
+          <Popover
+            trigger="click"
+            title={`${changeCount} pending change${changeCount !== 1 ? 's' : ''}`}
+            content={
+              <div style={{ maxHeight: 240, overflow: 'auto', fontSize: 12 }}>
+                {changes?.modified?.map(f => (
+                  <div key={f}><Tag color="blue" style={{ fontSize: 11 }}>M</Tag> <Typography.Text code style={{ fontSize: 11 }}>{f}</Typography.Text></div>
+                ))}
+                {changes?.added?.map(f => (
+                  <div key={f}><Tag color="green" style={{ fontSize: 11 }}>A</Tag> <Typography.Text code style={{ fontSize: 11 }}>{f}</Typography.Text></div>
+                ))}
+                {changes?.deleted?.map(f => (
+                  <div key={f}><Tag color="red" style={{ fontSize: 11 }}>D</Tag> <Typography.Text code style={{ fontSize: 11 }}>{f}</Typography.Text></div>
+                ))}
+              </div>
+            }
+          >
+            <Badge count={changeCount} size="small" offset={[0, 0]} style={{ cursor: 'pointer' }}>
+              <Tag color="blue" style={{ cursor: 'pointer' }}>{changeCount} change{changeCount !== 1 ? 's' : ''}</Tag>
+            </Badge>
+          </Popover>
         )}
 
         <Space size={4} style={{ marginLeft: 'auto' }}>
@@ -161,6 +180,21 @@ export default function GitStatusBar({ gitStatus, onRefresh }) {
               Sync
             </Button>
           )}
+        </div>
+      )}
+
+      {recoveredFromWip && (
+        <div style={{
+          padding: '4px 16px',
+          background: '#e6f7ff',
+          borderBottom: '1px solid #91d5ff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 12,
+        }}>
+          <ExclamationCircleOutlined style={{ color: '#1890ff' }} />
+          Restored from previous session — you have uncommitted work
         </div>
       )}
 

@@ -3,11 +3,11 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 
-export default function alertmanagerConfigsRouter(gitopsDir) {
+export default function alertmanagerConfigsRouter() {
   const router = Router()
-  const configDir = path.join(gitopsDir, 'alertmanager-configs')
 
   router.get('/', async (req, res) => {
+    const configDir = path.join(req.gitopsDir, 'alertmanager-configs')
     try {
       await fs.mkdir(configDir, { recursive: true })
       const files = await fs.readdir(configDir)
@@ -21,6 +21,7 @@ export default function alertmanagerConfigsRouter(gitopsDir) {
   })
 
   router.get('/:name', async (req, res) => {
+    const configDir = path.join(req.gitopsDir, 'alertmanager-configs')
     const filePath = path.join(configDir, `${req.params.name}.yaml`)
     try {
       const content = await fs.readFile(filePath, 'utf8')
@@ -33,6 +34,7 @@ export default function alertmanagerConfigsRouter(gitopsDir) {
   })
 
   router.put('/:name', async (req, res) => {
+    const configDir = path.join(req.gitopsDir, 'alertmanager-configs')
     await fs.mkdir(configDir, { recursive: true })
     const filePath = path.join(configDir, `${req.params.name}.yaml`)
     const { content } = req.body
@@ -42,6 +44,7 @@ export default function alertmanagerConfigsRouter(gitopsDir) {
   })
 
   router.delete('/:name', async (req, res) => {
+    const configDir = path.join(req.gitopsDir, 'alertmanager-configs')
     const filePath = path.join(configDir, `${req.params.name}.yaml`)
     try {
       await fs.unlink(filePath)

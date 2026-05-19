@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Layout, Menu, theme, Spin } from 'antd'
+import { Layout, Menu, theme } from 'antd'
 import {
   ToolOutlined,
   BellOutlined,
@@ -12,9 +12,7 @@ import GitopsEditor from './pages/GitopsEditor'
 import PromQLEditor from './pages/PromQLEditor'
 import TemplateDevEditor from './pages/TemplateDevEditor'
 import AlertUserView from './pages/AlertUserView'
-import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
 import { useGitStatus } from './hooks/useGitStatus'
-import LoginPage from './components/LoginPage'
 import GitStatusBar from './components/GitStatusBar'
 import './App.css'
 
@@ -42,24 +40,11 @@ const menuItems = [
   },
 ]
 
-function AppContent() {
+export default function App() {
   const [page, setPage] = useState('alert-user')
   const [collapsed, setCollapsed] = useState(false)
   const { token } = theme.useToken()
-  const auth = useAuth()
   const gitStatus = useGitStatus()
-
-  if (auth.loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-        <Spin size="large" />
-      </div>
-    )
-  }
-
-  if (!auth.isAuthenticated) {
-    return <LoginPage />
-  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -104,13 +89,5 @@ function AppContent() {
         {page === 'promql'       && <PromQLEditor onNavigate={setPage} />}
       </Content>
     </Layout>
-  )
-}
-
-export default function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
   )
 }

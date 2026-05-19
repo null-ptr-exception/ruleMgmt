@@ -4,12 +4,8 @@ import {
   ToolOutlined,
   BellOutlined,
   BranchesOutlined,
-  RocketOutlined,
-  BarChartOutlined,
 } from '@ant-design/icons'
 import NotificationRoutesEditor from './pages/NotificationRoutesEditor'
-import GitopsEditor from './pages/GitopsEditor'
-import PromQLEditor from './pages/PromQLEditor'
 import TemplateDevEditor from './pages/TemplateDevEditor'
 import AlertUserView from './pages/AlertUserView'
 import { useGitStatus } from './hooks/useGitStatus'
@@ -27,15 +23,6 @@ const menuItems = [
       { key: 'template-dev', label: 'Templates', icon: <ToolOutlined /> },
       { key: 'alert-user', label: 'Alerts', icon: <BellOutlined /> },
       { key: 'notifications', label: 'Routes', icon: <BranchesOutlined /> },
-    ],
-  },
-  {
-    key: 'tools',
-    label: 'Tools',
-    type: 'group',
-    children: [
-      { key: 'gitops', label: 'Gitops Deploy', icon: <RocketOutlined /> },
-      { key: 'promql', label: 'PromQL Builder', icon: <BarChartOutlined /> },
     ],
   },
 ]
@@ -85,8 +72,6 @@ export default function App() {
         {page === 'template-dev' && <TemplateDevEditor />}
         {page === 'alert-user'   && <AlertUserView />}
         {page === 'notifications' && <NotificationRoutesEditor />}
-        {page === 'gitops'       && <GitopsEditor />}
-        {page === 'promql'       && <PromQLEditor onNavigate={setPage} />}
       </Content>
     </Layout>
   )

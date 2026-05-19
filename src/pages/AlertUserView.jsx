@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Button, Modal, Typography, Empty } from 'antd'
-import { SaveOutlined, EyeOutlined } from '@ant-design/icons'
+import { Button, Modal, Typography, Empty, message } from 'antd'
+import { SaveOutlined, EyeOutlined, FolderOutlined } from '@ant-design/icons'
 import ChartSelector from '../components/ChartSelector'
 import DeploymentSelector from '../components/DeploymentSelector'
+import FolderSelector from '../components/FolderSelector'
 import TemplateTree from '../components/TemplateTree'
 import AlertTable from '../components/AlertTable'
 import { schemaAlertNames, schemaToVars } from '../utils/schemaUtils'
@@ -10,7 +11,8 @@ import {
   listCharts,
   getChartInfo,
   listDeployments, getDeployment, saveDeployment, cloneDeployment,
-  renderDeployment
+  renderDeployment,
+  listFolders, createFolder, initDeploymentFolder
 } from '../utils/chartApi'
 
 const { Title, Text } = Typography
@@ -33,6 +35,12 @@ export default function AlertUserView() {
   const [chartDescription, setChartDescription] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(280)
   const resizingRef = useRef(false)
+
+  // Folder selector state
+  const [deploymentFolder, setDeploymentFolder] = useState(null)
+  const [folderSelectorOpen, setFolderSelectorOpen] = useState(false)
+  const [folders, setFolders] = useState([])
+  const [foldersLoading, setFoldersLoading] = useState(false)
 
   function handleResizeStart(e) {
     e.preventDefault()
@@ -74,7 +82,7 @@ export default function AlertUserView() {
     setDirty(false)
     Promise.all([
       getChartInfo(activeChart),
-      listDeployments(activeChart)
+      listDeployments(activeChart, deploymentFolder)
     ]).then(([info, deps]) => {
       setSchema(info.schema)
       const names = schemaAlertNames(info.schema)
@@ -82,11 +90,11 @@ export default function AlertUserView() {
       setChartDescription(info.chartMeta?.description || '')
       setDeployments(deps)
     })
-  }, [activeChart])
+  }, [activeChart, deploymentFolder])
 
   useEffect(() => {
     if (!activeChart || !activeDeployment) return
-    getDeployment(activeChart, activeDeployment).then(data => {
+    getDeployment(activeChart, activeDeployment, deploymentFolder).then(data => {
       const parsed = data.parsed || {}
       setAllValues(parsed)
       if (activeAlert) {
@@ -109,41 +117,65 @@ export default function AlertUserView() {
   async function handleSave() {
     if (!activeChart || !activeDeployment || !activeAlert) return
     const merged = { ...allValues, [activeAlert]: rows }
-    await saveDeployment(activeChart, activeDeployment, merged)
+    await saveDeployment(activeChart, activeDeployment, merged, deploymentFolder)
     setAllValues(merged)
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
-    const deps = await listDeployments(activeChart)
+    const deps = await listDeployments(activeChart, deploymentFolder)
     setDeployments(deps)
   }
 
   async function handlePreview() {
     if (!activeChart || !activeDeployment) return
     if (dirty) await handleSave()
-    const result = await renderDeployment(activeChart, activeDeployment)
+    const result = await renderDeployment(activeChart, activeDeployment, deploymentFolder)
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
     setPreviewOpen(true)
   }
 
   async function handleCreateDeployment(name) {
     if (!activeChart) return
-    await saveDeployment(activeChart, name, {})
-    const deps = await listDeployments(activeChart)
+    await saveDeployment(activeChart, name, {}, deploymentFolder)
+    const deps = await listDeployments(activeChart, deploymentFolder)
     setDeployments(deps)
     setActiveDeployment(name)
   }
 
   async function handleClone(source, newName) {
     if (!activeChart) return
-    await cloneDeployment(activeChart, source, newName)
-    const deps = await listDeployments(activeChart)
+    await cloneDeployment(activeChart, source, newName, deploymentFolder)
+    const deps = await listDeployments(activeChart, deploymentFolder)
     setDeployments(deps)
     setActiveDeployment(newName)
   }
 
-  const sectionHeader = (text) => (
-    <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af', borderTop: '1px solid #f0f0f0' }}>
+  async function handleFolderOpen() {
+    setFolderSelectorOpen(true)
+    setFoldersLoading(true)
+    const tree = await listFolders()
+    setFolders(tree)
+    setFoldersLoading(false)
+  }
+
+  async function handleFolderSelect(folderPath) {
+    if (!activeChart) return
+    const result = await initDeploymentFolder(folderPath, activeChart)
+    if (result.status === 'created') {
+      message.success(`Initialized ${folderPath} with ${activeChart} dependency`)
+    }
+    setDeploymentFolder(folderPath)
+    setActiveDeployment(null)
+    setActiveAlert(null)
+  }
+
+  async function handleCreateFolder(folderPath) {
+    await createFolder(folderPath)
+  }
+
+  const sectionHeader = (text, extra) => (
+    <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       {text}
+      {extra}
     </div>
   )
 
@@ -153,13 +185,29 @@ export default function AlertUserView() {
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
       <div style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'auto', background: '#fff', position: 'relative' }}>
         <ChartSelector charts={charts} activeChart={activeChart} onSelect={setActiveChart} />
-        {sectionHeader('Deployments')}
+        <div style={{ position: 'relative' }}>
+          {sectionHeader('Deployments',
+            <FolderOutlined
+              style={{ cursor: 'pointer', fontSize: 14, color: '#595959' }}
+              onClick={handleFolderOpen}
+            />
+          )}
+          <FolderSelector
+            open={folderSelectorOpen}
+            onClose={() => setFolderSelectorOpen(false)}
+            onSelect={handleFolderSelect}
+            folders={folders}
+            loading={foldersLoading}
+            onCreateFolder={handleCreateFolder}
+          />
+        </div>
         <DeploymentSelector
           deployments={deployments}
           activeDeployment={activeDeployment}
           onSelect={setActiveDeployment}
           onCreate={handleCreateDeployment}
           onClone={handleClone}
+          deploymentFolder={deploymentFolder}
         />
         {sectionHeader('Alert Templates')}
         <TemplateTree
@@ -167,7 +215,6 @@ export default function AlertUserView() {
           activeTemplate={activeAlert}
           onSelect={setActiveAlert}
         />
-        {/* Resize handle */}
         <div
           onMouseDown={handleResizeStart}
           onTouchStart={handleResizeStart}

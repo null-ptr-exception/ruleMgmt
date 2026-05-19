@@ -3,7 +3,8 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { fileURLToPath } from 'url'
-import { execFile } from 'child_process'
+import { execFile, execFileSync } from 'child_process'
+import { existsSync } from 'fs'
 import os from 'os'
 import chartsRouter from './server/routes/charts.js'
 import templatesV2Router from './server/routes/templates.js'
@@ -405,8 +406,60 @@ app.get('/api/templates/:type/:name/:version/chartmeta', async (req, res) => {
 
 // ─── Helm render ──────────────────────────────────────────────────────────────
 
+let _helmCache = null
+
+/**
+ * Locate the helm binary in a cross-platform way.
+ * Priority:
+ *   1. HELM_BIN environment variable
+ *   2. `helm` found via PATH  (uses `where` on Windows, `which` on Unix)
+ *   3. Common platform-specific install locations
+ * Throws a friendly error when helm cannot be found.
+ */
 function findHelm() {
-  return path.join(os.homedir(), 'bin', 'helm')
+  if (_helmCache) return _helmCache
+
+  // 1. Explicit override
+  if (process.env.HELM_BIN) {
+    _helmCache = process.env.HELM_BIN
+    return _helmCache
+  }
+
+  const isWin = process.platform === 'win32'
+
+  // 2. Search PATH
+  try {
+    const locator = isWin ? 'where' : 'which'
+    const raw = execFileSync(locator, ['helm'], { encoding: 'utf-8', timeout: 5000 }).trim()
+    const first = raw.split(/\r?\n/)[0].trim()
+    if (first) { _helmCache = first; return _helmCache }
+  } catch { /* not in PATH */ }
+
+  // 3. Well-known fallback locations per platform
+  const candidates = isWin
+    ? [
+        path.join(process.env.ProgramData  || 'C:\\ProgramData',  'chocolatey', 'bin', 'helm.exe'),
+        path.join(process.env.ProgramFiles || 'C:\\Program Files', 'helm', 'helm.exe'),
+        path.join(os.homedir(), 'scoop', 'shims', 'helm.exe'),
+        // winget default install location
+        path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'helm', 'helm.exe'),
+      ]
+    : [
+        '/usr/local/bin/helm',
+        '/usr/bin/helm',
+        path.join(os.homedir(), 'bin', 'helm'),
+        path.join(os.homedir(), '.local', 'bin', 'helm'),
+      ]
+
+  for (const c of candidates) {
+    if (existsSync(c)) { _helmCache = c; return _helmCache }
+  }
+
+  const installHint = isWin
+    ? 'Install helm via:\n  choco install kubernetes-helm\n  scoop install helm\n  winget install Helm.Helm\nThen restart the dev server, or set HELM_BIN=<path> in your environment.'
+    : 'Install helm from https://helm.sh/docs/intro/install/ or via your package manager.'
+
+  throw new Error(`helm binary not found.\n${installHint}`)
 }
 
 function runCmd(bin, args, cwd) {
@@ -422,7 +475,13 @@ app.post('/api/helm/render/:product/:site/:relunit/:stage', async (req, res) => 
   const { product, site, relunit, stage } = req.params
   const stageDir = path.join(GITOPS_DIR, product, site, relunit, stage)
   const releaseName = `${relunit}-${stage}`.toLowerCase()
-  const helm = findHelm()
+
+  let helm
+  try {
+    helm = findHelm()
+  } catch (e) {
+    return res.json({ ok: false, output: e.message })
+  }
 
   const log = []
   try {

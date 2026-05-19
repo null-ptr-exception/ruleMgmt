@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
-import { Button, Typography, Space, Modal } from 'antd'
+import { Button, Typography, Space, Modal, Tooltip } from 'antd'
 import {
   BranchesOutlined,
   CloudUploadOutlined,
@@ -70,28 +70,28 @@ export default function GitPanel({ gitStatus, onRefresh }) {
           <BranchesOutlined /> {branch || '...'}
         </Title>
         <Space size="small">
-          {hasRemote && (
-            <>
-              <Button
-                icon={<CloudDownloadOutlined />}
-                disabled={changeCount > 0}
-                loading={loading === 'pull'}
-                onClick={handlePull}
-                size="small"
-              >
-                Pull
-              </Button>
-              <Button
-                icon={<CloudUploadOutlined />}
-                disabled={changeCount > 0}
-                loading={loading === 'push'}
-                onClick={handlePush}
-                size="small"
-              >
-                Push
-              </Button>
-            </>
-          )}
+          <Tooltip title={!hasRemote ? 'No remote configured' : undefined}>
+            <Button
+              icon={<CloudDownloadOutlined />}
+              disabled={!hasRemote || changeCount > 0}
+              loading={loading === 'pull'}
+              onClick={handlePull}
+              size="small"
+            >
+              Pull
+            </Button>
+          </Tooltip>
+          <Tooltip title={!hasRemote ? 'No remote configured' : undefined}>
+            <Button
+              icon={<CloudUploadOutlined />}
+              disabled={!hasRemote || changeCount > 0}
+              loading={loading === 'push'}
+              onClick={handlePush}
+              size="small"
+            >
+              Push
+            </Button>
+          </Tooltip>
         </Space>
       </div>
 

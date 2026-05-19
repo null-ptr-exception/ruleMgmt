@@ -12,6 +12,8 @@ beforeAll(async () => {
 
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'git-api-test-'))
   await git(tmpDir, 'init')
+  await git(tmpDir, 'config', 'user.email', 'test@test.com')
+  await git(tmpDir, 'config', 'user.name', 'Test')
   await fs.writeFile(path.join(tmpDir, 'README.md'), 'init')
   await git(tmpDir, 'add', '-A')
   await git(tmpDir, 'commit', '-m', 'initial')

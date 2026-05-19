@@ -17,3 +17,5 @@ fi
 cd /data/gitops
 git config user.name "$JUPYTERHUB_USER"
 git config user.email "${JUPYTERHUB_USER}@rulemgmt"
+
+chown -R 1000:1000 /data/gitops

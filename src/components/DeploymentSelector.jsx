@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { List, Button, Input, Select, Space, Badge, Typography } from 'antd'
-import { FolderOutlined, PlusOutlined, CopyOutlined } from '@ant-design/icons'
+import { FolderOutlined, FolderOpenOutlined, PlusOutlined, CopyOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
 
-export default function DeploymentSelector({ deployments, activeDeployment, onSelect, onCreate, onClone }) {
+export default function DeploymentSelector({ deployments, activeDeployment, onSelect, onCreate, onClone, deploymentFolder }) {
   const [mode, setMode]         = useState(null)
   const [newName, setNewName]   = useState('')
   const [cloneSource, setCloneSource] = useState('')
@@ -27,6 +27,12 @@ export default function DeploymentSelector({ deployments, activeDeployment, onSe
 
   return (
     <div style={{ padding: '4px 0' }}>
+      {deploymentFolder && (
+        <div style={{ padding: '2px 16px 4px', fontSize: 11, color: '#8c8c8c' }}>
+          <FolderOpenOutlined style={{ marginRight: 4 }} />
+          {deploymentFolder}
+        </div>
+      )}
       <List
         size="small"
         dataSource={deployments}

@@ -10,6 +10,10 @@ import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
 import renderRouter from './server/routes/render.js'
 import alertmanagerConfigsRouter from './server/routes/alertmanagerConfigs.js'
+import session from 'express-session'
+import authRouter from './server/routes/auth.js'
+import gitRouter from './server/routes/git.js'
+import { createWorkspaceMiddleware } from './server/middleware/workspace.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -21,6 +25,24 @@ const GITOPS_DIR = path.join(REPO_ROOT, 'gitops-deploy')
 const GITOPS_DIR_V2 = path.join(REPO_ROOT, 'gitops')
 const DEFAULTS_FILE     = path.join(REPO_ROOT, 'config', 'defaults.yaml')
 const METRICS_DICT_FILE = path.join(REPO_ROOT, 'config', 'metrics.yaml')
+
+const GITLAB_URL = process.env.GITLAB_URL || null
+const GITLAB_APP_ID = process.env.GITLAB_APP_ID || null
+const GITLAB_APP_SECRET = process.env.GITLAB_APP_SECRET || null
+const GITLAB_PROJECT_ID = process.env.GITLAB_PROJECT_ID || null
+const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-me'
+const WORKSPACES_DIR = process.env.WORKSPACES_DIR || '/data/workspaces'
+
+if (GITLAB_URL) {
+  app.use(session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 },
+  }))
+}
+
+app.locals.gitlabProjectId = GITLAB_PROJECT_ID
 
 async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true })
@@ -608,12 +630,29 @@ app.post('/api/prune-routes', (req, res) => {
   }
 })
 
+// ─── Auth ────────────────────────────────────────────────────────────────────
+app.use('/api/auth', authRouter({
+  gitlabUrl: GITLAB_URL,
+  gitlabAppId: GITLAB_APP_ID,
+  gitlabAppSecret: GITLAB_APP_SECRET,
+}))
+
 // ─── V2 API (Helm chart management) ─────────────────────────────────────────
-app.use('/api/v2/charts', chartsRouter(GITOPS_DIR_V2))
-app.use('/api/v2/templates', templatesV2Router(GITOPS_DIR_V2))
-app.use('/api/v2/deployments', deploymentsRouter(GITOPS_DIR_V2))
-app.use('/api/v2/render', renderRouter(GITOPS_DIR_V2))
+const workspaceMiddleware = createWorkspaceMiddleware({
+  gitopsDir: GITOPS_DIR_V2,
+  gitlabUrl: GITLAB_URL,
+  workspacesDir: WORKSPACES_DIR,
+})
+
+// Alertmanager configs stay local (not per-user workspace) — mount before workspace middleware
 app.use('/api/v2/alertmanager-configs', alertmanagerConfigsRouter(GITOPS_DIR_V2))
+
+// All other v2 routes go through workspace middleware
+app.use('/api/v2/charts', workspaceMiddleware, chartsRouter())
+app.use('/api/v2/templates', workspaceMiddleware, templatesV2Router())
+app.use('/api/v2/deployments', workspaceMiddleware, deploymentsRouter())
+app.use('/api/v2/render', workspaceMiddleware, renderRouter())
+app.use('/api/v2/git', workspaceMiddleware, gitRouter())
 
 app.use(express.static(path.join(__dirname, 'dist')))
 app.get('*', (req, res) => {

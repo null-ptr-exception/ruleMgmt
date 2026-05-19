@@ -1,0 +1,10 @@
+name,cluster,app
+error_rate_http_4xx,prod,api-gateway
+error_rate_http_4xx,prod,frontend
+error_rate_http_4xx,staging,api-gateway
+error_rate_http_5xx,prod,api-gateway
+error_rate_http_5xx,prod,payment-svc
+error_rate_http_5xx,staging,api-gateway
+retry_rate_grpc_retry,prod,payment-svc
+retry_rate_http_retry,prod,api-gateway
+retry_rate_http_retry,prod,frontend

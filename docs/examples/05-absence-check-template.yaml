@@ -1,0 +1,50 @@
+# 05-absence-check-template.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# 情境：服務存活監控（Liveness / Heartbeat）
+# Preset：absence-check
+#   metric == 0 時觸發，固定 critical severity，不需要 threshold。
+#   適合 Prometheus `up` 指標、自訂 heartbeat 指標。
+#
+# 特點：
+#   - 完全不需要 threshold（template / CSV 都不填）
+#   - CSV 只需 name/cluster/app
+#   - 支援 metric: 短寫法（exprTemplate 預設為 {{metric}}，等同 metricExpr）
+#   - 可與其他 preset 的 group 並列，但這份範例只示範純 absence-check
+# ─────────────────────────────────────────────────────────────────────────────
+
+preset: absence-check   # 全域 preset，所有 leaf 套用
+
+tree:
+  api:
+    children:
+      gateway:
+        metric: up{job="api-gateway"}
+
+      payment:
+        metric: up{job="payment-svc"}
+
+      order:
+        metric: up{job="order-svc"}
+
+      notification:
+        metric: up{job="notification-svc"}
+
+  data:
+    children:
+      postgres:
+        metric: pg_up
+
+      redis:
+        metric: redis_up
+
+      kafka:
+        # 也可以直接用 metricExpr（等同 metric: 此情境）
+        metricExpr: kafka_brokers > 0
+
+  infra:
+    children:
+      node_exporter:
+        metric: up{job="node-exporter"}
+
+      kube_state_metrics:
+        metric: up{job="kube-state-metrics"}

@@ -1,0 +1,39 @@
+# 01-basic-3tier-template.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# 情境：基礎三水位監控（最簡寫法）
+# Preset：single-threshold-3tier
+#   定義一個 threshold，系統自動展開：
+#     info  = threshold × 50%
+#     warn  = threshold × 75%
+#     crit  = threshold × 100%
+#
+# 特點：
+#   - 每個 leaf 直接用 metricExpr 寫完整 PromQL
+#   - threshold 從 root 繼承，個別 group / leaf 可 override
+#   - 最基本的入門範例
+# ─────────────────────────────────────────────────────────────────────────────
+
+preset: single-threshold-3tier
+threshold: 0.8        # 全域預設：info=40%, warn=60%, crit=80%
+
+tree:
+  cpu:
+    # 沒有 threshold override，繼承 root 的 0.8
+    children:
+      usage:
+        metricExpr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))
+
+  memory:
+    threshold: 0.85   # group 層 override：info=42.5%, warn=63.75%, crit=85%
+    children:
+      usage:
+        metricExpr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+
+  disk:
+    children:
+      root_usage:
+        metricExpr: 1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})
+        threshold: 0.9  # leaf 層 override：info=45%, warn=67.5%, crit=90%
+      data_usage:
+        metricExpr: 1 - (node_filesystem_avail_bytes{mountpoint="/data"} / node_filesystem_size_bytes{mountpoint="/data"})
+        # 繼承 disk group 的 threshold（group 未定義，再往上繼承 root 0.8）

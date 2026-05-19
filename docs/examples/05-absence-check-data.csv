@@ -1,0 +1,14 @@
+name,cluster,app
+api_gateway,prod,api-gateway
+api_payment,prod,payment-svc
+api_order,prod,order-svc
+api_notification,prod,notification-svc
+data_postgres,prod,postgres
+data_redis,prod,redis
+data_kafka,prod,kafka
+infra_node_exporter,prod,node-exporter
+infra_kube_state_metrics,prod,kube-state-metrics
+api_gateway,staging,api-gateway
+api_payment,staging,payment-svc
+data_postgres,staging,postgres
+data_redis,staging,redis

@@ -1,0 +1,7 @@
+name,cluster,app,threshold
+cpu_usage,staging,node-exporter,
+cpu_usage,staging,node-exporter-gpu,0.75
+memory_usage,staging,node-exporter,
+memory_usage,staging,node-exporter-gpu,
+disk_root_usage,staging,node-exporter,
+disk_data_usage,staging,node-exporter,0.85

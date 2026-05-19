@@ -1,0 +1,61 @@
+# 03-multi-tier-template.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# 情境：應用層延遲監控
+# Preset：multi-tier-threshold
+#   三個水位 (info / warn / crit) 各自獨立定義數值，不按比例推算。
+#   適合延遲、佔比等「非線性水位」的指標。
+#
+# 特點：
+#   - thresholds 定義在 template（group 或 leaf 層），CSV 只需 name/cluster/app
+#   - group 層的 thresholds 可以被 leaf 層覆蓋
+#   - 沒有 threshold 欄位的 CSV 行即繼承 template 的數值
+#
+# CSV 注意：
+#   - 不需要 threshold 欄位
+#   - thresholds 在 template 中定義，per-row override 不適用此 preset
+# ─────────────────────────────────────────────────────────────────────────────
+
+preset: multi-tier-threshold
+
+tree:
+  latency:
+    # group 層設定預設 thresholds，leaf 可覆蓋
+    thresholds:
+      info: 0.5    # 500 ms
+      warn: 1.0    # 1 s
+      crit: 2.0    # 2 s
+    children:
+      p50_seconds:
+        metricExpr: histogram_quantile(0.50, sum by (le, app) (rate(http_request_duration_seconds_bucket[5m])))
+        # 繼承 group thresholds：info=0.5, warn=1.0, crit=2.0
+
+      p95_seconds:
+        metricExpr: histogram_quantile(0.95, sum by (le, app) (rate(http_request_duration_seconds_bucket[5m])))
+        thresholds:    # leaf 層 override（p95 標準更嚴）
+          info: 1.0
+          warn: 2.0
+          crit: 4.0
+
+      p99_seconds:
+        metricExpr: histogram_quantile(0.99, sum by (le, app) (rate(http_request_duration_seconds_bucket[5m])))
+        thresholds:    # leaf 層 override（p99 標準最嚴）
+          info: 2.0
+          warn: 5.0
+          crit: 10.0
+
+  queue:
+    # 佇列深度監控（非延遲，但同樣適合 multi-tier）
+    thresholds:
+      info: 100
+      warn: 500
+      crit: 1000
+    children:
+      depth:
+        metricExpr: rabbitmq_queue_messages_ready
+
+      unacked:
+        metricExpr: rabbitmq_queue_messages_unacked
+        thresholds:
+          info: 50
+          warn: 200
+          crit: 500

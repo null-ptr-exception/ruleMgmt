@@ -1,0 +1,51 @@
+# 04-warn-crit-template.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# 情境：HTTP 錯誤率監控
+# Preset：warn-crit-threshold
+#   只有 warn / crit 兩個水位，無 info 層。
+#   適合錯誤率、重試率等「一旦出現就須注意」的指標。
+#
+# 特點：
+#   - exprTemplate + metric 搭配，共用計算形狀
+#   - thresholds 在 template 定義（warn / crit）
+#   - CSV 只需 name/cluster/app，不需要 threshold 欄位
+#
+# exprTemplate 解析示意：
+#   exprTemplate: "rate({{metric}}[5m]) / rate(http_requests_total[5m])"
+#   metric: "http_requests_total{status=~'5..'}"
+#   → resolved: "rate(http_requests_total{status=~'5..'}[5m]) / rate(http_requests_total[5m])"
+# ─────────────────────────────────────────────────────────────────────────────
+
+preset: warn-crit-threshold
+
+tree:
+  error_rate:
+    # 錯誤率計算形狀：特定條件 requests / 全部 requests
+    exprTemplate: "rate({{metric}}[5m]) / rate(http_requests_total[5m])"
+    children:
+      http_4xx:
+        metric: http_requests_total{status=~"4.."}
+        thresholds:
+          warn: 0.05   # 5% 4xx → warn
+          crit: 0.15   # 15% 4xx → crit
+
+      http_5xx:
+        metric: http_requests_total{status=~"5.."}
+        thresholds:
+          warn: 0.01   # 1% 5xx → warn（標準更嚴）
+          crit: 0.05   # 5% 5xx → crit
+
+  retry_rate:
+    # 重試率：形狀不同，直接用 metricExpr
+    thresholds:
+      warn: 0.10   # 10% → warn
+      crit: 0.30   # 30% → crit
+    children:
+      grpc_retry:
+        metricExpr: rate(grpc_client_msg_sent_total{grpc_type="unary"}[5m]) / rate(grpc_client_started_total{grpc_type="unary"}[5m]) - 1
+
+      http_retry:
+        metricExpr: rate(http_client_requests_total{retry="true"}[5m]) / rate(http_client_requests_total[5m])
+        thresholds:
+          warn: 0.05   # leaf 層 override（HTTP 重試標準更嚴）
+          crit: 0.20

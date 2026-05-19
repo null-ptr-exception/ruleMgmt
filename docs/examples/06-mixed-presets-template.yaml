@@ -1,0 +1,77 @@
+# 06-mixed-presets-template.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# 情境：完整微服務監控套件（混合 Preset）
+# 特點：
+#   - root 設定全域 preset，各 group 可 override 成不同 preset
+#   - 綜合示範所有繼承機制：preset / threshold / exprTemplate
+#   - 一份 template 涵蓋：資源飽和、延遲、錯誤率、服務存活 四個面向
+#
+# 繼承結構：
+#   preset: single-threshold-3tier (root)
+#     ├── resource/  → single-threshold-3tier  (inherited, exprTemplate)
+#     ├── latency/   → multi-tier-threshold    (group override)
+#     ├── error/     → warn-crit-threshold     (group override)
+#     └── svc/       → absence-check           (group override)
+# ─────────────────────────────────────────────────────────────────────────────
+
+preset: single-threshold-3tier
+threshold: 0.8
+
+tree:
+  resource:
+    # 繼承 root preset: single-threshold-3tier
+    # exprTemplate: 統一用 1-(available/total) 形狀
+    threshold: 0.85
+    exprTemplate: "1 - ({{metric}})"
+    children:
+      cpu:
+        metric: avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))
+
+      memory:
+        metric: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes
+
+      disk:
+        metric: node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs"}
+        threshold: 0.9   # disk 標準更嚴
+
+  latency:
+    preset: multi-tier-threshold   # override: 三水位各自定義
+    thresholds:
+      info: 0.3    # 300ms
+      warn: 1.0    # 1s
+      crit: 3.0    # 3s
+    children:
+      p95:
+        metricExpr: histogram_quantile(0.95, sum by (le, app) (rate(http_request_duration_seconds_bucket[5m])))
+        # 繼承 group thresholds
+
+      p99:
+        metricExpr: histogram_quantile(0.99, sum by (le, app) (rate(http_request_duration_seconds_bucket[5m])))
+        thresholds:    # p99 標準更嚴
+          info: 0.5
+          warn: 2.0
+          crit: 8.0
+
+  error:
+    preset: warn-crit-threshold   # override: 只有兩個水位
+    children:
+      rate_5xx:
+        metricExpr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])
+        thresholds:
+          warn: 0.01
+          crit: 0.05
+
+      rate_4xx:
+        metricExpr: rate(http_requests_total{status=~"4.."}[5m]) / rate(http_requests_total[5m])
+        thresholds:
+          warn: 0.05
+          crit: 0.20
+
+  svc:
+    preset: absence-check         # override: 存活監控，無 threshold
+    children:
+      isalive:
+        metric: up
+
+      db:
+        metric: pg_up

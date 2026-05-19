@@ -1,0 +1,8 @@
+name,cluster,app,threshold
+saturation_memory,prod,backend,
+saturation_memory,prod,frontend,
+saturation_disk,prod,backend,0.92
+saturation_cpu,prod,backend,
+saturation_cpu,prod,frontend,0.9
+network_rx_bytes,prod,backend,
+network_tx_bytes,prod,backend,

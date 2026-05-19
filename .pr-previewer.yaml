@@ -1,0 +1,6 @@
+up: docker compose up --build -d
+down: docker compose down -v
+
+healthcheck:
+  cmd: curl -sf http://localhost:${PR_PREVIEW_PORT}/
+  start_delay: 10s

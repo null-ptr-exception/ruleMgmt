@@ -1,290 +1,208 @@
-# Alert Template UI
+# AlertForge
 
-A local web UI for managing Prometheus Operator alerting templates and Alertmanager configurations. Visually create and version Helm chart–based alert templates, define AM Config routing with optional route pruning, and deploy through a structured GitOps repository layout.
-
----
+A web UI for managing Prometheus alerting rules as Helm charts, deployed per-user through JupyterHub. Each user gets an isolated git-backed workspace with per-user branches, GitLab OAuth, and a built-in Git panel for committing, pushing, and reviewing changes.
 
 ## Features
 
-| Editor | What it manages |
+| View | Description |
 |---|---|
-| **Alert Type** | Reusable rule skeletons — define `expr` with Go template vars (`{{ .varName }}`), declare parameter names and descriptions |
-| **Rule Group** | Compose Alert Types into PrometheusRule groups — fill in var values per rule, set severity, attach group-level labels |
-| **Receivers** | Alertmanager receiver configs — supports `webhook`, `email`, `slack`, and `pagerduty`, each with multiple entries per receiver |
-| **AM Config** | Full AlertmanagerConfig editor — route matchers, route rules (original or pruned tree), inhibit rules, embedded receivers |
-| **Gitops Deploy** | Tree view of `product / site / relunit / stage` — toggle stages on/off, assign an AM Config template, run `helm template` and view rendered YAML inline |
-| **PromQL Builder** | Interactive PromQL expression builder with metrics dictionary autocomplete |
+| **Templates** | Create and edit alert rule templates as Helm charts with Go template variables |
+| **Alerts** | Browse alert groups, view rendered rules |
+| **Routes** | Edit Alertmanager notification routing |
+| **Git Panel** | View changes, diffs (CodeMirror merge viewer), commit history, commit, push, pull |
 
-All templates are versioned (`v1.0.0`, `v1.0.1`, …) and saved as real Helm charts to the local filesystem.
+Alert templates are stored as Helm charts in a gitops repository. Each user works on their own branch (`rulemgmt/<username>`) and pushes changes through the Git panel.
 
 ---
 
-## Prerequisites
-
-| Tool | Version |
-|---|---|
-| Node.js | 18+ |
-| Helm | 3.x |
-
----
-
-## Getting Started
+## Quick Start (Local Development)
 
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Start the dev server (Express API + Vite frontend run concurrently)
-npm run dev
+npm run dev        # Express API + Vite frontend
 ```
 
-Open **http://localhost:5173** in your browser.
+Open **http://localhost:5173**. The app auto-initializes a local git repo in `gitops/` and scaffolds sample chart templates on first run.
 
-> The Express API listens on port **3001**. Vite proxies `/api` requests to it automatically.
+```bash
+make clean         # Reset gitops/ directory
+make apply-sample  # Reload sample data
+```
+
+---
+
+## Docker
+
+```bash
+docker compose up --build
+# or
+make up
+```
+
+The app listens on port 8080 inside the container.
+
+### Image
+
+Pre-built images are published to GitHub Container Registry on each release:
+
+```
+ghcr.io/null-ptr-exception/rulemgmt:<version>
+ghcr.io/null-ptr-exception/rulemgmt:latest
+```
+
+---
+
+## Deployment (JupyterHub on Kubernetes)
+
+AlertForge is designed to run as a JupyterHub singleuser server. Each user gets their own pod with a persistent volume for their git workspace.
+
+### Prerequisites
+
+- Kubernetes cluster (minikube, GKE, EKS, etc.)
+- Helm 3.x
+- A GitLab instance with an OAuth application configured
+- A git repository for storing alert templates
+
+### 1. Add the JupyterHub Helm repo
+
+```bash
+helm repo add jupyterhub https://hub.jupyter.org/helm-chart/
+helm repo update
+```
+
+### 2. Create your values file
+
+Start from the reference values:
+
+```bash
+cp k8s/jupyterhub-values.yaml my-values.yaml
+```
+
+This file configures:
+
+- **GitLab OAuth** — authenticator class, scopes, callback URL
+- **Pre-spawn hook** — injects `GITLAB_TOKEN` and `JUPYTERHUB_USER` into init containers
+- **Init container** — clones the git repo into the user's PVC, creates per-user branches
+- **Singleuser pod** — resource limits, persistent storage, environment variables
+- **Branding** — AlertForge logo and title in the JupyterHub navbar
+
+### 3. Create a secrets values file
+
+Create a separate file for credentials (do not commit this):
+
+```yaml
+# my-secrets.yaml
+hub:
+  config:
+    GitLabOAuthenticator:
+      client_id: "<your-gitlab-app-id>"
+      client_secret: "<your-gitlab-app-secret>"
+      oauth_callback_url: "https://<your-hub-url>/hub/oauth_callback"
+      gitlab_url: "https://<your-gitlab-host>"
+
+singleuser:
+  image:
+    name: ghcr.io/null-ptr-exception/rulemgmt
+    tag: "1.0.0"
+  extraEnv:
+    GITLAB_HOST: "<your-gitlab-host>"
+    GITLAB_PROJECT: "<group/project>"
+    GITOPS_DIR: "/data/gitops"
+```
+
+See `k8s/dev-values.yaml.example` for a complete example.
+
+### 4. Install
+
+```bash
+helm upgrade --install jupyterhub jupyterhub/jupyterhub \
+  --version 4.1.0 \
+  --values my-values.yaml \
+  --values my-secrets.yaml \
+  --namespace alertforge \
+  --create-namespace
+```
+
+### 5. Access
+
+The default proxy service type is `NodePort`. For production, configure an ingress or change the proxy service type in your values:
+
+```yaml
+proxy:
+  service:
+    type: LoadBalancer  # or ClusterIP with ingress
+```
+
+### Environment Variables
+
+| Variable | Description | Required |
+|---|---|---|
+| `GITLAB_HOST` | GitLab hostname (e.g. `gitlab.example.com`) | Yes |
+| `GITLAB_PROJECT` | Git repo path (e.g. `group/alertforge-configs`) | Yes |
+| `GITLAB_TOKEN` | OAuth token (injected by pre-spawn hook) | Auto |
+| `JUPYTERHUB_USER` | Username (injected by JupyterHub) | Auto |
+| `GITOPS_DIR` | Workspace path inside the container | No (default: `/data/gitops`) |
+| `CHARTS_DIR` | Subdirectory for chart templates | No (default: `charts/`) |
+| `DEPLOYMENTS_DIR` | Subdirectory for deployments | No (default: `deployments/`) |
+| `PORT` | Server listen port | No (default: `8080`) |
+
+### Local Development with Skaffold
+
+For iterating on the image with a local Kubernetes cluster:
+
+```bash
+# 1. Copy and fill in dev credentials
+cp k8s/dev-values.yaml.example k8s/dev-values.yaml
+
+# 2. Build and deploy
+skaffold run --kube-context minikube
+```
+
+Skaffold builds the Docker image locally, then deploys JupyterHub with both `k8s/jupyterhub-values.yaml` and `k8s/dev-values.yaml`.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Ant Design 6, Vite 5 |
+| Backend | Express (ES modules), js-yaml |
+| Editor | CodeMirror 6 with PromQL support, @codemirror/merge for diffs |
+| Tests | Vitest (unit/integration), Playwright (E2E) |
+| CI | GitHub Actions — lint, test, E2E, Docker build + ghcr push |
+
+---
+
+## Testing
+
+```bash
+npm test              # Unit and integration tests (vitest)
+npm run test:e2e      # E2E tests (playwright)
+npm run test:coverage # Coverage report
+npm run lint          # ESLint
+```
 
 ---
 
 ## Repository Layout
 
 ```
-repo/
-├── gitops-deploy/
-│   └── {product}/
-│       └── {site}/
-│           └── {relunit}/
-│               └── {stage}/            # DEV | TEST | STG | PROD
-│                   ├── Chart.yaml       # Helm wrapper — depends on amconfig chart
-│                   └── values.yaml      # Scoped overrides: { chartName: { ... } }
-│
-├── templates/
-│   ├── alert-type/
-│   │   └── {name}/{version}/
-│   │       ├── Chart.yaml
-│   │       ├── values.yaml             # expr template + var declarations
-│   │       └── templates/
-│   ├── alert-suite/
-│   │   └── {name}/{version}/
-│   │       ├── Chart.yaml
-│   │       ├── values.yaml             # rules + groupLabels
-│   │       └── templates/
-│   │           └── prometheus-rule.yaml  # PrometheusRule CR
-│   ├── receivers/
-│   │   └── {name}/{version}/
-│   │       ├── Chart.yaml
-│   │       └── values.yaml             # Alertmanager receivers block
-│   └── amconfig/
-│       └── {name}/{version}/
-│           ├── Chart.yaml              # depends on alert-suite charts
-│           ├── values.yaml             # routes, matchers, inhibitRules, receivers
-│           └── templates/
-│               └── alertmanager-config.yaml  # AlertmanagerConfig CR
-│
-├── scripts/
-│   └── prune_routes.py                 # Standalone CLI for route tree pruning
-│
-├── config/
-│   └── defaults.yaml
-│
-└── src/                                # React + Express source
+├── src/                    # React frontend
+│   ├── components/         # UI components (GitPanel, GitChanges, etc.)
+│   ├── pages/              # Page views (AlertUserView, TemplateDevEditor, etc.)
+│   ├── hooks/              # React hooks (useGitStatus)
+│   └── lib/                # Utilities (apiFetch)
+├── server/                 # Express backend
+│   ├── routes/             # API routes (charts, templates, git, etc.)
+│   └── lib/                # Server utilities (git wrapper, chart discovery)
+├── sample/                 # Sample chart templates (scaffolded on first run)
+├── k8s/                    # Kubernetes deployment files
+│   ├── jupyterhub-values.yaml      # Reference JupyterHub Helm values
+│   └── dev-values.yaml.example     # Dev credentials template
+├── tests/
+│   ├── unit/               # Unit tests
+│   ├── integration/        # API integration tests
+│   └── e2e/                # Playwright E2E tests
+└── gitops/                 # Local workspace (git-ignored)
 ```
-
----
-
-## Helm Chart Architecture
-
-Each GitOps stage is a Helm chart with a `file://` dependency on the chosen AM Config template. The AM Config chart in turn depends on one or more alert-suite charts:
-
-```
-gitops-deploy/.../PROD/  →  templates/amconfig/{name}/{version}/  →  templates/alert-suite/{name}/{version}/
-```
-
-Running `helm template` on a stage renders both the **PrometheusRule** and **AlertmanagerConfig** CRs.
-
-### Render a stage manually
-
-```bash
-# 1. Resolve amconfig chart's sub-dependencies (alert-suite charts)
-helm dependency update templates/amconfig/{name}/{version}/
-
-# 2. Resolve the stage chart's dependency (amconfig)
-cd gitops-deploy/{product}/{site}/{relunit}/{stage}
-helm dependency update
-
-# 3. Render
-helm template {relunit}-{stage} .
-```
-
-> Release names must be lowercase — the UI and server enforce this automatically.
-
-### File path formula
-
-The `file://` repository path in a stage's `Chart.yaml` is always **5 levels up** from the stage folder to the repo root:
-
-```yaml
-repository: "file://../../../../../templates/amconfig/{name}/{version}"
-```
-
----
-
-## Template Data Formats
-
-### Alert Type (`values.yaml`)
-
-```yaml
-name: high-threshold
-description: "Metric threshold alert"
-expr: "{{ .metric }} {{ .op }} {{ .threshold }}"
-vars:
-  - name: metric
-    description: "PromQL metric expression"
-  - name: op
-    description: "Comparison operator (>, <, >=, <=)"
-  - name: threshold
-    description: "Threshold value"
-for: "5m"
-labels: {}
-```
-
-### Rule Group / Alert Suite (`values.yaml`)
-
-```yaml
-alertSuite:
-  name: platform-infra
-  groupLabels:
-    team: platform
-  rules:
-    - alertTypeName: high-threshold
-      alertTypeVersion: v1.0.0
-      ruleName: high-cpu
-      expr: "cpu_usage > 80"
-      vars:
-        metric: cpu_usage
-        op: ">"
-        threshold: "80"
-      severity: warning
-      for: "5m"
-      description: "CPU above 80% on {{ $labels.instance }}"
-      labels:
-        team: platform
-```
-
-### AM Config (`values.yaml`)
-
-```yaml
-configName: platform-routing
-defaultReceiver: slack-warnings
-groups:
-  - name: platform-infra
-    version: v1.0.0
-routeMatchers:                         # spec.route.matchers — namespace filter
-  - key: namespace
-    op: "="
-    value: production
-routeMode: original                    # original | pruned
-routeRules:
-  - receiver: pagerduty-critical
-    matchers:
-      - key: severity
-        op: "="
-        value: critical
-  - receiver: slack-warnings
-    matchers:
-      - key: severity
-        op: "="
-        value: warning
-inhibitRules:
-  - sourceMatchers:
-      - key: severity
-        op: "="
-        value: critical
-    targetMatchers:
-      - key: severity
-        op: "="
-        value: warning
-    equal:
-      - alertname
-receivers:
-  - name: pagerduty-critical
-    pagerduty_configs:
-      - routing_key: YOUR_KEY
-        send_resolved: true
-  - name: slack-warnings
-    slack_configs:
-      - api_url: https://hooks.slack.com/...
-        channel: "#alerts"
-        send_resolved: true
-```
-
-### Receivers (`values.yaml`)
-
-```yaml
-receivers:
-  - name: platform-receiver
-    webhook_configs:
-      - url: "https://hook.example.com"
-        send_resolved: true
-    slack_configs:
-      - api_url: "https://hooks.slack.com/..."
-        channel: "#alerts"
-    pagerduty_configs:
-      - routing_key: "..."
-    email_configs:
-      - to: "team@example.com"
-        from: "alertmanager@example.com"
-        smarthost: "smtp.example.com:587"
-```
-
----
-
-## Route Pruning
-
-The AM Config editor supports two route display modes:
-
-- **Original** — routes exactly as entered, flat list
-- **Pruned** — routes synthesized into a trie tree, hoisting shared matchers into parent nodes
-
-Pruning is computed server-side via `POST /api/prune-routes`. A standalone CLI version is available for manual use:
-
-```bash
-# From JSON/YAML file
-python3 scripts/prune_routes.py input.yaml
-
-# From stdin
-echo '{"routeRules":[...], "routeMatchers":[...]}' | python3 scripts/prune_routes.py
-```
-
-The pruned route tree is stored in `values.yaml` when saved in pruned mode.
-
----
-
-## Development
-
-```bash
-# Frontend only (Vite dev server on :5173)
-npx vite
-
-# Backend only (Express API on :3001)
-node server.js
-
-# Production build
-npm run build
-```
-
-### Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React 18, plain CSS, Vite 5 |
-| Backend | Express (ES modules), js-yaml |
-| Editor | CodeMirror 6 with PromQL language support |
-| Helm | v3, `file://` local chart dependencies |
-
----
-
-## Notes
-
-- Template names and folder names are free-form strings.
-- Version format is `v{major}.{minor}.{patch}` (e.g. `v1.0.0`). The `v` prefix is stripped when used in Helm `dependencies[].version`.
-- Stage folders (`DEV`, `TEST`, `STG`, `PROD`) are fixed — toggling a stage "on" creates the folder; toggling "off" removes it.
-- The `values.yaml` in a GitOps stage scopes all overrides under the dependency chart name key (e.g. `platform-routing: { ... }`). An empty override must be `{}`, not `null`, to avoid Helm type errors.
-- The `global.product` value is injected by the GitOps stage and prefixes all Kubernetes resource names to avoid collisions across products.

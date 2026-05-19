@@ -6,3 +6,5 @@ playwright-report/
 gitops/
 k8s/dev-values.yaml
 .claude/
+docs/superpowers/
+coverage/

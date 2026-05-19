@@ -97,23 +97,81 @@ describe('Git API', () => {
     expect(status).toBe(404)
   })
 
-  it('GET /status reports recoveredFromWip when latest commit is wip', async () => {
-    await fs.writeFile(path.join(tmpDir, 'wip-file.txt'), 'wip content')
-    await git(tmpDir, 'add', '-A')
-    await git(tmpDir, 'commit', '-m', 'wip')
-
-    const res = await api('GET', '/api/v2/git/status')
-    expect(res.status).toBe(200)
-    expect(res.data.recoveredFromWip).toBe(true)
+  it('POST /pull returns 404 when no remote', async () => {
+    const { status, data } = await api('POST', '/api/v2/git/pull')
+    expect(status).toBe(404)
+    expect(data.error).toContain('no remote')
   })
 
-  it('GET /status reports recoveredFromWip false for normal commits', async () => {
-    await fs.writeFile(path.join(tmpDir, 'normal.txt'), 'content')
-    await git(tmpDir, 'add', '-A')
-    await git(tmpDir, 'commit', '-m', 'add normal file')
+  it('GET /log returns commit history', async () => {
+    const { status, data } = await api('GET', '/api/v2/git/log')
+    expect(status).toBe(200)
+    expect(Array.isArray(data)).toBe(true)
+    expect(data.length).toBeGreaterThan(0)
+    const commit = data[0]
+    expect(commit).toHaveProperty('sha')
+    expect(commit).toHaveProperty('shortSha')
+    expect(commit).toHaveProperty('message')
+    expect(commit).toHaveProperty('author')
+    expect(commit).toHaveProperty('date')
+    expect(commit).toHaveProperty('files')
+    expect(Array.isArray(commit.files)).toBe(true)
+  })
 
-    const res = await api('GET', '/api/v2/git/status')
-    expect(res.status).toBe(200)
-    expect(res.data.recoveredFromWip).toBe(false)
+  it('GET /log respects limit param', async () => {
+    const { status, data } = await api('GET', '/api/v2/git/log?limit=1')
+    expect(status).toBe(200)
+    expect(data.length).toBe(1)
+  })
+
+  it('GET /log includes file changes per commit', async () => {
+    const { data } = await api('GET', '/api/v2/git/log?limit=1')
+    const latest = data[0]
+    expect(latest.files.length).toBeGreaterThan(0)
+    expect(latest.files[0]).toHaveProperty('file')
+    expect(latest.files[0]).toHaveProperty('status')
+  })
+
+  it('GET /diff returns working tree diff', async () => {
+    await fs.writeFile(path.join(tmpDir, 'diff-test.txt'), 'modified content')
+    await git(tmpDir, 'add', 'diff-test.txt')
+    await git(tmpDir, 'commit', '-m', 'add diff-test')
+    await fs.writeFile(path.join(tmpDir, 'diff-test.txt'), 'changed content')
+
+    const { status, data } = await api('GET', '/api/v2/git/diff?file=diff-test.txt')
+    expect(status).toBe(200)
+    expect(data.file).toBe('diff-test.txt')
+    expect(data.original).toBe('modified content')
+    expect(data.modified).toBe('changed content')
+  })
+
+  it('GET /diff returns commit diff when ref provided', async () => {
+    await fs.writeFile(path.join(tmpDir, 'ref-test.txt'), 'v1')
+    await git(tmpDir, 'add', '-A')
+    await git(tmpDir, 'commit', '-m', 'add ref-test v1')
+
+    await fs.writeFile(path.join(tmpDir, 'ref-test.txt'), 'v2')
+    await git(tmpDir, 'add', '-A')
+    await git(tmpDir, 'commit', '-m', 'update ref-test v2')
+
+    const sha = (await git(tmpDir, 'rev-parse', 'HEAD')).trim()
+    const { status, data } = await api('GET', `/api/v2/git/diff?file=ref-test.txt&ref=${sha}`)
+    expect(status).toBe(200)
+    expect(data.original).toBe('v1')
+    expect(data.modified).toBe('v2')
+  })
+
+  it('GET /diff returns 400 when file param missing', async () => {
+    const { status } = await api('GET', '/api/v2/git/diff')
+    expect(status).toBe(400)
+  })
+
+  it('GET /diff returns empty original for added files', async () => {
+    await fs.writeFile(path.join(tmpDir, 'brand-new.txt'), 'new content')
+
+    const { status, data } = await api('GET', '/api/v2/git/diff?file=brand-new.txt')
+    expect(status).toBe(200)
+    expect(data.original).toBe('')
+    expect(data.modified).toBe('new content')
   })
 })

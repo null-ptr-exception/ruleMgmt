@@ -2,6 +2,8 @@ hub:
   config:
     JupyterHub:
       authenticator_class: gitlab
+      template_vars:
+        hub_title: "AlertForge"
     GitLabOAuthenticator:
       enable_auth_state: true
       scope:
@@ -14,6 +16,27 @@ hub:
     KubeSpawner:
       port: 8080
   extraConfig:
+    branding: |
+      c.JupyterHub.template_vars["announcement"] = """<style>
+      .navbar-brand img { display: none !important; }
+      .navbar-brand span { display: none !important; }
+      .navbar-brand { display: flex !important; align-items: center; text-decoration: none !important; }
+      .navbar-brand::before {
+        content: "\\1F525";
+        font-size: 22px;
+        margin-right: 6px;
+      }
+      .navbar-brand::after {
+        content: "AlertForge";
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        background: linear-gradient(90deg, #6f6f6f 0%, #6f6f6f 45%, #e8590c 45%, #e8590c 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      </style>"""
     pre_spawn_hook: |
       async def pre_spawn_hook(spawner):
           auth_state = await spawner.user.get_auth_state()
@@ -45,17 +68,14 @@ singleuser:
   extraEnv:
     PORT: "8080"
   storage:
-    type: none
+    type: dynamic
+    capacity: 256Mi
+    homeMountPath: /data/gitops
     extraVolumes:
-      - name: workspace
-        emptyDir: {}
       - name: init-scripts
         configMap:
           name: rulemgmt-init-scripts
           defaultMode: 0755
-    extraVolumeMounts:
-      - name: workspace
-        mountPath: /data/gitops
   memory:
     guarantee: 256M
     limit: 512M
@@ -67,24 +87,11 @@ singleuser:
       image: alpine/git:latest
       command: ["/bin/sh", "/scripts/init-clone.sh"]
       volumeMounts:
-        - name: workspace
+        - name: volume-{username}
           mountPath: /data/gitops
         - name: init-scripts
           mountPath: /scripts
   extraContainers: []
-  lifecycleHooks:
-    preStop:
-      exec:
-        command:
-          - /bin/sh
-          - -c
-          - |
-            cd /data/gitops
-            if [ -n "$(git status --porcelain)" ]; then
-              git add -A
-              git commit -m "wip"
-              git push origin "HEAD:rulemgmt/${JUPYTERHUB_USER}" || true
-            fi
 
 cull:
   enabled: true

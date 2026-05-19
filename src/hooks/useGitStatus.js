@@ -4,7 +4,7 @@ import { apiFetch } from '../lib/apiFetch.js'
 export function useGitStatus() {
   const [status, setStatus] = useState({
     branch: '', changes: null, changeCount: 0,
-    behindMain: 0, hasRemote: false, recoveredFromWip: false,
+    behindMain: 0, hasRemote: false,
   })
 
   const refresh = useCallback(() => {

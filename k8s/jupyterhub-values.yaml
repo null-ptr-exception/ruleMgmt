@@ -1,0 +1,81 @@
+hub:
+  config:
+    JupyterHub:
+      authenticator_class: gitlab
+    GitLabOAuthenticator:
+      enable_auth_state: true
+      scope:
+        - read_user
+        - read_repository
+        - write_repository
+    Authenticator:
+      enable_auth_state: true
+  extraConfig:
+    pre_spawn_hook: |
+      async def pre_spawn_hook(spawner):
+          auth_state = await spawner.user.get_auth_state()
+          if auth_state:
+              token = auth_state.get("access_token", "")
+              spawner.environment["GITLAB_TOKEN"] = token
+              spawner.environment["JUPYTERHUB_USER"] = spawner.user.name
+              for ic in spawner.init_containers:
+                  ic.setdefault("env", []).extend([
+                      {"name": "GITLAB_TOKEN", "value": token},
+                      {"name": "JUPYTERHUB_USER", "value": spawner.user.name},
+                  ])
+      c.KubeSpawner.pre_spawn_hook = pre_spawn_hook
+
+singleuser:
+  cmd: ["node", "server.js"]
+  extraEnv:
+    PORT: "8080"
+  storage:
+    type: none
+  memory:
+    guarantee: 256M
+    limit: 512M
+  cpu:
+    guarantee: 0.25
+    limit: 1
+  initContainers:
+    - name: git-clone
+      image: alpine/git:latest
+      command: ["/bin/sh", "/scripts/init-clone.sh"]
+      volumeMounts:
+        - name: workspace
+          mountPath: /data/gitops
+        - name: init-scripts
+          mountPath: /scripts
+  extraContainers: []
+  extraVolumes:
+    - name: workspace
+      emptyDir: {}
+    - name: init-scripts
+      configMap:
+        name: rulemgmt-init-scripts
+        defaultMode: 0755
+  extraVolumeMounts:
+    - name: workspace
+      mountPath: /data/gitops
+  lifecycleHooks:
+    preStop:
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - |
+            cd /data/gitops
+            if [ -n "$(git status --porcelain)" ]; then
+              git add -A
+              git commit -m "wip"
+              git push origin "HEAD:rulemgmt/${JUPYTERHUB_USER}" || true
+            fi
+
+cull:
+  enabled: true
+  timeout: 14400
+  every: 300
+
+proxy:
+  service:
+    type: NodePort

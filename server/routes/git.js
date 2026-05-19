@@ -17,13 +17,8 @@ function parseStatus(raw) {
   return changes
 }
 
-async function hasRemote(cwd) {
-  try {
-    const result = await git(cwd, 'remote')
-    return result.trim().length > 0
-  } catch {
-    return false
-  }
+function hasRemote() {
+  return !!process.env.GITLAB_TOKEN
 }
 
 async function getBranch(cwd) {
@@ -41,7 +36,7 @@ export default function gitRouter() {
       const raw = await git(cwd, 'status', '--porcelain')
       const changes = parseStatus(raw)
       const changeCount = changes.modified.length + changes.added.length + changes.deleted.length
-      const remote = await hasRemote(cwd)
+      const remote = hasRemote()
 
       let behindMain = 0
       if (remote) {
@@ -52,7 +47,15 @@ export default function gitRouter() {
         } catch { /* fetch failed */ }
       }
 
-      res.json({ branch, changes, changeCount, behindMain, hasRemote: remote })
+      let recoveredFromWip = false
+      try {
+        const lastMsg = (await git(cwd, 'log', '-1', '--format=%s')).trim()
+        recoveredFromWip = lastMsg === 'wip'
+      } catch {
+        // empty repo, no commits
+      }
+
+      res.json({ branch, changes, changeCount, behindMain, hasRemote: remote, recoveredFromWip })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -80,10 +83,10 @@ export default function gitRouter() {
 
   router.post('/push', async (req, res) => {
     const cwd = req.gitopsDir
-    const remote = await hasRemote(cwd)
+    const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
-    const username = req.session?.user?.username || 'user'
+    const username = process.env.JUPYTERHUB_USER || 'user'
     const branch = req.body.branch || `${username}/draft`
 
     try {
@@ -102,7 +105,7 @@ export default function gitRouter() {
         }
       }
 
-      const token = req.session?.user?.accessToken
+      const token = process.env.GITLAB_TOKEN
       if (token) {
         await pushWithToken(cwd, branch, token)
       } else {
@@ -131,7 +134,7 @@ export default function gitRouter() {
 
   router.post('/sync', async (req, res) => {
     const cwd = req.gitopsDir
-    const remote = await hasRemote(cwd)
+    const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
     try {

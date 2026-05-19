@@ -1,5 +1,6 @@
 import express from 'express'
 import fs from 'fs/promises'
+import { readFileSync } from 'fs'
 import path from 'path'
 import yaml from 'js-yaml'
 import { fileURLToPath } from 'url'
@@ -10,10 +11,8 @@ import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
 import renderRouter from './server/routes/render.js'
 import alertmanagerConfigsRouter from './server/routes/alertmanagerConfigs.js'
-import session from 'express-session'
-import authRouter from './server/routes/auth.js'
 import gitRouter from './server/routes/git.js'
-import { createWorkspaceMiddleware } from './server/middleware/workspace.js'
+import git from './server/lib/git.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -22,27 +21,23 @@ app.use(express.json())
 const REPO_ROOT = __dirname
 const TEMPLATES_DIR = path.join(REPO_ROOT, 'templates')
 const GITOPS_DIR = path.join(REPO_ROOT, 'gitops-deploy')
-const GITOPS_DIR_V2 = path.join(REPO_ROOT, 'gitops')
+const BASE_PATH = process.env.JUPYTERHUB_SERVICE_PREFIX || '/'
+const GITOPS_DIR_V2 = process.env.GITOPS_DIR || path.join(REPO_ROOT, 'gitops')
 const DEFAULTS_FILE     = path.join(REPO_ROOT, 'config', 'defaults.yaml')
 const METRICS_DICT_FILE = path.join(REPO_ROOT, 'config', 'metrics.yaml')
 
-const GITLAB_URL = process.env.GITLAB_URL || null
-const GITLAB_APP_ID = process.env.GITLAB_APP_ID || null
-const GITLAB_APP_SECRET = process.env.GITLAB_APP_SECRET || null
-const GITLAB_PROJECT_ID = process.env.GITLAB_PROJECT_ID || null
-const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-me'
-const WORKSPACES_DIR = process.env.WORKSPACES_DIR || '/data/workspaces'
-
-if (GITLAB_URL) {
-  app.use(session({
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 },
-  }))
+// Auto-init git in local dev mode (no JupyterHub)
+if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
+  try {
+    await fs.access(path.join(GITOPS_DIR_V2, '.git'))
+  } catch {
+    await fs.mkdir(GITOPS_DIR_V2, { recursive: true })
+    await git(GITOPS_DIR_V2, 'init')
+    await git(GITOPS_DIR_V2, 'add', '-A')
+    await git(GITOPS_DIR_V2, 'commit', '--allow-empty', '-m', 'initial')
+    console.log(`Git initialized in ${GITOPS_DIR_V2}`)
+  }
 }
-
-app.locals.gitlabProjectId = GITLAB_PROJECT_ID
 
 async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true })
@@ -630,34 +625,32 @@ app.post('/api/prune-routes', (req, res) => {
   }
 })
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
-app.use('/api/auth', authRouter({
-  gitlabUrl: GITLAB_URL,
-  gitlabAppId: GITLAB_APP_ID,
-  gitlabAppSecret: GITLAB_APP_SECRET,
-}))
+// ─── V2 API (base path router) ──────────────────────────────────────────────
+const baseRouter = express.Router()
 
-// ─── V2 API (Helm chart management) ─────────────────────────────────────────
-const workspaceMiddleware = createWorkspaceMiddleware({
-  gitopsDir: GITOPS_DIR_V2,
-  gitlabUrl: GITLAB_URL,
-  workspacesDir: WORKSPACES_DIR,
+function setGitopsDir(req, res, next) {
+  req.gitopsDir = GITOPS_DIR_V2
+  next()
+}
+
+baseRouter.use('/api/v2/alertmanager-configs', setGitopsDir, alertmanagerConfigsRouter())
+baseRouter.use('/api/v2/charts', setGitopsDir, chartsRouter())
+baseRouter.use('/api/v2/templates', setGitopsDir, templatesV2Router())
+baseRouter.use('/api/v2/deployments', setGitopsDir, deploymentsRouter())
+baseRouter.use('/api/v2/render', setGitopsDir, renderRouter())
+baseRouter.use('/api/v2/git', setGitopsDir, gitRouter())
+
+// Static assets + SPA fallback with base path injection
+const indexHtml = readFileSync(path.join(__dirname, 'dist', 'index.html'), 'utf-8')
+
+baseRouter.use(express.static(path.join(__dirname, 'dist')))
+baseRouter.get('*', (req, res) => {
+  const html = indexHtml
+    .replace('<head>', `<head><base href="${BASE_PATH}"><script>window.__BASE_PATH__="${BASE_PATH}"</script>`)
+  res.send(html)
 })
 
-// Alertmanager configs stay local (not per-user workspace) — mount before workspace middleware
-app.use('/api/v2/alertmanager-configs', alertmanagerConfigsRouter(GITOPS_DIR_V2))
-
-// All other v2 routes go through workspace middleware
-app.use('/api/v2/charts', workspaceMiddleware, chartsRouter())
-app.use('/api/v2/templates', workspaceMiddleware, templatesV2Router())
-app.use('/api/v2/deployments', workspaceMiddleware, deploymentsRouter())
-app.use('/api/v2/render', workspaceMiddleware, renderRouter())
-app.use('/api/v2/git', workspaceMiddleware, gitRouter())
-
-app.use(express.static(path.join(__dirname, 'dist')))
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'))
-})
+app.use(BASE_PATH, baseRouter)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => console.log(`API server → http://0.0.0.0:${PORT}`))

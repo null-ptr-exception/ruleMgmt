@@ -1,4 +1,20 @@
 {
+  "single-threshold-3tier": {
+    "name": "Single Threshold – 3 Tier",
+    "description": "Define one critical threshold; info (50%) and warn (75%) are derived automatically",
+    "promqlTemplate": "METRIC_EXPR > {{ THRESHOLD }}",
+    "forDuration": "5m",
+    "tiers": [
+      { "name": "infoThreshold",  "severity": "info",     "ratio": 0.50 },
+      { "name": "warnThreshold",  "severity": "warning",  "ratio": 0.75 },
+      { "name": "critThreshold",  "severity": "critical", "ratio": 1.00 }
+    ],
+    "vars": [
+      { "name": "cluster",   "type": "string", "xVarType": "selector",        "description": "Target cluster" },
+      { "name": "app",       "type": "string", "xVarType": "selector",        "description": "Target application" },
+      { "name": "threshold", "type": "number", "xVarType": "threshold-base",  "default": 0.9, "description": "Critical threshold; info=50%, warn=75%, crit=100%" }
+    ]
+  },
   "multi-tier-threshold": {
     "name": "Multi-Tier Threshold",
     "description": "3-tier (info / warn / crit) alert for any metric comparison",

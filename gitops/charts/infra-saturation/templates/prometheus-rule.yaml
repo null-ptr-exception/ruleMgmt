@@ -10,108 +10,108 @@ spec:
       rules:
         {{- range .Values.svc_isalive }}
         - alert: SvcIsalive
-          expr: up{cluster="{{ .cluster }}",app="{{ .app }}"} == 0
+          expr: up == 0
           for: 3m
           labels:
             severity: critical
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "SvcIsalive triggered on {{ .cluster }}/{{ .app }}"
+            summary: "SvcIsalive triggered on {{ .cluster }}"
         {{- end }}
 
     - name: kpi-cpu-saturation
       rules:
         {{- range .Values.kpi_cpu_saturation }}
-        - alert: KpiCpuSaturation_Info
-          expr: rate(node_cpu_seconds_total{mode="user",cluster="{{ .cluster }}",app="{{ .app }}"}[1m]) / scalar(count(node_cpu_seconds_total{mode="user"})) > {{ .infoThreshold }}
+        - alert: KpiCpuSaturation_InfoThreshold
+          expr: rate(node_cpu_seconds_total{mode="user"}[1m]) / scalar(count(node_cpu_seconds_total{mode="user"})) > {{ .infoThreshold }}
           for: 5m
           labels:
             severity: info
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "CPU saturation info on {{ .cluster }}/{{ .app }}"
-        - alert: KpiCpuSaturation_Warn
-          expr: rate(node_cpu_seconds_total{mode="user",cluster="{{ .cluster }}",app="{{ .app }}"}[1m]) / scalar(count(node_cpu_seconds_total{mode="user"})) > {{ .warnThreshold }}
+            summary: "KpiCpuSaturation_InfoThreshold triggered on {{ .cluster }}"
+        - alert: KpiCpuSaturation_WarnThreshold
+          expr: rate(node_cpu_seconds_total{mode="user"}[1m]) / scalar(count(node_cpu_seconds_total{mode="user"})) > {{ .warnThreshold }}
           for: 5m
           labels:
             severity: warning
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "CPU saturation warning on {{ .cluster }}/{{ .app }}"
-        - alert: KpiCpuSaturation_Crit
-          expr: rate(node_cpu_seconds_total{mode="user",cluster="{{ .cluster }}",app="{{ .app }}"}[1m]) / scalar(count(node_cpu_seconds_total{mode="user"})) > {{ .critThreshold }}
+            summary: "KpiCpuSaturation_WarnThreshold triggered on {{ .cluster }}"
+        - alert: KpiCpuSaturation_CritThreshold
+          expr: rate(node_cpu_seconds_total{mode="user"}[1m]) / scalar(count(node_cpu_seconds_total{mode="user"})) > {{ .critThreshold }}
           for: 5m
           labels:
             severity: critical
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "CPU saturation critical on {{ .cluster }}/{{ .app }}"
+            summary: "KpiCpuSaturation_CritThreshold triggered on {{ .cluster }}"
         {{- end }}
 
     - name: kpi-mem-saturation
       rules:
         {{- range .Values.kpi_mem_saturation }}
-        - alert: KpiMemSaturation_Info
-          expr: 1 - (node_memory_MemAvailable_bytes{cluster="{{ .cluster }}",app="{{ .app }}"} / node_memory_MemTotal_bytes{cluster="{{ .cluster }}",app="{{ .app }}"}) > {{ .infoThreshold }}
+        - alert: KpiMemSaturation_InfoThreshold
+          expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > {{ .infoThreshold }}
           for: 5m
           labels:
             severity: info
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "Memory saturation info on {{ .cluster }}/{{ .app }}"
-        - alert: KpiMemSaturation_Warn
-          expr: 1 - (node_memory_MemAvailable_bytes{cluster="{{ .cluster }}",app="{{ .app }}"} / node_memory_MemTotal_bytes{cluster="{{ .cluster }}",app="{{ .app }}"}) > {{ .warnThreshold }}
+            summary: "KpiMemSaturation_InfoThreshold triggered on {{ .cluster }}"
+        - alert: KpiMemSaturation_WarnThreshold
+          expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > {{ .warnThreshold }}
           for: 5m
           labels:
             severity: warning
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "Memory saturation warning on {{ .cluster }}/{{ .app }}"
-        - alert: KpiMemSaturation_Crit
-          expr: 1 - (node_memory_MemAvailable_bytes{cluster="{{ .cluster }}",app="{{ .app }}"} / node_memory_MemTotal_bytes{cluster="{{ .cluster }}",app="{{ .app }}"}) > {{ .critThreshold }}
+            summary: "KpiMemSaturation_WarnThreshold triggered on {{ .cluster }}"
+        - alert: KpiMemSaturation_CritThreshold
+          expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > {{ .critThreshold }}
           for: 5m
           labels:
             severity: critical
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "Memory saturation critical on {{ .cluster }}/{{ .app }}"
+            summary: "KpiMemSaturation_CritThreshold triggered on {{ .cluster }}"
         {{- end }}
 
     - name: kpi-disk-saturation
       rules:
         {{- range .Values.kpi_disk_saturation }}
-        - alert: KpiDiskSaturation_Info
-          expr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs",cluster="{{ .cluster }}",app="{{ .app }}"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs",cluster="{{ .cluster }}",app="{{ .app }}"}) > {{ .infoThreshold }}
+        - alert: KpiDiskSaturation_InfoThreshold
+          expr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs"}) > {{ .infoThreshold }}
           for: 5m
           labels:
             severity: info
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "Disk saturation info on {{ .cluster }}/{{ .app }}"
-        - alert: KpiDiskSaturation_Warn
-          expr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs",cluster="{{ .cluster }}",app="{{ .app }}"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs",cluster="{{ .cluster }}",app="{{ .app }}"}) > {{ .warnThreshold }}
+            summary: "KpiDiskSaturation_InfoThreshold triggered on {{ .cluster }}"
+        - alert: KpiDiskSaturation_WarnThreshold
+          expr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs"}) > {{ .warnThreshold }}
           for: 5m
           labels:
             severity: warning
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "Disk saturation warning on {{ .cluster }}/{{ .app }}"
-        - alert: KpiDiskSaturation_Crit
-          expr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs",cluster="{{ .cluster }}",app="{{ .app }}"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs",cluster="{{ .cluster }}",app="{{ .app }}"}) > {{ .critThreshold }}
+            summary: "KpiDiskSaturation_WarnThreshold triggered on {{ .cluster }}"
+        - alert: KpiDiskSaturation_CritThreshold
+          expr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs"}) > {{ .critThreshold }}
           for: 5m
           labels:
             severity: critical
             cluster: "{{ .cluster }}"
             app: "{{ .app }}"
           annotations:
-            summary: "Disk saturation critical on {{ .cluster }}/{{ .app }}"
+            summary: "KpiDiskSaturation_CritThreshold triggered on {{ .cluster }}"
         {{- end }}

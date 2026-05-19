@@ -6,3 +6,7 @@ services:
     environment:
       - PORT=8080
       - PUBLIC_URL=${PR_PREVIEW_URL:-http://localhost:3001}
+      - GIT_AUTHOR_NAME=AlertForge
+      - GIT_AUTHOR_EMAIL=alertforge@localhost
+      - GIT_COMMITTER_NAME=AlertForge
+      - GIT_COMMITTER_EMAIL=alertforge@localhost

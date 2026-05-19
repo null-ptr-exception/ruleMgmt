@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Layout, Menu, theme } from 'antd'
+import { Layout, Menu, theme, Spin } from 'antd'
 import {
   ToolOutlined,
   BellOutlined,
@@ -12,6 +12,10 @@ import GitopsEditor from './pages/GitopsEditor'
 import PromQLEditor from './pages/PromQLEditor'
 import TemplateDevEditor from './pages/TemplateDevEditor'
 import AlertUserView from './pages/AlertUserView'
+import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
+import { useGitStatus } from './hooks/useGitStatus'
+import LoginPage from './components/LoginPage'
+import GitStatusBar from './components/GitStatusBar'
 import './App.css'
 
 const { Sider, Content } = Layout
@@ -38,10 +42,24 @@ const menuItems = [
   },
 ]
 
-export default function App() {
+function AppContent() {
   const [page, setPage] = useState('alert-user')
   const [collapsed, setCollapsed] = useState(false)
   const { token } = theme.useToken()
+  const auth = useAuth()
+  const gitStatus = useGitStatus()
+
+  if (auth.loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    )
+  }
+
+  if (!auth.isAuthenticated) {
+    return <LoginPage />
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -78,6 +96,7 @@ export default function App() {
         />
       </Sider>
       <Content style={{ overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <GitStatusBar gitStatus={gitStatus} onRefresh={gitStatus.refresh} />
         {page === 'template-dev' && <TemplateDevEditor />}
         {page === 'alert-user'   && <AlertUserView />}
         {page === 'notifications' && <NotificationRoutesEditor />}
@@ -85,5 +104,13 @@ export default function App() {
         {page === 'promql'       && <PromQLEditor onNavigate={setPage} />}
       </Content>
     </Layout>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }

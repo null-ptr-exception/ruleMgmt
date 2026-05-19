@@ -5,9 +5,8 @@ import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
-export default function templatesRouter(gitopsDir) {
+export default function templatesRouter() {
   const router = express.Router()
-  const chartsDir = path.join(gitopsDir, 'charts')
 
   router.use('/:chart', (req, res, next) => {
     if (!NAME_RE.test(req.params.chart)) {
@@ -16,7 +15,8 @@ export default function templatesRouter(gitopsDir) {
     next()
   })
 
-  function chartPaths(chart) {
+  function chartPaths(req, chart) {
+    const chartsDir = path.join(req.gitopsDir, 'charts')
     const chartDir = path.join(chartsDir, chart)
     return {
       chartDir,
@@ -38,7 +38,7 @@ export default function templatesRouter(gitopsDir) {
 
   // Get chart-level info: schema + values + Chart.yaml metadata + template file list
   router.get('/:chart', async (req, res) => {
-    const { tmplDir, valuesFile, schemaFile, chartYamlFile } = chartPaths(req.params.chart)
+    const { tmplDir, valuesFile, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
     try {
       let templateFiles = []
       try {
@@ -70,7 +70,7 @@ export default function templatesRouter(gitopsDir) {
 
   // Save chart-level schema
   router.post('/:chart/schema', async (req, res) => {
-    const { schemaFile } = chartPaths(req.params.chart)
+    const { schemaFile } = chartPaths(req, req.params.chart)
     const { schema } = req.body
     try {
       await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
@@ -82,7 +82,7 @@ export default function templatesRouter(gitopsDir) {
 
   // Save chart-level default values
   router.post('/:chart/values', async (req, res) => {
-    const { valuesFile } = chartPaths(req.params.chart)
+    const { valuesFile } = chartPaths(req, req.params.chart)
     const { values } = req.body
     try {
       const content = typeof values === 'string' ? values : yaml.dump(values, { lineWidth: -1 })
@@ -95,7 +95,7 @@ export default function templatesRouter(gitopsDir) {
 
   // Save Chart.yaml metadata (name, description, version)
   router.post('/:chart/chart-meta', async (req, res) => {
-    const { chartYamlFile } = chartPaths(req.params.chart)
+    const { chartYamlFile } = chartPaths(req, req.params.chart)
     const { chartMeta } = req.body
     try {
       await fs.writeFile(chartYamlFile, yaml.dump(chartMeta, { lineWidth: -1 }), 'utf-8')
@@ -107,7 +107,7 @@ export default function templatesRouter(gitopsDir) {
 
   // Rename a template file
   router.post('/:chart/:template/rename', async (req, res) => {
-    const { tmplDir } = chartPaths(req.params.chart)
+    const { tmplDir } = chartPaths(req, req.params.chart)
     const { newName } = req.body
     if (!newName || !NAME_RE.test(newName)) {
       return res.status(400).json({ error: 'Invalid newName' })
@@ -126,7 +126,7 @@ export default function templatesRouter(gitopsDir) {
 
   // Get a single template file's content
   router.get('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req.params.chart)
+    const { tmplDir } = chartPaths(req, req.params.chart)
     const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
     try {
       const content = await fs.readFile(tmplFile, 'utf-8')
@@ -138,7 +138,7 @@ export default function templatesRouter(gitopsDir) {
 
   // Save a template file's content
   router.post('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req.params.chart)
+    const { tmplDir } = chartPaths(req, req.params.chart)
     const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
     const { content } = req.body
     try {
@@ -152,7 +152,7 @@ export default function templatesRouter(gitopsDir) {
 
   // Delete a template file
   router.delete('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req.params.chart)
+    const { tmplDir } = chartPaths(req, req.params.chart)
     const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
     try {
       await fs.rm(tmplFile, { force: true })

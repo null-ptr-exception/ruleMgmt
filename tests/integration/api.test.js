@@ -17,9 +17,10 @@ beforeAll(async () => {
 
   const app = express()
   app.use(express.json())
-  app.use('/api/v2/charts', chartsRouter(tmpDir))
-  app.use('/api/v2/templates', templatesRouter(tmpDir))
-  app.use('/api/v2/deployments', deploymentsRouter(tmpDir))
+  app.use((req, res, next) => { req.gitopsDir = tmpDir; next() })
+  app.use('/api/v2/charts', chartsRouter())
+  app.use('/api/v2/templates', templatesRouter())
+  app.use('/api/v2/deployments', deploymentsRouter())
 
   await new Promise(resolve => {
     server = app.listen(0, '127.0.0.1', () => {

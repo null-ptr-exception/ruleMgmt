@@ -5,12 +5,12 @@ import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
-export default function chartsRouter(gitopsDir) {
+export default function chartsRouter() {
   const router = express.Router()
-  const chartsDir = path.join(gitopsDir, 'charts')
 
   // List all charts → [{ name, templateCount }]
   router.get('/', async (req, res) => {
+    const chartsDir = path.join(req.gitopsDir, 'charts')
     try {
       await fs.mkdir(chartsDir, { recursive: true })
       const entries = await fs.readdir(chartsDir, { withFileTypes: true })
@@ -33,6 +33,7 @@ export default function chartsRouter(gitopsDir) {
 
   // Create a new chart
   router.post('/', async (req, res) => {
+    const chartsDir = path.join(req.gitopsDir, 'charts')
     const { name } = req.body
     if (!name || !NAME_RE.test(name)) {
       return res.status(400).json({ error: 'Invalid chart name. Must match ^[a-z0-9][a-z0-9_-]*$' })
@@ -65,6 +66,7 @@ export default function chartsRouter(gitopsDir) {
 
   // Delete a chart
   router.delete('/:name', async (req, res) => {
+    const chartsDir = path.join(req.gitopsDir, 'charts')
     if (!NAME_RE.test(req.params.name)) {
       return res.status(400).json({ error: 'Invalid chart name' })
     }

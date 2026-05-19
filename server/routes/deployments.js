@@ -5,9 +5,8 @@ import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
-export default function deploymentsRouter(gitopsDir) {
+export default function deploymentsRouter() {
   const router = express.Router()
-  const deploymentsDir = path.join(gitopsDir, 'deployments')
 
   router.use('/:chart', (req, res, next) => {
     if (!NAME_RE.test(req.params.chart)) {
@@ -18,6 +17,7 @@ export default function deploymentsRouter(gitopsDir) {
 
   // List deployments for a chart
   router.get('/:chart', async (req, res) => {
+    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
     const dir = path.join(deploymentsDir, req.params.chart)
     try {
       await fs.mkdir(dir, { recursive: true })
@@ -44,6 +44,7 @@ export default function deploymentsRouter(gitopsDir) {
 
   // Get deployment values
   router.get('/:chart/:deployment', async (req, res) => {
+    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
@@ -58,6 +59,7 @@ export default function deploymentsRouter(gitopsDir) {
 
   // Save deployment values
   router.post('/:chart/:deployment', async (req, res) => {
+    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
@@ -75,6 +77,7 @@ export default function deploymentsRouter(gitopsDir) {
 
   // Clone a deployment
   router.post('/:chart/:deployment/clone', async (req, res) => {
+    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
@@ -94,6 +97,7 @@ export default function deploymentsRouter(gitopsDir) {
 
   // Delete deployment
   router.delete('/:chart/:deployment', async (req, res) => {
+    const deploymentsDir = path.join(req.gitopsDir, 'deployments')
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }

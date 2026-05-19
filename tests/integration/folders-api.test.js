@@ -69,7 +69,7 @@ describe('folders API', () => {
     const chartDir = path.join(chartsDir, 'my-alerts')
     fs.mkdirSync(path.join(chartDir, 'templates'), { recursive: true })
     fs.writeFileSync(path.join(chartDir, 'Chart.yaml'),
-      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: alert-templates\n')
+      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
     fs.writeFileSync(path.join(chartDir, 'values.yaml'),
       'latency:\n  - threshold: 100\n')
 
@@ -96,7 +96,7 @@ describe('folders API', () => {
     const chartDir = path.join(chartsDir, 'my-alerts')
     fs.mkdirSync(path.join(chartDir, 'templates'), { recursive: true })
     fs.writeFileSync(path.join(chartDir, 'Chart.yaml'),
-      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: alert-templates\n')
+      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
     fs.writeFileSync(path.join(chartDir, 'values.yaml'), 'foo: bar\n')
 
     const deployFolder = 'existing-deploy'

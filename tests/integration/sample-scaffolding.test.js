@@ -24,7 +24,8 @@ describe('sample scaffolding', () => {
     await scaffoldSamplesIfNeeded(chartsDir, sampleDir)
 
     const chartYaml = yaml.load(fs.readFileSync(path.join(chartsDir, 'mariadb-alerts', 'Chart.yaml'), 'utf-8'))
-    expect(chartYaml.type).toBe('alert-templates')
+    expect(chartYaml.type).toBe('application')
+    expect(chartYaml.annotations.app).toBe('alertforge')
     expect(fs.existsSync(path.join(chartsDir, 'mariadb-alerts', 'values.yaml'))).toBe(true)
     expect(fs.existsSync(path.join(chartsDir, 'mariadb-alerts', 'templates', 'prometheus-rule.yaml'))).toBe(true)
   })
@@ -34,7 +35,7 @@ describe('sample scaffolding', () => {
     const chartDir = path.join(chartsDir, 'existing-alerts')
     fs.mkdirSync(chartDir, { recursive: true })
     fs.writeFileSync(path.join(chartDir, 'Chart.yaml'),
-      'apiVersion: v2\nname: existing-alerts\nversion: 0.1.0\ntype: alert-templates\n')
+      'apiVersion: v2\nname: existing-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
 
     const sampleDir = path.resolve('sample')
     await scaffoldSamplesIfNeeded(chartsDir, sampleDir)

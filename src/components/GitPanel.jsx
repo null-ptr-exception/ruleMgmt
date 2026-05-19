@@ -1,40 +1,25 @@
 import { useState } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
-import { Button, Input, Tag, Modal, Typography, Space } from 'antd'
+import { Button, Typography, Space, Modal } from 'antd'
 import {
   BranchesOutlined,
   CloudUploadOutlined,
-  UndoOutlined,
-  CheckOutlined,
+  CloudDownloadOutlined,
   SyncOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons'
+import GitChanges from './GitChanges.jsx'
+import GitHistory from './GitHistory.jsx'
+import GitDiffViewer from './GitDiffViewer.jsx'
 
-const { Text, Title } = Typography
+const { Title } = Typography
 
 export default function GitPanel({ gitStatus, onRefresh }) {
-  const [commitMessage, setCommitMessage] = useState('')
+  const [activeTab, setActiveTab] = useState('changes')
+  const [selectedFile, setSelectedFile] = useState(null)
   const [loading, setLoading] = useState(null)
 
-  const { branch, changes, changeCount, behindMain, hasRemote } = gitStatus
-
-  async function handleCommit() {
-    if (!commitMessage.trim()) return
-    setLoading('commit')
-    try {
-      const res = await apiFetch('/api/v2/git/commit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: commitMessage }),
-      })
-      if (res.ok) {
-        setCommitMessage('')
-        onRefresh()
-      }
-    } finally {
-      setLoading(null)
-    }
-  }
+  const { branch, changeCount, behindMain, hasRemote } = gitStatus
 
   async function handlePush() {
     setLoading('push')
@@ -46,18 +31,14 @@ export default function GitPanel({ gitStatus, onRefresh }) {
     }
   }
 
-  async function handleDiscard() {
-    Modal.confirm({
-      title: 'Discard all changes?',
-      icon: <ExclamationCircleOutlined />,
-      content: 'This will revert all uncommitted changes. This cannot be undone.',
-      okText: 'Discard',
-      okType: 'danger',
-      onOk: async () => {
-        await apiFetch('/api/v2/git/discard', { method: 'POST' })
-        onRefresh()
-      },
-    })
+  async function handlePull() {
+    setLoading('pull')
+    try {
+      const res = await apiFetch('/api/v2/git/pull', { method: 'POST' })
+      if (res.ok) onRefresh()
+    } finally {
+      setLoading(null)
+    }
   }
 
   async function handleSync() {
@@ -72,98 +53,94 @@ export default function GitPanel({ gitStatus, onRefresh }) {
     })
   }
 
-  const fileList = [
-    ...(changes?.modified || []).map(f => ({ file: f, status: 'M', color: 'blue' })),
-    ...(changes?.added || []).map(f => ({ file: f, status: 'A', color: 'green' })),
-    ...(changes?.deleted || []).map(f => ({ file: f, status: 'D', color: 'red' })),
-  ]
+  const tabStyle = (tab) => ({
+    padding: '6px 16px',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: activeTab === tab ? 600 : 400,
+    borderBottom: activeTab === tab ? '2px solid #1677ff' : '2px solid transparent',
+    color: activeTab === tab ? '#1677ff' : '#595959',
+  })
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0' }}>
-        <Title level={4} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* Header */}
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Title level={5} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
           <BranchesOutlined /> {branch || '...'}
         </Title>
+        <Space size="small">
+          {hasRemote && (
+            <>
+              <Button
+                icon={<CloudDownloadOutlined />}
+                disabled={changeCount > 0}
+                loading={loading === 'pull'}
+                onClick={handlePull}
+                size="small"
+              >
+                Pull
+              </Button>
+              <Button
+                icon={<CloudUploadOutlined />}
+                disabled={changeCount > 0}
+                loading={loading === 'push'}
+                onClick={handlePush}
+                size="small"
+              >
+                Push
+              </Button>
+            </>
+          )}
+        </Space>
       </div>
 
+      {/* Behind main banner */}
       {behindMain > 0 && (
         <div style={{
-          padding: '8px 20px',
+          padding: '6px 16px',
           background: '#fffbe6',
           borderBottom: '1px solid #ffe58f',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          fontSize: 13,
+          fontSize: 12,
         }}>
           <ExclamationCircleOutlined style={{ color: '#faad14' }} />
-          Main branch has {behindMain} new commit{behindMain !== 1 ? 's' : ''}
+          Main has {behindMain} new commit{behindMain !== 1 ? 's' : ''}
           {hasRemote && (
-            <Button size="small" type="link" icon={<SyncOutlined />} onClick={handleSync}>
+            <Button size="small" type="link" icon={<SyncOutlined />} onClick={handleSync} style={{ fontSize: 12 }}>
               Sync
             </Button>
           )}
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: 'auto', padding: '12px 20px' }}>
-        <Text strong style={{ fontSize: 13, color: '#8c8c8c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          Changes ({changeCount})
-        </Text>
-        <div style={{ marginTop: 8 }}>
-          {fileList.length === 0 ? (
-            <Text type="secondary" style={{ fontSize: 13 }}>No pending changes</Text>
-          ) : (
-            fileList.map(({ file, status, color }) => (
-              <div key={file} style={{ padding: '3px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Tag color={color} style={{ fontSize: 11, margin: 0, minWidth: 24, textAlign: 'center' }}>{status}</Tag>
-                <Text code style={{ fontSize: 12 }}>{file}</Text>
-              </div>
-            ))
-          )}
+      {/* Two-column body */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Left column */}
+        <div style={{ width: 280, minWidth: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid #f0f0f0' }}>
+          {/* Tab bar */}
+          <div style={{ display: 'flex', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={tabStyle('changes')} onClick={() => setActiveTab('changes')}>Changes</div>
+            <div style={tabStyle('history')} onClick={() => setActiveTab('history')}>History</div>
+          </div>
+          {/* Tab content */}
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {activeTab === 'changes' && (
+              <GitChanges gitStatus={gitStatus} onRefresh={onRefresh} onSelectFile={setSelectedFile} />
+            )}
+            {activeTab === 'history' && (
+              <GitHistory onSelectFile={setSelectedFile} />
+            )}
+          </div>
+        </div>
+
+        {/* Right column — diff viewer */}
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <GitDiffViewer selectedFile={selectedFile} />
         </div>
       </div>
-
-      <div style={{ padding: '12px 20px', borderTop: '1px solid #f0f0f0' }}>
-        <Input.TextArea
-          rows={2}
-          placeholder="Commit message..."
-          value={commitMessage}
-          onChange={e => setCommitMessage(e.target.value)}
-          onPressEnter={e => { if (e.ctrlKey) handleCommit() }}
-          style={{ marginBottom: 8 }}
-        />
-        <Space>
-          <Button
-            type="primary"
-            icon={<CheckOutlined />}
-            disabled={changeCount === 0 || !commitMessage.trim()}
-            loading={loading === 'commit'}
-            onClick={handleCommit}
-          >
-            Commit
-          </Button>
-          {hasRemote && (
-            <Button
-              icon={<CloudUploadOutlined />}
-              disabled={changeCount > 0}
-              loading={loading === 'push'}
-              onClick={handlePush}
-            >
-              Push
-            </Button>
-          )}
-          <Button
-            danger
-            icon={<UndoOutlined />}
-            disabled={changeCount === 0}
-            onClick={handleDiscard}
-          >
-            Discard
-          </Button>
-        </Space>
-      </div>
-
     </div>
   )
 }

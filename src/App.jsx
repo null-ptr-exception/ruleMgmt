@@ -28,28 +28,14 @@ export default function App() {
   }, [])
 
   const menuItems = [
+    { key: 'template-dev', label: 'Templates', icon: <ToolOutlined /> },
+    { key: 'alert-user', label: 'Alerts', icon: <BellOutlined /> },
     {
-      key: 'alert-rules',
-      label: 'Alert Rules',
-      type: 'group',
-      children: [
-        { key: 'template-dev', label: 'Templates', icon: <ToolOutlined /> },
-        { key: 'alert-user', label: 'Alerts', icon: <BellOutlined /> },
-      ],
-    },
-    {
-      key: 'git-group',
-      label: 'Source Control',
-      type: 'group',
-      children: [
-        {
-          key: 'git',
-          label: gitStatus.changeCount > 0
-            ? <span>Git <Badge count={gitStatus.changeCount} size="small" style={{ marginLeft: 6 }} /></span>
-            : 'Git',
-          icon: <GitlabOutlined />,
-        },
-      ],
+      key: 'git',
+      label: gitStatus.changeCount > 0
+        ? <span>Git <Badge count={gitStatus.changeCount} size="small" style={{ marginLeft: 6 }} /></span>
+        : 'Git',
+      icon: <GitlabOutlined />,
     },
   ]
 

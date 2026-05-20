@@ -8,7 +8,6 @@ A web UI for managing Prometheus alerting rules as Helm charts, deployed per-use
 |---|---|
 | **Templates** | Create and edit alert rule templates as Helm charts with Go template variables |
 | **Alerts** | Browse alert groups, view rendered rules |
-| **Routes** | Edit Alertmanager notification routing |
 | **Git Panel** | View changes, diffs (CodeMirror merge viewer), commit history, commit, push, pull |
 
 Alert templates are stored as Helm charts in a gitops repository. Each user works on their own branch (`rulemgmt/<username>`) and pushes changes through the Git panel.

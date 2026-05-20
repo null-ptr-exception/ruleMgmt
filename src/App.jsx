@@ -3,13 +3,11 @@ import { Layout, Menu, Badge, theme } from 'antd'
 import {
   ToolOutlined,
   BellOutlined,
-  BranchesOutlined,
   UserOutlined,
   LogoutOutlined,
   GitlabOutlined,
 } from '@ant-design/icons'
 import { getUserInfo } from './utils/chartApi'
-import NotificationRoutesEditor from './pages/NotificationRoutesEditor'
 import TemplateDevEditor from './pages/TemplateDevEditor'
 import AlertUserView from './pages/AlertUserView'
 import GitPanel from './components/GitPanel'
@@ -37,7 +35,6 @@ export default function App() {
       children: [
         { key: 'template-dev', label: 'Templates', icon: <ToolOutlined /> },
         { key: 'alert-user', label: 'Alerts', icon: <BellOutlined /> },
-        { key: 'notifications', label: 'Routes', icon: <BranchesOutlined /> },
       ],
     },
     {
@@ -114,7 +111,6 @@ export default function App() {
       <Content style={{ overflow: 'auto', display: 'flex', flexDirection: 'column', flex: 1 }}>
         {page === 'template-dev'  && <TemplateDevEditor />}
         {page === 'alert-user'    && <AlertUserView />}
-        {page === 'notifications' && <NotificationRoutesEditor />}
         {page === 'git'           && <GitPanel gitStatus={gitStatus} onRefresh={gitStatus.refresh} />}
       </Content>
     </Layout>

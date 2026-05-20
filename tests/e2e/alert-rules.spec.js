@@ -13,12 +13,6 @@ test.describe('Alert Rules navigation', () => {
     await expect(page.locator('.ant-menu-item-selected')).toContainText('Alerts')
   })
 
-  test('can navigate to Routes', async ({ page }) => {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Routes' }).click()
-    await expect(page.locator('.ant-menu-item-selected')).toContainText('Routes')
-  })
-
   test('Alerts page shows chart selector and deployment list', async ({ page }) => {
     await page.goto('/')
     await expect(page.locator('.ant-select, [class*="chart"]').first()).toBeVisible({ timeout: 5000 })

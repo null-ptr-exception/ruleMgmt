@@ -7,7 +7,6 @@ import chartsRouter from './server/routes/charts.js'
 import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
 import renderRouter from './server/routes/render.js'
-import alertmanagerConfigsRouter from './server/routes/alertmanagerConfigs.js'
 import gitRouter from './server/routes/git.js'
 import git from './server/lib/git.js'
 import foldersRouter from './server/routes/folders.js'
@@ -49,7 +48,6 @@ function setGitopsDir(req, res, next) {
   next()
 }
 
-baseRouter.use('/api/v2/alertmanager-configs', setGitopsDir, alertmanagerConfigsRouter())
 baseRouter.use('/api/v2/charts', setGitopsDir, chartsRouter())
 baseRouter.use('/api/v2/templates', setGitopsDir, templatesV2Router())
 baseRouter.use('/api/v2/deployments', setGitopsDir, deploymentsRouter())

@@ -176,6 +176,12 @@ export async function createFolder(folderPath) {
   return res.json()
 }
 
+export async function getFolderTree() {
+  const res = await apiFetch(`${BASE}/folders/tree`)
+  if (!res.ok) return []
+  return res.json()
+}
+
 export async function initDeploymentFolder(folder, chart) {
   const res = await apiFetch(`${BASE}/folders/init`, {
     method: 'POST',

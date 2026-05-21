@@ -13,9 +13,10 @@ test.describe('Alert Rules navigation', () => {
     await expect(page.locator('.ant-menu-item-selected')).toContainText('Alerts')
   })
 
-  test('Alerts page shows chart selector and deployment list', async ({ page }) => {
+  test('Alerts page shows deployment folder tree', async ({ page }) => {
     await page.goto('/')
-    await expect(page.locator('.ant-select, [class*="chart"]').first()).toBeVisible({ timeout: 5000 })
+    await page.locator('.ant-menu-item').filter({ hasText: 'Alerts' }).click()
+    await expect(page.locator('.ant-tree').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('Templates page shows chart selector', async ({ page }) => {

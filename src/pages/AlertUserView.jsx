@@ -113,7 +113,7 @@ export default function AlertUserView() {
     setVars(schemaToVars(schema, activeAlert))
     setRows(allValues[activeAlert] || [])
     setDirty(false)
-  }, [activeAlert])
+  }, [activeAlert, schema])
 
   function handleFolderSelect({ path, chart }) {
     setSelectedFolder(path)

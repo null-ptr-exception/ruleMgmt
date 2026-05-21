@@ -32,6 +32,20 @@ export default function deploymentsRouter() {
       await fs.mkdir(dir, { recursive: true })
       const files = await fs.readdir(dir)
       const deployments = []
+
+      if (files.includes('values.yaml')) {
+        const folderName = path.basename(dir)
+        let alertCount = 0
+        try {
+          const raw = await fs.readFile(path.join(dir, 'values.yaml'), 'utf-8')
+          const parsed = yaml.load(raw) || {}
+          for (const val of Object.values(parsed)) {
+            if (Array.isArray(val)) alertCount += val.length
+          }
+        } catch { /* skip unreadable */ }
+        deployments.push({ name: folderName, file: 'values.yaml', alertCount })
+      }
+
       for (const f of files) {
         if (!f.endsWith('-values.yaml')) continue
         const name = f.replace(/-values\.yaml$/, '')
@@ -57,8 +71,11 @@ export default function deploymentsRouter() {
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const file = path.join(dir, `${req.params.deployment}-values.yaml`)
+    const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
+    const directFile = path.join(dir, 'values.yaml')
     try {
+      let file = legacyFile
+      try { await fs.access(legacyFile) } catch { file = directFile }
       const content = await fs.readFile(file, 'utf-8')
       res.json({ content, parsed: yaml.load(content) })
     } catch {
@@ -72,9 +89,12 @@ export default function deploymentsRouter() {
     if (!NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const file = path.join(dir, `${req.params.deployment}-values.yaml`)
+    const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
+    const directFile = path.join(dir, 'values.yaml')
     try {
       await fs.mkdir(dir, { recursive: true })
+      let file = legacyFile
+      try { await fs.access(directFile); file = directFile } catch { /* use legacy */ }
       const content = typeof req.body.values === 'string' ? req.body.values : yaml.dump(req.body.values, { lineWidth: -1 })
       await fs.writeFile(file, content, 'utf-8')
       res.json({ ok: true })

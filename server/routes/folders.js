@@ -6,7 +6,7 @@ import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
 
-async function readFolderTree(dir, depth = 0) {
+async function readFolderTree(dir, depth = 0, parentPath = '') {
   if (depth > 5) return []
   let entries
   try {
@@ -18,14 +18,67 @@ async function readFolderTree(dir, depth = 0) {
   const folders = []
   for (const e of entries) {
     if (!e.isDirectory() || EXCLUDED_DIRS.has(e.name) || e.name.startsWith('.')) continue
-    const children = await readFolderTree(path.join(dir, e.name), depth + 1)
-    folders.push({ name: e.name, children })
+    const nodePath = parentPath ? `${parentPath}/${e.name}` : e.name
+    const children = await readFolderTree(path.join(dir, e.name), depth + 1, nodePath)
+    folders.push({ name: e.name, path: nodePath, children })
   }
   return folders.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+async function annotateDeployments(nodes, gitopsDir) {
+  for (const node of nodes) {
+    const absPath = path.join(gitopsDir, node.path)
+    let chartData = null
+    let hasValues = false
+
+    try {
+      const chartYaml = await fs.readFile(path.join(absPath, 'Chart.yaml'), 'utf-8')
+      chartData = yaml.load(chartYaml) || {}
+    } catch { /* no Chart.yaml */ }
+
+    try {
+      await fs.access(path.join(absPath, 'values.yaml'))
+      hasValues = true
+    } catch { /* no values.yaml */ }
+
+    const hasDependencies = chartData && Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
+
+    if (chartData && hasDependencies && hasValues) {
+      node.isDeployment = true
+      node.chart = chartData.dependencies[0].name
+
+      // Count total alert entries across all top-level arrays in values.yaml
+      try {
+        const valuesYaml = await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')
+        const values = yaml.load(valuesYaml) || {}
+        let count = 0
+        for (const val of Object.values(values)) {
+          if (Array.isArray(val)) count += val.length
+        }
+        node.alertCount = count
+      } catch { node.alertCount = 0 }
+    } else {
+      node.isDeployment = false
+    }
+
+    if (node.children && node.children.length > 0) {
+      await annotateDeployments(node.children, gitopsDir)
+    }
+  }
+}
+
 export default function foldersRouter() {
   const router = express.Router()
+
+  router.get('/tree', async (req, res) => {
+    try {
+      const tree = await readFolderTree(req.gitopsDir)
+      await annotateDeployments(tree, req.gitopsDir)
+      res.json(tree)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
 
   router.get('/', async (req, res) => {
     try {

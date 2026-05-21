@@ -78,6 +78,8 @@ export default function AlertUserView() {
     })
   }, [])
 
+  const effectiveDeployment = deploymentFolder ? deploymentFolder.split('/').pop() : activeDeployment
+
   const prevChartRef = useRef(activeChart)
   useEffect(() => {
     if (!activeChart) return
@@ -99,7 +101,7 @@ export default function AlertUserView() {
       setAlertNames(names)
       setChartDescription(info.chartMeta?.description || '')
       setDeployments(deps)
-      if (activeDeployment && !deps.some(d => d.name === activeDeployment)) {
+      if (!deploymentFolder && activeDeployment && !deps.some(d => d.name === activeDeployment)) {
         setActiveDeployment(null)
       }
       if (activeAlert && !names.includes(activeAlert)) {
@@ -109,8 +111,8 @@ export default function AlertUserView() {
   }, [activeChart, deploymentFolder])
 
   useEffect(() => {
-    if (!activeChart || !activeDeployment) return
-    getDeployment(activeChart, activeDeployment, deploymentFolder).then(data => {
+    if (!activeChart || !effectiveDeployment) return
+    getDeployment(activeChart, effectiveDeployment, deploymentFolder).then(data => {
       const parsed = data.parsed || {}
       setAllValues(parsed)
       if (activeAlert) {
@@ -118,7 +120,7 @@ export default function AlertUserView() {
       }
       setDirty(false)
     })
-  }, [activeChart, activeDeployment])
+  }, [activeChart, effectiveDeployment])
 
   useEffect(() => {
     if (!activeAlert || !schema) {
@@ -131,9 +133,9 @@ export default function AlertUserView() {
   }, [activeAlert])
 
   async function handleSave() {
-    if (!activeChart || !activeDeployment || !activeAlert) return
+    if (!activeChart || !effectiveDeployment || !activeAlert) return
     const merged = { ...allValues, [activeAlert]: rows }
-    await saveDeployment(activeChart, activeDeployment, merged, deploymentFolder)
+    await saveDeployment(activeChart, effectiveDeployment, merged, deploymentFolder)
     setAllValues(merged)
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
@@ -142,9 +144,9 @@ export default function AlertUserView() {
   }
 
   async function handlePreview() {
-    if (!activeChart || !activeDeployment) return
+    if (!activeChart || !effectiveDeployment) return
     if (dirty) await handleSave()
-    const result = await renderDeployment(activeChart, activeDeployment, deploymentFolder)
+    const result = await renderDeployment(activeChart, effectiveDeployment, deploymentFolder)
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
     setPreviewOpen(true)
   }
@@ -180,7 +182,6 @@ export default function AlertUserView() {
       message.success(`Initialized ${folderPath} with ${activeChart} dependency`)
     }
     setDeploymentFolder(folderPath)
-    setActiveDeployment(null)
     setActiveAlert(null)
   }
 
@@ -195,7 +196,7 @@ export default function AlertUserView() {
     </div>
   )
 
-  const showMain = activeChart && activeDeployment && activeAlert
+  const showMain = activeChart && effectiveDeployment && activeAlert
 
   return (
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
@@ -219,7 +220,7 @@ export default function AlertUserView() {
         </div>
         <DeploymentSelector
           deployments={deployments}
-          activeDeployment={activeDeployment}
+          activeDeployment={effectiveDeployment}
           onSelect={setActiveDeployment}
           onCreate={handleCreateDeployment}
           onClone={handleClone}
@@ -248,7 +249,7 @@ export default function AlertUserView() {
         {showMain ? (
           <>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
-              <Title level={4} style={{ margin: 0 }}>{activeDeployment} / {activeAlert}</Title>
+              <Title level={4} style={{ margin: 0 }}>{effectiveDeployment} / {activeAlert}</Title>
               {chartDescription && <Text type="secondary" style={{ fontSize: 13 }}>{chartDescription}</Text>}
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
@@ -280,7 +281,7 @@ export default function AlertUserView() {
           <Empty style={{ margin: 'auto' }}
             description={
               !activeChart ? 'Select a chart to get started' :
-              !activeDeployment ? 'Select a deployment from the sidebar' :
+              !effectiveDeployment ? 'Select a deployment from the sidebar' :
               'Select an alert template from the sidebar'
             } />
         )}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Layout, Menu, Badge, theme } from 'antd'
 import {
   ToolOutlined,
@@ -14,14 +14,32 @@ import GitPanel from './components/GitPanel'
 import { useGitStatus } from './hooks/useGitStatus'
 import './App.css'
 
+const HASH_TO_PAGE = { '#/templates': 'template-dev', '#/alerts': 'alert-user', '#/git': 'git' }
+const PAGE_TO_HASH = Object.fromEntries(Object.entries(HASH_TO_PAGE).map(([k, v]) => [v, k]))
+
+function getPageFromHash() {
+  return HASH_TO_PAGE[window.location.hash] || 'alert-user'
+}
+
 const { Sider, Content } = Layout
 
 export default function App() {
-  const [page, setPage] = useState('alert-user')
+  const [page, setPage] = useState(getPageFromHash)
   const [collapsed, setCollapsed] = useState(false)
   const [userInfo, setUserInfo] = useState({ user: null, logoutUrl: null })
   const { token } = theme.useToken()
   const gitStatus = useGitStatus()
+
+  const navigate = useCallback((key) => {
+    setPage(key)
+    window.location.hash = PAGE_TO_HASH[key] || ''
+  }, [])
+
+  useEffect(() => {
+    const onHashChange = () => setPage(getPageFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
 
   useEffect(() => {
     getUserInfo().then(setUserInfo)
@@ -70,7 +88,7 @@ export default function App() {
           theme="dark"
           mode="inline"
           selectedKeys={[page]}
-          onClick={({ key }) => setPage(key)}
+          onClick={({ key }) => navigate(key)}
           items={menuItems}
           style={{ flex: 1 }}
         />
@@ -95,9 +113,9 @@ export default function App() {
         )}
       </Sider>
       <Content style={{ overflow: 'auto', display: 'flex', flexDirection: 'column', flex: 1 }}>
-        {page === 'template-dev'  && <TemplateDevEditor />}
-        {page === 'alert-user'    && <AlertUserView />}
-        {page === 'git'           && <GitPanel gitStatus={gitStatus} onRefresh={gitStatus.refresh} />}
+        {page === 'template-dev' && <TemplateDevEditor />}
+        {page === 'alert-user' && <AlertUserView />}
+        {page === 'git' && <GitPanel gitStatus={gitStatus} onRefresh={gitStatus.refresh} />}
       </Content>
     </Layout>
   )

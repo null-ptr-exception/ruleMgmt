@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import useSessionState from '../hooks/useSessionState'
 import { Button, Modal, Typography, Empty, message } from 'antd'
 import { SaveOutlined, EyeOutlined, FolderOutlined } from '@ant-design/icons'
 import ChartSelector from '../components/ChartSelector'
@@ -19,10 +20,10 @@ const { Title, Text } = Typography
 
 export default function AlertUserView() {
   const [charts, setCharts] = useState([])
-  const [activeChart, setActiveChart] = useState(null)
+  const [activeChart, setActiveChart] = useSessionState('alerts:chart', null)
   const [deployments, setDeployments] = useState([])
-  const [activeDeployment, setActiveDeployment] = useState(null)
-  const [activeAlert, setActiveAlert] = useState(null)
+  const [activeDeployment, setActiveDeployment] = useSessionState('alerts:deployment', null)
+  const [activeAlert, setActiveAlert] = useSessionState('alerts:alert', null)
   const [schema, setSchema] = useState(null)
   const [alertNames, setAlertNames] = useState([])
   const [allValues, setAllValues] = useState({})
@@ -37,7 +38,7 @@ export default function AlertUserView() {
   const resizingRef = useRef(false)
 
   // Folder selector state
-  const [deploymentFolder, setDeploymentFolder] = useState(null)
+  const [deploymentFolder, setDeploymentFolder] = useSessionState('alerts:folder', null)
   const [folderSelectorOpen, setFolderSelectorOpen] = useState(false)
   const [folders, setFolders] = useState([])
   const [foldersLoading, setFoldersLoading] = useState(false)
@@ -69,17 +70,26 @@ export default function AlertUserView() {
   useEffect(() => {
     listCharts().then(c => {
       setCharts(c)
-      if (c.length > 0) setActiveChart(c[0].name)
+      if (activeChart && !c.some(ch => ch.name === activeChart)) {
+        setActiveChart(c.length > 0 ? c[0].name : null)
+      } else if (!activeChart && c.length > 0) {
+        setActiveChart(c[0].name)
+      }
     })
   }, [])
 
+  const prevChartRef = useRef(activeChart)
   useEffect(() => {
     if (!activeChart) return
-    setActiveDeployment(null)
-    setActiveAlert(null)
-    setAllValues({})
-    setRows([])
-    setDirty(false)
+    const chartChanged = prevChartRef.current !== activeChart
+    prevChartRef.current = activeChart
+    if (chartChanged) {
+      setActiveDeployment(null)
+      setActiveAlert(null)
+      setAllValues({})
+      setRows([])
+      setDirty(false)
+    }
     Promise.all([
       getChartInfo(activeChart),
       listDeployments(activeChart, deploymentFolder)
@@ -89,6 +99,12 @@ export default function AlertUserView() {
       setAlertNames(names)
       setChartDescription(info.chartMeta?.description || '')
       setDeployments(deps)
+      if (activeDeployment && !deps.some(d => d.name === activeDeployment)) {
+        setActiveDeployment(null)
+      }
+      if (activeAlert && !names.includes(activeAlert)) {
+        setActiveAlert(null)
+      }
     })
   }, [activeChart, deploymentFolder])
 

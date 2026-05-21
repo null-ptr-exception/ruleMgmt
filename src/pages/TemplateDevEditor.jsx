@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import useSessionState from '../hooks/useSessionState'
 import { Button, Input, Select, Empty, Typography, Switch, Collapse } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 import { schemaAlertNames } from '../utils/schemaUtils'
@@ -36,11 +37,11 @@ const TYPE_OPTIONS = [
 
 export default function TemplateDevEditor() {
   const [charts, setCharts] = useState([])
-  const [activeChart, setActiveChart] = useState(null)
+  const [activeChart, setActiveChart] = useSessionState('templates:chart', null)
   const [chartMeta, setChartMeta] = useState({})
   const [schema, setSchema] = useState(null)
   const [alertNames, setAlertNames] = useState([])
-  const [activeAlert, setActiveAlert] = useState(null)
+  const [activeAlert, setActiveAlert] = useSessionState('templates:alert', null)
   const [dirty, setDirty] = useState(false)
   const [yamlExpanded, setYamlExpanded] = useState(false)
   const [editorEditable, setEditorEditable] = useState(false)
@@ -77,7 +78,10 @@ export default function TemplateDevEditor() {
   const loadCharts = useCallback(async () => {
     const c = await listCharts()
     setCharts(c)
-  }, [])
+    if (activeChart && !c.some(ch => ch.name === activeChart)) {
+      setActiveChart(null)
+    }
+  }, [activeChart, setActiveChart])
 
   useEffect(() => { loadCharts() }, [loadCharts])
 
@@ -88,10 +92,10 @@ export default function TemplateDevEditor() {
     setSchema(s)
     const names = schemaAlertNames(s)
     setAlertNames(names)
-    setActiveAlert(names.length > 0 ? names[0] : null)
+    setActiveAlert(prev => names.includes(prev) ? prev : (names.length > 0 ? names[0] : null))
     setDirty(false)
     setEditorEditable(false)
-  }, [])
+  }, [setActiveAlert])
 
   useEffect(() => {
     if (activeChart) loadChart(activeChart)

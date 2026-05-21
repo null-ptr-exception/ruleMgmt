@@ -1,77 +1,72 @@
 mariadb_latency_slow_queries:
-  - instance_name: mariadb-primary
+  - owner: app-a
+    instance_name: mariadb-primary
     namespace: staging-db
     warn_threshold: 2
     critical_threshold: 10
-  - instance_name: mariadb-replica-01
-    namespace: staging-db
-    warn_threshold: 3
-    critical_threshold: 15
 mariadb_traffic_qps_low:
-  - instance_name: mariadb-primary
+  - owner: app-a
+    instance_name: mariadb-primary
     namespace: staging-db
     min_qps: 5
-  - instance_name: mariadb-replica-01
-    namespace: staging-db
-    min_qps: 2
 mariadb_traffic_qps_high:
-  - instance_name: mariadb-primary
+  - owner: app-a
+    instance_name: mariadb-primary
     namespace: staging-db
     max_qps: 8000
-  - instance_name: mariadb-replica-01
-    namespace: staging-db
-    max_qps: 5000
 mariadb_traffic_network_receive:
-  - pod_regex: mariadb-.*
+  - owner: app-a
+    pod_regex: mariadb-.*
     namespace: staging-db
     warn_bytes: 52428800
 mariadb_traffic_network_transmit:
-  - pod_regex: mariadb-.*
+  - owner: app-a
+    pod_regex: mariadb-.*
     namespace: staging-db
     warn_bytes: 52428800
 mariadb_errors_connections:
-  - instance_name: mariadb-primary
-    namespace: staging-db
-    warn_rate: 10
-    critical_rate: 50
-  - instance_name: mariadb-replica-01
+  - owner: app-a
+    instance_name: mariadb-primary
     namespace: staging-db
     warn_rate: 10
     critical_rate: 50
 mariadb_errors_aborted_clients:
-  - instance_name: mariadb-primary
+  - owner: app-a
+    instance_name: mariadb-primary
     namespace: staging-db
     warn_rate: 5
 mariadb_errors_aborted_connects:
-  - instance_name: mariadb-primary
+  - owner: app-a
+    instance_name: mariadb-primary
     namespace: staging-db
     warn_rate: 5
 mariadb_saturation_connections:
-  - instance_name: mariadb-primary
-    namespace: staging-db
-    warn_pct: 80
-    critical_pct: 95
-  - instance_name: mariadb-replica-01
+  - owner: app-a
+    instance_name: mariadb-primary
     namespace: staging-db
     warn_pct: 80
     critical_pct: 95
 mariadb_saturation_buffer_pool:
-  - instance_name: mariadb-primary
+  - owner: app-a
+    instance_name: mariadb-primary
     namespace: staging-db
     warn_pct: 90
     critical_pct: 98
 mariadb_saturation_cpu:
-  - pod_regex: mariadb-.*
+  - owner: app-a
+    pod_regex: mariadb-.*
     namespace: staging-db
     warn_pct: 85
     critical_pct: 98
 mariadb_saturation_memory:
-  - pod_regex: mariadb-.*
+  - owner: app-a
+    pod_regex: mariadb-.*
     namespace: staging-db
     warn_pct: 85
     critical_pct: 98
 mariadb_saturation_disk:
-  - pvc_regex: data-mariadb-.*
+  - owner: app-a
+    pvc_regex: data-mariadb-.*
     namespace: staging-db
     warn_pct: 80
     critical_pct: 95

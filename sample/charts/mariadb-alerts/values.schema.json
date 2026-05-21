@@ -9,12 +9,13 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_threshold": { "type": "number", "description": "Slow queries/sec warning", "default": 1, "x-var-type": "threshold", "x-severity": "warning" },
           "critical_threshold": { "type": "number", "description": "Slow queries/sec critical", "default": 5, "x-var-type": "threshold", "x-severity": "critical" }
         },
-        "required": ["instance_name"]
+        "required": ["owner", "instance_name"]
       }
     },
     "mariadb_traffic_qps_low": {
@@ -24,11 +25,12 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "min_qps": { "type": "number", "description": "Minimum QPS threshold", "default": 10, "x-var-type": "threshold", "x-severity": "warning" }
         },
-        "required": ["instance_name"]
+        "required": ["owner", "instance_name"]
       }
     },
     "mariadb_traffic_qps_high": {
@@ -38,11 +40,12 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "max_qps": { "type": "number", "description": "Maximum QPS threshold", "default": 10000, "x-var-type": "threshold", "x-severity": "warning" }
         },
-        "required": ["instance_name"]
+        "required": ["owner", "instance_name"]
       }
     },
     "mariadb_traffic_network_receive": {
@@ -52,11 +55,12 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_bytes": { "type": "number", "description": "Receive bytes/sec warning", "default": 104857600, "x-var-type": "threshold", "x-severity": "warning" }
         },
-        "required": ["pod_regex"]
+        "required": ["owner", "pod_regex"]
       }
     },
     "mariadb_traffic_network_transmit": {
@@ -66,11 +70,12 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_bytes": { "type": "number", "description": "Transmit bytes/sec warning", "default": 104857600, "x-var-type": "threshold", "x-severity": "warning" }
         },
-        "required": ["pod_regex"]
+        "required": ["owner", "pod_regex"]
       }
     },
     "mariadb_errors_connections": {
@@ -80,12 +85,13 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_rate": { "type": "number", "description": "Connection errors/sec warning", "default": 5, "x-var-type": "threshold", "x-severity": "warning" },
           "critical_rate": { "type": "number", "description": "Connection errors/sec critical", "default": 20, "x-var-type": "threshold", "x-severity": "critical" }
         },
-        "required": ["instance_name"]
+        "required": ["owner", "instance_name"]
       }
     },
     "mariadb_errors_aborted_clients": {
@@ -95,11 +101,12 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_rate": { "type": "number", "description": "Aborted clients/sec warning", "default": 3, "x-var-type": "threshold", "x-severity": "warning" }
         },
-        "required": ["instance_name"]
+        "required": ["owner", "instance_name"]
       }
     },
     "mariadb_errors_aborted_connects": {
@@ -109,11 +116,12 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_rate": { "type": "number", "description": "Aborted connects/sec warning", "default": 3, "x-var-type": "threshold", "x-severity": "warning" }
         },
-        "required": ["instance_name"]
+        "required": ["owner", "instance_name"]
       }
     },
     "mariadb_saturation_connections": {
@@ -123,12 +131,13 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_pct": { "type": "number", "description": "Connection saturation warning (%)", "default": 70, "x-var-type": "threshold", "x-severity": "warning" },
           "critical_pct": { "type": "number", "description": "Connection saturation critical (%)", "default": 90, "x-var-type": "threshold", "x-severity": "critical" }
         },
-        "required": ["instance_name"]
+        "required": ["owner", "instance_name"]
       }
     },
     "mariadb_saturation_buffer_pool": {
@@ -138,12 +147,13 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "instance_name": { "type": "string", "description": "MariaDB instance identifier", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_pct": { "type": "number", "description": "Buffer pool usage warning (%)", "default": 85, "x-var-type": "threshold", "x-severity": "warning" },
           "critical_pct": { "type": "number", "description": "Buffer pool usage critical (%)", "default": 95, "x-var-type": "threshold", "x-severity": "critical" }
         },
-        "required": ["instance_name"]
+        "required": ["owner", "instance_name"]
       }
     },
     "mariadb_saturation_cpu": {
@@ -153,12 +163,13 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_pct": { "type": "number", "description": "CPU usage warning (%)", "default": 80, "x-var-type": "threshold", "x-severity": "warning" },
           "critical_pct": { "type": "number", "description": "CPU usage critical (%)", "default": 95, "x-var-type": "threshold", "x-severity": "critical" }
         },
-        "required": ["pod_regex"]
+        "required": ["owner", "pod_regex"]
       }
     },
     "mariadb_saturation_memory": {
@@ -168,12 +179,13 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "pod_regex": { "type": "string", "description": "Pod name regex for MariaDB pods", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_pct": { "type": "number", "description": "Memory usage warning (%)", "default": 80, "x-var-type": "threshold", "x-severity": "warning" },
           "critical_pct": { "type": "number", "description": "Memory usage critical (%)", "default": 95, "x-var-type": "threshold", "x-severity": "critical" }
         },
-        "required": ["pod_regex"]
+        "required": ["owner", "pod_regex"]
       }
     },
     "mariadb_saturation_disk": {
@@ -183,12 +195,13 @@
       "items": {
         "type": "object",
         "properties": {
+          "owner": { "type": "string", "description": "Application team that owns this alert instance", "x-var-type": "selector" },
           "pvc_regex": { "type": "string", "description": "PVC name regex for MariaDB volumes", "x-var-type": "selector" },
           "namespace": { "type": "string", "description": "Kubernetes namespace", "default": "default", "x-var-type": "selector" },
           "warn_pct": { "type": "number", "description": "Disk usage warning (%)", "default": 75, "x-var-type": "threshold", "x-severity": "warning" },
           "critical_pct": { "type": "number", "description": "Disk usage critical (%)", "default": 90, "x-var-type": "threshold", "x-severity": "critical" }
         },
-        "required": ["pvc_regex"]
+        "required": ["owner", "pvc_regex"]
       }
     }
   }

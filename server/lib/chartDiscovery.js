@@ -43,7 +43,7 @@ export async function findAlertTemplateCharts(chartsDir) {
   return results
 }
 
-export async function scaffoldSamplesIfNeeded(chartsDir, sampleDir) {
+export async function scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir) {
   const existing = await findAlertTemplateCharts(chartsDir)
   if (existing.length > 0) return false
 
@@ -78,6 +78,15 @@ export async function scaffoldSamplesIfNeeded(chartsDir, sampleDir) {
       }
     } catch { /* skip */ }
   }
+
+  if (deploymentsDir) {
+    const sampleDeploymentsDir = path.join(sampleDir, 'deployments')
+    try {
+      await fs.access(sampleDeploymentsDir)
+      await copyDirRecursive(sampleDeploymentsDir, deploymentsDir)
+    } catch { /* no sample deployments */ }
+  }
+
   return true
 }
 

@@ -1,59 +1,72 @@
 mariadb_latency_slow_queries:
-  - instance_name: mariadb-primary
+  - owner: ""
+    instance_name: mariadb-primary
     namespace: default
     warn_threshold: 1
     critical_threshold: 5
 mariadb_traffic_qps_low:
-  - instance_name: mariadb-primary
+  - owner: ""
+    instance_name: mariadb-primary
     namespace: default
     min_qps: 10
 mariadb_traffic_qps_high:
-  - instance_name: mariadb-primary
+  - owner: ""
+    instance_name: mariadb-primary
     namespace: default
     max_qps: 10000
 mariadb_traffic_network_receive:
-  - pod_regex: mariadb-.*
+  - owner: ""
+    pod_regex: mariadb-.*
     namespace: default
     warn_bytes: 104857600
 mariadb_traffic_network_transmit:
-  - pod_regex: mariadb-.*
+  - owner: ""
+    pod_regex: mariadb-.*
     namespace: default
     warn_bytes: 104857600
 mariadb_errors_connections:
-  - instance_name: mariadb-primary
+  - owner: ""
+    instance_name: mariadb-primary
     namespace: default
     warn_rate: 5
     critical_rate: 20
 mariadb_errors_aborted_clients:
-  - instance_name: mariadb-primary
+  - owner: ""
+    instance_name: mariadb-primary
     namespace: default
     warn_rate: 3
 mariadb_errors_aborted_connects:
-  - instance_name: mariadb-primary
+  - owner: ""
+    instance_name: mariadb-primary
     namespace: default
     warn_rate: 3
 mariadb_saturation_connections:
-  - instance_name: mariadb-primary
+  - owner: ""
+    instance_name: mariadb-primary
     namespace: default
     warn_pct: 70
     critical_pct: 90
 mariadb_saturation_buffer_pool:
-  - instance_name: mariadb-primary
+  - owner: ""
+    instance_name: mariadb-primary
     namespace: default
     warn_pct: 85
     critical_pct: 95
 mariadb_saturation_cpu:
-  - pod_regex: mariadb-.*
+  - owner: ""
+    pod_regex: mariadb-.*
     namespace: default
     warn_pct: 80
     critical_pct: 95
 mariadb_saturation_memory:
-  - pod_regex: mariadb-.*
+  - owner: ""
+    pod_regex: mariadb-.*
     namespace: default
     warn_pct: 80
     critical_pct: 95
 mariadb_saturation_disk:
-  - pvc_regex: data-mariadb-.*
+  - owner: ""
+    pvc_regex: data-mariadb-.*
     namespace: default
     warn_pct: 75
     critical_pct: 90

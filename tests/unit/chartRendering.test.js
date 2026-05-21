@@ -126,7 +126,7 @@ describe('helm template with custom values', () => {
   let customRendered
 
   beforeAll(() => {
-    const valuesFile = path.resolve('sample/deployments/mariadb-alerts/production-values.yaml')
+    const valuesFile = path.resolve('sample/deployments/mariadb-1/production/values.yaml')
     const output = execSync(`helm template prod-release ${chartDir} -f ${valuesFile}`, { encoding: 'utf8' })
     customRendered = YAML.parseAllDocuments(output).map(doc => doc.toJSON())
   })
@@ -140,7 +140,7 @@ describe('helm template with custom values', () => {
   it('produces more rules with production values (multiple instances)', () => {
     const pr = customRendered.find(d => d.kind === 'PrometheusRule')
     const ruleCount = pr.spec.groups.flatMap(g => g.rules).length
-    expect(ruleCount).toBeGreaterThan(30)
+    expect(ruleCount).toBeGreaterThan(20)
   })
 
   it('contains production namespace in rendered rules', () => {

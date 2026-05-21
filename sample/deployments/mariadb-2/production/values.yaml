@@ -1,0 +1,72 @@
+mariadb_latency_slow_queries:
+  - owner: app-b
+    instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_threshold: 0.3
+    critical_threshold: 2
+mariadb_traffic_qps_low:
+  - owner: app-b
+    instance_name: mariadb-orders
+    namespace: prod-commerce
+    min_qps: 100
+mariadb_traffic_qps_high:
+  - owner: app-b
+    instance_name: mariadb-orders
+    namespace: prod-commerce
+    max_qps: 20000
+mariadb_traffic_network_receive:
+  - owner: app-b
+    pod_regex: mariadb-orders-.*
+    namespace: prod-commerce
+    warn_bytes: 209715200
+mariadb_traffic_network_transmit:
+  - owner: app-b
+    pod_regex: mariadb-orders-.*
+    namespace: prod-commerce
+    warn_bytes: 209715200
+mariadb_errors_connections:
+  - owner: app-b
+    instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_rate: 2
+    critical_rate: 10
+mariadb_errors_aborted_clients:
+  - owner: app-b
+    instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_rate: 1
+mariadb_errors_aborted_connects:
+  - owner: app-b
+    instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_rate: 1
+mariadb_saturation_connections:
+  - owner: app-b
+    instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_pct: 80
+    critical_pct: 95
+mariadb_saturation_buffer_pool:
+  - owner: app-b
+    instance_name: mariadb-orders
+    namespace: prod-commerce
+    warn_pct: 85
+    critical_pct: 95
+mariadb_saturation_cpu:
+  - owner: app-b
+    pod_regex: mariadb-orders-.*
+    namespace: prod-commerce
+    warn_pct: 75
+    critical_pct: 90
+mariadb_saturation_memory:
+  - owner: app-b
+    pod_regex: mariadb-orders-.*
+    namespace: prod-commerce
+    warn_pct: 80
+    critical_pct: 95
+mariadb_saturation_disk:
+  - owner: app-b
+    pvc_regex: data-mariadb-orders-.*
+    namespace: prod-commerce
+    warn_pct: 75
+    critical_pct: 90

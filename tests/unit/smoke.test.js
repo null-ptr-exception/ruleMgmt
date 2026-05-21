@@ -37,7 +37,7 @@ describe('sample data integrity', () => {
 
   it('production deployment keys match schema', () => {
     const schema = JSON.parse(fs.readFileSync(path.join(sampleDir, 'charts/mariadb-alerts/values.schema.json'), 'utf8'))
-    const yaml = fs.readFileSync(path.join(sampleDir, 'deployments/mariadb-alerts/production-values.yaml'), 'utf8')
+    const yaml = fs.readFileSync(path.join(sampleDir, 'deployments/mariadb-1/production/values.yaml'), 'utf8')
     const schemaKeys = Object.keys(schema.properties).filter(k => !k.startsWith('$'))
     for (const key of schemaKeys) {
       expect(yaml).toContain(`${key}:`)

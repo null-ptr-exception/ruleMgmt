@@ -1,0 +1,7 @@
+apiVersion: v2
+name: mariadb-1-staging
+version: 1.0.0
+dependencies:
+  - name: mariadb-alerts
+    version: "2.0.0"
+    repository: file://../../../../charts/mariadb-alerts

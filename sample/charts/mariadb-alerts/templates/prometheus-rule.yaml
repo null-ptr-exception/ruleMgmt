@@ -14,6 +14,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -23,6 +24,7 @@ spec:
           for: 5m
           labels:
             severity: critical
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -37,6 +39,7 @@ spec:
           for: 10m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -51,6 +54,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -65,6 +69,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             pod_regex: "{{ .pod_regex }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -79,6 +84,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             pod_regex: "{{ .pod_regex }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -93,6 +99,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -102,6 +109,7 @@ spec:
           for: 5m
           labels:
             severity: critical
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -116,6 +124,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -130,6 +139,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -144,6 +154,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -153,6 +164,7 @@ spec:
           for: 5m
           labels:
             severity: critical
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -167,6 +179,7 @@ spec:
           for: 10m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -176,6 +189,7 @@ spec:
           for: 10m
           labels:
             severity: critical
+            owner: "{{ .owner }}"
             instance_name: "{{ .instance_name }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -190,6 +204,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             pod_regex: "{{ .pod_regex }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -199,6 +214,7 @@ spec:
           for: 5m
           labels:
             severity: critical
+            owner: "{{ .owner }}"
             pod_regex: "{{ .pod_regex }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -213,6 +229,7 @@ spec:
           for: 5m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             pod_regex: "{{ .pod_regex }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -222,6 +239,7 @@ spec:
           for: 5m
           labels:
             severity: critical
+            owner: "{{ .owner }}"
             pod_regex: "{{ .pod_regex }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -236,6 +254,7 @@ spec:
           for: 10m
           labels:
             severity: warning
+            owner: "{{ .owner }}"
             pvc_regex: "{{ .pvc_regex }}"
             namespace: "{{ .namespace }}"
           annotations:
@@ -245,6 +264,7 @@ spec:
           for: 10m
           labels:
             severity: critical
+            owner: "{{ .owner }}"
             pvc_regex: "{{ .pvc_regex }}"
             namespace: "{{ .namespace }}"
           annotations:

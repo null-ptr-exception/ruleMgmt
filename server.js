@@ -10,7 +10,7 @@ import renderRouter from './server/routes/render.js'
 import gitRouter from './server/routes/git.js'
 import git from './server/lib/git.js'
 import foldersRouter from './server/routes/folders.js'
-import { getChartsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
+import { getChartsDir, getDeploymentsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -35,9 +35,10 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
 // Scaffold sample chart templates if none exist
 {
   const chartsDir = getChartsDir(GITOPS_DIR_V2, process.env.CHARTS_DIR)
+  const deploymentsDir = getDeploymentsDir(GITOPS_DIR_V2, process.env.DEPLOYMENTS_DIR)
   const sampleDir = path.join(__dirname, 'sample')
-  const scaffolded = await scaffoldSamplesIfNeeded(chartsDir, sampleDir)
-  if (scaffolded) console.log(`Scaffolded sample charts into ${chartsDir}`)
+  const scaffolded = await scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir)
+  if (scaffolded) console.log(`Scaffolded sample data into ${chartsDir}`)
 }
 
 // ─── V2 API (base path router) ──────────────────────────────────────────────

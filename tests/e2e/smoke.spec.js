@@ -5,12 +5,11 @@ test('app loads with AlertForge branding', async ({ page }) => {
   await expect(page.locator('text=AlertForge')).toBeVisible()
 })
 
-test('sidebar has Alert Rules and Source Control groups', async ({ page }) => {
+test('sidebar has Templates, Alerts, and Git menu items', async ({ page }) => {
   await page.goto('/')
-  const groups = page.locator('.ant-menu-item-group-title')
-  const texts = await groups.allTextContents()
-  expect(texts).toContain('Alert Rules')
-  expect(texts).toContain('Source Control')
+  await expect(page.locator('.ant-menu-item').filter({ hasText: 'Templates' })).toBeVisible()
+  await expect(page.locator('.ant-menu-item').filter({ hasText: 'Alerts' })).toBeVisible()
+  await expect(page.locator('.ant-menu-item').filter({ hasText: 'Git' })).toBeVisible()
 })
 
 test('Alerts is the default page', async ({ page }) => {

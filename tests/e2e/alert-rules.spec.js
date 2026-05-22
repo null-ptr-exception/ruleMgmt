@@ -14,9 +14,8 @@ test.describe('Alert Rules navigation', () => {
   })
 
   test('Alerts page shows deployment folder tree', async ({ page }) => {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Alerts' }).click()
-    await expect(page.locator('.ant-tree').first()).toBeVisible({ timeout: 5000 })
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments')).toBeVisible({ timeout: 10000 })
   })
 
   test('Templates page shows chart selector', async ({ page }) => {

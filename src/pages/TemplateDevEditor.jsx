@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
 import { Button, Input, Select, Empty, Typography, Switch, Collapse } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
-import { schemaAlertNames } from '../utils/schemaUtils'
+import { schemaAlertNames, getCommonVars, setCommonVars } from '../utils/schemaUtils'
 import TemplateTree from '../components/TemplateTree'
 import { generatePrometheusRule, generateGroupTemplate } from '../utils/templateGenerator'
 import {
@@ -20,6 +20,60 @@ const { Text } = Typography
 const { TextArea } = Input
 
 const yamlExtension = StreamLanguage.define(yaml)
+
+function VariableRow({ name, prop, onRename, onUpdate, onRemove, showRequired, isRequired, variant }) {
+  const uiType = prop.enum ? 'enum' : (prop.type || 'string')
+  const isEnum = uiType === 'enum'
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Input size="small" value={name} placeholder="name"
+          onChange={e => onRename(e.target.value)}
+          style={{ width: 140, fontWeight: 600 }} />
+        {variant === 'threshold' ? (
+          <Select size="small" value={prop['x-severity'] || 'warning'} options={SEVERITY_OPTIONS} style={{ width: 90 }}
+            onChange={val => onUpdate({ 'x-severity': val })} />
+        ) : (
+          <Select size="small" value={uiType} options={TYPE_OPTIONS} style={{ width: 80 }}
+            onChange={val => {
+              const updates = val === 'enum'
+                ? { type: 'string', enum: prop.enum || [] }
+                : { type: val, enum: undefined }
+              onUpdate(updates)
+            }} />
+        )}
+        <Input size="small" value={prop.description || ''} placeholder="description"
+          onChange={e => onUpdate({ description: e.target.value })}
+          style={{ flex: 1 }} />
+        <Input size="small" value={prop.default ?? ''} placeholder="default" style={{ width: variant === 'threshold' ? 80 : 100 }}
+          onChange={e => {
+            const v = e.target.value
+            if (variant === 'threshold') {
+              onUpdate({ default: v === '' ? undefined : (isNaN(Number(v)) ? v : Number(v)) })
+            } else {
+              onUpdate({ default: v || undefined })
+            }
+          }} />
+        {showRequired && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={!!isRequired}
+              onChange={e => onUpdate({ required: e.target.checked })} />
+            <Text style={{ fontSize: 11 }}>Req</Text>
+          </label>
+        )}
+        <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={onRemove} />
+      </div>
+      {isEnum && (
+        <Select size="small" mode="tags" placeholder="Type a value and press Enter"
+          value={prop.enum || []}
+          onChange={vals => onUpdate({ enum: vals?.length ? vals : undefined })}
+          style={{ width: '100%', marginTop: 6 }}
+          open={false}
+        />
+      )}
+    </div>
+  )
+}
 
 const SEVERITY_OPTIONS = [
   { value: 'info', label: 'info' },
@@ -104,10 +158,10 @@ export default function TemplateDevEditor() {
   }, [activeChart, loadChart])
 
   useEffect(() => {
-    if (!editorEditable && schema && activeAlert) {
+    if (!editorEditable && schema && activeAlert && activeAlert !== '__common_vars__') {
       const alertDef = schema.properties?.[activeAlert]
       if (alertDef && !alertDef['x-custom-template']) {
-        setFileContent(generateGroupTemplate(activeAlert, alertDef, '{{ .Release.Name }}') || '')
+        setFileContent(generateGroupTemplate(activeAlert, alertDef, '{{ .Release.Name }}', schema) || '')
       } else {
         setFileContent('')
       }
@@ -173,7 +227,7 @@ export default function TemplateDevEditor() {
         continue
       }
 
-      const content = generateGroupTemplate(alertGroup, alertDef, '{{ .Release.Name }}')
+      const content = generateGroupTemplate(alertGroup, alertDef, '{{ .Release.Name }}', schema)
       if (!content) continue
       await saveChartTemplateFile(activeChart, fileName, content)
       newTemplateFiles.push(fileName)
@@ -271,9 +325,30 @@ export default function TemplateDevEditor() {
     setDirty(true)
   }
 
-  const alertDef = activeAlert ? schema?.properties?.[activeAlert] : null
+  const isCommonVars = activeAlert === '__common_vars__'
+  const alertDef = (!isCommonVars && activeAlert) ? schema?.properties?.[activeAlert] : null
   const props = alertDef?.items?.properties || {}
   const required = new Set(alertDef?.items?.required || [])
+
+  const commonVars = schema ? getCommonVars(schema) : []
+
+  function addCommonVar() {
+    const updated = [...commonVars, { name: '', type: 'string', description: '', required: false }]
+    setSchema(setCommonVars(schema, updated))
+    setDirty(true)
+  }
+
+  function removeCommonVar(index) {
+    const updated = commonVars.filter((_, i) => i !== index)
+    setSchema(setCommonVars(schema, updated))
+    setDirty(true)
+  }
+
+  function updateCommonVar(index, field, value) {
+    const updated = commonVars.map((v, i) => i === index ? { ...v, [field]: value } : v)
+    setSchema(setCommonVars(schema, updated))
+    setDirty(true)
+  }
 
   const selectors = Object.entries(props).filter(([, p]) => p['x-var-type'] !== 'threshold')
   const thresholds = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'threshold')
@@ -348,6 +423,7 @@ export default function TemplateDevEditor() {
                 templates={alertNames}
                 activeTemplate={activeAlert}
                 onSelect={setActiveAlert}
+                showCommonVars
               />
             </div>
             {/* Resize handle - full height line + visible grip */}
@@ -367,7 +443,46 @@ export default function TemplateDevEditor() {
 
           {/* Main content - rule builder */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {alertDef ? (
+            {isCommonVars ? (
+              <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+                  <Text strong style={{ fontSize: 16 }}>Common Variables</Text>
+                </div>
+                <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
+                  Variables defined here are shared across all alert groups. They appear as columns in every alert table and as labels in every generated PrometheusRule.
+                </Text>
+
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Selectors</Text>
+                    <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
+                    <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={addCommonVar}>Add</Button>
+                  </div>
+                  {commonVars.length === 0 && <Text type="secondary" style={{ fontSize: 12 }}>No common variables defined</Text>}
+                  {commonVars.map((v, i) => {
+                    const prop = { type: v.type === 'enum' ? 'string' : (v.type || 'string'), description: v.description, default: v.default, enum: v.enum }
+                    return (
+                      <VariableRow key={i} name={v.name} prop={prop}
+                        showRequired isRequired={v.required}
+                        onRename={val => updateCommonVar(i, 'name', val)}
+                        onUpdate={updates => {
+                          const merged = { ...v }
+                          if ('type' in updates) merged.type = updates.enum !== undefined ? 'enum' : updates.type
+                          if ('description' in updates) merged.description = updates.description
+                          if ('default' in updates) merged.default = updates.default
+                          if ('enum' in updates) merged.enum = updates.enum
+                          if ('required' in updates) merged.required = updates.required
+                          const updated = commonVars.map((cv, j) => j === i ? merged : cv)
+                          setSchema(setCommonVars(schema, updated))
+                          setDirty(true)
+                        }}
+                        onRemove={() => removeCommonVar(i)}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            ) : alertDef ? (
               <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
                 {/* Alert group header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
@@ -414,24 +529,12 @@ export default function TemplateDevEditor() {
                   </div>
                   {selectors.length === 0 && <Text type="secondary" style={{ fontSize: 12 }}>No selectors defined</Text>}
                   {selectors.map(([name, prop]) => (
-                    <div key={name} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <Input size="small" value={name} placeholder="name"
-                        onChange={e => updateVariable(name, e.target.value, {})}
-                        style={{ width: 140, fontWeight: 600 }} />
-                      <Select size="small" value={prop.type || 'string'} options={TYPE_OPTIONS} style={{ width: 80 }}
-                        onChange={val => updateVariable(name, name, { type: val })} />
-                      <Input size="small" value={prop.description || ''} placeholder="description"
-                        onChange={e => updateVariable(name, name, { description: e.target.value })}
-                        style={{ flex: 1 }} />
-                      <Input size="small" value={prop.default ?? ''} placeholder="default" style={{ width: 100 }}
-                        onChange={e => updateVariable(name, name, { default: e.target.value || undefined })} />
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-                        <input type="checkbox" checked={required.has(name)}
-                          onChange={e => updateVariable(name, name, { required: e.target.checked })} />
-                        <Text style={{ fontSize: 11 }}>Req</Text>
-                      </label>
-                      <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => removeVariable(name)} />
-                    </div>
+                    <VariableRow key={name} name={name} prop={prop}
+                      showRequired isRequired={required.has(name)}
+                      onRename={val => updateVariable(name, val, {})}
+                      onUpdate={updates => updateVariable(name, name, updates)}
+                      onRemove={() => removeVariable(name)}
+                    />
                   ))}
                 </div>
 
@@ -444,22 +547,11 @@ export default function TemplateDevEditor() {
                   </div>
                   {thresholds.length === 0 && <Text type="secondary" style={{ fontSize: 12 }}>No thresholds defined</Text>}
                   {thresholds.map(([name, prop]) => (
-                    <div key={name} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <Input size="small" value={name} placeholder="name"
-                        onChange={e => updateVariable(name, e.target.value, {})}
-                        style={{ width: 140, fontWeight: 600 }} />
-                      <Select size="small" value={prop['x-severity'] || 'warning'} options={SEVERITY_OPTIONS} style={{ width: 90 }}
-                        onChange={val => updateVariable(name, name, { 'x-severity': val })} />
-                      <Input size="small" value={prop.description || ''} placeholder="description"
-                        onChange={e => updateVariable(name, name, { description: e.target.value })}
-                        style={{ flex: 1 }} />
-                      <Input size="small" value={prop.default ?? ''} placeholder="default" style={{ width: 80 }}
-                        onChange={e => {
-                          const v = e.target.value
-                          updateVariable(name, name, { default: v === '' ? undefined : (isNaN(Number(v)) ? v : Number(v)) })
-                        }} />
-                      <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => removeVariable(name)} />
-                    </div>
+                    <VariableRow key={name} name={name} prop={prop} variant="threshold"
+                      onRename={val => updateVariable(name, val, {})}
+                      onUpdate={updates => updateVariable(name, name, updates)}
+                      onRemove={() => removeVariable(name)}
+                    />
                   ))}
                 </div>
               </div>

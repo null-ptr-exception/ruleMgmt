@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { schemaAlertNames, schemaToVars, varsMapToSchema, updateSchemaAlert } from '../schemaUtils.js'
+import { schemaAlertNames, schemaToVars, varsMapToSchema, updateSchemaAlert, getCommonVars, setCommonVars } from '../schemaUtils.js'
 
 const sampleSchema = {
   $schema: 'https://json-schema.org/draft-07/schema#',
@@ -152,5 +152,98 @@ describe('schema with x- extensions', () => {
       expect(v).not.toHaveProperty('x-var-type')
       expect(v).not.toHaveProperty('x-severity')
     }
+  })
+})
+
+describe('getCommonVars', () => {
+  it('returns empty for schema without x-common-vars', () => {
+    expect(getCommonVars(sampleSchema)).toEqual([])
+    expect(getCommonVars(null)).toEqual([])
+    expect(getCommonVars({})).toEqual([])
+  })
+
+  it('extracts common vars from x-common-vars', () => {
+    const schema = {
+      ...sampleSchema,
+      'x-common-vars': {
+        type: 'object',
+        properties: {
+          owner: { type: 'string', description: 'Team owner' },
+          env: { type: 'string', description: 'Environment', default: 'prod' }
+        },
+        required: ['owner']
+      }
+    }
+    const vars = getCommonVars(schema)
+    expect(vars).toEqual([
+      { name: 'owner', type: 'string', description: 'Team owner', required: true },
+      { name: 'env', type: 'string', description: 'Environment', default: 'prod', required: false }
+    ])
+  })
+})
+
+describe('setCommonVars', () => {
+  it('adds x-common-vars to schema', () => {
+    const updated = setCommonVars(sampleSchema, [
+      { name: 'owner', type: 'string', description: 'Team', required: true }
+    ])
+    expect(updated['x-common-vars'].properties.owner.type).toBe('string')
+    expect(updated['x-common-vars'].required).toEqual(['owner'])
+    expect(updated.properties).toEqual(sampleSchema.properties)
+  })
+
+  it('removes x-common-vars when vars is empty', () => {
+    const withCommon = {
+      ...sampleSchema,
+      'x-common-vars': { type: 'object', properties: { owner: { type: 'string' } } }
+    }
+    const updated = setCommonVars(withCommon, [])
+    expect(updated).not.toHaveProperty('x-common-vars')
+    expect(updated.properties).toEqual(sampleSchema.properties)
+  })
+})
+
+describe('schemaToVars with common vars', () => {
+  const schemaWithCommon = {
+    ...sampleSchema,
+    'x-common-vars': {
+      type: 'object',
+      properties: {
+        owner: { type: 'string', description: 'Team owner' }
+      },
+      required: ['owner']
+    }
+  }
+
+  it('merges common vars before group-specific vars', () => {
+    const vars = schemaToVars(schemaWithCommon, 'cpu_alert')
+    expect(vars[0]).toEqual({ name: 'owner', type: 'string', description: 'Team owner', required: true })
+    expect(vars[1].name).toBe('host')
+  })
+
+  it('does not duplicate if group has same var name as common', () => {
+    const schema = {
+      type: 'object',
+      'x-common-vars': {
+        type: 'object',
+        properties: { host: { type: 'string', description: 'Common host' } }
+      },
+      properties: {
+        cpu_alert: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              host: { type: 'string', description: 'Per-group host' },
+              threshold: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+    const vars = schemaToVars(schema, 'cpu_alert')
+    const hostVars = vars.filter(v => v.name === 'host')
+    expect(hostVars).toHaveLength(1)
+    expect(hostVars[0].description).toBe('Common host')
   })
 })

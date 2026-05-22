@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Typography, Badge } from 'antd'
-import { RightOutlined } from '@ant-design/icons'
+import { RightOutlined, SettingOutlined } from '@ant-design/icons'
 import { buildTree } from '../utils/treeGrouping'
 
 const { Text } = Typography
@@ -65,12 +65,33 @@ function TreeNode({ node, activeTemplate, onSelect }) {
   )
 }
 
-export default function TemplateTree({ templates, activeTemplate, onSelect }) {
+export default function TemplateTree({ templates, activeTemplate, onSelect, showCommonVars }) {
   const names = (templates || []).map((t) => (typeof t === 'string' ? t : t.name))
   const tree = buildTree(names)
 
+  const isCommonActive = activeTemplate === '__common_vars__'
+
   return (
     <div style={{ padding: '4px 0' }}>
+      {showCommonVars && (
+        <div
+          onClick={() => onSelect('__common_vars__')}
+          style={{
+            padding: '5px 12px',
+            cursor: 'pointer',
+            fontSize: 13,
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: isCommonActive ? '#e6f4ff' : undefined,
+            fontWeight: isCommonActive ? 600 : undefined,
+            color: isCommonActive ? '#1677ff' : '#595959',
+            borderBottom: '1px solid #f0f0f0',
+            marginBottom: 4,
+          }}
+        >
+          <SettingOutlined style={{ fontSize: 12 }} />
+          Common Variables
+        </div>
+      )}
       {tree.map((node) => (
         <TreeNode
           key={node.fullName || node.label}

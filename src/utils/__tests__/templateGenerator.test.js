@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generatePrometheusRule, generateDefaultValues } from '../templateGenerator.js'
+import { generatePrometheusRule, generateDefaultValues, generateGroupTemplate } from '../templateGenerator.js'
 
 const sampleSchema = {
   $schema: 'https://json-schema.org/draft-07/schema#',
@@ -187,5 +187,96 @@ describe('generateDefaultValues', () => {
   it('returns empty object for null schema', () => {
     expect(generateDefaultValues(null)).toEqual({})
     expect(generateDefaultValues({})).toEqual({})
+  })
+
+  it('includes common vars in default values', () => {
+    const schema = {
+      type: 'object',
+      'x-common-vars': {
+        type: 'object',
+        properties: {
+          owner: { type: 'string', default: 'team-a' }
+        }
+      },
+      properties: {
+        test: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              val: { type: 'number', default: 5 }
+            }
+          }
+        }
+      }
+    }
+    const values = generateDefaultValues(schema)
+    expect(values.test[0]).toEqual({ owner: 'team-a', val: 5 })
+  })
+})
+
+describe('common vars in template generation', () => {
+  const schemaWithCommon = {
+    type: 'object',
+    'x-common-vars': {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' }
+      }
+    },
+    properties: {
+      test_group: {
+        type: 'array',
+        'x-promql': 'metric > {{ THRESHOLD }}',
+        'x-for': '5m',
+        items: {
+          type: 'object',
+          properties: {
+            ns: { type: 'string', 'x-var-type': 'selector' },
+            warn: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
+          }
+        }
+      }
+    }
+  }
+
+  it('includes common vars in labels via generatePrometheusRule', () => {
+    const yaml = generatePrometheusRule(schemaWithCommon, 'test')
+    expect(yaml).toContain('owner: "{{ .owner }}"')
+    expect(yaml).toContain('ns: "{{ .ns }}"')
+  })
+
+  it('includes common vars in labels via generateGroupTemplate', () => {
+    const alertDef = schemaWithCommon.properties.test_group
+    const yaml = generateGroupTemplate('test_group', alertDef, 'test', schemaWithCommon)
+    expect(yaml).toContain('owner: "{{ .owner }}"')
+    expect(yaml).toContain('ns: "{{ .ns }}"')
+  })
+
+  it('deduplicates common and group selectors', () => {
+    const schema = {
+      type: 'object',
+      'x-common-vars': {
+        type: 'object',
+        properties: { ns: { type: 'string' } }
+      },
+      properties: {
+        dup_group: {
+          type: 'array',
+          'x-promql': 'metric > {{ THRESHOLD }}',
+          'x-for': '5m',
+          items: {
+            type: 'object',
+            properties: {
+              ns: { type: 'string', 'x-var-type': 'selector' },
+              warn: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
+            }
+          }
+        }
+      }
+    }
+    const yaml = generatePrometheusRule(schema, 'test')
+    const matches = yaml.match(/ns: "\{\{ \.ns \}\}"/g)
+    expect(matches).toHaveLength(1)
   })
 })

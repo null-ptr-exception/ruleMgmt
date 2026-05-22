@@ -34,13 +34,19 @@ function getSelectors(alertDef) {
     .map(([name]) => name)
 }
 
-function generateGroupYaml(alertGroup, alertDef) {
+function getCommonSelectors(schema) {
+  const props = schema?.['x-common-vars']?.properties || {}
+  return Object.keys(props)
+}
+
+function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
   const promql = alertDef['x-promql']
   if (!promql) return null
 
   const forDuration = alertDef['x-for'] || '5m'
   const thresholds = getThresholds(alertDef)
   const selectors = getSelectors(alertDef)
+  const allSelectors = [...new Set([...commonSelectors, ...selectors])]
 
   const rules = []
   for (const threshold of thresholds) {
@@ -48,7 +54,7 @@ function generateGroupYaml(alertGroup, alertDef) {
     const expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ .${threshold.name} }}`)
 
     const labelLines = [`            severity: ${threshold.severity}`]
-    for (const sel of selectors) {
+    for (const sel of allSelectors) {
       labelLines.push(`            ${sel}: "{{ .${sel} }}"`)
     }
 
@@ -59,7 +65,7 @@ function generateGroupYaml(alertGroup, alertDef) {
       `          labels:\n` +
       labelLines.join('\n') + '\n' +
       `          annotations:\n` +
-      `            summary: "${alertName} triggered on {{ .${selectors[0] || 'namespace'} }}"`
+      `            summary: "${alertName} triggered on {{ .${allSelectors[0] || 'namespace'} }}"`
     )
   }
 
@@ -74,8 +80,9 @@ function generateGroupYaml(alertGroup, alertDef) {
   )
 }
 
-export function generateGroupTemplate(alertGroup, alertDef, releaseName) {
-  const groupYaml = generateGroupYaml(alertGroup, alertDef)
+export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema) {
+  const commonSelectors = schema ? getCommonSelectors(schema) : []
+  const groupYaml = generateGroupYaml(alertGroup, alertDef, commonSelectors)
   if (!groupYaml) return null
 
   const name = releaseName || '{{ .Release.Name }}'
@@ -95,13 +102,14 @@ export function generateGroupTemplate(alertGroup, alertDef, releaseName) {
 export function generatePrometheusRule(schema, releaseName) {
   if (!schema?.properties) return ''
 
+  const commonSelectors = getCommonSelectors(schema)
   const groups = []
 
   for (const [alertGroup, alertDef] of Object.entries(schema.properties)) {
     if (alertGroup.startsWith('$')) continue
     if (alertDef['x-custom-template']) continue
 
-    const groupYaml = generateGroupYaml(alertGroup, alertDef)
+    const groupYaml = generateGroupYaml(alertGroup, alertDef, commonSelectors)
     if (groupYaml) groups.push(groupYaml)
   }
 
@@ -123,11 +131,17 @@ export function generatePrometheusRule(schema, releaseName) {
 
 export function generateDefaultValues(schema) {
   if (!schema?.properties) return {}
+  const commonProps = schema?.['x-common-vars']?.properties || {}
   const values = {}
   for (const [alertGroup, alertDef] of Object.entries(schema.properties)) {
     if (alertGroup.startsWith('$')) continue
     const props = alertDef?.items?.properties || {}
     const row = {}
+    for (const [name, prop] of Object.entries(commonProps)) {
+      if (prop.default !== undefined) row[name] = prop.default
+      else if (prop.type === 'number') row[name] = 0
+      else row[name] = ''
+    }
     for (const [name, prop] of Object.entries(props)) {
       if (prop.default !== undefined) row[name] = prop.default
       else if (prop.type === 'number') row[name] = 0

@@ -7,22 +7,64 @@ export function schemaAlertNames(schema) {
   return Object.keys(schema.properties).filter(k => !k.startsWith('$'))
 }
 
-/**
- * Extract vars array for a specific alert name from schema.
- */
-export function schemaToVars(schema, alertName) {
-  const alertDef = schema?.properties?.[alertName]
-  if (!alertDef?.items?.properties) return []
-  const items = alertDef.items
-  const props = items.properties
-  const required = new Set(items.required || [])
-  return Object.entries(props).map(([name, prop]) => {
+export function getCommonVars(schema) {
+  const vars = schema?.['x-common-vars']
+  if (!vars || !vars.properties) return []
+  const required = new Set(vars.required || [])
+  return Object.entries(vars.properties).map(([name, prop]) => {
     const uiType = prop.enum ? 'enum' : (prop.type || 'string')
     const v = { name, type: uiType, description: prop.description || '', required: required.has(name) }
     if (prop.default !== undefined) v.default = prop.default
     if (prop.enum) v.enum = prop.enum
     return v
   })
+}
+
+export function setCommonVars(schema, vars) {
+  if (!vars || vars.length === 0) {
+    const { 'x-common-vars': _, ...rest } = schema || {}
+    return rest
+  }
+  const properties = {}
+  const required = []
+  for (const v of vars) {
+    properties[v.name] = varToSchemaProp(v)
+    if (v.required) required.push(v.name)
+  }
+  return {
+    ...schema,
+    'x-common-vars': {
+      type: 'object',
+      properties,
+      ...(required.length > 0 ? { required } : {})
+    }
+  }
+}
+
+/**
+ * Extract vars array for a specific alert name from schema.
+ */
+export function schemaToVars(schema, alertName) {
+  const alertDef = schema?.properties?.[alertName]
+  if (!alertDef?.items?.properties) return []
+
+  const common = getCommonVars(schema)
+  const commonNames = new Set(common.map(v => v.name))
+
+  const items = alertDef.items
+  const props = items.properties
+  const required = new Set(items.required || [])
+  const groupVars = Object.entries(props)
+    .filter(([name]) => !commonNames.has(name))
+    .map(([name, prop]) => {
+      const uiType = prop.enum ? 'enum' : (prop.type || 'string')
+      const v = { name, type: uiType, description: prop.description || '', required: required.has(name) }
+      if (prop.default !== undefined) v.default = prop.default
+      if (prop.enum) v.enum = prop.enum
+      return v
+    })
+
+  return [...common, ...groupVars]
 }
 
 /**
@@ -33,7 +75,7 @@ function varToSchemaProp(v) {
   const prop = { type: isEnum ? 'string' : (v.type || 'string') }
   if (v.description) prop.description = v.description
   if (v.default !== undefined) prop.default = v.default
-  if (isEnum && v.enum) prop.enum = v.enum
+  if (isEnum) prop.enum = v.enum || []
   return prop
 }
 

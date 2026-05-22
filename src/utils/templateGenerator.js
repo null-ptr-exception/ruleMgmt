@@ -34,6 +34,64 @@ function getSelectors(alertDef) {
     .map(([name]) => name)
 }
 
+function generateGroupYaml(alertGroup, alertDef) {
+  const promql = alertDef['x-promql']
+  if (!promql) return null
+
+  const forDuration = alertDef['x-for'] || '5m'
+  const thresholds = getThresholds(alertDef)
+  const selectors = getSelectors(alertDef)
+
+  const rules = []
+  for (const threshold of thresholds) {
+    const alertName = `${toPascalCase(alertGroup)}_${toPascalCase(threshold.name)}`
+    const expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ .${threshold.name} }}`)
+
+    const labelLines = [`            severity: ${threshold.severity}`]
+    for (const sel of selectors) {
+      labelLines.push(`            ${sel}: "{{ .${sel} }}"`)
+    }
+
+    rules.push(
+      `        - alert: ${alertName}\n` +
+      `          expr: ${expr}\n` +
+      `          for: ${forDuration}\n` +
+      `          labels:\n` +
+      labelLines.join('\n') + '\n' +
+      `          annotations:\n` +
+      `            summary: "${alertName} triggered on {{ .${selectors[0] || 'namespace'} }}"`
+    )
+  }
+
+  if (rules.length === 0) return null
+
+  return (
+    `    - name: ${alertGroup.replace(/_/g, '-')}\n` +
+    `      rules:\n` +
+    `        {{- range .Values.${alertGroup} }}\n` +
+    rules.join('\n') + '\n' +
+    `        {{- end }}`
+  )
+}
+
+export function generateGroupTemplate(alertGroup, alertDef, releaseName) {
+  const groupYaml = generateGroupYaml(alertGroup, alertDef)
+  if (!groupYaml) return null
+
+  const name = releaseName || '{{ .Release.Name }}'
+  return (
+    `apiVersion: monitoring.coreos.com/v1\n` +
+    `kind: PrometheusRule\n` +
+    `metadata:\n` +
+    `  name: ${name}-${alertGroup.replace(/_/g, '-')}\n` +
+    `  labels:\n` +
+    `    app.kubernetes.io/managed-by: Helm\n` +
+    `spec:\n` +
+    `  groups:\n` +
+    groupYaml
+  ) + '\n'
+}
+
 export function generatePrometheusRule(schema, releaseName) {
   if (!schema?.properties) return ''
 
@@ -43,45 +101,11 @@ export function generatePrometheusRule(schema, releaseName) {
     if (alertGroup.startsWith('$')) continue
     if (alertDef['x-custom-template']) continue
 
-    const promql = alertDef['x-promql']
-    if (!promql) continue
-
-    const forDuration = alertDef['x-for'] || '5m'
-    const thresholds = getThresholds(alertDef)
-    const selectors = getSelectors(alertDef)
-
-    const rules = []
-    for (const threshold of thresholds) {
-      const alertName = `${toPascalCase(alertGroup)}_${toPascalCase(threshold.name)}`
-      const expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ .${threshold.name} }}`)
-
-      const labelLines = [`            severity: ${threshold.severity}`]
-      for (const sel of selectors) {
-        labelLines.push(`            ${sel}: "{{ .${sel} }}"`)
-      }
-
-      rules.push(
-        `        - alert: ${alertName}\n` +
-        `          expr: ${expr}\n` +
-        `          for: ${forDuration}\n` +
-        `          labels:\n` +
-        labelLines.join('\n') + '\n' +
-        `          annotations:\n` +
-        `            summary: "${alertName} triggered on {{ .${selectors[0] || 'namespace'} }}"`
-      )
-    }
-
-    if (rules.length === 0) continue
-
-    const groupYaml =
-      `    - name: ${alertGroup.replace(/_/g, '-')}\n` +
-      `      rules:\n` +
-      `        {{- range .Values.${alertGroup} }}\n` +
-      rules.join('\n') + '\n' +
-      `        {{- end }}`
-
-    groups.push(groupYaml)
+    const groupYaml = generateGroupYaml(alertGroup, alertDef)
+    if (groupYaml) groups.push(groupYaml)
   }
+
+  if (groups.length === 0) return ''
 
   const name = releaseName || '{{ .Release.Name }}'
   return (

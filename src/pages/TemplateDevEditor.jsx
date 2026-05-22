@@ -4,10 +4,10 @@ import { Button, Input, Select, Empty, Typography, Switch, Collapse } from 'antd
 import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 import { schemaAlertNames } from '../utils/schemaUtils'
 import TemplateTree from '../components/TemplateTree'
-import { generatePrometheusRule } from '../utils/templateGenerator'
+import { generatePrometheusRule, generateGroupTemplate } from '../utils/templateGenerator'
 import {
   listCharts, createChart, deleteChart,
-  getChartInfo, saveChartTemplateFile,
+  getChartInfo, saveChartTemplateFile, deleteChartTemplate,
   saveChartSchema, saveChartMeta
 } from '../utils/chartApi'
 
@@ -46,6 +46,7 @@ export default function TemplateDevEditor() {
   const [yamlExpanded, setYamlExpanded] = useState(false)
   const [editorEditable, setEditorEditable] = useState(false)
   const [fileContent, setFileContent] = useState('')
+  const [savedTemplateFiles, setSavedTemplateFiles] = useState([])
   const [sidebarWidth, setSidebarWidth] = useState(220)
   const resizingRef = useRef(false)
   const editorRef = useRef(null)
@@ -93,6 +94,7 @@ export default function TemplateDevEditor() {
     const names = schemaAlertNames(s)
     setAlertNames(names)
     setActiveAlert(prev => names.includes(prev) ? prev : (names.length > 0 ? names[0] : null))
+    setSavedTemplateFiles(info.templateFiles || [])
     setDirty(false)
     setEditorEditable(false)
   }, [setActiveAlert])
@@ -102,10 +104,15 @@ export default function TemplateDevEditor() {
   }, [activeChart, loadChart])
 
   useEffect(() => {
-    if (!editorEditable && schema) {
-      setFileContent(generatePrometheusRule(schema, '{{ .Release.Name }}'))
+    if (!editorEditable && schema && activeAlert) {
+      const alertDef = schema.properties?.[activeAlert]
+      if (alertDef && !alertDef['x-custom-template']) {
+        setFileContent(generateGroupTemplate(activeAlert, alertDef, '{{ .Release.Name }}') || '')
+      } else {
+        setFileContent('')
+      }
     }
-  }, [schema, editorEditable])
+  }, [schema, editorEditable, activeAlert])
 
   useEffect(() => {
     if (!editorRef.current || !yamlExpanded) return
@@ -151,8 +158,35 @@ export default function TemplateDevEditor() {
     if (!activeChart) return
     await saveChartSchema(activeChart, schema)
     await saveChartMeta(activeChart, chartMeta)
-    const content = editorEditable ? fileContent : generatePrometheusRule(schema, '{{ .Release.Name }}')
-    await saveChartTemplateFile(activeChart, 'prometheus-rule', content)
+
+    const newTemplateFiles = []
+    for (const [alertGroup, alertDef] of Object.entries(schema.properties || {})) {
+      if (alertGroup.startsWith('$')) continue
+      const fileName = alertGroup.replace(/_/g, '-')
+
+      if (alertDef['x-custom-template']) {
+        // Save custom template if currently editing it
+        if (editorEditable && activeAlert === alertGroup && fileContent) {
+          await saveChartTemplateFile(activeChart, fileName, fileContent)
+        }
+        newTemplateFiles.push(fileName)
+        continue
+      }
+
+      const content = generateGroupTemplate(alertGroup, alertDef, '{{ .Release.Name }}')
+      if (!content) continue
+      await saveChartTemplateFile(activeChart, fileName, content)
+      newTemplateFiles.push(fileName)
+    }
+
+    // Delete template files for removed groups
+    for (const oldFile of savedTemplateFiles) {
+      if (!newTemplateFiles.includes(oldFile) && oldFile !== 'Chart') {
+        await deleteChartTemplate(activeChart, oldFile)
+      }
+    }
+
+    setSavedTemplateFiles(newTemplateFiles)
     setDirty(false)
   }
 

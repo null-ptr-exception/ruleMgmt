@@ -10,7 +10,7 @@ RUN npm run build
 
 FROM node:22-alpine
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git helm
 
 WORKDIR /app
 

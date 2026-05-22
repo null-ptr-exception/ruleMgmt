@@ -23,7 +23,6 @@ export default function AlertUserView() {
   const [selectedChart, setSelectedChart] = useState(null)
   const [schema, setSchema] = useState(null)
   const [alertNames, setAlertNames] = useState([])
-  const [chartDescription, setChartDescription] = useState('')
 
   const [allValues, setAllValues] = useState({})
   const [rows, setRows] = useState([])
@@ -78,13 +77,11 @@ export default function AlertUserView() {
     if (!selectedChart) {
       setSchema(null)
       setAlertNames([])
-      setChartDescription('')
       return
     }
     getChartInfo(selectedChart).then(info => {
       setSchema(info.schema)
       setAlertNames(schemaAlertNames(info.schema))
-      setChartDescription(info.chartMeta?.description || '')
       if (activeAlert && !schemaAlertNames(info.schema).includes(activeAlert)) {
         setActiveAlert(null)
       }
@@ -189,7 +186,6 @@ export default function AlertUserView() {
           <>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
               <Title level={4} style={{ margin: 0 }}>{selectedFolder} / {activeAlert}</Title>
-              {chartDescription && <Text type="secondary" style={{ fontSize: 13 }}>{chartDescription}</Text>}
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
               <AlertTable

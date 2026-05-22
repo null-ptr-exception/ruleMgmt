@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Modal, Typography, Empty, message } from 'antd'
+import { Button, Modal, Typography, Empty, Input, Select, message } from 'antd'
 import { SaveOutlined, EyeOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
 import AlertTable from '../components/AlertTable'
-import { schemaAlertNames, schemaToVars } from '../utils/schemaUtils'
+import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -25,6 +25,7 @@ export default function AlertUserView() {
   const [alertNames, setAlertNames] = useState([])
 
   const [allValues, setAllValues] = useState({})
+  const [commonValues, setCommonValues] = useState({})
   const [rows, setRows] = useState([])
   const [vars, setVars] = useState([])
   const [dirty, setDirty] = useState(false)
@@ -94,9 +95,11 @@ export default function AlertUserView() {
     if (!selectedChart || !selectedFolder) return
     getDeployment(selectedChart, folderBasename, selectedFolder).then(data => {
       const parsed = data.parsed || {}
-      setAllValues(parsed)
-      if (activeAlert) {
-        setRows(parsed[activeAlert] || [])
+      const { _common, ...rest } = parsed
+      setCommonValues(_common || {})
+      setAllValues(rest)
+      if (activeAlert && activeAlert !== '__common_vars__') {
+        setRows(rest[activeAlert] || [])
       }
       setDirty(false)
     })
@@ -117,15 +120,20 @@ export default function AlertUserView() {
     setSelectedChart(chart)
     setActiveAlert(null)
     setAllValues({})
+    setCommonValues({})
     setRows([])
     setDirty(false)
   }
 
   async function handleSave() {
-    if (!selectedChart || !selectedFolder || !activeAlert) return
-    const merged = { ...allValues, [activeAlert]: rows }
-    await saveDeployment(selectedChart, folderBasename, merged, selectedFolder)
-    setAllValues(merged)
+    if (!selectedChart || !selectedFolder) return
+    const isCommon = activeAlert === '__common_vars__'
+    const merged = isCommon ? allValues : { ...allValues, [activeAlert]: rows }
+    const toSave = Object.keys(commonValues).length > 0
+      ? { _common: commonValues, ...merged }
+      : merged
+    await saveDeployment(selectedChart, folderBasename, toSave, selectedFolder)
+    if (!isCommon) setAllValues(merged)
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
   }
@@ -144,6 +152,8 @@ export default function AlertUserView() {
     </div>
   )
 
+  const isCommonView = activeAlert === '__common_vars__'
+  const commonVarDefs = schema ? getCommonVars(schema) : []
   const showMain = selectedFolder && selectedChart && activeAlert
 
   return (
@@ -165,6 +175,8 @@ export default function AlertUserView() {
               templates={alertNames}
               activeTemplate={activeAlert}
               onSelect={setActiveAlert}
+              showCommonVars={getCommonVars(schema).length > 0}
+              commonVarsLabel="Common Values"
             />
           </>
         )}
@@ -185,20 +197,56 @@ export default function AlertUserView() {
         {showMain ? (
           <>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
-              <Title level={4} style={{ margin: 0 }}>{selectedFolder} / {activeAlert}</Title>
+              <Title level={4} style={{ margin: 0 }}>
+                {selectedFolder} / {isCommonView ? 'Common Values' : activeAlert}
+              </Title>
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
-              <AlertTable
-                vars={vars}
-                rows={rows}
-                onUpdate={updated => { setRows(updated); setDirty(true) }}
-                onDelete={idx => { setRows(rows.filter((_, i) => i !== idx)); setDirty(true) }}
-                onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
-              />
+              {isCommonView ? (
+                <div style={{ maxWidth: 500 }}>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
+                    Values set here apply to all alert groups in this deployment.
+                  </Text>
+                  {commonVarDefs.map(v => (
+                    <div key={v.name} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                      <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}</Text>
+                      {v.enum ? (
+                        <Select size="small" value={commonValues[v.name] ?? ''}
+                          onChange={val => { setCommonValues({ ...commonValues, [v.name]: val }); setDirty(true) }}
+                          style={{ flex: 1 }}
+                          options={v.enum.map(opt => ({ value: opt, label: opt }))}
+                          allowClear
+                          onClear={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}
+                        />
+                      ) : (
+                        <Input size="small" value={commonValues[v.name] ?? ''}
+                          onChange={e => {
+                            if (e.target.value) {
+                              setCommonValues({ ...commonValues, [v.name]: e.target.value }); setDirty(true)
+                            } else {
+                              const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true)
+                            }
+                          }}
+                          style={{ flex: 1 }}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <AlertTable
+                  vars={vars}
+                  rows={rows}
+                  commonValues={commonValues}
+                  onUpdate={updated => { setRows(updated); setDirty(true) }}
+                  onDelete={idx => { setRows(rows.filter((_, i) => i !== idx)); setDirty(true) }}
+                  onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
+                />
+              )}
             </div>
             <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
               <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
-              <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>
+              {!isCommonView && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
               {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
             </div>
             <Modal title="Rendered PrometheusRule" open={previewOpen} onCancel={() => setPreviewOpen(false)}

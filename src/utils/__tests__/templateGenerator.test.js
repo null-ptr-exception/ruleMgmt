@@ -242,15 +242,19 @@ describe('common vars in template generation', () => {
 
   it('includes common vars in labels via generatePrometheusRule', () => {
     const yaml = generatePrometheusRule(schemaWithCommon, 'test')
-    expect(yaml).toContain('owner: "{{ .owner }}"')
-    expect(yaml).toContain('ns: "{{ .ns }}"')
+    expect(yaml).toContain('$common := .Values._common | default dict')
+    expect(yaml).toContain('$row := merge . $common')
+    expect(yaml).toContain('owner: "{{ $row.owner }}"')
+    expect(yaml).toContain('ns: "{{ $row.ns }}"')
   })
 
   it('includes common vars in labels via generateGroupTemplate', () => {
     const alertDef = schemaWithCommon.properties.test_group
     const yaml = generateGroupTemplate('test_group', alertDef, 'test', schemaWithCommon)
-    expect(yaml).toContain('owner: "{{ .owner }}"')
-    expect(yaml).toContain('ns: "{{ .ns }}"')
+    expect(yaml).toContain('$common := .Values._common | default dict')
+    expect(yaml).toContain('$row := merge . $common')
+    expect(yaml).toContain('owner: "{{ $row.owner }}"')
+    expect(yaml).toContain('ns: "{{ $row.ns }}"')
   })
 
   it('deduplicates common and group selectors', () => {
@@ -276,7 +280,7 @@ describe('common vars in template generation', () => {
       }
     }
     const yaml = generatePrometheusRule(schema, 'test')
-    const matches = yaml.match(/ns: "\{\{ \.ns \}\}"/g)
+    const matches = yaml.match(/ns: "\{\{ \$row\.ns \}\}"/g)
     expect(matches).toHaveLength(1)
   })
 })

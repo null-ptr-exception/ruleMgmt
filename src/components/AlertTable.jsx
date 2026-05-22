@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { Table, Button, Input, InputNumber, Select, Checkbox } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 
-export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, onAdd }) {
+export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, onAdd, commonValues = {} }) {
   const handleCellChange = useCallback((rowIdx, varName, value) => {
     const updated = rows.map((r, i) =>
       i === rowIdx ? { ...r, [varName]: value } : r
@@ -13,13 +13,14 @@ export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, o
   const handleAdd = useCallback(() => {
     const newRow = {}
     vars.forEach(v => {
+      if (v.name in commonValues) return
       if (v.default !== undefined) newRow[v.name] = v.default
       else if (v.type === 'boolean') newRow[v.name] = false
       else if (v.type === 'number' || v.type === 'integer') newRow[v.name] = 0
       else newRow[v.name] = ''
     })
     onAdd(newRow)
-  }, [vars, onAdd])
+  }, [vars, onAdd, commonValues])
 
   const renderInput = (v, row, rowIdx) => {
     const val = row[v.name]
@@ -63,12 +64,17 @@ export default function AlertTable({ vars = [], rows = [], onUpdate, onDelete, o
   }
 
   const columns = [
-    ...vars.map(v => ({
-      title: v.name,
-      dataIndex: v.name,
-      key: v.name,
-      render: (_, row, rowIdx) => renderInput(v, row, rowIdx),
-    })),
+    ...vars.map(v => {
+      const isCommon = v.name in commonValues
+      return {
+        title: v.name,
+        dataIndex: v.name,
+        key: v.name,
+        render: (_, row, rowIdx) => isCommon
+          ? <span style={{ fontSize: 13, color: '#8c8c8c', padding: '0 7px' }}>{commonValues[v.name]}</span>
+          : renderInput(v, row, rowIdx),
+      }
+    }),
     {
       title: '',
       key: 'actions',

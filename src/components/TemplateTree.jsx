@@ -65,7 +65,7 @@ function TreeNode({ node, activeTemplate, onSelect }) {
   )
 }
 
-export default function TemplateTree({ templates, activeTemplate, onSelect, showCommonVars }) {
+export default function TemplateTree({ templates, activeTemplate, onSelect, showCommonVars, commonVarsLabel = 'Common Variables' }) {
   const names = (templates || []).map((t) => (typeof t === 'string' ? t : t.name))
   const tree = buildTree(names)
 
@@ -89,7 +89,7 @@ export default function TemplateTree({ templates, activeTemplate, onSelect, show
           }}
         >
           <SettingOutlined style={{ fontSize: 12 }} />
-          Common Variables
+          {commonVarsLabel}
         </div>
       )}
       {tree.map((node) => (

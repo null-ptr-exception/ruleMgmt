@@ -47,15 +47,17 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
   const thresholds = getThresholds(alertDef)
   const selectors = getSelectors(alertDef)
   const allSelectors = [...new Set([...commonSelectors, ...selectors])]
+  const hasCommon = commonSelectors.length > 0
+  const ref = hasCommon ? '$row.' : '.'
 
   const rules = []
   for (const threshold of thresholds) {
     const alertName = `${toPascalCase(alertGroup)}_${toPascalCase(threshold.name)}`
-    const expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ .${threshold.name} }}`)
+    const expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ ${ref}${threshold.name} }}`)
 
     const labelLines = [`            severity: ${threshold.severity}`]
     for (const sel of allSelectors) {
-      labelLines.push(`            ${sel}: "{{ .${sel} }}"`)
+      labelLines.push(`            ${sel}: "{{ ${ref}${sel} }}"`)
     }
 
     rules.push(
@@ -65,16 +67,22 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
       `          labels:\n` +
       labelLines.join('\n') + '\n' +
       `          annotations:\n` +
-      `            summary: "${alertName} triggered on {{ .${allSelectors[0] || 'namespace'} }}"`
+      `            summary: "${alertName} triggered on {{ ${ref}${allSelectors[0] || 'namespace'} }}"`
     )
   }
 
   if (rules.length === 0) return null
 
+  const rangeBlock = hasCommon
+    ? `        {{- $common := .Values._common | default dict }}\n` +
+      `        {{- range .Values.${alertGroup} }}\n` +
+      `        {{- $row := merge . $common }}\n`
+    : `        {{- range .Values.${alertGroup} }}\n`
+
   return (
     `    - name: ${alertGroup.replace(/_/g, '-')}\n` +
     `      rules:\n` +
-    `        {{- range .Values.${alertGroup} }}\n` +
+    rangeBlock +
     rules.join('\n') + '\n' +
     `        {{- end }}`
   )

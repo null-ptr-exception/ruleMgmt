@@ -8,265 +8,271 @@ spec:
   groups:
     - name: mariadb-latency-slow-queries
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_latency_slow_queries }}
+        {{- $row := merge . $common }}
         - alert: MariadbLatencySlowQueries_WarnThreshold
-          expr: rate(mysql_global_status_slow_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_threshold }}
+          expr: rate(mysql_global_status_slow_queries{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_threshold }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbLatencySlowQueries_WarnThreshold triggered on {{ .instance_name }}"
+            summary: "MariadbLatencySlowQueries_WarnThreshold triggered on {{ $row.owner }}"
         - alert: MariadbLatencySlowQueries_CriticalThreshold
-          expr: rate(mysql_global_status_slow_queries{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .critical_threshold }}
+          expr: rate(mysql_global_status_slow_queries{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.critical_threshold }}
           for: 5m
           labels:
             severity: critical
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbLatencySlowQueries_CriticalThreshold triggered on {{ .instance_name }}"
+            summary: "MariadbLatencySlowQueries_CriticalThreshold triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-traffic-qps-low
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_traffic_qps_low }}
+        {{- $row := merge . $common }}
         - alert: MariadbTrafficQpsLow_MinQps
-          expr: rate(mysql_global_status_questions{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) < {{ .min_qps }}
+          expr: rate(mysql_global_status_questions{namespace="{{ $row.namespace }}"}[5m]) < {{ $row.min_qps }}
           for: 10m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbTrafficQpsLow_MinQps triggered on {{ .instance_name }}"
+            summary: "MariadbTrafficQpsLow_MinQps triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-traffic-qps-high
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_traffic_qps_high }}
+        {{- $row := merge . $common }}
         - alert: MariadbTrafficQpsHigh_MaxQps
-          expr: rate(mysql_global_status_questions{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .max_qps }}
+          expr: rate(mysql_global_status_questions{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.max_qps }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbTrafficQpsHigh_MaxQps triggered on {{ .instance_name }}"
+            summary: "MariadbTrafficQpsHigh_MaxQps triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-traffic-network-receive
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_traffic_network_receive }}
+        {{- $row := merge . $common }}
         - alert: MariadbTrafficNetworkReceive_WarnBytes
-          expr: rate(container_network_receive_bytes_total{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"}[5m]) > {{ .warn_bytes }}
+          expr: rate(container_network_receive_bytes_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_bytes }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            pod_regex: "{{ .pod_regex }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbTrafficNetworkReceive_WarnBytes triggered on {{ .pod_regex }}"
+            summary: "MariadbTrafficNetworkReceive_WarnBytes triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-traffic-network-transmit
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_traffic_network_transmit }}
+        {{- $row := merge . $common }}
         - alert: MariadbTrafficNetworkTransmit_WarnBytes
-          expr: rate(container_network_transmit_bytes_total{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"}[5m]) > {{ .warn_bytes }}
+          expr: rate(container_network_transmit_bytes_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_bytes }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            pod_regex: "{{ .pod_regex }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbTrafficNetworkTransmit_WarnBytes triggered on {{ .pod_regex }}"
+            summary: "MariadbTrafficNetworkTransmit_WarnBytes triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-errors-connections
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_errors_connections }}
+        {{- $row := merge . $common }}
         - alert: MariadbErrorsConnections_WarnRate
-          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_rate }}
+          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_rate }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbErrorsConnections_WarnRate triggered on {{ .instance_name }}"
+            summary: "MariadbErrorsConnections_WarnRate triggered on {{ $row.owner }}"
         - alert: MariadbErrorsConnections_CriticalRate
-          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .critical_rate }}
+          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.critical_rate }}
           for: 5m
           labels:
             severity: critical
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbErrorsConnections_CriticalRate triggered on {{ .instance_name }}"
+            summary: "MariadbErrorsConnections_CriticalRate triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-errors-aborted-clients
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_errors_aborted_clients }}
+        {{- $row := merge . $common }}
         - alert: MariadbErrorsAbortedClients_WarnRate
-          expr: rate(mysql_global_status_aborted_clients{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_rate }}
+          expr: rate(mysql_global_status_aborted_clients{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_rate }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbErrorsAbortedClients_WarnRate triggered on {{ .instance_name }}"
+            summary: "MariadbErrorsAbortedClients_WarnRate triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-errors-aborted-connects
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_errors_aborted_connects }}
+        {{- $row := merge . $common }}
         - alert: MariadbErrorsAbortedConnects_WarnRate
-          expr: rate(mysql_global_status_aborted_connects{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}[5m]) > {{ .warn_rate }}
+          expr: rate(mysql_global_status_aborted_connects{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_rate }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbErrorsAbortedConnects_WarnRate triggered on {{ .instance_name }}"
+            summary: "MariadbErrorsAbortedConnects_WarnRate triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-saturation-connections
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_saturation_connections }}
+        {{- $row := merge . $common }}
         - alert: MariadbSaturationConnections_WarnPct
-          expr: (mysql_global_status_threads_connected{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_variables_max_connections{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .warn_pct }}
+          expr: (mysql_global_status_threads_connected{namespace="{{ $row.namespace }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.warn_pct }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationConnections_WarnPct triggered on {{ .instance_name }}"
+            summary: "MariadbSaturationConnections_WarnPct triggered on {{ $row.owner }}"
         - alert: MariadbSaturationConnections_CriticalPct
-          expr: (mysql_global_status_threads_connected{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_variables_max_connections{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .critical_pct }}
+          expr: (mysql_global_status_threads_connected{namespace="{{ $row.namespace }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.critical_pct }}
           for: 5m
           labels:
             severity: critical
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationConnections_CriticalPct triggered on {{ .instance_name }}"
+            summary: "MariadbSaturationConnections_CriticalPct triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-saturation-buffer-pool
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_saturation_buffer_pool }}
+        {{- $row := merge . $common }}
         - alert: MariadbSaturationBufferPool_WarnPct
-          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .warn_pct }}
+          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ $row.namespace }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.warn_pct }}
           for: 10m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationBufferPool_WarnPct triggered on {{ .instance_name }}"
+            summary: "MariadbSaturationBufferPool_WarnPct triggered on {{ $row.owner }}"
         - alert: MariadbSaturationBufferPool_CriticalPct
-          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ .namespace }}", instance="{{ .instance_name }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ .namespace }}", instance="{{ .instance_name }}"}) * 100 > {{ .critical_pct }}
+          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ $row.namespace }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.critical_pct }}
           for: 10m
           labels:
             severity: critical
-            owner: "{{ .owner }}"
-            instance_name: "{{ .instance_name }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationBufferPool_CriticalPct triggered on {{ .instance_name }}"
+            summary: "MariadbSaturationBufferPool_CriticalPct triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-saturation-cpu
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_saturation_cpu }}
+        {{- $row := merge . $common }}
         - alert: MariadbSaturationCpu_WarnPct
-          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}", resource="cpu"}) * 100 > {{ .warn_pct }}
+          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace }}", resource="cpu"}) * 100 > {{ $row.warn_pct }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            pod_regex: "{{ .pod_regex }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationCpu_WarnPct triggered on {{ .pod_regex }}"
+            summary: "MariadbSaturationCpu_WarnPct triggered on {{ $row.owner }}"
         - alert: MariadbSaturationCpu_CriticalPct
-          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}", resource="cpu"}) * 100 > {{ .critical_pct }}
+          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace }}", resource="cpu"}) * 100 > {{ $row.critical_pct }}
           for: 5m
           labels:
             severity: critical
-            owner: "{{ .owner }}"
-            pod_regex: "{{ .pod_regex }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationCpu_CriticalPct triggered on {{ .pod_regex }}"
+            summary: "MariadbSaturationCpu_CriticalPct triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-saturation-memory
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_saturation_memory }}
+        {{- $row := merge . $common }}
         - alert: MariadbSaturationMemory_WarnPct
-          expr: (container_memory_working_set_bytes{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}", resource="memory"}) * 100 > {{ .warn_pct }}
+          expr: (container_memory_working_set_bytes{namespace="{{ $row.namespace }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace }}", resource="memory"}) * 100 > {{ $row.warn_pct }}
           for: 5m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            pod_regex: "{{ .pod_regex }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationMemory_WarnPct triggered on {{ .pod_regex }}"
+            summary: "MariadbSaturationMemory_WarnPct triggered on {{ $row.owner }}"
         - alert: MariadbSaturationMemory_CriticalPct
-          expr: (container_memory_working_set_bytes{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ .namespace }}", pod=~"{{ .pod_regex }}", resource="memory"}) * 100 > {{ .critical_pct }}
+          expr: (container_memory_working_set_bytes{namespace="{{ $row.namespace }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace }}", resource="memory"}) * 100 > {{ $row.critical_pct }}
           for: 5m
           labels:
             severity: critical
-            owner: "{{ .owner }}"
-            pod_regex: "{{ .pod_regex }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationMemory_CriticalPct triggered on {{ .pod_regex }}"
+            summary: "MariadbSaturationMemory_CriticalPct triggered on {{ $row.owner }}"
         {{- end }}
 
     - name: mariadb-saturation-disk
       rules:
+        {{- $common := .Values._common | default dict }}
         {{- range .Values.mariadb_saturation_disk }}
+        {{- $row := merge . $common }}
         - alert: MariadbSaturationDisk_WarnPct
-          expr: (kubelet_volume_stats_used_bytes{namespace="{{ .namespace }}", persistentvolumeclaim=~"{{ .pvc_regex }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ .namespace }}", persistentvolumeclaim=~"{{ .pvc_regex }}"}) * 100 > {{ .warn_pct }}
+          expr: (kubelet_volume_stats_used_bytes{namespace="{{ $row.namespace }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.warn_pct }}
           for: 10m
           labels:
             severity: warning
-            owner: "{{ .owner }}"
-            pvc_regex: "{{ .pvc_regex }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationDisk_WarnPct triggered on {{ .pvc_regex }}"
+            summary: "MariadbSaturationDisk_WarnPct triggered on {{ $row.owner }}"
         - alert: MariadbSaturationDisk_CriticalPct
-          expr: (kubelet_volume_stats_used_bytes{namespace="{{ .namespace }}", persistentvolumeclaim=~"{{ .pvc_regex }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ .namespace }}", persistentvolumeclaim=~"{{ .pvc_regex }}"}) * 100 > {{ .critical_pct }}
+          expr: (kubelet_volume_stats_used_bytes{namespace="{{ $row.namespace }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.critical_pct }}
           for: 10m
           labels:
             severity: critical
-            owner: "{{ .owner }}"
-            pvc_regex: "{{ .pvc_regex }}"
-            namespace: "{{ .namespace }}"
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
           annotations:
-            summary: "MariadbSaturationDisk_CriticalPct triggered on {{ .pvc_regex }}"
+            summary: "MariadbSaturationDisk_CriticalPct triggered on {{ $row.owner }}"
         {{- end }}

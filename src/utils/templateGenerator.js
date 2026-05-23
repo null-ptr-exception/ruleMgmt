@@ -53,7 +53,10 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
   const rules = []
   for (const threshold of thresholds) {
     const alertName = `${toPascalCase(alertGroup)}_${toPascalCase(threshold.name)}`
-    const expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ ${ref}${threshold.name} }}`)
+    let expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ ${ref}${threshold.name} }}`)
+    if (hasCommon) {
+      expr = expr.replace(/\{\{\s*\.(\w+)\s*\}\}/g, (m, name) => `{{ $row.${name} }}`)
+    }
 
     const labelLines = [`            severity: ${threshold.severity}`]
     for (const sel of allSelectors) {

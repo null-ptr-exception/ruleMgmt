@@ -54,13 +54,15 @@ describe('sample data integrity', () => {
     }
   })
 
-  it('each alert group has at least one selector variable', () => {
+  it('chart has at least one selector variable (per-group or common)', () => {
     const schema = JSON.parse(fs.readFileSync(path.join(sampleDir, 'charts/mariadb-alerts/values.schema.json'), 'utf8'))
+    const commonProps = schema['x-common-vars']?.properties || {}
+    const commonSelectors = Object.values(commonProps).filter(p => p['x-var-type'] === 'selector')
     const alertNames = Object.keys(schema.properties).filter(k => !k.startsWith('$'))
     for (const name of alertNames) {
-      const props = schema.properties[name].items.properties
-      const selectors = Object.values(props).filter(p => p['x-var-type'] === 'selector')
-      expect(selectors.length).toBeGreaterThanOrEqual(1)
+      const props = schema.properties[name].items?.properties || {}
+      const groupSelectors = Object.values(props).filter(p => p['x-var-type'] === 'selector')
+      expect(commonSelectors.length + groupSelectors.length).toBeGreaterThanOrEqual(1)
     }
   })
 })

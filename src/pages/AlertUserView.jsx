@@ -83,7 +83,7 @@ export default function AlertUserView() {
     getChartInfo(selectedChart).then(info => {
       setSchema(info.schema)
       setAlertNames(schemaAlertNames(info.schema))
-      if (activeAlert && !schemaAlertNames(info.schema).includes(activeAlert)) {
+      if (activeAlert && activeAlert !== '__common_vars__' && !schemaAlertNames(info.schema).includes(activeAlert)) {
         setActiveAlert(null)
       }
     })

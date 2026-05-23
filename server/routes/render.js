@@ -1,8 +1,27 @@
 import express from 'express'
+import fs from 'fs/promises'
 import path from 'path'
 import { execFile } from 'child_process'
+import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+
+async function wrapValuesForSubchart(deploymentsDir) {
+  try {
+    const chartYaml = yaml.load(await fs.readFile(path.join(deploymentsDir, 'Chart.yaml'), 'utf-8'))
+    const dep = chartYaml?.dependencies?.[0]
+    if (!dep?.name) return null
+
+    const valuesPath = path.join(deploymentsDir, 'values.yaml')
+    const values = yaml.load(await fs.readFile(valuesPath, 'utf-8')) || {}
+    const wrapped = { [dep.name]: values }
+    const tmpFile = path.join(deploymentsDir, '.values-wrapped.yaml')
+    await fs.writeFile(tmpFile, yaml.dump(wrapped, { lineWidth: -1 }), 'utf-8')
+    return tmpFile
+  } catch {
+    return null
+  }
+}
 
 export default function renderRouter() {
   const router = express.Router()
@@ -27,17 +46,21 @@ export default function renderRouter() {
     const releaseName = `${chart}-${deployment}`
     const helm = process.env.HELM_BIN || 'helm'
 
-    const valuesFile = folder
-      ? path.join(deploymentsDir, 'values.yaml')
-      : path.join(deploymentsDir, `${deployment}-values.yaml`)
-
+    let wrappedFile = null
     try {
       const templateDir = folder ? deploymentsDir : chartDir
-      const templateArgs = folder
-        ? ['template', releaseName, deploymentsDir]
-        : ['template', releaseName, chartDir, '-f', valuesFile]
 
-      // Build dependencies if the chart has a Chart.yaml with dependencies
+      let templateArgs
+      if (folder) {
+        wrappedFile = await wrapValuesForSubchart(deploymentsDir)
+        templateArgs = wrappedFile
+          ? ['template', releaseName, deploymentsDir, '-f', wrappedFile]
+          : ['template', releaseName, deploymentsDir]
+      } else {
+        const valuesFile = path.join(deploymentsDir, `${deployment}-values.yaml`)
+        templateArgs = ['template', releaseName, chartDir, '-f', valuesFile]
+      }
+
       await new Promise((resolve, reject) => {
         execFile(helm, ['dependency', 'build', templateDir], { timeout: 120000 }, (err) => {
           if (err) reject(new Error(err.message))
@@ -54,6 +77,8 @@ export default function renderRouter() {
       res.json({ ok: true, output })
     } catch (err) {
       res.json({ ok: false, error: err.message })
+    } finally {
+      if (wrappedFile) fs.rm(wrappedFile, { force: true }).catch(() => {})
     }
   })
 

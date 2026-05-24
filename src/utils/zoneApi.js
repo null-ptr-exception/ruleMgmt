@@ -8,11 +8,11 @@ export async function listZones() {
   return res.json()
 }
 
-export async function createZone(name, type, description = '') {
+export async function createZone(name) {
   const res = await apiFetch(BASE, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, type, description })
+    body: JSON.stringify({ name })
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || 'Create zone failed')

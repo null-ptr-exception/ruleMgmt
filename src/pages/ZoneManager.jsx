@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Button, Select, Input, Switch, Empty, Typography, Modal, Tag, Table } from 'antd'
+import { Button, Select, Input, Switch, Empty, Typography, Modal, Table } from 'antd'
 import {
   PlusOutlined, DeleteOutlined, SaveOutlined,
   EyeOutlined, GlobalOutlined
@@ -9,11 +9,6 @@ import { listCharts } from '../utils/chartApi'
 import { listDeployments } from '../utils/chartApi'
 
 const { Text, Title } = Typography
-
-const ZONE_TYPES = [
-  { value: 'prometheus',       label: 'Prometheus' },
-  { value: 'victoriametrics',  label: 'VictoriaMetrics' },
-]
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -66,7 +61,6 @@ export default function ZoneManager() {
   // Create zone modal
   const [createOpen, setCreateOpen]     = useState(false)
   const [newZoneName, setNewZoneName]   = useState('')
-  const [newZoneType, setNewZoneType]   = useState('prometheus')
   const [creating, setCreating]         = useState(false)
 
   // Add-binding modal
@@ -103,7 +97,6 @@ export default function ZoneManager() {
 
   function handleAddZone() {
     setNewZoneName('')
-    setNewZoneType('prometheus')
     setCreateOpen(true)
   }
 
@@ -116,7 +109,7 @@ export default function ZoneManager() {
     }
     setCreating(true)
     try {
-      await createZone(trimmed, newZoneType)
+      await createZone(trimmed)
       await loadZones()
       setActiveZone(trimmed)
       setCreateOpen(false)
@@ -254,7 +247,6 @@ export default function ZoneManager() {
                 <GlobalOutlined style={{ fontSize: 12, color: '#8c8c8c' }} />
                 <Text style={{ fontSize: 13, fontWeight: activeZone === z.name ? 600 : 400 }}>{z.name}</Text>
               </div>
-              <Tag style={{ fontSize: 10, marginTop: 2 }}>{z.type}</Tag>
             </div>
           ))}
         </div>
@@ -267,7 +259,6 @@ export default function ZoneManager() {
             {/* Zone header */}
             <div style={{ padding: '16px 24px', borderBottom: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
               <Title level={4} style={{ margin: 0 }}>{activeZone}</Title>
-              <Tag>{meta?.type || 'prometheus'}</Tag>
               <div style={{ marginLeft: 'auto' }}>
                 <Button danger icon={<DeleteOutlined />} size="small" onClick={handleDeleteZone}>Delete Zone</Button>
               </div>
@@ -335,29 +326,18 @@ export default function ZoneManager() {
         okText="Create"
         okButtonProps={{ loading: creating, disabled: !newZoneName.trim() }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Zone Name</Text>
-            <Input
-              placeholder="e.g. prod-cluster, staging-vm"
-              value={newZoneName}
-              onChange={e => setNewZoneName(e.target.value)}
-              onPressEnter={confirmCreateZone}
-              autoFocus
-            />
-            <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
-              Lowercase, a–z, 0–9, hyphens and underscores only
-            </Text>
-          </div>
-          <div>
-            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Type</Text>
-            <Select
-              value={newZoneType}
-              onChange={setNewZoneType}
-              style={{ width: '100%' }}
-              options={ZONE_TYPES}
-            />
-          </div>
+        <div>
+          <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Zone Name</Text>
+          <Input
+            placeholder="e.g. prod-cluster, staging-vm"
+            value={newZoneName}
+            onChange={e => setNewZoneName(e.target.value)}
+            onPressEnter={confirmCreateZone}
+            autoFocus
+          />
+          <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+            Lowercase, a–z, 0–9, hyphens and underscores only
+          </Text>
         </div>
       </Modal>
 

@@ -1,5 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Button, Select, Input, Switch, Empty, Typography, Modal, Table, Tag, Spin, Space } from 'antd'
+import {
+  useState, useEffect, useCallback, useMemo,
+  useRef, forwardRef, useImperativeHandle,
+} from 'react'
+import {
+  Button, Select, Input, Switch, Empty, Typography,
+  Modal, Table, Tag, Spin, Space,
+} from 'antd'
 import {
   PlusOutlined, DeleteOutlined,
   EyeOutlined, GlobalOutlined, SearchOutlined,
@@ -9,26 +15,41 @@ import { listCharts, getChartInfo, listDeployments } from '../utils/chartApi'
 
 const { Text, Title } = Typography
 
-// ── inline KV row editor used in Add Binding modal ────────────────────────────
-function GsEditor({ rows, onChange }) {
-  function updateKey(idx, key) {
-    onChange(rows.map((r, i) => i === idx ? { ...r, key } : r))
-  }
-  function updateVal(idx, value) {
-    onChange(rows.map((r, i) => i === idx ? { ...r, value } : r))
-  }
-  function addRow() {
-    onChange([...rows, { key: '', value: '' }])
-  }
-  function removeRow(idx) {
-    onChange(rows.filter((_, i) => i !== idx))
-  }
+// ── GsEditor ──────────────────────────────────────────────────────────────────
+// Fully self-contained KV row editor. Parent reads current rows via ref.
+// seedKeys: string[] — pre-fills key names (from schema x-global-selectors)
+const GsEditor = forwardRef(function GsEditor({ seedKeys = [] }, ref) {
+  const [rows, setRows] = useState(() => seedKeys.map(k => ({ key: k, value: '' })))
+
+  // Re-seed when seedKeys content changes (chart changed)
+  const prevSeed = useRef(seedKeys.join('\x00'))
+  useEffect(() => {
+    const s = seedKeys.join('\x00')
+    if (prevSeed.current !== s) {
+      prevSeed.current = s
+      setRows(seedKeys.map(k => ({ key: k, value: '' })))
+    }
+  }, [seedKeys])
+
+  useImperativeHandle(ref, () => ({ getRows: () => rows }), [rows])
+
+  const updateKey = (idx, key) =>
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, key } : r))
+
+  const updateVal = (idx, val) =>
+    setRows(prev => prev.map((r, i) => i === idx ? { ...r, value: val } : r))
+
+  const addRow = () =>
+    setRows(prev => [...prev, { key: '', value: '' }])
+
+  const removeRow = (idx) =>
+    setRows(prev => prev.filter((_, i) => i !== idx))
 
   return (
     <div>
       {rows.length === 0 && (
         <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
-          No global selectors. Click "Add" to scope this binding.
+          No selectors. Click "Add" to scope this binding.
         </Text>
       )}
       {rows.map((r, idx) => (
@@ -56,7 +77,7 @@ function GsEditor({ rows, onChange }) {
       </Button>
     </div>
   )
-}
+})
 
 // ── main component ────────────────────────────────────────────────────────────
 
@@ -67,9 +88,13 @@ export default function ZoneManager() {
   const [bindings, setBindings]         = useState([])
   const [sidebarWidth]                  = useState(220)
 
+  // Chart version cache: { chartName → version string }
+  const [chartVersions, setChartVersions]   = useState({})
+  const fetchedChartsRef                    = useRef(new Set())
+
   // Table filter state
   const [filterText, setFilterText]     = useState('')
-  const [filterEnabled, setFilterEnabled] = useState(false)   // when true → show enabled only
+  const [filterEnabled, setFilterEnabled] = useState(false)
 
   // Create zone modal
   const [createOpen, setCreateOpen]     = useState(false)
@@ -80,10 +105,11 @@ export default function ZoneManager() {
   const [addBindOpen, setAddBindOpen]   = useState(false)
   const [charts, setCharts]             = useState([])
   const [bindChart, setBindChart]       = useState(null)
-  const [bindGsRows, setBindGsRows]     = useState([])   // [{key,value},...] editable rows
+  const [bindChartGsKeys, setBindChartGsKeys] = useState([])
   const [deployments, setDeployments]   = useState([])
   const [bindDeployment, setBindDeployment] = useState(null)
   const [loadingChartGs, setLoadingChartGs] = useState(false)
+  const gsEditorRef                     = useRef(null)
 
   // Preview modal
   const [previewOpen, setPreviewOpen]   = useState(false)
@@ -107,6 +133,21 @@ export default function ZoneManager() {
       setFilterEnabled(false)
     })
   }, [activeZone])
+
+  // ── lazily fetch chart versions for every unique chart in bindings ─────────
+  useEffect(() => {
+    const unique = [...new Set(bindings.map(b => b.chart).filter(Boolean))]
+    unique.forEach(chart => {
+      if (fetchedChartsRef.current.has(chart)) return
+      fetchedChartsRef.current.add(chart)
+      getChartInfo(chart)
+        .then(info => {
+          const v = info?.chartMeta?.version
+          if (v) setChartVersions(prev => ({ ...prev, [chart]: v }))
+        })
+        .catch(() => {})
+    })
+  }, [bindings])
 
   // ── zone actions ─────────────────────────────────────────────────────────
 
@@ -156,16 +197,16 @@ export default function ZoneManager() {
     const allCharts = await listCharts()
     setCharts(allCharts)
     setBindChart(null)
-    setBindGsRows([])
+    setBindChartGsKeys([])
     setBindDeployment(null)
     setDeployments([])
     setAddBindOpen(true)
   }
 
-  // When chart changes: seed GS rows from schema x-global-selectors + load deployments
+  // When chart changes: load schema gs keys + deployments
   useEffect(() => {
     if (!bindChart) {
-      setBindGsRows([])
+      setBindChartGsKeys([])
       setDeployments([])
       setBindDeployment(null)
       return
@@ -176,8 +217,7 @@ export default function ZoneManager() {
       listDeployments(bindChart).catch(() => []),
     ]).then(([chartInfo, deps]) => {
       const gsKeys = (chartInfo?.schema?.['x-global-selectors'] || []).filter(k => k.trim())
-      // Pre-seed rows from schema keys; user can freely edit/add/remove
-      setBindGsRows(gsKeys.map(k => ({ key: k, value: '' })))
+      setBindChartGsKeys(gsKeys)
       setDeployments(deps)
       setBindDeployment(deps[0]?.name || null)
     }).finally(() => setLoadingChartGs(false))
@@ -185,9 +225,9 @@ export default function ZoneManager() {
 
   async function confirmAddBinding() {
     if (!bindChart || !bindDeployment) return
-    // Build globalSelectors object — skip rows with empty keys
+    const gsRows = gsEditorRef.current?.getRows() || []
     const globalSelectors = Object.fromEntries(
-      bindGsRows.filter(r => r.key.trim()).map(r => [r.key.trim(), r.value])
+      gsRows.filter(r => r.key.trim()).map(r => [r.key.trim(), r.value])
     )
     const next = [...bindings, { chart: bindChart, deployment: bindDeployment, globalSelectors, enabled: true }]
     setBindings(next)
@@ -195,14 +235,14 @@ export default function ZoneManager() {
     setAddBindOpen(false)
   }
 
-  async function toggleBinding(idx) {
-    const next = bindings.map((b, i) => i === idx ? { ...b, enabled: !b.enabled } : b)
+  async function toggleBinding(origIdx) {
+    const next = bindings.map((b, i) => i === origIdx ? { ...b, enabled: !b.enabled } : b)
     setBindings(next)
     await saveZoneBindings(activeZone, next)
   }
 
-  async function removeBinding(idx) {
-    const next = bindings.filter((_, i) => i !== idx)
+  async function removeBinding(origIdx) {
+    const next = bindings.filter((_, i) => i !== origIdx)
     setBindings(next)
     await saveZoneBindings(activeZone, next)
   }
@@ -223,21 +263,20 @@ export default function ZoneManager() {
 
   // ── filtering ─────────────────────────────────────────────────────────────
 
-  const filteredBindings = useMemo(() => {
-    let rows = bindings
-    if (filterEnabled) rows = rows.filter(b => b.enabled)
-    if (filterText.trim()) {
-      const q = filterText.trim().toLowerCase()
-      rows = rows.filter(b => {
+  // Each filtered row carries its original index so toggle/remove are correct
+  const filteredRows = useMemo(() => {
+    return bindings
+      .map((b, origIdx) => ({ ...b, origIdx }))
+      .filter(b => {
+        if (filterEnabled && !b.enabled) return false
+        if (!filterText.trim()) return true
+        const q = filterText.trim().toLowerCase()
         if (b.chart?.toLowerCase().includes(q)) return true
         if (b.deployment?.toLowerCase().includes(q)) return true
-        const gs = b.globalSelectors || {}
-        return Object.entries(gs).some(
+        return Object.entries(b.globalSelectors || {}).some(
           ([k, v]) => k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q)
         )
       })
-    }
-    return rows
   }, [bindings, filterText, filterEnabled])
 
   // ── binding table columns ─────────────────────────────────────────────────
@@ -247,7 +286,16 @@ export default function ZoneManager() {
       title: 'Template',
       dataIndex: 'chart',
       key: 'chart',
-      render: v => <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text>
+      render: v => (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text>
+          {chartVersions[v] && (
+            <Tag color="geekblue" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
+              v{chartVersions[v]}
+            </Tag>
+          )}
+        </span>
+      )
     },
     {
       title: 'Global Selectors',
@@ -255,7 +303,8 @@ export default function ZoneManager() {
       render: (_, row) => {
         const gs = row.globalSelectors || {}
         const entries = Object.entries(gs).filter(([k]) => k)
-        if (entries.length === 0) return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
+        if (entries.length === 0)
+          return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
         return (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {entries.map(([k, v]) => (
@@ -277,35 +326,22 @@ export default function ZoneManager() {
       title: 'Enabled',
       key: 'enabled',
       width: 80,
-      render: (_, row) => {
-        // use the original index in `bindings` so toggle/remove target the right entry
-        const origIdx = bindings.findIndex(
-          b => b.chart === row.chart && b.deployment === row.deployment &&
-          JSON.stringify(b.globalSelectors) === JSON.stringify(row.globalSelectors)
-        )
-        return (
-          <Switch size="small" checked={row.enabled}
-            onChange={() => origIdx >= 0 && toggleBinding(origIdx)} />
-        )
-      }
+      render: (_, row) => (
+        <Switch size="small" checked={row.enabled}
+          onChange={() => toggleBinding(row.origIdx)} />
+      )
     },
     {
       title: '',
       key: 'actions',
       width: 130,
-      render: (_, row) => {
-        const origIdx = bindings.findIndex(
-          b => b.chart === row.chart && b.deployment === row.deployment &&
-          JSON.stringify(b.globalSelectors) === JSON.stringify(row.globalSelectors)
-        )
-        return (
-          <div style={{ display: 'flex', gap: 6 }}>
-            <Button size="small" icon={<EyeOutlined />} onClick={() => handlePreview(row)}>Preview</Button>
-            <Button size="small" type="text" danger icon={<DeleteOutlined />}
-              onClick={() => origIdx >= 0 && removeBinding(origIdx)} />
-          </div>
-        )
-      }
+      render: (_, row) => (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => handlePreview(row)}>Preview</Button>
+          <Button size="small" type="text" danger icon={<DeleteOutlined />}
+            onClick={() => removeBinding(row.origIdx)} />
+        </div>
+      )
     },
   ]
 
@@ -314,7 +350,7 @@ export default function ZoneManager() {
   return (
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
 
-      {/* Left sidebar — zone list */}
+      {/* Left sidebar */}
       <div style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', display: 'flex', flexDirection: 'column', background: '#fff' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Zones</Text>
@@ -358,8 +394,6 @@ export default function ZoneManager() {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-
-              {/* Bindings */}
               <div style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: '16px 20px' }}>
 
                 {/* Title row */}
@@ -367,8 +401,8 @@ export default function ZoneManager() {
                   <Text strong style={{ fontSize: 14 }}>Alert Bindings</Text>
                   {bindings.length > 0 && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {filteredBindings.length !== bindings.length
-                        ? `${filteredBindings.length} / ${bindings.length}`
+                      {filteredRows.length !== bindings.length
+                        ? `${filteredRows.length} / ${bindings.length}`
                         : bindings.length}
                     </Text>
                   )}
@@ -377,7 +411,7 @@ export default function ZoneManager() {
                   </Button>
                 </div>
 
-                {/* Filter bar — only shown when there are bindings */}
+                {/* Filter bar */}
                 {bindings.length > 0 && (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
                     <Input
@@ -390,11 +424,7 @@ export default function ZoneManager() {
                       style={{ maxWidth: 340 }}
                     />
                     <Space size={6}>
-                      <Switch
-                        size="small"
-                        checked={filterEnabled}
-                        onChange={setFilterEnabled}
-                      />
+                      <Switch size="small" checked={filterEnabled} onChange={setFilterEnabled} />
                       <Text style={{ fontSize: 12 }}>Enabled only</Text>
                     </Space>
                   </div>
@@ -402,11 +432,11 @@ export default function ZoneManager() {
 
                 {bindings.length === 0
                   ? <Text type="secondary" style={{ fontSize: 12 }}>No bindings yet. Add a template + alert config to this zone.</Text>
-                  : filteredBindings.length === 0
+                  : filteredRows.length === 0
                     ? <Text type="secondary" style={{ fontSize: 12 }}>No bindings match the current filter.</Text>
                     : <Table
                         size="small"
-                        dataSource={filteredBindings.map((b, i) => ({ ...b, key: i }))}
+                        dataSource={filteredRows.map(b => ({ ...b, key: b.origIdx }))}
                         columns={bindingColumns}
                         pagination={false}
                       />
@@ -419,7 +449,7 @@ export default function ZoneManager() {
         )}
       </div>
 
-      {/* Create Zone Modal */}
+      {/* ── Create Zone Modal ─────────────────────────────────────────────── */}
       <Modal
         title="Create New Zone"
         open={createOpen}
@@ -443,7 +473,7 @@ export default function ZoneManager() {
         </div>
       </Modal>
 
-      {/* Add Binding Modal */}
+      {/* ── Add Binding Modal ─────────────────────────────────────────────── */}
       <Modal
         title="Add Alert Binding"
         open={addBindOpen}
@@ -454,7 +484,7 @@ export default function ZoneManager() {
         width={520}
         destroyOnClose
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
 
           {/* Template */}
           <div>
@@ -468,7 +498,7 @@ export default function ZoneManager() {
             />
           </div>
 
-          {/* Global Selectors — always visible once a chart is selected */}
+          {/* Global Selectors — always shown once chart is picked */}
           {bindChart && (
             <div>
               <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>
@@ -482,7 +512,7 @@ export default function ZoneManager() {
                     <Spin size="small" />
                     <Text type="secondary" style={{ fontSize: 12 }}>Loading…</Text>
                   </div>
-                : <GsEditor rows={bindGsRows} onChange={setBindGsRows} />
+                : <GsEditor ref={gsEditorRef} seedKeys={bindChartGsKeys} />
               }
             </div>
           )}
@@ -503,7 +533,7 @@ export default function ZoneManager() {
         </div>
       </Modal>
 
-      {/* Preview Modal */}
+      {/* ── Preview Modal ─────────────────────────────────────────────────── */}
       <Modal
         title={`Rendered PrometheusRule — ${previewLoading ? 'rendering…' : activeZone}`}
         open={previewOpen}

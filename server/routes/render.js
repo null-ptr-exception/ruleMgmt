@@ -1,6 +1,7 @@
 import express from 'express'
 import fs from 'fs/promises'
 import path from 'path'
+import os from 'os'
 import { exec } from 'child_process'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -29,10 +30,10 @@ export default function renderRouter() {
     const releaseName = `${chart}-${deployment}`
     const helm = process.env.HELM_BIN || 'helm'
 
-    // Build helm args — base values first, then zone values on top
+    // Build helm args — base values first
     const helmArgs = ['template', releaseName, chartDir, '-f', valuesFile]
 
-    // Optional: overlay zone-level values (global selectors)
+    // Optional: overlay zone-level values file (legacy support)
     const zone = req.query.zone
     if (zone) {
       if (zone.includes('..') || !NAME_RE.test(zone)) {
@@ -44,6 +45,18 @@ export default function renderRouter() {
         await fs.access(zoneValuesFile)
         helmArgs.push('-f', zoneValuesFile)
       } catch { /* zone-values.yaml doesn't exist yet — skip silently */ }
+    }
+
+    // Per-binding global selectors — written to a temp file and passed as -f
+    const globalSelectors = req.body?.globalSelectors
+    let tempFile = null
+    if (globalSelectors && typeof globalSelectors === 'object' && Object.keys(globalSelectors).length > 0) {
+      const lines = Object.entries(globalSelectors)
+        .map(([k, v]) => `${k}: ${JSON.stringify(String(v))}`)
+        .join('\n')
+      tempFile = path.join(os.tmpdir(), `zone-gs-${Date.now()}-${Math.random().toString(36).slice(2)}.yaml`)
+      await fs.writeFile(tempFile, lines + '\n', 'utf-8')
+      helmArgs.push('-f', tempFile)
     }
 
     // Use exec (goes through system shell) so Windows resolves helm.exe via PATH
@@ -60,6 +73,8 @@ export default function renderRouter() {
       res.json({ ok: true, output })
     } catch (err) {
       res.json({ ok: false, error: err.message })
+    } finally {
+      if (tempFile) fs.unlink(tempFile).catch(() => {})
     }
   })
 

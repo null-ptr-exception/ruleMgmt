@@ -51,10 +51,14 @@ export async function saveZoneBindings(name, bindings) {
   return res.json()
 }
 
-export async function renderZoneBinding(zoneName, chart, deployment) {
+export async function renderZoneBinding(zoneName, chart, deployment, globalSelectors = {}) {
   const res = await apiFetch(
     `/api/v2/render/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}?zone=${encodeURIComponent(zoneName)}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ globalSelectors }),
+    }
   )
   if (!res.ok) return { ok: false, error: 'Request failed' }
   return res.json()

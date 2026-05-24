@@ -1,133 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Button, Select, Input, Switch, Empty, Typography, Modal, Table, Tag, Spin } from 'antd'
 import {
-  PlusOutlined, DeleteOutlined, SaveOutlined,
+  PlusOutlined, DeleteOutlined,
   EyeOutlined, GlobalOutlined
 } from '@ant-design/icons'
-import { listZones, createZone, deleteZone, getZone, saveZoneValues, saveZoneBindings, renderZoneBinding } from '../utils/zoneApi'
-import { listCharts, getChartInfo, getDeployment, listDeployments } from '../utils/chartApi'
-import { schemaAlertNames } from '../utils/schemaUtils'
+import { listZones, createZone, deleteZone, getZone, saveZoneBindings, renderZoneBinding } from '../utils/zoneApi'
+import { listCharts, getChartInfo, listDeployments } from '../utils/chartApi'
 
 const { Text, Title } = Typography
-
-// ── BindingDetail: expanded overview of one binding ───────────────────────────
-function BindingDetail({ binding, zoneValues }) {
-  const [detail, setDetail] = useState(null)
-
-  useEffect(() => {
-    Promise.all([
-      getChartInfo(binding.chart),
-      getDeployment(binding.chart, binding.deployment),
-    ]).then(([chartInfo, depData]) => {
-      setDetail({ schema: chartInfo.schema, values: depData.parsed || {} })
-    })
-  }, [binding.chart, binding.deployment])
-
-  if (!detail) return <div style={{ padding: '8px 16px' }}><Spin size="small" /> <Text type="secondary" style={{ fontSize: 12 }}> Loading…</Text></div>
-
-  const { schema, values } = detail
-  const alertGroups = schemaAlertNames(schema)
-  const gsEntries = Object.entries(zoneValues).filter(([k]) => k.trim())
-
-  return (
-    <div style={{ padding: '10px 24px 14px', background: '#fafafa', borderTop: '1px solid #f0f0f0' }}>
-      {/* Zone global selectors */}
-      {gsEntries.length > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>
-            Zone Selectors (哪種運動)
-          </Text>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
-            {gsEntries.map(([k, v]) => (
-              <Tag key={k} color="blue" style={{ fontFamily: 'monospace', fontSize: 11 }}>{k}={v}</Tag>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Alert groups */}
-      <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>
-        Alert Groups (肉)
-      </Text>
-      {alertGroups.length === 0
-        ? <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>No alert groups in this template.</Text>
-        : (
-          <div style={{ marginTop: 6 }}>
-            {alertGroups.map(group => {
-              const rows = values[group] || []
-              const props = schema?.properties?.[group]?.items?.properties || {}
-              const selKeys = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'selector').map(([k]) => k)
-              const thrKeys = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'threshold').map(([k]) => k)
-              return (
-                <div key={group} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
-                  <Text style={{ fontFamily: 'monospace', fontSize: 12, minWidth: 220, flexShrink: 0 }}>{group}</Text>
-                  <Text type="secondary" style={{ fontSize: 11, minWidth: 60 }}>{rows.length} row{rows.length !== 1 ? 's' : ''}</Text>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {rows.map((row, i) => [
-                      ...selKeys.map(k => row[k] != null && (
-                        <Tag key={`s-${i}-${k}`} style={{ fontSize: 10, fontFamily: 'monospace' }}>{k}={row[k]}</Tag>
-                      )),
-                      ...thrKeys.map(k => row[k] != null && (
-                        <Tag key={`t-${i}-${k}`} color="orange" style={{ fontSize: 10, fontFamily: 'monospace' }}>{k}={row[k]}</Tag>
-                      )),
-                    ])}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )
-      }
-    </div>
-  )
-}
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-function KVEditor({ value = {}, onChange }) {
-  const entries = Object.entries(value)
-  function updateKey(oldKey, newKey) {
-    const next = {}
-    for (const [k, v] of Object.entries(value)) next[k === oldKey ? newKey : k] = v
-    onChange(next)
-  }
-  function updateVal(key, val) { onChange({ ...value, [key]: val }) }
-  function addRow()            { onChange({ ...value, '': '' }) }
-  function removeRow(key)      { const next = { ...value }; delete next[key]; onChange(next) }
-
-  return (
-    <div>
-      {entries.length === 0 && (
-        <Text type="secondary" style={{ fontSize: 12 }}>No values defined. Add global selector values (e.g. cluster, group).</Text>
-      )}
-      {entries.map(([k, v]) => (
-        <div key={k} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
-          <Input size="small" value={k} placeholder="key"
-            onChange={e => updateKey(k, e.target.value)}
-            style={{ width: 140, fontFamily: 'monospace' }} />
-          <Text type="secondary" style={{ fontSize: 12 }}>:</Text>
-          <Input size="small" value={v} placeholder="value"
-            onChange={e => updateVal(k, e.target.value)}
-            style={{ flex: 1, fontFamily: 'monospace' }} />
-          <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => removeRow(k)} />
-        </div>
-      ))}
-      <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={addRow} style={{ marginTop: 4 }}>
-        Add key
-      </Button>
-    </div>
-  )
-}
 
 // ── main component ────────────────────────────────────────────────────────────
 
 export default function ZoneManager() {
   const [zones, setZones]               = useState([])
   const [activeZone, setActiveZone]     = useState(null)
-  const [zoneData, setZoneData]         = useState(null)   // { meta, values, bindings }
-  const [zoneValues, setZoneValues]     = useState({})
+  const [zoneData, setZoneData]         = useState(null)
   const [bindings, setBindings]         = useState([])
-  const [valuesDirty, setValuesDirty]   = useState(false)
   const [sidebarWidth]                  = useState(220)
 
   // Create zone modal
@@ -139,8 +27,11 @@ export default function ZoneManager() {
   const [addBindOpen, setAddBindOpen]   = useState(false)
   const [charts, setCharts]             = useState([])
   const [bindChart, setBindChart]       = useState(null)
+  const [bindChartGsKeys, setBindChartGsKeys] = useState([])   // x-global-selectors from schema
+  const [bindGsValues, setBindGsValues] = useState({})         // { key: value } for this binding
   const [deployments, setDeployments]   = useState([])
   const [bindDeployment, setBindDeployment] = useState(null)
+  const [loadingChartGs, setLoadingChartGs] = useState(false)
 
   // Preview modal
   const [previewOpen, setPreviewOpen]   = useState(false)
@@ -159,9 +50,7 @@ export default function ZoneManager() {
     if (!activeZone) { setZoneData(null); return }
     getZone(activeZone).then(data => {
       setZoneData(data)
-      setZoneValues(data.values || {})
       setBindings(data.bindings || [])
-      setValuesDirty(false)
     })
   }, [activeZone])
 
@@ -207,38 +96,48 @@ export default function ZoneManager() {
     })
   }
 
-  // ── values actions ────────────────────────────────────────────────────────
-
-  async function handleSaveValues() {
-    if (!activeZone) return
-    await saveZoneValues(activeZone, zoneValues)
-    setValuesDirty(false)
-  }
-
   // ── binding actions ───────────────────────────────────────────────────────
 
   async function openAddBinding() {
     const allCharts = await listCharts()
     setCharts(allCharts)
     setBindChart(null)
+    setBindChartGsKeys([])
+    setBindGsValues({})
     setBindDeployment(null)
     setDeployments([])
     setAddBindOpen(true)
   }
 
+  // When chart changes: load its global-selector keys + deployments in parallel
   useEffect(() => {
-    if (!bindChart) { setDeployments([]); setBindDeployment(null); return }
-    listDeployments(bindChart).then(deps => {
+    if (!bindChart) {
+      setBindChartGsKeys([])
+      setBindGsValues({})
+      setDeployments([])
+      setBindDeployment(null)
+      return
+    }
+    setLoadingChartGs(true)
+    Promise.all([
+      getChartInfo(bindChart).catch(() => null),
+      listDeployments(bindChart).catch(() => []),
+    ]).then(([chartInfo, deps]) => {
+      const gsKeys = (chartInfo?.schema?.['x-global-selectors'] || []).filter(k => k.trim())
+      setBindChartGsKeys(gsKeys)
+      setBindGsValues(Object.fromEntries(gsKeys.map(k => [k, ''])))
       setDeployments(deps)
       setBindDeployment(deps[0]?.name || null)
-    })
+    }).finally(() => setLoadingChartGs(false))
   }, [bindChart])
 
   async function confirmAddBinding() {
     if (!bindChart || !bindDeployment) return
-    const already = bindings.some(b => b.chart === bindChart && b.deployment === bindDeployment)
-    if (already) { alert('This chart+deployment is already bound to this zone.'); return }
-    const next = [...bindings, { chart: bindChart, deployment: bindDeployment, enabled: true }]
+    // Build globalSelectors — only include non-empty values
+    const globalSelectors = Object.fromEntries(
+      Object.entries(bindGsValues).filter(([, v]) => v.trim())
+    )
+    const next = [...bindings, { chart: bindChart, deployment: bindDeployment, globalSelectors, enabled: true }]
     setBindings(next)
     await saveZoneBindings(activeZone, next)
     setAddBindOpen(false)
@@ -260,7 +159,12 @@ export default function ZoneManager() {
     setPreviewLoading(true)
     setPreviewYaml('')
     setPreviewOpen(true)
-    const result = await renderZoneBinding(activeZone, binding.chart, binding.deployment)
+    const result = await renderZoneBinding(
+      activeZone,
+      binding.chart,
+      binding.deployment,
+      binding.globalSelectors || {}
+    )
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
     setPreviewLoading(false)
   }
@@ -268,27 +172,57 @@ export default function ZoneManager() {
   // ── binding table columns ─────────────────────────────────────────────────
 
   const bindingColumns = [
-    { title: 'Template (chart)', dataIndex: 'chart', key: 'chart',
-      render: v => <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text> },
-    { title: 'Alert Config (deployment)', dataIndex: 'deployment', key: 'deployment',
-      render: v => <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text> },
-    { title: 'Enabled', key: 'enabled', width: 80,
+    {
+      title: 'Template',
+      dataIndex: 'chart',
+      key: 'chart',
+      render: v => <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text>
+    },
+    {
+      title: 'Global Selectors',
+      key: 'globalSelectors',
+      render: (_, row) => {
+        const gs = row.globalSelectors || {}
+        const entries = Object.entries(gs).filter(([, v]) => v !== '')
+        if (entries.length === 0) return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
+        return (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {entries.map(([k, v]) => (
+              <Tag key={k} color="blue" style={{ fontFamily: 'monospace', fontSize: 11 }}>{k}={v}</Tag>
+            ))}
+          </div>
+        )
+      }
+    },
+    {
+      title: 'Alert Config',
+      dataIndex: 'deployment',
+      key: 'deployment',
+      render: v => <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text>
+    },
+    {
+      title: 'Enabled',
+      key: 'enabled',
+      width: 80,
       render: (_, __, idx) => (
         <Switch size="small" checked={bindings[idx]?.enabled}
           onChange={() => toggleBinding(idx)} />
-      ) },
-    { title: '', key: 'actions', width: 120,
+      )
+    },
+    {
+      title: '',
+      key: 'actions',
+      width: 120,
       render: (_, row, idx) => (
         <div style={{ display: 'flex', gap: 6 }}>
           <Button size="small" icon={<EyeOutlined />} onClick={() => handlePreview(row)}>Preview</Button>
           <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => removeBinding(idx)} />
         </div>
-      ) },
+      )
+    },
   ]
 
   // ── render ────────────────────────────────────────────────────────────────
-
-  const meta = zoneData?.meta
 
   return (
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
@@ -338,53 +272,21 @@ export default function ZoneManager() {
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
-              {/* Global Selector Values */}
-              <div style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: '16px 20px', marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <Text strong style={{ fontSize: 14 }}>Global Selector Values</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>— 哪種運動（Zone scope）</Text>
-                  {valuesDirty && (
-                    <Button size="small" type="primary" icon={<SaveOutlined />}
-                      onClick={handleSaveValues} style={{ marginLeft: 'auto' }}>
-                      Save Values
-                    </Button>
-                  )}
-                </div>
-                <KVEditor
-                  value={zoneValues}
-                  onChange={v => { setZoneValues(v); setValuesDirty(true) }}
-                />
-                {Object.keys(zoneValues).length > 0 && (
-                  <div style={{ marginTop: 12, padding: '8px 12px', background: '#f6ffed', borderRadius: 4, border: '1px solid #b7eb8f' }}>
-                    <Text style={{ fontSize: 11, color: '#52c41a' }}>
-                      Stored in <code>zones/{activeZone}/zone-values.yaml</code> — passed as <code>-f zone-values.yaml</code> during render
-                    </Text>
-                  </div>
-                )}
-              </div>
-
               {/* Bindings */}
               <div style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: '16px 20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <Text strong style={{ fontSize: 14 }}>Alert Bindings</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>— 骨架 + 肉 套用到此 Zone</Text>
                   <Button size="small" icon={<PlusOutlined />} onClick={openAddBinding} style={{ marginLeft: 'auto' }}>
                     Add Binding
                   </Button>
                 </div>
                 {bindings.length === 0
-                  ? <Text type="secondary" style={{ fontSize: 12 }}>No bindings yet. Add a chart+deployment to this zone.</Text>
+                  ? <Text type="secondary" style={{ fontSize: 12 }}>No bindings yet. Add a template + alert config to this zone.</Text>
                   : <Table
                       size="small"
                       dataSource={bindings.map((b, i) => ({ ...b, key: i }))}
                       columns={bindingColumns}
                       pagination={false}
-                      expandable={{
-                        expandedRowRender: (record) => (
-                          <BindingDetail binding={record} zoneValues={zoneValues} />
-                        ),
-                        rowExpandable: () => true,
-                      }}
                     />
                 }
               </div>
@@ -427,22 +329,58 @@ export default function ZoneManager() {
         onOk={confirmAddBinding}
         okText="Add"
         okButtonProps={{ disabled: !bindChart || !bindDeployment }}
+        width={520}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Chart / Template */}
           <div>
-            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Template (chart — 骨架)</Text>
+            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Template</Text>
             <Select
-              placeholder="Select chart"
+              placeholder="Select template"
               style={{ width: '100%' }}
               value={bindChart}
               onChange={v => { setBindChart(v); setBindDeployment(null) }}
               options={charts.map(c => ({ value: c.name, label: c.name }))}
             />
           </div>
+
+          {/* Global Selectors — shown only if chart has x-global-selectors */}
+          {bindChart && (
+            loadingChartGs
+              ? <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Spin size="small" />
+                  <Text type="secondary" style={{ fontSize: 12 }}>Loading selector keys…</Text>
+                </div>
+              : bindChartGsKeys.length > 0 && (
+                <div>
+                  <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>Global Selectors</Text>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {bindChartGsKeys.map(k => (
+                      <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontFamily: 'monospace', fontSize: 12, minWidth: 120 }}>{k}</Text>
+                        <Input
+                          size="small"
+                          placeholder={`value for ${k}`}
+                          value={bindGsValues[k] || ''}
+                          onChange={e => setBindGsValues(prev => ({ ...prev, [k]: e.target.value }))}
+                          style={{ fontFamily: 'monospace' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                    Empty values will be omitted from the rendered output.
+                  </Text>
+                </div>
+              )
+          )}
+
+          {/* Deployment / Alert Config */}
           <div>
-            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Alert Config (deployment — 肉)</Text>
+            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Alert Config</Text>
             <Select
-              placeholder={bindChart ? 'Select deployment' : 'Select chart first'}
+              placeholder={bindChart ? 'Select alert config' : 'Select template first'}
               style={{ width: '100%' }}
               value={bindDeployment}
               onChange={setBindDeployment}
@@ -450,6 +388,7 @@ export default function ZoneManager() {
               options={deployments.map(d => ({ value: d.name, label: `${d.name} (${d.alertCount} alerts)` }))}
             />
           </div>
+
         </div>
       </Modal>
 

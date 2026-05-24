@@ -14,6 +14,11 @@
  *     }
  *   }
  * }
+ *
+ * Schema root may also contain:
+ *   "x-global-selectors": ["cluster", "group"]
+ * These keys are rendered as {{ $.Values.key }} (Zone-level scope, outside range)
+ * instead of {{ .key }} (per-row scope, inside range).
  */
 
 function toPascalCase(str) {
@@ -34,8 +39,26 @@ function getSelectors(alertDef) {
     .map(([name]) => name)
 }
 
+/**
+ * Replace {{ .key }} and {{.key}} occurrences for a given key with
+ * {{ $.Values.key }} so they resolve at Zone scope (outside range).
+ */
+function replaceGlobalSelectorInExpr(expr, gsKeys) {
+  let result = expr
+  for (const key of gsKeys) {
+    result = result.replace(
+      new RegExp(`\\{\\{\\s*\\.${key}\\s*\\}\\}`, 'g'),
+      `{{ $.Values.${key} }}`
+    )
+  }
+  return result
+}
+
 export function generatePrometheusRule(schema, releaseName) {
   if (!schema?.properties) return ''
+
+  // Global selector keys live at schema root, rendered as {{ $.Values.key }}
+  const gsKeys = (schema['x-global-selectors'] || []).filter(k => k && k.trim())
 
   const groups = []
 
@@ -48,17 +71,31 @@ export function generatePrometheusRule(schema, releaseName) {
 
     const forDuration = alertDef['x-for'] || '5m'
     const thresholds = getThresholds(alertDef)
-    const selectors = getSelectors(alertDef)
+    // Regular selectors = those NOT in global selector keys
+    const selectors = getSelectors(alertDef).filter(s => !gsKeys.includes(s))
 
     const rules = []
     for (const threshold of thresholds) {
       const alertName = `${toPascalCase(alertGroup)}_${toPascalCase(threshold.name)}`
-      const expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ .${threshold.name} }}`)
 
+      // 1. Replace {{ THRESHOLD }} placeholder with per-row var
+      let expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ .${threshold.name} }}`)
+      // 2. Replace global selector vars: {{ .key }} → {{ $.Values.key }}
+      expr = replaceGlobalSelectorInExpr(expr, gsKeys)
+
+      // Labels: global selectors (Zone-scope) first, then per-row selectors
       const labelLines = [`            severity: ${threshold.severity}`]
+      for (const gsKey of gsKeys) {
+        labelLines.push(`            ${gsKey}: "{{ $.Values.${gsKey} }}"`)
+      }
       for (const sel of selectors) {
         labelLines.push(`            ${sel}: "{{ .${sel} }}"`)
       }
+
+      // Annotation summary reference — prefer per-row selector, fallback to global
+      const summaryRef = selectors[0]
+        ? `{{ .${selectors[0]} }}`
+        : gsKeys[0] ? `{{ $.Values.${gsKeys[0]} }}` : ''
 
       rules.push(
         `        - alert: ${alertName}\n` +
@@ -67,7 +104,7 @@ export function generatePrometheusRule(schema, releaseName) {
         `          labels:\n` +
         labelLines.join('\n') + '\n' +
         `          annotations:\n` +
-        `            summary: "${alertName} triggered on {{ .${selectors[0] || 'namespace'} }}"`
+        `            summary: "${alertName} triggered${summaryRef ? ` on ${summaryRef}` : ''}"`
       )
     }
 
@@ -99,12 +136,14 @@ export function generatePrometheusRule(schema, releaseName) {
 
 export function generateDefaultValues(schema) {
   if (!schema?.properties) return {}
+  const gsKeys = new Set((schema['x-global-selectors'] || []).filter(k => k && k.trim()))
   const values = {}
   for (const [alertGroup, alertDef] of Object.entries(schema.properties)) {
     if (alertGroup.startsWith('$')) continue
     const props = alertDef?.items?.properties || {}
     const row = {}
     for (const [name, prop] of Object.entries(props)) {
+      if (gsKeys.has(name)) continue // global selectors not in per-row values
       if (prop.default !== undefined) row[name] = prop.default
       else if (prop.type === 'number') row[name] = 0
       else row[name] = ''

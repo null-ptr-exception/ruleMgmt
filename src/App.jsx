@@ -3,6 +3,7 @@ import { Layout, Menu, Badge, theme } from 'antd'
 import {
   ToolOutlined,
   BellOutlined,
+  GlobalOutlined,
   UserOutlined,
   LogoutOutlined,
   GitlabOutlined,
@@ -10,11 +11,12 @@ import {
 import { getUserInfo } from './utils/chartApi'
 import TemplateDevEditor from './pages/TemplateDevEditor'
 import AlertUserView from './pages/AlertUserView'
+import ZoneManager from './pages/ZoneManager'
 import GitPanel from './components/GitPanel'
 import { useGitStatus } from './hooks/useGitStatus'
 import './App.css'
 
-const HASH_TO_PAGE = { '#/templates': 'template-dev', '#/alerts': 'alert-user', '#/git': 'git' }
+const HASH_TO_PAGE = { '#/templates': 'template-dev', '#/alerts': 'alert-user', '#/zones': 'zones', '#/git': 'git' }
 const PAGE_TO_HASH = Object.fromEntries(Object.entries(HASH_TO_PAGE).map(([k, v]) => [v, k]))
 
 function getPageFromHash() {
@@ -47,7 +49,8 @@ export default function App() {
 
   const menuItems = [
     { key: 'template-dev', label: 'Templates', icon: <ToolOutlined /> },
-    { key: 'alert-user', label: 'Alerts', icon: <BellOutlined /> },
+    { key: 'alert-user',   label: 'Alerts',    icon: <BellOutlined /> },
+    { key: 'zones',        label: 'Zones',     icon: <GlobalOutlined /> },
     {
       key: 'git',
       label: gitStatus.changeCount > 0
@@ -114,8 +117,9 @@ export default function App() {
       </Sider>
       <Content style={{ overflow: 'auto', display: 'flex', flexDirection: 'column', flex: 1 }}>
         {page === 'template-dev' && <TemplateDevEditor />}
-        {page === 'alert-user' && <AlertUserView />}
-        {page === 'git' && <GitPanel gitStatus={gitStatus} onRefresh={gitStatus.refresh} />}
+        {page === 'alert-user'   && <AlertUserView />}
+        {page === 'zones'        && <ZoneManager />}
+        {page === 'git'          && <GitPanel gitStatus={gitStatus} onRefresh={gitStatus.refresh} />}
       </Content>
     </Layout>
   )

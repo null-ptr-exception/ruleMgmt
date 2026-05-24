@@ -1,4 +1,5 @@
 import express from 'express'
+import fs from 'fs/promises'
 import path from 'path'
 import { execFile } from 'child_process'
 
@@ -28,9 +29,26 @@ export default function renderRouter() {
     const releaseName = `${chart}-${deployment}`
     const helm = process.env.HELM_BIN || 'helm'
 
+    // Build helm args — base values first, then zone values on top
+    const helmArgs = ['template', releaseName, chartDir, '-f', valuesFile]
+
+    // Optional: overlay zone-level values (global selectors)
+    const zone = req.query.zone
+    if (zone) {
+      if (zone.includes('..') || !NAME_RE.test(zone)) {
+        return res.status(400).json({ error: 'Invalid zone name' })
+      }
+      const zonesDir = path.join(req.gitopsDir, process.env.ZONES_DIR || 'zones')
+      const zoneValuesFile = path.join(zonesDir, zone, 'zone-values.yaml')
+      try {
+        await fs.access(zoneValuesFile)
+        helmArgs.push('-f', zoneValuesFile)
+      } catch { /* zone-values.yaml doesn't exist yet — skip silently */ }
+    }
+
     try {
       const output = await new Promise((resolve, reject) => {
-        execFile(helm, ['template', releaseName, chartDir, '-f', valuesFile], { timeout: 120000 }, (err, stdout, stderr) => {
+        execFile(helm, helmArgs, { timeout: 120000 }, (err, stdout, stderr) => {
           if (err) reject(new Error(stderr || stdout || err.message))
           else resolve(stdout)
         })

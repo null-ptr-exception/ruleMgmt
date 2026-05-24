@@ -90,7 +90,7 @@ export async function scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsD
   return true
 }
 
-async function copyDirRecursive(src, dest) {
+export async function copyDirRecursive(src, dest) {
   await fs.mkdir(dest, { recursive: true })
   const entries = await fs.readdir(src, { withFileTypes: true })
   for (const e of entries) {

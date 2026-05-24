@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, Select, Empty, Typography, Switch, Collapse } from 'antd'
-import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
+import { Button, Input, Select, Empty, Typography, Switch, Modal, Tag } from 'antd'
+import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined, CopyOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { schemaAlertNames } from '../utils/schemaUtils'
 import TemplateTree from '../components/TemplateTree'
 import { generatePrometheusRule } from '../utils/templateGenerator'
 import {
-  listCharts, createChart, deleteChart,
+  listCharts, createChart, deleteChart, cloneChart,
   getChartInfo, saveChartTemplateFile,
   saveChartSchema, saveChartMeta
 } from '../utils/chartApi'
@@ -44,9 +44,11 @@ export default function TemplateDevEditor() {
   const [activeAlert, setActiveAlert] = useSessionState('templates:alert', null)
   const [dirty, setDirty] = useState(false)
   const [yamlExpanded, setYamlExpanded] = useState(false)
+  const [gsExpanded, setGsExpanded] = useState(false)
   const [editorEditable, setEditorEditable] = useState(false)
   const [fileContent, setFileContent] = useState('')
   const [sidebarWidth, setSidebarWidth] = useState(220)
+  const [saveWarning, setSaveWarning] = useState(null)
   const resizingRef = useRef(false)
   const editorRef = useRef(null)
   const viewRef = useRef(null)
@@ -147,14 +149,68 @@ export default function TemplateDevEditor() {
     }
   }, [fileContent])
 
-  async function handleSave() {
-    if (!activeChart) return
-    await saveChartSchema(activeChart, schema)
+  // ── Global selector helpers ───────────────────────────────────────────────
+
+  function ruleHasGlobalSelector(promql, gsKeys) {
+    if (!gsKeys || gsKeys.length === 0) return true
+    return gsKeys.some(k => promql && (promql.includes(`{{ .${k} }}`) || promql.includes(`{{.${k}}}`)))
+  }
+
+  function injectGlobalSelectorsIntoPromql(promql, gsKeys) {
+    if (!gsKeys || gsKeys.length === 0 || !promql) return promql
+    const suffix = gsKeys.map(k => `${k}="{{ .${k} }}"`).join(', ')
+    if (/\{[^}]*\}/.test(promql)) {
+      return promql.replace(/\{([^}]*)\}/g, (_, content) => {
+        const trimmed = content.trim()
+        return trimmed ? `{${trimmed}, ${suffix}}` : `{${suffix}}`
+      })
+    }
+    return promql.replace(/^([a-zA-Z_:][a-zA-Z0-9_:]*)/, `$1{${suffix}}`)
+  }
+
+  // ── Save with validation ──────────────────────────────────────────────────
+
+  async function doSave(overrideSchema) {
+    const s = overrideSchema ?? schema
+    await saveChartSchema(activeChart, s)
     await saveChartMeta(activeChart, chartMeta)
-    const content = editorEditable ? fileContent : generatePrometheusRule(schema, '{{ .Release.Name }}')
+    const content = editorEditable ? fileContent : generatePrometheusRule(s, '{{ .Release.Name }}')
     await saveChartTemplateFile(activeChart, 'prometheus-rule', content)
     setDirty(false)
   }
+
+  async function handleSave() {
+    if (!activeChart) return
+    const gsKeys = (schema?.['x-global-selectors'] || []).filter(k => k.trim())
+    if (gsKeys.length > 0) {
+      const names = schemaAlertNames(schema)
+      const missing = names.filter(name => {
+        const promql = schema.properties[name]?.['x-promql'] || ''
+        return !ruleHasGlobalSelector(promql, gsKeys)
+      })
+      if (missing.length > 0) {
+        setSaveWarning({ type: missing.length === names.length ? 'all-missing' : 'some-missing', missing, gsKeys })
+        return
+      }
+    }
+    await doSave()
+  }
+
+  function handleAutoFix() {
+    const { missing, gsKeys } = saveWarning
+    const newProperties = { ...schema.properties }
+    for (const name of missing) {
+      const alertDef = newProperties[name]
+      if (!alertDef) continue
+      newProperties[name] = { ...alertDef, 'x-promql': injectGlobalSelectorsIntoPromql(alertDef['x-promql'] || '', gsKeys) }
+    }
+    const newSchema = { ...schema, properties: newProperties }
+    setSchema(newSchema)
+    setSaveWarning(null)
+    doSave(newSchema)
+  }
+
+  // ── Chart management ──────────────────────────────────────────────────────
 
   async function handleCreateChart() {
     const name = prompt('New chart name:')
@@ -164,12 +220,51 @@ export default function TemplateDevEditor() {
     setActiveChart(name.trim())
   }
 
+  async function handleCloneChart() {
+    if (!activeChart) return
+    const newName = prompt(`Clone "${activeChart}" as (lowercase, a-z0-9_-):`)
+    if (!newName?.trim()) return
+    const trimmed = newName.trim()
+    if (!/^[a-z0-9][a-z0-9_-]*$/.test(trimmed)) {
+      alert('Chart name must match: ^[a-z0-9][a-z0-9_-]*$')
+      return
+    }
+    try {
+      await cloneChart(activeChart, trimmed)
+      await loadCharts()
+      setActiveChart(trimmed)
+    } catch (err) {
+      alert(err.message)
+    }
+  }
+
   async function handleDelete() {
     if (!activeChart) return
-    if (!confirm(`Delete chart "${activeChart}"?`)) return
+    if (!confirm(`Delete chart "${activeChart}" and all its alert groups?`)) return
     await deleteChart(activeChart)
     setActiveChart(null)
     await loadCharts()
+  }
+
+  // ── Global selector key management ───────────────────────────────────────
+
+  function handleAddGsKey() {
+    const newKeys = [...(schema?.['x-global-selectors'] || []), '']
+    setSchema({ ...schema, 'x-global-selectors': newKeys })
+    setGsExpanded(true)
+    setDirty(true)
+  }
+
+  function updateGsKey(idx, value) {
+    const newKeys = (schema?.['x-global-selectors'] || []).map((k, i) => i === idx ? value : k)
+    setSchema({ ...schema, 'x-global-selectors': newKeys })
+    setDirty(true)
+  }
+
+  function removeGsKey(idx) {
+    const newKeys = (schema?.['x-global-selectors'] || []).filter((_, i) => i !== idx)
+    setSchema({ ...schema, 'x-global-selectors': newKeys })
+    setDirty(true)
   }
 
   function handleAddAlert() {
@@ -237,6 +332,7 @@ export default function TemplateDevEditor() {
     setDirty(true)
   }
 
+  const gsKeys = (schema?.['x-global-selectors'] || []).filter(k => k.trim())
   const alertDef = activeAlert ? schema?.properties?.[activeAlert] : null
   const props = alertDef?.items?.properties || {}
   const required = new Set(alertDef?.items?.required || [])
@@ -295,6 +391,7 @@ export default function TemplateDevEditor() {
               style={{ flex: 1, maxWidth: 400 }} />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
               <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
+              <Button icon={<CopyOutlined />} onClick={handleCloneChart}>Clone</Button>
               <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
             </div>
           </>
@@ -333,6 +430,49 @@ export default function TemplateDevEditor() {
 
           {/* Main content - rule builder */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+            {/* Global Selectors panel (chart-level) */}
+            <div style={{ borderBottom: '1px solid #f0f0f0', background: '#fafafa', flexShrink: 0 }}>
+              <div
+                onClick={() => setGsExpanded(v => !v)}
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}
+              >
+                {gsExpanded ? <DownOutlined style={{ fontSize: 10 }} /> : <RightOutlined style={{ fontSize: 10 }} />}
+                <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Global Selectors</Text>
+                {!gsExpanded && (
+                  (schema?.['x-global-selectors'] || []).length > 0
+                    ? (schema['x-global-selectors']).map(k => k && <Tag key={k} style={{ margin: '0 2px', fontSize: 11 }}>{`{{ .${k} }}`}</Tag>)
+                    : <Text type="secondary" style={{ fontSize: 11 }}>none defined</Text>
+                )}
+                <div style={{ marginLeft: 'auto' }} onClick={e => e.stopPropagation()}>
+                  <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={handleAddGsKey} disabled={!activeChart}>Add</Button>
+                </div>
+              </div>
+              {gsExpanded && (
+                <div style={{ padding: '4px 16px 12px' }}>
+                  {(schema?.['x-global-selectors'] || []).length === 0 && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      No global selectors defined. Add keys that must appear in every rule's PromQL (e.g. cluster, group).
+                    </Text>
+                  )}
+                  {(schema?.['x-global-selectors'] || []).map((key, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                      <Input
+                        size="small"
+                        value={key}
+                        placeholder="key name (e.g. cluster)"
+                        onChange={e => updateGsKey(idx, e.target.value)}
+                        style={{ width: 180, fontFamily: 'monospace' }}
+                      />
+                      <Text type="secondary" style={{ fontSize: 12 }}>→</Text>
+                      <Tag style={{ fontSize: 11, fontFamily: 'monospace' }}>{`{{ .${key || '?'} }}`}</Tag>
+                      <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => removeGsKey(idx)} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {alertDef ? (
               <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
                 {/* Alert group header */}
@@ -467,6 +607,42 @@ export default function TemplateDevEditor() {
           <Button size="small" type="primary" icon={<SaveOutlined />} onClick={handleSave}>Save</Button>
         </div>
       )}
+
+      {/* Save validation modal */}
+      <Modal
+        open={!!saveWarning}
+        title={saveWarning?.type === 'all-missing' ? 'No Global Selectors Embedded' : 'Some Rules Missing Global Selectors'}
+        onCancel={() => setSaveWarning(null)}
+        footer={[
+          <Button key="cancel" onClick={() => setSaveWarning(null)}>Cancel</Button>,
+          <Button key="fix" type="primary" icon={<ThunderboltOutlined />} onClick={handleAutoFix}>
+            Auto-fix & Save
+          </Button>,
+          <Button key="anyway" onClick={() => { setSaveWarning(null); doSave() }}>
+            {saveWarning?.type === 'all-missing' ? 'I understand, save anyway' : 'Save without fix'}
+          </Button>,
+        ]}
+      >
+        {saveWarning?.type === 'all-missing'
+          ? <Text type="warning" style={{ display: 'block', marginBottom: 8 }}>
+              No rules embed any global selector. This template cannot be scoped to specific targets.
+            </Text>
+          : <Text style={{ display: 'block', marginBottom: 8 }}>
+              The following rules don&apos;t embed any global selector placeholder:
+            </Text>
+        }
+        <ul style={{ margin: '0 0 12px 16px', padding: 0 }}>
+          {saveWarning?.missing.map(r => (
+            <li key={r} style={{ fontFamily: 'monospace', fontSize: 13 }}>{r}</li>
+          ))}
+        </ul>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>Global selectors:</Text>
+          {(saveWarning?.gsKeys || []).map(k => (
+            <Tag key={k} style={{ fontSize: 11, fontFamily: 'monospace' }}>{`{{ .${k} }}`}</Tag>
+          ))}
+        </div>
+      </Modal>
     </div>
   )
 }

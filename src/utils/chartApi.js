@@ -28,6 +28,17 @@ export async function createChart(name) {
   return res.json()
 }
 
+export async function cloneChart(name, newName) {
+  const res = await apiFetch(`${BASE}/charts/${encodeURIComponent(name)}/clone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newName })
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error || 'Clone failed')
+  return data
+}
+
 export async function deleteChart(name) {
   const res = await apiFetch(`${BASE}/charts/${encodeURIComponent(name)}`, {
     method: 'DELETE'

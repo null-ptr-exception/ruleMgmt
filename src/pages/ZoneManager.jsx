@@ -16,12 +16,11 @@ import { listCharts, getChartInfo, listDeployments } from '../utils/chartApi'
 const { Text, Title } = Typography
 
 // ── GsEditor ──────────────────────────────────────────────────────────────────
-// Fully self-contained KV row editor. Parent reads current rows via ref.
-// seedKeys: string[] — pre-fills key names (from schema x-global-selectors)
+// Self-contained KV row editor. Parent reads rows via ref at submit time.
 const GsEditor = forwardRef(function GsEditor({ seedKeys = [] }, ref) {
   const [rows, setRows] = useState(() => seedKeys.map(k => ({ key: k, value: '' })))
 
-  // Re-seed when seedKeys content changes (chart changed)
+  // Re-seed when seedKeys content changes (chart switched)
   const prevSeed = useRef(seedKeys.join('\x00'))
   useEffect(() => {
     const s = seedKeys.join('\x00')
@@ -35,15 +34,10 @@ const GsEditor = forwardRef(function GsEditor({ seedKeys = [] }, ref) {
 
   const updateKey = (idx, key) =>
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, key } : r))
-
   const updateVal = (idx, val) =>
     setRows(prev => prev.map((r, i) => i === idx ? { ...r, value: val } : r))
-
-  const addRow = () =>
-    setRows(prev => [...prev, { key: '', value: '' }])
-
-  const removeRow = (idx) =>
-    setRows(prev => prev.filter((_, i) => i !== idx))
+  const addRow    = () => setRows(prev => [...prev, { key: '', value: '' }])
+  const removeRow = (idx) => setRows(prev => prev.filter((_, i) => i !== idx))
 
   return (
     <div>
@@ -79,6 +73,32 @@ const GsEditor = forwardRef(function GsEditor({ seedKeys = [] }, ref) {
   )
 })
 
+// ── column text-search dropdown (reusable) ───────────────────────────────────
+function makeTextFilter(placeholder = 'Search…') {
+  return {
+    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+      <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <Input
+          autoFocus
+          size="small"
+          placeholder={placeholder}
+          value={selectedKeys[0] ?? ''}
+          onChange={e => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+          onPressEnter={() => confirm()}
+          style={{ fontFamily: 'monospace' }}
+        />
+        <Space>
+          <Button type="primary" size="small" onClick={() => confirm()}>Filter</Button>
+          <Button size="small" onClick={() => { clearFilters?.(); confirm() }}>Reset</Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: filtered => (
+      <SearchOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+    ),
+  }
+}
+
 // ── main component ────────────────────────────────────────────────────────────
 
 export default function ZoneManager() {
@@ -91,10 +111,6 @@ export default function ZoneManager() {
   // Chart version cache: { chartName → version string }
   const [chartVersions, setChartVersions]   = useState({})
   const fetchedChartsRef                    = useRef(new Set())
-
-  // Table filter state
-  const [filterText, setFilterText]     = useState('')
-  const [filterEnabled, setFilterEnabled] = useState(false)
 
   // Create zone modal
   const [createOpen, setCreateOpen]     = useState(false)
@@ -129,12 +145,10 @@ export default function ZoneManager() {
     getZone(activeZone).then(data => {
       setZoneData(data)
       setBindings(data.bindings || [])
-      setFilterText('')
-      setFilterEnabled(false)
     })
   }, [activeZone])
 
-  // ── lazily fetch chart versions for every unique chart in bindings ─────────
+  // Lazily fetch chart versions for each unique chart referenced in bindings
   useEffect(() => {
     const unique = [...new Set(bindings.map(b => b.chart).filter(Boolean))]
     unique.forEach(chart => {
@@ -151,17 +165,13 @@ export default function ZoneManager() {
 
   // ── zone actions ─────────────────────────────────────────────────────────
 
-  function handleAddZone() {
-    setNewZoneName('')
-    setCreateOpen(true)
-  }
+  function handleAddZone() { setNewZoneName(''); setCreateOpen(true) }
 
   async function confirmCreateZone() {
     const trimmed = newZoneName.trim()
     if (!trimmed) return
     if (!/^[a-z0-9][a-z0-9_-]*$/.test(trimmed)) {
-      alert('Name must match ^[a-z0-9][a-z0-9_-]*$')
-      return
+      alert('Name must match ^[a-z0-9][a-z0-9_-]*$'); return
     }
     setCreating(true)
     try {
@@ -169,11 +179,8 @@ export default function ZoneManager() {
       await loadZones()
       setActiveZone(trimmed)
       setCreateOpen(false)
-    } catch (err) {
-      alert(err.message)
-    } finally {
-      setCreating(false)
-    }
+    } catch (err) { alert(err.message) }
+    finally { setCreating(false) }
   }
 
   function handleDeleteZone() {
@@ -181,8 +188,7 @@ export default function ZoneManager() {
     Modal.confirm({
       title: `Delete zone "${activeZone}"?`,
       content: 'This will remove the zone directory and all its bindings.',
-      okText: 'Delete',
-      okType: 'danger',
+      okText: 'Delete', okType: 'danger',
       onOk: async () => {
         await deleteZone(activeZone)
         setActiveZone(null)
@@ -196,28 +202,21 @@ export default function ZoneManager() {
   async function openAddBinding() {
     const allCharts = await listCharts()
     setCharts(allCharts)
-    setBindChart(null)
-    setBindChartGsKeys([])
-    setBindDeployment(null)
-    setDeployments([])
+    setBindChart(null); setBindChartGsKeys([])
+    setBindDeployment(null); setDeployments([])
     setAddBindOpen(true)
   }
 
-  // When chart changes: load schema gs keys + deployments
   useEffect(() => {
     if (!bindChart) {
-      setBindChartGsKeys([])
-      setDeployments([])
-      setBindDeployment(null)
-      return
+      setBindChartGsKeys([]); setDeployments([]); setBindDeployment(null); return
     }
     setLoadingChartGs(true)
     Promise.all([
       getChartInfo(bindChart).catch(() => null),
       listDeployments(bindChart).catch(() => []),
     ]).then(([chartInfo, deps]) => {
-      const gsKeys = (chartInfo?.schema?.['x-global-selectors'] || []).filter(k => k.trim())
-      setBindChartGsKeys(gsKeys)
+      setBindChartGsKeys((chartInfo?.schema?.['x-global-selectors'] || []).filter(k => k.trim()))
       setDeployments(deps)
       setBindDeployment(deps[0]?.name || null)
     }).finally(() => setLoadingChartGs(false))
@@ -248,61 +247,56 @@ export default function ZoneManager() {
   }
 
   async function handlePreview(binding) {
-    setPreviewLoading(true)
-    setPreviewYaml('')
-    setPreviewOpen(true)
+    setPreviewLoading(true); setPreviewYaml(''); setPreviewOpen(true)
     const result = await renderZoneBinding(
-      activeZone,
-      binding.chart,
-      binding.deployment,
-      binding.globalSelectors || {}
+      activeZone, binding.chart, binding.deployment, binding.globalSelectors || {}
     )
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
     setPreviewLoading(false)
   }
 
-  // ── filtering ─────────────────────────────────────────────────────────────
+  // ── table data — attach origIdx so filtered rows still target correct entry ─
 
-  // Each filtered row carries its original index so toggle/remove are correct
-  const filteredRows = useMemo(() => {
-    return bindings
-      .map((b, origIdx) => ({ ...b, origIdx }))
-      .filter(b => {
-        if (filterEnabled && !b.enabled) return false
-        if (!filterText.trim()) return true
-        const q = filterText.trim().toLowerCase()
-        if (b.chart?.toLowerCase().includes(q)) return true
-        if (b.deployment?.toLowerCase().includes(q)) return true
-        return Object.entries(b.globalSelectors || {}).some(
-          ([k, v]) => k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q)
-        )
-      })
-  }, [bindings, filterText, filterEnabled])
+  const tableData = useMemo(
+    () => bindings.map((b, i) => ({ ...b, origIdx: i, key: i })),
+    [bindings]
+  )
+
+  // ── column filter option lists ────────────────────────────────────────────
+
+  const templateFilters = useMemo(() => {
+    const unique = [...new Set(bindings.map(b => b.chart).filter(Boolean))]
+    return unique.map(c => ({ text: c, value: c }))
+  }, [bindings])
+
+  const deploymentFilters = useMemo(() => {
+    const unique = [...new Set(bindings.map(b => b.deployment).filter(Boolean))]
+    return unique.map(d => ({ text: d, value: d }))
+  }, [bindings])
 
   // ── binding table columns ─────────────────────────────────────────────────
 
-  const bindingColumns = [
+  const bindingColumns = useMemo(() => [
     {
       title: 'Template',
       dataIndex: 'chart',
       key: 'chart',
-      render: v => (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text>
-          {chartVersions[v] && (
-            <Tag color="geekblue" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
-              v{chartVersions[v]}
-            </Tag>
-          )}
-        </span>
-      )
+      filters: templateFilters,
+      onFilter: (value, record) => record.chart === value,
+      render: v => <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text>,
     },
     {
       title: 'Global Selectors',
       key: 'globalSelectors',
+      ...makeTextFilter('key or value…'),
+      onFilter: (value, record) => {
+        const q = value.toLowerCase()
+        return Object.entries(record.globalSelectors || {}).some(
+          ([k, v]) => k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q)
+        )
+      },
       render: (_, row) => {
-        const gs = row.globalSelectors || {}
-        const entries = Object.entries(gs).filter(([k]) => k)
+        const entries = Object.entries(row.globalSelectors || {}).filter(([k]) => k)
         if (entries.length === 0)
           return <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
         return (
@@ -314,22 +308,41 @@ export default function ZoneManager() {
             ))}
           </div>
         )
-      }
+      },
     },
     {
       title: 'Alert Config',
       dataIndex: 'deployment',
       key: 'deployment',
-      render: v => <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text>
+      filters: deploymentFilters,
+      onFilter: (value, record) => record.deployment === value,
+      render: (v, row) => {
+        const ver = chartVersions[row.chart]
+        return (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>{v}</Text>
+            {ver && (
+              <Tag color="geekblue" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>
+                v{ver}
+              </Tag>
+            )}
+          </span>
+        )
+      },
     },
     {
       title: 'Enabled',
       key: 'enabled',
       width: 80,
+      filters: [
+        { text: 'Enabled',  value: true },
+        { text: 'Disabled', value: false },
+      ],
+      onFilter: (value, record) => record.enabled === value,
       render: (_, row) => (
         <Switch size="small" checked={row.enabled}
           onChange={() => toggleBinding(row.origIdx)} />
-      )
+      ),
     },
     {
       title: '',
@@ -341,9 +354,10 @@ export default function ZoneManager() {
           <Button size="small" type="text" danger icon={<DeleteOutlined />}
             onClick={() => removeBinding(row.origIdx)} />
         </div>
-      )
+      ),
     },
-  ]
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [templateFilters, deploymentFilters, chartVersions, bindings])
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -396,50 +410,24 @@ export default function ZoneManager() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div style={{ background: '#fff', border: '1px solid #f0f0f0', borderRadius: 8, padding: '16px 20px' }}>
 
-                {/* Title row */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <Text strong style={{ fontSize: 14 }}>Alert Bindings</Text>
                   {bindings.length > 0 && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {filteredRows.length !== bindings.length
-                        ? `${filteredRows.length} / ${bindings.length}`
-                        : bindings.length}
-                    </Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{bindings.length}</Text>
                   )}
                   <Button size="small" icon={<PlusOutlined />} onClick={openAddBinding} style={{ marginLeft: 'auto' }}>
                     Add Binding
                   </Button>
                 </div>
 
-                {/* Filter bar */}
-                {bindings.length > 0 && (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-                    <Input
-                      allowClear
-                      size="small"
-                      prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                      placeholder="Filter by template, selector, alert config…"
-                      value={filterText}
-                      onChange={e => setFilterText(e.target.value)}
-                      style={{ maxWidth: 340 }}
-                    />
-                    <Space size={6}>
-                      <Switch size="small" checked={filterEnabled} onChange={setFilterEnabled} />
-                      <Text style={{ fontSize: 12 }}>Enabled only</Text>
-                    </Space>
-                  </div>
-                )}
-
                 {bindings.length === 0
                   ? <Text type="secondary" style={{ fontSize: 12 }}>No bindings yet. Add a template + alert config to this zone.</Text>
-                  : filteredRows.length === 0
-                    ? <Text type="secondary" style={{ fontSize: 12 }}>No bindings match the current filter.</Text>
-                    : <Table
-                        size="small"
-                        dataSource={filteredRows.map(b => ({ ...b, key: b.origIdx }))}
-                        columns={bindingColumns}
-                        pagination={false}
-                      />
+                  : <Table
+                      size="small"
+                      dataSource={tableData}
+                      columns={bindingColumns}
+                      pagination={false}
+                    />
                 }
               </div>
             </div>
@@ -486,7 +474,6 @@ export default function ZoneManager() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 }}>
 
-          {/* Template */}
           <div>
             <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Template</Text>
             <Select
@@ -498,7 +485,6 @@ export default function ZoneManager() {
             />
           </div>
 
-          {/* Global Selectors — always shown once chart is picked */}
           {bindChart && (
             <div>
               <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6 }}>
@@ -517,7 +503,6 @@ export default function ZoneManager() {
             </div>
           )}
 
-          {/* Alert Config */}
           <div>
             <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Alert Config</Text>
             <Select

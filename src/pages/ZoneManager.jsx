@@ -1,14 +1,86 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Button, Select, Input, Switch, Empty, Typography, Modal, Table } from 'antd'
+import { Button, Select, Input, Switch, Empty, Typography, Modal, Table, Tag, Spin } from 'antd'
 import {
   PlusOutlined, DeleteOutlined, SaveOutlined,
   EyeOutlined, GlobalOutlined
 } from '@ant-design/icons'
 import { listZones, createZone, deleteZone, getZone, saveZoneValues, saveZoneBindings, renderZoneBinding } from '../utils/zoneApi'
-import { listCharts } from '../utils/chartApi'
-import { listDeployments } from '../utils/chartApi'
+import { listCharts, getChartInfo, getDeployment, listDeployments } from '../utils/chartApi'
+import { schemaAlertNames } from '../utils/schemaUtils'
 
 const { Text, Title } = Typography
+
+// ── BindingDetail: expanded overview of one binding ───────────────────────────
+function BindingDetail({ binding, zoneValues }) {
+  const [detail, setDetail] = useState(null)
+
+  useEffect(() => {
+    Promise.all([
+      getChartInfo(binding.chart),
+      getDeployment(binding.chart, binding.deployment),
+    ]).then(([chartInfo, depData]) => {
+      setDetail({ schema: chartInfo.schema, values: depData.parsed || {} })
+    })
+  }, [binding.chart, binding.deployment])
+
+  if (!detail) return <div style={{ padding: '8px 16px' }}><Spin size="small" /> <Text type="secondary" style={{ fontSize: 12 }}> Loading…</Text></div>
+
+  const { schema, values } = detail
+  const alertGroups = schemaAlertNames(schema)
+  const gsEntries = Object.entries(zoneValues).filter(([k]) => k.trim())
+
+  return (
+    <div style={{ padding: '10px 24px 14px', background: '#fafafa', borderTop: '1px solid #f0f0f0' }}>
+      {/* Zone global selectors */}
+      {gsEntries.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>
+            Zone Selectors (哪種運動)
+          </Text>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+            {gsEntries.map(([k, v]) => (
+              <Tag key={k} color="blue" style={{ fontFamily: 'monospace', fontSize: 11 }}>{k}={v}</Tag>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Alert groups */}
+      <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>
+        Alert Groups (肉)
+      </Text>
+      {alertGroups.length === 0
+        ? <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>No alert groups in this template.</Text>
+        : (
+          <div style={{ marginTop: 6 }}>
+            {alertGroups.map(group => {
+              const rows = values[group] || []
+              const props = schema?.properties?.[group]?.items?.properties || {}
+              const selKeys = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'selector').map(([k]) => k)
+              const thrKeys = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'threshold').map(([k]) => k)
+              return (
+                <div key={group} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
+                  <Text style={{ fontFamily: 'monospace', fontSize: 12, minWidth: 220, flexShrink: 0 }}>{group}</Text>
+                  <Text type="secondary" style={{ fontSize: 11, minWidth: 60 }}>{rows.length} row{rows.length !== 1 ? 's' : ''}</Text>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {rows.map((row, i) => [
+                      ...selKeys.map(k => row[k] != null && (
+                        <Tag key={`s-${i}-${k}`} style={{ fontSize: 10, fontFamily: 'monospace' }}>{k}={row[k]}</Tag>
+                      )),
+                      ...thrKeys.map(k => row[k] != null && (
+                        <Tag key={`t-${i}-${k}`} color="orange" style={{ fontSize: 10, fontFamily: 'monospace' }}>{k}={row[k]}</Tag>
+                      )),
+                    ])}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      }
+    </div>
+  )
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -307,6 +379,12 @@ export default function ZoneManager() {
                       dataSource={bindings.map((b, i) => ({ ...b, key: i }))}
                       columns={bindingColumns}
                       pagination={false}
+                      expandable={{
+                        expandedRowRender: (record) => (
+                          <BindingDetail binding={record} zoneValues={zoneValues} />
+                        ),
+                        rowExpandable: () => true,
+                      }}
                     />
                 }
               </div>

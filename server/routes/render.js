@@ -1,7 +1,7 @@
 import express from 'express'
 import fs from 'fs/promises'
 import path from 'path'
-import { execFile } from 'child_process'
+import { exec } from 'child_process'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -46,9 +46,13 @@ export default function renderRouter() {
       } catch { /* zone-values.yaml doesn't exist yet — skip silently */ }
     }
 
+    // Use exec (goes through system shell) so Windows resolves helm.exe via PATH
+    const quoted = helmArgs.map(a => (a.includes(' ') ? `"${a}"` : a)).join(' ')
+    const helmCmd = `"${helm}" ${quoted}`
+
     try {
       const output = await new Promise((resolve, reject) => {
-        execFile(helm, helmArgs, { timeout: 120000 }, (err, stdout, stderr) => {
+        exec(helmCmd, { timeout: 120000 }, (err, stdout, stderr) => {
           if (err) reject(new Error(stderr || stdout || err.message))
           else resolve(stdout)
         })

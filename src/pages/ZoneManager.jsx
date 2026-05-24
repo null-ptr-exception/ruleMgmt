@@ -63,6 +63,12 @@ export default function ZoneManager() {
   const [valuesDirty, setValuesDirty]   = useState(false)
   const [sidebarWidth]                  = useState(220)
 
+  // Create zone modal
+  const [createOpen, setCreateOpen]     = useState(false)
+  const [newZoneName, setNewZoneName]   = useState('')
+  const [newZoneType, setNewZoneType]   = useState('prometheus')
+  const [creating, setCreating]         = useState(false)
+
   // Add-binding modal
   const [addBindOpen, setAddBindOpen]   = useState(false)
   const [charts, setCharts]             = useState([])
@@ -95,25 +101,45 @@ export default function ZoneManager() {
 
   // ── zone actions ─────────────────────────────────────────────────────────
 
-  async function handleAddZone() {
-    const name = prompt('Zone name (lowercase, a-z0-9_-):\nExamples: prod-cluster, staging-vm')
-    if (!name?.trim()) return
-    const trimmed = name.trim()
-    if (!/^[a-z0-9][a-z0-9_-]*$/.test(trimmed)) { alert('Name must match ^[a-z0-9][a-z0-9_-]*$'); return }
-    const type = ZONE_TYPES.find(t => t.value === 'prometheus')?.value || 'prometheus'
-    try {
-      await createZone(trimmed, type)
-      await loadZones()
-      setActiveZone(trimmed)
-    } catch (err) { alert(err.message) }
+  function handleAddZone() {
+    setNewZoneName('')
+    setNewZoneType('prometheus')
+    setCreateOpen(true)
   }
 
-  async function handleDeleteZone() {
+  async function confirmCreateZone() {
+    const trimmed = newZoneName.trim()
+    if (!trimmed) return
+    if (!/^[a-z0-9][a-z0-9_-]*$/.test(trimmed)) {
+      alert('Name must match ^[a-z0-9][a-z0-9_-]*$')
+      return
+    }
+    setCreating(true)
+    try {
+      await createZone(trimmed, newZoneType)
+      await loadZones()
+      setActiveZone(trimmed)
+      setCreateOpen(false)
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  function handleDeleteZone() {
     if (!activeZone) return
-    if (!confirm(`Delete zone "${activeZone}"?`)) return
-    await deleteZone(activeZone)
-    setActiveZone(null)
-    await loadZones()
+    Modal.confirm({
+      title: `Delete zone "${activeZone}"?`,
+      content: 'This will remove the zone directory and all its bindings.',
+      okText: 'Delete',
+      okType: 'danger',
+      onOk: async () => {
+        await deleteZone(activeZone)
+        setActiveZone(null)
+        await loadZones()
+      }
+    })
   }
 
   // ── values actions ────────────────────────────────────────────────────────
@@ -299,6 +325,41 @@ export default function ZoneManager() {
           <Empty style={{ margin: 'auto' }} description="Select a zone or create a new one" />
         )}
       </div>
+
+      {/* Create Zone Modal */}
+      <Modal
+        title="Create New Zone"
+        open={createOpen}
+        onCancel={() => setCreateOpen(false)}
+        onOk={confirmCreateZone}
+        okText="Create"
+        okButtonProps={{ loading: creating, disabled: !newZoneName.trim() }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Zone Name</Text>
+            <Input
+              placeholder="e.g. prod-cluster, staging-vm"
+              value={newZoneName}
+              onChange={e => setNewZoneName(e.target.value)}
+              onPressEnter={confirmCreateZone}
+              autoFocus
+            />
+            <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+              Lowercase, a–z, 0–9, hyphens and underscores only
+            </Text>
+          </div>
+          <div>
+            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Type</Text>
+            <Select
+              value={newZoneType}
+              onChange={setNewZoneType}
+              style={{ width: '100%' }}
+              options={ZONE_TYPES}
+            />
+          </div>
+        </div>
+      </Modal>
 
       {/* Add Binding Modal */}
       <Modal

@@ -20,8 +20,8 @@ app.use(httpLogger)
 app.use((req, res, next) => {
   const origJson = res.json.bind(res)
   res.json = (body) => {
-    if (res.statusCode >= 500 && body?.error) {
-      req.log.error({ err: body.error }, `${req.method} ${req.originalUrl} failed`)
+    if (res.statusCode >= 400 && body?.error) {
+      res._errorBody = body.error
     }
     return origJson(body)
   }

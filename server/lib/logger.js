@@ -8,6 +8,12 @@ export const logger = pino({
 export const httpLogger = pinoHttp({
   logger,
   autoLogging: {
-    ignore: (req) => req.url?.startsWith('/assets/'),
+    ignore: (req) => req.url?.includes('/assets/'),
+  },
+  customSuccessObject: (req, res, val) => {
+    if (res.statusCode >= 400 && res._errorBody) {
+      return { ...val, error: res._errorBody }
+    }
+    return val
   },
 })

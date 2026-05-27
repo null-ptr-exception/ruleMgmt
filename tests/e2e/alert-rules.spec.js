@@ -15,7 +15,7 @@ test.describe('Alert Rules navigation', () => {
 
   test('Alerts page shows deployment folder tree', async ({ page }) => {
     await page.goto('/#/alerts')
-    await expect(page.getByText('Deployments')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
   })
 
   test('Templates page shows chart selector', async ({ page }) => {

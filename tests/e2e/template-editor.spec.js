@@ -23,7 +23,7 @@ test.describe('Template Editor', () => {
     const option = page.locator('.ant-select-item-option').first()
     if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
       await option.click()
-      await expect(page.locator('[class*="tree"], [class*="template"], [class*="alert"]').first()).toBeVisible({ timeout: 5000 })
+      await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
     }
   })
 })

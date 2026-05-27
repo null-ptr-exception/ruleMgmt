@@ -66,10 +66,27 @@ hub:
               spawner.init_containers = new_init_containers
       c.KubeSpawner.pre_spawn_hook = pre_spawn_hook
 
+scheduling:
+  userScheduler:
+    enabled: false
+
+prePuller:
+  continuous:
+    enabled: false
+  hook:
+    enabled: false
+
+proxy:
+  service:
+    type: NodePort
+
 singleuser:
   cmd: ["node", "server.js"]
+  cloudMetadata:
+    blockWithIptables: false
   extraEnv:
     PORT: "8080"
+    GITOPS_DIR: /data/gitops
   storage:
     type: dynamic
     capacity: 256Mi
@@ -122,7 +139,3 @@ cull:
   enabled: true
   timeout: 14400
   every: 300
-
-proxy:
-  service:
-    type: NodePort

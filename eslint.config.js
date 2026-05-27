@@ -18,13 +18,14 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         HTMLElement: 'readonly',
+        sessionStorage: 'readonly',
       },
       parserOptions: {
         ecmaFeatures: { jsx: true },
       },
     },
     rules: {
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },

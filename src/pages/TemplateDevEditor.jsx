@@ -7,7 +7,7 @@ import TemplateTree from '../components/TemplateTree'
 import { generatePrometheusRule, generateGroupTemplate } from '../utils/templateGenerator'
 import {
   listCharts, createChart, deleteChart,
-  getChartInfo, saveChartTemplateFile, deleteChartTemplate,
+  getChartInfo, getChartTemplateFile, saveChartTemplateFile, deleteChartTemplate,
   saveChartSchema, saveChartMeta
 } from '../utils/chartApi'
 
@@ -97,12 +97,13 @@ export default function TemplateDevEditor() {
   const [alertNames, setAlertNames] = useState([])
   const [activeAlert, setActiveAlert] = useSessionState('templates:alert', null)
   const [dirty, setDirty] = useState(false)
-  const [yamlExpanded, setYamlExpanded] = useState(false)
-  const [editorEditable, setEditorEditable] = useState(false)
+  const [yamlExpanded, setYamlExpanded] = useSessionState('templates:yamlExpanded', false)
+  const [editorEditable, setEditorEditable] = useSessionState('templates:editorEditable', false)
   const [fileContent, setFileContent] = useState('')
   const [savedTemplateFiles, setSavedTemplateFiles] = useState([])
   const [sidebarWidth, setSidebarWidth] = useState(220)
   const resizingRef = useRef(false)
+  const suppressDirtyRef = useRef(false)
   const editorRef = useRef(null)
   const viewRef = useRef(null)
 
@@ -150,7 +151,6 @@ export default function TemplateDevEditor() {
     setActiveAlert(prev => names.includes(prev) ? prev : (names.length > 0 ? names[0] : null))
     setSavedTemplateFiles(info.templateFiles || [])
     setDirty(false)
-    setEditorEditable(false)
   }, [setActiveAlert])
 
   useEffect(() => {
@@ -158,15 +158,25 @@ export default function TemplateDevEditor() {
   }, [activeChart, loadChart])
 
   useEffect(() => {
-    if (!editorEditable && schema && activeAlert && activeAlert !== '__common_vars__') {
-      const alertDef = schema.properties?.[activeAlert]
-      if (alertDef && !alertDef['x-custom-template']) {
-        setFileContent(generateGroupTemplate(activeAlert, alertDef, '{{ .Release.Name }}', schema) || '')
-      } else {
-        setFileContent('')
-      }
+    if (!schema || !activeAlert || activeAlert === '__common_vars__') return
+    const alertDef = schema.properties?.[activeAlert]
+    if (!alertDef) return
+
+    if (alertDef['x-custom-template']) {
+      setEditorEditable(true)
+      const fileName = activeAlert.replace(/_/g, '-')
+      suppressDirtyRef.current = true
+      getChartTemplateFile(activeChart, fileName).then(data => {
+        setFileContent(data.content || '')
+        setTimeout(() => { suppressDirtyRef.current = false }, 0)
+      })
+    } else {
+      setEditorEditable(false)
+      suppressDirtyRef.current = true
+      setFileContent(generateGroupTemplate(activeAlert, alertDef, '{{ .Release.Name }}', schema) || '')
+      setTimeout(() => { suppressDirtyRef.current = false }, 0)
     }
-  }, [schema, editorEditable, activeAlert])
+  }, [schema, activeAlert, activeChart])
 
   useEffect(() => {
     if (!editorRef.current || !yamlExpanded) return
@@ -182,7 +192,7 @@ export default function TemplateDevEditor() {
       ...(editorEditable ? [EditorView.updateListener.of(update => {
         if (update.docChanged) {
           setFileContent(update.state.doc.toString())
-          setDirty(true)
+          if (!suppressDirtyRef.current) setDirty(true)
         }
       })] : []),
     ]

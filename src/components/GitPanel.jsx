@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
 import { Button, Typography, Space, Modal, Tooltip } from 'antd'
 import {
@@ -18,6 +18,32 @@ export default function GitPanel({ gitStatus, onRefresh }) {
   const [activeTab, setActiveTab] = useState('changes')
   const [selectedFile, setSelectedFile] = useState(null)
   const [loading, setLoading] = useState(null)
+  const [sidebarWidth, setSidebarWidth] = useState(280)
+  const resizingRef = useRef(false)
+
+  function handleResizeStart(e) {
+    e.preventDefault()
+    resizingRef.current = true
+    const startX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX
+    const startWidth = sidebarWidth
+    function onMove(ev) {
+      if (!resizingRef.current) return
+      const clientX = ev.type === 'touchmove' ? ev.touches[0].clientX : ev.clientX
+      const newWidth = Math.max(200, Math.min(500, startWidth + clientX - startX))
+      setSidebarWidth(newWidth)
+    }
+    function onUp() {
+      resizingRef.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('touchmove', onMove)
+      document.removeEventListener('touchend', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.addEventListener('touchmove', onMove, { passive: false })
+    document.addEventListener('touchend', onUp)
+  }
 
   const { branch, changeCount, behindMain, hasRemote } = gitStatus
 
@@ -119,7 +145,7 @@ export default function GitPanel({ gitStatus, onRefresh }) {
       {/* Two-column body */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left column */}
-        <div style={{ width: 280, minWidth: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid #f0f0f0' }}>
+        <div style={{ width: sidebarWidth, minWidth: 200, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid #f0f0f0', position: 'relative' }}>
           {/* Tab bar */}
           <div style={{ display: 'flex', borderBottom: '1px solid #f0f0f0' }}>
             <div style={tabStyle('changes')} onClick={() => setActiveTab('changes')}>Changes</div>
@@ -133,6 +159,18 @@ export default function GitPanel({ gitStatus, onRefresh }) {
             {activeTab === 'history' && (
               <GitHistory onSelectFile={setSelectedFile} />
             )}
+          </div>
+          <div
+            onMouseDown={handleResizeStart}
+            onTouchStart={handleResizeStart}
+            style={{ position: 'absolute', top: 0, right: -2, width: 5, height: '100%', cursor: 'col-resize', zIndex: 10 }}
+          >
+            <div style={{
+              position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+              width: 14, height: 28, borderRadius: 4, background: '#d9d9d9', border: '1px solid #bfbfbf',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 10, color: '#8c8c8c', letterSpacing: 1, touchAction: 'none'
+            }}>⋮</div>
           </div>
         </div>
 

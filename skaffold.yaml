@@ -20,10 +20,11 @@ deploy:
           - k8s/dev-values.yaml
         namespace: default
         version: 4.3.5
+        upgradeOnChange: true
         setValueTemplates:
           singleuser.image.name: '{{.IMAGE_REPO_rulemgmt}}'
           singleuser.image.tag: '{{.IMAGE_TAG_rulemgmt}}'
-          singleuser.image.pullPolicy: IfNotPresent
+          singleuser.image.pullPolicy: Never
         repo: https://hub.jupyter.org/helm-chart/
   kubectl:
     defaultNamespace: default

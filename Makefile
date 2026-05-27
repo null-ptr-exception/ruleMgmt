@@ -1,48 +1,22 @@
-.PHONY: help apply-sample clean up down
+MINIKUBE_COMPOSE := docker compose -f docker-compose.minikube.yml
 
-SAMPLE_DIR  := sample
+.PHONY: help up down deploy proxy status
 
-help:
-	@echo ""
-	@echo "Alert Template UI — Makefile"
-	@echo "======================================"
-	@echo ""
-	@echo "  make apply-sample   Copy sample charts and deployments into gitops/"
-	@echo "  make clean          Remove all data from gitops/"
-	@echo ""
-	@echo "Quick start:"
-	@echo "  make apply-sample"
-	@echo "  npm run dev"
-	@echo ""
-	@echo "Reset and reload:"
-	@echo "  make clean apply-sample"
-	@echo ""
+help: ## Show available targets
+	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-12s %s\n", $$1, $$2}'
 
-apply-sample:
-	@echo ">> Copying sample/charts/ → gitops/charts/"
-	@mkdir -p gitops/charts
-	@cp -r $(SAMPLE_DIR)/charts/. gitops/charts/
-	@echo ">> Copying sample/deployments/ → gitops/deployments/"
-	@mkdir -p gitops/deployments
-	@cp -r $(SAMPLE_DIR)/deployments/. gitops/deployments/
-	@echo ">> Copying sample/alertmanager-configs/ → gitops/alertmanager-configs/"
-	@mkdir -p gitops/alertmanager-configs
-	@if [ -d $(SAMPLE_DIR)/alertmanager-configs ]; then cp -r $(SAMPLE_DIR)/alertmanager-configs/. gitops/alertmanager-configs/; fi
-	@echo ""
-	@echo "Done. Sample data loaded."
-	@echo "Run 'npm run dev' (or 'node server.js') to start the UI."
+up: deploy proxy ## Build, deploy to minikube, and start local proxy
 
-clean:
-	@echo ">> Removing all content from gitops/..."
-	@mkdir -p gitops/charts gitops/deployments gitops/alertmanager-configs
-	@find gitops/charts -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-	@find gitops/deployments -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-	@find gitops/alertmanager-configs -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-	@echo ""
-	@echo "Done. Working directories are now empty."
+down: ## Stop proxy and destroy minikube cluster
+	$(MINIKUBE_COMPOSE) down
+	minikube delete
 
-up:
-	docker compose up --build -d
+deploy: ## Build image and deploy to minikube via Skaffold
+	eval $$(minikube docker-env) && skaffold run
 
-down:
-	docker compose down --volumes
+proxy: ## Start local proxy (127.0.0.1:12014 → minikube:30080)
+	$(MINIKUBE_COMPOSE) up -d
+
+status: ## Show proxy and pod status
+	@$(MINIKUBE_COMPOSE) ps
+	@kubectl --context minikube get pods

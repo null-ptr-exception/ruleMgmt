@@ -5,22 +5,20 @@
 Vite + React frontend, Express backend, Helm chart templates.
 Node 22, deployed as JupyterHub singleuser image on minikube.
 
-## Dev
+## Commands
 
 ```bash
-npm run dev          # frontend (Vite) + backend (Express) concurrently
+make up              # build, deploy to minikube, and start local proxy
+make deploy          # build image and deploy to minikube via Skaffold
+make proxy           # start local proxy (127.0.0.1:12014 → minikube:30080)
+make down            # stop proxy and destroy minikube cluster
+make status          # show proxy and pod status
 npm test             # vitest unit + integration tests
 npm run test:e2e     # playwright E2E tests
 npm run lint         # eslint
 ```
 
-## Deploy to minikube
-
-```bash
-skaffold run         # build image, deploy via Helm to JupyterHub on minikube
-```
-
-**Never** manually docker build / minikube image load / kubectl delete pod. Always use Skaffold.
+**Never** manually docker build / minikube image load / kubectl delete pod. Always use `make deploy`.
 
 Kubectl context: `minikube`. Namespace: `default`.
 

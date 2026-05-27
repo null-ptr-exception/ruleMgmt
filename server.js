@@ -11,10 +11,22 @@ import gitRouter from './server/routes/git.js'
 import git from './server/lib/git.js'
 import foldersRouter from './server/routes/folders.js'
 import { getChartsDir, getDeploymentsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
+import { logger, httpLogger } from './server/lib/logger.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
 app.use(express.json())
+app.use(httpLogger)
+app.use((req, res, next) => {
+  const origJson = res.json.bind(res)
+  res.json = (body) => {
+    if (res.statusCode >= 500 && body?.error) {
+      req.log.error({ err: body.error }, `${req.method} ${req.originalUrl} failed`)
+    }
+    return origJson(body)
+  }
+  next()
+})
 
 const BASE_PATH = process.env.JUPYTERHUB_SERVICE_PREFIX || '/'
 const GITOPS_DIR_V2 = process.env.GITOPS_DIR || path.join(__dirname, 'gitops')
@@ -28,7 +40,7 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
     await git(GITOPS_DIR_V2, 'init')
     await git(GITOPS_DIR_V2, 'add', '-A')
     await git(GITOPS_DIR_V2, 'commit', '--allow-empty', '-m', 'initial')
-    console.log(`Git initialized in ${GITOPS_DIR_V2}`)
+    logger.info(`Git initialized in ${GITOPS_DIR_V2}`)
   }
 }
 
@@ -38,7 +50,7 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
   const deploymentsDir = getDeploymentsDir(GITOPS_DIR_V2, process.env.DEPLOYMENTS_DIR)
   const sampleDir = path.join(__dirname, 'sample')
   const scaffolded = await scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir)
-  if (scaffolded) console.log(`Scaffolded sample data into ${chartsDir}`)
+  if (scaffolded) logger.info(`Scaffolded sample data into ${chartsDir}`)
 }
 
 // ─── V2 API (base path router) ──────────────────────────────────────────────
@@ -75,4 +87,4 @@ baseRouter.get('*', (req, res) => {
 app.use(BASE_PATH, baseRouter)
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`API server → http://0.0.0.0:${PORT}`))
+app.listen(PORT, () => logger.info(`API server listening on port ${PORT}`))

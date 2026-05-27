@@ -19,7 +19,7 @@ deploy:
           - k8s/jupyterhub-values.yaml
           - k8s/dev-values.yaml
         namespace: default
-        version: 4.1.0
+        version: 4.3.5
         setValueTemplates:
           singleuser.image.name: '{{.IMAGE_REPO_rulemgmt}}'
           singleuser.image.tag: '{{.IMAGE_TAG_rulemgmt}}'

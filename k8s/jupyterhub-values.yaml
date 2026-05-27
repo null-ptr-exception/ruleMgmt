@@ -79,6 +79,8 @@ prePuller:
 proxy:
   service:
     type: NodePort
+    nodePorts:
+      http: 30080
 
 singleuser:
   cmd: ["node", "server.js"]

@@ -578,7 +578,7 @@ export default function TemplateDevEditor() {
                 {yamlExpanded ? <DownOutlined style={{ fontSize: 10 }} /> : <RightOutlined style={{ fontSize: 10 }} />}
                 <Text style={{ fontSize: 11, fontWeight: 600, color: '#8c8c8c', textTransform: 'uppercase' }}>Generated YAML</Text>
                 {yamlExpanded && (
-                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
                     <Text style={{ fontSize: 11, color: '#8c8c8c' }}>Edit manually</Text>
                     <Switch size="small" checked={editorEditable} onChange={setEditorEditable} />
                   </div>

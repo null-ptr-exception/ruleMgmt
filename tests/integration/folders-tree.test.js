@@ -26,7 +26,13 @@ describe('GET /api/v2/folders/tree', () => {
   })
 
   it('returns folder tree with path field', async () => {
-    fs.mkdirSync(path.join(tmpDir, 'deployments', 'app1'), { recursive: true })
+    const dir = path.join(tmpDir, 'deployments', 'app1')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
+      apiVersion: 'v2', name: 'app1', version: '0.1.0',
+      dependencies: [{ name: 'my-chart', version: '0.1.0', repository: 'file://../../charts/my-chart' }]
+    }))
+    fs.writeFileSync(path.join(dir, 'values.yaml'), 'foo: bar\n')
     const res = await request(app).get('/api/v2/folders/tree')
     expect(res.status).toBe(200)
     const depNode = res.body.find(f => f.name === 'deployments')
@@ -55,16 +61,14 @@ describe('GET /api/v2/folders/tree', () => {
     expect(prod.alertCount).toBe(3)
   })
 
-  it('returns isDeployment false for folders without Chart.yaml', async () => {
+  it('prunes folders without deployments', async () => {
     fs.mkdirSync(path.join(tmpDir, 'plain-folder'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'charts', 'my-chart', 'templates'), { recursive: true })
     const res = await request(app).get('/api/v2/folders/tree')
-    const node = res.body.find(f => f.name === 'plain-folder')
-    expect(node.isDeployment).toBe(false)
-    expect(node.chart).toBeUndefined()
-    expect(node.alertCount).toBeUndefined()
+    expect(res.body).toEqual([])
   })
 
-  it('returns isDeployment false for folders with Chart.yaml but no values.yaml', async () => {
+  it('prunes folders with Chart.yaml but no values.yaml', async () => {
     const dir = path.join(tmpDir, 'no-values')
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
@@ -72,24 +76,28 @@ describe('GET /api/v2/folders/tree', () => {
       dependencies: [{ name: 'some-chart', version: '0.1.0', repository: 'file://../../charts/some-chart' }]
     }))
     const res = await request(app).get('/api/v2/folders/tree')
-    const node = res.body.find(f => f.name === 'no-values')
-    expect(node.isDeployment).toBe(false)
+    expect(res.body).toEqual([])
   })
 
-  it('handles Chart.yaml with no dependencies gracefully', async () => {
+  it('prunes folders with Chart.yaml but no dependencies', async () => {
     const dir = path.join(tmpDir, 'no-deps')
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({ apiVersion: 'v2', name: 'test', version: '0.1.0' }))
     fs.writeFileSync(path.join(dir, 'values.yaml'), 'foo: bar\n')
     const res = await request(app).get('/api/v2/folders/tree')
-    const node = res.body.find(f => f.name === 'no-deps')
-    expect(node.isDeployment).toBe(false)
+    expect(res.body).toEqual([])
   })
 
   it('excludes .git and node_modules', async () => {
     fs.mkdirSync(path.join(tmpDir, '.git', 'objects'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'node_modules', 'foo'), { recursive: true })
-    fs.mkdirSync(path.join(tmpDir, 'real-folder'), { recursive: true })
+    const dir = path.join(tmpDir, 'real-folder')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
+      apiVersion: 'v2', name: 'real', version: '0.1.0',
+      dependencies: [{ name: 'chart', version: '0.1.0', repository: 'file://../charts/chart' }]
+    }))
+    fs.writeFileSync(path.join(dir, 'values.yaml'), 'foo: bar\n')
     const res = await request(app).get('/api/v2/folders/tree')
     const names = res.body.map(f => f.name)
     expect(names).not.toContain('.git')

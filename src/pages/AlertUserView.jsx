@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
 import { Button, Modal, Typography, Empty, Input, Select, message } from 'antd'
-import { SaveOutlined, EyeOutlined } from '@ant-design/icons'
+import { SaveOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
 import AlertTable from '../components/AlertTable'
@@ -10,7 +10,9 @@ import {
   getChartInfo,
   getDeployment, saveDeployment,
   renderDeployment,
-  getFolderTree
+  getFolderTree,
+  listCharts,
+  initDeploymentFolder
 } from '../utils/chartApi'
 
 const { Title, Text } = Typography
@@ -32,6 +34,11 @@ export default function AlertUserView() {
   const [saveStatus, setSaveStatus] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
+
+  const [newDeployOpen, setNewDeployOpen] = useState(false)
+  const [newDeployPath, setNewDeployPath] = useState('')
+  const [newDeployChart, setNewDeployChart] = useState(null)
+  const [availableCharts, setAvailableCharts] = useState([])
 
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const resizingRef = useRef(false)
@@ -115,6 +122,29 @@ export default function AlertUserView() {
     setDirty(false)
   }, [activeAlert, schema])
 
+  async function handleNewDeployOpen() {
+    const charts = await listCharts()
+    setAvailableCharts(charts)
+    setNewDeployPath('')
+    setNewDeployChart(charts.length > 0 ? charts[0].name : null)
+    setNewDeployOpen(true)
+  }
+
+  async function handleNewDeployCreate() {
+    if (!newDeployPath || !newDeployChart) return
+    const result = await initDeploymentFolder(newDeployPath, newDeployChart)
+    setNewDeployOpen(false)
+    if (result.status === 'created' || result.status === 'existing') {
+      const tree = await getFolderTree()
+      setFolderTree(tree)
+      const chart = result.chart || newDeployChart
+      setSelectedFolder(newDeployPath)
+      setSelectedChart(chart)
+      setActiveAlert(null)
+      message.success(`Deployment created at ${newDeployPath}`)
+    }
+  }
+
   function handleFolderSelect({ path, chart }) {
     setSelectedFolder(path)
     setSelectedChart(chart)
@@ -146,9 +176,10 @@ export default function AlertUserView() {
     setPreviewOpen(true)
   }
 
-  const sectionHeader = (text) => (
-    <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af', borderTop: '1px solid #f0f0f0' }}>
+  const sectionHeader = (text, action) => (
+    <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af', borderTop: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       {text}
+      {action}
     </div>
   )
 
@@ -159,7 +190,7 @@ export default function AlertUserView() {
   return (
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
       <div style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'auto', background: '#fff', position: 'relative' }}>
-        {sectionHeader('Deployments')}
+        {sectionHeader('Deployments', <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleNewDeployOpen} />)}
         <DeploymentTree
           folderTree={folderTree}
           selectedFolder={selectedFolder}
@@ -269,6 +300,22 @@ export default function AlertUserView() {
             } />
         )}
       </div>
+      <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}
+        onOk={handleNewDeployCreate} okText="Create"
+        okButtonProps={{ disabled: !newDeployPath || !newDeployChart }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+          <div>
+            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Folder Path</Text>
+            <Input placeholder="deployments/my-app/production" value={newDeployPath}
+              onChange={e => setNewDeployPath(e.target.value)} />
+          </div>
+          <div>
+            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Chart</Text>
+            <Select style={{ width: '100%' }} value={newDeployChart} onChange={setNewDeployChart}
+              options={availableCharts.map(c => ({ value: c.name, label: c.name }))} />
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

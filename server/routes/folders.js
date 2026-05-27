@@ -67,6 +67,17 @@ async function annotateDeployments(nodes, gitopsDir) {
   }
 }
 
+function pruneNonDeployments(nodes) {
+  return nodes.filter(node => {
+    if (node.isDeployment) return true
+    if (node.children && node.children.length > 0) {
+      node.children = pruneNonDeployments(node.children)
+      return node.children.length > 0
+    }
+    return false
+  })
+}
+
 export default function foldersRouter() {
   const router = express.Router()
 
@@ -74,7 +85,7 @@ export default function foldersRouter() {
     try {
       const tree = await readFolderTree(req.gitopsDir)
       await annotateDeployments(tree, req.gitopsDir)
-      res.json(tree)
+      res.json(pruneNonDeployments(tree))
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

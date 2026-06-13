@@ -125,7 +125,7 @@ export default function AlertUserView() {
   async function handleNewDeployOpen() {
     const charts = await listCharts()
     setAvailableCharts(charts)
-    setNewDeployPath('')
+    setNewDeployPath(selectedFolder ? selectedFolder + '/' : '')
     setNewDeployChart(charts.length > 0 ? charts[0].name : null)
     setNewDeployOpen(true)
   }

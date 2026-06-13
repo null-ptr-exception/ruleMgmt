@@ -25,7 +25,19 @@ describe('GET /api/v2/folders/tree', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('returns folder tree with path field', async () => {
+  it('returns immediate children of root', async () => {
+    fs.mkdirSync(path.join(tmpDir, 'deployments', 'app1'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'charts'), { recursive: true })
+
+    const res = await request(app).get('/api/v2/folders/tree')
+    expect(res.status).toBe(200)
+    const names = res.body.map(f => f.name)
+    expect(names).toContain('deployments')
+    expect(names).toContain('charts')
+    expect(res.body.find(f => f.name === 'deployments').isLeaf).toBe(false)
+  })
+
+  it('returns children of a specific path', async () => {
     const dir = path.join(tmpDir, 'deployments', 'app1')
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
@@ -33,16 +45,18 @@ describe('GET /api/v2/folders/tree', () => {
       dependencies: [{ name: 'my-chart', version: '0.1.0', repository: 'file://../../charts/my-chart' }]
     }))
     fs.writeFileSync(path.join(dir, 'values.yaml'), 'foo: bar\n')
-    const res = await request(app).get('/api/v2/folders/tree')
+
+    const res = await request(app).get('/api/v2/folders/tree?path=deployments')
     expect(res.status).toBe(200)
-    const depNode = res.body.find(f => f.name === 'deployments')
-    expect(depNode.path).toBe('deployments')
-    expect(depNode.isDeployment).toBe(false)
-    expect(depNode.children[0].path).toBe('deployments/app1')
+    expect(res.body).toHaveLength(1)
+    expect(res.body[0].name).toBe('app1')
+    expect(res.body[0].path).toBe('deployments/app1')
+    expect(res.body[0].isDeployment).toBe(true)
+    expect(res.body[0].chart).toBe('my-chart')
   })
 
-  it('marks folders with Chart.yaml + values.yaml as deployments', async () => {
-    const dir = path.join(tmpDir, 'deployments', 'prod')
+  it('marks folders with Chart.yaml + dependencies + values.yaml as deployments', async () => {
+    const dir = path.join(tmpDir, 'prod')
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
       apiVersion: 'v2', name: 'prod', version: '0.1.0',
@@ -54,50 +68,40 @@ describe('GET /api/v2/folders/tree', () => {
     }))
 
     const res = await request(app).get('/api/v2/folders/tree')
-    const depNode = res.body.find(f => f.name === 'deployments')
-    const prod = depNode.children.find(f => f.name === 'prod')
+    const prod = res.body.find(f => f.name === 'prod')
     expect(prod.isDeployment).toBe(true)
     expect(prod.chart).toBe('mariadb-alerts')
     expect(prod.alertCount).toBe(3)
   })
 
-  it('prunes folders without deployments', async () => {
+  it('does not prune non-deployment folders', async () => {
     fs.mkdirSync(path.join(tmpDir, 'plain-folder'), { recursive: true })
-    fs.mkdirSync(path.join(tmpDir, 'charts', 'my-chart', 'templates'), { recursive: true })
     const res = await request(app).get('/api/v2/folders/tree')
-    expect(res.body).toEqual([])
+    expect(res.body.map(f => f.name)).toContain('plain-folder')
   })
 
-  it('prunes folders with Chart.yaml but no values.yaml', async () => {
-    const dir = path.join(tmpDir, 'no-values')
-    fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
-      apiVersion: 'v2', name: 'test', version: '0.1.0',
-      dependencies: [{ name: 'some-chart', version: '0.1.0', repository: 'file://../../charts/some-chart' }]
-    }))
+  it('marks folders without Chart.yaml as non-deployments', async () => {
+    fs.mkdirSync(path.join(tmpDir, 'no-chart'), { recursive: true })
     const res = await request(app).get('/api/v2/folders/tree')
-    expect(res.body).toEqual([])
+    const node = res.body.find(f => f.name === 'no-chart')
+    expect(node.isDeployment).toBeUndefined()
   })
 
-  it('prunes folders with Chart.yaml but no dependencies', async () => {
+  it('marks folders with Chart.yaml but no dependencies as non-deployments', async () => {
     const dir = path.join(tmpDir, 'no-deps')
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({ apiVersion: 'v2', name: 'test', version: '0.1.0' }))
     fs.writeFileSync(path.join(dir, 'values.yaml'), 'foo: bar\n')
     const res = await request(app).get('/api/v2/folders/tree')
-    expect(res.body).toEqual([])
+    const node = res.body.find(f => f.name === 'no-deps')
+    expect(node.isDeployment).toBeUndefined()
   })
 
   it('excludes .git and node_modules', async () => {
     fs.mkdirSync(path.join(tmpDir, '.git', 'objects'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'node_modules', 'foo'), { recursive: true })
-    const dir = path.join(tmpDir, 'real-folder')
-    fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
-      apiVersion: 'v2', name: 'real', version: '0.1.0',
-      dependencies: [{ name: 'chart', version: '0.1.0', repository: 'file://../charts/chart' }]
-    }))
-    fs.writeFileSync(path.join(dir, 'values.yaml'), 'foo: bar\n')
+    fs.mkdirSync(path.join(tmpDir, 'real-folder'), { recursive: true })
+
     const res = await request(app).get('/api/v2/folders/tree')
     const names = res.body.map(f => f.name)
     expect(names).not.toContain('.git')
@@ -105,8 +109,28 @@ describe('GET /api/v2/folders/tree', () => {
     expect(names).toContain('real-folder')
   })
 
-  it('handles nested deployment structure', async () => {
-    const dir = path.join(tmpDir, 'deployments', 'mariadb-1', 'site-1', 'production')
+  it('sets isLeaf correctly', async () => {
+    fs.mkdirSync(path.join(tmpDir, 'parent', 'child'), { recursive: true })
+    fs.mkdirSync(path.join(tmpDir, 'leaf'), { recursive: true })
+
+    const res = await request(app).get('/api/v2/folders/tree')
+    expect(res.body.find(f => f.name === 'parent').isLeaf).toBe(false)
+    expect(res.body.find(f => f.name === 'leaf').isLeaf).toBe(true)
+  })
+
+  it('rejects path traversal', async () => {
+    const res = await request(app).get('/api/v2/folders/tree?path=../etc')
+    expect(res.status).toBe(400)
+  })
+
+  it('returns empty array for non-existent path', async () => {
+    const res = await request(app).get('/api/v2/folders/tree?path=does-not-exist')
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual([])
+  })
+
+  it('supports nested path queries', async () => {
+    const dir = path.join(tmpDir, 'deployments', 'mariadb-1', 'production')
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
       apiVersion: 'v2', name: 'production', version: '0.1.0',
@@ -114,15 +138,14 @@ describe('GET /api/v2/folders/tree', () => {
     }))
     fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump({ latency: [{ threshold: 100 }] }))
 
-    const res = await request(app).get('/api/v2/folders/tree')
-    const dep = res.body.find(f => f.name === 'deployments')
-    const m1 = dep.children.find(f => f.name === 'mariadb-1')
-    expect(m1.isDeployment).toBe(false)
-    const s1 = m1.children.find(f => f.name === 'site-1')
-    expect(s1.isDeployment).toBe(false)
-    const prod = s1.children.find(f => f.name === 'production')
-    expect(prod.isDeployment).toBe(true)
-    expect(prod.chart).toBe('mariadb-alerts')
-    expect(prod.path).toBe('deployments/mariadb-1/site-1/production')
+    const res1 = await request(app).get('/api/v2/folders/tree?path=deployments')
+    expect(res1.body[0].name).toBe('mariadb-1')
+    expect(res1.body[0].path).toBe('deployments/mariadb-1')
+
+    const res2 = await request(app).get('/api/v2/folders/tree?path=deployments/mariadb-1')
+    expect(res2.body[0].name).toBe('production')
+    expect(res2.body[0].path).toBe('deployments/mariadb-1/production')
+    expect(res2.body[0].isDeployment).toBe(true)
+    expect(res2.body[0].chart).toBe('mariadb-alerts')
   })
 })

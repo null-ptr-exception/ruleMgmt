@@ -10,7 +10,6 @@ import {
   getChartInfo,
   getDeployment, saveDeployment,
   renderDeployment,
-  getFolderTree,
   listCharts,
   initDeploymentFolder
 } from '../utils/chartApi'
@@ -18,11 +17,11 @@ import {
 const { Title, Text } = Typography
 
 export default function AlertUserView() {
-  const [folderTree, setFolderTree] = useState([])
   const [selectedFolder, setSelectedFolder] = useSessionState('alerts:folder', null)
+  const [selectedChart, setSelectedChart] = useSessionState('alerts:chart', null)
   const [activeAlert, setActiveAlert] = useSessionState('alerts:alert', null)
+  const [treeRefreshKey, setTreeRefreshKey] = useState(0)
 
-  const [selectedChart, setSelectedChart] = useState(null)
   const [schema, setSchema] = useState(null)
   const [alertNames, setAlertNames] = useState([])
 
@@ -66,20 +65,6 @@ export default function AlertUserView() {
     document.addEventListener('touchmove', onMove, { passive: false })
     document.addEventListener('touchend', onUp)
   }
-
-  useEffect(() => {
-    getFolderTree().then(tree => {
-      setFolderTree(tree)
-      if (selectedFolder) {
-        const chart = findChartInTree(tree, selectedFolder)
-        if (chart) {
-          setSelectedChart(chart)
-        } else {
-          setSelectedFolder(null)
-        }
-      }
-    })
-  }, [])
 
   useEffect(() => {
     if (!selectedChart) {
@@ -135,12 +120,11 @@ export default function AlertUserView() {
     const result = await initDeploymentFolder(newDeployPath, newDeployChart)
     setNewDeployOpen(false)
     if (result.status === 'created' || result.status === 'existing') {
-      const tree = await getFolderTree()
-      setFolderTree(tree)
       const chart = result.chart || newDeployChart
       setSelectedFolder(newDeployPath)
       setSelectedChart(chart)
       setActiveAlert(null)
+      setTreeRefreshKey(k => k + 1)
       message.success(`Deployment created at ${newDeployPath}`)
     }
   }
@@ -192,9 +176,9 @@ export default function AlertUserView() {
       <div style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'auto', background: '#fff', position: 'relative' }}>
         {sectionHeader('Deployments', <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleNewDeployOpen} />)}
         <DeploymentTree
-          folderTree={folderTree}
           selectedFolder={selectedFolder}
           onSelect={handleFolderSelect}
+          refreshKey={treeRefreshKey}
         />
         {selectedChart && (
           <>
@@ -318,15 +302,4 @@ export default function AlertUserView() {
       </Modal>
     </div>
   )
-}
-
-function findChartInTree(nodes, targetPath) {
-  for (const node of nodes) {
-    if (node.path === targetPath && node.isDeployment) return node.chart
-    if (node.children) {
-      const found = findChartInTree(node.children, targetPath)
-      if (found) return found
-    }
-  }
-  return null
 }

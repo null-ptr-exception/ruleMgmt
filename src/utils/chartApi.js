@@ -176,8 +176,9 @@ export async function createFolder(folderPath) {
   return res.json()
 }
 
-export async function getFolderTree() {
-  const res = await apiFetch(`${BASE}/folders/tree`)
+export async function getFolderTree(parentPath = '') {
+  const query = parentPath ? `?path=${encodeURIComponent(parentPath)}` : ''
+  const res = await apiFetch(`${BASE}/folders/tree${query}`)
   if (!res.ok) return []
   return res.json()
 }

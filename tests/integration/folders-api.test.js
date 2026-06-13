@@ -25,7 +25,7 @@ describe('folders API', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('GET / returns folder tree', async () => {
+  it('GET / returns immediate children', async () => {
     fs.mkdirSync(path.join(tmpDir, 'charts', 'my-alerts'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'deployments', 'prod'), { recursive: true })
 
@@ -37,8 +37,11 @@ describe('folders API', () => {
     expect(names).toContain('deployments')
 
     const chartsNode = res.body.find(f => f.name === 'charts')
-    expect(chartsNode.children).toHaveLength(1)
-    expect(chartsNode.children[0].name).toBe('my-alerts')
+    expect(chartsNode.isLeaf).toBe(false)
+
+    const res2 = await request(app).get('/api/v2/folders?path=charts')
+    expect(res2.body).toHaveLength(1)
+    expect(res2.body[0].name).toBe('my-alerts')
   })
 
   it('GET / excludes .git and node_modules', async () => {

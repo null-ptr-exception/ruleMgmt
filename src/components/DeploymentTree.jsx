@@ -1,69 +1,103 @@
-import { useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Tree, Tag } from 'antd'
 import { FolderOutlined } from '@ant-design/icons'
+import { getFolderTree } from '../utils/chartApi'
 
-function buildTreeData(nodes) {
-  return nodes.map(node => {
-    const titleContent = (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        <span>{node.name}</span>
-        {node.isDeployment && (
-          <Tag
-            color="blue"
-            style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}
-          >
-            {node.chart}
-          </Tag>
-        )}
-      </span>
-    )
+function toTreeNode(node) {
+  const titleContent = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span>{node.name}</span>
+      {node.isDeployment && (
+        <Tag
+          color="blue"
+          style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}
+        >
+          {node.chart}
+        </Tag>
+      )}
+    </span>
+  )
 
-    return {
-      key: node.path,
-      title: titleContent,
-      icon: <FolderOutlined />,
-      children: node.children?.length ? buildTreeData(node.children) : undefined,
-      isLeaf: !node.children?.length,
-    }
-  })
-}
-
-function findExpandKeys(targetPath) {
-  const parts = targetPath.split('/')
-  const keys = []
-  for (let i = 1; i < parts.length; i++) {
-    keys.push(parts.slice(0, i).join('/'))
+  return {
+    key: node.path,
+    title: titleContent,
+    icon: <FolderOutlined />,
+    isLeaf: node.isLeaf,
+    isDeployment: node.isDeployment,
+    chart: node.chart,
   }
-  return keys
 }
 
-export default function DeploymentTree({ folderTree, selectedFolder, onSelect }) {
-  const treeData = useMemo(() => buildTreeData(folderTree), [folderTree])
+export default function DeploymentTree({ selectedFolder, onSelect, refreshKey }) {
+  const [treeData, setTreeData] = useState([])
+  const [expandedKeys, setExpandedKeys] = useState([])
 
-  const defaultExpandedKeys = useMemo(() => {
-    if (!selectedFolder) return []
-    return findExpandKeys(selectedFolder)
-  }, [folderTree, selectedFolder])
+  const loadChildren = useCallback(async (parentPath = '') => {
+    const children = await getFolderTree(parentPath)
+    return children.map(toTreeNode)
+  }, [])
 
-  const nodeMap = useMemo(() => {
-    const map = {}
-    function walk(nodes) {
-      for (const n of nodes) {
-        if (n.isDeployment) map[n.path] = n
-        if (n.children) walk(n.children)
+  // Load root on mount and when refreshKey changes
+  useEffect(() => {
+    loadChildren().then(setTreeData)
+  }, [loadChildren, refreshKey])
+
+  // When selectedFolder is set (e.g. from session restore), expand its ancestors
+  useEffect(() => {
+    if (!selectedFolder) return
+    const parts = selectedFolder.split('/')
+    const paths = parts.map((_, i) => parts.slice(0, i + 1).join('/'))
+    // Load each ancestor level to build the path
+    async function expandPath() {
+      let currentData = await loadChildren()
+      const keys = []
+      for (let i = 0; i < paths.length - 1; i++) {
+        keys.push(paths[i])
+        const children = await loadChildren(paths[i])
+        currentData = insertChildren(currentData, paths[i], children)
       }
+      setTreeData(currentData)
+      setExpandedKeys(keys)
     }
-    walk(folderTree)
-    return map
-  }, [folderTree])
+    expandPath()
+  }, [selectedFolder, loadChildren, refreshKey])
+
+  function insertChildren(nodes, parentKey, children) {
+    return nodes.map(node => {
+      if (node.key === parentKey) {
+        return { ...node, children }
+      }
+      if (node.children) {
+        return { ...node, children: insertChildren(node.children, parentKey, children) }
+      }
+      return node
+    })
+  }
+
+  async function onLoadData(node) {
+    if (node.children) return
+    const children = await loadChildren(node.key)
+    setTreeData(prev => insertChildren(prev, node.key, children))
+  }
 
   function handleSelect(selectedKeys) {
     if (selectedKeys.length === 0) return
     const key = selectedKeys[0]
-    const node = nodeMap[key]
-    if (node) {
-      onSelect({ path: node.path, chart: node.chart })
+    const node = findNode(treeData, key)
+    if (node?.isDeployment) {
+      onSelect({ path: node.key, chart: node.chart })
     }
+  }
+
+  function findNode(nodes, key) {
+    for (const n of nodes) {
+      if (n.key === key) return n
+      if (n.children) {
+        const found = findNode(n.children, key)
+        if (found) return found
+      }
+    }
+    return null
   }
 
   return (
@@ -72,8 +106,10 @@ export default function DeploymentTree({ folderTree, selectedFolder, onSelect })
         showIcon
         treeData={treeData}
         selectedKeys={selectedFolder ? [selectedFolder] : []}
-        defaultExpandedKeys={defaultExpandedKeys}
+        expandedKeys={expandedKeys}
+        onExpand={setExpandedKeys}
         onSelect={handleSelect}
+        loadData={onLoadData}
         style={{ fontSize: 13 }}
       />
     </div>

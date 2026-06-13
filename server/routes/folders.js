@@ -6,8 +6,12 @@ import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
 
-async function readFolderTree(dir, depth = 0, parentPath = '') {
-  if (depth > 5) return []
+function isExcluded(name) {
+  return EXCLUDED_DIRS.has(name) || name.startsWith('.')
+}
+
+async function listChildren(baseDir, parentPath) {
+  const dir = parentPath ? path.join(baseDir, parentPath) : baseDir
   let entries
   try {
     entries = await fs.readdir(dir, { withFileTypes: true })
@@ -17,37 +21,29 @@ async function readFolderTree(dir, depth = 0, parentPath = '') {
 
   const folders = []
   for (const e of entries) {
-    if (!e.isDirectory() || EXCLUDED_DIRS.has(e.name) || e.name.startsWith('.')) continue
+    if (!e.isDirectory() || isExcluded(e.name)) continue
     const nodePath = parentPath ? `${parentPath}/${e.name}` : e.name
-    const children = await readFolderTree(path.join(dir, e.name), depth + 1, nodePath)
-    folders.push({ name: e.name, path: nodePath, children })
-  }
-  return folders.sort((a, b) => a.name.localeCompare(b.name))
-}
+    const absPath = path.join(baseDir, nodePath)
 
-async function annotateDeployments(nodes, gitopsDir) {
-  for (const node of nodes) {
-    const absPath = path.join(gitopsDir, node.path)
+    const node = { name: e.name, path: nodePath }
+
+    // Check if deployment (Chart.yaml + dependencies + values.yaml)
     let chartData = null
-    let hasValues = false
-
     try {
       const chartYaml = await fs.readFile(path.join(absPath, 'Chart.yaml'), 'utf-8')
       chartData = yaml.load(chartYaml) || {}
     } catch { /* no Chart.yaml */ }
 
+    let hasValues = false
     try {
       await fs.access(path.join(absPath, 'values.yaml'))
       hasValues = true
     } catch { /* no values.yaml */ }
 
-    const hasDependencies = chartData && Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
-
-    if (chartData && hasDependencies && hasValues) {
+    const hasDeps = chartData && Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
+    if (chartData && hasDeps && hasValues) {
       node.isDeployment = true
       node.chart = chartData.dependencies[0].name
-
-      // Count total alert entries across all top-level arrays in values.yaml
       try {
         const valuesYaml = await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')
         const values = yaml.load(valuesYaml) || {}
@@ -57,25 +53,19 @@ async function annotateDeployments(nodes, gitopsDir) {
         }
         node.alertCount = count
       } catch { node.alertCount = 0 }
-    } else {
-      node.isDeployment = false
     }
 
-    if (node.children && node.children.length > 0) {
-      await annotateDeployments(node.children, gitopsDir)
+    // Check if has subdirectories
+    try {
+      const subEntries = await fs.readdir(absPath, { withFileTypes: true })
+      node.isLeaf = !subEntries.some(s => s.isDirectory() && !isExcluded(s.name))
+    } catch {
+      node.isLeaf = true
     }
+
+    folders.push(node)
   }
-}
-
-function pruneNonDeployments(nodes) {
-  return nodes.filter(node => {
-    if (node.isDeployment) return true
-    if (node.children && node.children.length > 0) {
-      node.children = pruneNonDeployments(node.children)
-      return node.children.length > 0
-    }
-    return false
-  })
+  return folders.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export default function foldersRouter() {
@@ -83,9 +73,12 @@ export default function foldersRouter() {
 
   router.get('/tree', async (req, res) => {
     try {
-      const tree = await readFolderTree(req.gitopsDir)
-      await annotateDeployments(tree, req.gitopsDir)
-      res.json(pruneNonDeployments(tree))
+      const parentPath = req.query.path || ''
+      if (parentPath.includes('..')) {
+        return res.status(400).json({ error: 'Invalid path' })
+      }
+      const children = await listChildren(req.gitopsDir, parentPath)
+      res.json(children)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -93,8 +86,12 @@ export default function foldersRouter() {
 
   router.get('/', async (req, res) => {
     try {
-      const tree = await readFolderTree(req.gitopsDir)
-      res.json(tree)
+      const parentPath = req.query.path || ''
+      if (parentPath.includes('..')) {
+        return res.status(400).json({ error: 'Invalid path' })
+      }
+      const children = await listChildren(req.gitopsDir, parentPath)
+      res.json(children)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -128,7 +125,6 @@ export default function foldersRouter() {
     try {
       await fs.mkdir(deployDir, { recursive: true })
 
-      // Check if folder already has a Chart.yaml with an alert-template dependency
       try {
         const existingChartYaml = await fs.readFile(path.join(deployDir, 'Chart.yaml'), 'utf-8')
         const existing = yaml.load(existingChartYaml) || {}
@@ -143,14 +139,10 @@ export default function foldersRouter() {
         }
       } catch { /* no existing Chart.yaml */ }
 
-      // Read chart template info
       const chartDir = path.join(chartsDir, chart)
       const chartMeta = yaml.load(await fs.readFile(path.join(chartDir, 'Chart.yaml'), 'utf-8'))
-
-      // Compute relative path from deploy folder to chart folder
       const relPath = path.relative(deployDir, chartDir)
 
-      // Scaffold Chart.yaml
       const deployChart = {
         apiVersion: 'v2',
         name: path.basename(folder),
@@ -163,7 +155,6 @@ export default function foldersRouter() {
       }
       await fs.writeFile(path.join(deployDir, 'Chart.yaml'), yaml.dump(deployChart, { lineWidth: -1 }), 'utf-8')
 
-      // Scaffold values.yaml from chart defaults
       let defaultValues = ''
       try {
         defaultValues = await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8')

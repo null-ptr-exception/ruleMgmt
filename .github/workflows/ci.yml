@@ -48,8 +48,9 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     needs: e2e
+    if: github.ref == 'refs/heads/main'
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -62,34 +63,58 @@ jobs:
         run: echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
 
       - name: Check if version already exists in ghcr
-        if: github.ref == 'refs/heads/main'
+        id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${{ steps.version.outputs.version }}
           if gh api "/orgs/${{ github.repository_owner }}/packages/container/${GITHUB_REPOSITORY#*/}/versions" \
                --jq ".[].metadata.container.tags[]" 2>/dev/null | grep -qx "$VERSION"; then
-            echo "::error::Version $VERSION already exists in ghcr. Bump the version in package.json before merging."
-            exit 1
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION already exists — skipping push and release"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Version $VERSION is new — will push and release"
           fi
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
+      - name: Build image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Log in to ghcr
-        if: github.ref == 'refs/heads/main'
+        if: steps.check.outputs.exists == 'false'
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: .
-          push: ${{ github.ref == 'refs/heads/main' }}
-          tags: |
-            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
-            ${{ env.IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Push image
+        if: steps.check.outputs.exists == 'false'
+        run: |
+          docker push ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+          docker push ${{ env.IMAGE }}:latest
+
+      - name: Create git tag and GitHub release
+        if: steps.check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=v${{ steps.version.outputs.version }}
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="$VERSION" --jq .body)
+          printf '%s\n\n## Docker Image\n\n```\ndocker pull %s:%s\n```\n' \
+            "$NOTES" "${{ env.IMAGE }}" "${{ steps.version.outputs.version }}" > /tmp/release-notes.md
+          gh release create "$VERSION" -F /tmp/release-notes.md

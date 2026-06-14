@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
-import { Button, Input, Tag, Modal, Typography, Space } from 'antd'
+import { Button, Input, Tag, Modal, Typography, Space, message } from 'antd'
 import {
   CheckOutlined,
   UndoOutlined,
@@ -25,9 +25,15 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
         body: JSON.stringify({ message: commitMessage }),
       })
       if (res.ok) {
+        message.success('Changes committed')
         setCommitMessage('')
         onRefresh()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        message.error(data.error || 'Commit failed')
       }
+    } catch {
+      message.error('Commit failed: network error')
     } finally {
       setLoading(null)
     }
@@ -41,8 +47,18 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
       okText: 'Discard',
       okType: 'danger',
       onOk: async () => {
-        await apiFetch('/api/v2/git/discard', { method: 'POST' })
-        onRefresh()
+        try {
+          const res = await apiFetch('/api/v2/git/discard', { method: 'POST' })
+          if (res.ok) {
+            message.success('Changes discarded')
+            onRefresh()
+          } else {
+            const data = await res.json().catch(() => ({}))
+            message.error(data.error || 'Discard failed')
+          }
+        } catch {
+          message.error('Discard failed: network error')
+        }
       },
     })
   }

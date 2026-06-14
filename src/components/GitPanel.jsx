@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
-import { Button, Typography, Space, Modal, Tooltip } from 'antd'
+import { Button, Typography, Space, Modal, Tooltip, message } from 'antd'
 import {
   BranchesOutlined,
   CloudUploadOutlined,
@@ -51,7 +51,15 @@ export default function GitPanel({ gitStatus, onRefresh }) {
     setLoading('push')
     try {
       const res = await apiFetch('/api/v2/git/push', { method: 'POST' })
-      if (res.ok) onRefresh()
+      if (res.ok) {
+        message.success('Pushed successfully')
+        onRefresh()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        message.error(data.error || 'Push failed')
+      }
+    } catch {
+      message.error('Push failed: network error')
     } finally {
       setLoading(null)
     }
@@ -61,7 +69,15 @@ export default function GitPanel({ gitStatus, onRefresh }) {
     setLoading('pull')
     try {
       const res = await apiFetch('/api/v2/git/pull', { method: 'POST' })
-      if (res.ok) onRefresh()
+      if (res.ok) {
+        message.success('Pulled successfully')
+        onRefresh()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        message.error(data.error || 'Pull failed')
+      }
+    } catch {
+      message.error('Pull failed: network error')
     } finally {
       setLoading(null)
     }
@@ -73,8 +89,18 @@ export default function GitPanel({ gitStatus, onRefresh }) {
       icon: <SyncOutlined />,
       content: 'This will reset your workspace to the latest main branch.',
       onOk: async () => {
-        await apiFetch('/api/v2/git/sync', { method: 'POST' })
-        onRefresh()
+        try {
+          const res = await apiFetch('/api/v2/git/sync', { method: 'POST' })
+          if (res.ok) {
+            message.success('Synced to latest main')
+            onRefresh()
+          } else {
+            const data = await res.json().catch(() => ({}))
+            message.error(data.error || 'Sync failed')
+          }
+        } catch {
+          message.error('Sync failed: network error')
+        }
       },
     })
   }

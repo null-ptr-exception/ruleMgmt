@@ -29,5 +29,8 @@ test('Alerts is the default page', async ({ page }) => {
 
 test('sample data is visible in deployment tree', async ({ page }) => {
   await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10_000 })
+  // Tree is lazy-loaded — click the switcher arrow to expand deployments
+  const deploymentsRow = page.locator('.ant-tree-treenode', { has: page.locator('.ant-tree-title:has-text("deployments")') })
+  await deploymentsRow.locator('.ant-tree-switcher').click()
   await expect(page.getByText('mariadb-1')).toBeVisible({ timeout: 10_000 })
 })

@@ -5,6 +5,8 @@ test-results/
 playwright-report/
 gitops/
 k8s/dev-values.yaml
+k8s/gitea-oauth-values.yaml
+.env
 .claude/
 docs/superpowers/
 .superpowers/

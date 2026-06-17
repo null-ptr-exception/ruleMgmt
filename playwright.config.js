@@ -8,6 +8,17 @@ export default defineConfig({
   use: {
     headless: true,
   },
+  ...(isFullstack
+    ? { globalSetup: './tests/e2e-fullstack/global-setup.js' }
+    : {
+        webServer: {
+          command: 'node server.js',
+          port: 3111,
+          env: { PORT: '3111' },
+          reuseExistingServer: !process.env.CI,
+          timeout: 10000,
+        },
+      }),
   projects: [
     {
       name: 'unit',
@@ -19,20 +30,11 @@ export default defineConfig({
     {
       name: 'fullstack',
       testDir: 'tests/e2e-fullstack',
-      globalSetup: './tests/e2e-fullstack/global-setup.js',
       use: {
         storageState: 'tests/e2e-fullstack/.auth/session.json',
+        ignoreHTTPSErrors: true,
       },
       timeout: 120_000,
     },
   ],
-  ...(!isFullstack && {
-    webServer: {
-      command: 'node server.js',
-      port: 3111,
-      env: { PORT: '3111' },
-      reuseExistingServer: !process.env.CI,
-      timeout: 10000,
-    },
-  }),
 })

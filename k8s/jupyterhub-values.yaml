@@ -119,7 +119,7 @@ singleuser:
             rm -rf /data/gitops/*
             rm -rf /data/gitops/.[!.]*
           fi
-          REPO_URL="https://oauth2:$GITLAB_TOKEN@$GITLAB_HOST/$GITLAB_PROJECT.git"
+          REPO_URL="http://oauth2:$GITLAB_TOKEN@$GITLAB_HOST/$GITLAB_PROJECT.git"
           USER_BRANCH="rulemgmt/$JUPYTERHUB_USER"
           if git ls-remote --heads "$REPO_URL" "$USER_BRANCH" 2>/dev/null | grep -q .; then
             echo "Cloning existing branch: $USER_BRANCH"

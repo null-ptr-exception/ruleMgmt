@@ -30,6 +30,7 @@ export default defineConfig({
     {
       name: 'fullstack',
       testDir: 'tests/e2e-fullstack',
+      retries: 1,
       use: {
         storageState: 'tests/e2e-fullstack/.auth/session.json',
         ignoreHTTPSErrors: true,

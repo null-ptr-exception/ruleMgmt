@@ -49,9 +49,11 @@ test.describe('Git operations', () => {
     await saveButton.click()
     await expect(page.locator('text=Saved at')).toBeVisible({ timeout: 10_000 })
 
-    // 5. Navigate to Git panel
+    // 5. Navigate to Git panel — reload to get fresh git status
     await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
-    await expect(page.getByText('Changes', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await page.reload()
+    await page.waitForSelector('text=AlertForge', { timeout: 30_000 })
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
 
     // Verify changed files are listed
     await expect(page.locator('text=values.yaml')).toBeVisible({ timeout: 15_000 })

@@ -1,0 +1,45 @@
+gitea:
+  admin:
+    username: gitea_admin
+    password: localdev123
+    email: admin@local.domain
+  config:
+    server:
+      ROOT_URL: http://gitea-http:3000
+    service:
+      DISABLE_REGISTRATION: true
+    database:
+      DB_TYPE: sqlite3
+    session:
+      PROVIDER: memory
+    cache:
+      ADAPTER: memory
+    queue:
+      TYPE: level
+    oauth2:
+      ENABLED: true
+
+strategy:
+  type: Recreate
+
+service:
+  http:
+    type: NodePort
+    port: 3000
+    nodePort: 30081
+    clusterIP: ""
+  ssh:
+    type: ClusterIP
+
+persistence:
+  enabled: true
+  size: 1Gi
+
+postgresql-ha:
+  enabled: false
+postgresql:
+  enabled: false
+valkey-cluster:
+  enabled: false
+valkey:
+  enabled: false

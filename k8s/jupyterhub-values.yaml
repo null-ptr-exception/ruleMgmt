@@ -1,15 +1,17 @@
 hub:
   config:
     JupyterHub:
-      authenticator_class: gitlab
+      authenticator_class: oauthenticator.generic.GenericOAuthenticator
       template_vars:
         hub_title: "AlertForge"
-    GitLabOAuthenticator:
+    GenericOAuthenticator:
+      userdata_url: http://gitea-http:3000/api/v1/user
+      username_claim: login
       enable_auth_state: true
       scope:
-        - read_user
-        - read_repository
-        - write_repository
+        - read:user
+        - read:repository
+        - write:repository
     Authenticator:
       enable_auth_state: true
       allow_all: true

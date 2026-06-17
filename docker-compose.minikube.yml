@@ -7,6 +7,14 @@ services:
     networks:
       - minikube
     restart: unless-stopped
+  gitea-proxy:
+    image: alpine/socat
+    command: TCP-LISTEN:12016,fork,reuseaddr TCP:192.168.58.2:30081
+    ports:
+      - "127.0.0.1:12016:12016"
+    networks:
+      - minikube
+    restart: unless-stopped
 
 networks:
   minikube:

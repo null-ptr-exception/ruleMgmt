@@ -11,3 +11,4 @@ k8s/gitea-oauth-values.yaml
 docs/superpowers/
 .superpowers/
 coverage/
+tests/e2e-fullstack/.auth/

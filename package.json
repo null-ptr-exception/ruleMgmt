@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=unit",
+    "test:e2e:fullstack": "playwright test --project=fullstack",
     "lint": "eslint 'src/**/*.{js,jsx}' 'server.js' 'server/**/*.js' --no-error-on-unmatched-pattern"
   },
   "dependencies": {

@@ -65,6 +65,15 @@ export default function deploymentsRouter() {
     }
   })
 
+  async function getDepName(dir) {
+    try {
+      const chartYaml = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8'))
+      return chartYaml?.dependencies?.[0]?.name || null
+    } catch {
+      return null
+    }
+  }
+
   router.get('/:chart/:deployment', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
@@ -77,7 +86,12 @@ export default function deploymentsRouter() {
       let file = legacyFile
       try { await fs.access(legacyFile) } catch { file = directFile }
       const content = await fs.readFile(file, 'utf-8')
-      res.json({ content, parsed: yaml.load(content) })
+      let parsed = yaml.load(content) || {}
+      const depName = await getDepName(dir)
+      if (depName && parsed[depName] && typeof parsed[depName] === 'object') {
+        parsed = parsed[depName]
+      }
+      res.json({ content, parsed })
     } catch {
       res.status(404).json({ error: 'Not found' })
     }
@@ -95,8 +109,14 @@ export default function deploymentsRouter() {
       await fs.mkdir(dir, { recursive: true })
       let file = legacyFile
       try { await fs.access(directFile); file = directFile } catch { /* use legacy */ }
-      const content = typeof req.body.values === 'string' ? req.body.values : yaml.dump(req.body.values, { lineWidth: -1 })
-      await fs.writeFile(file, content, 'utf-8')
+      let values = req.body.values
+      if (typeof values !== 'string') {
+        const depName = await getDepName(dir)
+        values = depName
+          ? yaml.dump({ [depName]: values }, { lineWidth: -1 })
+          : yaml.dump(values, { lineWidth: -1 })
+      }
+      await fs.writeFile(file, values, 'utf-8')
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

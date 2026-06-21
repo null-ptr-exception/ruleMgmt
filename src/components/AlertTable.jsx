@@ -16,7 +16,7 @@ function matchesFilter(row, varName, filter) {
   if (filter.isNumber) {
     const num = Number(cellVal)
     const fnum = Number(filter.value)
-    if (isNaN(num) || isNaN(fnum)) return true
+    if (isNaN(num) || isNaN(fnum)) return false
     switch (filter.op) {
       case '>=': return num >= fnum
       case '<=': return num <= fnum

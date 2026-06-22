@@ -2,6 +2,7 @@ import express from 'express'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
+import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -32,16 +33,14 @@ export default function deploymentsRouter() {
       await fs.mkdir(dir, { recursive: true })
       const files = await fs.readdir(dir)
       const deployments = []
+      const depName = await getDepName(dir)
 
       if (files.includes('values.yaml')) {
         const folderName = path.basename(dir)
         let alertCount = 0
         try {
           const raw = await fs.readFile(path.join(dir, 'values.yaml'), 'utf-8')
-          const parsed = yaml.load(raw) || {}
-          for (const val of Object.values(parsed)) {
-            if (Array.isArray(val)) alertCount += val.length
-          }
+          alertCount = countAlerts(yaml.load(raw) || {}, depName)
         } catch { /* skip unreadable */ }
         deployments.push({ name: folderName, file: 'values.yaml', alertCount })
       }
@@ -52,10 +51,7 @@ export default function deploymentsRouter() {
         let alertCount = 0
         try {
           const raw = await fs.readFile(path.join(dir, f), 'utf-8')
-          const parsed = yaml.load(raw) || {}
-          for (const val of Object.values(parsed)) {
-            if (Array.isArray(val)) alertCount += val.length
-          }
+          alertCount = countAlerts(yaml.load(raw) || {}, depName)
         } catch { /* skip unreadable */ }
         deployments.push({ name, file: f, alertCount })
       }
@@ -77,7 +73,8 @@ export default function deploymentsRouter() {
       let file = legacyFile
       try { await fs.access(legacyFile) } catch { file = directFile }
       const content = await fs.readFile(file, 'utf-8')
-      res.json({ content, parsed: yaml.load(content) })
+      const parsed = unwrapValues(yaml.load(content) || {}, await getDepName(dir))
+      res.json({ content, parsed })
     } catch {
       res.status(404).json({ error: 'Not found' })
     }
@@ -95,8 +92,12 @@ export default function deploymentsRouter() {
       await fs.mkdir(dir, { recursive: true })
       let file = legacyFile
       try { await fs.access(directFile); file = directFile } catch { /* use legacy */ }
-      const content = typeof req.body.values === 'string' ? req.body.values : yaml.dump(req.body.values, { lineWidth: -1 })
-      await fs.writeFile(file, content, 'utf-8')
+      let values = req.body.values
+      if (typeof values !== 'string') {
+        const depName = await getDepName(dir)
+        values = yaml.dump(wrapValues(values, depName), { lineWidth: -1 })
+      }
+      await fs.writeFile(file, values, 'utf-8')
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

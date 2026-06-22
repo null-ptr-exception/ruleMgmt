@@ -1,5 +1,7 @@
-import { describe, it, expect, beforeAll } from 'vitest'
-import { execSync } from 'child_process'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { execFileSync } from 'child_process'
+import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import YAML from 'yaml'
 
@@ -8,7 +10,7 @@ const chartDir = path.resolve('sample/charts/mariadb-alerts')
 let rendered
 
 beforeAll(() => {
-  const output = execSync(`helm template test-release ${chartDir}`, { encoding: 'utf8' })
+  const output = execFileSync('helm', ['template', 'test-release', chartDir], { encoding: 'utf8' })
   rendered = YAML.parseAllDocuments(output).map(doc => doc.toJSON())
 })
 
@@ -124,11 +126,25 @@ describe('rendered alert rules', () => {
 
 describe('helm template with custom values', () => {
   let customRendered
+  let workDir
 
   beforeAll(() => {
-    const valuesFile = path.resolve('sample/deployments/mariadb-1/production/values.yaml')
-    const output = execSync(`helm template prod-release ${chartDir} -f ${valuesFile}`, { encoding: 'utf8' })
+    // The deployment's values.yaml is subchart-wrapped, so it must be rendered
+    // through the parent deployment chart (which declares mariadb-alerts as a
+    // dependency) — exactly how render.js / Helm consume it in production.
+    // Copy sample/ to a temp dir so `helm dependency build` artifacts (charts/,
+    // Chart.lock) never land in the repo; the file:// dependency path resolves
+    // because the relative layout is preserved.
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chart-render-'))
+    fs.cpSync(path.resolve('sample'), path.join(workDir, 'sample'), { recursive: true })
+    const deployDir = path.join(workDir, 'sample/deployments/mariadb-1/production')
+    execFileSync('helm', ['dependency', 'build', deployDir], { encoding: 'utf8' })
+    const output = execFileSync('helm', ['template', 'prod-release', deployDir], { encoding: 'utf8' })
     customRendered = YAML.parseAllDocuments(output).map(doc => doc.toJSON())
+  })
+
+  afterAll(() => {
+    if (workDir) fs.rmSync(workDir, { recursive: true, force: true })
   })
 
   it('renders with production values', () => {

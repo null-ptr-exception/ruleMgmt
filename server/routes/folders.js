@@ -151,13 +151,14 @@ export default function foldersRouter() {
       }
       await fs.writeFile(path.join(deployDir, 'Chart.yaml'), yaml.dump(deployChart, { lineWidth: -1 }), 'utf-8')
 
-      let defaultValues = ''
+      let emptyValues = {}
       try {
-        defaultValues = await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8')
+        const defaults = yaml.load(await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8')) || {}
+        for (const [key, val] of Object.entries(defaults)) {
+          if (Array.isArray(val)) emptyValues[key] = []
+        }
       } catch { /* no default values */ }
-      // Wrap the subchart's bare default values under the dependency name so a
-      // freshly created deployment renders correctly without a UI re-save.
-      const wrapped = wrapValues(yaml.load(defaultValues) || {}, chart)
+      const wrapped = wrapValues(emptyValues, chart)
       await fs.writeFile(path.join(deployDir, 'values.yaml'), yaml.dump(wrapped, { lineWidth: -1 }), 'utf-8')
 
       res.json({ status: 'created', chart, folder })

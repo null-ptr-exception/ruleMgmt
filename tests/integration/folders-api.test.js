@@ -90,12 +90,35 @@ describe('folders API', () => {
     expect(chartYaml.dependencies[0].name).toBe('my-alerts')
     expect(chartYaml.dependencies[0].repository).toMatch(/^file:\/\//)
 
-    // the chart's bare default values must be wrapped under the dependency name
-    // so the freshly created deployment renders correctly without a UI re-save
     const savedValues = yaml.load(fs.readFileSync(path.join(tmpDir, deployFolder, 'values.yaml'), 'utf-8'))
     expect(savedValues).toHaveProperty('my-alerts')
-    expect(savedValues['my-alerts'].latency).toEqual([{ threshold: 100 }])
+    expect(savedValues['my-alerts'].latency).toEqual([])
     expect(savedValues).not.toHaveProperty('latency')
+  })
+
+  it('POST /init writes empty arrays for each alert key, excluding non-array keys', async () => {
+    const chartsDir = path.join(tmpDir, 'charts')
+    const chartDir = path.join(chartsDir, 'my-alerts')
+    fs.mkdirSync(path.join(chartDir, 'templates'), { recursive: true })
+    fs.writeFileSync(path.join(chartDir, 'Chart.yaml'),
+      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
+    fs.writeFileSync(path.join(chartDir, 'values.yaml'), yaml.dump({
+      _common: { owner: '', namespace: 'default' },
+      latency: [{ threshold: 100 }],
+      traffic: [{ qps: 50 }, { qps: 100 }],
+    }))
+
+    const deployFolder = 'teams/beta'
+    fs.mkdirSync(path.join(tmpDir, deployFolder), { recursive: true })
+
+    await request(app).post('/api/v2/folders/init').send({
+      folder: deployFolder,
+      chart: 'my-alerts'
+    })
+
+    const savedValues = yaml.load(fs.readFileSync(path.join(tmpDir, deployFolder, 'values.yaml'), 'utf-8'))
+    expect(savedValues['my-alerts']).toEqual({ latency: [], traffic: [] })
+    expect(savedValues['my-alerts']).not.toHaveProperty('_common')
   })
 
   it('POST /init returns existing chart info when folder already has alert-template dependency', async () => {

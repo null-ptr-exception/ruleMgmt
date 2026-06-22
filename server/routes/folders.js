@@ -155,9 +155,17 @@ export default function foldersRouter() {
       try {
         defaultValues = await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8')
       } catch { /* no default values */ }
-      // Wrap the subchart's bare default values under the dependency name so a
-      // freshly created deployment renders correctly without a UI re-save.
-      const wrapped = wrapValues(yaml.load(defaultValues) || {}, chart)
+      // Start a new deployment empty: keep every alert key from the chart's
+      // default values but reset each list to empty. This overrides the
+      // subchart's own defaults — otherwise Helm falls back to them and renders
+      // all default rules against namespace "default" with no owner. The user
+      // adds entries explicitly. Wrapped under the dependency name for Helm.
+      const def = yaml.load(defaultValues) || {}
+      const emptied = {}
+      for (const [k, v] of Object.entries(def)) {
+        emptied[k] = Array.isArray(v) ? [] : v
+      }
+      const wrapped = wrapValues(emptied, chart)
       await fs.writeFile(path.join(deployDir, 'values.yaml'), yaml.dump(wrapped, { lineWidth: -1 }), 'utf-8')
 
       res.json({ status: 'created', chart, folder })

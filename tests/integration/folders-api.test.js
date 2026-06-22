@@ -90,11 +90,13 @@ describe('folders API', () => {
     expect(chartYaml.dependencies[0].name).toBe('my-alerts')
     expect(chartYaml.dependencies[0].repository).toMatch(/^file:\/\//)
 
-    // the chart's bare default values must be wrapped under the dependency name
-    // so the freshly created deployment renders correctly without a UI re-save
+    // a new deployment starts empty: each alert key from the chart default is
+    // reset to an empty list (so Helm's subchart defaults are overridden),
+    // still wrapped under the dependency name
     const savedValues = yaml.load(fs.readFileSync(path.join(tmpDir, deployFolder, 'values.yaml'), 'utf-8'))
     expect(savedValues).toHaveProperty('my-alerts')
-    expect(savedValues['my-alerts'].latency).toEqual([{ threshold: 100 }])
+    expect(savedValues['my-alerts']).toHaveProperty('latency')
+    expect(savedValues['my-alerts'].latency).toEqual([])
     expect(savedValues).not.toHaveProperty('latency')
   })
 

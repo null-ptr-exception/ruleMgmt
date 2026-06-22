@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -10,7 +10,7 @@ const chartDir = path.resolve('sample/charts/mariadb-alerts')
 let rendered
 
 beforeAll(() => {
-  const output = execSync(`helm template test-release ${chartDir}`, { encoding: 'utf8' })
+  const output = execFileSync('helm', ['template', 'test-release', chartDir], { encoding: 'utf8' })
   rendered = YAML.parseAllDocuments(output).map(doc => doc.toJSON())
 })
 
@@ -138,8 +138,8 @@ describe('helm template with custom values', () => {
     workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chart-render-'))
     fs.cpSync(path.resolve('sample'), path.join(workDir, 'sample'), { recursive: true })
     const deployDir = path.join(workDir, 'sample/deployments/mariadb-1/production')
-    execSync(`helm dependency build ${deployDir}`, { encoding: 'utf8' })
-    const output = execSync(`helm template prod-release ${deployDir}`, { encoding: 'utf8' })
+    execFileSync('helm', ['dependency', 'build', deployDir], { encoding: 'utf8' })
+    const output = execFileSync('helm', ['template', 'prod-release', deployDir], { encoding: 'utf8' })
     customRendered = YAML.parseAllDocuments(output).map(doc => doc.toJSON())
   })
 

@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
+import { wrapValues, countAlerts } from '../lib/subchart.js'
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
 
@@ -46,12 +47,7 @@ async function listChildren(baseDir, parentPath) {
       node.chart = chartData.dependencies[0].name
       try {
         const valuesYaml = await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')
-        const values = yaml.load(valuesYaml) || {}
-        let count = 0
-        for (const val of Object.values(values)) {
-          if (Array.isArray(val)) count += val.length
-        }
-        node.alertCount = count
+        node.alertCount = countAlerts(yaml.load(valuesYaml) || {}, node.chart)
       } catch { node.alertCount = 0 }
     }
 
@@ -159,7 +155,10 @@ export default function foldersRouter() {
       try {
         defaultValues = await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8')
       } catch { /* no default values */ }
-      await fs.writeFile(path.join(deployDir, 'values.yaml'), defaultValues, 'utf-8')
+      // Wrap the subchart's bare default values under the dependency name so a
+      // freshly created deployment renders correctly without a UI re-save.
+      const wrapped = wrapValues(yaml.load(defaultValues) || {}, chart)
+      await fs.writeFile(path.join(deployDir, 'values.yaml'), yaml.dump(wrapped, { lineWidth: -1 }), 'utf-8')
 
       res.json({ status: 'created', chart, folder })
     } catch (err) {

@@ -129,4 +129,31 @@ describe('deployments API — subchart wrap/unwrap', () => {
     expect(res.body.parsed).toMatchObject(BARE_VALUES)
     expect(res.body.parsed).not.toHaveProperty('mariadb-alerts')
   })
+
+  it('list endpoint reports correct alertCount for wrapped values', async () => {
+    const folderPath = 'my-deploy'
+    const dir = setupDeploymentDir(folderPath, true)
+    // BARE_VALUES has two alert-rule arrays of one entry each → alertCount 2
+    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump({ 'mariadb-alerts': BARE_VALUES }))
+
+    const res = await request(app)
+      .get(`/api/deployments/my-chart${folderQuery(folderPath)}`)
+
+    expect(res.status).toBe(200)
+    const entry = res.body.find(d => d.file === 'values.yaml')
+    expect(entry).toBeDefined()
+    expect(entry.alertCount).toBe(2)
+  })
+
+  it('list endpoint counts legacy bare values.yaml (backward compatibility)', async () => {
+    const folderPath = 'legacy-deploy'
+    const dir = setupDeploymentDir(folderPath, true)
+    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump(BARE_VALUES))
+
+    const res = await request(app)
+      .get(`/api/deployments/my-chart${folderQuery(folderPath)}`)
+
+    const entry = res.body.find(d => d.file === 'values.yaml')
+    expect(entry.alertCount).toBe(2)
+  })
 })

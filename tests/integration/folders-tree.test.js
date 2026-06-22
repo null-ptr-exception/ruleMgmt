@@ -62,9 +62,12 @@ describe('GET /api/v2/folders/tree', () => {
       apiVersion: 'v2', name: 'prod', version: '0.1.0',
       dependencies: [{ name: 'mariadb-alerts', version: '0.1.0', repository: 'file://../../charts/mariadb-alerts' }]
     }))
+    // values.yaml is written in subchart-wrapped format (as the backend now saves it)
     fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump({
-      latency: [{ owner: 'team-a', threshold: 100 }, { owner: 'team-a', threshold: 200 }],
-      traffic: [{ owner: 'team-a', rate: 50 }]
+      'mariadb-alerts': {
+        latency: [{ owner: 'team-a', threshold: 100 }, { owner: 'team-a', threshold: 200 }],
+        traffic: [{ owner: 'team-a', rate: 50 }]
+      }
     }))
 
     const res = await request(app).get('/api/v2/folders/tree')
@@ -72,6 +75,25 @@ describe('GET /api/v2/folders/tree', () => {
     expect(prod.isDeployment).toBe(true)
     expect(prod.chart).toBe('mariadb-alerts')
     expect(prod.alertCount).toBe(3)
+  })
+
+  it('counts alertCount for legacy bare-key values.yaml (backward compatibility)', async () => {
+    const dir = path.join(tmpDir, 'legacy')
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
+      apiVersion: 'v2', name: 'legacy', version: '0.1.0',
+      dependencies: [{ name: 'mariadb-alerts', version: '0.1.0', repository: 'file://../../charts/mariadb-alerts' }]
+    }))
+    // pre-migration bare keys (no subchart wrap) must still count correctly
+    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump({
+      latency: [{ owner: 'team-a', threshold: 100 }, { owner: 'team-a', threshold: 200 }],
+      traffic: [{ owner: 'team-a', rate: 50 }]
+    }))
+
+    const res = await request(app).get('/api/v2/folders/tree')
+    const legacy = res.body.find(f => f.name === 'legacy')
+    expect(legacy.isDeployment).toBe(true)
+    expect(legacy.alertCount).toBe(3)
   })
 
   it('does not prune non-deployment folders', async () => {

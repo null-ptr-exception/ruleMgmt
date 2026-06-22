@@ -90,8 +90,12 @@ describe('folders API', () => {
     expect(chartYaml.dependencies[0].name).toBe('my-alerts')
     expect(chartYaml.dependencies[0].repository).toMatch(/^file:\/\//)
 
-    const valuesContent = fs.readFileSync(path.join(tmpDir, deployFolder, 'values.yaml'), 'utf-8')
-    expect(valuesContent).toContain('latency')
+    // the chart's bare default values must be wrapped under the dependency name
+    // so the freshly created deployment renders correctly without a UI re-save
+    const savedValues = yaml.load(fs.readFileSync(path.join(tmpDir, deployFolder, 'values.yaml'), 'utf-8'))
+    expect(savedValues).toHaveProperty('my-alerts')
+    expect(savedValues['my-alerts'].latency).toEqual([{ threshold: 100 }])
+    expect(savedValues).not.toHaveProperty('latency')
   })
 
   it('POST /init returns existing chart info when folder already has alert-template dependency', async () => {

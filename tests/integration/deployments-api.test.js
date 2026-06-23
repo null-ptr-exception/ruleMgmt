@@ -157,3 +157,74 @@ describe('deployments API — subchart wrap/unwrap', () => {
     expect(entry.alertCount).toBe(2)
   })
 })
+
+describe('deployments API — NAME_RE with folder param', () => {
+  let tmpDir, app
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deployments-namere-test-'))
+    app = express()
+    app.use(express.json())
+    app.use((req, res, next) => {
+      req.gitopsDir = tmpDir
+      next()
+    })
+    app.use('/api/deployments', deploymentsRouter())
+  })
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  function folderQuery(folderPath) {
+    return `?folder=${encodeURIComponent(folderPath)}`
+  }
+
+  it('GET allows uppercase deployment name when folder param is present', async () => {
+    const folderPath = 'myapp/PROD'
+    const dir = path.join(tmpDir, folderPath)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump(BARE_VALUES))
+
+    const res = await request(app)
+      .get(`/api/deployments/my-chart/PROD${folderQuery(folderPath)}`)
+
+    expect(res.status).toBe(200)
+  })
+
+  it('POST allows uppercase deployment name when folder param is present', async () => {
+    const folderPath = 'myapp/PROD'
+    const dir = path.join(tmpDir, folderPath)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'values.yaml'), '')
+
+    const res = await request(app)
+      .post(`/api/deployments/my-chart/PROD${folderQuery(folderPath)}`)
+      .send({ values: BARE_VALUES })
+
+    expect(res.status).toBe(200)
+    expect(res.body.ok).toBe(true)
+  })
+
+  it('DELETE allows uppercase deployment name when folder param is present', async () => {
+    const folderPath = 'myapp/PROD'
+    const dir = path.join(tmpDir, folderPath)
+    fs.mkdirSync(dir, { recursive: true })
+    const targetFile = path.join(dir, 'PROD-values.yaml')
+    fs.writeFileSync(targetFile, yaml.dump(BARE_VALUES))
+
+    const res = await request(app)
+      .delete(`/api/deployments/my-chart/PROD${folderQuery(folderPath)}`)
+
+    expect(res.status).toBe(200)
+    expect(fs.existsSync(targetFile)).toBe(false)
+  })
+
+  it('POST still rejects uppercase deployment name without folder param', async () => {
+    const res = await request(app)
+      .post('/api/deployments/my-chart/PROD')
+      .send({ values: BARE_VALUES })
+
+    expect(res.status).toBe(400)
+  })
+})

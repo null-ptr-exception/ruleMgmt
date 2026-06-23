@@ -29,7 +29,7 @@ export default function renderRouter() {
     }
 
     const chartDir = path.join(chartsDir, chart)
-    const releaseName = `${chart}-${deployment}`
+    const releaseName = `${chart}-${deployment}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
     const helm = process.env.HELM_BIN || 'helm'
 
     try {

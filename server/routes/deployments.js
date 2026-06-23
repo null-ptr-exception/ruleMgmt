@@ -5,6 +5,14 @@ import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
+
+function isValidDeploymentParam(req) {
+  const deployment = req.params.deployment
+  return req.query.folder
+    ? FOLDER_DEPLOYMENT_SEGMENT_RE.test(deployment)
+    : NAME_RE.test(deployment)
+}
 
 function resolveDeploymentDir(req) {
   const folder = req.query.folder
@@ -64,7 +72,7 @@ export default function deploymentsRouter() {
   router.get('/:chart/:deployment', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!req.query.folder && !NAME_RE.test(req.params.deployment)) {
+    if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
@@ -83,7 +91,7 @@ export default function deploymentsRouter() {
   router.post('/:chart/:deployment', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!req.query.folder && !NAME_RE.test(req.params.deployment)) {
+    if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
@@ -107,7 +115,7 @@ export default function deploymentsRouter() {
   router.post('/:chart/:deployment/clone', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!req.query.folder && !NAME_RE.test(req.params.deployment)) {
+    if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     if (!req.body.newName || !NAME_RE.test(req.body.newName)) {
@@ -126,7 +134,7 @@ export default function deploymentsRouter() {
   router.delete('/:chart/:deployment', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!req.query.folder && !NAME_RE.test(req.params.deployment)) {
+    if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     const file = path.join(dir, `${req.params.deployment}-values.yaml`)

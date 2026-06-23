@@ -210,12 +210,14 @@ describe('deployments API — NAME_RE with folder param', () => {
     const folderPath = 'myapp/PROD'
     const dir = path.join(tmpDir, folderPath)
     fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'PROD-values.yaml'), yaml.dump(BARE_VALUES))
+    const targetFile = path.join(dir, 'PROD-values.yaml')
+    fs.writeFileSync(targetFile, yaml.dump(BARE_VALUES))
 
     const res = await request(app)
       .delete(`/api/deployments/my-chart/PROD${folderQuery(folderPath)}`)
 
     expect(res.status).toBe(200)
+    expect(fs.existsSync(targetFile)).toBe(false)
   })
 
   it('POST still rejects uppercase deployment name without folder param', async () => {

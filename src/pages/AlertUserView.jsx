@@ -149,16 +149,20 @@ export default function AlertUserView() {
     const result = await saveDeployment(selectedChart, folderBasename, toSave, selectedFolder)
     if (!result.ok) {
       message.error('Save failed')
-      return
+      return false
     }
     if (!isCommon) setAllValues(merged)
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
+    return true
   }
 
   async function handlePreview() {
     if (!selectedChart || !selectedFolder) return
-    if (dirty) await handleSave()
+    if (dirty) {
+      const saved = await handleSave()
+      if (!saved) return
+    }
     const result = await renderDeployment(selectedChart, folderBasename, selectedFolder)
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
     setPreviewOpen(true)

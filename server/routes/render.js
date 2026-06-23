@@ -3,6 +3,7 @@ import path from 'path'
 import { execFile } from 'child_process'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
 
 
 export default function renderRouter() {
@@ -12,7 +13,10 @@ export default function renderRouter() {
     const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
     const { chart, deployment } = req.params
     const folder = req.query.folder
-    if (!NAME_RE.test(chart) || (!folder && !NAME_RE.test(deployment))) {
+    const deploymentValid = folder
+      ? FOLDER_DEPLOYMENT_SEGMENT_RE.test(deployment)
+      : NAME_RE.test(deployment)
+    if (!NAME_RE.test(chart) || !deploymentValid) {
       return res.status(400).json({ error: 'Invalid chart or deployment name' })
     }
 

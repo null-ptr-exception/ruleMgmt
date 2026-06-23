@@ -64,7 +64,7 @@ export default function deploymentsRouter() {
   router.get('/:chart/:deployment', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!NAME_RE.test(req.params.deployment)) {
+    if (!req.query.folder && !NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
@@ -83,7 +83,7 @@ export default function deploymentsRouter() {
   router.post('/:chart/:deployment', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!NAME_RE.test(req.params.deployment)) {
+    if (!req.query.folder && !NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
@@ -107,7 +107,7 @@ export default function deploymentsRouter() {
   router.post('/:chart/:deployment/clone', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!NAME_RE.test(req.params.deployment)) {
+    if (!req.query.folder && !NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     if (!req.body.newName || !NAME_RE.test(req.body.newName)) {
@@ -126,7 +126,7 @@ export default function deploymentsRouter() {
   router.delete('/:chart/:deployment', async (req, res) => {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!NAME_RE.test(req.params.deployment)) {
+    if (!req.query.folder && !NAME_RE.test(req.params.deployment)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     const file = path.join(dir, `${req.params.deployment}-values.yaml`)

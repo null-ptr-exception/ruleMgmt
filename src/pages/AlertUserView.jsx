@@ -146,7 +146,11 @@ export default function AlertUserView() {
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...merged }
       : merged
-    await saveDeployment(selectedChart, folderBasename, toSave, selectedFolder)
+    const result = await saveDeployment(selectedChart, folderBasename, toSave, selectedFolder)
+    if (!result.ok) {
+      message.error('Save failed')
+      return
+    }
     if (!isCommon) setAllValues(merged)
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)

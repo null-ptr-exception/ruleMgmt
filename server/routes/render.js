@@ -11,12 +11,12 @@ export default function renderRouter() {
   router.post('/:chart/:deployment', async (req, res) => {
     const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
     const { chart, deployment } = req.params
-    if (!NAME_RE.test(chart) || !NAME_RE.test(deployment)) {
+    const folder = req.query.folder
+    if (!NAME_RE.test(chart) || (!folder && !NAME_RE.test(deployment))) {
       return res.status(400).json({ error: 'Invalid chart or deployment name' })
     }
 
     let deploymentsDir
-    const folder = req.query.folder
     if (folder) {
       if (folder.includes('..')) return res.status(400).json({ error: 'Invalid folder path' })
       deploymentsDir = path.join(req.gitopsDir, folder)

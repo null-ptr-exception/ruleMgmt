@@ -28,8 +28,8 @@ Run the following in the root of your gitops repository:
 
 ```bash
 # Untrack all committed Chart.lock and charts/*.tgz regardless of folder depth
-git ls-files | grep -E "(^|/)Chart\.lock$" | xargs -r git rm --cached
-git ls-files | grep -E "(^|/)charts/.*\.tgz$" | xargs -r git rm --cached
+while IFS= read -r f; do git rm --cached "$f"; done < <(git ls-files | grep -E "(^|/)Chart\.lock$")
+while IFS= read -r f; do git rm --cached "$f"; done < <(git ls-files | grep -E "(^|/)charts/.*\.tgz$")
 
 git commit -m "chore: remove helm-generated artifacts from working tree"
 git push

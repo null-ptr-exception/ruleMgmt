@@ -32,8 +32,17 @@ async function buildTempSourceDir(gitopsDir, sourceDir) {
     }
 
     for (const entry of await fs.readdir(gitopsDir)) {
-      if (entry === firstSeg) continue
-      await fs.symlink(path.join(gitopsDir, entry), path.join(tmpRoot, entry))
+      if (entry === firstSeg) {
+        // Copy siblings within firstSeg so file:// cross-chart refs resolve
+        const realFirstSeg = path.join(gitopsDir, firstSeg)
+        const tmpFirstSeg = path.join(tmpRoot, firstSeg)
+        for (const sibling of await fs.readdir(realFirstSeg)) {
+          if (path.join(realFirstSeg, sibling) === sourceDir) continue
+          await fs.cp(path.join(realFirstSeg, sibling), path.join(tmpFirstSeg, sibling), { recursive: true })
+        }
+      } else {
+        await fs.symlink(path.join(gitopsDir, entry), path.join(tmpRoot, entry))
+      }
     }
 
     return { tmpRoot, tmpSourceDir }

@@ -37,6 +37,10 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
     await fs.access(path.join(GITOPS_DIR_V2, '.git'))
   } catch {
     await fs.mkdir(GITOPS_DIR_V2, { recursive: true })
+    await fs.writeFile(
+      path.join(GITOPS_DIR_V2, '.gitignore'),
+      '# Helm dependency build artifacts — generated at render time, never committed\nChart.lock\ncharts/*.tgz\n'
+    )
     await git(GITOPS_DIR_V2, 'init')
     await git(GITOPS_DIR_V2, 'add', '-A')
     await git(GITOPS_DIR_V2, 'commit', '--allow-empty', '-m', 'initial')

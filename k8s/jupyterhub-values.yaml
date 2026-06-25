@@ -114,8 +114,13 @@ singleuser:
           if [ -d /data/gitops/.git ]; then
             echo "Workspace already initialized, updating remote URL with fresh token"
             REPO_URL="http://oauth2:$GITLAB_TOKEN@$GITLAB_HOST/$GITLAB_PROJECT.git"
+            USER_BRANCH="rulemgmt/$JUPYTERHUB_USER"
             git config --global --add safe.directory /data/gitops
             git -C /data/gitops remote set-url origin "$REPO_URL"
+            if ! git -C /data/gitops ls-remote --heads origin "$USER_BRANCH" 2>/dev/null | grep -q .; then
+              echo "Remote branch missing, pushing now"
+              git -C /data/gitops push -u origin "$USER_BRANCH"
+            fi
             chown -R 1000:1000 /data/gitops
             exit 0
           fi

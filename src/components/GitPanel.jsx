@@ -49,6 +49,7 @@ export default function GitPanel({ gitStatus, onRefresh }) {
 
   function showTokenExpired() {
     notification.error({
+      key: 'token-expired',
       message: 'Session Expired',
       description: (
         <>

@@ -96,7 +96,7 @@ export default function gitRouter() {
       res.json({ branch, remote: 'origin' })
     } catch (err) {
       if (isAuthError(err)) {
-        return res.status(401).json({ error: err.message, code: 'TOKEN_EXPIRED' })
+        return res.status(401).json({ error: 'Authentication failed: token may have expired', code: 'TOKEN_EXPIRED' })
       }
       if (err.message.includes('permission') || err.message.includes('denied')) {
         return res.status(403).json({ error: err.message })
@@ -193,7 +193,7 @@ export default function gitRouter() {
       res.json({ status: 'ok', head })
     } catch (err) {
       if (isAuthError(err)) {
-        return res.status(401).json({ error: err.message, code: 'TOKEN_EXPIRED' })
+        return res.status(401).json({ error: 'Authentication failed: token may have expired', code: 'TOKEN_EXPIRED' })
       }
       res.status(500).json({ error: err.message })
     }
@@ -225,7 +225,7 @@ export default function gitRouter() {
 
 function isAuthError(err) {
   const msg = err.message.toLowerCase()
-  return msg.includes('authentication failed') || msg.includes('could not read username') || msg.includes('403') || msg.includes('401')
+  return msg.includes('authentication failed') || msg.includes('could not read username') || msg.includes('401')
 }
 
 async function pushWithToken(cwd, branch, token) {

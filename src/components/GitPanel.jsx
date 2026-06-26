@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
-import { Button, Typography, Space, Modal, Tooltip, message } from 'antd'
+import { Button, Typography, Space, Modal, Tooltip, message, notification } from 'antd'
 import {
   BranchesOutlined,
   CloudUploadOutlined,
@@ -47,6 +47,23 @@ export default function GitPanel({ gitStatus, onRefresh }) {
 
   const { branch, changeCount, behindMain, hasRemote } = gitStatus
 
+  function showTokenExpired() {
+    notification.error({
+      key: 'token-expired',
+      message: 'Session Expired',
+      description: (
+        <>
+          Your authentication token has expired.{' '}
+          <a href="/hub/home" target="_blank" rel="noreferrer">
+            Restart your server
+          </a>{' '}
+          to re-authenticate.
+        </>
+      ),
+      duration: 0,
+    })
+  }
+
   async function handlePush() {
     setLoading('push')
     try {
@@ -56,7 +73,11 @@ export default function GitPanel({ gitStatus, onRefresh }) {
         onRefresh()
       } else {
         const data = await res.json().catch(() => ({}))
-        message.error(data.error || 'Push failed')
+        if (data.code === 'TOKEN_EXPIRED') {
+          showTokenExpired()
+        } else {
+          message.error(data.error || 'Push failed')
+        }
       }
     } catch {
       message.error('Push failed: network error')
@@ -74,7 +95,11 @@ export default function GitPanel({ gitStatus, onRefresh }) {
         onRefresh()
       } else {
         const data = await res.json().catch(() => ({}))
-        message.error(data.error || 'Pull failed')
+        if (data.code === 'TOKEN_EXPIRED') {
+          showTokenExpired()
+        } else {
+          message.error(data.error || 'Pull failed')
+        }
       }
     } catch {
       message.error('Pull failed: network error')

@@ -18,6 +18,7 @@ gitea:
       TYPE: level
     oauth2:
       ENABLED: true
+      ACCESS_TOKEN_EXPIRATION_TIME: 300
 
 strategy:
   type: Recreate

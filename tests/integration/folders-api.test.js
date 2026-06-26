@@ -121,6 +121,48 @@ describe('folders API', () => {
     expect(savedValues['my-alerts']).not.toHaveProperty('_common')
   })
 
+  it('POST /init writes empty wrapped values when chart has no array keys', async () => {
+    const chartsDir = path.join(tmpDir, 'charts')
+    const chartDir = path.join(chartsDir, 'my-alerts')
+    fs.mkdirSync(path.join(chartDir, 'templates'), { recursive: true })
+    fs.writeFileSync(path.join(chartDir, 'Chart.yaml'),
+      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
+    fs.writeFileSync(path.join(chartDir, 'values.yaml'), yaml.dump({
+      _common: { owner: '', namespace: 'default' },
+    }))
+
+    const deployFolder = 'teams/gamma'
+    fs.mkdirSync(path.join(tmpDir, deployFolder), { recursive: true })
+
+    await request(app).post('/api/v2/folders/init').send({
+      folder: deployFolder,
+      chart: 'my-alerts'
+    })
+
+    const savedValues = yaml.load(fs.readFileSync(path.join(tmpDir, deployFolder, 'values.yaml'), 'utf-8'))
+    expect(savedValues['my-alerts']).toEqual({})
+  })
+
+  it('POST /init writes empty wrapped values when chart has no values.yaml', async () => {
+    const chartsDir = path.join(tmpDir, 'charts')
+    const chartDir = path.join(chartsDir, 'my-alerts')
+    fs.mkdirSync(path.join(chartDir, 'templates'), { recursive: true })
+    fs.writeFileSync(path.join(chartDir, 'Chart.yaml'),
+      'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\ntype: application\nannotations:\n  app: alertforge\n')
+    // no values.yaml written
+
+    const deployFolder = 'teams/delta'
+    fs.mkdirSync(path.join(tmpDir, deployFolder), { recursive: true })
+
+    await request(app).post('/api/v2/folders/init').send({
+      folder: deployFolder,
+      chart: 'my-alerts'
+    })
+
+    const savedValues = yaml.load(fs.readFileSync(path.join(tmpDir, deployFolder, 'values.yaml'), 'utf-8'))
+    expect(savedValues['my-alerts']).toEqual({})
+  })
+
   it('POST /init returns existing chart info when folder already has alert-template dependency', async () => {
     const chartsDir = path.join(tmpDir, 'charts')
     const chartDir = path.join(chartsDir, 'my-alerts')

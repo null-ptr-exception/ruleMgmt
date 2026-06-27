@@ -6,8 +6,9 @@ const FOLDER_BASENAME = 'dev'
 const ALERT_TYPE = 'latency_slow_queries'
 
 // Pre-populate the deployment with two rows so filter tests have data to work with.
-// The exact field names come from the mariadb-alerts chart schema.
+// owner/namespace are common vars (x-common-vars in schema); group/threshold are per-row.
 const SEED_DATA = {
+  _common: { owner: 'team-a', namespace: 'monitoring' },
   [ALERT_TYPE]: [
     { group: 'prod', threshold: 100 },
     { group: 'staging', threshold: 500 },
@@ -128,6 +129,27 @@ test.describe('Alert Table Filter', () => {
       await expect(page.getByText('No rows match current filter')).toBeVisible({ timeout: 3000 })
       // Filter input still visible
       await expect(filterInput).toBeVisible()
+    })
+
+    test('common var column filter matches all rows (same value shared)', async ({ page }) => {
+      await expandAndSelectDeployment(page)
+      await page.getByText(ALERT_TYPE).click()
+
+      // owner is a common var — its column filter input should be visible
+      const filterInputs = page.getByPlaceholder('value')
+      await expect(filterInputs.first()).toBeVisible({ timeout: 5000 })
+
+      // Find the owner column filter (common var, shown grayed out in cells)
+      // owner = "team-a" — filtering "team" (contains) should keep both rows
+      const ownerFilterInput = page.locator('th').filter({ hasText: /owner/ }).getByPlaceholder('value')
+      await ownerFilterInput.fill('team')
+      await expect(page.locator('.ant-table-tbody tr.ant-table-row')).toHaveCount(2, { timeout: 3000 })
+
+      // Filtering "ZZZNOMATCH" should filter out all rows
+      await ownerFilterInput.fill('ZZZNOMATCH')
+      await expect(page.getByText('No rows match current filter')).toBeVisible({ timeout: 3000 })
+      // Filter input must still be visible
+      await expect(ownerFilterInput).toBeVisible()
     })
 
     test('numeric filter >= narrows rows correctly', async ({ page }) => {

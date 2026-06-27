@@ -2,11 +2,11 @@ import { useCallback, useMemo } from 'react'
 import { Table, Button, Input, InputNumber, Select, Checkbox } from 'antd'
 import { DeleteOutlined, PlusOutlined, FilterOutlined } from '@ant-design/icons'
 
-function matchesFilter(row, filters, vars) {
+function matchesFilter(row, filters, vars, commonValues = {}) {
   return Object.entries(filters).every(([varName, filter]) => {
     if (!filter || filter.value === '' || filter.value == null) return true
     const v = vars.find(v => v.name === varName)
-    const cellVal = row[varName]
+    const cellVal = varName in commonValues ? commonValues[varName] : row[varName]
     if (v && (v.type === 'number' || v.type === 'integer' || (v.type === 'enum' && typeof v.enum?.[0] === 'number'))) {
       const num = parseFloat(cellVal)
       const fnum = parseFloat(filter.value)
@@ -86,7 +86,7 @@ export default function AlertTable({
     if (!hasFilters) return rows.map((r, i) => ({ ...r, __realIndex: i }))
     return rows
       .map((r, i) => ({ ...r, __realIndex: i }))
-      .filter(r => matchesFilter(r, filters, vars))
+      .filter(r => matchesFilter(r, filters, vars, commonValues))
   }, [rows, filters, vars])
 
   const handleCellChange = useCallback((realIndex, varName, value) => {

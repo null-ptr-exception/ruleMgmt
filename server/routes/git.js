@@ -153,7 +153,9 @@ export default function gitRouter() {
     const file = req.query.file
     const ref = req.query.ref
 
-    if (!file) return res.status(400).json({ error: 'file param required' })
+    if (!file || file.includes('..') || path.isAbsolute(file)) {
+      return res.status(400).json({ error: 'Invalid file path' })
+    }
 
     try {
       let original = ''

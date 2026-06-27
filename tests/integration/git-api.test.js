@@ -168,6 +168,16 @@ describe('Git API', () => {
     expect(status).toBe(400)
   })
 
+  it('GET /diff rejects file with .. path traversal', async () => {
+    const { status } = await api('GET', '/api/v2/git/diff?file=../../etc/passwd')
+    expect(status).toBe(400)
+  })
+
+  it('GET /diff rejects absolute file path', async () => {
+    const { status } = await api('GET', '/api/v2/git/diff?file=/etc/passwd')
+    expect(status).toBe(400)
+  })
+
   it('GET /diff returns empty original for added files', async () => {
     await fs.writeFile(path.join(tmpDir, 'brand-new.txt'), 'new content')
 

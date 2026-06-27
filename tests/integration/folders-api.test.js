@@ -188,4 +188,20 @@ describe('folders API', () => {
     expect(res.body.status).toBe('existing')
     expect(res.body.chart).toBe('my-alerts')
   })
+
+  it('POST /init rejects chart with .. path traversal', async () => {
+    const res = await request(app).post('/api/v2/folders/init').send({
+      folder: 'some-folder',
+      chart: '../../etc'
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('POST /init rejects absolute chart path', async () => {
+    const res = await request(app).post('/api/v2/folders/init').send({
+      folder: 'some-folder',
+      chart: '/etc/passwd'
+    })
+    expect(res.status).toBe(400)
+  })
 })

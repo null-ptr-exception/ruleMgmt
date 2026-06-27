@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
 import { Button, Modal, Typography, Empty, Input, Select, message, Segmented } from 'antd'
-import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined } from '@ant-design/icons'
+import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
 import OverviewTemplateTree from '../components/OverviewTemplateTree'
@@ -341,6 +341,9 @@ export default function AlertUserView() {
             <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
               <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
               {!isCommonView && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
+              {!isCommonView && Object.values(filters).some(f => f && f.value !== '' && f.value != null) && (
+                <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>
+              )}
               {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
             </div>
             <Modal title="Rendered PrometheusRule" open={previewOpen} onCancel={() => setPreviewOpen(false)}

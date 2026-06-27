@@ -75,18 +75,18 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
   )
 }
 
-function SectionPanel({ alertName, vars, rows, commonValues, filters, onFiltersChange, onUpdate, onDelete, onAdd }) {
+function SectionPanel({ alertName, vars, rows, commonValues, filters, onFiltersChange, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear }) {
   const [collapsed, setCollapsed] = useState(false)
 
   const matchCount = useMemo(() => {
-    const hasFilters = Object.values(filters).some(f => f && f.value !== '' && f.value !== undefined)
+    const hasFilters = Object.values(filters).some(f => f && f.value !== '' && f.value != null)
     if (!hasFilters) return rows.length
     return rows.filter(row => {
       return Object.entries(filters).every(([varName, filter]) => {
-        if (!filter || filter.value === '') return true
+        if (!filter || filter.value === '' || filter.value == null) return true
         const v = vars.find(v => v.name === varName)
         const cellVal = row[varName]
-        if (v && (v.type === 'number' || v.type === 'integer')) {
+        if (v && (v.type === 'number' || v.type === 'integer' || (v.type === 'enum' && typeof v.enum?.[0] === 'number'))) {
           const num = parseFloat(cellVal)
           const fnum = parseFloat(filter.value)
           if (isNaN(num) || isNaN(fnum)) return false
@@ -99,22 +99,45 @@ function SectionPanel({ alertName, vars, rows, commonValues, filters, onFiltersC
             default:   return true
           }
         }
-        return String(cellVal ?? '').includes(String(filter.value))
+        const cell = String(cellVal ?? '').toLowerCase()
+        const val = String(filter.value).toLowerCase()
+        return filter.op === '=' ? cell === val : cell.includes(val)
       })
     }).length
   }, [rows, filters, vars])
 
+  const activeSectionFilters = Object.values(filters).filter(f => f && f.value !== '' && f.value != null)
+  const hasSectionFilter = activeSectionFilters.length > 0
+  const hasWsFilter = Object.keys(wsFilters || {}).length > 0
+  const hasAnyFilter = hasSectionFilter || hasWsFilter
+
   return (
     <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
       <div
-        onClick={() => setCollapsed(c => !c)}
-        style={{ padding: '8px 12px', background: '#fafafa', borderBottom: collapsed ? 'none' : '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        style={{ padding: '8px 12px', background: '#fafafa', borderBottom: collapsed ? 'none' : '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}
       >
-        <RightOutlined style={{ fontSize: 10, color: '#9ca3af', transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s' }} />
-        <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{alertName}</span>
-        <span style={{ fontSize: 11, color: '#9ca3af', background: '#f3f4f6', border: '0.5px solid #e5e7eb', borderRadius: 8, padding: '0 6px' }}>
-          {matchCount} / {rows.length} rows
-        </span>
+        <div onClick={() => setCollapsed(c => !c)} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer', minWidth: 0 }}>
+          <RightOutlined style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0, transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s' }} />
+          <span style={{ fontSize: 13, fontWeight: 500, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{alertName}</span>
+          <span style={{ fontSize: 11, color: '#9ca3af', background: '#f3f4f6', border: '0.5px solid #e5e7eb', borderRadius: 8, padding: '0 6px', flexShrink: 0 }}>
+            {matchCount} / {rows.length} rows
+          </span>
+        </div>
+        {hasAnyFilter && (
+          <Button
+            size="small"
+            type="text"
+            icon={<CloseOutlined />}
+            style={{ fontSize: 11, color: '#1677ff', flexShrink: 0 }}
+            onClick={e => {
+              e.stopPropagation()
+              if (hasSectionFilter) onFiltersChange({})
+              if (hasWsFilter) onWsFiltersClear()
+            }}
+          >
+            Clear filters
+          </Button>
+        )}
       </div>
       {!collapsed && (
         <div style={{ padding: '10px 12px' }}>
@@ -204,6 +227,8 @@ export default function AlertOverviewWorkspace({
             commonValues={commonValues}
             filters={mergedFilters(alertName)}
             onFiltersChange={f => handleSectionFiltersChange(alertName, f)}
+            wsFilters={wsFilters}
+            onWsFiltersClear={() => setWsFilters({})}
             onUpdate={updated => handleUpdate(alertName, updated)}
             onDelete={realIndex => handleDelete(alertName, realIndex)}
             onAdd={newRow => handleAdd(alertName, newRow)}

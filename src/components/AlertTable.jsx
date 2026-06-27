@@ -2,14 +2,12 @@ import { useCallback, useMemo } from 'react'
 import { Table, Button, Input, InputNumber, Select, Checkbox } from 'antd'
 import { DeleteOutlined, PlusOutlined, FilterOutlined } from '@ant-design/icons'
 
-const OPERATORS = ['>=', '<=', '>', '<', '=']
-
 function matchesFilter(row, filters, vars) {
   return Object.entries(filters).every(([varName, filter]) => {
-    if (!filter || (filter.value === '' && filter.value !== 0)) return true
+    if (!filter || filter.value === '' || filter.value == null) return true
     const v = vars.find(v => v.name === varName)
     const cellVal = row[varName]
-    if (v && (v.type === 'number' || v.type === 'integer')) {
+    if (v && (v.type === 'number' || v.type === 'integer' || (v.type === 'enum' && typeof v.enum?.[0] === 'number'))) {
       const num = parseFloat(cellVal)
       const fnum = parseFloat(filter.value)
       if (isNaN(num) || isNaN(fnum)) return false
@@ -22,13 +20,31 @@ function matchesFilter(row, filters, vars) {
         default:   return true
       }
     }
-    return String(cellVal ?? '').includes(String(filter.value))
+    const cell = String(cellVal ?? '').toLowerCase()
+    const val = String(filter.value).toLowerCase()
+    return filter.op === '=' ? cell === val : cell.includes(val)
   })
 }
 
+const NUM_OPERATORS = ['>=', '<=', '>', '<', '=']
+const STR_OPERATORS = ['contains', '=']
+const ENUM_STR_OPERATORS = ['=']
+
+function getOperators(varDef) {
+  if (!varDef) return STR_OPERATORS
+  if (varDef.type === 'number' || varDef.type === 'integer') return NUM_OPERATORS
+  if (varDef.type === 'enum') {
+    return typeof varDef.enum?.[0] === 'number' ? NUM_OPERATORS : ENUM_STR_OPERATORS
+  }
+  return STR_OPERATORS
+}
+
 function FilterHeader({ varName, varDef, filter, onChange }) {
+  const ops = getOperators(varDef)
   const isNumeric = varDef && (varDef.type === 'number' || varDef.type === 'integer')
-  const active = filter && filter.value !== '' && filter.value !== undefined
+  const isNumericEnum = varDef?.type === 'enum' && typeof varDef.enum?.[0] === 'number'
+  const active = filter && filter.value !== '' && filter.value != null
+  const defaultOp = ops[0]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -36,20 +52,18 @@ function FilterHeader({ varName, varDef, filter, onChange }) {
         {active && <FilterOutlined style={{ fontSize: 10, color: '#1677ff' }} />}
       </div>
       <div style={{ display: 'flex', gap: 2 }}>
-        {isNumeric && (
-          <Select
-            size="small"
-            value={filter?.op ?? '>='}
-            onChange={op => onChange({ ...filter, op })}
-            style={{ width: 52 }}
-            options={OPERATORS.map(o => ({ value: o, label: o }))}
-          />
-        )}
+        <Select
+          size="small"
+          value={filter?.op ?? defaultOp}
+          onChange={op => onChange({ ...filter, op })}
+          style={{ width: (isNumeric || isNumericEnum) ? 52 : ops.length === 1 ? 44 : 76 }}
+          options={ops.map(o => ({ value: o, label: o }))}
+        />
         <Input
           size="small"
           value={filter?.value ?? ''}
-          placeholder="filter"
-          onChange={e => onChange({ op: filter?.op ?? '>=', value: e.target.value })}
+          placeholder="value"
+          onChange={e => onChange({ op: filter?.op ?? defaultOp, value: e.target.value })}
           style={{ width: isNumeric ? 60 : '100%' }}
         />
       </div>
@@ -163,22 +177,18 @@ export default function AlertTable({
     }
   ]
 
-  const isEmpty = filteredRows.length === 0 && rows.length > 0
+  const hasActiveFilter = Object.values(filters).some(f => f && f.value !== '' && f.value != null)
+  const emptyText = hasActiveFilter ? 'No rows match current filter' : 'No data'
 
   return (
     <div>
-      {isEmpty && (
-        <div style={{ padding: '12px 0', textAlign: 'center', color: '#8c8c8c', fontSize: 13, fontStyle: 'italic' }}>
-          No rows match current filter
-        </div>
-      )}
       <Table
         dataSource={filteredRows.map(r => ({ ...r, key: r.__realIndex }))}
         columns={columns}
         pagination={false}
         size="small"
         bordered
-        style={{ display: isEmpty ? 'none' : undefined }}
+        locale={{ emptyText }}
       />
       <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }}
         onClick={handleAdd}>

@@ -46,6 +46,7 @@ export default function AlertUserView() {
   const [availableCharts, setAvailableCharts] = useState([])
 
   const [sidebarWidth, setSidebarWidth] = useState(300)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const resizingRef = useRef(false)
 
   function handleResizeStart(e) {
@@ -215,7 +216,7 @@ export default function AlertUserView() {
 
   return (
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
-      <div style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'hidden', background: '#fff', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: sidebarCollapsed ? 0 : sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'hidden', background: '#fff', position: 'relative', display: 'flex', flexDirection: 'column', transition: 'width 0.15s ease' }}>
         <div style={{ flexShrink: 0, overflowY: 'auto' }}>
           {sectionHeader('Deployments', <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleNewDeployOpen} />)}
           <DeploymentTree
@@ -265,18 +266,24 @@ export default function AlertUserView() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Resize / collapse handle — lives outside the sidebar so it stays visible when collapsed */}
+      <div
+        onMouseDown={e => { if (!sidebarCollapsed) handleResizeStart(e) }}
+        onTouchStart={e => { if (!sidebarCollapsed) handleResizeStart(e) }}
+        style={{ width: 5, flexShrink: 0, position: 'relative', cursor: sidebarCollapsed ? 'default' : 'col-resize', zIndex: 10 }}
+      >
         <div
-          onMouseDown={handleResizeStart}
-          onTouchStart={handleResizeStart}
-          style={{ position: 'absolute', top: 0, right: -2, width: 5, height: '100%', cursor: 'col-resize', zIndex: 10 }}
-        >
-          <div style={{
+          onClick={() => setSidebarCollapsed(c => !c)}
+          style={{
             position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
             width: 14, height: 28, borderRadius: 4, background: '#d9d9d9', border: '1px solid #bfbfbf',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, color: '#8c8c8c', letterSpacing: 1, touchAction: 'none'
-          }}>⋮</div>
-        </div>
+            fontSize: 10, color: '#8c8c8c', cursor: 'pointer', touchAction: 'none',
+            userSelect: 'none',
+          }}
+        >{sidebarCollapsed ? '›' : '‹'}</div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>

@@ -268,23 +268,26 @@ export default function AlertUserView() {
         )}
       </div>
 
-      {/* Resize / collapse handle — lives outside the sidebar so it stays visible when collapsed */}
+      {/* Drag-to-resize track */}
       <div
         onMouseDown={e => { if (!sidebarCollapsed) handleResizeStart(e) }}
         onTouchStart={e => { if (!sidebarCollapsed) handleResizeStart(e) }}
-        style={{ width: 5, flexShrink: 0, position: 'relative', cursor: sidebarCollapsed ? 'default' : 'col-resize', zIndex: 10 }}
-      >
-        <div
-          onClick={() => setSidebarCollapsed(c => !c)}
-          style={{
-            position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
-            width: 14, height: 28, borderRadius: 4, background: '#d9d9d9', border: '1px solid #bfbfbf',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, color: '#8c8c8c', cursor: 'pointer', touchAction: 'none',
-            userSelect: 'none',
-          }}
-        >{sidebarCollapsed ? '›' : '‹'}</div>
-      </div>
+        style={{ width: 5, flexShrink: 0, cursor: sidebarCollapsed ? 'default' : 'col-resize', zIndex: 10 }}
+      />
+      {/* Collapse / expand toggle — position:fixed so it stays in viewport regardless of scroll */}
+      <div
+        onClick={() => setSidebarCollapsed(c => !c)}
+        style={{
+          position: 'fixed', bottom: 20,
+          left: sidebarCollapsed ? 0 : sidebarWidth,
+          transition: 'left 0.15s ease',
+          width: 16, height: 28, borderRadius: '0 4px 4px 0',
+          background: '#d9d9d9', border: '1px solid #bfbfbf', borderLeft: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, color: '#8c8c8c', cursor: 'pointer',
+          zIndex: 100, userSelect: 'none', touchAction: 'none',
+        }}
+      >{sidebarCollapsed ? '›' : '‹'}</div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
         {mode === 'overview' && selectedFolder && selectedChart ? (

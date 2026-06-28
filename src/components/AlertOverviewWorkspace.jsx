@@ -2,18 +2,9 @@ import { useState, useMemo } from 'react'
 import { Button, Input, Select, Tag, Typography } from 'antd'
 import { SaveOutlined, CloseOutlined, RightOutlined } from '@ant-design/icons'
 import AlertTable from './AlertTable'
-import { matchesFilter } from '../utils/filterUtils'
+import { matchesFilter, getWsOperators } from '../utils/filterUtils'
 
 const { Text } = Typography
-const NUM_OPERATORS = ['>=', '<=', '>', '<', '=']
-const STR_OPERATORS = ['contains', '=']
-
-function getWsOperators(varDef) {
-  if (!varDef) return STR_OPERATORS
-  if (varDef.type === 'number' || varDef.type === 'integer') return NUM_OPERATORS
-  if (varDef.type === 'enum') return typeof varDef.enum?.[0] === 'number' ? NUM_OPERATORS : ['=']
-  return STR_OPERATORS
-}
 
 function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
   const [pendingCol, setPendingCol] = useState('')

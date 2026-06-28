@@ -1,3 +1,13 @@
+export const NUM_OPERATORS = ['>=', '<=', '>', '<', '=']
+export const STR_OPERATORS = ['contains', '=']
+
+export function getWsOperators(varDef) {
+  if (!varDef) return STR_OPERATORS
+  if (varDef.type === 'number' || varDef.type === 'integer') return NUM_OPERATORS
+  if (varDef.type === 'enum') return typeof varDef.enum?.[0] === 'number' ? NUM_OPERATORS : ['=']
+  return STR_OPERATORS
+}
+
 export function matchesFilter(row, filters, vars, commonValues = {}) {
   return Object.entries(filters).every(([varName, filter]) => {
     if (!filter || filter.value === '' || filter.value == null) return true

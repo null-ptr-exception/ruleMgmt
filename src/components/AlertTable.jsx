@@ -1,23 +1,10 @@
 import { useCallback, useMemo } from 'react'
 import { Table, Button, Input, InputNumber, Select, Checkbox } from 'antd'
 import { DeleteOutlined, PlusOutlined, FilterOutlined } from '@ant-design/icons'
-import { matchesFilter } from '../utils/filterUtils'
-
-const NUM_OPERATORS = ['>=', '<=', '>', '<', '=']
-const STR_OPERATORS = ['contains', '=']
-const ENUM_STR_OPERATORS = ['=']
-
-function getOperators(varDef) {
-  if (!varDef) return STR_OPERATORS
-  if (varDef.type === 'number' || varDef.type === 'integer') return NUM_OPERATORS
-  if (varDef.type === 'enum') {
-    return typeof varDef.enum?.[0] === 'number' ? NUM_OPERATORS : ENUM_STR_OPERATORS
-  }
-  return STR_OPERATORS
-}
+import { matchesFilter, getFilterOperators } from '../utils/filterUtils'
 
 function FilterHeader({ varName, varDef, filter, onChange }) {
-  const ops = getOperators(varDef)
+  const ops = getFilterOperators(varDef)
   const isNumeric = varDef && (varDef.type === 'number' || varDef.type === 'integer')
   const isNumericEnum = varDef?.type === 'enum' && typeof varDef.enum?.[0] === 'number'
   const active = filter && filter.value !== '' && filter.value != null

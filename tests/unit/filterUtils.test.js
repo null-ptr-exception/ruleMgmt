@@ -1,35 +1,81 @@
 import { describe, it, expect } from 'vitest'
-import { matchesFilter, getWsOperators, NUM_OPERATORS, STR_OPERATORS } from '../../src/utils/filterUtils.js'
+import { matchesFilter, getFilterOperators, mergeFilters, NUM_OPERATORS, STR_OPERATORS } from '../../src/utils/filterUtils.js'
 
-// ─── getWsOperators ──────────────────────────────────────────────────────────
+// ─── getFilterOperators ───────────────────────────────────────────────────────
+// Used by both FilterHeader (AlertTable column headers) and WorkspaceFilterBar.
 
-describe('getWsOperators', () => {
+describe('getFilterOperators', () => {
   it('returns STR_OPERATORS when varDef is undefined', () => {
-    expect(getWsOperators(undefined)).toEqual(STR_OPERATORS)
+    expect(getFilterOperators(undefined)).toEqual(STR_OPERATORS)
   })
 
   it('returns STR_OPERATORS for string type', () => {
-    expect(getWsOperators({ type: 'string' })).toEqual(STR_OPERATORS)
+    expect(getFilterOperators({ type: 'string' })).toEqual(STR_OPERATORS)
   })
 
   it('returns NUM_OPERATORS for number type', () => {
-    expect(getWsOperators({ type: 'number' })).toEqual(NUM_OPERATORS)
+    expect(getFilterOperators({ type: 'number' })).toEqual(NUM_OPERATORS)
   })
 
   it('returns NUM_OPERATORS for integer type', () => {
-    expect(getWsOperators({ type: 'integer' })).toEqual(NUM_OPERATORS)
+    expect(getFilterOperators({ type: 'integer' })).toEqual(NUM_OPERATORS)
   })
 
   it('returns NUM_OPERATORS for numeric enum', () => {
-    expect(getWsOperators({ type: 'enum', enum: [1, 2, 3] })).toEqual(NUM_OPERATORS)
+    expect(getFilterOperators({ type: 'enum', enum: [1, 2, 3] })).toEqual(NUM_OPERATORS)
   })
 
   it('returns ["="] for string enum', () => {
-    expect(getWsOperators({ type: 'enum', enum: ['a', 'b'] })).toEqual(['='])
+    expect(getFilterOperators({ type: 'enum', enum: ['a', 'b'] })).toEqual(['='])
   })
 
   it('returns STR_OPERATORS for unrecognised type', () => {
-    expect(getWsOperators({ type: 'boolean' })).toEqual(STR_OPERATORS)
+    expect(getFilterOperators({ type: 'boolean' })).toEqual(STR_OPERATORS)
+  })
+})
+
+// ─── mergeFilters ─────────────────────────────────────────────────────────────
+// Section filters take precedence over workspace filters for the same key.
+
+describe('mergeFilters', () => {
+  it('returns wsFilters unchanged when sectionFilters is empty', () => {
+    const ws = { threshold: { op: '>=', value: '100' } }
+    expect(mergeFilters(ws, {})).toEqual(ws)
+  })
+
+  it('merges non-overlapping keys', () => {
+    const ws = { threshold: { op: '>=', value: '100' } }
+    const section = { instance_name: { op: 'contains', value: 'prod' } }
+    expect(mergeFilters(ws, section)).toEqual({ ...ws, ...section })
+  })
+
+  it('section filter overrides workspace filter for same key', () => {
+    const ws = { instance_name: { op: 'contains', value: 'prod' } }
+    const section = { instance_name: { op: '=', value: 'staging' } }
+    expect(mergeFilters(ws, section)).toEqual({ instance_name: { op: '=', value: 'staging' } })
+  })
+
+  it('skips section entries with empty string value', () => {
+    const ws = { threshold: { op: '>=', value: '100' } }
+    const section = { threshold: { op: '=', value: '' } }
+    expect(mergeFilters(ws, section)).toEqual(ws)
+  })
+
+  it('skips section entries with null value', () => {
+    const ws = { threshold: { op: '>=', value: '100' } }
+    const section = { threshold: { op: '=', value: null } }
+    expect(mergeFilters(ws, section)).toEqual(ws)
+  })
+
+  it('returns empty object when both are empty', () => {
+    expect(mergeFilters({}, {})).toEqual({})
+  })
+
+  it('does not mutate wsFilters input', () => {
+    const ws = { threshold: { op: '>=', value: '100' } }
+    const wsCopy = { ...ws }
+    mergeFilters(ws, { threshold: { op: '=', value: '200' } })
+    expect(ws).toEqual(wsCopy)
   })
 })
 

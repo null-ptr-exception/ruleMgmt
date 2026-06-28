@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Button, Input, Select, Tag, Typography } from 'antd'
 import { SaveOutlined, CloseOutlined, RightOutlined } from '@ant-design/icons'
 import AlertTable from './AlertTable'
-import { matchesFilter, getWsOperators } from '../utils/filterUtils'
+import { matchesFilter, getFilterOperators, mergeFilters } from '../utils/filterUtils'
 
 const { Text } = Typography
 
@@ -15,12 +15,12 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
   const allVarNames = [...new Set(allVars.map(x => x.name))]
 
   const pendingVarDef = allVars.find(v => v.name === pendingCol)
-  const ops = getWsOperators(pendingVarDef)
+  const ops = getFilterOperators(pendingVarDef)
 
   function handleColChange(col) {
     setPendingCol(col)
     const varDef = allVars.find(v => v.name === col)
-    setPendingOp(getWsOperators(varDef)[0])
+    setPendingOp(getFilterOperators(varDef)[0])
   }
 
   function addFilter() {
@@ -168,12 +168,7 @@ export default function AlertOverviewWorkspace({
   }
 
   function mergedFilters(alertName) {
-    const section = sectionFilters[alertName] || {}
-    const merged = { ...wsFilters }
-    Object.entries(section).forEach(([k, v]) => {
-      if (v && v.value !== '') merged[k] = v
-    })
-    return merged
+    return mergeFilters(wsFilters, sectionFilters[alertName] || {})
   }
 
   function handleUpdate(alertName, updated) {

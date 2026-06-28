@@ -7,26 +7,47 @@ import { matchesFilter, getFilterOperators, mergeFilters } from '../utils/filter
 const { Text } = Typography
 
 function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
-  const [pendingCol, setPendingCol] = useState('')
+  const [pendingKey, setPendingKey] = useState('')  // "name::type"
   const [pendingOp, setPendingOp] = useState('contains')
   const [pendingVal, setPendingVal] = useState('')
 
-  const allVars = vars.flatMap(v => v)
-  const allVarNames = [...new Set(allVars.map(x => x.name))]
+  // Dedupe by name+type — keeps separate entries for same-named columns with different types
+  const colOptions = useMemo(() => {
+    const seen = new Set()
+    const result = []
+    for (const v of vars.flatMap(v => v)) {
+      const key = `${v.name}::${v.type}`
+      if (!seen.has(key)) { seen.add(key); result.push(v) }
+    }
+    return result
+  }, [vars])
 
-  const pendingVarDef = allVars.find(v => v.name === pendingCol)
+  // Names that appear with more than one type need a "(type)" suffix to disambiguate
+  const ambiguous = useMemo(() => {
+    const counts = new Map()
+    for (const v of colOptions) counts.set(v.name, (counts.get(v.name) || 0) + 1)
+    return new Set([...counts.entries()].filter(([, c]) => c > 1).map(([n]) => n))
+  }, [colOptions])
+
+  const selectOptions = colOptions.map(v => ({
+    value: `${v.name}::${v.type}`,
+    label: ambiguous.has(v.name) ? `${v.name} (${v.type})` : v.name,
+  }))
+
+  const pendingVarDef = colOptions.find(v => `${v.name}::${v.type}` === pendingKey)
+  const pendingColName = pendingKey.split('::')[0]
   const ops = getFilterOperators(pendingVarDef)
 
-  function handleColChange(col) {
-    setPendingCol(col)
-    const varDef = allVars.find(v => v.name === col)
+  function handleColChange(key) {
+    setPendingKey(key)
+    const varDef = colOptions.find(v => `${v.name}::${v.type}` === key)
     setPendingOp(getFilterOperators(varDef)[0])
   }
 
   function addFilter() {
-    if (!pendingCol || pendingVal === '') return
-    onWsFiltersChange({ ...wsFilters, [pendingCol]: { op: pendingOp, value: pendingVal } })
-    setPendingCol('')
+    if (!pendingColName || pendingVal === '') return
+    onWsFiltersChange({ ...wsFilters, [pendingColName]: { op: pendingOp, value: pendingVal } })
+    setPendingKey('')
     setPendingVal('')
     setPendingOp('contains')
   }
@@ -56,10 +77,10 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
       <Select
         size="small"
         placeholder="column"
-        value={pendingCol || undefined}
+        value={pendingKey || undefined}
         onChange={handleColChange}
-        style={{ width: 120 }}
-        options={allVarNames.map(n => ({ value: n, label: n }))}
+        style={{ width: 140 }}
+        options={selectOptions}
       />
       <Select
         size="small"
@@ -76,7 +97,7 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
         onPressEnter={addFilter}
         style={{ width: 80 }}
       />
-      <Button size="small" onClick={addFilter} disabled={!pendingCol || pendingVal === ''}>Add</Button>
+      <Button size="small" onClick={addFilter} disabled={!pendingColName || pendingVal === ''}>Add</Button>
       {activeCount > 0 && (
         <Button size="small" type="text" icon={<CloseOutlined />} onClick={() => onWsFiltersChange({})}>
           Clear all

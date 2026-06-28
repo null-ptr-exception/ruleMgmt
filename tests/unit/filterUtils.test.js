@@ -184,6 +184,14 @@ describe('matchesFilter — NaN / non-numeric cell handling', () => {
   it('returns false when cell is null for numeric filter', () => {
     expect(matchesFilter({ threshold: null }, { threshold: { op: '>=', value: '0' } }, vars)).toBe(false)
   })
+
+  it('rejects cell value with numeric prefix ("100ms" is not a valid number)', () => {
+    expect(matchesFilter({ threshold: '100ms' }, { threshold: { op: '>=', value: '0' } }, vars)).toBe(false)
+  })
+
+  it('rejects filter value with numeric prefix ("100ms" as filter value)', () => {
+    expect(matchesFilter({ threshold: 100 }, { threshold: { op: '>=', value: '100ms' } }, vars)).toBe(false)
+  })
 })
 
 describe('matchesFilter — numeric enum', () => {

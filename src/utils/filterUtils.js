@@ -28,8 +28,8 @@ export function matchesFilter(row, filters, vars, commonValues = {}) {
     const v = vars.find(v => v.name === varName)
     const cellVal = varName in commonValues ? commonValues[varName] : row[varName]
     if (v && (v.type === 'number' || v.type === 'integer' || (v.type === 'enum' && typeof v.enum?.[0] === 'number'))) {
-      const num = parseFloat(cellVal)
-      const fnum = parseFloat(filter.value)
+      const num = cellVal == null ? NaN : Number(cellVal)
+      const fnum = Number(filter.value)
       if (isNaN(num) || isNaN(fnum)) return false
       switch (filter.op) {
         case '>=': return num >= fnum

@@ -28,11 +28,9 @@ async function expandToDeployment(page, folderPath) {
 }
 
 async function clickDeploymentAndWait(page, deployNode) {
-  const [response] = await Promise.all([
-    page.waitForResponse(r => r.url().includes('/api/v2/deployments/') && r.status() < 300),
-    deployNode.locator('.ant-tree-node-content-wrapper').click(),
-  ])
-  await response.json()
+  await deployNode.locator('.ant-tree-node-content-wrapper').click()
+  // Wait for mode toggle to confirm deployment selected + schema loaded
+  await expect(page.getByText('Single', { exact: true })).toBeVisible({ timeout: 8000 })
 }
 
 test.describe('Alert Overview Mode', () => {
@@ -143,5 +141,104 @@ test.describe('Alert Overview Mode', () => {
     // Should show normal template tree (no search box, no checkboxes)
     await expect(page.getByPlaceholder('Search alert types...')).not.toBeVisible()
     await expect(page.getByText('latency_slow_queries')).toBeVisible({ timeout: 5000 })
+  })
+
+  test.describe('Workspace filter bar', () => {
+    // Uses e2e-filter-test/dev which has seeded data (2 rows in mariadb_latency_slow_queries)
+    const SEEDED_FOLDER = 'deployments/e2e-filter-test/dev'
+
+    async function openOverviewWithLatencySection(page) {
+      await page.goto('/#/alerts')
+      await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+      const deploymentNode = await expandToDeployment(page, SEEDED_FOLDER)
+      await expect(deploymentNode).toBeVisible({ timeout: 5000 })
+      await clickDeploymentAndWait(page, deploymentNode)
+      await page.getByText('Overview', { exact: true }).click()
+      await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
+      // Search and check latency leaf
+      await page.getByPlaceholder('Search alert types...').fill('latency')
+      await expect(page.locator('input[type="checkbox"]').last()).toBeVisible({ timeout: 5000 })
+      await page.locator('input[type="checkbox"]').last().check()
+      await expect(page.locator('text=/2 \\/ 2 rows/').first()).toBeVisible({ timeout: 5000 })
+    }
+
+    async function addWorkspaceFilter(page, columnName, value) {
+      // All interactions scoped to the workspace filter bar div
+      const wsBar = page.getByText('Workspace filter:').locator('..')
+      // Click the column combobox (first combobox in the bar)
+      await wsBar.getByRole('combobox').first().click()
+      // Select option from the Ant Design dropdown portal
+      await page.locator('.ant-select-item-option', { hasText: columnName }).first().click()
+      // Fill the value input (scoped to wsBar to avoid section column inputs)
+      await wsBar.locator('input[placeholder="value"]').fill(value)
+      // Click the Add button (scoped to wsBar)
+      await wsBar.getByRole('button', { name: 'Add', exact: true }).click()
+    }
+
+    test('workspace filter narrows rows across sections', async ({ page }) => {
+      await openOverviewWithLatencySection(page)
+      await addWorkspaceFilter(page, 'instance_name', 'prod')
+      // Section should now show 1 / 2 rows
+      await expect(page.locator('text=/1 \\/ 2 rows/').first()).toBeVisible({ timeout: 3000 })
+    })
+
+    test('workspace Clear all restores full row count', async ({ page }) => {
+      await openOverviewWithLatencySection(page)
+      await addWorkspaceFilter(page, 'instance_name', 'prod')
+      await expect(page.locator('text=/1 \\/ 2 rows/').first()).toBeVisible({ timeout: 3000 })
+
+      // Clear all workspace filters
+      await page.getByRole('button', { name: 'Clear all' }).click()
+      await expect(page.locator('text=/2 \\/ 2 rows/').first()).toBeVisible({ timeout: 3000 })
+    })
+  })
+
+  test.describe('Session persistence', () => {
+    test('overview mode survives page reload', async ({ page }) => {
+      await page.goto('/#/alerts')
+      await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+
+      const deploymentNode = await expandToDeployment(page, FOLDER)
+      await expect(deploymentNode).toBeVisible({ timeout: 5000 })
+      await clickDeploymentAndWait(page, deploymentNode)
+
+      await page.getByText('Overview', { exact: true }).click()
+      await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
+
+      // Check an alert type so session has something to restore
+      await page.locator('input[type="checkbox"]').first().check()
+
+      // Reload the page
+      await page.reload()
+      await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+
+      // Mode should still be Overview (session storage persists across reload)
+      await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
+      // Checked alerts should also be restored (workspace shows sections)
+      await expect(page.locator('text=/\\d+ \\/ \\d+ rows/').first()).toBeVisible({ timeout: 5000 })
+    })
+
+    test('switching back to Single mode persists after reload', async ({ page }) => {
+      await page.goto('/#/alerts')
+      await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+
+      const deploymentNode = await expandToDeployment(page, FOLDER)
+      await expect(deploymentNode).toBeVisible({ timeout: 5000 })
+      await clickDeploymentAndWait(page, deploymentNode)
+
+      // Switch to overview then back to single
+      await page.getByText('Overview', { exact: true }).click()
+      await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
+      await page.getByText('Single', { exact: true }).click()
+      await expect(page.getByText('latency_slow_queries')).toBeVisible({ timeout: 5000 })
+
+      // Reload
+      await page.reload()
+      await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+
+      // Should still be in Single mode (search box not visible)
+      await expect(page.getByPlaceholder('Search alert types...')).not.toBeVisible()
+      await expect(page.getByText('latency_slow_queries')).toBeVisible({ timeout: 5000 })
+    })
   })
 })

@@ -39,11 +39,9 @@ async function expandAndSelectDeployment(page) {
 
   const deployNode = tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: FOLDER_BASENAME }).first()
   await expect(deployNode).toBeVisible({ timeout: 5000 })
-  const [response] = await Promise.all([
-    page.waitForResponse(r => r.url().includes('/api/v2/deployments/') && r.status() < 300),
-    deployNode.locator('.ant-tree-node-content-wrapper').click(),
-  ])
-  await response.json()
+  await deployNode.locator('.ant-tree-node-content-wrapper').click()
+  // Wait for mode toggle to confirm deployment selected + schema loaded
+  await expect(page.getByText('Single', { exact: true })).toBeVisible({ timeout: 8000 })
 }
 
 test.describe('Alert Table Filter', () => {
@@ -234,6 +232,44 @@ test.describe('Alert Table Filter', () => {
       await page.getByRole('button', { name: 'Clear filters' }).click()
       await expect(page.locator('text=/2 \\/ 2 rows/')).toBeVisible({ timeout: 3000 })
       await expect(page.getByRole('button', { name: 'Clear filters' })).not.toBeVisible()
+    })
+  })
+
+  test.describe('Filter state management', () => {
+    test('filter state clears when switching to a different deployment', async ({ page }) => {
+      await expandAndSelectDeployment(page)
+      await page.getByText(ALERT_TYPE_LABEL).click()
+
+      await expect(page.getByPlaceholder('value').first()).toBeVisible({ timeout: 5000 })
+      await expect(page.locator('.ant-table-tbody tr.ant-table-row')).toHaveCount(2, { timeout: 5000 })
+
+      // Apply a filter — only 1 row visible
+      const instanceFilter = page.locator('th').filter({ hasText: /instance_name/ }).getByPlaceholder('value')
+      await instanceFilter.fill('prod')
+      await expect(page.locator('.ant-table-tbody tr.ant-table-row')).toHaveCount(1, { timeout: 3000 })
+      await expect(page.getByRole('button', { name: 'Clear filters' })).toBeVisible()
+
+      // Switch to a different deployment (e2e-overview-test/dev, no seeded data)
+      const tree = page.locator('.ant-tree')
+      const overviewTestSwitcher = tree.locator('.ant-tree-treenode')
+        .filter({ hasText: 'e2e-overview-test' }).first()
+        .locator('.ant-tree-switcher_close')
+      if (await overviewTestSwitcher.count() > 0) {
+        await overviewTestSwitcher.click()
+        await expect(tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' }).nth(1)).toBeVisible({ timeout: 5000 })
+      }
+      const otherDeploy = tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' }).nth(1)
+      await otherDeploy.locator('.ant-tree-node-content-wrapper').click()
+      // Wait for mode toggle to confirm the new deployment loaded
+      await expect(page.getByText('Single', { exact: true })).toBeVisible({ timeout: 8000 })
+
+      // Click the same alert type on the new deployment
+      await page.getByText(ALERT_TYPE_LABEL).click()
+
+      // The new deployment has no seeded data — should show 0 rows (not 1 filtered)
+      // This proves filters were cleared when switching deployments (if filter stuck, would still show 0 but...
+      // also confirm "Clear filters" button is gone — meaning filter state is clean)
+      await expect(page.getByRole('button', { name: 'Clear filters' })).not.toBeVisible({ timeout: 5000 })
     })
   })
 })

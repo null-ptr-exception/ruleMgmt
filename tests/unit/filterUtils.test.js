@@ -73,9 +73,45 @@ describe('mergeFilters', () => {
 
   it('does not mutate wsFilters input', () => {
     const ws = { threshold: { op: '>=', value: '100' } }
-    const wsCopy = { ...ws }
+    const wsCopy = JSON.parse(JSON.stringify(ws))
     mergeFilters(ws, { threshold: { op: '=', value: '200' } })
     expect(ws).toEqual(wsCopy)
+  })
+})
+
+// ─── WorkspaceFilterBar key semantics (documented behaviour) ─────────────────
+// wsFilters is keyed by column *name* only. When the same column name exists
+// in two alert sections with different types, the UI shows them as separate
+// selectable options (e.g. "threshold (number)" vs "threshold (string)"), but
+// both write to the same key. Only one ws filter per column name can be active
+// at a time — the last one written wins. This is intentional: a workspace
+// filter applies across all sections regardless of their local type.
+
+describe('wsFilters key semantics — same name, different types', () => {
+  it('merging a second filter for the same name overwrites the first', () => {
+    const ws1 = { threshold: { op: '>=', value: '100' } }          // set by "threshold (number)"
+    const ws2 = { threshold: { op: 'contains', value: 'high' } }   // then user picks "threshold (string)"
+    // simulate addFilter overwrite: { ...wsFilters, [colName]: newFilter }
+    const result = { ...ws1, ...ws2 }
+    expect(result).toEqual({ threshold: { op: 'contains', value: 'high' } })
+    expect(Object.keys(result)).toHaveLength(1)
+  })
+
+  it('matchesFilter uses the section-local varDef to evaluate the shared filter', () => {
+    // Both sections have a "threshold" column but different types.
+    // The ws filter {op:'>=', value:'100'} applies to both; each section
+    // evaluates it against its own type.
+    const numVars = [{ name: 'threshold', type: 'number' }]
+    const strVars = [{ name: 'threshold', type: 'string' }]
+    const filter = { threshold: { op: '>=', value: '100' } }
+
+    // number section: numeric comparison — row with 150 passes
+    expect(matchesFilter({ threshold: 150 }, filter, numVars)).toBe(true)
+    // string section: falls back to string path — op '>=' is not '=', so contains check
+    // '200' contains '100'? No → false (string "200".includes("100") === false)
+    expect(matchesFilter({ threshold: '200' }, filter, strVars)).toBe(false)
+    // string section: 'above-100-limit' contains '100' → true
+    expect(matchesFilter({ threshold: 'above-100-limit' }, filter, strVars)).toBe(true)
   })
 })
 
@@ -101,7 +137,7 @@ describe('matchesFilter — empty / null filter guard', () => {
   })
 
   it('returns true when filter value is undefined', () => {
-    expect(matchesFilter({ instance_name: 'prod' }, { instance_name: null }, [STR_VAR])).toBe(true)
+    expect(matchesFilter({ instance_name: 'prod' }, { instance_name: { op: 'contains', value: undefined } }, [STR_VAR])).toBe(true)
   })
 })
 

@@ -72,9 +72,11 @@ test.describe('Alert Overview Save', () => {
     test('Save all shows Saved at timestamp after click', async ({ page }) => {
       await openOverviewWithLatencySection(page)
 
-      // Add a row to make data dirty
+      // Edit instance_name of first row to make data dirty (keeps row count at 2)
       await expect(page.locator('.ant-table-tbody tr.ant-table-row')).toHaveCount(2, { timeout: 5000 })
-      await page.getByRole('button', { name: /Add instance/ }).first().click()
+      const firstRowInput = page.locator('.ant-table-tbody tr.ant-table-row').first().getByRole('textbox').first()
+      await expect(firstRowInput).toBeVisible({ timeout: 3000 })
+      await firstRowInput.fill('prod-edited')
 
       await page.getByRole('button', { name: 'Save all' }).click()
       await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 5000 })

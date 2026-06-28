@@ -103,16 +103,22 @@ export default function AlertUserView() {
     })
   }, [selectedChart, selectedFolder])
 
+  // Reset UI state when the selected alert type or schema changes
   useEffect(() => {
     if (!activeAlert || !schema) {
       setVars([])
       return
     }
     setVars(schemaToVars(schema, activeAlert))
-    setRows(allValues[activeAlert] || [])
     setFilters({})
     setDirty(false)
-  }, [activeAlert, schema, allValues])
+  }, [activeAlert, schema])
+
+  // Sync rows when allValues updates (e.g. after deployment fetch or overview save)
+  useEffect(() => {
+    if (!activeAlert) return
+    setRows(allValues[activeAlert] || [])
+  }, [activeAlert, allValues])
 
   async function handleNewDeployOpen() {
     const charts = await listCharts()

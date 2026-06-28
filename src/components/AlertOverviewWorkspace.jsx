@@ -2,22 +2,42 @@ import { useState, useMemo } from 'react'
 import { Button, Input, Select, Tag, Typography } from 'antd'
 import { SaveOutlined, CloseOutlined, RightOutlined } from '@ant-design/icons'
 import AlertTable from './AlertTable'
+import { matchesFilter } from '../utils/filterUtils'
 
 const { Text } = Typography
-const OPERATORS = ['>=', '<=', '>', '<', '=']
+const NUM_OPERATORS = ['>=', '<=', '>', '<', '=']
+const STR_OPERATORS = ['contains', '=']
+
+function getWsOperators(varDef) {
+  if (!varDef) return STR_OPERATORS
+  if (varDef.type === 'number' || varDef.type === 'integer') return NUM_OPERATORS
+  if (varDef.type === 'enum') return typeof varDef.enum?.[0] === 'number' ? NUM_OPERATORS : ['=']
+  return STR_OPERATORS
+}
 
 function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
   const [pendingCol, setPendingCol] = useState('')
-  const [pendingOp, setPendingOp] = useState('=')
+  const [pendingOp, setPendingOp] = useState('contains')
   const [pendingVal, setPendingVal] = useState('')
 
-  const allVarNames = [...new Set(vars.flatMap(v => v.map(x => x.name)))]
+  const allVars = vars.flatMap(v => v)
+  const allVarNames = [...new Set(allVars.map(x => x.name))]
+
+  const pendingVarDef = allVars.find(v => v.name === pendingCol)
+  const ops = getWsOperators(pendingVarDef)
+
+  function handleColChange(col) {
+    setPendingCol(col)
+    const varDef = allVars.find(v => v.name === col)
+    setPendingOp(getWsOperators(varDef)[0])
+  }
 
   function addFilter() {
     if (!pendingCol || pendingVal === '') return
     onWsFiltersChange({ ...wsFilters, [pendingCol]: { op: pendingOp, value: pendingVal } })
     setPendingCol('')
     setPendingVal('')
+    setPendingOp('contains')
   }
 
   function removeFilter(key) {
@@ -46,7 +66,7 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
         size="small"
         placeholder="column"
         value={pendingCol || undefined}
-        onChange={setPendingCol}
+        onChange={handleColChange}
         style={{ width: 120 }}
         options={allVarNames.map(n => ({ value: n, label: n }))}
       />
@@ -54,8 +74,8 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
         size="small"
         value={pendingOp}
         onChange={setPendingOp}
-        style={{ width: 60 }}
-        options={OPERATORS.map(o => ({ value: o, label: o }))}
+        style={{ width: 80 }}
+        options={ops.map(o => ({ value: o, label: o }))}
       />
       <Input
         size="small"
@@ -81,30 +101,8 @@ function SectionPanel({ alertName, vars, rows, commonValues, filters, onFiltersC
   const matchCount = useMemo(() => {
     const hasFilters = Object.values(filters).some(f => f && f.value !== '' && f.value != null)
     if (!hasFilters) return rows.length
-    return rows.filter(row => {
-      return Object.entries(filters).every(([varName, filter]) => {
-        if (!filter || filter.value === '' || filter.value == null) return true
-        const v = vars.find(v => v.name === varName)
-        const cellVal = varName in commonValues ? commonValues[varName] : row[varName]
-        if (v && (v.type === 'number' || v.type === 'integer' || (v.type === 'enum' && typeof v.enum?.[0] === 'number'))) {
-          const num = parseFloat(cellVal)
-          const fnum = parseFloat(filter.value)
-          if (isNaN(num) || isNaN(fnum)) return false
-          switch (filter.op) {
-            case '>=': return num >= fnum
-            case '<=': return num <= fnum
-            case '>':  return num > fnum
-            case '<':  return num < fnum
-            case '=':  return num === fnum
-            default:   return true
-          }
-        }
-        const cell = String(cellVal ?? '').toLowerCase()
-        const val = String(filter.value).toLowerCase()
-        return filter.op === '=' ? cell === val : cell.includes(val)
-      })
-    }).length
-  }, [rows, filters, vars])
+    return rows.filter(row => matchesFilter(row, filters, vars, commonValues)).length
+  }, [rows, filters, vars, commonValues])
 
   const activeSectionFilters = Object.values(filters).filter(f => f && f.value !== '' && f.value != null)
   const hasSectionFilter = activeSectionFilters.length > 0

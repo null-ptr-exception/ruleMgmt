@@ -6,16 +6,33 @@ const FOLDER = 'deployments/e2e-overview-test/dev'
 async function expandToDeployment(page, folderPath) {
   const tree = page.locator('.ant-tree')
   const parts = folderPath.split('/')
-  for (const part of parts.slice(0, -1)) {
-    const node = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${part}$`) })
-    const switcher = node.locator('.ant-tree-switcher_close')
+  const leaf = parts[parts.length - 1]
+
+  // Expand each ancestor in order, waiting for the next level to appear
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i]
+    const nextPart = parts[i + 1]
+
+    await expect(tree.locator('.ant-tree-treenode').filter({ hasText: part }).first()).toBeVisible({ timeout: 5000 })
+
+    const switcher = tree.locator('.ant-tree-treenode').filter({ hasText: part }).first().locator('.ant-tree-switcher_close')
     if (await switcher.count() > 0) {
       await switcher.click()
-      await page.waitForTimeout(300)
+      // wait for the next level to load
+      await expect(tree.locator('.ant-tree-treenode').filter({ hasText: nextPart }).first()).toBeVisible({ timeout: 8000 })
     }
   }
-  const leaf = parts[parts.length - 1]
-  return tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: leaf })
+
+  const deployNode = tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: leaf }).first()
+  return deployNode
+}
+
+async function clickDeploymentAndWait(page, deployNode) {
+  const [response] = await Promise.all([
+    page.waitForResponse(r => r.url().includes('/api/v2/deployments/') && r.status() < 300),
+    deployNode.locator('.ant-tree-node-content-wrapper').click(),
+  ])
+  await response.json()
 }
 
 test.describe('Alert Overview Mode', () => {
@@ -32,10 +49,10 @@ test.describe('Alert Overview Mode', () => {
 
     const deploymentNode = await expandToDeployment(page, FOLDER)
     await expect(deploymentNode).toBeVisible({ timeout: 5000 })
-    await deploymentNode.locator('.ant-tree-node-content-wrapper').click()
+    await clickDeploymentAndWait(page, deploymentNode)
 
-    await expect(page.getByText('Single')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText('Overview')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Single', { exact: true })).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Overview', { exact: true })).toBeVisible({ timeout: 5000 })
   })
 
   test('switching to Overview mode shows checkbox tree', async ({ page }) => {
@@ -44,9 +61,9 @@ test.describe('Alert Overview Mode', () => {
 
     const deploymentNode = await expandToDeployment(page, FOLDER)
     await expect(deploymentNode).toBeVisible({ timeout: 5000 })
-    await deploymentNode.locator('.ant-tree-node-content-wrapper').click()
+    await clickDeploymentAndWait(page, deploymentNode)
 
-    await page.getByText('Overview').click()
+    await page.getByText('Overview', { exact: true }).click()
 
     await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
     await expect(page.getByText('Select alert types from the sidebar to get started')).toBeVisible()
@@ -58,9 +75,9 @@ test.describe('Alert Overview Mode', () => {
 
     const deploymentNode = await expandToDeployment(page, FOLDER)
     await expect(deploymentNode).toBeVisible({ timeout: 5000 })
-    await deploymentNode.locator('.ant-tree-node-content-wrapper').click()
+    await clickDeploymentAndWait(page, deploymentNode)
 
-    await page.getByText('Overview').click()
+    await page.getByText('Overview', { exact: true }).click()
     await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
 
     // Check the first alert type checkbox
@@ -71,7 +88,7 @@ test.describe('Alert Overview Mode', () => {
     // Workspace should show a section panel (no longer the empty state)
     await expect(page.getByText('Select alert types from the sidebar to get started')).not.toBeVisible()
     // Section panel header visible with row count badge
-    await expect(page.locator('text=/\\d+ \\/ \\d+ rows/')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('text=/\\d+ \\/ \\d+ rows/').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('Save all button appears and is clickable in overview mode', async ({ page }) => {
@@ -80,9 +97,9 @@ test.describe('Alert Overview Mode', () => {
 
     const deploymentNode = await expandToDeployment(page, FOLDER)
     await expect(deploymentNode).toBeVisible({ timeout: 5000 })
-    await deploymentNode.locator('.ant-tree-node-content-wrapper').click()
+    await clickDeploymentAndWait(page, deploymentNode)
 
-    await page.getByText('Overview').click()
+    await page.getByText('Overview', { exact: true }).click()
     await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
 
     // Check a checkbox to load a section
@@ -99,9 +116,9 @@ test.describe('Alert Overview Mode', () => {
 
     const deploymentNode = await expandToDeployment(page, FOLDER)
     await expect(deploymentNode).toBeVisible({ timeout: 5000 })
-    await deploymentNode.locator('.ant-tree-node-content-wrapper').click()
+    await clickDeploymentAndWait(page, deploymentNode)
 
-    await page.getByText('Overview').click()
+    await page.getByText('Overview', { exact: true }).click()
     const searchBox = page.getByPlaceholder('Search alert types...')
     await expect(searchBox).toBeVisible({ timeout: 5000 })
 
@@ -117,12 +134,12 @@ test.describe('Alert Overview Mode', () => {
 
     const deploymentNode = await expandToDeployment(page, FOLDER)
     await expect(deploymentNode).toBeVisible({ timeout: 5000 })
-    await deploymentNode.locator('.ant-tree-node-content-wrapper').click()
+    await clickDeploymentAndWait(page, deploymentNode)
 
-    await page.getByText('Overview').click()
+    await page.getByText('Overview', { exact: true }).click()
     await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
 
-    await page.getByText('Single').click()
+    await page.getByText('Single', { exact: true }).click()
     // Should show normal template tree (no search box, no checkboxes)
     await expect(page.getByPlaceholder('Search alert types...')).not.toBeVisible()
     await expect(page.getByText('latency_slow_queries')).toBeVisible({ timeout: 5000 })

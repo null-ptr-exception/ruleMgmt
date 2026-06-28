@@ -112,7 +112,7 @@ export default function AlertUserView() {
     setRows(allValues[activeAlert] || [])
     setFilters({})
     setDirty(false)
-  }, [activeAlert, schema])
+  }, [activeAlert, schema, allValues])
 
   async function handleNewDeployOpen() {
     const charts = await listCharts()

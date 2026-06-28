@@ -108,11 +108,11 @@ export default function foldersRouter() {
 
   router.post('/init', async (req, res) => {
     const { folder, chart } = req.body
-    if (!folder || folder.includes('..')) {
+    if (!folder || typeof folder !== 'string' || folder.includes('..')) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
-    if (!chart) {
-      return res.status(400).json({ error: 'chart name required' })
+    if (!chart || typeof chart !== 'string' || chart.includes('..') || path.isAbsolute(chart)) {
+      return res.status(400).json({ error: 'Invalid chart name' })
     }
 
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)

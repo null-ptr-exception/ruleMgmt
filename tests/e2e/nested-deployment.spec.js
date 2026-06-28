@@ -81,8 +81,9 @@ test.describe('nested deployment — save and preview', () => {
       await expect(page.getByText('Common Values')).toBeVisible({ timeout: 5000 })
       await page.getByText('Common Values').click()
 
-      // Edit the first text input to make form dirty (skip hidden Segmented radio inputs)
-      const input = page.getByRole('textbox').first()
+      // Edit the first visible text input in the Common Values form
+      // (scope to ant-input to skip hidden Segmented radio buttons and sidebar search inputs)
+      const input = page.locator('input.ant-input:visible').first()
       await expect(input).toBeVisible({ timeout: 3000 })
       await input.fill('e2e-test-value')
 

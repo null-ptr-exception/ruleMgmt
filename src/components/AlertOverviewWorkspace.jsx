@@ -95,16 +95,16 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
   )
 }
 
-function SectionPanel({ alertName, vars, rows, commonValues, filters, onFiltersChange, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear }) {
+function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear }) {
   const [collapsed, setCollapsed] = useState(false)
 
   const matchCount = useMemo(() => {
-    const hasFilters = Object.values(filters).some(f => f && f.value !== '' && f.value != null)
+    const hasFilters = Object.values(effectiveFilters).some(f => f && f.value !== '' && f.value != null)
     if (!hasFilters) return rows.length
-    return rows.filter(row => matchesFilter(row, filters, vars, commonValues)).length
-  }, [rows, filters, vars, commonValues])
+    return rows.filter(row => matchesFilter(row, effectiveFilters, vars, commonValues)).length
+  }, [rows, effectiveFilters, vars, commonValues])
 
-  const activeSectionFilters = Object.values(filters).filter(f => f && f.value !== '' && f.value != null)
+  const activeSectionFilters = Object.values(sectionFilters).filter(f => f && f.value !== '' && f.value != null)
   const hasSectionFilter = activeSectionFilters.length > 0
   const hasWsFilter = Object.keys(wsFilters || {}).length > 0
   const hasAnyFilter = hasSectionFilter || hasWsFilter
@@ -143,7 +143,8 @@ function SectionPanel({ alertName, vars, rows, commonValues, filters, onFiltersC
             vars={vars}
             rows={rows}
             commonValues={commonValues}
-            filters={filters}
+            filters={sectionFilters}
+            effectiveFilters={effectiveFilters}
             onFiltersChange={onFiltersChange}
             onUpdate={onUpdate}
             onDelete={onDelete}
@@ -223,7 +224,8 @@ export default function AlertOverviewWorkspace({
             vars={getVars(alertName)}
             rows={allValues[alertName] || []}
             commonValues={commonValues}
-            filters={mergedFilters(alertName)}
+            sectionFilters={sectionFilters[alertName] || {}}
+            effectiveFilters={mergedFilters(alertName)}
             onFiltersChange={f => handleSectionFiltersChange(alertName, f)}
             wsFilters={wsFilters}
             onWsFiltersClear={() => setWsFilters({})}

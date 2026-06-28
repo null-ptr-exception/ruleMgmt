@@ -236,6 +236,14 @@ test.describe('Alert Table Filter', () => {
   })
 
   test.describe('Filter state management', () => {
+    test.beforeAll(async ({ request }) => {
+      // Ensure the second deployment exists so this spec is not order-dependent
+      const res = await request.post('/api/v2/folders/init', {
+        data: { folder: 'deployments/e2e-overview-test/dev', chart: CHART }
+      })
+      expect(res.status()).toBeLessThan(300)
+    })
+
     test('filter state clears when switching to a different deployment', async ({ page }) => {
       await expandAndSelectDeployment(page)
       await page.getByText(ALERT_TYPE_LABEL).click()

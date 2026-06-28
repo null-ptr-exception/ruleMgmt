@@ -144,8 +144,27 @@ test.describe('Alert Overview Mode', () => {
   })
 
   test.describe('Workspace filter bar', () => {
-    // Uses e2e-filter-test/dev which has seeded data (2 rows in mariadb_latency_slow_queries)
+    // Self-seeds e2e-filter-test/dev so this spec is not order-dependent on alert-filter.spec.js
     const SEEDED_FOLDER = 'deployments/e2e-filter-test/dev'
+    const SEEDED_CHART = 'mariadb-alerts'
+    const SEED_DATA = {
+      _common: { owner: 'team-a', namespace: 'monitoring' },
+      mariadb_latency_slow_queries: [
+        { instance_name: 'prod', warn_threshold: 100, critical_threshold: 200 },
+        { instance_name: 'staging', warn_threshold: 500, critical_threshold: 1000 },
+      ]
+    }
+
+    test.beforeAll(async ({ request }) => {
+      const init = await request.post('/api/v2/folders/init', {
+        data: { folder: SEEDED_FOLDER, chart: SEEDED_CHART }
+      })
+      expect(init.status()).toBeLessThan(300)
+      const save = await request.post(`/api/v2/deployments/${SEEDED_CHART}/dev?folder=${SEEDED_FOLDER}`, {
+        data: { values: SEED_DATA }
+      })
+      expect(save.status()).toBeLessThan(300)
+    })
 
     async function openOverviewWithLatencySection(page) {
       await page.goto('/#/alerts')

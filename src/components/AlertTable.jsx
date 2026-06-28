@@ -56,15 +56,17 @@ export default function AlertTable({
   onAdd,
   commonValues = {},
   filters = {},
+  effectiveFilters,
   onFiltersChange,
 }) {
+  const activeFilters = effectiveFilters ?? filters
   const filteredRows = useMemo(() => {
-    const hasFilters = Object.values(filters).some(f => f && f.value !== '' && f.value !== undefined)
+    const hasFilters = Object.values(activeFilters).some(f => f && f.value !== '' && f.value !== undefined)
     if (!hasFilters) return rows.map((r, i) => ({ ...r, __realIndex: i }))
     return rows
       .map((r, i) => ({ ...r, __realIndex: i }))
-      .filter(r => matchesFilter(r, filters, vars, commonValues))
-  }, [rows, filters, vars, commonValues])
+      .filter(r => matchesFilter(r, activeFilters, vars, commonValues))
+  }, [rows, activeFilters, vars, commonValues])
 
   const handleCellChange = useCallback((realIndex, varName, value) => {
     const updated = rows.map((r, i) => i === realIndex ? { ...r, [varName]: value } : r)
@@ -154,7 +156,7 @@ export default function AlertTable({
     }
   ]
 
-  const hasActiveFilter = Object.values(filters).some(f => f && f.value !== '' && f.value != null)
+  const hasActiveFilter = Object.values(activeFilters).some(f => f && f.value !== '' && f.value != null)
   const emptyText = hasActiveFilter ? 'No rows match current filter' : 'No data'
 
   return (

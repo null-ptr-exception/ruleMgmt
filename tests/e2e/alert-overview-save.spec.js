@@ -3,7 +3,6 @@ import { test, expect } from '@playwright/test'
 const CHART = 'mariadb-alerts'
 const FOLDER = 'deployments/e2e-save-test/dev'
 const FOLDER_BASENAME = 'dev'
-const ALERT_TYPE_LABEL = 'latency_slow_queries'
 
 const SEED_DATA = {
   _common: { owner: 'team-a', namespace: 'monitoring' },
@@ -85,9 +84,10 @@ test.describe('Alert Overview Save', () => {
     test('Save all in overview persists row count across page reload', async ({ page }) => {
       await openOverviewWithLatencySection(page)
 
-      // Add a new row to make the count go to 3, then save
+      const before = await getCurrentRowCount(page)
       await page.getByRole('button', { name: /Add instance/ }).first().click()
-      await expect(page.locator('text=/3 \\/ 3 rows/').first()).toBeVisible({ timeout: 3000 })
+      const expected = before + 1
+      await expect(page.locator(`text=/${expected} \\/ ${expected} rows/`).first()).toBeVisible({ timeout: 3000 })
 
       await page.getByRole('button', { name: 'Save all' }).click()
       await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 5000 })
@@ -95,8 +95,8 @@ test.describe('Alert Overview Save', () => {
       // Reload — session restores overview mode with latency section
       await page.reload()
       await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
-      // Row count should persist (3 rows saved)
-      await expect(page.locator('text=/3 \\/ 3 rows/').first()).toBeVisible({ timeout: 10000 })
+      // Row count should persist after reload
+      await expect(page.locator(`text=/${expected} \\/ ${expected} rows/`).first()).toBeVisible({ timeout: 10000 })
     })
   })
 

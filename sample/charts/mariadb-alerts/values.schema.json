@@ -9,6 +9,10 @@
       "items": {
         "type": "object",
         "properties": {
+          "instance_name": {
+            "type": "string",
+            "description": "Unique name for this alert instance (e.g. prod, staging)"
+          },
           "warn_threshold": {
             "type": "number",
             "description": "Slow queries/sec warning",

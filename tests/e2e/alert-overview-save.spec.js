@@ -72,18 +72,9 @@ test.describe('Alert Overview Save', () => {
     test('Save all shows Saved at timestamp after click', async ({ page }) => {
       await openOverviewWithLatencySection(page)
 
-      // Make a change in the section to enable save
-      const rows = page.locator('.ant-table-tbody tr.ant-table-row')
-      await expect(rows).toHaveCount(2, { timeout: 5000 })
-
-      // Edit a cell to make data dirty
-      const firstCell = rows.first().locator('td').nth(1)
-      await firstCell.dblclick()
-      const cellInput = firstCell.locator('input')
-      if (await cellInput.count() > 0) {
-        await cellInput.fill('prod-edited')
-        await page.keyboard.press('Tab')
-      }
+      // Add a row to make data dirty
+      await expect(page.locator('.ant-table-tbody tr.ant-table-row')).toHaveCount(2, { timeout: 5000 })
+      await page.getByRole('button', { name: /Add instance/ }).first().click()
 
       await page.getByRole('button', { name: 'Save all' }).click()
       await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 5000 })

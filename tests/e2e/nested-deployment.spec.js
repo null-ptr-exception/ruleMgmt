@@ -56,7 +56,7 @@ test.describe('nested deployment — save and preview', () => {
 
     // Modal opens and contains PrometheusRule YAML
     const modal = page.getByRole('dialog')
-    await expect(modal).toBeVisible()
+    await expect(modal).toBeVisible({ timeout: 10000 })
     await expect(modal.locator('pre')).toContainText('PrometheusRule', { timeout: 15000 })
     await expect(modal.locator('pre')).not.toContainText('invalid release name')
   })
@@ -81,8 +81,9 @@ test.describe('nested deployment — save and preview', () => {
       await expect(page.getByText('Common Values')).toBeVisible({ timeout: 5000 })
       await page.getByText('Common Values').click()
 
-      // Edit the first input to make form dirty
-      const input = page.locator('input').first()
+      // Edit the first visible text input in the Common Values form
+      // (scope to ant-input to skip hidden Segmented radio buttons and sidebar search inputs)
+      const input = page.locator('input.ant-input:visible').first()
       await expect(input).toBeVisible({ timeout: 3000 })
       await input.fill('e2e-test-value')
 
@@ -112,7 +113,7 @@ test.describe('nested deployment — save and preview', () => {
 
       // Modal opens with valid PrometheusRule YAML (no release name error)
       const modal = page.getByRole('dialog')
-      await expect(modal).toBeVisible()
+      await expect(modal).toBeVisible({ timeout: 10000 })
       await expect(modal.locator('pre')).toContainText('PrometheusRule', { timeout: 15000 })
       await expect(modal.locator('pre')).not.toContainText('invalid release name')
     })

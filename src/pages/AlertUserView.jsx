@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Modal, Typography, Empty, Input, Select, message } from 'antd'
-import { SaveOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons'
+import { Button, Modal, Typography, Empty, Input, Select, message, Segmented } from 'antd'
+import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
+import OverviewTemplateTree from '../components/OverviewTemplateTree'
 import AlertTable from '../components/AlertTable'
+import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
 import {
   getChartInfo,
@@ -21,6 +23,7 @@ export default function AlertUserView() {
   const [selectedChart, setSelectedChart] = useSessionState('alerts:chart', null)
   const [activeAlert, setActiveAlert] = useSessionState('alerts:alert', null)
   const [treeRefreshKey, setTreeRefreshKey] = useState(0)
+  const [mode, setMode] = useSessionState('alerts:mode', 'single')
 
   const [schema, setSchema] = useState(null)
   const [alertNames, setAlertNames] = useState([])
@@ -29,10 +32,13 @@ export default function AlertUserView() {
   const [commonValues, setCommonValues] = useState({})
   const [rows, setRows] = useState([])
   const [vars, setVars] = useState([])
+  const [filters, setFilters] = useState({})
   const [dirty, setDirty] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
+
+  const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
 
   const [newDeployOpen, setNewDeployOpen] = useState(false)
   const [newDeployPath, setNewDeployPath] = useState('')
@@ -40,6 +46,7 @@ export default function AlertUserView() {
   const [availableCharts, setAvailableCharts] = useState([])
 
   const [sidebarWidth, setSidebarWidth] = useState(300)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const resizingRef = useRef(false)
 
   function handleResizeStart(e) {
@@ -97,15 +104,22 @@ export default function AlertUserView() {
     })
   }, [selectedChart, selectedFolder])
 
+  // Reset UI state when the selected alert type or schema changes
   useEffect(() => {
     if (!activeAlert || !schema) {
       setVars([])
       return
     }
     setVars(schemaToVars(schema, activeAlert))
-    setRows(allValues[activeAlert] || [])
+    setFilters({})
     setDirty(false)
   }, [activeAlert, schema])
+
+  // Sync rows when allValues updates (e.g. after deployment fetch or overview save)
+  useEffect(() => {
+    if (!activeAlert) return
+    setRows(allValues[activeAlert] || [])
+  }, [activeAlert, allValues])
 
   async function handleNewDeployOpen() {
     const charts = await listCharts()
@@ -136,6 +150,8 @@ export default function AlertUserView() {
     setAllValues({})
     setCommonValues({})
     setRows([])
+    setFilters({})
+    setCheckedAlerts([])
     setDirty(false)
   }
 
@@ -157,6 +173,20 @@ export default function AlertUserView() {
     return true
   }
 
+  async function handleOverviewSave() {
+    if (!selectedChart || !selectedFolder) return
+    const toSave = Object.keys(commonValues).length > 0
+      ? { _common: commonValues, ...allValues }
+      : allValues
+    const result = await saveDeployment(selectedChart, folderBasename, toSave, selectedFolder)
+    if (!result.ok) {
+      message.error('Save failed')
+      return
+    }
+    setDirty(false)
+    setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
+  }
+
   async function handlePreview() {
     if (!selectedChart || !selectedFolder) return
     if (dirty) {
@@ -166,6 +196,11 @@ export default function AlertUserView() {
     const result = await renderDeployment(selectedChart, folderBasename, selectedFolder)
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
     setPreviewOpen(true)
+  }
+
+  function getVars(alertName) {
+    if (!schema) return []
+    return schemaToVars(schema, alertName)
   }
 
   const sectionHeader = (text, action) => (
@@ -181,43 +216,93 @@ export default function AlertUserView() {
 
   return (
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
-      <div style={{ width: sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'auto', background: '#fff', position: 'relative' }}>
-        {sectionHeader('Deployments', <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleNewDeployOpen} />)}
-        <DeploymentTree
-          selectedFolder={selectedFolder}
-          onSelect={handleFolderSelect}
-          refreshKey={treeRefreshKey}
-        />
-        {selectedChart && (
-          <>
-            {sectionHeader(`Alert Templates`)}
-            <div style={{ padding: '0 16px 4px', fontSize: 11, color: '#6b7280' }}>
-              from <b>{selectedChart}</b>
-            </div>
-            <TemplateTree
-              templates={alertNames}
-              activeTemplate={activeAlert}
-              onSelect={setActiveAlert}
-              showCommonVars={getCommonVars(schema).length > 0}
-              commonVarsLabel="Common Values"
-            />
-          </>
-        )}
-        <div
-          onMouseDown={handleResizeStart}
-          onTouchStart={handleResizeStart}
-          style={{ position: 'absolute', top: 0, right: -2, width: 5, height: '100%', cursor: 'col-resize', zIndex: 10 }}
-        >
-          <div style={{
-            position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
-            width: 14, height: 28, borderRadius: 4, background: '#d9d9d9', border: '1px solid #bfbfbf',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, color: '#8c8c8c', letterSpacing: 1, touchAction: 'none'
-          }}>⋮</div>
+      <div style={{ width: sidebarCollapsed ? 0 : sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'hidden', background: '#fff', position: 'relative', display: 'flex', flexDirection: 'column', transition: 'width 0.15s ease' }}>
+        <div style={{ flexShrink: 0, overflowY: 'auto' }}>
+          {sectionHeader('Deployments', <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleNewDeployOpen} />)}
+          <DeploymentTree
+            selectedFolder={selectedFolder}
+            onSelect={handleFolderSelect}
+            refreshKey={treeRefreshKey}
+          />
         </div>
+        {selectedChart && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ flexShrink: 0 }}>
+              {sectionHeader('Alert Templates')}
+              <div style={{ padding: '0 16px 4px', fontSize: 11, color: '#6b7280' }}>
+                from <b>{selectedChart}</b>
+              </div>
+              <div style={{ padding: '4px 12px 8px' }}>
+                <Segmented
+                  size="small"
+                  value={mode}
+                  onChange={setMode}
+                  options={[
+                    { label: 'Single', value: 'single', icon: <TableOutlined /> },
+                    { label: 'Overview', value: 'overview', icon: <AppstoreOutlined /> },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              {mode === 'single' ? (
+                <div style={{ overflowY: 'auto', height: '100%' }}>
+                  <TemplateTree
+                    templates={alertNames}
+                    activeTemplate={activeAlert}
+                    onSelect={setActiveAlert}
+                    showCommonVars={getCommonVars(schema).length > 0}
+                    commonVarsLabel="Common Values"
+                  />
+                </div>
+              ) : (
+                <OverviewTemplateTree
+                  templates={alertNames}
+                  checked={checkedAlerts}
+                  onCheckedChange={setCheckedAlerts}
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Drag-to-resize track */}
+      <div
+        onMouseDown={e => { if (!sidebarCollapsed) handleResizeStart(e) }}
+        onTouchStart={e => { if (!sidebarCollapsed) handleResizeStart(e) }}
+        style={{ width: 5, flexShrink: 0, cursor: sidebarCollapsed ? 'default' : 'col-resize', zIndex: 10 }}
+      />
+      {/* Collapse / expand toggle — position:fixed so it stays in viewport regardless of scroll */}
+      <div
+        onClick={() => setSidebarCollapsed(c => !c)}
+        style={{
+          position: 'fixed', bottom: 20,
+          left: sidebarCollapsed ? 0 : sidebarWidth,
+          transition: 'left 0.15s ease',
+          width: 16, height: 28, borderRadius: '0 4px 4px 0',
+          background: '#d9d9d9', border: '1px solid #bfbfbf', borderLeft: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, color: '#8c8c8c', cursor: 'pointer',
+          zIndex: 100, userSelect: 'none', touchAction: 'none',
+        }}
+      >{sidebarCollapsed ? '›' : '‹'}</div>
+
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
-        {showMain ? (
+        {mode === 'overview' && selectedFolder && selectedChart ? (
+          <AlertOverviewWorkspace
+            checkedAlerts={checkedAlerts}
+            allValues={allValues}
+            commonValues={commonValues}
+            schema={schema}
+            onAllValuesChange={updated => { setAllValues(updated); setDirty(true) }}
+            onSave={handleOverviewSave}
+            dirty={dirty}
+            saveStatus={saveStatus}
+            getVars={getVars}
+          />
+        ) : showMain ? (
           <>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
               <Title level={4} style={{ margin: 0 }}>
@@ -261,8 +346,10 @@ export default function AlertUserView() {
                   vars={vars}
                   rows={rows}
                   commonValues={commonValues}
+                  filters={filters}
+                  onFiltersChange={setFilters}
                   onUpdate={updated => { setRows(updated); setDirty(true) }}
-                  onDelete={idx => { setRows(rows.filter((_, i) => i !== idx)); setDirty(true) }}
+                  onDelete={realIndex => { setRows(rows.filter((_, i) => i !== realIndex)); setDirty(true) }}
                   onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
                 />
               )}
@@ -270,6 +357,9 @@ export default function AlertUserView() {
             <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
               <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
               {!isCommonView && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
+              {!isCommonView && Object.values(filters).some(f => f && f.value !== '' && f.value != null) && (
+                <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>
+              )}
               {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
             </div>
             <Modal title="Rendered PrometheusRule" open={previewOpen} onCancel={() => setPreviewOpen(false)}
@@ -287,11 +377,13 @@ export default function AlertUserView() {
           <Empty style={{ margin: 'auto' }}
             description={
               !selectedFolder ? 'Select a deployment from the folder tree' :
+              mode === 'overview' ? 'Select alert types from the sidebar to get started' :
               !activeAlert ? 'Select an alert template from the sidebar' :
               'Loading...'
             } />
         )}
       </div>
+
       <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}
         onOk={handleNewDeployCreate} okText="Create"
         okButtonProps={{ disabled: !newDeployPath || !newDeployChart }}>

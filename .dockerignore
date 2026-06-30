@@ -7,3 +7,5 @@ playwright-report/
 docs/
 mockups/
 gitops/
+sample/**/tests/
+sample/promtool-tests/

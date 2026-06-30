@@ -171,7 +171,8 @@ spec:
         self.assertEqual(code, 2)
 
     def test_run_command_reports_missing_binary_cleanly(self):
-        result = run_command(["missing-promtool"])
+        with patch("subprocess.run", side_effect=FileNotFoundError("No such file or directory")):
+            result = run_command(["missing-promtool"])
 
         self.assertEqual(result.returncode, 127)
         self.assertIn("failed to execute missing-promtool", result.stderr)

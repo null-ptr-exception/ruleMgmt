@@ -13,6 +13,14 @@ tests:
         values: '0+900000x20'
     alert_rule_test:
       - eval_time: 10m
+        alertname: MariadbLatencySlowQueries_WarnThreshold
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: default
+            exp_annotations:
+              summary: "MariadbLatencySlowQueries_WarnThreshold triggered on "
+      - eval_time: 10m
         alertname: MariadbLatencySlowQueries_CriticalThreshold
         exp_alerts:
           - exp_labels:

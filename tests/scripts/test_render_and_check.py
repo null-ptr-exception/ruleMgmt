@@ -16,6 +16,7 @@ from render_and_check import (
     discover_chart_targets,
     discover_deployment_targets,
     render_target,
+    run_command,
     run_target,
 )
 
@@ -70,6 +71,18 @@ class RenderAndCheckTest(unittest.TestCase):
 
         self.assertEqual([target.chart_dir for target in targets], [deploy_dir])
 
+    def test_deployment_discovery_keeps_real_deployment_under_charts_named_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            deploy_dir = root / "teams" / "charts" / "prod"
+            deploy_dir.mkdir(parents=True)
+            (deploy_dir / "Chart.yaml").write_text("name: prod\n", encoding="utf-8")
+            (deploy_dir / "values.yaml").write_text("rule: value\n", encoding="utf-8")
+
+            targets = discover_deployment_targets(root)
+
+        self.assertEqual([target.chart_dir for target in targets], [deploy_dir])
+
     def test_render_target_invokes_helm_template_with_values_file(self):
         target = RenderTarget("cpu-alerts", Path("."), Path("charts/cpu-alerts"), Path("charts/cpu-alerts/values.yaml"))
 
@@ -90,9 +103,9 @@ class RenderAndCheckTest(unittest.TestCase):
                 "helm",
                 "template",
                 "cpu-alerts",
-                "charts/cpu-alerts",
+                str(Path("charts/cpu-alerts")),
                 "-f",
-                "charts/cpu-alerts/values.yaml",
+                str(Path("charts/cpu-alerts/values.yaml")),
             ],
         )
 
@@ -156,6 +169,12 @@ spec:
                 code = check_rules(target, rendered, "promtool")
 
         self.assertEqual(code, 2)
+
+    def test_run_command_reports_missing_binary_cleanly(self):
+        result = run_command(["missing-promtool"])
+
+        self.assertEqual(result.returncode, 127)
+        self.assertIn("failed to execute missing-promtool", result.stderr)
 
     def test_build_dependencies_uses_temporary_chart_copy(self):
         with tempfile.TemporaryDirectory() as tmp:

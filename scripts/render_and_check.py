@@ -59,8 +59,12 @@ def should_skip_deployment_chart(chart_yaml: Path, root: Path) -> bool:
     if is_relative_to(chart_dir, charts_root):
         return True
 
-    # Skip Helm dependency vendor directories inside deployment charts.
-    return "charts" in chart_yaml.relative_to(root).parts[:-1]
+    dependency_parent = chart_yaml.parent.parent
+    if dependency_parent.name != "charts":
+        return False
+
+    deployment_chart_dir = dependency_parent.parent
+    return (deployment_chart_dir / "Chart.yaml").exists()
 
 
 def discover_deployment_targets(root: Path) -> list[RenderTarget]:
@@ -76,13 +80,21 @@ def discover_deployment_targets(root: Path) -> list[RenderTarget]:
 
 
 def run_command(command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        command,
-        cwd=cwd,
-        check=False,
-        text=True,
-        capture_output=True,
-    )
+    try:
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    except OSError as exc:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=127,
+            stdout="",
+            stderr=f"failed to execute {command[0]}: {exc}\n",
+        )
 
 
 def chart_has_dependencies(target: RenderTarget) -> bool:
@@ -149,10 +161,13 @@ def check_rules(target: RenderTarget, rendered_yaml: str, promtool: str) -> int:
         print(f"{target.name}: no PrometheusRule spec.groups found", file=sys.stderr)
         return 1
 
-    with tempfile.NamedTemporaryFile("w", suffix="-rules.yaml", encoding="utf-8") as tmp:
-        yaml.safe_dump({"groups": groups}, tmp, default_flow_style=False, sort_keys=False)
-        tmp.flush()
-        result = run_command([promtool, "check", "rules", tmp.name])
+    with tempfile.TemporaryDirectory(prefix="alertforge-rules-") as tmp:
+        rules_path = Path(tmp) / "rules.yaml"
+        rules_path.write_text(
+            yaml.safe_dump({"groups": groups}, default_flow_style=False, sort_keys=False),
+            encoding="utf-8",
+        )
+        result = run_command([promtool, "check", "rules", str(rules_path)])
 
     if result.stdout:
         print(result.stdout, end="")
@@ -222,7 +237,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv or sys.argv[1:])
+    args = parse_args(sys.argv[1:] if argv is None else argv)
     root = Path(args.root)
 
     targets = (

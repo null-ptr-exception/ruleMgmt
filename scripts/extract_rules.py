@@ -31,11 +31,15 @@ def extract_prometheus_rule_groups(rendered_yaml: str) -> list[dict]:
         if document.get("kind") != "PrometheusRule":
             continue
 
-        spec = document.get("spec") or {}
+        spec = document.get("spec")
+        if spec is None:
+            spec = {}
         if not isinstance(spec, dict):
             raise RuleExtractionError("PrometheusRule spec must be a mapping")
 
-        rule_groups = spec.get("groups") or []
+        rule_groups = spec.get("groups")
+        if rule_groups is None:
+            rule_groups = []
         if not isinstance(rule_groups, list):
             raise RuleExtractionError("PrometheusRule spec.groups must be a list")
 
@@ -101,7 +105,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv or sys.argv[1:])
+    args = parse_args(sys.argv[1:] if argv is None else argv)
 
     try:
         content = read_input(args.input)

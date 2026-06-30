@@ -13,6 +13,7 @@ from extract_rules import promtool_rules_yaml
 
 
 PROMTOOL = shutil.which("promtool")
+HELM = shutil.which("helm")
 
 
 @unittest.skipUnless(PROMTOOL, "promtool is not installed")
@@ -131,6 +132,7 @@ tests:
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn("SUCCESS", result.stdout)
 
+    @unittest.skipUnless(HELM, "helm is not installed")
     def test_real_render_check_supports_non_deployments_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

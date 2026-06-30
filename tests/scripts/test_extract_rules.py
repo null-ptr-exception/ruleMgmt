@@ -1,13 +1,14 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from extract_rules import RuleExtractionError, extract_prometheus_rule_groups, promtool_rules_yaml
+from extract_rules import RuleExtractionError, extract_prometheus_rule_groups, main, promtool_rules_yaml
 
 
 class ExtractRulesTest(unittest.TestCase):
@@ -76,6 +77,31 @@ spec:
 
         with self.assertRaisesRegex(RuleExtractionError, "spec.groups must be a list"):
             extract_prometheus_rule_groups(rendered)
+
+    def test_empty_groups_mapping_raises_clear_error(self):
+        rendered = """
+kind: PrometheusRule
+spec:
+  groups: {}
+"""
+
+        with self.assertRaisesRegex(RuleExtractionError, "spec.groups must be a list"):
+            extract_prometheus_rule_groups(rendered)
+
+    def test_invalid_spec_shape_raises_clear_error(self):
+        rendered = """
+kind: PrometheusRule
+spec: []
+"""
+
+        with self.assertRaisesRegex(RuleExtractionError, "spec must be a mapping"):
+            extract_prometheus_rule_groups(rendered)
+
+    def test_main_honors_explicit_empty_argv(self):
+        with patch.object(sys, "argv", ["extract_rules.py", "--require-groups"]):
+            with patch("sys.stdin.read", return_value="kind: Service\n"):
+                with patch("sys.stdout.write"):
+                    self.assertEqual(main([]), 0)
 
 
 if __name__ == "__main__":

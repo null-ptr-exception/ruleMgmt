@@ -154,7 +154,8 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const file = path.join(dir, `${req.params.deployment}-values.yaml`)
+    const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
+    const directFile = path.join(dir, 'values.yaml')
     try {
       const folder = req.query.folder
       if (folder) {
@@ -164,7 +165,18 @@ export default function deploymentsRouter() {
           await writeSyncRegistry(req.gitopsDir, registry)
         }
       }
-      await fs.rm(file, { force: true })
+
+      let hasDirectFile = false
+      try { await fs.access(directFile); hasDirectFile = true } catch { /* legacy sibling-file mode */ }
+
+      if (hasDirectFile) {
+        // Folder-mode deployment: the directory itself is the deployment
+        // (Chart.yaml + values.yaml live directly inside it), so removing
+        // just one file would leave an orphaned, half-deleted deployment.
+        await fs.rm(dir, { recursive: true, force: true })
+      } else {
+        await fs.rm(legacyFile, { force: true })
+      }
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

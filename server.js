@@ -10,6 +10,7 @@ import renderRouter from './server/routes/render.js'
 import gitRouter from './server/routes/git.js'
 import git from './server/lib/git.js'
 import foldersRouter from './server/routes/folders.js'
+import syncRouter from './server/routes/sync.js'
 import { getChartsDir, getDeploymentsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
 import { logger, httpLogger } from './server/lib/logger.js'
 
@@ -67,6 +68,7 @@ baseRouter.use('/api/v2/deployments', setGitopsDir, deploymentsRouter())
 baseRouter.use('/api/v2/render', setGitopsDir, renderRouter())
 baseRouter.use('/api/v2/git', setGitopsDir, gitRouter())
 baseRouter.use('/api/v2/folders', setGitopsDir, foldersRouter())
+baseRouter.use('/api/v2/sync', setGitopsDir, syncRouter())
 
 baseRouter.get('/api/v2/user', (req, res) => {
   const user = process.env.JUPYTERHUB_USER || null

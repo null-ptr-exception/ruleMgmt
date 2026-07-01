@@ -104,3 +104,24 @@ export function applyUnlink(registry, target) {
   }
   return { ok: true }
 }
+
+// Same recognition rule used by the folder tree (Chart.yaml with a
+// dependency + values.yaml) — a sync source/target must resolve to an
+// actual deployment, not an arbitrary directory.
+export async function isDeploymentDir(absDir) {
+  let chartData
+  try {
+    const raw = await fs.readFile(path.join(absDir, 'Chart.yaml'), 'utf-8')
+    chartData = yaml.load(raw) || {}
+  } catch {
+    return false
+  }
+  const hasDeps = Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
+  if (!hasDeps) return false
+  try {
+    await fs.access(path.join(absDir, 'values.yaml'))
+    return true
+  } catch {
+    return false
+  }
+}

@@ -1,10 +1,82 @@
 import express from 'express'
+import fs from 'fs/promises'
+import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
+import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
 
+function runCommand(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (err, stdout, stderr) => {
+      if (err) {
+        err.stdout = stdout
+        err.stderr = stderr
+        reject(err)
+      } else {
+        resolve({ stdout, stderr })
+      }
+    })
+  })
+}
+
+function extractPrometheusRuleGroups(renderedYaml) {
+  const groups = []
+  yaml.loadAll(renderedYaml, doc => {
+    if (doc?.kind === 'PrometheusRule' && Array.isArray(doc?.spec?.groups)) {
+      groups.push(...doc.spec.groups)
+    }
+  })
+  return groups
+}
+
+async function checkPrometheusRules(renderedYaml) {
+  let groups
+  try {
+    groups = extractPrometheusRuleGroups(renderedYaml)
+  } catch (err) {
+    return {
+      passed: false,
+      errors: [`Failed to parse rendered YAML: ${err.message}`],
+      output: err.message
+    }
+  }
+
+  if (groups.length === 0) {
+    return {
+      passed: true,
+      skipped: true,
+      errors: [],
+      output: 'No PrometheusRule resources found.'
+    }
+  }
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'alertforge-promtool-'))
+  const rulesFile = path.join(tmpDir, 'rules.yaml')
+  const promtool = process.env.PROMTOOL_BIN || 'promtool'
+
+  try {
+    await fs.writeFile(rulesFile, yaml.dump({ groups }, { lineWidth: -1 }), 'utf-8')
+    const { stdout, stderr } = await runCommand(promtool, ['check', 'rules', rulesFile], { timeout: 120000 })
+    return {
+      passed: true,
+      errors: [],
+      output: `${stdout || ''}${stderr || ''}`.trim()
+    }
+  } catch (err) {
+    const unavailable = err.code === 'ENOENT' ? `Promtool is not available: ${promtool}` : ''
+    const output = `${err.stdout || ''}${err.stderr || ''}${unavailable || err.message || ''}`.trim()
+    return {
+      passed: false,
+      errors: output ? [output] : ['promtool check rules failed.'],
+      output
+    }
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true })
+  }
+}
 
 export default function renderRouter() {
   const router = express.Router()
@@ -43,22 +115,13 @@ export default function renderRouter() {
         templateArgs = ['template', releaseName, chartDir, '-f', valuesFile]
       }
 
-      await new Promise((resolve, reject) => {
-        execFile(helm, ['dependency', 'build', templateDir], { timeout: 120000 }, (err) => {
-          if (err) reject(new Error(err.message))
-          else resolve()
-        })
-      })
+      await runCommand(helm, ['dependency', 'build', templateDir], { timeout: 120000 })
 
-      const output = await new Promise((resolve, reject) => {
-        execFile(helm, templateArgs, { timeout: 120000 }, (err, stdout, stderr) => {
-          if (err) reject(new Error(stderr || stdout || err.message))
-          else resolve(stdout)
-        })
-      })
-      res.json({ ok: true, output })
+      const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000 })
+      const check = await checkPrometheusRules(output)
+      res.json({ ok: true, output, check })
     } catch (err) {
-      res.json({ ok: false, error: err.message })
+      res.json({ ok: false, error: err.stderr || err.stdout || err.message })
     }
   })
 

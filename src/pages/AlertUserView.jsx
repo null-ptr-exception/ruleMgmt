@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Modal, Typography, Empty, Input, Select, message, Segmented } from 'antd'
+import { Alert, Button, Modal, Typography, Empty, Input, Select, message, Segmented } from 'antd'
 import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
@@ -37,6 +37,7 @@ export default function AlertUserView() {
   const [saveStatus, setSaveStatus] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
+  const [previewCheck, setPreviewCheck] = useState(null)
 
   const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
 
@@ -195,6 +196,7 @@ export default function AlertUserView() {
     }
     const result = await renderDeployment(selectedChart, folderBasename, selectedFolder)
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
+    setPreviewCheck(result.ok ? result.check : null)
     setPreviewOpen(true)
   }
 
@@ -364,6 +366,19 @@ export default function AlertUserView() {
             </div>
             <Modal title="Rendered PrometheusRule" open={previewOpen} onCancel={() => setPreviewOpen(false)}
               footer={null} width={800}>
+              {previewCheck && (
+                <Alert
+                  style={{ marginBottom: 12 }}
+                  type={previewCheck.skipped ? 'info' : previewCheck.passed ? 'success' : 'error'}
+                  showIcon
+                  message={previewCheck.skipped ? 'Promtool check skipped' : previewCheck.passed ? 'Promtool check passed' : 'Promtool check failed'}
+                  description={
+                    previewCheck.output
+                      ? <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{previewCheck.output}</pre>
+                      : null
+                  }
+                />
+              )}
               <pre style={{
                 background: '#0f172a', color: '#7dd3fc', padding: 16, borderRadius: 8,
                 fontSize: 12, fontFamily: 'monospace', maxHeight: 500, overflow: 'auto',

@@ -183,6 +183,14 @@ export async function getFolderTree(parentPath = '') {
   return res.json()
 }
 
+// Recursive, on-demand scan of every deployment in the repo — used only to
+// populate the Sync to/from modals' candidate lists (not the lazy tree).
+export async function listAllDeployments() {
+  const res = await apiFetch(`${BASE}/folders/deployments`)
+  if (!res.ok) return []
+  return res.json()
+}
+
 export async function initDeploymentFolder(folder, chart) {
   const res = await apiFetch(`${BASE}/folders/init`, {
     method: 'POST',
@@ -191,4 +199,48 @@ export async function initDeploymentFolder(folder, chart) {
   })
   if (!res.ok) return {}
   return res.json()
+}
+
+// ─── Sync ───────────────────────────────────────────────────────────────────
+
+// Full registry in one call — used by DeploymentSelector to badge every row
+// without a per-item request.
+export async function getSyncRegistry() {
+  const res = await apiFetch(`${BASE}/sync`)
+  if (!res.ok) return { syncs: [] }
+  return res.json()
+}
+
+export async function getSyncTargets(source) {
+  const res = await apiFetch(`${BASE}/sync?source=${encodeURIComponent(source)}`)
+  if (!res.ok) return { source, targets: [] }
+  return res.json()
+}
+
+export async function getSyncSource(target) {
+  const res = await apiFetch(`${BASE}/sync?target=${encodeURIComponent(target)}`)
+  if (!res.ok) return { target, source: null }
+  return res.json()
+}
+
+export async function createSync(source, target) {
+  const res = await apiFetch(`${BASE}/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source, target })
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) return { ok: false, error: body.error || 'Sync failed' }
+  return body
+}
+
+export async function unlinkSync(target) {
+  const res = await apiFetch(`${BASE}/sync`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target })
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) return { ok: false, error: body.error || 'Unlink failed' }
+  return body
 }

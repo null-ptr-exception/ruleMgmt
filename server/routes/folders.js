@@ -4,6 +4,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { wrapValues, countAlerts } from '../lib/subchart.js'
+import { isDeploymentDir } from '../lib/sync.js'
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
 
@@ -64,6 +65,44 @@ async function listChildren(baseDir, parentPath) {
   return folders.sort((a, b) => a.name.localeCompare(b.name))
 }
 
+// Recursive, on-demand flat listing of every deployment folder in the repo —
+// used to populate the Sync to/from modals' candidate lists. Deliberately
+// not cached: this only runs when a sync modal opens (not a hot path like
+// the lazy-loaded tree above), so a fresh scan each time is simplest and
+// avoids the risk of a cache silently drifting from the filesystem.
+async function collectDeployments(baseDir, parentPath, chartsDirName, results) {
+  const dir = parentPath ? path.join(baseDir, parentPath) : baseDir
+  let entries
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  for (const e of entries) {
+    if (!e.isDirectory() || isExcluded(e.name)) continue
+    if (!parentPath && e.name === chartsDirName) continue
+
+    const nodePath = parentPath ? `${parentPath}/${e.name}` : e.name
+    const absPath = path.join(baseDir, nodePath)
+
+    if (await isDeploymentDir(absPath)) {
+      let chart = null
+      let alertCount = 0
+      try {
+        const chartYaml = yaml.load(await fs.readFile(path.join(absPath, 'Chart.yaml'), 'utf-8')) || {}
+        chart = chartYaml.dependencies?.[0]?.name || null
+        const valuesYaml = yaml.load(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
+        alertCount = countAlerts(valuesYaml, chart)
+      } catch { /* leave defaults */ }
+      results.push({ name: e.name, path: nodePath, chart, alertCount })
+      continue
+    }
+
+    await collectDeployments(baseDir, nodePath, chartsDirName, results)
+  }
+}
+
 export default function foldersRouter() {
   const router = express.Router()
 
@@ -75,6 +114,17 @@ export default function foldersRouter() {
       }
       const children = await listChildren(req.gitopsDir, parentPath)
       res.json(children)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  router.get('/deployments', async (req, res) => {
+    try {
+      const chartsDirName = process.env.CHARTS_DIR || 'charts'
+      const results = []
+      await collectDeployments(req.gitopsDir, '', chartsDirName, results)
+      res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

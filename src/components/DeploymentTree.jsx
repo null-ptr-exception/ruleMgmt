@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Tree, Tag, Dropdown, Modal, message } from 'antd'
 import { FolderOutlined } from '@ant-design/icons'
 import { getFolderTree, getSyncRegistry, unlinkSync, deleteDeployment } from '../utils/chartApi'
@@ -88,6 +88,12 @@ function toTreeNode(node, registry, handlers) {
 export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, onSyncChange }) {
   const [treeData, setTreeData] = useState([])
   const [expandedKeys, setExpandedKeys] = useState([])
+  // Tree node titles embed handlers (e.g. handleUnlink -> refreshAll) that get
+  // frozen at whichever render first created that specific node — which can
+  // be long before the node is expanded further. A ref keeps refreshAll
+  // reading the *current* expansion set regardless of which render's
+  // closure ends up calling it.
+  const expandedKeysRef = useRef([])
   const [syncRegistry, setSyncRegistry] = useState({ syncs: [] })
   const [syncToNode, setSyncToNode] = useState(null)
   const [syncFromNode, setSyncFromNode] = useState(null)
@@ -120,21 +126,26 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
 
   // Re-fetches the registry plus the root and every currently expanded
   // node's children, so badges/menus reflect the latest sync state after a
-  // mutation. Reads expandedKeys fresh each call (not memoized) to avoid a
-  // stale-closure bug where a handler frozen at an earlier render refreshes
-  // against an outdated expansion set.
+  // mutation. Reads expandedKeysRef.current (not the expandedKeys closure)
+  // so it always sees the latest expansion set, no matter which render's
+  // closure ends up calling it.
   async function refreshAll() {
     const registry = await getSyncRegistry()
     setSyncRegistry(registry)
 
     const rootChildren = await loadChildren('')
     let newTreeData = buildTreeNodes(rootChildren, registry)
-    for (const key of expandedKeys) {
+    for (const key of expandedKeysRef.current) {
       const children = await loadChildren(key)
       newTreeData = insertChildren(newTreeData, key, buildTreeNodes(children, registry))
     }
     setTreeData(newTreeData)
     onSyncChange?.()
+  }
+
+  function updateExpandedKeys(keys) {
+    expandedKeysRef.current = keys
+    setExpandedKeys(keys)
   }
 
   // Load root on mount and when refreshKey changes
@@ -160,7 +171,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
         currentData = insertChildren(currentData, paths[i], buildTreeNodes(children, registry))
       }
       setTreeData(currentData)
-      setExpandedKeys(keys)
+      updateExpandedKeys(keys)
     }
     expandPath()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -230,7 +241,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
         treeData={treeData}
         selectedKeys={selectedFolder ? [selectedFolder] : []}
         expandedKeys={expandedKeys}
-        onExpand={setExpandedKeys}
+        onExpand={updateExpandedKeys}
         onSelect={handleSelect}
         loadData={onLoadData}
         style={{ fontSize: 13 }}

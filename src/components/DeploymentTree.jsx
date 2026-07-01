@@ -130,15 +130,15 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // so it always sees the latest expansion set, no matter which render's
   // closure ends up calling it.
   async function refreshAll() {
-    const registry = await getSyncRegistry()
+    const [registry, rootChildren] = await Promise.all([getSyncRegistry(), loadChildren('')])
     setSyncRegistry(registry)
 
-    const rootChildren = await loadChildren('')
     let newTreeData = buildTreeNodes(rootChildren, registry)
-    for (const key of expandedKeysRef.current) {
-      const children = await loadChildren(key)
-      newTreeData = insertChildren(newTreeData, key, buildTreeNodes(children, registry))
-    }
+    const keys = expandedKeysRef.current
+    const childLists = await Promise.all(keys.map(key => loadChildren(key)))
+    keys.forEach((key, i) => {
+      newTreeData = insertChildren(newTreeData, key, buildTreeNodes(childLists[i], registry))
+    })
     setTreeData(newTreeData)
     onSyncChange?.()
   }
@@ -160,16 +160,17 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     const parts = selectedFolder.split('/')
     const paths = parts.map((_, i) => parts.slice(0, i + 1).join('/'))
     async function expandPath() {
-      const registry = await getSyncRegistry()
+      const keys = paths.slice(0, -1)
+      const [registry, rootChildren, ...childLists] = await Promise.all([
+        getSyncRegistry(),
+        loadChildren(''),
+        ...keys.map(key => loadChildren(key)),
+      ])
       setSyncRegistry(registry)
-      const rootChildren = await loadChildren('')
       let currentData = buildTreeNodes(rootChildren, registry)
-      const keys = []
-      for (let i = 0; i < paths.length - 1; i++) {
-        keys.push(paths[i])
-        const children = await loadChildren(paths[i])
-        currentData = insertChildren(currentData, paths[i], buildTreeNodes(children, registry))
-      }
+      keys.forEach((key, i) => {
+        currentData = insertChildren(currentData, key, buildTreeNodes(childLists[i], registry))
+      })
       setTreeData(currentData)
       updateExpandedKeys(keys)
     }

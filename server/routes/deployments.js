@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
+import { readSyncRegistry, writeSyncRegistry, getTargetsForSource, isTarget, applyUnlink } from '../lib/sync.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
@@ -94,6 +95,7 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
+    const folder = req.query.folder
     const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
     const directFile = path.join(dir, 'values.yaml')
     try {
@@ -106,6 +108,21 @@ export default function deploymentsRouter() {
         values = yaml.dump(wrapValues(values, depName), { lineWidth: -1 })
       }
       await fs.writeFile(file, values, 'utf-8')
+
+      // Eager sync: only folder-mode deployments participate (sync.yaml
+      // paths are folder-relative, matching the `folder` query param).
+      if (folder) {
+        const registry = await readSyncRegistry(req.gitopsDir)
+        const targets = getTargetsForSource(registry, folder)
+        for (const target of targets) {
+          try {
+            const targetDir = path.join(req.gitopsDir, target)
+            await fs.mkdir(targetDir, { recursive: true })
+            await fs.writeFile(path.join(targetDir, 'values.yaml'), values, 'utf-8')
+          } catch { /* best-effort — one failing target doesn't undo the source save */ }
+        }
+      }
+
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -139,6 +156,14 @@ export default function deploymentsRouter() {
     }
     const file = path.join(dir, `${req.params.deployment}-values.yaml`)
     try {
+      const folder = req.query.folder
+      if (folder) {
+        const registry = await readSyncRegistry(req.gitopsDir)
+        if (isTarget(registry, folder)) {
+          applyUnlink(registry, folder)
+          await writeSyncRegistry(req.gitopsDir, registry)
+        }
+      }
       await fs.rm(file, { force: true })
       res.json({ ok: true })
     } catch (err) {

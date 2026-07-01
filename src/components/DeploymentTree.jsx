@@ -85,7 +85,7 @@ function toTreeNode(node, registry, handlers) {
   }
 }
 
-export default function DeploymentTree({ selectedFolder, onSelect, refreshKey }) {
+export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, onSyncChange }) {
   const [treeData, setTreeData] = useState([])
   const [expandedKeys, setExpandedKeys] = useState([])
   const [syncRegistry, setSyncRegistry] = useState({ syncs: [] })
@@ -134,6 +134,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey })
       newTreeData = insertChildren(newTreeData, key, buildTreeNodes(children, registry))
     }
     setTreeData(newTreeData)
+    onSyncChange?.()
   }
 
   // Load root on mount and when refreshKey changes

@@ -11,6 +11,7 @@ import {
   isSource,
   isTarget,
   isSafeSyncPath,
+  normalizeSyncPath,
   applySync,
   applyUnlink,
 } from '../../server/lib/sync.js'
@@ -96,6 +97,40 @@ describe('isSafeSyncPath', () => {
   it('rejects non-string input', () => {
     expect(isSafeSyncPath(null, 'charts')).toBe(false)
     expect(isSafeSyncPath(undefined, 'charts')).toBe(false)
+  })
+
+  it('accepts equivalent-but-unnormalized variants of a safe path', () => {
+    expect(isSafeSyncPath('cpu/./prod', 'charts')).toBe(true)
+    expect(isSafeSyncPath('cpu//prod', 'charts')).toBe(true)
+    expect(isSafeSyncPath('cpu/prod/', 'charts')).toBe(true)
+  })
+
+  it('still rejects traversal that only appears after normalization collapses it', () => {
+    expect(isSafeSyncPath('cpu/../../../etc/passwd', 'charts')).toBe(false)
+    expect(isSafeSyncPath('..', 'charts')).toBe(false)
+    expect(isSafeSyncPath('.', 'charts')).toBe(false)
+  })
+
+  it('catches a charts-dir-rooted path spelled with a leading ./', () => {
+    expect(isSafeSyncPath('./charts/mychart', 'charts')).toBe(false)
+  })
+})
+
+describe('normalizeSyncPath', () => {
+  it('collapses ./, //, and trailing / to the same canonical form', () => {
+    expect(normalizeSyncPath('cpu/./prod')).toBe('cpu/prod')
+    expect(normalizeSyncPath('cpu//prod')).toBe('cpu/prod')
+    expect(normalizeSyncPath('cpu/prod/')).toBe('cpu/prod')
+    expect(normalizeSyncPath('cpu/prod')).toBe('cpu/prod')
+  })
+
+  it('resolves internal .. segments that cancel out without escaping the root', () => {
+    expect(normalizeSyncPath('cpu/qa/../prod')).toBe('cpu/prod')
+  })
+
+  it('passes through non-string input unchanged', () => {
+    expect(normalizeSyncPath(null)).toBe(null)
+    expect(normalizeSyncPath(undefined)).toBe(undefined)
   })
 })
 

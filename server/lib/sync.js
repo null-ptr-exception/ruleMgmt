@@ -45,14 +45,28 @@ export function isTarget(registry, candidate) {
   return !!findEntryForTarget(registry, candidate)
 }
 
-// Reject '..', absolute paths, and anything rooted at the charts directory —
-// sync must only ever point at deployment folders. See #33/#34 for the two
-// prior path-traversal bugs this codebase has shipped.
+// Canonical form used for both validation and registry storage/comparison —
+// callers must normalize a candidate with this *before* comparing it against
+// existing registry entries (applySync/applyUnlink do strict string
+// equality), otherwise 'cpu/prod' and 'cpu/./prod' would be treated as two
+// different deployments and slip past role-exclusivity checks.
+export function normalizeSyncPath(candidate) {
+  if (typeof candidate !== 'string') return candidate
+  return path.normalize(candidate).replace(/\/+$/, '')
+}
+
+// Reject traversal above the root, absolute paths, and anything rooted at
+// the charts directory — sync must only ever point at deployment folders.
+// See #33/#34 for the two prior path-traversal bugs this codebase has
+// shipped. Candidates are normalized first so equivalent variants like
+// 'cpu/./prod', 'cpu//prod', and 'cpu/prod/' can't slip past the checks
+// below under a different spelling than what ends up on disk.
 export function isSafeSyncPath(candidate, chartsDirName) {
   if (!candidate || typeof candidate !== 'string') return false
-  if (candidate.includes('..')) return false
   if (path.isAbsolute(candidate)) return false
-  const firstSegment = candidate.split('/')[0]
+  const normalized = normalizeSyncPath(candidate)
+  if (normalized === '.' || normalized === '' || normalized === '..' || normalized.startsWith('../')) return false
+  const firstSegment = normalized.split('/')[0]
   if (firstSegment === chartsDirName) return false
   return true
 }

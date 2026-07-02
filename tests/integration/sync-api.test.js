@@ -159,6 +159,29 @@ describe('sync API', () => {
       const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/staging', target: 'cpu/dev' })
       expect(res.status).toBe(400)
     })
+
+    it('normalizes paths before storing, so an unnormalized spelling of an existing source cannot bypass role exclusivity', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('cpu/staging')
+      makeDeployment('cpu/dev')
+      await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
+
+      // 'cpu/./prod' is the same deployment as 'cpu/prod', which is already
+      // a source — this must be rejected exactly like the canonical spelling.
+      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/dev', target: 'cpu/./prod' })
+      expect(res.status).toBe(400)
+    })
+
+    it('stores the canonical (normalized) path in the registry regardless of input spelling', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('cpu/staging')
+
+      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu//prod', target: 'cpu/staging/' })
+      expect(res.status).toBe(200)
+
+      const registry = await request(app).get('/api/v2/sync')
+      expect(registry.body).toEqual({ syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] })
+    })
   })
 
   describe('DELETE / (unlink)', () => {

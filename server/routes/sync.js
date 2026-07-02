@@ -7,6 +7,7 @@ import {
   getTargetsForSource,
   getSourceForTarget,
   isSafeSyncPath,
+  normalizeSyncPath,
   isDeploymentDir,
   applySync,
   applyUnlink,
@@ -31,7 +32,8 @@ export default function syncRouter() {
   const router = express.Router()
 
   router.get('/', async (req, res) => {
-    const { source, target } = req.query
+    const source = req.query.source ? normalizeSyncPath(req.query.source) : undefined
+    const target = req.query.target ? normalizeSyncPath(req.query.target) : undefined
     const registry = await readSyncRegistry(req.gitopsDir)
 
     if (source) {
@@ -44,10 +46,14 @@ export default function syncRouter() {
   })
 
   router.post('/', async (req, res) => {
-    const { source, target } = req.body || {}
-    if (!source || !target) {
+    if (!req.body?.source || !req.body?.target) {
       return res.status(400).json({ error: 'source and target are required' })
     }
+    // Normalize before any validation/comparison/storage — otherwise
+    // 'cpu/prod' and 'cpu/./prod' would be treated as different deployments
+    // by the strict string equality in applySync's role-exclusivity checks.
+    const source = normalizeSyncPath(req.body.source)
+    const target = normalizeSyncPath(req.body.target)
 
     const sourceError = await validateSyncPath(req.gitopsDir, source)
     if (sourceError) return res.status(400).json({ error: sourceError })
@@ -93,10 +99,10 @@ export default function syncRouter() {
   })
 
   router.delete('/', async (req, res) => {
-    const { target } = req.body || {}
-    if (!target) {
+    if (!req.body?.target) {
       return res.status(400).json({ error: 'target is required' })
     }
+    const target = normalizeSyncPath(req.body.target)
     if (!isSafeSyncPath(target, chartsDirName())) {
       return res.status(400).json({ error: `Invalid path: ${target}` })
     }

@@ -1,0 +1,121 @@
+rule_files:
+  - rules/mariadb_alerts_rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: mariadb counter-rate demo alerts
+    interval: 1m
+    input_series:
+      - series: 'mysql_global_status_slow_queries{namespace="default"}'
+        values: '0+360x20'
+      - series: 'mysql_global_status_questions{namespace="default"}'
+        values: '0+900000x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MariadbLatencySlowQueries_WarnThreshold
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: default
+            exp_annotations:
+              summary: "MariadbLatencySlowQueries_WarnThreshold triggered on "
+      - eval_time: 10m
+        alertname: MariadbLatencySlowQueries_CriticalThreshold
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: default
+            exp_annotations:
+              summary: "MariadbLatencySlowQueries_CriticalThreshold triggered on "
+      - eval_time: 10m
+        alertname: MariadbTrafficQpsHigh_MaxQps
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: default
+            exp_annotations:
+              summary: "MariadbTrafficQpsHigh_MaxQps triggered on "
+
+  - name: mariadb low-qps demo alert
+    interval: 1m
+    input_series:
+      - series: 'mysql_global_status_questions{namespace="default"}'
+        values: '0+300x25'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: MariadbTrafficQpsLow_MinQps
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: default
+            exp_annotations:
+              summary: "MariadbTrafficQpsLow_MinQps triggered on "
+
+  - name: mariadb saturation demo alerts
+    interval: 1m
+    input_series:
+      - series: 'mysql_global_status_threads_connected{namespace="default"}'
+        values: '95x20'
+      - series: 'mysql_global_variables_max_connections{namespace="default"}'
+        values: '100x20'
+      - series: 'mysql_global_status_innodb_buffer_pool_pages_free{namespace="default"}'
+        values: '4x25'
+      - series: 'mysql_global_status_innodb_buffer_pool_pages_total{namespace="default"}'
+        values: '100x25'
+      - series: 'container_cpu_usage_seconds_total{namespace="default", pod="mariadb-0"}'
+        values: '0+1x20'
+      - series: 'kube_pod_container_resource_requests{namespace="default", pod="mariadb-0", resource="cpu"}'
+        values: '0.01x20'
+      - series: 'container_memory_working_set_bytes{namespace="default", pod="mariadb-0"}'
+        values: '960x20'
+      - series: 'kube_pod_container_resource_limits{namespace="default", pod="mariadb-0", resource="memory"}'
+        values: '1000x20'
+      - series: 'kubelet_volume_stats_used_bytes{namespace="default", persistentvolumeclaim="data-mariadb-0"}'
+        values: '950x25'
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="default", persistentvolumeclaim="data-mariadb-0"}'
+        values: '1000x25'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MariadbSaturationConnections_CriticalPct
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: default
+            exp_annotations:
+              summary: "MariadbSaturationConnections_CriticalPct triggered on "
+      - eval_time: 15m
+        alertname: MariadbSaturationBufferPool_CriticalPct
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: default
+            exp_annotations:
+              summary: "MariadbSaturationBufferPool_CriticalPct triggered on "
+      - eval_time: 10m
+        alertname: MariadbSaturationCpu_CriticalPct
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: default
+              pod: mariadb-0
+            exp_annotations:
+              summary: "MariadbSaturationCpu_CriticalPct triggered on "
+      - eval_time: 10m
+        alertname: MariadbSaturationMemory_CriticalPct
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: default
+              pod: mariadb-0
+            exp_annotations:
+              summary: "MariadbSaturationMemory_CriticalPct triggered on "
+      - eval_time: 15m
+        alertname: MariadbSaturationDisk_CriticalPct
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: default
+              persistentvolumeclaim: data-mariadb-0
+            exp_annotations:
+              summary: "MariadbSaturationDisk_CriticalPct triggered on "

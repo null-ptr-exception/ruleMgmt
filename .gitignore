@@ -11,3 +11,5 @@ k8s/gitea-oauth-values.yaml
 docs/superpowers/
 .superpowers/
 coverage/
+__pycache__/
+*.pyc

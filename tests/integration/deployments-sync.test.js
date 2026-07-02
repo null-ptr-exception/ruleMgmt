@@ -55,6 +55,42 @@ describe('deployments API — eager sync integration', () => {
     expect(dev).toMatchObject(newValues)
   })
 
+  it('skips a registry target with an unsafe path instead of writing outside the gitops dir', async () => {
+    makeDeploymentDir('cpu/prod')
+    makeDeploymentDir('cpu/staging')
+    // Simulates sync.yaml having been hand-edited (or arriving via git pull)
+    // with a traversal path — the registry itself isn't a trusted boundary,
+    // so this must be re-validated at propagation time, not just at POST /sync.
+    await writeSyncRegistry(tmpDir, {
+      syncs: [{ source: 'cpu/prod', targets: ['cpu/staging', '../../etc/evil'] }],
+    })
+
+    const res = await request(app)
+      .post(`/api/deployments/my-chart/prod${folderQuery('cpu/prod')}`)
+      .send({ values: { alerts: [{ warn: 1 }] } })
+
+    expect(res.status).toBe(200)
+    const staging = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))
+    expect(staging).toMatchObject({ alerts: [{ warn: 1 }] })
+    const escapedPath = path.join(tmpDir, '../../etc/evil')
+    expect(fs.existsSync(escapedPath)).toBe(false)
+  })
+
+  it('rejects saving directly to a synced target (server-side read-only enforcement)', async () => {
+    makeDeploymentDir('cpu/prod')
+    const targetDir = makeDeploymentDir('cpu/staging')
+    fs.writeFileSync(path.join(targetDir, 'values.yaml'), yaml.dump({ untouched: true }))
+    await writeSyncRegistry(tmpDir, { syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] })
+
+    const res = await request(app)
+      .post(`/api/deployments/my-chart/staging${folderQuery('cpu/staging')}`)
+      .send({ values: { alerts: [{ warn: 1 }] } })
+
+    expect(res.status).toBe(409)
+    const staging = yaml.load(fs.readFileSync(path.join(targetDir, 'values.yaml'), 'utf-8'))
+    expect(staging).toEqual({ untouched: true })
+  })
+
   it('saving a deployment with no registered targets does not touch sync.yaml', async () => {
     makeDeploymentDir('cpu/dev')
 

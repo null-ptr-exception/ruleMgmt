@@ -3,10 +3,14 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
-import { readSyncRegistry, writeSyncRegistry, getTargetsForSource, isTarget, applyUnlink } from '../lib/sync.js'
+import { readSyncRegistry, writeSyncRegistry, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
+
+function chartsDirName() {
+  return process.env.CHARTS_DIR || 'charts'
+}
 
 function isValidDeploymentParam(req) {
   const deployment = req.params.deployment
@@ -99,6 +103,17 @@ export default function deploymentsRouter() {
     const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
     const directFile = path.join(dir, 'values.yaml')
     try {
+      // A synced target is read-only server-side, not just in the UI —
+      // the frontend's freeze can race (see AlertUserView's getSyncSource
+      // call), so this must be enforced here too, not only by disabling Save.
+      let registry = null
+      if (folder) {
+        registry = await readSyncRegistry(req.gitopsDir)
+        if (isTarget(registry, folder)) {
+          return res.status(409).json({ error: `${folder} is synced from another deployment and is read-only` })
+        }
+      }
+
       await fs.mkdir(dir, { recursive: true })
       let file = legacyFile
       try { await fs.access(directFile); file = directFile } catch { /* use legacy */ }
@@ -112,9 +127,14 @@ export default function deploymentsRouter() {
       // Eager sync: only folder-mode deployments participate (sync.yaml
       // paths are folder-relative, matching the `folder` query param).
       if (folder) {
-        const registry = await readSyncRegistry(req.gitopsDir)
         const targets = getTargetsForSource(registry, folder)
         for (const target of targets) {
+          // sync.yaml is a plain file inside the gitops repo — it can be
+          // hand-edited or arrive via `git pull` outside the app, so a
+          // registry entry isn't automatically trustworthy just because
+          // it's in the registry. Re-run the same check used at write time
+          // (POST /sync) before ever joining it into a filesystem path.
+          if (!isSafeSyncPath(target, chartsDirName())) continue
           try {
             const targetDir = path.join(req.gitopsDir, target)
             await fs.mkdir(targetDir, { recursive: true })

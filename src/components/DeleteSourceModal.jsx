@@ -17,19 +17,40 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
 
   async function handleConfirm() {
     setSubmitting(true)
-    for (const targetPath of targets) {
-      if (decisions[targetPath] === 'delete') {
-        const name = targetPath.split('/').pop()
-        await deleteDeployment(source.chart, name, targetPath)
-      } else {
-        await unlinkSync(targetPath)
+    // Stop on the first failure rather than pressing on to delete the
+    // source — if a target's unlink/delete didn't actually happen, deleting
+    // the source out from under it leaves that target's sync.yaml entry
+    // pointing at a deployment that no longer exists.
+    let anyChange = false
+    let succeeded = false
+    try {
+      for (const targetPath of targets) {
+        const action = decisions[targetPath] === 'delete' ? 'delete' : 'unlink'
+        const result = action === 'delete'
+          ? await deleteDeployment(source.chart, targetPath.split('/').pop(), targetPath)
+          : await unlinkSync(targetPath)
+        if (!result.ok) {
+          message.error(`Failed to ${action} ${targetPath}${result.error ? `: ${result.error}` : ''}`)
+          return
+        }
+        anyChange = true
       }
+
+      const result = await deleteDeployment(source.chart, source.name, source.path)
+      if (!result.ok) {
+        message.error(`Failed to delete ${source.name}${result.error ? `: ${result.error}` : ''}`)
+        return
+      }
+      message.success(`Deleted ${source.name}`)
+      succeeded = true
+      onSuccess?.()
+      onClose()
+    } finally {
+      setSubmitting(false)
+      // Refresh the tree even on a partial failure — some targets may have
+      // already been unlinked/deleted before the step that failed.
+      if (anyChange && !succeeded) onSuccess?.()
     }
-    await deleteDeployment(source.chart, source.name, source.path)
-    setSubmitting(false)
-    message.success(`Deleted ${source.name}`)
-    onSuccess?.()
-    onClose()
   }
 
   return (

@@ -35,11 +35,33 @@ async function rightClickMenuItem(page, node, itemLabel) {
   await menuItem.click()
 }
 
-test.describe('deployment sync', () => {
+// serial: later tests depend on sync state left behind by earlier ones
+// (e.g. "Unlink sync" acts on the target created by the first test), and a
+// failure partway through should abort the rest rather than run against an
+// inconsistent tree.
+test.describe.serial('deployment sync', () => {
   test.beforeAll(async ({ request }) => {
     await initDeployment(request, `${ROOT}/prod`)
     await initDeployment(request, `${ROOT}/staging`)
     await initDeployment(request, `${ROOT}/dev`)
+    await initDeployment(request, `${ROOT}/canary`)
+    await initDeployment(request, `${ROOT}/del-source`)
+    await initDeployment(request, `${ROOT}/del-keep`)
+    await initDeployment(request, `${ROOT}/del-remove`)
+    await request.post('/api/v2/sync', { data: { source: `${ROOT}/del-source`, target: `${ROOT}/del-keep` } })
+    await request.post('/api/v2/sync', { data: { source: `${ROOT}/del-source`, target: `${ROOT}/del-remove` } })
+  })
+
+  test.afterAll(async ({ request }) => {
+    // Without this, sync.yaml and the ROOT folders survive the run and the
+    // next run's "Sync to..." checks (e.g. dev already checked+disabled as
+    // green-locked) fail against leftover state instead of a clean tree.
+    // del-source and del-remove are expected to already be gone by the time
+    // this runs (deleted by the "Delete a sync source" test) — DELETE is a
+    // no-op on an already-missing path either way.
+    for (const name of ['prod', 'staging', 'dev', 'canary', 'del-source', 'del-keep', 'del-remove']) {
+      await request.delete(`/api/v2/deployments/${CHART}/${name}?folder=${encodeURIComponent(`${ROOT}/${name}`)}`)
+    }
   })
 
   test('Sync to... creates a target and shows the synced badge', async ({ page }) => {
@@ -67,6 +89,44 @@ test.describe('deployment sync', () => {
 
     const stagingNode = deploymentNode(page, 'staging')
     await expect(stagingNode.getByText('synced')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('manually typing an existing deployment path into "Add new path" requires the same overwrite ack as picking it from the list', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expandFolder(page, ROOT)
+
+    const prodNode = deploymentNode(page, 'prod')
+    await expect(prodNode).toBeVisible({ timeout: 5000 })
+    await rightClickMenuItem(page, prodNode, 'Sync to...')
+
+    const modal = page.getByRole('dialog')
+    await expect(modal).toBeVisible()
+
+    // canary is an existing, independent deployment — typing its path should
+    // classify it exactly like picking it from the list (red/needs ack),
+    // not silently bypass the confirmation gate. Every independent
+    // candidate in the list carries the same "will overwrite" tag text, so
+    // scope to the tag rendered directly under the input (last in DOM order,
+    // after the list) rather than matching on text alone.
+    const input = modal.getByPlaceholder('Add new path (e.g. cpu/canary)')
+    await input.fill(`${ROOT}/canary`)
+    const newPathTag = modal.locator('.ant-tag').last()
+    await expect(newPathTag).toHaveText('will overwrite its content', { timeout: 3000 })
+
+    const confirmButton = modal.getByRole('button', { name: 'Confirm sync' })
+    await expect(confirmButton).toBeDisabled()
+
+    const ackCheckbox = modal.getByText(new RegExp(`I understand, overwrite ${ROOT}/canary`))
+    await expect(ackCheckbox).toBeVisible({ timeout: 3000 })
+    await ackCheckbox.click()
+    await expect(confirmButton).toBeEnabled()
+
+    await confirmButton.click()
+    await expect(modal).not.toBeVisible({ timeout: 5000 })
+
+    const canaryNode = deploymentNode(page, 'canary')
+    await expect(canaryNode.getByText('synced')).toBeVisible({ timeout: 5000 })
   })
 
   test('opening a synced deployment shows the frozen banner and disables editing', async ({ page, request }) => {
@@ -138,5 +198,41 @@ test.describe('deployment sync', () => {
     const res = await request.get(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(`${ROOT}/dev`)}`)
     const body = await res.json()
     expect(JSON.stringify(body.parsed)).toContain('e2e-sync-propagation-value')
+  })
+
+  test('Delete a sync source: per-target Keep/Delete choices are honored', async ({ page, request }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expandFolder(page, ROOT)
+
+    const sourceNode = deploymentNode(page, 'del-source')
+    await expect(sourceNode).toBeVisible({ timeout: 5000 })
+    await rightClickMenuItem(page, sourceNode, 'Delete')
+
+    const modal = page.getByRole('dialog')
+    await expect(modal).toBeVisible()
+    await expect(modal.getByText('2 deployments synced to')).toBeVisible({ timeout: 3000 })
+
+    // del-keep stays on its default ("Keep" = unlink and retain content).
+    // del-remove is switched to "Delete".
+    const removeRow = modal.locator('div').filter({ hasText: `${ROOT}/del-remove` }).last()
+    await removeRow.locator('.ant-radio-button-wrapper', { hasText: 'Delete' }).click()
+
+    await modal.getByRole('button', { name: `Delete del-source` }).click()
+    await expect(modal).not.toBeVisible({ timeout: 5000 })
+
+    // Source and the "Delete"-marked target are gone from the tree.
+    await expect(deploymentNode(page, 'del-source')).not.toBeVisible({ timeout: 5000 })
+    await expect(deploymentNode(page, 'del-remove')).not.toBeVisible({ timeout: 5000 })
+
+    // The "Keep"-marked target survives, unlinked (no more "synced" badge).
+    const keepNode = deploymentNode(page, 'del-keep')
+    await expect(keepNode).toBeVisible({ timeout: 5000 })
+    await expect(keepNode.getByText('synced')).not.toBeVisible({ timeout: 3000 })
+
+    const keepRes = await request.get(`/api/v2/deployments/${CHART}/del-keep?folder=${encodeURIComponent(`${ROOT}/del-keep`)}`)
+    expect(keepRes.status()).toBe(200)
+    const removeRes = await request.get(`/api/v2/deployments/${CHART}/del-remove?folder=${encodeURIComponent(`${ROOT}/del-remove`)}`)
+    expect(removeRes.status()).toBe(404)
   })
 })

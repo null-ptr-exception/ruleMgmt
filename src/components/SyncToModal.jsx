@@ -62,10 +62,33 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
     })
   }
 
-  const needsAck = rows.filter(r => selected.has(r.path) && (r.status === 'red' || r.status === 'orange'))
-  const allAcked = needsAck.every(r => acked.has(r.path))
   const newPathTrimmed = newPath.trim()
-  const canConfirm = (selected.size > 0 || newPathTrimmed.length > 0) && allAcked && !submitting
+  // A manually-typed path must go through the same red/orange/disabled
+  // classification as a picked-from-list row — otherwise typing an existing
+  // deployment's path bypasses the overwrite-confirmation gate entirely.
+  // Only classify it against the registry if it's an already-known
+  // deployment; an unrecognized path is presumed genuinely new (created as
+  // a copy of source, nothing to overwrite).
+  const newPathStatus = useMemo(() => {
+    if (!newPathTrimmed) return null
+    if (newPathTrimmed === source?.path) {
+      return { status: 'disabled', reason: 'cannot sync a deployment to itself' }
+    }
+    if (!candidates.some(c => c.path === newPathTrimmed)) {
+      return { status: 'new', reason: 'will be created as a new deployment' }
+    }
+    return classify(registry, source?.path, newPathTrimmed)
+  }, [newPathTrimmed, candidates, registry, source])
+
+  const needsAck = [
+    ...rows.filter(r => selected.has(r.path) && (r.status === 'red' || r.status === 'orange')),
+    ...(newPathStatus && (newPathStatus.status === 'red' || newPathStatus.status === 'orange')
+      ? [{ path: newPathTrimmed, ...newPathStatus }]
+      : []),
+  ]
+  const allAcked = needsAck.every(r => acked.has(r.path))
+  const newPathBlocked = newPathStatus?.status === 'disabled'
+  const canConfirm = (selected.size > 0 || newPathTrimmed.length > 0) && allAcked && !newPathBlocked && !submitting
 
   async function handleConfirm() {
     setSubmitting(true)
@@ -131,6 +154,9 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
           value={newPath}
           onChange={e => setNewPath(e.target.value)}
         />
+        {newPathStatus && (
+          <Tag style={{ marginTop: 6 }} color={STATUS_COLOR[newPathStatus.status]}>{newPathStatus.reason}</Tag>
+        )}
       </div>
 
       {needsAck.length > 0 && (

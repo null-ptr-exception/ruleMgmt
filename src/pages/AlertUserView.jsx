@@ -374,7 +374,7 @@ export default function AlertUserView() {
                   message={previewCheck.skipped ? 'Promtool check skipped' : previewCheck.passed ? 'Promtool check passed' : 'Promtool check failed'}
                   description={
                     previewCheck.output
-                      ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{previewCheck.output}</div>
+                      ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto' }}>{previewCheck.output}</div>
                       : null
                   }
                 />

@@ -107,7 +107,7 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
   )
 }
 
-function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear }) {
+function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly }) {
   const [collapsed, setCollapsed] = useState(false)
 
   const matchCount = useMemo(() => {
@@ -161,6 +161,7 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
             onUpdate={onUpdate}
             onDelete={onDelete}
             onAdd={onAdd}
+            readOnly={readOnly}
           />
         </div>
       )}
@@ -178,6 +179,7 @@ export default function AlertOverviewWorkspace({
   dirty,
   saveStatus,
   getVars,
+  readOnly = false,
 }) {
   const [wsFilters, setWsFilters] = useState({})
   const [sectionFilters, setSectionFilters] = useState({})
@@ -239,11 +241,12 @@ export default function AlertOverviewWorkspace({
             onUpdate={updated => handleUpdate(alertName, updated)}
             onDelete={realIndex => handleDelete(alertName, realIndex)}
             onAdd={newRow => handleAdd(alertName, newRow)}
+            readOnly={readOnly}
           />
         ))}
       </div>
       <div style={{ padding: '10px 16px', borderTop: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Button type="primary" icon={<SaveOutlined />} onClick={onSave} disabled={!dirty}>Save all</Button>
+        <Button type="primary" icon={<SaveOutlined />} onClick={onSave} disabled={!dirty || readOnly}>Save all</Button>
         <Text style={{ fontSize: 11, color: '#9ca3af' }}>
           {checkedAlerts.length} section{checkedAlerts.length > 1 ? 's' : ''} loaded
           {activeWsFilterCount > 0 ? ` · ${activeWsFilterCount} workspace filter${activeWsFilterCount > 1 ? 's' : ''} active` : ''}

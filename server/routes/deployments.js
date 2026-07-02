@@ -3,9 +3,14 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
+import { readSyncRegistry, writeSyncRegistry, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
+
+function chartsDirName() {
+  return process.env.CHARTS_DIR || 'charts'
+}
 
 function isValidDeploymentParam(req) {
   const deployment = req.params.deployment
@@ -94,9 +99,21 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
+    const folder = req.query.folder
     const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
     const directFile = path.join(dir, 'values.yaml')
     try {
+      // A synced target is read-only server-side, not just in the UI —
+      // the frontend's freeze can race (see AlertUserView's getSyncSource
+      // call), so this must be enforced here too, not only by disabling Save.
+      let registry = null
+      if (folder) {
+        registry = await readSyncRegistry(req.gitopsDir)
+        if (isTarget(registry, folder)) {
+          return res.status(409).json({ error: `${folder} is synced from another deployment and is read-only` })
+        }
+      }
+
       await fs.mkdir(dir, { recursive: true })
       let file = legacyFile
       try { await fs.access(directFile); file = directFile } catch { /* use legacy */ }
@@ -106,6 +123,26 @@ export default function deploymentsRouter() {
         values = yaml.dump(wrapValues(values, depName), { lineWidth: -1 })
       }
       await fs.writeFile(file, values, 'utf-8')
+
+      // Eager sync: only folder-mode deployments participate (sync.yaml
+      // paths are folder-relative, matching the `folder` query param).
+      if (folder) {
+        const targets = getTargetsForSource(registry, folder)
+        for (const target of targets) {
+          // sync.yaml is a plain file inside the gitops repo — it can be
+          // hand-edited or arrive via `git pull` outside the app, so a
+          // registry entry isn't automatically trustworthy just because
+          // it's in the registry. Re-run the same check used at write time
+          // (POST /sync) before ever joining it into a filesystem path.
+          if (!isSafeSyncPath(target, chartsDirName())) continue
+          try {
+            const targetDir = path.join(req.gitopsDir, target)
+            await fs.mkdir(targetDir, { recursive: true })
+            await fs.writeFile(path.join(targetDir, 'values.yaml'), values, 'utf-8')
+          } catch { /* best-effort — one failing target doesn't undo the source save */ }
+        }
+      }
+
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -137,9 +174,29 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const file = path.join(dir, `${req.params.deployment}-values.yaml`)
+    const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
+    const directFile = path.join(dir, 'values.yaml')
     try {
-      await fs.rm(file, { force: true })
+      const folder = req.query.folder
+      if (folder) {
+        const registry = await readSyncRegistry(req.gitopsDir)
+        if (isTarget(registry, folder)) {
+          applyUnlink(registry, folder)
+          await writeSyncRegistry(req.gitopsDir, registry)
+        }
+      }
+
+      let hasDirectFile = false
+      try { await fs.access(directFile); hasDirectFile = true } catch { /* legacy sibling-file mode */ }
+
+      if (hasDirectFile) {
+        // Folder-mode deployment: the directory itself is the deployment
+        // (Chart.yaml + values.yaml live directly inside it), so removing
+        // just one file would leave an orphaned, half-deleted deployment.
+        await fs.rm(dir, { recursive: true, force: true })
+      } else {
+        await fs.rm(legacyFile, { force: true })
+      }
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

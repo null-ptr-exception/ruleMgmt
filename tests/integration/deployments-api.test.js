@@ -227,4 +227,33 @@ describe('deployments API — NAME_RE with folder param', () => {
 
     expect(res.status).toBe(400)
   })
+
+  it('DELETE removes the whole directory for a direct values.yaml (folder-mode) deployment', async () => {
+    const folderPath = 'cpu/prod'
+    const dir = path.join(tmpDir, folderPath)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'Chart.yaml'), CHART_WITH_DEP)
+    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump(BARE_VALUES))
+
+    const res = await request(app)
+      .delete(`/api/deployments/my-chart/prod${folderQuery(folderPath)}`)
+
+    expect(res.status).toBe(200)
+    expect(fs.existsSync(dir)).toBe(false)
+  })
+
+  it('DELETE only removes the sibling file when other legacy-named deployments share the folder', async () => {
+    const folderPath = 'myapp'
+    const dir = path.join(tmpDir, folderPath)
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(path.join(dir, 'production-values.yaml'), yaml.dump(BARE_VALUES))
+    fs.writeFileSync(path.join(dir, 'staging-values.yaml'), yaml.dump(BARE_VALUES))
+
+    const res = await request(app)
+      .delete(`/api/deployments/my-chart/production${folderQuery(folderPath)}`)
+
+    expect(res.status).toBe(200)
+    expect(fs.existsSync(path.join(dir, 'production-values.yaml'))).toBe(false)
+    expect(fs.existsSync(path.join(dir, 'staging-values.yaml'))).toBe(true)
+  })
 })

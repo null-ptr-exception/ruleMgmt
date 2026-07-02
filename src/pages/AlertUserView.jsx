@@ -13,7 +13,8 @@ import {
   getDeployment, saveDeployment,
   renderDeployment,
   listCharts,
-  initDeploymentFolder
+  initDeploymentFolder,
+  getSyncSource
 } from '../utils/chartApi'
 
 const { Title, Text } = Typography
@@ -39,6 +40,8 @@ export default function AlertUserView() {
   const [previewYaml, setPreviewYaml] = useState('')
 
   const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
+
+  const [frozenSource, setFrozenSource] = useState(null)
 
   const [newDeployOpen, setNewDeployOpen] = useState(false)
   const [newDeployPath, setNewDeployPath] = useState('')
@@ -143,7 +146,7 @@ export default function AlertUserView() {
     }
   }
 
-  function handleFolderSelect({ path, chart }) {
+  async function handleFolderSelect({ path, chart }) {
     setSelectedFolder(path)
     setSelectedChart(chart)
     setActiveAlert(null)
@@ -153,6 +156,9 @@ export default function AlertUserView() {
     setFilters({})
     setCheckedAlerts([])
     setDirty(false)
+    setFrozenSource(null)
+    const { source } = await getSyncSource(path)
+    setFrozenSource(source)
   }
 
   async function handleSave() {
@@ -223,6 +229,11 @@ export default function AlertUserView() {
             selectedFolder={selectedFolder}
             onSelect={handleFolderSelect}
             refreshKey={treeRefreshKey}
+            onSyncChange={async () => {
+              if (!selectedFolder) return
+              const { source } = await getSyncSource(selectedFolder)
+              setFrozenSource(source)
+            }}
           />
         </div>
         {selectedChart && (
@@ -290,6 +301,11 @@ export default function AlertUserView() {
       >{sidebarCollapsed ? '›' : '‹'}</div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
+        {frozenSource && selectedFolder && (
+          <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
+            Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.
+          </div>
+        )}
         {mode === 'overview' && selectedFolder && selectedChart ? (
           <AlertOverviewWorkspace
             checkedAlerts={checkedAlerts}
@@ -301,6 +317,7 @@ export default function AlertUserView() {
             dirty={dirty}
             saveStatus={saveStatus}
             getVars={getVars}
+            readOnly={!!frozenSource}
           />
         ) : showMain ? (
           <>
@@ -324,10 +341,12 @@ export default function AlertUserView() {
                           style={{ flex: 1 }}
                           options={v.enum.map(opt => ({ value: opt, label: opt }))}
                           allowClear
+                          disabled={!!frozenSource}
                           onClear={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}
                         />
                       ) : (
                         <Input size="small" value={commonValues[v.name] ?? ''}
+                          disabled={!!frozenSource}
                           onChange={e => {
                             if (e.target.value) {
                               setCommonValues({ ...commonValues, [v.name]: e.target.value }); setDirty(true)
@@ -351,11 +370,12 @@ export default function AlertUserView() {
                   onUpdate={updated => { setRows(updated); setDirty(true) }}
                   onDelete={realIndex => { setRows(rows.filter((_, i) => i !== realIndex)); setDirty(true) }}
                   onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
+                  readOnly={!!frozenSource}
                 />
               )}
             </div>
             <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty || !!frozenSource}>Save</Button>
               {!isCommonView && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
               {!isCommonView && Object.values(filters).some(f => f && f.value !== '' && f.value != null) && (
                 <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>

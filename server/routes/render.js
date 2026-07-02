@@ -32,6 +32,25 @@ function extractPrometheusRuleGroups(renderedYaml) {
   return groups
 }
 
+async function copyGitopsDirToTemp(gitopsDir) {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'alertforge-render-'))
+  const copiedGitopsDir = path.join(tmpDir, 'repo')
+  try {
+    await fs.cp(gitopsDir, copiedGitopsDir, {
+      recursive: true,
+      filter: source => {
+        const relative = path.relative(gitopsDir, source)
+        if (!relative) return true
+        return !relative.split(path.sep).some(part => ['.git', 'node_modules', '__pycache__'].includes(part))
+      }
+    })
+    return { tmpDir, copiedGitopsDir }
+  } catch (err) {
+    await fs.rm(tmpDir, { recursive: true, force: true })
+    throw err
+  }
+}
+
 async function checkPrometheusRules(renderedYaml) {
   let groups
   try {
@@ -106,20 +125,29 @@ export default function renderRouter() {
 
     try {
       const templateDir = folder ? deploymentsDir : chartDir
+      const { tmpDir, copiedGitopsDir } = await copyGitopsDirToTemp(req.gitopsDir)
 
-      let templateArgs
-      if (folder) {
-        templateArgs = ['template', releaseName, deploymentsDir]
-      } else {
-        const valuesFile = path.join(deploymentsDir, `${deployment}-values.yaml`)
-        templateArgs = ['template', releaseName, chartDir, '-f', valuesFile]
+      try {
+        const copiedTemplateDir = path.join(copiedGitopsDir, path.relative(req.gitopsDir, templateDir))
+
+        let templateArgs
+        if (folder) {
+          templateArgs = ['template', releaseName, copiedTemplateDir]
+        } else {
+          const valuesFile = path.join(deploymentsDir, `${deployment}-values.yaml`)
+          const copiedChartDir = path.join(copiedGitopsDir, path.relative(req.gitopsDir, chartDir))
+          const copiedValuesFile = path.join(copiedGitopsDir, path.relative(req.gitopsDir, valuesFile))
+          templateArgs = ['template', releaseName, copiedChartDir, '-f', copiedValuesFile]
+        }
+
+        await runCommand(helm, ['dependency', 'build', copiedTemplateDir], { timeout: 120000 })
+
+        const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000 })
+        const check = await checkPrometheusRules(output)
+        res.json({ ok: true, output, check })
+      } finally {
+        await fs.rm(tmpDir, { recursive: true, force: true })
       }
-
-      await runCommand(helm, ['dependency', 'build', templateDir], { timeout: 120000 })
-
-      const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000 })
-      const check = await checkPrometheusRules(output)
-      res.json({ ok: true, output, check })
     } catch (err) {
       res.json({ ok: false, error: err.stderr || err.stdout || err.message })
     }

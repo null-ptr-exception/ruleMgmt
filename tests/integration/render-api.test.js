@@ -25,6 +25,8 @@ beforeAll(async () => {
   const fakeHelm = path.join(tmpDir, 'fake-helm')
   await fs.writeFile(fakeHelm, `#!/bin/sh
 if [ "$1" = "dependency" ]; then
+  mkdir -p "$3/charts"
+  echo "generated" > "$3/Chart.lock"
   exit 0
 fi
 cat "$FAKE_HELM_OUTPUT_FILE"
@@ -81,6 +83,15 @@ async function api(method, urlPath, body) {
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(`${baseURL}${urlPath}`, opts)
   return { status: res.status, data: await res.json() }
+}
+
+async function pathExists(filePath) {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
 }
 
 describe('POST /api/v2/render/:chart/:deployment', () => {
@@ -187,6 +198,17 @@ spec:
     const { status, data } = await api('POST', '/api/v2/render/test-chart/Bad%20Name')
     expect(status).toBe(400)
     expect(data.error).toBeDefined()
+  })
+
+  it('does not leave helm dependency artifacts in the live chart checkout', async () => {
+    const chartDir = path.join(tmpDir, 'charts', 'test-chart')
+
+    const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(status).toBe(200)
+    expect(data.ok).toBe(true)
+    expect(await pathExists(path.join(chartDir, 'Chart.lock'))).toBe(false)
+    expect(await pathExists(path.join(chartDir, 'charts'))).toBe(false)
   })
 
   it('uses custom deployments dir when folder query param is provided', async () => {

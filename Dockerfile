@@ -28,6 +28,10 @@ COPY server/ ./server/
 COPY sample/ ./sample/
 COPY index.html ./
 
+RUN chown -R node:node /app
+
+USER node
+
 EXPOSE 8080
 ENV PORT=8080
 CMD ["node", "server.js"]

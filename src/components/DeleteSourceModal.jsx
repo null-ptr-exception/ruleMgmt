@@ -8,12 +8,18 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
   const [decisions, setDecisions] = useState({})
   const [submitting, setSubmitting] = useState(false)
 
+  // Keyed on target *content*, not the array reference — a re-render that
+  // hands down a fresh-but-equal array (e.g. a future live-refresh of
+  // deleteSourceInfo while the modal stays open) shouldn't wipe out
+  // Keep/Delete choices the user already made.
+  const targetsKey = targets.join('|')
   useEffect(() => {
     if (!open) return
     const initial = {}
     for (const t of targets) initial[t] = 'keep'
     setDecisions(initial)
-  }, [open, targets])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, targetsKey])
 
   async function handleConfirm() {
     setSubmitting(true)
@@ -45,6 +51,12 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
       succeeded = true
       onSuccess?.()
       onClose()
+    } catch (err) {
+      // deleteDeployment/unlinkSync can reject outright (e.g. a network
+      // failure), not just resolve with { ok: false } — without this the
+      // rejection would escape as an unhandled promise rejection with no
+      // feedback shown to the user.
+      message.error(err.message || 'Delete failed')
     } finally {
       setSubmitting(false)
       // Refresh the tree even on a partial failure — some targets may have

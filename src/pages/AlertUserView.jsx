@@ -146,10 +146,29 @@ export default function AlertUserView() {
     }
   }
 
+  // Guards frozenSource against stale responses: rapid folder switches fire
+  // overlapping getSyncSource calls, and a slower earlier response landing
+  // last would freeze (or unfreeze) the wrong folder. Only the response for
+  // the most recently requested folder is allowed to update state.
+  const frozenSourceFolderRef = useRef(null)
+  async function refreshFrozenSource(path) {
+    frozenSourceFolderRef.current = path
+    let source = null
+    try {
+      ;({ source } = await getSyncSource(path))
+    } catch {
+      // Transport failure — fall through to null. The server enforces
+      // read-only on save regardless, so failing open here can't corrupt a
+      // synced target; it just skips the banner until the next refresh.
+    }
+    if (frozenSourceFolderRef.current === path) setFrozenSource(source)
+  }
+
   async function handleFolderSelect(selection) {
     // null = the selected deployment was deleted; reset instead of keeping
     // an editor open on content that no longer exists on disk.
     if (!selection) {
+      frozenSourceFolderRef.current = null
       setSelectedFolder(null)
       setSelectedChart(null)
       setActiveAlert(null)
@@ -173,8 +192,7 @@ export default function AlertUserView() {
     setCheckedAlerts([])
     setDirty(false)
     setFrozenSource(null)
-    const { source } = await getSyncSource(path)
-    setFrozenSource(source)
+    await refreshFrozenSource(path)
   }
 
   async function handleSave() {
@@ -248,10 +266,9 @@ export default function AlertUserView() {
             selectedFolder={selectedFolder}
             onSelect={handleFolderSelect}
             refreshKey={treeRefreshKey}
-            onSyncChange={async () => {
+            onSyncChange={() => {
               if (!selectedFolder) return
-              const { source } = await getSyncSource(selectedFolder)
-              setFrozenSource(source)
+              refreshFrozenSource(selectedFolder)
             }}
           />
         </div>

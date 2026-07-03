@@ -35,7 +35,13 @@ export async function readSyncRegistry(gitopsDir) {
 }
 
 export async function writeSyncRegistry(gitopsDir, registry) {
-  await fs.writeFile(path.join(gitopsDir, SYNC_FILE), yaml.dump(registry, { lineWidth: -1 }), 'utf-8')
+  // Temp file + rename so a crash mid-write can't leave sync.yaml
+  // truncated — readSyncRegistry treats a corrupt registry as a hard
+  // error (deliberately), which would take the whole sync API down.
+  const file = path.join(gitopsDir, SYNC_FILE)
+  const tmp = `${file}.tmp`
+  await fs.writeFile(tmp, yaml.dump(registry, { lineWidth: -1 }), 'utf-8')
+  await fs.rename(tmp, file)
 }
 
 export function findSourceEntry(registry, source) {

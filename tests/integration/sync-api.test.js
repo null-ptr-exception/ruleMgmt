@@ -258,13 +258,14 @@ describe('sync API', () => {
     it('a registry write failure leaves the target untouched and returns a generic error', async () => {
       makeDeployment('cpu/prod', { alerts: [{ warn: 99 }] })
       makeDeployment('cpu/staging', { alerts: [{ warn: 1 }] })
-      // Valid but unwritable registry: reads succeed, the persist step fails.
-      const registryFile = path.join(tmpDir, 'sync.yaml')
-      fs.writeFileSync(registryFile, 'syncs: []\n')
-      fs.chmodSync(registryFile, 0o444)
+      // Valid registry in a read-only directory: reads succeed, but the
+      // persist step (atomic temp-file write in gitopsDir) fails. The
+      // deployment subdirectories themselves stay writable.
+      fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), 'syncs: []\n')
+      fs.chmodSync(tmpDir, 0o555)
 
       const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
-      fs.chmodSync(registryFile, 0o644)
+      fs.chmodSync(tmpDir, 0o755)
 
       expect(res.status).toBe(500)
       // Registry-first ordering: the failed persist must mean the target's

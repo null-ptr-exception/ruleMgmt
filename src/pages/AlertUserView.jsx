@@ -164,6 +164,16 @@ export default function AlertUserView() {
     if (frozenSourceFolderRef.current === path) setFrozenSource(source)
   }
 
+  // Covers folders restored from session state, which never pass through
+  // handleFolderSelect — without this a synced deployment restored on page
+  // load would look editable until save time. handleFolderSelect keeps its
+  // own call because reselecting the same folder doesn't re-fire this
+  // effect (the ref check makes the duplicate fetch harmless).
+  useEffect(() => {
+    if (selectedFolder) refreshFrozenSource(selectedFolder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFolder])
+
   async function handleFolderSelect(selection) {
     // null = the selected deployment was deleted; reset instead of keeping
     // an editor open on content that no longer exists on disk.

@@ -255,7 +255,9 @@ describe('sync API', () => {
       expect(registry.body.syncs[0].targets.sort()).toEqual(['cpu/dev', 'cpu/staging'])
     })
 
-    it('a registry write failure leaves the target untouched and returns a generic error', async () => {
+    // root bypasses file permissions, so the read-only directory below
+    // wouldn't actually make the persist step fail.
+    it.skipIf(process.getuid?.() === 0)('a registry write failure leaves the target untouched and returns a generic error', async () => {
       makeDeployment('cpu/prod', { alerts: [{ warn: 99 }] })
       makeDeployment('cpu/staging', { alerts: [{ warn: 1 }] })
       // Valid registry in a read-only directory: reads succeed, but the
@@ -264,8 +266,13 @@ describe('sync API', () => {
       fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), 'syncs: []\n')
       fs.chmodSync(tmpDir, 0o555)
 
-      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
-      fs.chmodSync(tmpDir, 0o755)
+      let res
+      try {
+        res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
+      } finally {
+        // Always restore, or afterEach can't remove the read-only tmpDir.
+        fs.chmodSync(tmpDir, 0o755)
+      }
 
       expect(res.status).toBe(500)
       // Registry-first ordering: the failed persist must mean the target's

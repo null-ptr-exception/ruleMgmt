@@ -3,7 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
-import { readSyncRegistry, writeSyncRegistry, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
+import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
@@ -179,11 +179,13 @@ export default function deploymentsRouter() {
     try {
       const folder = req.query.folder
       if (folder) {
-        const registry = await readSyncRegistry(req.gitopsDir)
-        if (isTarget(registry, folder)) {
-          applyUnlink(registry, folder)
-          await writeSyncRegistry(req.gitopsDir, registry)
-        }
+        await withSyncRegistryLock(req.gitopsDir, async () => {
+          const registry = await readSyncRegistry(req.gitopsDir)
+          if (isTarget(registry, folder)) {
+            applyUnlink(registry, folder)
+            await writeSyncRegistry(req.gitopsDir, registry)
+          }
+        })
       }
 
       let hasDirectFile = false

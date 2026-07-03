@@ -210,4 +210,79 @@ describe('sync API', () => {
       expect(res.status).toBe(400)
     })
   })
+
+  describe('registry integrity', () => {
+    it('a missing sync.yaml reads as an empty registry', async () => {
+      const res = await request(app).get('/api/v2/sync')
+      expect(res.status).toBe(200)
+      expect(res.body).toEqual({ syncs: [] })
+    })
+
+    it('a corrupt sync.yaml surfaces as 500, not as an empty registry', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), 'syncs: [unclosed')
+
+      const res = await request(app).get('/api/v2/sync')
+      expect(res.status).toBe(500)
+    })
+
+    it('a corrupt sync.yaml fails POST without clobbering the file', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('cpu/staging')
+      const corrupt = 'syncs: [unclosed'
+      fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), corrupt)
+
+      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
+      expect(res.status).toBe(500)
+      // The unparseable registry must survive untouched — treating it as
+      // empty and rewriting it would silently drop every existing link.
+      expect(fs.readFileSync(path.join(tmpDir, 'sync.yaml'), 'utf-8')).toBe(corrupt)
+    })
+
+    it('concurrent POSTs are serialized — neither sync link is lost', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('cpu/staging')
+      makeDeployment('cpu/dev')
+
+      const [a, b] = await Promise.all([
+        request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' }),
+        request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/dev' }),
+      ])
+      expect(a.status).toBe(200)
+      expect(b.status).toBe(200)
+
+      const registry = await request(app).get('/api/v2/sync')
+      expect(registry.body.syncs).toHaveLength(1)
+      expect(registry.body.syncs[0].targets.sort()).toEqual(['cpu/dev', 'cpu/staging'])
+    })
+
+    it('a registry write failure leaves the target untouched and returns a generic error', async () => {
+      makeDeployment('cpu/prod', { alerts: [{ warn: 99 }] })
+      makeDeployment('cpu/staging', { alerts: [{ warn: 1 }] })
+      // Valid but unwritable registry: reads succeed, the persist step fails.
+      const registryFile = path.join(tmpDir, 'sync.yaml')
+      fs.writeFileSync(registryFile, 'syncs: []\n')
+      fs.chmodSync(registryFile, 0o444)
+
+      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
+      fs.chmodSync(registryFile, 0o644)
+
+      expect(res.status).toBe(500)
+      // Registry-first ordering: the failed persist must mean the target's
+      // content was never overwritten...
+      const target = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))
+      expect(target).toEqual({ alerts: [{ warn: 1 }] })
+      // ...and no half-created link is visible afterwards.
+      const registry = await request(app).get('/api/v2/sync')
+      expect(registry.body).toEqual({ syncs: [] })
+      // Generic message only — fs errors embed absolute server paths.
+      expect(res.body.error).not.toContain(tmpDir)
+    })
+
+    it('500 responses do not leak filesystem paths', async () => {
+      fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), 'syncs: [unclosed')
+      const res = await request(app).get('/api/v2/sync')
+      expect(res.status).toBe(500)
+      expect(JSON.stringify(res.body)).not.toContain(tmpDir)
+    })
+  })
 })

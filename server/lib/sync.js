@@ -4,14 +4,34 @@ import yaml from 'js-yaml'
 
 const SYNC_FILE = 'sync.yaml'
 
+// Serializes registry read-modify-write sequences. Concurrent POST/DELETE
+// /api/v2/sync (or an eager-sync save racing either) would otherwise both
+// read the same registry state and the second write would silently drop the
+// first one's change. A per-directory promise chain is sufficient here: the
+// app runs as a per-user JupyterHub singleuser server, so there is exactly
+// one Node process per repo — no cross-process locking needed.
+const registryLocks = new Map()
+
+export function withSyncRegistryLock(gitopsDir, fn) {
+  const prev = registryLocks.get(gitopsDir) || Promise.resolve()
+  const next = prev.then(fn, fn)
+  registryLocks.set(gitopsDir, next.catch(() => {}))
+  return next
+}
+
 export async function readSyncRegistry(gitopsDir) {
+  let raw
   try {
-    const raw = await fs.readFile(path.join(gitopsDir, SYNC_FILE), 'utf-8')
-    const data = yaml.load(raw) || {}
-    return { syncs: Array.isArray(data.syncs) ? data.syncs : [] }
-  } catch {
-    return { syncs: [] }
+    raw = await fs.readFile(path.join(gitopsDir, SYNC_FILE), 'utf-8')
+  } catch (err) {
+    // Only a missing registry means "no syncs yet". Parse, permission, and
+    // I/O errors must surface — treating a malformed sync.yaml as empty
+    // would let the next write silently discard every existing sync link.
+    if (err?.code === 'ENOENT') return { syncs: [] }
+    throw err
   }
+  const data = yaml.load(raw) || {}
+  return { syncs: Array.isArray(data.syncs) ? data.syncs : [] }
 }
 
 export async function writeSyncRegistry(gitopsDir, registry) {

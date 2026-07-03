@@ -146,7 +146,23 @@ export default function AlertUserView() {
     }
   }
 
-  async function handleFolderSelect({ path, chart }) {
+  async function handleFolderSelect(selection) {
+    // null = the selected deployment was deleted; reset instead of keeping
+    // an editor open on content that no longer exists on disk.
+    if (!selection) {
+      setSelectedFolder(null)
+      setSelectedChart(null)
+      setActiveAlert(null)
+      setAllValues({})
+      setCommonValues({})
+      setRows([])
+      setFilters({})
+      setCheckedAlerts([])
+      setDirty(false)
+      setFrozenSource(null)
+      return
+    }
+    const { path, chart } = selection
     setSelectedFolder(path)
     setSelectedChart(chart)
     setActiveAlert(null)
@@ -195,7 +211,10 @@ export default function AlertUserView() {
 
   async function handlePreview() {
     if (!selectedChart || !selectedFolder) return
-    if (dirty) {
+    // A frozen (synced) deployment is read-only: its on-disk state is the
+    // source of truth, so render that directly. Attempting the save-first
+    // path would just bounce off the server's 409 read-only guard.
+    if (dirty && !frozenSource) {
       const saved = await handleSave()
       if (!saved) return
     }

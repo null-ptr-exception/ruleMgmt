@@ -29,6 +29,10 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
     // pointing at a deployment that no longer exists.
     let anyChange = false
     let succeeded = false
+    // Paths actually removed from disk (deleted targets + the source) —
+    // reported to onSuccess so the tree can drop a now-dangling selection.
+    // Unlinked targets keep their content, so they don't belong here.
+    const deletedPaths = []
     try {
       for (const targetPath of targets) {
         const action = decisions[targetPath] === 'delete' ? 'delete' : 'unlink'
@@ -40,6 +44,7 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
           return
         }
         anyChange = true
+        if (action === 'delete') deletedPaths.push(targetPath)
       }
 
       const result = await deleteDeployment(source.chart, source.name, source.path)
@@ -49,19 +54,21 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
       }
       message.success(`Deleted ${source.name}`)
       succeeded = true
-      onSuccess?.()
+      deletedPaths.push(source.path)
+      onSuccess?.(deletedPaths)
       onClose()
     } catch (err) {
       // deleteDeployment/unlinkSync can reject outright (e.g. a network
       // failure), not just resolve with { ok: false } — without this the
       // rejection would escape as an unhandled promise rejection with no
-      // feedback shown to the user.
-      message.error(err.message || 'Delete failed')
+      // feedback shown to the user. Optional chaining because a rejection
+      // value isn't guaranteed to be an Error (or even non-null).
+      message.error(err?.message || 'Delete failed')
     } finally {
       setSubmitting(false)
       // Refresh the tree even on a partial failure — some targets may have
       // already been unlinked/deleted before the step that failed.
-      if (anyChange && !succeeded) onSuccess?.()
+      if (anyChange && !succeeded) onSuccess?.(deletedPaths)
     }
   }
 

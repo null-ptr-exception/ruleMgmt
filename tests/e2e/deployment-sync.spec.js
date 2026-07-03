@@ -45,6 +45,7 @@ test.describe.serial('deployment sync', () => {
     await initDeployment(request, `${ROOT}/staging`)
     await initDeployment(request, `${ROOT}/dev`)
     await initDeployment(request, `${ROOT}/canary`)
+    await initDeployment(request, `${ROOT}/del-selected`)
     await initDeployment(request, `${ROOT}/del-source`)
     await initDeployment(request, `${ROOT}/del-keep`)
     await initDeployment(request, `${ROOT}/del-remove`)
@@ -59,9 +60,23 @@ test.describe.serial('deployment sync', () => {
     // del-source and del-remove are expected to already be gone by the time
     // this runs (deleted by the "Delete a sync source" test) — DELETE is a
     // no-op on an already-missing path either way.
-    for (const name of ['prod', 'staging', 'dev', 'canary', 'del-source', 'del-keep', 'del-remove']) {
+    for (const name of ['prod', 'staging', 'dev', 'canary', 'del-selected', 'del-source', 'del-keep', 'del-remove']) {
       await request.delete(`/api/v2/deployments/${CHART}/${name}?folder=${encodeURIComponent(`${ROOT}/${name}`)}`)
     }
+  })
+
+  test('the actions menu is reachable via the ⋯ button, not only right-click', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expandFolder(page, ROOT)
+
+    const prodNode = deploymentNode(page, 'prod')
+    await expect(prodNode).toBeVisible({ timeout: 5000 })
+    await prodNode.getByRole('button', { name: 'Actions for prod' }).click()
+
+    const menuItem = page.locator('.ant-dropdown-menu-item', { hasText: 'Sync to...' })
+    await expect(menuItem).toBeVisible({ timeout: 3000 })
+    await page.keyboard.press('Escape')
   })
 
   test('Sync to... creates a target and shows the synced badge', async ({ page }) => {
@@ -152,6 +167,39 @@ test.describe.serial('deployment sync', () => {
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
+  test('Preview on a frozen deployment renders without attempting a save', async ({ page, request }) => {
+    const res = await request.get(`/api/v2/sync?target=${encodeURIComponent(`${ROOT}/staging`)}`)
+    const body = await res.json()
+    test.skip(!body.source, 'staging is not currently synced — run after the "Sync to..." test')
+
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expandFolder(page, ROOT)
+
+    const stagingNode = deploymentNode(page, 'staging')
+    await expect(stagingNode).toBeVisible({ timeout: 5000 })
+    await stagingNode.locator('.ant-tree-node-content-wrapper').click()
+    await expect(page.getByText(/Synced from/)).toBeVisible({ timeout: 5000 })
+
+    await expect(page.getByText('latency_slow_queries')).toBeVisible({ timeout: 5000 })
+    await page.getByText('latency_slow_queries').click()
+
+    // Preview on a read-only deployment must render the on-disk state
+    // directly — the save-first path would just bounce off the server's
+    // 409 guard and surface as "Save failed".
+    const saveRequests = []
+    page.on('request', r => {
+      if (r.method() === 'POST' && r.url().includes('/api/v2/deployments/')) saveRequests.push(r.url())
+    })
+    await page.getByRole('button', { name: 'Preview' }).click()
+
+    const modal = page.getByRole('dialog')
+    await expect(modal).toBeVisible({ timeout: 10000 })
+    await expect(modal.locator('pre')).toContainText('PrometheusRule', { timeout: 15000 })
+    await expect(page.getByText('Save failed')).not.toBeVisible()
+    expect(saveRequests).toEqual([])
+  })
+
   test('Unlink sync removes the badge and makes the table editable again', async ({ page }) => {
     await page.goto('/#/alerts')
     await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
@@ -198,6 +246,27 @@ test.describe.serial('deployment sync', () => {
     const res = await request.get(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(`${ROOT}/dev`)}`)
     const body = await res.json()
     expect(JSON.stringify(body.parsed)).toContain('e2e-sync-propagation-value')
+  })
+
+  test('deleting the currently selected deployment clears the editor pane', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expandFolder(page, ROOT)
+
+    const node = deploymentNode(page, 'del-selected')
+    await expect(node).toBeVisible({ timeout: 5000 })
+    await node.locator('.ant-tree-node-content-wrapper').click()
+    await expect(page.getByText('Alert Templates')).toBeVisible({ timeout: 5000 })
+
+    await rightClickMenuItem(page, node, 'Delete')
+    const confirm = page.getByRole('dialog').filter({ hasText: 'Delete del-selected?' })
+    await expect(confirm).toBeVisible({ timeout: 3000 })
+    await confirm.getByRole('button', { name: 'OK' }).click()
+
+    // The editor must not keep showing a deployment that no longer exists:
+    // chart sidebar section disappears and the empty-state prompt returns.
+    await expect(page.getByText('Alert Templates')).not.toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('Select a deployment from the folder tree')).toBeVisible({ timeout: 5000 })
   })
 
   test('Delete a sync source: per-target Keep/Delete choices are honored', async ({ page, request }) => {

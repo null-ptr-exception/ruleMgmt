@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Tree, Tag, Dropdown, Modal, message } from 'antd'
-import { FolderOutlined } from '@ant-design/icons'
+import { FolderOutlined, MoreOutlined } from '@ant-design/icons'
 import { getFolderTree, getSyncRegistry, unlinkSync, deleteDeployment } from '../utils/chartApi'
 import SyncToModal from './SyncToModal'
 import SyncFromModal from './SyncFromModal'
@@ -66,9 +66,32 @@ function toTreeNode(node, registry, handlers) {
       else if (key === 'delete') handlers.onDelete(treeNode, status)
     }
 
+    // Right-click still works, but it can't be the only entry point —
+    // keyboard and touch users need a visible trigger for the same menu.
     titleContent = (
       <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['contextMenu']}>
-        {titleInner}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {titleInner}
+          <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']}>
+            <button
+              type="button"
+              aria-label={`Actions for ${node.name}`}
+              onClick={e => e.stopPropagation()}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: '0 2px',
+                cursor: 'pointer',
+                color: '#9ca3af',
+                lineHeight: 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              <MoreOutlined />
+            </button>
+          </Dropdown>
+        </span>
       </Dropdown>
     )
   }
@@ -94,6 +117,11 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // reading the *current* expansion set regardless of which render's
   // closure ends up calling it.
   const expandedKeysRef = useRef([])
+  // Same stale-closure hazard as expandedKeysRef: delete handlers embedded
+  // in tree node titles must see the selection at delete time, not at the
+  // render that created the node.
+  const selectedFolderRef = useRef(selectedFolder)
+  selectedFolderRef.current = selectedFolder
   const [syncRegistry, setSyncRegistry] = useState({ syncs: [] })
   const [syncToNode, setSyncToNode] = useState(null)
   const [syncFromNode, setSyncFromNode] = useState(null)
@@ -214,6 +242,17 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     }
   }
 
+  // If a deployment that just got deleted is (or contains) the current
+  // selection, the editor pane would keep showing content that no longer
+  // exists on disk — drop the selection so the parent resets.
+  function clearSelectionIfDeleted(deletedPaths) {
+    const sel = selectedFolderRef.current
+    if (!sel) return
+    if (deletedPaths.some(p => sel === p || sel.startsWith(p + '/'))) {
+      onSelect(null)
+    }
+  }
+
   function handleDeleteClick(node, status) {
     if (status.role === 'source') {
       setDeleteSourceInfo({ source: node, targets: status.targets })
@@ -227,6 +266,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
         const result = await deleteDeployment(node.chart, node.name, node.path)
         if (result.ok) {
           message.success(`Deleted ${node.name}`)
+          clearSelectionIfDeleted([node.path])
           refreshAll()
         } else {
           message.error('Delete failed')
@@ -265,7 +305,10 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
         source={deleteSourceInfo?.source}
         targets={deleteSourceInfo?.targets || []}
         onClose={() => setDeleteSourceInfo(null)}
-        onSuccess={refreshAll}
+        onSuccess={(deletedPaths = []) => {
+          clearSelectionIfDeleted(deletedPaths)
+          refreshAll()
+        }}
       />
     </div>
   )

@@ -114,6 +114,11 @@ describe('isSafeSyncPath', () => {
   it('catches a charts-dir-rooted path spelled with a leading ./', () => {
     expect(isSafeSyncPath('./charts/mychart', 'charts')).toBe(false)
   })
+
+  it('catches a charts-dir-rooted path spelled with backslashes', () => {
+    expect(isSafeSyncPath('charts\\mychart', 'charts')).toBe(false)
+    expect(isSafeSyncPath('..\\etc', 'charts')).toBe(false)
+  })
 })
 
 describe('normalizeSyncPath', () => {
@@ -131,6 +136,15 @@ describe('normalizeSyncPath', () => {
   it('passes through non-string input unchanged', () => {
     expect(normalizeSyncPath(null)).toBe(null)
     expect(normalizeSyncPath(undefined)).toBe(undefined)
+  })
+
+  it('canonicalizes to forward slashes on every host OS', () => {
+    // sync.yaml is committed to the gitops repo and read cross-platform, so
+    // a registry written on Windows must compare equal on Linux and vice
+    // versa — and 'charts\evil' must not slip past the charts-dir check
+    // under a separator split('/') can't see.
+    expect(normalizeSyncPath('cpu\\prod')).toBe('cpu/prod')
+    expect(normalizeSyncPath('cpu\\qa\\..\\prod')).toBe('cpu/prod')
   })
 })
 

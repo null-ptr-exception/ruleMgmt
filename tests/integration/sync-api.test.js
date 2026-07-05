@@ -256,8 +256,9 @@ describe('sync API', () => {
     })
 
     // root bypasses file permissions, so the read-only directory below
-    // wouldn't actually make the persist step fail.
-    it.skipIf(process.getuid?.() === 0)('a registry write failure leaves the target untouched and returns a generic error', async () => {
+    // wouldn't actually make the persist step fail. Same on Windows, where
+    // chmod on a directory is a no-op and the write succeeds anyway.
+    it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('a registry write failure leaves the target untouched and returns a generic error', async () => {
       makeDeployment('cpu/prod', { alerts: [{ warn: 99 }] })
       makeDeployment('cpu/staging', { alerts: [{ warn: 1 }] })
       // Valid registry in a read-only directory: reads succeed, but the

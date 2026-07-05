@@ -76,9 +76,16 @@ export function isTarget(registry, candidate) {
 // existing registry entries (applySync/applyUnlink do strict string
 // equality), otherwise 'cpu/prod' and 'cpu/./prod' would be treated as two
 // different deployments and slip past role-exclusivity checks.
+// Always POSIX semantics, regardless of host OS. On win32, path.normalize
+// rewrites '/' to '\', which (a) stores non-portable '\'-separated paths in
+// sync.yaml — a file that gets committed to the gitops repo and read on
+// Linux — and (b) lets 'charts\evil' pass the charts-dir check below
+// (split('/') can't see the '\' separator) while path.join still resolves
+// it into the charts directory. Backslashes are folded into '/' first so
+// both spellings canonicalize identically.
 export function normalizeSyncPath(candidate) {
   if (typeof candidate !== 'string') return candidate
-  return path.normalize(candidate).replace(/\/+$/, '')
+  return path.posix.normalize(candidate.replaceAll('\\', '/')).replace(/\/+$/, '')
 }
 
 // Reject traversal above the root, absolute paths, and anything rooted at

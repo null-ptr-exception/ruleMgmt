@@ -317,11 +317,13 @@ test.describe.serial('tree refresh preserves expanded children', () => {
 
   test.beforeAll(async ({ request }) => {
     await initDeployment(request, `${NESTED_ROOT}/nested/prod`)
+    await initDeployment(request, `${NESTED_ROOT}/keep/other`)
   })
 
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/prod?folder=${encodeURIComponent(`${NESTED_ROOT}/nested/prod`)}`)
     await request.delete(`/api/v2/deployments/${CHART}/copy?folder=${encodeURIComponent(`${NESTED_ROOT}/copy`)}`)
+    await request.delete(`/api/v2/deployments/${CHART}/other?folder=${encodeURIComponent(`${NESTED_ROOT}/keep/other`)}`)
   })
 
   test('children stay visible after a sync when an ancestor was collapsed and re-expanded', async ({ page }) => {
@@ -357,5 +359,34 @@ test.describe.serial('tree refresh preserves expanded children', () => {
 
     await expect(prodNode).toBeVisible({ timeout: 5000 })
     await expect(prodNode.getByText('source')).toBeVisible({ timeout: 5000 })
+  })
+
+  // Regression: selecting a deployment used to rebuild the tree down to just
+  // the selected folder's ancestor chain, wiping the loaded children of
+  // every other expanded branch (and antd's loadedKeys kept loadData from
+  // refetching them, so they re-expanded empty until a full reload).
+  test('selecting a deployment keeps other expanded branches populated', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+
+    await expandFolder(page, NESTED_ROOT)
+    await expandFolder(page, 'keep')
+    const otherNode = deploymentNode(page, 'other')
+    await expect(otherNode).toBeVisible({ timeout: 5000 })
+
+    await expandFolder(page, 'nested')
+    const prodNode = deploymentNode(page, 'prod')
+    await expect(prodNode).toBeVisible({ timeout: 5000 })
+
+    await prodNode.locator('.ant-tree-node-content-wrapper').click()
+    await expect(page.getByText('Alert Templates')).toBeVisible({ timeout: 5000 })
+
+    // The selection-triggered tree refresh is async and lands after the
+    // workspace opens — give it time to settle, or this assertion passes
+    // against the pre-refresh DOM and never sees the branch get wiped.
+    await page.waitForTimeout(800)
+
+    // The unrelated expanded branch must survive the selection refresh.
+    await expect(otherNode).toBeVisible({ timeout: 5000 })
   })
 })

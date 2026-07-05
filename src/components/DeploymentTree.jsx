@@ -156,8 +156,10 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // node's children, so badges/menus reflect the latest sync state after a
   // mutation. Reads expandedKeysRef.current (not the expandedKeys closure)
   // so it always sees the latest expansion set, no matter which render's
-  // closure ends up calling it.
-  async function refreshAll() {
+  // closure ends up calling it. `ensureKeys` adds paths that must end up
+  // expanded (a selected folder's ancestors) on top of — never instead of —
+  // what the user already has open.
+  async function refreshAll(ensureKeys = []) {
     const [registry, rootChildren] = await Promise.all([getSyncRegistry(), loadChildren('')])
     setSyncRegistry(registry)
 
@@ -167,12 +169,14 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     // an ancestor is collapsed, and re-expanding appends the ancestor after
     // them. insertChildren against a not-yet-populated parent is a silent
     // no-op, which is how expanded nodes ended up empty after a sync.
-    const keys = [...expandedKeysRef.current].sort((a, b) => a.split('/').length - b.split('/').length)
+    const keys = [...new Set([...expandedKeysRef.current, ...ensureKeys])]
+      .sort((a, b) => a.split('/').length - b.split('/').length)
     const childLists = await Promise.all(keys.map(key => loadChildren(key)))
     keys.forEach((key, i) => {
       newTreeData = insertChildren(newTreeData, key, buildTreeNodes(childLists[i], registry))
     })
     setTreeData(newTreeData)
+    updateExpandedKeys(keys)
     onSyncChange?.()
   }
 
@@ -181,33 +185,27 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     setExpandedKeys(keys)
   }
 
-  // Load root on mount and when refreshKey changes
+  // Load root on mount and when refreshKey changes. When a folder is
+  // selected, the effect below already does a full refresh that also
+  // expands its ancestors — skip the duplicate here so two concurrent
+  // refreshes can't race (the loser would clobber the winner's tree with a
+  // staler expansion set).
   useEffect(() => {
+    if (selectedFolder) return
     refreshAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [refreshKey, selectedFolder])
 
-  // When selectedFolder is set (e.g. from session restore), expand its ancestors
+  // When selectedFolder is set (session restore, tree click, or a freshly
+  // created deployment), make sure its ancestors are expanded. This used to
+  // rebuild the tree down to just that ancestor chain, which wiped the
+  // loaded children of every other expanded branch on each selection — and
+  // antd's internal loadedKeys then blocked loadData from refetching them,
+  // so those branches re-expanded empty until a full reload.
   useEffect(() => {
     if (!selectedFolder) return
     const parts = selectedFolder.split('/')
-    const paths = parts.map((_, i) => parts.slice(0, i + 1).join('/'))
-    async function expandPath() {
-      const keys = paths.slice(0, -1)
-      const [registry, rootChildren, ...childLists] = await Promise.all([
-        getSyncRegistry(),
-        loadChildren(''),
-        ...keys.map(key => loadChildren(key)),
-      ])
-      setSyncRegistry(registry)
-      let currentData = buildTreeNodes(rootChildren, registry)
-      keys.forEach((key, i) => {
-        currentData = insertChildren(currentData, key, buildTreeNodes(childLists[i], registry))
-      })
-      setTreeData(currentData)
-      updateExpandedKeys(keys)
-    }
-    expandPath()
+    refreshAll(parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join('/')))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFolder, refreshKey])
 

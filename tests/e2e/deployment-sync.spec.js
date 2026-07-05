@@ -305,3 +305,57 @@ test.describe.serial('deployment sync', () => {
     expect(removeRes.status()).toBe(404)
   })
 })
+
+// Regression for expanded children vanishing after a sync: refreshAll used
+// to insert expanded-node children in raw expandedKeys order, but antd keeps
+// descendant keys when an ancestor is collapsed and appends the ancestor
+// *after* them on re-expand — so the array can be child-before-parent, and
+// inserting into a not-yet-populated parent was a silent no-op that left the
+// child node expanded but empty until a full page reload.
+test.describe.serial('tree refresh preserves expanded children', () => {
+  const NESTED_ROOT = 'e2e-sync-order'
+
+  test.beforeAll(async ({ request }) => {
+    await initDeployment(request, `${NESTED_ROOT}/nested/prod`)
+  })
+
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/v2/deployments/${CHART}/prod?folder=${encodeURIComponent(`${NESTED_ROOT}/nested/prod`)}`)
+    await request.delete(`/api/v2/deployments/${CHART}/copy?folder=${encodeURIComponent(`${NESTED_ROOT}/copy`)}`)
+  })
+
+  test('children stay visible after a sync when an ancestor was collapsed and re-expanded', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expandFolder(page, NESTED_ROOT)
+    await expandFolder(page, 'nested')
+
+    const prodNode = deploymentNode(page, 'prod')
+    await expect(prodNode).toBeVisible({ timeout: 5000 })
+
+    // Collapse the outer folder, then re-expand it. 'nested' stays in
+    // expandedKeys throughout, so it now precedes its parent in the array.
+    const rootNode = page.locator('.ant-tree').locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${NESTED_ROOT}$`) })
+    await rootNode.locator('.ant-tree-switcher_open').click()
+    await expect(prodNode).not.toBeVisible({ timeout: 3000 })
+    await rootNode.locator('.ant-tree-switcher_close').click()
+    await expect(prodNode).toBeVisible({ timeout: 5000 })
+    // Let the expand animation settle before right-clicking — an open
+    // context menu is embedded in the node title, and antd's motion churn
+    // detaches it mid-click otherwise (same reason expandFolder waits).
+    await page.waitForTimeout(400)
+
+    // Sync prod to a brand-new path (classified "new", so no overwrite ack
+    // is needed) — success triggers refreshAll, which must rebuild the tree
+    // without dropping nested's already-loaded children.
+    await rightClickMenuItem(page, prodNode, 'Sync to...')
+    const modal = page.getByRole('dialog')
+    await expect(modal).toBeVisible()
+    await modal.getByPlaceholder('Add new path (e.g. cpu/canary)').fill(`${NESTED_ROOT}/copy`)
+    await modal.getByRole('button', { name: 'Confirm sync' }).click()
+    await expect(modal).not.toBeVisible({ timeout: 5000 })
+
+    await expect(prodNode).toBeVisible({ timeout: 5000 })
+    await expect(prodNode.getByText('source')).toBeVisible({ timeout: 5000 })
+  })
+})

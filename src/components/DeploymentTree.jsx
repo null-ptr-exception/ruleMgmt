@@ -162,7 +162,12 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     setSyncRegistry(registry)
 
     let newTreeData = buildTreeNodes(rootChildren, registry)
-    const keys = expandedKeysRef.current
+    // Parents must be inserted before their descendants, but expandedKeys
+    // can't be trusted to be in that order: antd keeps descendant keys when
+    // an ancestor is collapsed, and re-expanding appends the ancestor after
+    // them. insertChildren against a not-yet-populated parent is a silent
+    // no-op, which is how expanded nodes ended up empty after a sync.
+    const keys = [...expandedKeysRef.current].sort((a, b) => a.split('/').length - b.split('/').length)
     const childLists = await Promise.all(keys.map(key => loadChildren(key)))
     keys.forEach((key, i) => {
       newTreeData = insertChildren(newTreeData, key, buildTreeNodes(childLists[i], registry))

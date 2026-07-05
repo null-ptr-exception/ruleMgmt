@@ -134,6 +134,9 @@ export default function AlertUserView() {
 
   async function handleNewDeployCreate() {
     if (!newDeployPath || !newDeployChart) return
+    // Creating a deployment jumps the workspace to it — same silent-discard
+    // hazard as switching folders in the tree.
+    if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
     const result = await initDeploymentFolder(newDeployPath, newDeployChart)
     setNewDeployOpen(false)
     if (result.status === 'created' || result.status === 'existing') {
@@ -174,6 +177,33 @@ export default function AlertUserView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFolder])
 
+  // Unsaved edits live only in React state — switching folders resets them.
+  // Gate the switch behind an explicit confirmation instead of discarding
+  // silently. Frozen folders are skipped: their inputs are disabled, so a
+  // lingering dirty flag there can't represent real unsaved work.
+  function confirmDiscardEdits() {
+    return new Promise(resolve => {
+      Modal.confirm({
+        title: 'Discard unsaved changes?',
+        content: `${selectedFolder} has unsaved changes that will be lost if you leave without saving.`,
+        okText: 'Discard',
+        okButtonProps: { danger: true },
+        cancelText: 'Keep editing',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      })
+    })
+  }
+
+  // Reload/close would silently drop unsaved edits the same way — warn via
+  // the browser's native dialog (text is browser-controlled).
+  useEffect(() => {
+    if (!dirty || frozenSource) return
+    const warn = e => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty, frozenSource])
+
   async function handleFolderSelect(selection) {
     // null = the selected deployment was deleted; reset instead of keeping
     // an editor open on content that no longer exists on disk.
@@ -191,6 +221,7 @@ export default function AlertUserView() {
       setFrozenSource(null)
       return
     }
+    if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
     const { path, chart } = selection
     setSelectedFolder(path)
     setSelectedChart(chart)

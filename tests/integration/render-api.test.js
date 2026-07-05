@@ -5,11 +5,12 @@ import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
 
-let server, baseURL, tmpDir, helmOutputFile, promtoolCaptureFile, fakePromtool
+let server, baseURL, tmpDir, helmOutputFile, helmArgsFile, promtoolCaptureFile, fakePromtool
 
 beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'render-test-'))
   helmOutputFile = path.join(tmpDir, 'helm-output.yaml')
+  helmArgsFile = path.join(tmpDir, 'helm-args.log')
   promtoolCaptureFile = path.join(tmpDir, 'promtool-rules.yaml')
   await fs.mkdir(path.join(tmpDir, 'charts', 'test-chart', 'templates'), { recursive: true })
   await fs.mkdir(path.join(tmpDir, 'deployments', 'test-chart'), { recursive: true })
@@ -24,6 +25,7 @@ beforeAll(async () => {
 
   const fakeHelm = path.join(tmpDir, 'fake-helm')
   await fs.writeFile(fakeHelm, `#!/bin/sh
+echo "$@" >> "$FAKE_HELM_ARGS_FILE"
 if [ "$1" = "dependency" ]; then
   mkdir -p "$3/charts"
   echo "generated" > "$3/Chart.lock"
@@ -33,6 +35,7 @@ cat "$FAKE_HELM_OUTPUT_FILE"
 `, { mode: 0o755 })
   process.env.HELM_BIN = fakeHelm
   process.env.FAKE_HELM_OUTPUT_FILE = helmOutputFile
+  process.env.FAKE_HELM_ARGS_FILE = helmArgsFile
 
   fakePromtool = path.join(tmpDir, 'fake-promtool')
   await fs.writeFile(fakePromtool, `#!/bin/sh
@@ -83,15 +86,6 @@ async function api(method, urlPath, body) {
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(`${baseURL}${urlPath}`, opts)
   return { status: res.status, data: await res.json() }
-}
-
-async function pathExists(filePath) {
-  try {
-    await fs.access(filePath)
-    return true
-  } catch {
-    return false
-  }
 }
 
 describe('POST /api/v2/render/:chart/:deployment', () => {
@@ -200,15 +194,22 @@ spec:
     expect(data.error).toBeDefined()
   })
 
-  it('does not leave helm dependency artifacts in the live chart checkout', async () => {
+  // Renders run in place, per the decision in #29 → PR #30 (closed) → PR #31:
+  // helm's on-disk artifacts are kept out of version control by the gitops
+  // repo's own .gitignore (doc/gitops-repo-setup.md), not app-level temp-dir
+  // isolation. `dependency update` rather than `build` matters: build
+  // hard-errors on a stale Chart.lock as soon as a chart version is bumped.
+  it('runs helm dependency update against the live chart dir', async () => {
     const chartDir = path.join(tmpDir, 'charts', 'test-chart')
+    await fs.rm(helmArgsFile, { force: true })
 
     const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
 
     expect(status).toBe(200)
     expect(data.ok).toBe(true)
-    expect(await pathExists(path.join(chartDir, 'Chart.lock'))).toBe(false)
-    expect(await pathExists(path.join(chartDir, 'charts'))).toBe(false)
+    const helmCalls = (await fs.readFile(helmArgsFile, 'utf-8')).trim().split('\n')
+    expect(helmCalls[0]).toContain(`dependency update ${chartDir}`)
+    expect(helmCalls[1]).toContain(`template test-chart-staging ${chartDir}`)
   })
 
   it('uses custom deployments dir when folder query param is provided', async () => {

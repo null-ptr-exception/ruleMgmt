@@ -32,25 +32,6 @@ function extractPrometheusRuleGroups(renderedYaml) {
   return groups
 }
 
-async function copyGitopsDirToTemp(gitopsDir) {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'alertforge-render-'))
-  const copiedGitopsDir = path.join(tmpDir, 'repo')
-  try {
-    await fs.cp(gitopsDir, copiedGitopsDir, {
-      recursive: true,
-      filter: source => {
-        const relative = path.relative(gitopsDir, source)
-        if (!relative) return true
-        return !relative.split(path.sep).some(part => ['.git', 'node_modules', '__pycache__'].includes(part))
-      }
-    })
-    return { tmpDir, copiedGitopsDir }
-  } catch (err) {
-    await fs.rm(tmpDir, { recursive: true, force: true })
-    throw err
-  }
-}
-
 async function checkPrometheusRules(renderedYaml) {
   let groups
   try {
@@ -125,29 +106,30 @@ export default function renderRouter() {
 
     try {
       const templateDir = folder ? deploymentsDir : chartDir
-      const { tmpDir, copiedGitopsDir } = await copyGitopsDirToTemp(req.gitopsDir)
 
-      try {
-        const copiedTemplateDir = path.join(copiedGitopsDir, path.relative(req.gitopsDir, templateDir))
-
-        let templateArgs
-        if (folder) {
-          templateArgs = ['template', releaseName, copiedTemplateDir]
-        } else {
-          const valuesFile = path.join(deploymentsDir, `${deployment}-values.yaml`)
-          const copiedChartDir = path.join(copiedGitopsDir, path.relative(req.gitopsDir, chartDir))
-          const copiedValuesFile = path.join(copiedGitopsDir, path.relative(req.gitopsDir, valuesFile))
-          templateArgs = ['template', releaseName, copiedChartDir, '-f', copiedValuesFile]
-        }
-
-        await runCommand(helm, ['dependency', 'build', copiedTemplateDir], { timeout: 120000 })
-
-        const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000 })
-        const check = await checkPrometheusRules(output)
-        res.json({ ok: true, output, check })
-      } finally {
-        await fs.rm(tmpDir, { recursive: true, force: true })
+      let templateArgs
+      if (folder) {
+        templateArgs = ['template', releaseName, templateDir]
+      } else {
+        const valuesFile = path.join(deploymentsDir, `${deployment}-values.yaml`)
+        templateArgs = ['template', releaseName, chartDir, '-f', valuesFile]
       }
+
+      // Renders run in place, per the decision in #29/#30/#31: the artifacts
+      // helm writes here (Chart.lock, charts/*.tgz) are kept out of version
+      // control by the gitops repo's own .gitignore (doc/gitops-repo-setup.md),
+      // not by app-level temp-dir isolation.
+      //
+      // `dependency update` rather than `build`: build hard-errors on a stale
+      // on-disk Chart.lock the moment a chart version is bumped ("lock file
+      // out of sync"), and the lock carries no pinning value for same-repo
+      // file:// dependencies anyway. update re-resolves every time and prunes
+      // outdated .tgz files as a side effect.
+      await runCommand(helm, ['dependency', 'update', templateDir], { timeout: 120000 })
+
+      const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000 })
+      const check = await checkPrometheusRules(output)
+      res.json({ ok: true, output, check })
     } catch (err) {
       res.json({ ok: false, error: err.stderr || err.stdout || err.message })
     }

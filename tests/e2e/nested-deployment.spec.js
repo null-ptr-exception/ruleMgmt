@@ -85,7 +85,10 @@ test.describe('nested deployment — save and preview', () => {
       // (scope to ant-input to skip hidden Segmented radio buttons and sidebar search inputs)
       const input = page.locator('input.ant-input:visible').first()
       await expect(input).toBeVisible({ timeout: 3000 })
-      await input.fill('e2e-test-value')
+      // Unique per run: refilling the exact value a previous run already
+      // saved doesn't fire React's onChange, so dirty stays false and Save
+      // stays disabled — only a fresh workspace (like CI) would pass.
+      await input.fill(`e2e-test-value-${Date.now()}`)
 
       // Save button should be enabled
       const saveBtn = page.getByRole('button', { name: 'Save' })

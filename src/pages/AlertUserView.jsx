@@ -13,7 +13,8 @@ import {
   getDeployment, saveDeployment,
   renderDeployment,
   listCharts,
-  initDeploymentFolder
+  initDeploymentFolder,
+  getSyncSource
 } from '../utils/chartApi'
 
 const { Title, Text } = Typography
@@ -39,6 +40,8 @@ export default function AlertUserView() {
   const [previewYaml, setPreviewYaml] = useState('')
 
   const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
+
+  const [frozenSource, setFrozenSource] = useState(null)
 
   const [newDeployOpen, setNewDeployOpen] = useState(false)
   const [newDeployPath, setNewDeployPath] = useState('')
@@ -131,6 +134,9 @@ export default function AlertUserView() {
 
   async function handleNewDeployCreate() {
     if (!newDeployPath || !newDeployChart) return
+    // Creating a deployment jumps the workspace to it — same silent-discard
+    // hazard as switching folders in the tree.
+    if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
     const result = await initDeploymentFolder(newDeployPath, newDeployChart)
     setNewDeployOpen(false)
     if (result.status === 'created' || result.status === 'existing') {
@@ -143,7 +149,80 @@ export default function AlertUserView() {
     }
   }
 
-  function handleFolderSelect({ path, chart }) {
+  // Guards frozenSource against stale responses: rapid folder switches fire
+  // overlapping getSyncSource calls, and a slower earlier response landing
+  // last would freeze (or unfreeze) the wrong folder. Only the response for
+  // the most recently requested folder is allowed to update state.
+  const frozenSourceFolderRef = useRef(null)
+  async function refreshFrozenSource(path) {
+    frozenSourceFolderRef.current = path
+    let source = null
+    try {
+      ;({ source } = await getSyncSource(path))
+    } catch {
+      // Transport failure — fall through to null. The server enforces
+      // read-only on save regardless, so failing open here can't corrupt a
+      // synced target; it just skips the banner until the next refresh.
+    }
+    if (frozenSourceFolderRef.current === path) setFrozenSource(source)
+  }
+
+  // Covers folders restored from session state, which never pass through
+  // handleFolderSelect — without this a synced deployment restored on page
+  // load would look editable until save time. handleFolderSelect keeps its
+  // own call because reselecting the same folder doesn't re-fire this
+  // effect (the ref check makes the duplicate fetch harmless).
+  useEffect(() => {
+    if (selectedFolder) refreshFrozenSource(selectedFolder)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFolder])
+
+  // Unsaved edits live only in React state — switching folders resets them.
+  // Gate the switch behind an explicit confirmation instead of discarding
+  // silently. Frozen folders are skipped: their inputs are disabled, so a
+  // lingering dirty flag there can't represent real unsaved work.
+  function confirmDiscardEdits() {
+    return new Promise(resolve => {
+      Modal.confirm({
+        title: 'Discard unsaved changes?',
+        content: `${selectedFolder} has unsaved changes that will be lost if you leave without saving.`,
+        okText: 'Discard',
+        okButtonProps: { danger: true },
+        cancelText: 'Keep editing',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      })
+    })
+  }
+
+  // Reload/close would silently drop unsaved edits the same way — warn via
+  // the browser's native dialog (text is browser-controlled).
+  useEffect(() => {
+    if (!dirty || frozenSource) return
+    const warn = e => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty, frozenSource])
+
+  async function handleFolderSelect(selection) {
+    // null = the selected deployment was deleted; reset instead of keeping
+    // an editor open on content that no longer exists on disk.
+    if (!selection) {
+      frozenSourceFolderRef.current = null
+      setSelectedFolder(null)
+      setSelectedChart(null)
+      setActiveAlert(null)
+      setAllValues({})
+      setCommonValues({})
+      setRows([])
+      setFilters({})
+      setCheckedAlerts([])
+      setDirty(false)
+      setFrozenSource(null)
+      return
+    }
+    if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
+    const { path, chart } = selection
     setSelectedFolder(path)
     setSelectedChart(chart)
     setActiveAlert(null)
@@ -153,6 +232,8 @@ export default function AlertUserView() {
     setFilters({})
     setCheckedAlerts([])
     setDirty(false)
+    setFrozenSource(null)
+    await refreshFrozenSource(path)
   }
 
   async function handleSave() {
@@ -189,7 +270,10 @@ export default function AlertUserView() {
 
   async function handlePreview() {
     if (!selectedChart || !selectedFolder) return
-    if (dirty) {
+    // A frozen (synced) deployment is read-only: its on-disk state is the
+    // source of truth, so render that directly. Attempting the save-first
+    // path would just bounce off the server's 409 read-only guard.
+    if (dirty && !frozenSource) {
       const saved = await handleSave()
       if (!saved) return
     }
@@ -223,6 +307,10 @@ export default function AlertUserView() {
             selectedFolder={selectedFolder}
             onSelect={handleFolderSelect}
             refreshKey={treeRefreshKey}
+            onSyncChange={() => {
+              if (!selectedFolder) return
+              refreshFrozenSource(selectedFolder)
+            }}
           />
         </div>
         {selectedChart && (
@@ -290,6 +378,11 @@ export default function AlertUserView() {
       >{sidebarCollapsed ? '›' : '‹'}</div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
+        {frozenSource && selectedFolder && (
+          <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
+            Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.
+          </div>
+        )}
         {mode === 'overview' && selectedFolder && selectedChart ? (
           <AlertOverviewWorkspace
             checkedAlerts={checkedAlerts}
@@ -301,6 +394,7 @@ export default function AlertUserView() {
             dirty={dirty}
             saveStatus={saveStatus}
             getVars={getVars}
+            readOnly={!!frozenSource}
           />
         ) : showMain ? (
           <>
@@ -324,10 +418,12 @@ export default function AlertUserView() {
                           style={{ flex: 1 }}
                           options={v.enum.map(opt => ({ value: opt, label: opt }))}
                           allowClear
+                          disabled={!!frozenSource}
                           onClear={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}
                         />
                       ) : (
                         <Input size="small" value={commonValues[v.name] ?? ''}
+                          disabled={!!frozenSource}
                           onChange={e => {
                             if (e.target.value) {
                               setCommonValues({ ...commonValues, [v.name]: e.target.value }); setDirty(true)
@@ -351,11 +447,12 @@ export default function AlertUserView() {
                   onUpdate={updated => { setRows(updated); setDirty(true) }}
                   onDelete={realIndex => { setRows(rows.filter((_, i) => i !== realIndex)); setDirty(true) }}
                   onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
+                  readOnly={!!frozenSource}
                 />
               )}
             </div>
             <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty || !!frozenSource}>Save</Button>
               {!isCommonView && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
               {!isCommonView && Object.values(filters).some(f => f && f.value !== '' && f.value != null) && (
                 <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>

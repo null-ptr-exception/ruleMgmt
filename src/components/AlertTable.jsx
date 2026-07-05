@@ -45,6 +45,7 @@ export default function AlertTable({
   filters = {},
   effectiveFilters,
   onFiltersChange,
+  readOnly = false,
 }) {
   const activeFilters = effectiveFilters ?? filters
   const filteredRows = useMemo(() => {
@@ -78,6 +79,7 @@ export default function AlertTable({
       return (
         <Checkbox
           checked={!!val}
+          disabled={readOnly}
           onChange={e => handleCellChange(realIndex, v.name, e.target.checked)}
         />
       )
@@ -88,6 +90,7 @@ export default function AlertTable({
           size="small"
           step={v.type === 'integer' ? 1 : 'any'}
           value={val ?? ''}
+          disabled={readOnly}
           onChange={value => handleCellChange(realIndex, v.name, value)}
           style={{ width: '100%' }}
         />
@@ -98,6 +101,7 @@ export default function AlertTable({
         <Select
           size="small"
           value={val ?? ''}
+          disabled={readOnly}
           onChange={value => handleCellChange(realIndex, v.name, value)}
           style={{ width: '100%' }}
           options={v.enum.map(opt => ({ value: opt, label: opt }))}
@@ -108,6 +112,7 @@ export default function AlertTable({
       <Input
         size="small"
         value={val ?? ''}
+        disabled={readOnly}
         onChange={e => handleCellChange(realIndex, v.name, e.target.value)}
       />
     )
@@ -137,7 +142,7 @@ export default function AlertTable({
       key: 'actions',
       width: 50,
       render: (_, row) => (
-        <Button type="text" danger size="small" icon={<DeleteOutlined />}
+        <Button type="text" danger size="small" icon={<DeleteOutlined />} disabled={readOnly}
           onClick={() => onDelete(row.__realIndex)} />
       )
     }
@@ -157,7 +162,7 @@ export default function AlertTable({
         locale={{ emptyText }}
       />
       <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }}
-        onClick={handleAdd}>
+        onClick={handleAdd} disabled={readOnly}>
         Add instance
       </Button>
     </div>

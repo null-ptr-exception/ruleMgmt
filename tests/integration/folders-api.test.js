@@ -67,6 +67,30 @@ describe('folders API', () => {
     expect(res.status).toBe(400)
   })
 
+  it('POST / rejects paths rooted at the charts dir', async () => {
+    const res = await request(app).post('/api/v2/folders').send({ path: 'charts/mychart' })
+    expect(res.status).toBe(400)
+    expect(fs.existsSync(path.join(tmpDir, 'charts', 'mychart'))).toBe(false)
+  })
+
+  it('POST / rejects the charts dir itself', async () => {
+    const res = await request(app).post('/api/v2/folders').send({ path: 'charts' })
+    expect(res.status).toBe(400)
+  })
+
+  it('POST / rejects a charts-dir escape even when CHARTS_DIR is an equivalent spelling', async () => {
+    const origEnv = process.env.CHARTS_DIR
+    process.env.CHARTS_DIR = 'charts/'
+    try {
+      const res = await request(app).post('/api/v2/folders').send({ path: 'charts/mychart' })
+      expect(res.status).toBe(400)
+      expect(fs.existsSync(path.join(tmpDir, 'charts', 'mychart'))).toBe(false)
+    } finally {
+      if (origEnv === undefined) delete process.env.CHARTS_DIR
+      else process.env.CHARTS_DIR = origEnv
+    }
+  })
+
   it('POST /init scaffolds Chart.yaml and values.yaml', async () => {
     const chartsDir = path.join(tmpDir, 'charts')
     const chartDir = path.join(chartsDir, 'my-alerts')
@@ -201,6 +225,14 @@ describe('folders API', () => {
     const res = await request(app).post('/api/v2/folders/init').send({
       folder: 'some-folder',
       chart: '/etc/passwd'
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('POST /init rejects a folder rooted at the charts dir', async () => {
+    const res = await request(app).post('/api/v2/folders/init').send({
+      folder: 'charts/mychart',
+      chart: 'my-alerts'
     })
     expect(res.status).toBe(400)
   })

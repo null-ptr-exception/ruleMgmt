@@ -39,4 +39,14 @@ describe('apiFetch', () => {
     await apiFetch('/api/v2/git/commit', opts)
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/v2/git/commit', opts)
   })
+
+  it('resolves to a failed response instead of throwing when fetch rejects', async () => {
+    delete globalThis.window.__BASE_PATH__
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('network down'))
+    const { apiFetch } = await import('../../src/lib/apiFetch.js')
+
+    const res = await apiFetch('/api/v2/charts')
+    expect(res.ok).toBe(false)
+    await expect(res.json()).resolves.toEqual({ error: 'network down' })
+  })
 })

@@ -8,6 +8,11 @@ import yaml from 'js-yaml'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
 
+// execFile's default maxBuffer is 1MiB; large chart renders or rule sets
+// can exceed that and fail with ERR_CHILD_PROCESS_STDIO_MAXBUFFER instead
+// of returning output.
+const MAX_BUFFER = 10 * 1024 * 1024
+
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (err, stdout, stderr) => {
@@ -59,7 +64,7 @@ async function checkPrometheusRules(renderedYaml) {
 
   try {
     await fs.writeFile(rulesFile, yaml.dump({ groups }, { lineWidth: -1 }), 'utf-8')
-    const { stdout, stderr } = await runCommand(promtool, ['check', 'rules', rulesFile], { timeout: 120000 })
+    const { stdout, stderr } = await runCommand(promtool, ['check', 'rules', rulesFile], { timeout: 120000, maxBuffer: MAX_BUFFER })
     return {
       passed: true,
       errors: [],
@@ -127,7 +132,7 @@ export default function renderRouter() {
       // outdated .tgz files as a side effect.
       await runCommand(helm, ['dependency', 'update', templateDir], { timeout: 120000 })
 
-      const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000 })
+      const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000, maxBuffer: MAX_BUFFER })
       const check = await checkPrometheusRules(output)
       res.json({ ok: true, output, check })
     } catch (err) {

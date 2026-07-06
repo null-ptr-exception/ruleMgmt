@@ -4,12 +4,16 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { wrapValues, countAlerts } from '../lib/subchart.js'
-import { isDeploymentDir } from '../lib/sync.js'
+import { isDeploymentDir, isSafeSyncPath } from '../lib/sync.js'
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
 
 function isExcluded(name) {
   return EXCLUDED_DIRS.has(name) || name.startsWith('.')
+}
+
+function chartsDirName() {
+  return process.env.CHARTS_DIR || 'charts'
 }
 
 async function listChildren(baseDir, parentPath) {
@@ -121,9 +125,8 @@ export default function foldersRouter() {
 
   router.get('/deployments', async (req, res) => {
     try {
-      const chartsDirName = process.env.CHARTS_DIR || 'charts'
       const results = []
-      await collectDeployments(req.gitopsDir, '', chartsDirName, results)
+      await collectDeployments(req.gitopsDir, '', chartsDirName(), results)
       res.json(results)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -145,7 +148,7 @@ export default function foldersRouter() {
 
   router.post('/', async (req, res) => {
     const { path: folderPath } = req.body
-    if (!folderPath || folderPath.includes('..')) {
+    if (!isSafeSyncPath(folderPath, chartsDirName())) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
     try {
@@ -158,7 +161,7 @@ export default function foldersRouter() {
 
   router.post('/init', async (req, res) => {
     const { folder, chart } = req.body
-    if (!folder || typeof folder !== 'string' || folder.includes('..')) {
+    if (!isSafeSyncPath(folder, chartsDirName())) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
     if (!chart || typeof chart !== 'string' || chart.includes('..') || path.isAbsolute(chart)) {

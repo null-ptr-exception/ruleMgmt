@@ -78,6 +78,19 @@ describe('folders API', () => {
     expect(res.status).toBe(400)
   })
 
+  it('POST / rejects a charts-dir escape even when CHARTS_DIR is an equivalent spelling', async () => {
+    const origEnv = process.env.CHARTS_DIR
+    process.env.CHARTS_DIR = 'charts/'
+    try {
+      const res = await request(app).post('/api/v2/folders').send({ path: 'charts/mychart' })
+      expect(res.status).toBe(400)
+      expect(fs.existsSync(path.join(tmpDir, 'charts', 'mychart'))).toBe(false)
+    } finally {
+      if (origEnv === undefined) delete process.env.CHARTS_DIR
+      else process.env.CHARTS_DIR = origEnv
+    }
+  })
+
   it('POST /init scaffolds Chart.yaml and values.yaml', async () => {
     const chartsDir = path.join(tmpDir, 'charts')
     const chartDir = path.join(chartsDir, 'my-alerts')

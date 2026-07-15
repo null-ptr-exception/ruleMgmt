@@ -8,6 +8,7 @@ import OverviewTemplateTree from '../components/OverviewTemplateTree'
 import AlertTable from '../components/AlertTable'
 import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
+import { pruneAllValues } from '../utils/valueUtils'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -244,7 +245,7 @@ export default function AlertUserView() {
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...merged }
       : merged
-    const result = await saveDeployment(selectedChart, folderBasename, toSave, selectedFolder)
+    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
     if (!result.ok) {
       message.error('Save failed')
       return false
@@ -260,7 +261,7 @@ export default function AlertUserView() {
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...allValues }
       : allValues
-    const result = await saveDeployment(selectedChart, folderBasename, toSave, selectedFolder)
+    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
     if (!result.ok) {
       message.error('Save failed')
       return

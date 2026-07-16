@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { Table, Button, Input, InputNumber, Select, Checkbox } from 'antd'
 import { DeleteOutlined, PlusOutlined, FilterOutlined } from '@ant-design/icons'
 import { matchesFilter, getFilterOperators } from '../utils/filterUtils'
+import { buildNewRow } from '../utils/valueUtils'
 
 function FilterHeader({ varName, varDef, filter, onChange }) {
   const ops = getFilterOperators(varDef)
@@ -62,15 +63,7 @@ export default function AlertTable({
   }, [rows, onUpdate])
 
   const handleAdd = useCallback(() => {
-    const newRow = {}
-    vars.forEach(v => {
-      if (v.name in commonValues) return
-      if (v.default !== undefined) newRow[v.name] = v.default
-      else if (v.type === 'boolean') newRow[v.name] = false
-      else if (v.type === 'number' || v.type === 'integer') newRow[v.name] = 0
-      else newRow[v.name] = ''
-    })
-    onAdd(newRow)
+    onAdd(buildNewRow(vars, commonValues))
   }, [vars, onAdd, commonValues])
 
   const renderInput = (v, row, realIndex) => {

@@ -39,7 +39,11 @@ function getCommonSelectors(schema) {
   return Object.keys(props)
 }
 
-function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
+function getCommonRequired(schema) {
+  return schema?.['x-common-vars']?.required || []
+}
+
+function generateGroupYaml(alertGroup, alertDef, commonSelectors = [], commonRequired = []) {
   const promql = alertDef['x-promql']
   if (!promql) return null
 
@@ -49,6 +53,20 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
   const allSelectors = [...new Set([...commonSelectors, ...selectors])]
   const hasCommon = commonSelectors.length > 0
   const ref = hasCommon ? '$row.' : '.'
+  const refVar = hasCommon ? '$row' : '.'
+  // "Set" means "key present": optional vars are omitted from values.yaml
+  // entirely when empty, so key presence (hasKey) — not truthiness — is the
+  // correct guard, and it keeps numeric enum selectors with a legitimate 0
+  // rendering. Unguarded references to a missing key render the literal
+  // string "<no value>".
+  const requiredSet = new Set([...(alertDef?.items?.required || []), ...commonRequired])
+
+  const requiredSel = allSelectors.find(s => requiredSet.has(s))
+  const summarySuffix = requiredSel
+    ? ` on {{ ${ref}${requiredSel} }}`
+    : allSelectors.length > 0
+      ? `{{ if hasKey ${refVar} "${allSelectors[0]}" }} on {{ ${ref}${allSelectors[0]} }}{{ end }}`
+      : ''
 
   const rules = []
   for (const threshold of thresholds) {
@@ -60,7 +78,16 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
 
     const labelLines = [`            severity: ${threshold.severity}`]
     for (const sel of allSelectors) {
-      labelLines.push(`            ${sel}: "{{ ${ref}${sel} }}"`)
+      const line = `            ${sel}: "{{ ${ref}${sel} }}"`
+      if (requiredSet.has(sel)) {
+        labelLines.push(line)
+      } else {
+        labelLines.push(
+          `            {{- if hasKey ${refVar} "${sel}" }}\n` +
+          line + '\n' +
+          `            {{- end }}`
+        )
+      }
     }
 
     rules.push(
@@ -70,7 +97,7 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
       `          labels:\n` +
       labelLines.join('\n') + '\n' +
       `          annotations:\n` +
-      `            summary: "${alertName} triggered on {{ ${ref}${allSelectors[0] || 'namespace'} }}"`
+      `            summary: "${alertName} triggered${summarySuffix}"`
     )
   }
 
@@ -93,7 +120,7 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = []) {
 
 export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema) {
   const commonSelectors = schema ? getCommonSelectors(schema) : []
-  const groupYaml = generateGroupYaml(alertGroup, alertDef, commonSelectors)
+  const groupYaml = generateGroupYaml(alertGroup, alertDef, commonSelectors, schema ? getCommonRequired(schema) : [])
   if (!groupYaml) return null
 
   const name = releaseName || '{{ .Release.Name }}'
@@ -114,13 +141,14 @@ export function generatePrometheusRule(schema, releaseName) {
   if (!schema?.properties) return ''
 
   const commonSelectors = getCommonSelectors(schema)
+  const commonRequired = getCommonRequired(schema)
   const groups = []
 
   for (const [alertGroup, alertDef] of Object.entries(schema.properties)) {
     if (alertGroup.startsWith('$')) continue
     if (alertDef['x-custom-template']) continue
 
-    const groupYaml = generateGroupYaml(alertGroup, alertDef, commonSelectors)
+    const groupYaml = generateGroupYaml(alertGroup, alertDef, commonSelectors, commonRequired)
     if (groupYaml) groups.push(groupYaml)
   }
 

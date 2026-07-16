@@ -153,6 +153,147 @@ describe('generatePrometheusRule', () => {
   })
 })
 
+describe('optional selector guards', () => {
+  it('wraps non-required selector labels in a hasKey guard', () => {
+    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    // namespace is not in items.required → guarded
+    expect(yaml).toContain('{{- if hasKey . "namespace" }}')
+    expect(yaml).toContain('namespace: "{{ .namespace }}"')
+  })
+
+  it('renders required selectors unguarded', () => {
+    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    expect(yaml).not.toContain('hasKey . "pvc_regex"')
+    expect(yaml).toContain('pvc_regex: "{{ .pvc_regex }}"')
+  })
+
+  it('guards optional common vars with $row when common vars exist', () => {
+    const schema = {
+      type: 'object',
+      'x-common-vars': {
+        type: 'object',
+        properties: { owner: { type: 'string' } }
+      },
+      properties: {
+        test_group: {
+          type: 'array',
+          'x-promql': 'metric > {{ THRESHOLD }}',
+          'x-for': '5m',
+          items: {
+            type: 'object',
+            properties: {
+              ns: { type: 'string', 'x-var-type': 'selector' },
+              warn: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
+            },
+            required: ['ns']
+          }
+        }
+      }
+    }
+    const yaml = generatePrometheusRule(schema, 'test')
+    expect(yaml).toContain('{{- if hasKey $row "owner" }}')
+    expect(yaml).not.toContain('hasKey $row "ns"')
+  })
+
+  it('does not guard required common vars', () => {
+    const schema = {
+      type: 'object',
+      'x-common-vars': {
+        type: 'object',
+        properties: { owner: { type: 'string' } },
+        required: ['owner']
+      },
+      properties: {
+        test_group: {
+          type: 'array',
+          'x-promql': 'metric > {{ THRESHOLD }}',
+          'x-for': '5m',
+          items: {
+            type: 'object',
+            properties: {
+              warn: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
+            }
+          }
+        }
+      }
+    }
+    const yaml = generatePrometheusRule(schema, 'test')
+    expect(yaml).not.toContain('hasKey $row "owner"')
+    expect(yaml).toContain('owner: "{{ $row.owner }}"')
+  })
+})
+
+describe('summary annotation selector choice', () => {
+  it('prefers a required selector even when it is not first', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        g: {
+          type: 'array',
+          'x-promql': 'm > {{ THRESHOLD }}',
+          'x-for': '5m',
+          items: {
+            type: 'object',
+            properties: {
+              team: { type: 'string', 'x-var-type': 'selector' },
+              host: { type: 'string', 'x-var-type': 'selector' },
+              warn: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
+            },
+            required: ['host']
+          }
+        }
+      }
+    }
+    const yaml = generatePrometheusRule(schema, 'test')
+    expect(yaml).toContain('summary: "G_Warn triggered on {{ .host }}"')
+  })
+
+  it('guards the summary reference when only optional selectors exist', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        g: {
+          type: 'array',
+          'x-promql': 'm > {{ THRESHOLD }}',
+          'x-for': '5m',
+          items: {
+            type: 'object',
+            properties: {
+              team: { type: 'string', 'x-var-type': 'selector' },
+              warn: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
+            }
+          }
+        }
+      }
+    }
+    const yaml = generatePrometheusRule(schema, 'test')
+    expect(yaml).toContain('summary: "G_Warn triggered{{ if hasKey . "team" }} on {{ .team }}{{ end }}"')
+  })
+
+  it('omits the on-clause when there are no selectors', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        g: {
+          type: 'array',
+          'x-promql': 'm > {{ THRESHOLD }}',
+          'x-for': '5m',
+          items: {
+            type: 'object',
+            properties: {
+              warn: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
+            }
+          }
+        }
+      }
+    }
+    const yaml = generatePrometheusRule(schema, 'test')
+    expect(yaml).toContain('summary: "G_Warn triggered"')
+    expect(yaml).not.toContain('<no value>')
+    expect(yaml).not.toContain('{{ .namespace }}')
+  })
+})
+
 describe('generateDefaultValues', () => {
   it('generates one row per alert group with defaults', () => {
     const values = generateDefaultValues(sampleSchema)

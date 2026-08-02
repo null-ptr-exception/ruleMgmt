@@ -131,4 +131,47 @@ test.describe('Alert Overview Save', () => {
       await expect(page.locator(`text=/${after} \\/ ${after} rows/`).first()).toBeVisible({ timeout: 3000 })
     })
   })
+
+  test.describe('Preview', () => {
+    // Waits on a real helm render, which can take tens of seconds on a machine
+    // with charts to resolve (it is fast on a runner without helm, where the
+    // render fails immediately and the modal reports the error).
+    test('Preview button opens the render modal from overview', async ({ page }) => {
+      test.slow()
+      await openOverviewWithLatencySection(page)
+
+      await page.getByRole('button', { name: 'Preview' }).click()
+
+      await expect(page.getByText('Rendered PrometheusRule')).toBeVisible({ timeout: 60000 })
+    })
+
+    test('Preview saves overview edits, not the single-mode row buffer', async ({ page }) => {
+      // Visiting the alert in single mode first loads it into the `rows` state.
+      // Preview saves before rendering, and saving through the single-mode
+      // handler would write that now-stale buffer over the overview edit.
+      await expandAndSelectDeployment(page)
+      await page.getByText('latency_slow_queries').click()
+      await expect(page.locator('.ant-table-tbody tr.ant-table-row').first()).toBeVisible({ timeout: 5000 })
+
+      await page.getByText('Overview', { exact: true }).click()
+      await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
+      await page.getByPlaceholder('Search alert types...').fill('latency')
+      await page.locator('input[type="checkbox"]').last().check()
+      await expect(page.locator('text=/\\d+ \\/ \\d+ rows/').first()).toBeVisible({ timeout: 5000 })
+
+      const before = await getCurrentRowCount(page)
+      await page.getByRole('button', { name: /Add instance/ }).first().click()
+      const expected = before + 1
+      await expect(page.locator(`text=/${expected} \\/ ${expected} rows/`).first()).toBeVisible({ timeout: 3000 })
+
+      // Preview saves before it renders, and the save is what this test is
+      // about — waiting on the render would tie it to helm's speed.
+      await page.getByRole('button', { name: 'Preview' }).click()
+      await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 10000 })
+
+      await page.reload()
+      await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+      await expect(page.locator(`text=/${expected} \\/ ${expected} rows/`).first()).toBeVisible({ timeout: 10000 })
+    })
+  })
 })

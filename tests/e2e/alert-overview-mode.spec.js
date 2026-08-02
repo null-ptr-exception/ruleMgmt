@@ -260,4 +260,88 @@ test.describe('Alert Overview Mode', () => {
       await expect(page.getByText('latency_slow_queries')).toBeVisible({ timeout: 5000 })
     })
   })
+
+  test.describe('Workspace layout', () => {
+    // Self-seeds a section long enough to scroll on its own
+    const TALL_FOLDER = 'deployments/e2e-overview-layout/dev'
+    const TALL_BASENAME = 'dev'
+    const MANY_ROWS = Array.from({ length: 40 }, (_, i) => ({
+      instance_name: `inst-${i}`,
+      warn_threshold: i + 1,
+      critical_threshold: i + 100,
+    }))
+
+    async function scrollToRow(page, index) {
+      await page.locator('.ant-table-tbody tr.ant-table-row').nth(index).scrollIntoViewIfNeeded()
+      // Report how far the sections container actually moved, so a test that
+      // silently failed to scroll cannot pass on trivially-visible elements.
+      return page.evaluate(() => {
+        const el = [...document.querySelectorAll('div')].find(d =>
+          d.scrollHeight > d.clientHeight + 1 &&
+          getComputedStyle(d).overflowY === 'auto' &&
+          d.querySelector('.ant-table'))
+        return el ? el.scrollTop : 0
+      })
+    }
+
+    test.beforeAll(async ({ request }) => {
+      const init = await request.post('/api/v2/folders/init', {
+        data: { folder: TALL_FOLDER, chart: CHART }
+      })
+      expect(init.status()).toBeLessThan(300)
+
+      const save = await request.post(`/api/v2/deployments/${CHART}/${TALL_BASENAME}?folder=${TALL_FOLDER}`, {
+        data: { values: { _common: { owner: 'team-a', namespace: 'monitoring' }, mariadb_latency_slow_queries: MANY_ROWS } }
+      })
+      expect(save.status()).toBeLessThan(300)
+    })
+
+    test('footer stays visible and the page itself does not scroll', async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto('/#/alerts')
+      await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+
+      const deploymentNode = await expandToDeployment(page, FOLDER)
+      await clickDeploymentAndWait(page, deploymentNode)
+
+      await page.getByText('Overview', { exact: true }).click()
+      await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
+
+      // Root group checkbox selects every alert type — enough sections to
+      // overflow the viewport several times over
+      await page.locator('input[type="checkbox"]').first().check()
+      await expect(page.locator('.ant-table').first()).toBeVisible({ timeout: 5000 })
+
+      const doc = await page.evaluate(() => ({
+        scrollHeight: document.documentElement.scrollHeight,
+        clientHeight: document.documentElement.clientHeight,
+      }))
+      expect(doc.scrollHeight).toBeLessThanOrEqual(doc.clientHeight + 1)
+
+      await expect(page.getByRole('button', { name: 'Save all' })).toBeInViewport()
+      await expect(page.getByRole('button', { name: 'Preview' })).toBeInViewport()
+    })
+
+    test('section title and column headers stay visible while scrolling', async ({ page }) => {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.goto('/#/alerts')
+      await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+
+      const deploymentNode = await expandToDeployment(page, TALL_FOLDER)
+      await clickDeploymentAndWait(page, deploymentNode)
+
+      await page.getByText('Overview', { exact: true }).click()
+      await expect(page.getByPlaceholder('Search alert types...')).toBeVisible({ timeout: 5000 })
+      await page.getByPlaceholder('Search alert types...').fill('latency')
+      await page.locator('input[type="checkbox"]').last().check()
+      await expect(page.locator('.ant-table-tbody tr.ant-table-row').first()).toBeVisible({ timeout: 5000 })
+
+      const scrolled = await scrollToRow(page, 30)
+      expect(scrolled).toBeGreaterThan(0)
+
+      await expect(page.getByText('mariadb_latency_slow_queries').first()).toBeInViewport()
+      await expect(page.locator('.ant-table-thead').first()).toBeInViewport()
+      await expect(page.getByRole('button', { name: 'Save all' })).toBeInViewport()
+    })
+  })
 })

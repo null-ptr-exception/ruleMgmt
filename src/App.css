@@ -1,1 +1,8 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Every page below <Content> is a height:100% flex column that scrolls its own
+   middle region and pins its footer. Percentage heights need a definite height
+   to resolve against, so without this the whole chain falls back to auto, the
+   inner scroll regions never activate, and the document scrolls instead —
+   pushing the pinned footers below the fold. */
+html, body, #root { height: 100%; }

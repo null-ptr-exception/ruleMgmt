@@ -58,7 +58,7 @@ export default function App() {
   ]
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ height: '100%' }}>
       <Sider
         collapsible
         collapsed={collapsed}

@@ -278,7 +278,7 @@ test.describe('Alert Overview Mode', () => {
       return page.evaluate(() => {
         const el = [...document.querySelectorAll('div')].find(d =>
           d.scrollHeight > d.clientHeight + 1 &&
-          getComputedStyle(d).overflowY === 'auto' &&
+          window.getComputedStyle(d).overflowY === 'auto' &&
           d.querySelector('.ant-table'))
         return el ? el.scrollTop : 0
       })

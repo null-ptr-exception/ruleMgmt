@@ -47,6 +47,8 @@ export default function AlertTable({
   effectiveFilters,
   onFiltersChange,
   readOnly = false,
+  scrollContainer = null,
+  stickyOffsetHeader = 0,
 }) {
   const activeFilters = effectiveFilters ?? filters
   const filteredRows = useMemo(() => {
@@ -153,6 +155,7 @@ export default function AlertTable({
         size="small"
         bordered
         locale={{ emptyText }}
+        sticky={scrollContainer ? { getContainer: () => scrollContainer, offsetHeader: stickyOffsetHeader } : false}
       />
       <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }}
         onClick={handleAdd} disabled={readOnly}>

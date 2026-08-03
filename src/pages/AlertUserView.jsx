@@ -50,6 +50,8 @@ export default function AlertUserView() {
   const [newDeployChart, setNewDeployChart] = useState(null)
   const [availableCharts, setAvailableCharts] = useState([])
 
+  const [mainScrollContainer, setMainScrollContainer] = useState(null)
+
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const resizingRef = useRef(false)
@@ -257,17 +259,18 @@ export default function AlertUserView() {
   }
 
   async function handleOverviewSave() {
-    if (!selectedChart || !selectedFolder) return
+    if (!selectedChart || !selectedFolder) return false
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...allValues }
       : allValues
     const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
     if (!result.ok) {
       message.error('Save failed')
-      return
+      return false
     }
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
+    return true
   }
 
   async function handlePreview() {
@@ -276,7 +279,10 @@ export default function AlertUserView() {
     // source of truth, so render that directly. Attempting the save-first
     // path would just bounce off the server's 409 read-only guard.
     if (dirty && !frozenSource) {
-      const saved = await handleSave()
+      // Overview edits allValues in place; single mode keeps the active alert's
+      // rows separate and merges them back on save. Saving through the wrong
+      // handler would write stale rows over the other mode's edits.
+      const saved = mode === 'overview' ? await handleOverviewSave() : await handleSave()
       if (!saved) return
     }
     const result = await renderDeployment(selectedChart, folderBasename, selectedFolder)
@@ -304,7 +310,10 @@ export default function AlertUserView() {
   return (
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
       <div style={{ width: sidebarCollapsed ? 0 : sidebarWidth, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflow: 'hidden', background: '#fff', position: 'relative', display: 'flex', flexDirection: 'column', transition: 'width 0.15s ease' }}>
-        <div style={{ flexShrink: 0, overflowY: 'auto' }}>
+        {/* Must stay shrinkable: the sidebar clips its overflow, so a tree taller
+            than the pane has to scroll here rather than run past the bottom.
+            Capped at half the pane so the template list below keeps its space. */}
+        <div style={{ flex: '0 1 auto', minHeight: 0, maxHeight: selectedChart ? '50%' : '100%', overflowY: 'auto' }}>
           {sectionHeader('Deployments', <Button size="small" type="text" icon={<PlusOutlined />} onClick={handleNewDeployOpen} />)}
           <DeploymentTree
             selectedFolder={selectedFolder}
@@ -317,7 +326,7 @@ export default function AlertUserView() {
           />
         </div>
         {selectedChart && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flexShrink: 0 }}>
               {sectionHeader('Alert Templates')}
               <div style={{ padding: '0 16px 4px', fontSize: 11, color: '#6b7280' }}>
@@ -394,6 +403,7 @@ export default function AlertUserView() {
             schema={schema}
             onAllValuesChange={updated => { setAllValues(updated); setDirty(true) }}
             onSave={handleOverviewSave}
+            onPreview={handlePreview}
             dirty={dirty}
             saveStatus={saveStatus}
             getVars={getVars}
@@ -406,7 +416,7 @@ export default function AlertUserView() {
                 {selectedFolder} / {isCommonView ? 'Common Values' : activeAlert}
               </Title>
             </div>
-            <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+            <div ref={setMainScrollContainer} style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
               {isCommonView ? (
                 <div style={{ maxWidth: 500 }}>
                   <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
@@ -451,6 +461,7 @@ export default function AlertUserView() {
                   onDelete={realIndex => { setRows(rows.filter((_, i) => i !== realIndex)); setDirty(true) }}
                   onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
                   readOnly={!!frozenSource}
+                  scrollContainer={mainScrollContainer}
                 />
               )}
             </div>
@@ -462,29 +473,6 @@ export default function AlertUserView() {
               )}
               {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
             </div>
-            <Modal title="Rendered PrometheusRule" open={previewOpen} onCancel={() => setPreviewOpen(false)}
-              footer={null} width={800}>
-              {previewCheck && (
-                <Alert
-                  style={{ marginBottom: 12 }}
-                  type={previewCheck.skipped ? 'info' : previewCheck.passed ? 'success' : 'error'}
-                  showIcon
-                  message={previewCheck.skipped ? 'Promtool check skipped' : previewCheck.passed ? 'Promtool check passed' : 'Promtool check failed'}
-                  description={
-                    previewCheck.output
-                      ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto' }}>{previewCheck.output}</div>
-                      : null
-                  }
-                />
-              )}
-              <pre style={{
-                background: '#0f172a', color: '#7dd3fc', padding: 16, borderRadius: 8,
-                fontSize: 12, fontFamily: 'monospace', maxHeight: 500, overflow: 'auto',
-                whiteSpace: 'pre-wrap', wordBreak: 'break-all'
-              }}>
-                {previewYaml || 'No output'}
-              </pre>
-            </Modal>
           </>
         ) : (
           <Empty style={{ margin: 'auto' }}
@@ -496,6 +484,31 @@ export default function AlertUserView() {
             } />
         )}
       </div>
+
+      {/* Mounted outside the mode branches: both single and overview open it. */}
+      <Modal title="Rendered PrometheusRule" open={previewOpen} onCancel={() => setPreviewOpen(false)}
+        footer={null} width={800}>
+        {previewCheck && (
+          <Alert
+            style={{ marginBottom: 12 }}
+            type={previewCheck.skipped ? 'info' : previewCheck.passed ? 'success' : 'error'}
+            showIcon
+            message={previewCheck.skipped ? 'Promtool check skipped' : previewCheck.passed ? 'Promtool check passed' : 'Promtool check failed'}
+            description={
+              previewCheck.output
+                ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto' }}>{previewCheck.output}</div>
+                : null
+            }
+          />
+        )}
+        <pre style={{
+          background: '#0f172a', color: '#7dd3fc', padding: 16, borderRadius: 8,
+          fontSize: 12, fontFamily: 'monospace', maxHeight: 500, overflow: 'auto',
+          whiteSpace: 'pre-wrap', wordBreak: 'break-all'
+        }}>
+          {previewYaml || 'No output'}
+        </pre>
+      </Modal>
 
       <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}
         onOk={handleNewDeployCreate} okText="Create"

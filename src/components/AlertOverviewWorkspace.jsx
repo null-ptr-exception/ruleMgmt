@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Button, Input, Select, Tag, Typography } from 'antd'
-import { SaveOutlined, CloseOutlined, RightOutlined } from '@ant-design/icons'
+import { SaveOutlined, EyeOutlined, CloseOutlined, RightOutlined } from '@ant-design/icons'
 import AlertTable from './AlertTable'
 import { matchesFilter, getFilterOperators, mergeFilters } from '../utils/filterUtils'
 
@@ -107,8 +107,17 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
   )
 }
 
-function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly }) {
+function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer }) {
   const [collapsed, setCollapsed] = useState(false)
+  const [headerHeight, setHeaderHeight] = useState(0)
+
+  // The table header sticks directly below this section's own sticky header, so
+  // its offset has to track the real rendered height rather than a guess.
+  const measureHeader = useCallback(el => {
+    if (!el) return
+    const h = Math.round(el.getBoundingClientRect().height)
+    setHeaderHeight(prev => (prev === h ? prev : h))
+  }, [])
 
   const matchCount = useMemo(() => {
     const hasFilters = Object.values(effectiveFilters).some(f => f && f.value !== '' && f.value != null)
@@ -121,10 +130,13 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
   const hasWsFilter = Object.keys(wsFilters || {}).length > 0
   const hasAnyFilter = hasSectionFilter || hasWsFilter
 
+  // No overflow:hidden on the card — it would trap the sticky header inside a
+  // non-scrolling box and stop it from sticking to the scroll container.
   return (
-    <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+    <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, background: '#fff' }}>
       <div
-        style={{ padding: '8px 12px', background: '#fafafa', borderBottom: collapsed ? 'none' : '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}
+        ref={measureHeader}
+        style={{ padding: '8px 12px', background: '#fafafa', borderBottom: collapsed ? 'none' : '1px solid #f0f0f0', borderRadius: collapsed ? 8 : '8px 8px 0 0', display: 'flex', alignItems: 'center', gap: 8, position: 'sticky', top: 0, zIndex: 3 }}
       >
         <div onClick={() => setCollapsed(c => !c)} style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer', minWidth: 0 }}>
           <RightOutlined style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0, transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s' }} />
@@ -162,6 +174,8 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
             onDelete={onDelete}
             onAdd={onAdd}
             readOnly={readOnly}
+            scrollContainer={scrollContainer}
+            stickyOffsetHeader={headerHeight}
           />
         </div>
       )}
@@ -176,6 +190,7 @@ export default function AlertOverviewWorkspace({
   schema,
   onAllValuesChange,
   onSave,
+  onPreview,
   dirty,
   saveStatus,
   getVars,
@@ -183,6 +198,9 @@ export default function AlertOverviewWorkspace({
 }) {
   const [wsFilters, setWsFilters] = useState({})
   const [sectionFilters, setSectionFilters] = useState({})
+  // Held in state, not a ref: the sections re-render once the element exists so
+  // the sticky table headers can attach to it.
+  const [scrollContainer, setScrollContainer] = useState(null)
 
   const allVars = checkedAlerts.map(name => getVars(name))
 
@@ -225,7 +243,7 @@ export default function AlertOverviewWorkspace({
         onWsFiltersChange={setWsFilters}
         vars={allVars}
       />
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div ref={setScrollContainer} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {checkedAlerts.map(alertName => (
           <SectionPanel
             key={alertName}
@@ -242,11 +260,13 @@ export default function AlertOverviewWorkspace({
             onDelete={realIndex => handleDelete(alertName, realIndex)}
             onAdd={newRow => handleAdd(alertName, newRow)}
             readOnly={readOnly}
+            scrollContainer={scrollContainer}
           />
         ))}
       </div>
       <div style={{ padding: '10px 16px', borderTop: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button type="primary" icon={<SaveOutlined />} onClick={onSave} disabled={!dirty || readOnly}>Save all</Button>
+        {onPreview && <Button icon={<EyeOutlined />} onClick={onPreview}>Preview</Button>}
         <Text style={{ fontSize: 11, color: '#9ca3af' }}>
           {checkedAlerts.length} section{checkedAlerts.length > 1 ? 's' : ''} loaded
           {activeWsFilterCount > 0 ? ` · ${activeWsFilterCount} workspace filter${activeWsFilterCount > 1 ? 's' : ''} active` : ''}

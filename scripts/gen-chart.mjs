@@ -1,0 +1,97 @@
+#!/usr/bin/env node
+/**
+ * Generate a chart's templates from its values.schema.json, without the UI.
+ *
+ *   node scripts/gen-chart.mjs <chart-dir>            write templates/
+ *   node scripts/gen-chart.mjs <chart-dir> --check    compare only, never write
+ *
+ * --check is the round-trip equivalence tool: it regenerates every group and
+ * reports any byte difference against what is already on disk. Run it against
+ * an existing chart to confirm the generator still produces exactly the same
+ * output before adopting a change.
+ */
+
+import fs from 'fs/promises'
+import path from 'path'
+import { generateGroupTemplate, normalizeRules } from '../src/utils/templateGenerator.js'
+import { danglingRefs } from '../src/utils/ruleModel.js'
+
+const args = process.argv.slice(2)
+const check = args.includes('--check')
+const chartDir = args.find(a => !a.startsWith('--'))
+
+if (!chartDir) {
+  console.error('usage: node scripts/gen-chart.mjs <chart-dir> [--check]')
+  process.exit(2)
+}
+
+function definedVars(schema, alertDef) {
+  return [
+    ...Object.keys(alertDef?.items?.properties || {}),
+    ...Object.keys(schema?.['x-common-vars']?.properties || {})
+  ]
+}
+
+async function readIfExists(file) {
+  try {
+    return await fs.readFile(file, 'utf-8')
+  } catch {
+    return null
+  }
+}
+
+const schemaFile = path.join(chartDir, 'values.schema.json')
+const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
+const tmplDir = path.join(chartDir, 'templates')
+if (!check) await fs.mkdir(tmplDir, { recursive: true })
+
+const results = []
+let failed = 0
+
+for (const [group, alertDef] of Object.entries(schema.properties || {})) {
+  if (group.startsWith('$')) continue
+  const file = path.join(tmplDir, `${group.replace(/_/g, '-')}.yaml`)
+
+  if (alertDef['x-custom-template']) {
+    results.push(['skip', group, 'x-custom-template (hand-written, left untouched)'])
+    continue
+  }
+
+  // Acceptance condition 3: every ${var} must resolve to a column.
+  const missing = danglingRefs(normalizeRules(group, alertDef), definedVars(schema, alertDef))
+  if (missing.length) {
+    results.push(['ERROR', group, `undefined variables: ${missing.join(', ')}`])
+    failed++
+    continue
+  }
+
+  const content = generateGroupTemplate(group, alertDef, '{{ .Release.Name }}', schema)
+  if (!content) {
+    results.push(['skip', group, 'no rules to generate'])
+    continue
+  }
+
+  const existing = await readIfExists(file)
+  if (check) {
+    if (existing === null) {
+      results.push(['MISSING', group, 'no template file on disk'])
+      failed++
+    } else if (existing === content) {
+      results.push(['same', group, ''])
+    } else {
+      results.push(['DIFFERS', group, `${existing.split('\n').length} lines on disk vs ${content.split('\n').length} generated`])
+      failed++
+    }
+    continue
+  }
+
+  await fs.writeFile(file, content, 'utf-8')
+  results.push([existing === content ? 'unchanged' : existing === null ? 'created' : 'updated', group, ''])
+}
+
+const width = Math.max(...results.map(r => r[1].length), 0)
+for (const [status, group, note] of results) {
+  console.log(`${status.padEnd(9)} ${group.padEnd(width)}  ${note}`)
+}
+console.log(`\n${results.length} groups, ${failed} problem(s)`)
+process.exit(failed ? 1 : 0)

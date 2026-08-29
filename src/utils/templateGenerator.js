@@ -16,6 +16,8 @@
  * }
  */
 
+import { renderValue } from './ruleModel.js'
+
 function toPascalCase(str) {
   return str.split(/[_\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
 }
@@ -43,12 +45,92 @@ function getCommonRequired(schema) {
   return schema?.['x-common-vars']?.required || []
 }
 
-function generateGroupYaml(alertGroup, alertDef, commonSelectors = [], commonRequired = []) {
-  const promql = alertDef['x-promql']
-  if (!promql) return null
+/** Values that are a bare word render unquoted, matching hand-written rules. */
+function needsQuote(value) {
+  return value === '' || /[^A-Za-z0-9_.-]/.test(value)
+}
 
+function renderEntry(entry, ref, refVar, indent) {
+  const rendered = renderValue(entry.value, ref) + (entry.helmSuffix || '')
+  const line = `${indent}${entry.key}: ${needsQuote(entry.value) ? `"${rendered}"` : rendered}`
+  if (!entry.guard) return line
+  return (
+    `${indent}{{- if hasKey ${refVar} "${entry.guard}" }}\n` +
+    line + '\n' +
+    `${indent}{{- end }}`
+  )
+}
+
+function renderRule(rule, ref, refVar) {
+  const parts = [
+    `        - alert: ${rule.alert}\n` +
+    `          expr: ${renderValue(rule.expr, ref)}\n` +
+    `          for: ${renderValue(rule.for, ref)}`
+  ]
+  if (rule.labels?.length) {
+    parts.push(`          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12))).join('\n'))
+  }
+  if (rule.annotations?.length) {
+    parts.push(`          annotations:\n` + rule.annotations.map(a => renderEntry(a, ref, refVar, ' '.repeat(12))).join('\n'))
+  }
+  return parts.join('\n')
+}
+
+function toEntries(mapOrList) {
+  if (!mapOrList) return []
+  if (Array.isArray(mapOrList)) return mapOrList
+  return Object.entries(mapOrList).map(([key, value]) => ({ key, value: String(value) }))
+}
+
+/**
+ * Read-time adapter: a legacy `x-promql` group is one rule per threshold.
+ * Emitting these through the same path as `x-rules` is what keeps the
+ * round-trip byte-identical for charts that have not been rewritten yet.
+ */
+function legacyRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar) {
+  const promql = alertDef['x-promql']
   const forDuration = alertDef['x-for'] || '5m'
-  const thresholds = getThresholds(alertDef)
+  const requiredSel = allSelectors.find(s => requiredSet.has(s))
+
+  return getThresholds(alertDef).map(threshold => {
+    const alert = `${toPascalCase(alertGroup)}_${toPascalCase(threshold.name)}`
+    const expr = promql
+      .replace(/\{\{\s*THRESHOLD\s*\}\}/g, `\${${threshold.name}}`)
+      .replace(/\{\{\s*\.(\w+)\s*\}\}/g, (m, name) => `\${${name}}`)
+
+    const labels = [{ key: 'severity', value: threshold.severity }]
+    for (const sel of allSelectors) {
+      labels.push({ key: sel, value: `\${${sel}}`, guard: requiredSet.has(sel) ? null : sel })
+    }
+
+    const summary = { key: 'summary', value: `${alert} triggered` }
+    if (requiredSel) {
+      summary.value += ` on \${${requiredSel}}`
+    } else if (allSelectors.length > 0) {
+      summary.helmSuffix = `{{ if hasKey ${refVar} "${allSelectors[0]}" }} on {{ ${ref}${allSelectors[0]} }}{{ end }}`
+    }
+
+    return { alert, expr, for: forDuration, labels, annotations: [summary] }
+  })
+}
+
+export function normalizeRules(alertGroup, alertDef, allSelectors = [], requiredSet = new Set(), ref = '.', refVar = '.') {
+  if (Array.isArray(alertDef?.['x-rules'])) {
+    return alertDef['x-rules'].map(rule => ({
+      alert: rule.alert,
+      expr: rule.expr || '',
+      for: rule.for || alertDef['x-for'] || '5m',
+      labels: toEntries(rule.labels),
+      annotations: toEntries(rule.annotations)
+    }))
+  }
+  if (!alertDef?.['x-promql']) return []
+  return legacyRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
+}
+
+function generateGroupYaml(alertGroup, alertDef, commonSelectors = [], commonRequired = []) {
+  if (!alertDef['x-promql'] && !Array.isArray(alertDef['x-rules'])) return null
+
   const selectors = getSelectors(alertDef)
   const allSelectors = [...new Set([...commonSelectors, ...selectors])]
   const hasCommon = commonSelectors.length > 0
@@ -61,45 +143,8 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = [], commonReq
   // string "<no value>".
   const requiredSet = new Set([...(alertDef?.items?.required || []), ...commonRequired])
 
-  const requiredSel = allSelectors.find(s => requiredSet.has(s))
-  const summarySuffix = requiredSel
-    ? ` on {{ ${ref}${requiredSel} }}`
-    : allSelectors.length > 0
-      ? `{{ if hasKey ${refVar} "${allSelectors[0]}" }} on {{ ${ref}${allSelectors[0]} }}{{ end }}`
-      : ''
-
-  const rules = []
-  for (const threshold of thresholds) {
-    const alertName = `${toPascalCase(alertGroup)}_${toPascalCase(threshold.name)}`
-    let expr = promql.replace(/\{\{\s*THRESHOLD\s*\}\}/g, `{{ ${ref}${threshold.name} }}`)
-    if (hasCommon) {
-      expr = expr.replace(/\{\{\s*\.(\w+)\s*\}\}/g, (m, name) => `{{ $row.${name} }}`)
-    }
-
-    const labelLines = [`            severity: ${threshold.severity}`]
-    for (const sel of allSelectors) {
-      const line = `            ${sel}: "{{ ${ref}${sel} }}"`
-      if (requiredSet.has(sel)) {
-        labelLines.push(line)
-      } else {
-        labelLines.push(
-          `            {{- if hasKey ${refVar} "${sel}" }}\n` +
-          line + '\n' +
-          `            {{- end }}`
-        )
-      }
-    }
-
-    rules.push(
-      `        - alert: ${alertName}\n` +
-      `          expr: ${expr}\n` +
-      `          for: ${forDuration}\n` +
-      `          labels:\n` +
-      labelLines.join('\n') + '\n' +
-      `          annotations:\n` +
-      `            summary: "${alertName} triggered${summarySuffix}"`
-    )
-  }
+  const rules = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
+    .map(rule => renderRule(rule, ref, refVar))
 
   if (rules.length === 0) return null
 

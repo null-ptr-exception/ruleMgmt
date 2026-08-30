@@ -1,5 +1,10 @@
 # Architecture
 
+> **Parts of this document are out of date** — the page and component names
+> below predate several rounds of change. For how a chart describes alerts and
+> how templates are generated from it, see
+> [alert-rules.md](alert-rules.md), which is current.
+
 ## Overview
 
 Alert Template UI is a local-first, filesystem-backed tool for authoring and deploying Prometheus Operator alerting configurations. It has no database — all state lives in versioned Helm charts on disk. A lightweight Express API serves the frontend and delegates rendering to `helm template`.

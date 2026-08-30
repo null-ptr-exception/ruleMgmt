@@ -27,7 +27,9 @@ export const MAX_OBJECT_BYTES = 1_000_000
 export const MAX_ROWS_PER_OBJECT = 100
 
 const API_VERSION = 'monitoring.coreos.com/v1'
-const KIND = 'PrometheusRule'
+
+/** Exported so anything inspecting the output cannot drift from what it emits. */
+export const KIND = 'PrometheusRule'
 
 // The generator runs in the browser as well as in scripts, so size is measured
 // with TextEncoder rather than Buffer.

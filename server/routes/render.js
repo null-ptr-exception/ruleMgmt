@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
+import { KIND } from '../../src/utils/crConverter.js'
 import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -27,10 +28,13 @@ function runCommand(command, args, options = {}) {
   })
 }
 
+// The kind comes from the converter rather than a literal here: if the
+// platform ever emits something else, a checker still looking for the old one
+// would find nothing and report that as fine.
 function extractPrometheusRuleGroups(renderedYaml) {
   const groups = []
   yaml.loadAll(renderedYaml, doc => {
-    if (doc?.kind === 'PrometheusRule' && Array.isArray(doc?.spec?.groups)) {
+    if (doc?.kind === KIND && Array.isArray(doc?.spec?.groups)) {
       groups.push(...doc.spec.groups)
     }
   })
@@ -50,11 +54,13 @@ async function checkPrometheusRules(renderedYaml) {
   }
 
   if (groups.length === 0) {
+    // Not a failure: a deployment with no rows renders no resources at all,
+    // which is the ordinary state of a chart nobody has filled in yet.
     return {
       passed: true,
       skipped: true,
       errors: [],
-      output: 'No PrometheusRule resources found.'
+      output: `Nothing to check — this deployment rendered no ${KIND} resources. A group with no rows produces none.`
     }
   }
 

@@ -61,10 +61,12 @@ export function shardRules(ruleTexts, { maxBytes = MAX_OBJECT_BYTES, rowsPerObje
 /**
  * One document per row chunk.
  *
- * The suffix is added only when there is more than one chunk, so a deployment
- * that fits in a single object keeps the name it has always had — renaming a
- * resource means the old one is deleted and a new one created, and no chart
- * small enough to fit should pay that.
+ * The index is always in the name, even for a single chunk. Adding it only
+ * when a group overflows would rename the first object the moment a
+ * deployment crosses the row boundary — and renaming a resource deletes the
+ * old one and creates a new one, at a threshold nobody is watching. Numbering
+ * from the start costs one rename when this lands, and none afterwards: -1
+ * stays put and later chunks appear and disappear behind it.
  *
  * `$` is used throughout because `.` inside the chunk loop is the chunk.
  */
@@ -88,7 +90,7 @@ function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, r
     `apiVersion: ${API_VERSION}\n` +
     `kind: ${KIND}\n` +
     `metadata:\n` +
-    `  name: ${name}-${baseName}{{ if gt (len $chunks) 1 }}-{{ add1 $chunkIndex }}{{ end }}\n` +
+    `  name: ${name}-${baseName}-{{ add1 $chunkIndex }}\n` +
     `  labels:\n` +
     `    app.kubernetes.io/managed-by: Helm\n` +
     `spec:\n` +

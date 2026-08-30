@@ -119,7 +119,7 @@ const allRules = () => prometheusRules().flatMap(d => d.spec.groups).flatMap(g =
 describe('a schema the editor produced renders through helm', () => {
   it('emits one resource for the group', () => {
     expect(prometheusRules()).toHaveLength(1)
-    expect(prometheusRules()[0].metadata.name).toBe('rel-network-traffic')
+    expect(prometheusRules()[0].metadata.name).toBe('rel-network-traffic-1')
   })
 
   it('produces one alert per row per rule', () => {
@@ -251,13 +251,13 @@ describe('rows are cut across objects, since only a deployment knows how many th
     }
   }
 
-  it('keeps the name it already had while a deployment fits one object', () => {
-    // Renaming a resource deletes the old one and creates a new one, so a
-    // chart small enough to fit must render exactly as it did before.
-    expect(renderRows(100).names).toEqual(['rel-network-traffic'])
+  it('numbers the object even when a deployment fits in one', () => {
+    // The index never moves: -1 stays put and later chunks appear behind it,
+    // so crossing the boundary renames nothing.
+    expect(renderRows(100).names).toEqual(['rel-network-traffic-1'])
   })
 
-  it('numbers the objects once it does not', () => {
+  it('adds objects behind it once it does not fit', () => {
     expect(renderRows(101).names).toEqual(['rel-network-traffic-1', 'rel-network-traffic-2'])
     expect(renderRows(250).names).toHaveLength(3)
   })

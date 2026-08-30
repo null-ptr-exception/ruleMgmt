@@ -4,7 +4,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: {{ $.Release.Name }}-mariadb-errors-connections{{ if gt (len $chunks) 1 }}-{{ add1 $chunkIndex }}{{ end }}
+  name: {{ $.Release.Name }}-mariadb-errors-connections-{{ add1 $chunkIndex }}
   labels:
     app.kubernetes.io/managed-by: Helm
 spec:

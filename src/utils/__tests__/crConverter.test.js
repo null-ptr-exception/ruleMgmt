@@ -48,10 +48,10 @@ describe('the row dimension is cut in the template, not here', () => {
     expect(out).toContain('{{- range $chunkIndex, $rows := $chunks }}')
   })
 
-  it('numbers the objects only when there is more than one chunk', () => {
-    // Renaming a resource deletes the old one and creates a new one, so a
-    // deployment small enough to fit must keep the name it already had.
-    expect(out).toContain('name: rel-network-traffic{{ if gt (len $chunks) 1 }}-{{ add1 $chunkIndex }}{{ end }}')
+  it('always numbers the object, so no name moves when a group overflows', () => {
+    // Suffixing only on overflow would rename the first object the moment a
+    // deployment crosses the boundary, which deletes it and creates another.
+    expect(out).toContain('name: rel-network-traffic-{{ add1 $chunkIndex }}')
   })
 
   it('roots every reference at $, since . is the chunk inside the loop', () => {
@@ -62,7 +62,7 @@ describe('the row dimension is cut in the template, not here', () => {
 
   it('roots a templated release name at $ too', () => {
     const templated = emitRuleObjects({ ...parts([ruleText('A')]), releaseName: '{{ .Release.Name }}' })
-    expect(templated).toContain('name: {{ $.Release.Name }}-network-traffic')
+    expect(templated).toContain('name: {{ $.Release.Name }}-network-traffic-{{ add1 $chunkIndex }}')
   })
 })
 
@@ -74,8 +74,8 @@ describe('emitRuleObjects', () => {
 
   it('numbers the documents when the rules are split across objects', () => {
     const out = emitRuleObjects(parts([ruleText('A'), ruleText('B')]), { maxBytes: 60, rowsPerObject: 1 })
-    expect(out).toContain('name: rel-network-traffic-1')
-    expect(out).toContain('name: rel-network-traffic-2')
+    expect(out).toContain('name: rel-network-traffic-1-{{ add1 $chunkIndex }}')
+    expect(out).toContain('name: rel-network-traffic-2-{{ add1 $chunkIndex }}')
     expect(out.match(/kind: PrometheusRule/g)).toHaveLength(2)
   })
 

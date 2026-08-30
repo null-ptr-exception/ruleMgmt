@@ -53,7 +53,7 @@ for (const [group, alertDef] of Object.entries(schema.properties || {})) {
   const file = path.join(tmplDir, `${group.replace(/_/g, '-')}.yaml`)
 
   if (alertDef['x-custom-template']) {
-    results.push(['skip', group, 'x-custom-template (hand-written, left untouched)'])
+    results.push(['skip', group, 'x-custom-template — file-level escape hatch, migrate to a raw x-rules entry'])
     continue
   }
 

@@ -62,7 +62,32 @@ function renderEntry(entry, ref, refVar, indent) {
   )
 }
 
+/**
+ * A hand-written rule entry, passed through with its YAML untouched.
+ *
+ * This is the escape hatch, and one `rules[]` entry is as large as it gets:
+ * the CR shell, the row loop and sharding stay with the converter, so an
+ * escaped rule can still be rendered as any kind of object and still be
+ * sharded. Placeholders are resolved exactly as in a structured rule — ${var}
+ * reads the row, {{ ... }} is Prometheus and survives Helm.
+ */
+function renderRawRule(raw, ref) {
+  const lines = renderValue(raw, ref).replace(/\s+$/, '').split('\n')
+  const indents = lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length)
+  const base = indents.length ? Math.min(...indents) : 0
+  const body = lines.map(l => (l.trim() ? l.slice(base) : ''))
+
+  // Accept both a full list entry and just its body.
+  const entry = body[0].startsWith('- ')
+    ? body
+    : [`- ${body[0]}`, ...body.slice(1).map(l => (l ? `  ${l}` : ''))]
+
+  return entry.map(l => (l ? ' '.repeat(8) + l : '')).join('\n')
+}
+
 function renderRule(rule, ref, refVar) {
+  if (rule.raw) return renderRawRule(rule.raw, ref)
+
   const parts = [
     `        - alert: ${rule.alert}\n` +
     `          expr: ${renderValue(rule.expr, ref)}\n` +
@@ -117,7 +142,7 @@ function legacyRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVa
 
 export function normalizeRules(alertGroup, alertDef, allSelectors = [], requiredSet = new Set(), ref = '.', refVar = '.') {
   if (Array.isArray(alertDef?.['x-rules'])) {
-    return alertDef['x-rules'].map(rule => ({
+    return alertDef['x-rules'].map(rule => (rule.raw ? { raw: rule.raw } : {
       alert: rule.alert,
       expr: rule.expr || '',
       for: rule.for || alertDef['x-for'] || '5m',

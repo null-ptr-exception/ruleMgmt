@@ -127,3 +127,57 @@ describe('x-rules groups', () => {
     expect(rules[1].annotations).toEqual([])
   })
 })
+
+describe('rule-level escape hatch (#57 section 6)', () => {
+  const withRaw = raw => ({
+    type: 'array',
+    'x-rules': [
+      { alert: 'Structured', expr: 'up{ns="${namespace}"} == 0', for: '5m', labels: { severity: 'warning' } },
+      { raw }
+    ],
+    items: {
+      properties: { namespace: { type: 'string', 'x-var-type': 'selector' }, warn: { type: 'number' } },
+      required: ['namespace']
+    }
+  })
+
+  const handWritten =
+    'alert: HandWritten\n' +
+    'expr: rate(x{ns="${namespace}"}[5m]) > ${warn}\n' +
+    'for: 10m\n' +
+    'labels:\n' +
+    '  severity: critical\n' +
+    'annotations:\n' +
+    '  summary: "is {{ $value }}"'
+
+  it('places a hand-written entry in the same row loop as structured rules', () => {
+    const out = generateGroupTemplate('demo', withRaw(handWritten), 'rel')
+    expect(out.match(/\{\{- range \.Values\.demo \}\}/g)).toHaveLength(1)
+    expect(out).toContain('        - alert: Structured')
+    expect(out).toContain('        - alert: HandWritten')
+  })
+
+  it('keeps the CR shell with the converter, not with the hand-written text', () => {
+    const out = generateGroupTemplate('demo', withRaw(handWritten), 'rel')
+    expect(out.match(/kind: PrometheusRule/g)).toHaveLength(1)
+    expect(out).toContain('name: rel-demo')
+  })
+
+  it('resolves placeholders in hand-written entries like anywhere else', () => {
+    const out = generateGroupTemplate('demo', withRaw(handWritten), 'rel')
+    expect(out).toContain('expr: rate(x{ns="{{ .namespace }}"}[5m]) > {{ .warn }}')
+    expect(out).toContain('summary: "is {{ `{{ $value }}` }}"')
+  })
+
+  it('accepts the entry written as a list item too', () => {
+    const asItem = handWritten.split('\n').map((l, i) => (i === 0 ? `- ${l}` : `  ${l}`)).join('\n')
+    expect(generateGroupTemplate('demo', withRaw(asItem), 'rel'))
+      .toBe(generateGroupTemplate('demo', withRaw(handWritten), 'rel'))
+  })
+
+  it('counts variables used only inside a hand-written entry', () => {
+    const rules = normalizeRules('demo', withRaw(handWritten))
+    expect(fieldOwnership(rules).shared).toEqual(['namespace'])
+    expect(danglingRefs(rules, ['namespace'])).toEqual(['warn'])
+  })
+})

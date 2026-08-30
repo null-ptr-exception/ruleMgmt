@@ -57,6 +57,9 @@ export function varsIn(str) {
 export function ruleVars(rule) {
   const names = new Set()
   const add = s => { for (const n of varsIn(s || '')) names.add(n) }
+  // A hand-written entry still takes part in the variable model — the escape
+  // hatch is about YAML structure, not about opting out of rows.
+  add(rule.raw)
   add(rule.expr)
   add(rule.for)
   for (const l of rule.labels || []) { add(l.key); add(l.value) }

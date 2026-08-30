@@ -68,13 +68,25 @@ export async function deleteChartTemplate(chart, template) {
   return res.json()
 }
 
-export async function saveChartSchema(chart, schema) {
+/**
+ * A schema change that would orphan a rule owner's rows comes back as 409 with
+ * what breaks and who is affected. Pass confirmBreaking once the person making
+ * the change has seen that and said to go ahead.
+ */
+export async function saveChartSchema(chart, schema, confirmBreaking = false) {
   const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/schema`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ schema })
+    body: JSON.stringify({ schema, confirmBreaking })
   })
+  if (res.status === 409) return { blocked: true, ...(await res.json()) }
   if (!res.ok) return {}
+  return res.json()
+}
+
+export async function listChartDeployments(chart) {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/deployments`)
+  if (!res.ok) return { deployments: [] }
   return res.json()
 }
 
@@ -243,4 +255,14 @@ export async function unlinkSync(target) {
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { ok: false, error: body.error || 'Unlink failed' }
   return body
+}
+
+export async function cloneChart(chart, newName, migration) {
+  const res = await apiFetch(`${BASE}/charts/${encodeURIComponent(chart)}/clone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newName, migration })
+  })
+  if (!res.ok) return { error: (await res.json().catch(() => ({}))).error || 'Clone failed' }
+  return res.json()
 }

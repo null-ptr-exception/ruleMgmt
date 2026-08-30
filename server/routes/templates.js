@@ -1,4 +1,6 @@
 import express from 'express'
+import { diffSchema, describeChange } from '../../src/utils/schemaCompat.js'
+import { findDeploymentsUsing } from '../lib/chartUsage.js'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
@@ -68,11 +70,39 @@ export default function templatesRouter() {
 
   // --- Chart-level endpoints (must be before /:chart/:template) ---
 
-  // Save chart-level schema
+  // Which deployments are using this chart. Needed before a breaking change,
+  // and to know when an old chart is free to retire.
+  router.get('/:chart/deployments', async (req, res) => {
+    try {
+      res.json({ deployments: await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR) })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Save chart-level schema.
+  //
+  // A change that would orphan data a rule owner already entered is refused
+  // rather than written silently — the caller gets what breaks and who is
+  // affected, and decides: clone the chart, or confirm and overwrite.
   router.post('/:chart/schema', async (req, res) => {
     const { schemaFile } = chartPaths(req, req.params.chart)
-    const { schema } = req.body
+    const { schema, confirmBreaking } = req.body
     try {
+      if (!confirmBreaking) {
+        const before = await readSchema(schemaFile)
+        const { breaking, isBreaking } = diffSchema(before, schema)
+        if (isBreaking) {
+          const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
+          if (deployments.length > 0) {
+            return res.status(409).json({
+              error: 'Breaking schema change',
+              breaking: breaking.map(c => ({ ...c, description: describeChange(c) })),
+              deployments
+            })
+          }
+        }
+      }
       await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
       res.json({ ok: true })
     } catch (err) {

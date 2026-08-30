@@ -219,9 +219,35 @@ export default function TemplateDevEditor() {
     }
   }, [fileContent])
 
-  async function handleSave() {
+  async function handleSave(confirmBreaking = false) {
     if (!activeChart) return
-    await saveChartSchema(activeChart, schema)
+    const saved = await saveChartSchema(activeChart, schema, confirmBreaking)
+    if (saved?.blocked) {
+      Modal.confirm({
+        title: 'This change breaks deployments that already exist',
+        width: 620,
+        content: (
+          <div>
+            <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+              {saved.breaking.map((c, i) => <li key={i}>{c.description}</li>)}
+            </ul>
+            <p style={{ marginTop: 12 }}>
+              In use by {saved.deployments.length} deployment(s):{' '}
+              {saved.deployments.map(d => d.path).join(', ')}
+            </p>
+            <p>
+              Cloning the chart and changing the copy leaves these untouched and lets each
+              owner move over when they are ready.
+            </p>
+          </div>
+        ),
+        okText: 'Save anyway',
+        okButtonProps: { danger: true },
+        cancelText: 'Cancel',
+        onOk: () => handleSave(true)
+      })
+      return
+    }
     await saveChartMeta(activeChart, chartMeta)
 
     const newTemplateFiles = []
@@ -478,7 +504,7 @@ export default function TemplateDevEditor() {
               onChange={e => { setChartMeta({ ...chartMeta, description: e.target.value }); setDirty(true) }}
               style={{ flex: 1, maxWidth: 400 }} />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty}>Save</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={!dirty}>Save</Button>
               <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
             </div>
           </>
@@ -693,7 +719,7 @@ export default function TemplateDevEditor() {
       {activeChart && dirty && (
         <div style={{ padding: '8px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fffbe6' }}>
           <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>
-          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={handleSave}>Save</Button>
+          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => handleSave()}>Save</Button>
         </div>
       )}
     </div>

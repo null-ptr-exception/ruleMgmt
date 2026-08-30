@@ -24,7 +24,7 @@ export const MAX_OBJECT_BYTES = 1_000_000
  * the rule dimension is sharded statically against this assumption, while the
  * row dimension stays unbounded at generation time.
  */
-export const ASSUMED_MAX_ROWS = 200
+export const ASSUMED_MAX_ROWS = 100
 
 const API_VERSION = 'monitoring.coreos.com/v1'
 const KIND = 'PrometheusRule'

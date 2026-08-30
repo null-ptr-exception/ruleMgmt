@@ -42,13 +42,20 @@ function buildTestValues(alertGroup, alertDef) {
   return { [alertGroup]: [row] }
 }
 
-export function generateHelmUnittestSuite(schema, templateFile = 'templates/prometheus-rule.yaml') {
+export function generateHelmUnittestSuite(schema, templateFile) {
   if (!schema?.properties) return ''
+
+  // One template file per alert group, matching what the generator writes.
+  const templateFiles = templateFile
+    ? [templateFile]
+    : Object.keys(schema.properties)
+      .filter(k => !k.startsWith('$'))
+      .map(k => `templates/${k.replace(/_/g, '-')}.yaml`)
 
   const lines = []
   lines.push('suite: generated alert rule tests')
   lines.push('templates:')
-  lines.push(`  - ${templateFile}`)
+  for (const file of templateFiles) lines.push(`  - ${file}`)
   lines.push('tests:')
 
   // Global structure test

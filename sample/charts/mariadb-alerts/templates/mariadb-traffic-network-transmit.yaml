@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-mariadb-traffic-network-transmit
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-traffic-network-transmit
+      rules:
+        {{- $common := .Values._common | default dict }}
+        {{- range .Values.mariadb_traffic_network_transmit }}
+        {{- $row := merge . $common }}
+        - alert: MariadbTrafficNetworkTransmit_WarnBytes
+          expr: rate(container_network_transmit_bytes_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_bytes }}
+          for: 5m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbTrafficNetworkTransmit_WarnBytes triggered on {{ $row.owner }}"
+        {{- end }}

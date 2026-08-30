@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-mariadb-errors-aborted-connects
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-errors-aborted-connects
+      rules:
+        {{- $common := .Values._common | default dict }}
+        {{- range .Values.mariadb_errors_aborted_connects }}
+        {{- $row := merge . $common }}
+        - alert: MariadbErrorsAbortedConnects_WarnRate
+          expr: rate(mysql_global_status_aborted_connects{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_rate }}
+          for: 5m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbErrorsAbortedConnects_WarnRate triggered on {{ $row.owner }}"
+        {{- end }}

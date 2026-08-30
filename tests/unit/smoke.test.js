@@ -10,7 +10,12 @@ describe('sample data integrity', () => {
     expect(fs.existsSync(path.join(chartDir, 'Chart.yaml'))).toBe(true)
     expect(fs.existsSync(path.join(chartDir, 'values.yaml'))).toBe(true)
     expect(fs.existsSync(path.join(chartDir, 'values.schema.json'))).toBe(true)
-    expect(fs.existsSync(path.join(chartDir, 'templates/prometheus-rule.yaml'))).toBe(true)
+    // One template per alert group — the merged single-file format was dropped
+    // when the generator switched to per-group output.
+    const schema = JSON.parse(fs.readFileSync(path.join(chartDir, 'values.schema.json'), 'utf8'))
+    for (const group of Object.keys(schema.properties).filter(k => !k.startsWith('$'))) {
+      expect(fs.existsSync(path.join(chartDir, 'templates', `${group.replace(/_/g, '-')}.yaml`))).toBe(true)
+    }
   })
 
   it('schema has valid JSON with x-promql on all alert groups', () => {

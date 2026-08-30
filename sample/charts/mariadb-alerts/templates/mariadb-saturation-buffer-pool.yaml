@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-mariadb-saturation-buffer-pool
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-saturation-buffer-pool
+      rules:
+        {{- $common := .Values._common | default dict }}
+        {{- range .Values.mariadb_saturation_buffer_pool }}
+        {{- $row := merge . $common }}
+        - alert: MariadbSaturationBufferPool_WarnPct
+          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ $row.namespace }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.warn_pct }}
+          for: 10m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbSaturationBufferPool_WarnPct triggered on {{ $row.owner }}"
+        - alert: MariadbSaturationBufferPool_CriticalPct
+          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ $row.namespace }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.critical_pct }}
+          for: 10m
+          labels:
+            severity: critical
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbSaturationBufferPool_CriticalPct triggered on {{ $row.owner }}"
+        {{- end }}

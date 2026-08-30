@@ -25,9 +25,14 @@ describe('helm template renders valid output', () => {
     expect(pr.apiVersion).toBe('monitoring.coreos.com/v1')
   })
 
-  it('has correct metadata name', () => {
-    const pr = rendered.find(d => d.kind === 'PrometheusRule')
-    expect(pr.metadata.name).toBe('test-release-alerts')
+  // One PrometheusRule per alert group, named after the group — the merged
+  // single-object format is gone.
+  it('names every PrometheusRule after its release and group', () => {
+    const prs = rendered.filter(d => d.kind === 'PrometheusRule')
+    expect(prs.length).toBeGreaterThanOrEqual(10)
+    for (const pr of prs) {
+      expect(pr.metadata.name.startsWith('test-release-')).toBe(true)
+    }
   })
 
   it('has managed-by Helm label', () => {
@@ -40,8 +45,7 @@ describe('rendered alert groups', () => {
   let groups
 
   beforeAll(() => {
-    const pr = rendered.find(d => d.kind === 'PrometheusRule')
-    groups = pr.spec.groups
+    groups = rendered.filter(d => d.kind === 'PrometheusRule').flatMap(d => d.spec.groups)
   })
 
   it('has at least 10 groups', () => {
@@ -66,8 +70,10 @@ describe('rendered alert rules', () => {
   let allRules
 
   beforeAll(() => {
-    const pr = rendered.find(d => d.kind === 'PrometheusRule')
-    allRules = pr.spec.groups.flatMap(g => g.rules)
+    allRules = rendered
+      .filter(d => d.kind === 'PrometheusRule')
+      .flatMap(d => d.spec.groups)
+      .flatMap(g => g.rules)
   })
 
   it('has at least 15 alert rules total', () => {
@@ -147,27 +153,28 @@ describe('helm template with custom values', () => {
     if (workDir) fs.rmSync(workDir, { recursive: true, force: true })
   })
 
+  const prodRules = () => customRendered
+    .filter(d => d.kind === 'PrometheusRule')
+    .flatMap(d => d.spec.groups)
+    .flatMap(g => g.rules)
+
   it('renders with production values', () => {
-    const pr = customRendered.find(d => d.kind === 'PrometheusRule')
-    expect(pr).toBeTruthy()
-    expect(pr.metadata.name).toBe('prod-release-alerts')
+    const prs = customRendered.filter(d => d.kind === 'PrometheusRule')
+    expect(prs.length).toBeGreaterThanOrEqual(10)
+    for (const pr of prs) {
+      expect(pr.metadata.name.startsWith('prod-release-')).toBe(true)
+    }
   })
 
   it('produces expected number of rules', () => {
-    const pr = customRendered.find(d => d.kind === 'PrometheusRule')
-    const ruleCount = pr.spec.groups.flatMap(g => g.rules).length
-    expect(ruleCount).toBeGreaterThanOrEqual(20)
+    expect(prodRules().length).toBeGreaterThanOrEqual(20)
   })
 
   it('contains production namespace in rendered rules', () => {
-    const pr = customRendered.find(d => d.kind === 'PrometheusRule')
-    const allExprs = pr.spec.groups.flatMap(g => g.rules).map(r => r.expr).join(' ')
-    expect(allExprs).toContain('prod-db')
+    expect(prodRules().map(r => r.expr).join(' ')).toContain('prod-db')
   })
 
   it('contains owner in labels', () => {
-    const pr = customRendered.find(d => d.kind === 'PrometheusRule')
-    const allLabels = pr.spec.groups.flatMap(g => g.rules).map(r => JSON.stringify(r.labels)).join(' ')
-    expect(allLabels).toContain('app-a')
+    expect(prodRules().map(r => JSON.stringify(r.labels)).join(' ')).toContain('app-a')
   })
 })

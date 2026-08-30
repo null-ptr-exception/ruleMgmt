@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-mariadb-saturation-connections
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-saturation-connections
+      rules:
+        {{- $common := .Values._common | default dict }}
+        {{- range .Values.mariadb_saturation_connections }}
+        {{- $row := merge . $common }}
+        - alert: MariadbSaturationConnections_WarnPct
+          expr: (mysql_global_status_threads_connected{namespace="{{ $row.namespace }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.warn_pct }}
+          for: 5m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbSaturationConnections_WarnPct triggered on {{ $row.owner }}"
+        - alert: MariadbSaturationConnections_CriticalPct
+          expr: (mysql_global_status_threads_connected{namespace="{{ $row.namespace }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.critical_pct }}
+          for: 5m
+          labels:
+            severity: critical
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbSaturationConnections_CriticalPct triggered on {{ $row.owner }}"
+        {{- end }}

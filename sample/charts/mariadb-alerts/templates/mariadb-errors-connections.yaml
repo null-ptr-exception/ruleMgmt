@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-mariadb-errors-connections
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-errors-connections
+      rules:
+        {{- $common := .Values._common | default dict }}
+        {{- range .Values.mariadb_errors_connections }}
+        {{- $row := merge . $common }}
+        - alert: MariadbErrorsConnections_WarnRate
+          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_rate }}
+          for: 5m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbErrorsConnections_WarnRate triggered on {{ $row.owner }}"
+        - alert: MariadbErrorsConnections_CriticalRate
+          expr: rate(mysql_global_status_connection_errors_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.critical_rate }}
+          for: 5m
+          labels:
+            severity: critical
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbErrorsConnections_CriticalRate triggered on {{ $row.owner }}"
+        {{- end }}

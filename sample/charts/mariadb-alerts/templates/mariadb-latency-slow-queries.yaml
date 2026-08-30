@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-mariadb-latency-slow-queries
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-latency-slow-queries
+      rules:
+        {{- $common := .Values._common | default dict }}
+        {{- range .Values.mariadb_latency_slow_queries }}
+        {{- $row := merge . $common }}
+        - alert: MariadbLatencySlowQueries_WarnThreshold
+          expr: rate(mysql_global_status_slow_queries{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_threshold }}
+          for: 5m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbLatencySlowQueries_WarnThreshold triggered on {{ $row.owner }}"
+        - alert: MariadbLatencySlowQueries_CriticalThreshold
+          expr: rate(mysql_global_status_slow_queries{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.critical_threshold }}
+          for: 5m
+          labels:
+            severity: critical
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbLatencySlowQueries_CriticalThreshold triggered on {{ $row.owner }}"
+        {{- end }}

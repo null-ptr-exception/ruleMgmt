@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-mariadb-saturation-cpu
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-saturation-cpu
+      rules:
+        {{- $common := .Values._common | default dict }}
+        {{- range .Values.mariadb_saturation_cpu }}
+        {{- $row := merge . $common }}
+        - alert: MariadbSaturationCpu_WarnPct
+          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace }}", resource="cpu"}) * 100 > {{ $row.warn_pct }}
+          for: 5m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbSaturationCpu_WarnPct triggered on {{ $row.owner }}"
+        - alert: MariadbSaturationCpu_CriticalPct
+          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace }}", resource="cpu"}) * 100 > {{ $row.critical_pct }}
+          for: 5m
+          labels:
+            severity: critical
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbSaturationCpu_CriticalPct triggered on {{ $row.owner }}"
+        {{- end }}

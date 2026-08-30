@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-mariadb-saturation-memory
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-saturation-memory
+      rules:
+        {{- $common := .Values._common | default dict }}
+        {{- range .Values.mariadb_saturation_memory }}
+        {{- $row := merge . $common }}
+        - alert: MariadbSaturationMemory_WarnPct
+          expr: (container_memory_working_set_bytes{namespace="{{ $row.namespace }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace }}", resource="memory"}) * 100 > {{ $row.warn_pct }}
+          for: 5m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbSaturationMemory_WarnPct triggered on {{ $row.owner }}"
+        - alert: MariadbSaturationMemory_CriticalPct
+          expr: (container_memory_working_set_bytes{namespace="{{ $row.namespace }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace }}", resource="memory"}) * 100 > {{ $row.critical_pct }}
+          for: 5m
+          labels:
+            severity: critical
+            owner: "{{ $row.owner }}"
+            namespace: "{{ $row.namespace }}"
+          annotations:
+            summary: "MariadbSaturationMemory_CriticalPct triggered on {{ $row.owner }}"
+        {{- end }}

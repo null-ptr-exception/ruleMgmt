@@ -2,8 +2,8 @@
 
 > **Parts of this document are out of date** — the page and component names
 > below predate several rounds of change. For how a chart describes alerts and
-> how templates are generated from it, see
-> [alert-rules.md](alert-rules.md), which is current.
+> how templates are generated from it, see [alert-rules.md](alert-rules.md);
+> for how to do things, [how-to.md](how-to.md). Both are current.
 
 ## Overview
 

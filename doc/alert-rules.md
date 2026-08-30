@@ -1,8 +1,8 @@
 # Alert rules: from a schema to a PrometheusRule
 
 How a chart describes alerts, who owns which part, and what the generator does
-with it. Design discussion and the reasoning behind the decisions live in
-issue #57.
+with it. For the steps to actually do something, see [how-to.md](how-to.md).
+Design discussion and the reasoning behind the decisions live in issue #57.
 
 ## The shape of it
 

@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { generatePrometheusRule, generateDefaultValues, generateGroupTemplate } from '../templateGenerator.js'
+import { generateDefaultValues, generateGroupTemplate } from '../templateGenerator.js'
+
+// The merged single-object generator is gone: every alert group is its own
+// PrometheusRule. These tests assert on rule content, so they render all the
+// groups of a schema and join them.
+function renderAll(schema, releaseName) {
+  if (!schema?.properties) return ''
+  return Object.entries(schema.properties)
+    .filter(([group, def]) => !group.startsWith('$') && !def['x-custom-template'])
+    .map(([group, def]) => generateGroupTemplate(group, def, releaseName, schema))
+    .filter(Boolean)
+    .join('')
+}
 
 const sampleSchema = {
   $schema: 'https://json-schema.org/draft-07/schema#',
@@ -23,52 +35,52 @@ const sampleSchema = {
   }
 }
 
-describe('generatePrometheusRule', () => {
+describe('per-group rule generation', () => {
   it('generates valid YAML structure', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('apiVersion: monitoring.coreos.com/v1')
     expect(yaml).toContain('kind: PrometheusRule')
-    expect(yaml).toContain('name: {{ .Release.Name }}-alerts')
+    expect(yaml).toContain('name: {{ .Release.Name }}-mariadb-saturation-disk')
   })
 
   it('generates one rule per threshold', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('MariadbSaturationDisk_WarnPct')
     expect(yaml).toContain('MariadbSaturationDisk_CriticalPct')
   })
 
   it('replaces THRESHOLD placeholder with threshold variable', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('> {{ .warn_pct }}')
     expect(yaml).toContain('> {{ .critical_pct }}')
     expect(yaml).not.toContain('{{ THRESHOLD }}')
   })
 
   it('uses correct for duration', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('for: 10m')
   })
 
   it('sets severity from x-severity', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('severity: warning')
     expect(yaml).toContain('severity: critical')
   })
 
   it('includes selector labels', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('pvc_regex: "{{ .pvc_regex }}"')
     expect(yaml).toContain('namespace: "{{ .namespace }}"')
   })
 
   it('wraps rules in range over values key', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('{{- range .Values.mariadb_saturation_disk }}')
     expect(yaml).toContain('{{- end }}')
   })
 
   it('uses group name with dashes', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('name: mariadb-saturation-disk')
   })
 
@@ -90,7 +102,7 @@ describe('generatePrometheusRule', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     expect(yaml).not.toContain('custom_group')
     expect(yaml).not.toContain('custom-group')
   })
@@ -105,13 +117,13 @@ describe('generatePrometheusRule', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     expect(yaml).not.toContain('no_promql')
   })
 
   it('returns empty string for null/empty schema', () => {
-    expect(generatePrometheusRule(null, 'x')).toBe('')
-    expect(generatePrometheusRule({}, 'x')).toBe('')
+    expect(renderAll(null, 'x')).toBe('')
+    expect(renderAll({}, 'x')).toBe('')
   })
 
   it('handles multiple alert groups', () => {
@@ -144,7 +156,7 @@ describe('generatePrometheusRule', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     expect(yaml).toContain('name: group-a')
     expect(yaml).toContain('name: group-b')
     expect(yaml).toContain('GroupA_Warn')
@@ -155,14 +167,14 @@ describe('generatePrometheusRule', () => {
 
 describe('optional selector guards', () => {
   it('wraps non-required selector labels in a hasKey guard', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     // namespace is not in items.required → guarded
     expect(yaml).toContain('{{- if hasKey . "namespace" }}')
     expect(yaml).toContain('namespace: "{{ .namespace }}"')
   })
 
   it('renders required selectors unguarded', () => {
-    const yaml = generatePrometheusRule(sampleSchema, '{{ .Release.Name }}')
+    const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).not.toContain('hasKey . "pvc_regex"')
     expect(yaml).toContain('pvc_regex: "{{ .pvc_regex }}"')
   })
@@ -190,7 +202,7 @@ describe('optional selector guards', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     expect(yaml).toContain('{{- if hasKey $row "owner" }}')
     expect(yaml).not.toContain('hasKey $row "ns"')
   })
@@ -217,7 +229,7 @@ describe('optional selector guards', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     expect(yaml).not.toContain('hasKey $row "owner"')
     expect(yaml).toContain('owner: "{{ $row.owner }}"')
   })
@@ -244,7 +256,7 @@ describe('summary annotation selector choice', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     expect(yaml).toContain('summary: "G_Warn triggered on {{ .host }}"')
   })
 
@@ -266,7 +278,7 @@ describe('summary annotation selector choice', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     expect(yaml).toContain('summary: "G_Warn triggered{{ if hasKey . "team" }} on {{ .team }}{{ end }}"')
   })
 
@@ -287,7 +299,7 @@ describe('summary annotation selector choice', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     expect(yaml).toContain('summary: "G_Warn triggered"')
     expect(yaml).not.toContain('<no value>')
     expect(yaml).not.toContain('{{ .namespace }}')
@@ -382,7 +394,7 @@ describe('common vars in template generation', () => {
   }
 
   it('includes common vars in labels via generatePrometheusRule', () => {
-    const yaml = generatePrometheusRule(schemaWithCommon, 'test')
+    const yaml = renderAll(schemaWithCommon, 'test')
     expect(yaml).toContain('$common := .Values._common | default dict')
     expect(yaml).toContain('$row := merge . $common')
     expect(yaml).toContain('owner: "{{ $row.owner }}"')
@@ -420,7 +432,7 @@ describe('common vars in template generation', () => {
         }
       }
     }
-    const yaml = generatePrometheusRule(schema, 'test')
+    const yaml = renderAll(schema, 'test')
     const matches = yaml.match(/ns: "\{\{ \$row\.ns \}\}"/g)
     expect(matches).toHaveLength(1)
   })

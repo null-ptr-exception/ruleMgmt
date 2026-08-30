@@ -17,6 +17,7 @@
  */
 
 import { renderValue } from './ruleModel.js'
+import { emitRuleObjects } from './crConverter.js'
 
 function toPascalCase(str) {
   return str.split(/[_\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
@@ -128,7 +129,12 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
   return legacyRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
 }
 
-function generateGroupYaml(alertGroup, alertDef, commonSelectors = [], commonRequired = []) {
+/**
+ * Split a group into the pieces the converter needs: the Helm row loop and one
+ * rendered block per rule. The CR that wraps them is not this function's
+ * business.
+ */
+function buildGroupParts(alertGroup, alertDef, commonSelectors = [], commonRequired = []) {
   if (!alertDef['x-promql'] && !Array.isArray(alertDef['x-rules'])) return null
 
   const selectors = getSelectors(alertDef)
@@ -143,74 +149,38 @@ function generateGroupYaml(alertGroup, alertDef, commonSelectors = [], commonReq
   // string "<no value>".
   const requiredSet = new Set([...(alertDef?.items?.required || []), ...commonRequired])
 
-  const rules = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
+  const ruleTexts = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
     .map(rule => renderRule(rule, ref, refVar))
 
-  if (rules.length === 0) return null
+  if (ruleTexts.length === 0) return null
 
   const rangeBlock = hasCommon
-    ? `        {{- $common := .Values._common | default dict }}\n` +
-      `        {{- range .Values.${alertGroup} }}\n` +
-      `        {{- $row := merge . $common }}\n`
-    : `        {{- range .Values.${alertGroup} }}\n`
+    ? `        {{- $common := .Values._common | default dict }}
+` +
+      `        {{- range .Values.${alertGroup} }}
+` +
+      `        {{- $row := merge . $common }}
+`
+    : `        {{- range .Values.${alertGroup} }}
+`
 
-  return (
-    `    - name: ${alertGroup.replace(/_/g, '-')}\n` +
-    `      rules:\n` +
-    rangeBlock +
-    rules.join('\n') + '\n' +
-    `        {{- end }}`
+  return { groupName: alertGroup.replace(/_/g, '-'), rangeBlock, ruleTexts }
+}
+
+export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema, options) {
+  const parts = buildGroupParts(
+    alertGroup,
+    alertDef,
+    schema ? getCommonSelectors(schema) : [],
+    schema ? getCommonRequired(schema) : []
   )
-}
+  if (!parts) return null
 
-export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema) {
-  const commonSelectors = schema ? getCommonSelectors(schema) : []
-  const groupYaml = generateGroupYaml(alertGroup, alertDef, commonSelectors, schema ? getCommonRequired(schema) : [])
-  if (!groupYaml) return null
-
-  const name = releaseName || '{{ .Release.Name }}'
-  return (
-    `apiVersion: monitoring.coreos.com/v1\n` +
-    `kind: PrometheusRule\n` +
-    `metadata:\n` +
-    `  name: ${name}-${alertGroup.replace(/_/g, '-')}\n` +
-    `  labels:\n` +
-    `    app.kubernetes.io/managed-by: Helm\n` +
-    `spec:\n` +
-    `  groups:\n` +
-    groupYaml
-  ) + '\n'
-}
-
-export function generatePrometheusRule(schema, releaseName) {
-  if (!schema?.properties) return ''
-
-  const commonSelectors = getCommonSelectors(schema)
-  const commonRequired = getCommonRequired(schema)
-  const groups = []
-
-  for (const [alertGroup, alertDef] of Object.entries(schema.properties)) {
-    if (alertGroup.startsWith('$')) continue
-    if (alertDef['x-custom-template']) continue
-
-    const groupYaml = generateGroupYaml(alertGroup, alertDef, commonSelectors, commonRequired)
-    if (groupYaml) groups.push(groupYaml)
-  }
-
-  if (groups.length === 0) return ''
-
-  const name = releaseName || '{{ .Release.Name }}'
-  return (
-    `apiVersion: monitoring.coreos.com/v1\n` +
-    `kind: PrometheusRule\n` +
-    `metadata:\n` +
-    `  name: ${name}-alerts\n` +
-    `  labels:\n` +
-    `    app.kubernetes.io/managed-by: Helm\n` +
-    `spec:\n` +
-    `  groups:\n` +
-    groups.join('\n\n')
-  ) + '\n'
+  return emitRuleObjects({
+    releaseName: releaseName || '{{ .Release.Name }}',
+    group: alertGroup,
+    ...parts
+  }, options)
 }
 
 export function generateDefaultValues(schema) {

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, Select, Empty, Typography, Switch, Collapse, Modal } from 'antd'
-import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
+import { Button, Input, Select, Empty, Typography, Switch, Collapse, Modal, Dropdown } from 'antd'
+import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined, ImportOutlined } from '@ant-design/icons'
 import { schemaAlertNames, getCommonVars, setCommonVars } from '../utils/schemaUtils'
+import { schemaFromImport } from '../utils/ruleImport'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
+import ImportRulesModal from '../components/ImportRulesModal'
 import { generateGroupTemplate, normalizeRules } from '../utils/templateGenerator'
 import { danglingRefs } from '../utils/ruleModel'
 import {
@@ -103,6 +105,8 @@ export default function TemplateDevEditor() {
   const [collapsedRules, setCollapsedRules] = useState({})
   // Site policy for generated resources; the same values the CLI reads.
   const [platformMeta, setPlatformMeta] = useState(null)
+  // null | 'new' | 'existing'
+  const [importTarget, setImportTarget] = useState(null)
 
   useEffect(() => { getPlatformMeta().then(setPlatformMeta) }, [])
   const [yamlExpanded, setYamlExpanded] = useSessionState('templates:yamlExpanded', false)
@@ -324,6 +328,31 @@ export default function TemplateDevEditor() {
     await createChart(name.trim())
     await loadCharts()
     setActiveChart(name.trim())
+  }
+
+  /**
+   * Importing is an edit to the schema in hand, not a second way to write one.
+   * Going through the editor means it inherits every guard Save already has:
+   * a replaced group that drops a column is caught by the breaking-change
+   * check, and a rule referring to a column nobody defined is caught by the
+   * reference check. Cancelling is just not saving.
+   */
+  function applyImport(result) {
+    const next = schemaFromImport(result, schema)
+    setSchema(next)
+    setAlertNames(schemaAlertNames(next))
+    setActiveAlert(result.groups[0]?.key || activeAlert)
+    setDirty(true)
+  }
+
+  async function createChartFromRules(result, name) {
+    await createChart(name)
+    // A chart that was empty a moment ago has no rows to orphan, so the import
+    // is written straight out and the editor opens on what landed.
+    await saveChartSchema(name, schemaFromImport(result, null), true)
+    await loadCharts()
+    setActiveChart(name)
+    setImportTarget(null)
   }
 
   async function handleDelete() {
@@ -551,6 +580,17 @@ export default function TemplateDevEditor() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <ImportRulesModal
+        open={importTarget !== null}
+        needsName={importTarget === 'new'}
+        existingGroups={Object.keys(schema?.properties || {})}
+        onCancel={() => setImportTarget(null)}
+        onApply={(result, name) => {
+          if (importTarget === 'new') return createChartFromRules(result, name)
+          applyImport(result)
+          setImportTarget(null)
+        }}
+      />
       {/* Top bar */}
       <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <Select
@@ -560,13 +600,25 @@ export default function TemplateDevEditor() {
           style={{ minWidth: 180 }}
           options={charts.map(c => ({ value: c.name, label: `${c.name} (${c.templateCount} templates)` }))}
         />
-        <Button size="small" icon={<PlusOutlined />} onClick={handleCreateChart}>New</Button>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            items: [
+              { key: 'blank', label: 'Blank chart' },
+              { key: 'rules', label: 'From rules…' }
+            ],
+            onClick: ({ key }) => (key === 'blank' ? handleCreateChart() : setImportTarget('new'))
+          }}
+        >
+          <Button size="small" icon={<PlusOutlined />}>New</Button>
+        </Dropdown>
         {activeChart && (
           <>
             <Input size="small" placeholder="Description" value={chartMeta.description || ''}
               onChange={e => { setChartMeta({ ...chartMeta, description: e.target.value }); setDirty(true) }}
               style={{ flex: 1, maxWidth: 400 }} />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+              <Button icon={<ImportOutlined />} onClick={() => setImportTarget('existing')}>Import</Button>
               <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={!dirty}>Save</Button>
               <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
             </div>

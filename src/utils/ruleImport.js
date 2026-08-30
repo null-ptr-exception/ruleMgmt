@@ -175,3 +175,49 @@ export function importProblems({ groups }, schema) {
     })
     .filter(g => g.missing.length > 0)
 }
+
+/**
+ * A structured rule as the YAML of one rules[] entry, for the raw toggle.
+ * Empty fields are left out rather than written as blanks to fill in.
+ */
+export function ruleToYaml(rule) {
+  const entry = {}
+  if (rule.alert) entry.alert = rule.alert
+  if (rule.expr) entry.expr = rule.expr
+  if (rule.for) entry.for = rule.for
+  if (rule.labels && Object.keys(rule.labels).length) entry.labels = rule.labels
+  if (rule.annotations && Object.keys(rule.annotations).length) entry.annotations = rule.annotations
+  return yaml.dump(entry, { lineWidth: -1 }).trimEnd()
+}
+
+/**
+ * The other direction. Returns null when the text cannot become a structured
+ * rule — invalid YAML, or fields the model does not cover — so the caller can
+ * keep the hand-written entry instead of quietly dropping what is in it.
+ */
+export function ruleFromYaml(raw) {
+  let doc
+  try {
+    doc = yaml.load(raw)
+  } catch (err) {
+    return { error: `Not valid YAML: ${err.message}` }
+  }
+
+  const entry = Array.isArray(doc) ? doc[0] : doc
+  if (!entry || typeof entry !== 'object') return { error: 'Not a rule entry' }
+
+  const unknown = Object.keys(entry).filter(k => !RULE_FIELDS.includes(k))
+  if (unknown.length) {
+    return { error: `${unknown.join(', ')} can only be kept by hand-writing this rule` }
+  }
+
+  return {
+    rule: {
+      alert: entry.alert || '',
+      expr: String(entry.expr ?? ''),
+      for: entry.for ? String(entry.for) : '',
+      labels: entry.labels || {},
+      annotations: entry.annotations || {}
+    }
+  }
+}

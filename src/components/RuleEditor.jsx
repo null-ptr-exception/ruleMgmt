@@ -4,6 +4,7 @@ import { DeleteOutlined, TagOutlined, DownOutlined, RightOutlined } from '@ant-d
 import PromQLEditor from './PromQLEditor'
 import KVEditor from './KVEditor'
 import { ruleVars } from '../utils/ruleModel'
+import { ruleToYaml, ruleFromYaml } from '../utils/ruleImport'
 
 const { Text } = Typography
 const { TextArea } = Input
@@ -72,6 +73,22 @@ export default function RuleEditor({ rule, columns = [], collapsed = false, onTo
     setNaming(null)
   }
 
+  // Switching either way carries the rule across: to YAML on the way in, and
+  // back to fields on the way out. A hand-written entry the model cannot hold
+  // stays raw and says why, rather than being emptied out.
+  function toggleRaw(on) {
+    if (on) {
+      onChange({ raw: ruleToYaml(rule) })
+      return
+    }
+    const { rule: parsed, error } = ruleFromYaml(rule.raw || '')
+    if (error) {
+      Modal.error({ title: 'This rule has to stay hand-written', content: error })
+      return
+    }
+    onChange(parsed)
+  }
+
   function insertVariable(name) {
     const at = exprApi.current?.getSelection()
     if (at) exprApi.current.replaceRange(at.from, at.to, `\${${name}}`)
@@ -133,9 +150,7 @@ export default function RuleEditor({ rule, columns = [], collapsed = false, onTo
             <Switch
               size="small"
               checked={isRaw}
-              onChange={on => onChange(on
-                ? { raw: `alert: ${rule.alert || 'NewAlert'}\nexpr: ${rule.expr || ''}` }
-                : { alert: rule.alert || 'NewAlert', expr: '', for: '5m', labels: {}, annotations: {} })}
+              onChange={toggleRaw}
             />
           </span>
         </Tooltip>

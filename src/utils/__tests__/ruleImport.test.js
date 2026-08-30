@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { importRules, schemaFromImport, importProblems, toGroupKey, columnsOf } from '../ruleImport'
+import { importRules, schemaFromImport, importProblems, toGroupKey, columnsOf, ruleToYaml, ruleFromYaml } from '../ruleImport'
 import { generateGroupTemplate } from '../templateGenerator'
 
 const ruleFile = `
@@ -177,5 +177,44 @@ describe('starting column types', () => {
       'groups:\n  - name: g\n    rules:\n      - alert: A\n        expr: up > ${warn}\n        limit: 5\n'
     )
     expect(schemaFromImport(result).properties.g.items.properties.warn.type).toBe('number')
+  })
+})
+
+describe('the raw toggle round-trips a rule', () => {
+  const structured = {
+    alert: 'NetworkReceiveHigh',
+    expr: 'rate(receive{ns="${namespace}"}[5m]) > ${recv_warn}',
+    for: '5m',
+    labels: { severity: 'warning', component: 'network' },
+    annotations: { summary: 'receive is {{ $value }} B/s' }
+  }
+
+  it('carries every field into the YAML, not just alert and expr', () => {
+    const yamlText = ruleToYaml(structured)
+    expect(yamlText).toContain('for: 5m')
+    expect(yamlText).toContain('component: network')
+    expect(yamlText).toContain('$value')
+  })
+
+  it('comes back unchanged', () => {
+    expect(ruleFromYaml(ruleToYaml(structured)).rule).toEqual(structured)
+  })
+
+  it('leaves out fields that are empty rather than writing blanks', () => {
+    expect(ruleToYaml({ alert: 'A', expr: 'up == 0' })).toBe('alert: A\nexpr: up == 0')
+  })
+
+  it('accepts an entry written as a list item', () => {
+    expect(ruleFromYaml('- alert: A\n  expr: up == 0').rule.alert).toBe('A')
+  })
+
+  it('refuses to convert a rule carrying fields the model has no place for', () => {
+    const { rule, error } = ruleFromYaml('alert: A\nexpr: up == 0\nlimit: 10')
+    expect(rule).toBeUndefined()
+    expect(error).toMatch(/limit/)
+  })
+
+  it('refuses invalid YAML instead of returning an empty rule', () => {
+    expect(ruleFromYaml('alert: [').error).toMatch(/Not valid YAML/)
   })
 })

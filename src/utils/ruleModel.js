@@ -62,9 +62,20 @@ export function ruleVars(rule) {
   add(rule.raw)
   add(rule.expr)
   add(rule.for)
-  for (const l of rule.labels || []) { add(l.key); add(l.value) }
-  for (const a of rule.annotations || []) { add(a.key); add(a.value) }
+  for (const [k, v] of pairs(rule.labels)) { add(k); add(v) }
+  for (const [k, v] of pairs(rule.annotations)) { add(k); add(v) }
   return names
+}
+
+/**
+ * Labels and annotations are a map in the schema and an ordered entry list
+ * once normalized. Both shapes reach here — the editor reads a rule straight
+ * out of the schema.
+ */
+function pairs(mapOrList) {
+  if (!mapOrList) return []
+  if (Array.isArray(mapOrList)) return mapOrList.map(e => [e.key, e.value])
+  return Object.entries(mapOrList)
 }
 
 /**

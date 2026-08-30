@@ -29,6 +29,11 @@ export const ASSUMED_MAX_ROWS = 100
 const API_VERSION = 'monitoring.coreos.com/v1'
 const KIND = 'PrometheusRule'
 
+// The generator runs in the browser as well as in scripts, so size is measured
+// with TextEncoder rather than Buffer.
+const encoder = new TextEncoder()
+const byteLength = text => encoder.encode(text).length
+
 /**
  * Pack rendered rules into shards that stay inside the byte budget once
  * multiplied out by rows. A shard always holds at least one rule — a single
@@ -41,7 +46,7 @@ export function shardRules(ruleTexts, { maxBytes = MAX_OBJECT_BYTES, assumedRows
   let size = 0
 
   for (const text of ruleTexts) {
-    const bytes = Buffer.byteLength(text, 'utf8')
+    const bytes = byteLength(text)
     if (current.length > 0 && size + bytes > budget) {
       shards.push(current)
       current = []

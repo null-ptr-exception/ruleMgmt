@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, Select, Empty, Typography, Switch, Collapse } from 'antd'
+import { Button, Input, Select, Empty, Typography, Switch, Collapse, Modal } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 import { schemaAlertNames, getCommonVars, setCommonVars } from '../utils/schemaUtils'
 import TemplateTree from '../components/TemplateTree'
-import { generatePrometheusRule, generateGroupTemplate } from '../utils/templateGenerator'
+import RuleEditor from '../components/RuleEditor'
+import { generateGroupTemplate } from '../utils/templateGenerator'
 import {
   listCharts, createChart, deleteChart,
   getChartInfo, getChartTemplateFile, saveChartTemplateFile, deleteChartTemplate,
@@ -395,6 +396,70 @@ export default function TemplateDevEditor() {
   }
 
 
+  const xRules = alertDef?.['x-rules']
+
+  function setRules(rules) {
+    updateAlertDef('x-rules', rules)
+  }
+
+  function addRule() {
+    setRules([...(xRules || []), {
+      alert: '', expr: '', for: alertDef['x-for'] || '5m', labels: { severity: 'warning' }, annotations: {}
+    }])
+  }
+
+  // Marking a literal opens a column for it. A number stays a number so the
+  // rule owner gets a numeric field rather than a text box.
+  function addColumn(name, sample) {
+    const numeric = sample !== undefined && sample.trim() !== '' && !Number.isNaN(Number(sample))
+    updateItems({ ...props, [name]: { type: numeric ? 'number' : 'string' } }, [...required])
+  }
+
+  function convertToRules() {
+    const promql = alertDef['x-promql'] || ''
+    const selectors = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'selector').map(([n]) => n)
+    const thresholds = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'threshold')
+    const optional = [...commonVars.filter(v => !v.required).map(v => v.name), ...selectors.filter(s => !required.has(s))]
+    const pascal = str => str.split(/[_\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
+    const firstRequired = [...commonVars.filter(v => v.required).map(v => v.name), ...selectors.filter(s => required.has(s))][0]
+
+    const build = () => thresholds.map(([name, prop]) => {
+      const alert = `${pascal(activeAlert)}_${pascal(name)}`
+      return {
+        alert,
+        expr: promql
+          .replace(/\{\{\s*THRESHOLD\s*\}\}/g, `\${${name}}`)
+          .replace(/\{\{\s*\.(\w+)\s*\}\}/g, (m, v) => `\${${v}}`),
+        for: alertDef['x-for'] || '5m',
+        labels: {
+          severity: prop['x-severity'] || 'warning',
+          ...Object.fromEntries([...commonVars.map(v => v.name), ...selectors].map(sel => [sel, `\${${sel}}`]))
+        },
+        annotations: { summary: firstRequired ? `${alert} triggered on \${${firstRequired}}` : `${alert} triggered` }
+      }
+    })
+
+    const apply = () => {
+      const { 'x-promql': _p, 'x-for': _f, ...rest } = schema.properties[activeAlert]
+      setSchema({
+        ...schema,
+        properties: { ...schema.properties, [activeAlert]: { ...rest, 'x-rules': build() } }
+      })
+      setDirty(true)
+    }
+
+    if (optional.length > 0) {
+      Modal.confirm({
+        title: 'Converting drops the optional-label guards',
+        content: `${optional.join(', ')} are optional today, so their labels are only emitted when a row sets them. Converted rules emit every label unconditionally, which changes what this chart renders.`,
+        okText: 'Convert anyway',
+        onOk: apply
+      })
+    } else {
+      apply()
+    }
+  }
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Top bar */}
@@ -500,27 +565,55 @@ export default function TemplateDevEditor() {
                   <Button size="small" danger icon={<DeleteOutlined />} onClick={handleRemoveAlert}>Remove</Button>
                 </div>
 
-                {/* PromQL */}
-                <div style={{ marginBottom: 20 }}>
-                  <Text style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 6 }}>PromQL Expression</Text>
-                  <TextArea
-                    rows={3}
-                    placeholder='rate(metric{namespace="{{ .namespace }}"}[5m]) > {{ THRESHOLD }}'
-                    value={alertDef['x-promql'] || ''}
-                    onChange={e => updateAlertDef('x-promql', e.target.value)}
-                    style={{ fontFamily: 'monospace', fontSize: 13 }}
-                  />
-                  <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
-                    Use {'{{ .var_name }}'} for selectors, {'{{ THRESHOLD }}'} for threshold placeholder
-                  </Text>
-                </div>
+                {xRules ? (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
+                        Rules ({xRules.length}) — one table, one alert per rule
+                      </Text>
+                      <Button size="small" icon={<PlusOutlined />} onClick={addRule}>Add rule</Button>
+                    </div>
+                    {xRules.map((rule, i) => (
+                      <RuleEditor
+                        key={i}
+                        rule={rule}
+                        columns={Object.keys(props)}
+                        onChange={next => setRules(xRules.map((r, idx) => (idx === i ? next : r)))}
+                        onRemove={() => setRules(xRules.filter((_, idx) => idx !== i))}
+                        onAddColumn={addColumn}
+                      />
+                    ))}
+                    {xRules.length === 0 && <Empty description="No rules yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>PromQL Expression</Text>
+                      <Button size="small" onClick={convertToRules} disabled={!alertDef['x-promql']}>
+                        Convert to rules
+                      </Button>
+                    </div>
+                    <TextArea
+                      rows={3}
+                      placeholder='rate(metric{namespace="{{ .namespace }}"}[5m]) > {{ THRESHOLD }}'
+                      value={alertDef['x-promql'] || ''}
+                      onChange={e => updateAlertDef('x-promql', e.target.value)}
+                      style={{ fontFamily: 'monospace', fontSize: 13 }}
+                    />
+                    <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                      Legacy single-expression group. Convert to rules to give this table more than one alert.
+                    </Text>
+                  </div>
+                )}
 
                 {/* For duration */}
                 <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'center' }}>
-                  <div>
-                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>For Duration</Text>
-                    <Input size="small" value={alertDef['x-for'] || '5m'} onChange={e => updateAlertDef('x-for', e.target.value)} style={{ width: 80 }} />
-                  </div>
+                  {!xRules && (
+                    <div>
+                      <Text style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 4 }}>For Duration</Text>
+                      <Input size="small" value={alertDef['x-for'] || '5m'} onChange={e => updateAlertDef('x-for', e.target.value)} style={{ width: 80 }} />
+                    </div>
+                  )}
                   <div style={{ marginTop: 18 }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                       <input type="checkbox" checked={alertDef['x-custom-template'] || false}

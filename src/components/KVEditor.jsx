@@ -60,7 +60,10 @@ export default function KVEditor({ rows, onChange, keyPlaceholder = 'key', value
     <div>
       <Table
         columns={columns}
-        dataSource={rows.map((r, i) => ({ ...r, key: `row-${i}` }))}
+        // `key` is a column here, so row identity goes in a separate field —
+        // writing to `key` would overwrite what the user typed.
+        dataSource={rows.map((r, i) => ({ ...r, _rowId: i }))}
+        rowKey="_rowId"
         pagination={false}
         size="small"
         bordered

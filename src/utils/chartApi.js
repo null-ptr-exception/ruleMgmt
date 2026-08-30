@@ -266,3 +266,14 @@ export async function cloneChart(chart, newName, migration) {
   if (!res.ok) return { error: (await res.json().catch(() => ({}))).error || 'Clone failed' }
   return res.json()
 }
+
+/**
+ * The site's labels and annotations for generated resources. Fetched because
+ * the browser generates the templates on Save and has no other way to see the
+ * environment the platform was deployed with.
+ */
+export async function getPlatformMeta() {
+  const res = await apiFetch(`${BASE}/platform`)
+  if (!res.ok) return { labels: {}, annotations: {}, warnings: [] }
+  return res.json()
+}

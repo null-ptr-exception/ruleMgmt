@@ -18,6 +18,8 @@
  * rows in the template itself, by the chunk the loop is written around.
  */
 
+import { BUILT_IN_LABELS, renderMetaMap } from './objectMeta.js'
+
 /** Budget per object. etcd's default limit is ~1.5MB; leave headroom. */
 export const MAX_OBJECT_BYTES = 1_000_000
 
@@ -70,7 +72,7 @@ export function shardRules(ruleTexts, { maxBytes = MAX_OBJECT_BYTES, rowsPerObje
  *
  * `$` is used throughout because `.` inside the chunk loop is the chunk.
  */
-function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, ruleTexts }) {
+function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, ruleTexts, objectMeta }) {
   const rowLoop = hasCommon
     ? `        {{- $common := $.Values._common | default dict }}\n` +
       `        {{- range $rows }}\n` +
@@ -91,8 +93,8 @@ function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, r
     `kind: ${KIND}\n` +
     `metadata:\n` +
     `  name: ${name}-${baseName}-{{ add1 $chunkIndex }}\n` +
-    `  labels:\n` +
-    `    app.kubernetes.io/managed-by: Helm\n` +
+    renderMetaMap('labels', objectMeta?.labels || BUILT_IN_LABELS) +
+    renderMetaMap('annotations', objectMeta?.annotations) +
     `spec:\n` +
     `  groups:\n` +
     `    - name: ${groupName}\n` +
@@ -119,7 +121,8 @@ export function emitRuleObjects({ releaseName, group, groupName, valuesKey, hasC
       groupName,
       valuesKey,
       hasCommon,
-      ruleTexts: shard
+      ruleTexts: shard,
+      objectMeta: options?.objectMeta
     }))
     .join('')
 }

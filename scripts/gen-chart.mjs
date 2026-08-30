@@ -15,6 +15,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { generateGroupTemplate, normalizeRules } from '../src/utils/templateGenerator.js'
 import { danglingRefs } from '../src/utils/ruleModel.js'
+import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 
 const args = process.argv.slice(2)
 const check = args.includes('--check')
@@ -39,6 +40,12 @@ async function readIfExists(file) {
     return null
   }
 }
+
+// The same site policy the server hands the browser, so both paths emit the
+// same file and --check does not report a difference that is only the source
+// of the labels.
+const objectMeta = objectMetaFromEnv()
+for (const warning of objectMeta.warnings) console.log(`warn   ${warning}`)
 
 const schemaFile = path.join(chartDir, 'values.schema.json')
 const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
@@ -65,7 +72,7 @@ for (const [group, alertDef] of Object.entries(schema.properties || {})) {
     continue
   }
 
-  const content = generateGroupTemplate(group, alertDef, '{{ .Release.Name }}', schema)
+  const content = generateGroupTemplate(group, alertDef, '{{ .Release.Name }}', schema, { objectMeta })
   if (!content) {
     results.push(['skip', group, 'no rules to generate'])
     continue

@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import { readFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { objectMetaFromEnv } from './src/utils/objectMeta.js'
 import chartsRouter from './server/routes/charts.js'
 import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
@@ -61,6 +62,14 @@ function setGitopsDir(req, res, next) {
   req.gitopsDir = GITOPS_DIR_V2
   next()
 }
+
+// The site's own labels and annotations for every generated resource. They
+// come from the environment where this is deployed rather than from either
+// repository, and the browser needs them because it is where Save generates
+// the templates — otherwise the UI and the CLI would emit different files.
+baseRouter.get('/api/v2/platform', (req, res) => {
+  res.json(objectMetaFromEnv())
+})
 
 baseRouter.use('/api/v2/charts', setGitopsDir, chartsRouter())
 baseRouter.use('/api/v2/templates', setGitopsDir, templatesV2Router())

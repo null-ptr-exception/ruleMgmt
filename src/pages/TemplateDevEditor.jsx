@@ -10,6 +10,7 @@ import { danglingRefs } from '../utils/ruleModel'
 import {
   listCharts, createChart, deleteChart,
   getChartInfo, getChartTemplateFile, saveChartTemplateFile, deleteChartTemplate,
+  getPlatformMeta,
   saveChartSchema, saveChartMeta
 } from '../utils/chartApi'
 
@@ -100,6 +101,10 @@ export default function TemplateDevEditor() {
   const [activeAlert, setActiveAlert] = useSessionState('templates:alert', null)
   const [dirty, setDirty] = useState(false)
   const [collapsedRules, setCollapsedRules] = useState({})
+  // Site policy for generated resources; the same values the CLI reads.
+  const [platformMeta, setPlatformMeta] = useState(null)
+
+  useEffect(() => { getPlatformMeta().then(setPlatformMeta) }, [])
   const [yamlExpanded, setYamlExpanded] = useSessionState('templates:yamlExpanded', false)
   const [editorEditable, setEditorEditable] = useSessionState('templates:editorEditable', false)
   const [fileContent, setFileContent] = useState('')
@@ -176,10 +181,10 @@ export default function TemplateDevEditor() {
     } else {
       setEditorEditable(false)
       suppressDirtyRef.current = true
-      setFileContent(generateGroupTemplate(activeAlert, alertDef, '{{ .Release.Name }}', schema) || '')
+      setFileContent(generateGroupTemplate(activeAlert, alertDef, '{{ .Release.Name }}', schema, { objectMeta: platformMeta }) || '')
       setTimeout(() => { suppressDirtyRef.current = false }, 0)
     }
-  }, [schema, activeAlert, activeChart])
+  }, [schema, activeAlert, activeChart, platformMeta])
 
   useEffect(() => {
     if (!editorRef.current || !yamlExpanded) return
@@ -296,7 +301,7 @@ export default function TemplateDevEditor() {
         continue
       }
 
-      const content = generateGroupTemplate(alertGroup, alertDef, '{{ .Release.Name }}', schema)
+      const content = generateGroupTemplate(alertGroup, alertDef, '{{ .Release.Name }}', schema, { objectMeta: platformMeta })
       if (!content) continue
       await saveChartTemplateFile(activeChart, fileName, content)
       newTemplateFiles.push(fileName)

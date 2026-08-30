@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Input, Button, Select, Typography, Modal, Switch, Tooltip } from 'antd'
 import { DeleteOutlined, TagOutlined } from '@ant-design/icons'
 import PromQLEditor from './PromQLEditor'
@@ -7,6 +7,22 @@ import { ruleVars } from '../utils/ruleModel'
 
 const { Text } = Typography
 const { TextArea } = Input
+
+const toRows = map => Object.entries(map || {}).map(([key, value]) => ({ key, value }))
+
+/**
+ * Keep the blank rows the user is still typing into, while picking up any
+ * change that came from outside the editor.
+ */
+function reconcile(rows, map) {
+  const incoming = toRows(map)
+  const blanks = rows.filter(r => !r.key)
+  const sameNamed = rows.filter(r => r.key)
+  const unchanged =
+    sameNamed.length === incoming.length &&
+    sameNamed.every((r, i) => r.key === incoming[i].key && r.value === incoming[i].value)
+  return unchanged ? rows : [...incoming, ...blanks]
+}
 
 const label = text => (
   <Text style={{ fontSize: 12, fontWeight: 600, color: '#555', display: 'block', marginBottom: 6 }}>{text}</Text>
@@ -26,6 +42,20 @@ export default function RuleEditor({ rule, columns = [], onChange, onRemove, onA
 
   const isRaw = rule.raw !== undefined
   const update = patch => onChange({ ...rule, ...patch })
+
+  // Labels and annotations are a map in the schema, which cannot hold the blank
+  // row you get right after pressing Add row — the key is its identity. The
+  // rows are kept here as a list so a new one survives long enough to be typed
+  // into, and only the named ones are written back.
+  const [labelRows, setLabelRows] = useState(() => toRows(rule.labels))
+  const [annotationRows, setAnnotationRows] = useState(() => toRows(rule.annotations))
+
+  useEffect(() => { setLabelRows(rows => reconcile(rows, rule.labels)) }, [rule.labels])
+  useEffect(() => { setAnnotationRows(rows => reconcile(rows, rule.annotations)) }, [rule.annotations])
+
+  function writeBack(rows, field) {
+    update({ [field]: Object.fromEntries(rows.filter(r => r.key).map(r => [r.key, r.value])) })
+  }
 
   function markSelectionAsVariable() {
     const selection = exprApi.current?.getSelection()
@@ -126,22 +156,33 @@ export default function RuleEditor({ rule, columns = [], onChange, onRemove, onA
               value={rule.for || ''}
               onChange={e => update({ for: e.target.value })}
             />
+            <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+              A duration, or a column: <code>{'${window}'}</code>.
+            </Text>
           </div>
 
           <div style={{ marginBottom: 12 }}>
             {label('Labels')}
             <KVEditor
-              rows={Object.entries(rule.labels || {}).map(([key, value]) => ({ key, value }))}
-              onChange={rows => update({ labels: Object.fromEntries(rows.filter(r => r.key).map(r => [r.key, r.value])) })}
+              rows={labelRows}
+              onChange={rows => { setLabelRows(rows); writeBack(rows, 'labels') }}
             />
+            <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+              A value may be literal (<code>warning</code>), a column (<code>{'${namespace}'}</code>),
+              or a Prometheus template (<code>{'{{ $labels.pod }}'}</code>).
+            </Text>
           </div>
 
           <div>
             {label('Annotations')}
             <KVEditor
-              rows={Object.entries(rule.annotations || {}).map(([key, value]) => ({ key, value }))}
-              onChange={rows => update({ annotations: Object.fromEntries(rows.filter(r => r.key).map(r => [r.key, r.value])) })}
+              rows={annotationRows}
+              onChange={rows => { setAnnotationRows(rows); writeBack(rows, 'annotations') }}
             />
+            <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+              Same as labels — <code>{'{{ $value }}'}</code> is evaluated by Prometheus when the
+              alert fires, not here.
+            </Text>
           </div>
         </>
       )}

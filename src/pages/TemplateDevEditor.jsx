@@ -306,8 +306,9 @@ export default function TemplateDevEditor() {
         ...schema.properties,
         [name]: {
           type: 'array',
-          'x-promql': '',
-          'x-for': '5m',
+          // New groups start on x-rules. The legacy single-expression field is
+          // only ever shown for charts that already have one.
+          'x-rules': [{ alert: '', expr: '', for: '5m', labels: { severity: 'warning' }, annotations: {} }],
           items: { type: 'object', properties: {} }
         }
       }
@@ -387,12 +388,19 @@ export default function TemplateDevEditor() {
     setDirty(true)
   }
 
-  const selectors = Object.entries(props).filter(([, p]) => p['x-var-type'] !== 'threshold')
+  // Only a column tagged as a selector is emitted as a label by the legacy
+  // generator; an untagged one is a plain variable a rule refers to by name, so
+  // showing it under Selectors was misleading.
+  const selectors = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'selector')
   const thresholds = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'threshold')
+  const variables = Object.entries(props).filter(([, p]) => !p['x-var-type'])
 
   function addVariable(varType) {
     const newName = ''
-    const newProp = { type: varType === 'threshold' ? 'number' : 'string', 'x-var-type': varType }
+    const newProp = { type: varType === 'threshold' ? 'number' : 'string' }
+    // An untagged column is a plain variable; only selectors and thresholds
+    // carry a role, and only the legacy generator reads it.
+    if (varType) newProp['x-var-type'] = varType
     if (varType === 'threshold') newProp['x-severity'] = 'warning'
     const newProps = { ...props, [newName]: newProp }
     const newRequired = [...required]
@@ -449,7 +457,20 @@ export default function TemplateDevEditor() {
     const pascal = str => str.split(/[_\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
     const firstRequired = [...commonVars.filter(v => v.required).map(v => v.name), ...selectors.filter(s => required.has(s))][0]
 
-    const build = () => thresholds.map(([name, prop]) => {
+    const asPlaceholders = text => text
+      .replace(/\{\{\s*\.(\w+)\s*\}\}/g, (m, v) => `\${${v}}`)
+
+    // A group with no thresholds still has an expression, and dropping it on
+    // convert would silently discard what the owner typed.
+    const build = () => thresholds.length === 0
+      ? [{
+        alert: pascal(activeAlert),
+        expr: asPlaceholders(promql),
+        for: alertDef['x-for'] || '5m',
+        labels: { severity: 'warning' },
+        annotations: {}
+      }]
+      : thresholds.map(([name, prop]) => {
       const alert = `${pascal(activeAlert)}_${pascal(name)}`
       return {
         alert,
@@ -658,6 +679,28 @@ export default function TemplateDevEditor() {
                   </div>
                   {selectors.length === 0 && <Text type="secondary" style={{ fontSize: 12 }}>No selectors defined</Text>}
                   {selectors.map(([name, prop]) => (
+                    <VariableRow key={name} name={name} prop={prop}
+                      showRequired isRequired={required.has(name)}
+                      onRename={val => updateVariable(name, val, {})}
+                      onUpdate={updates => updateVariable(name, name, updates)}
+                      onRemove={() => removeVariable(name)}
+                    />
+                  ))}
+                </div>
+
+                {/* Variables — columns a rule refers to by name */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Variables</Text>
+                    <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
+                    <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => addVariable(undefined)}>Add</Button>
+                  </div>
+                  {variables.length === 0 && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Columns a rule refers to as {'${name}'}. Marking a literal in an expression creates one here.
+                    </Text>
+                  )}
+                  {variables.map(([name, prop]) => (
                     <VariableRow key={name} name={name} prop={prop}
                       showRequired isRequired={required.has(name)}
                       onRename={val => updateVariable(name, val, {})}

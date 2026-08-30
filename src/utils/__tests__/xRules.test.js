@@ -152,7 +152,7 @@ describe('rule-level escape hatch (#57 section 6)', () => {
 
   it('places a hand-written entry in the same row loop as structured rules', () => {
     const out = generateGroupTemplate('demo', withRaw(handWritten), 'rel')
-    expect(out.match(/\{\{- range \.Values\.demo \}\}/g)).toHaveLength(1)
+    expect(out.match(/\{\{- range \$rows \}\}/g)).toHaveLength(1)
     expect(out).toContain('        - alert: Structured')
     expect(out).toContain('        - alert: HandWritten')
   })

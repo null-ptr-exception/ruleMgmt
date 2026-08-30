@@ -1,15 +1,18 @@
+{{- $chunks := chunk 100 ($.Values.mariadb_saturation_disk | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: {{ .Release.Name }}-mariadb-saturation-disk
+  name: {{ $.Release.Name }}-mariadb-saturation-disk{{ if gt (len $chunks) 1 }}-{{ add1 $chunkIndex }}{{ end }}
   labels:
     app.kubernetes.io/managed-by: Helm
 spec:
   groups:
     - name: mariadb-saturation-disk
       rules:
-        {{- $common := .Values._common | default dict }}
-        {{- range .Values.mariadb_saturation_disk }}
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbSaturationDisk_WarnPct
           expr: (kubelet_volume_stats_used_bytes{namespace="{{ $row.namespace }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.warn_pct }}
@@ -30,3 +33,4 @@ spec:
           annotations:
             summary: "MariadbSaturationDisk_CriticalPct triggered on {{ $row.owner }}"
         {{- end }}
+{{- end }}

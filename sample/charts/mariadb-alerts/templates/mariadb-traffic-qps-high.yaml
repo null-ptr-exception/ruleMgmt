@@ -1,15 +1,18 @@
+{{- $chunks := chunk 100 ($.Values.mariadb_traffic_qps_high | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: {{ .Release.Name }}-mariadb-traffic-qps-high
+  name: {{ $.Release.Name }}-mariadb-traffic-qps-high{{ if gt (len $chunks) 1 }}-{{ add1 $chunkIndex }}{{ end }}
   labels:
     app.kubernetes.io/managed-by: Helm
 spec:
   groups:
     - name: mariadb-traffic-qps-high
       rules:
-        {{- $common := .Values._common | default dict }}
-        {{- range .Values.mariadb_traffic_qps_high }}
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbTrafficQpsHigh_MaxQps
           expr: rate(mysql_global_status_questions{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.max_qps }}
@@ -21,3 +24,4 @@ spec:
           annotations:
             summary: "MariadbTrafficQpsHigh_MaxQps triggered on {{ $row.owner }}"
         {{- end }}
+{{- end }}

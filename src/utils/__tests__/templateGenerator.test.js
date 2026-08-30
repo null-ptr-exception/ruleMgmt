@@ -40,7 +40,7 @@ describe('per-group rule generation', () => {
     const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
     expect(yaml).toContain('apiVersion: monitoring.coreos.com/v1')
     expect(yaml).toContain('kind: PrometheusRule')
-    expect(yaml).toContain('name: {{ .Release.Name }}-mariadb-saturation-disk')
+    expect(yaml).toContain('name: {{ $.Release.Name }}-mariadb-saturation-disk')
   })
 
   it('generates one rule per threshold', () => {
@@ -75,7 +75,9 @@ describe('per-group rule generation', () => {
 
   it('wraps rules in range over values key', () => {
     const yaml = renderAll(sampleSchema, '{{ .Release.Name }}')
-    expect(yaml).toContain('{{- range .Values.mariadb_saturation_disk }}')
+    // Rows are chunked across objects, so the loop runs over a chunk
+    expect(yaml).toContain('chunk 100 ($.Values.mariadb_saturation_disk | default list)')
+    expect(yaml).toContain('{{- range $rows }}')
     expect(yaml).toContain('{{- end }}')
   })
 
@@ -395,7 +397,7 @@ describe('common vars in template generation', () => {
 
   it('includes common vars in labels via generatePrometheusRule', () => {
     const yaml = renderAll(schemaWithCommon, 'test')
-    expect(yaml).toContain('$common := .Values._common | default dict')
+    expect(yaml).toContain('$common := $.Values._common | default dict')
     expect(yaml).toContain('$row := merge . $common')
     expect(yaml).toContain('owner: "{{ $row.owner }}"')
     expect(yaml).toContain('ns: "{{ $row.ns }}"')
@@ -404,7 +406,7 @@ describe('common vars in template generation', () => {
   it('includes common vars in labels via generateGroupTemplate', () => {
     const alertDef = schemaWithCommon.properties.test_group
     const yaml = generateGroupTemplate('test_group', alertDef, 'test', schemaWithCommon)
-    expect(yaml).toContain('$common := .Values._common | default dict')
+    expect(yaml).toContain('$common := $.Values._common | default dict')
     expect(yaml).toContain('$row := merge . $common')
     expect(yaml).toContain('owner: "{{ $row.owner }}"')
     expect(yaml).toContain('ns: "{{ $row.ns }}"')

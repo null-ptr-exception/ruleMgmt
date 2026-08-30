@@ -9,22 +9,20 @@
  *
  * Sharding must never change an alert's identity. Splitting a group across
  * several objects may only change `metadata.name` — the `alert` names and the
- * labels are identical either way — so the threshold below decides how many
- * files there are, never whether the output is correct.
+ * labels are identical either way — so the thresholds below decide how many
+ * objects there are, never whether the output is correct.
+ *
+ * Output grows as rows x rules, and only the rule count is known here: rows
+ * are a Helm loop over `.Values.<group>` and each deployment fills a different
+ * number. So the two dimensions are cut in two different places — rules here,
+ * rows in the template itself, by the chunk the loop is written around.
  */
 
 /** Budget per object. etcd's default limit is ~1.5MB; leave headroom. */
 export const MAX_OBJECT_BYTES = 1_000_000
 
-/**
- * How many rows an object is assumed to carry.
- *
- * The row count is not knowable here: a template is a Helm loop over
- * `.Values.<group>` and each deployment fills a different number of rows. So
- * the rule dimension is sharded statically against this assumption, while the
- * row dimension stays unbounded at generation time.
- */
-export const ASSUMED_MAX_ROWS = 100
+/** Rows per object. The template chunks its row loop at this size. */
+export const MAX_ROWS_PER_OBJECT = 100
 
 const API_VERSION = 'monitoring.coreos.com/v1'
 const KIND = 'PrometheusRule'
@@ -36,11 +34,12 @@ const byteLength = text => encoder.encode(text).length
 
 /**
  * Pack rendered rules into shards that stay inside the byte budget once
- * multiplied out by rows. A shard always holds at least one rule — a single
- * rule over budget is emitted alone rather than dropped.
+ * multiplied out by a full object's worth of rows. A shard always holds at
+ * least one rule — a single rule over budget is emitted alone rather than
+ * dropped.
  */
-export function shardRules(ruleTexts, { maxBytes = MAX_OBJECT_BYTES, assumedRows = ASSUMED_MAX_ROWS } = {}) {
-  const budget = Math.max(1, Math.floor(maxBytes / assumedRows))
+export function shardRules(ruleTexts, { maxBytes = MAX_OBJECT_BYTES, rowsPerObject = MAX_ROWS_PER_OBJECT } = {}) {
+  const budget = Math.max(1, Math.floor(maxBytes / rowsPerObject))
   const shards = []
   let current = []
   let size = 0
@@ -59,40 +58,66 @@ export function shardRules(ruleTexts, { maxBytes = MAX_OBJECT_BYTES, assumedRows
   return shards
 }
 
-function buildObject({ name, groupName, rangeBlock, ruleTexts }) {
+/**
+ * One document per row chunk.
+ *
+ * The suffix is added only when there is more than one chunk, so a deployment
+ * that fits in a single object keeps the name it has always had — renaming a
+ * resource means the old one is deleted and a new one created, and no chart
+ * small enough to fit should pay that.
+ *
+ * `$` is used throughout because `.` inside the chunk loop is the chunk.
+ */
+function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, ruleTexts }) {
+  const rowLoop = hasCommon
+    ? `        {{- $common := $.Values._common | default dict }}\n` +
+      `        {{- range $rows }}\n` +
+      `        {{- $row := merge . $common }}\n`
+    : `        {{- range $rows }}\n`
+
+  const name = releaseName.includes('{{')
+    // The release name is itself a template, and inside the chunk loop it has
+    // to be rooted at $.
+    ? releaseName.replace(/\{\{\s*\.Release\.Name\s*\}\}/g, '{{ $.Release.Name }}')
+    : releaseName
+
   return (
+    `{{- $chunks := chunk ${MAX_ROWS_PER_OBJECT} ($.Values.${valuesKey} | default list) }}\n` +
+    `{{- range $chunkIndex, $rows := $chunks }}\n` +
+    `---\n` +
     `apiVersion: ${API_VERSION}\n` +
     `kind: ${KIND}\n` +
     `metadata:\n` +
-    `  name: ${name}\n` +
+    `  name: ${name}-${baseName}{{ if gt (len $chunks) 1 }}-{{ add1 $chunkIndex }}{{ end }}\n` +
     `  labels:\n` +
     `    app.kubernetes.io/managed-by: Helm\n` +
     `spec:\n` +
     `  groups:\n` +
     `    - name: ${groupName}\n` +
     `      rules:\n` +
-    rangeBlock +
+    rowLoop +
     ruleTexts.join('\n') + '\n' +
-    `        {{- end }}\n`
+    `        {{- end }}\n` +
+    `{{- end }}\n`
   )
 }
 
 /**
- * Render one alert group as one or more custom resources.
- *
- * A group that fits in a single object keeps the unsuffixed name it has always
- * had, so charts that were never near the limit render byte-for-byte as before.
+ * Render one alert group as a template that emits one or more custom
+ * resources: one per rule shard, times one per row chunk.
  */
-export function emitRuleObjects({ releaseName, group, groupName, rangeBlock, ruleTexts }, options) {
+export function emitRuleObjects({ releaseName, group, groupName, valuesKey, hasCommon, ruleTexts }, options) {
   const shards = shardRules(ruleTexts, options)
-  const base = `${releaseName}-${group.replace(/_/g, '-')}`
+  const base = group.replace(/_/g, '-')
 
   return shards
     .map((shard, i) => buildObject({
-      name: shards.length === 1 ? base : `${base}-${i + 1}`,
+      releaseName,
+      baseName: shards.length === 1 ? base : `${base}-${i + 1}`,
       groupName,
-      rangeBlock,
+      valuesKey,
+      hasCommon,
       ruleTexts: shard
     }))
-    .join('---\n')
+    .join('')
 }

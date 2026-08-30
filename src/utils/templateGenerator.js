@@ -155,9 +155,9 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
 }
 
 /**
- * Split a group into the pieces the converter needs: the Helm row loop and one
- * rendered block per rule. The CR that wraps them is not this function's
- * business.
+ * Split a group into the pieces the converter needs: which values key the rows
+ * come from, and one rendered block per rule. The resource that wraps them and
+ * how the rows are chunked across objects is not this function's business.
  */
 function buildGroupParts(alertGroup, alertDef, commonSelectors = [], commonRequired = []) {
   if (!alertDef['x-promql'] && !Array.isArray(alertDef['x-rules'])) return null
@@ -179,17 +179,12 @@ function buildGroupParts(alertGroup, alertDef, commonSelectors = [], commonRequi
 
   if (ruleTexts.length === 0) return null
 
-  const rangeBlock = hasCommon
-    ? `        {{- $common := .Values._common | default dict }}
-` +
-      `        {{- range .Values.${alertGroup} }}
-` +
-      `        {{- $row := merge . $common }}
-`
-    : `        {{- range .Values.${alertGroup} }}
-`
-
-  return { groupName: alertGroup.replace(/_/g, '-'), rangeBlock, ruleTexts }
+  return {
+    groupName: alertGroup.replace(/_/g, '-'),
+    valuesKey: alertGroup,
+    hasCommon,
+    ruleTexts
+  }
 }
 
 export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema, options) {

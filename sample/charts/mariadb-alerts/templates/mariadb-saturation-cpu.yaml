@@ -1,15 +1,18 @@
+{{- $chunks := chunk 100 ($.Values.mariadb_saturation_cpu | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: {{ .Release.Name }}-mariadb-saturation-cpu
+  name: {{ $.Release.Name }}-mariadb-saturation-cpu{{ if gt (len $chunks) 1 }}-{{ add1 $chunkIndex }}{{ end }}
   labels:
     app.kubernetes.io/managed-by: Helm
 spec:
   groups:
     - name: mariadb-saturation-cpu
       rules:
-        {{- $common := .Values._common | default dict }}
-        {{- range .Values.mariadb_saturation_cpu }}
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbSaturationCpu_WarnPct
           expr: (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace }}", resource="cpu"}) * 100 > {{ $row.warn_pct }}
@@ -30,3 +33,4 @@ spec:
           annotations:
             summary: "MariadbSaturationCpu_CriticalPct triggered on {{ $row.owner }}"
         {{- end }}
+{{- end }}

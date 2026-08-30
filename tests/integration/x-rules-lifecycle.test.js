@@ -224,3 +224,52 @@ describe('the schema is still editable afterwards', () => {
     expect(critical.map(r => r.expr.match(/> (\S+)$/)[1])).toEqual(['2e+07', '4e+06'])
   })
 })
+
+describe('rows are cut across objects, since only a deployment knows how many there are', () => {
+  // An earlier block edits the schema, so put the chart back to the two rules
+  // this block counts against.
+  beforeAll(() => {
+    fs.writeFileSync(path.join(chartDir, 'values.schema.json'), JSON.stringify(schema, null, 2), 'utf-8')
+    writeTemplates(schema)
+    execFileSync('helm', ['dependency', 'build', deployDir], { encoding: 'utf8' })
+  })
+
+  const renderRows = count => {
+    const many = path.join(workDir, `rows-${count}.yaml`)
+    fs.writeFileSync(many, yaml.dump({
+      [CHART]: {
+        [GROUP]: Array.from({ length: count }, (_, i) => ({
+          namespace: `ns-${i}`, pod_regex: 'mysql-.*', window: '5m', recv_warn: 1, xmit_warn: 1
+        }))
+      }
+    }), 'utf-8')
+    const output = execFileSync('helm', ['template', 'rel', deployDir, '-f', many], { encoding: 'utf8' })
+    const docs = YAML.parseAllDocuments(output).map(d => d.toJSON()).filter(d => d?.kind === 'PrometheusRule')
+    return {
+      names: docs.map(d => d.metadata.name),
+      alerts: docs.flatMap(d => d.spec.groups).flatMap(g => g.rules).length
+    }
+  }
+
+  it('keeps the name it already had while a deployment fits one object', () => {
+    // Renaming a resource deletes the old one and creates a new one, so a
+    // chart small enough to fit must render exactly as it did before.
+    expect(renderRows(100).names).toEqual(['rel-network-traffic'])
+  })
+
+  it('numbers the objects once it does not', () => {
+    expect(renderRows(101).names).toEqual(['rel-network-traffic-1', 'rel-network-traffic-2'])
+    expect(renderRows(250).names).toHaveLength(3)
+  })
+
+  it('loses no alert to the cut', () => {
+    // rows x rules, whichever side of the boundary it falls
+    expect(renderRows(100).alerts).toBe(200)
+    expect(renderRows(101).alerts).toBe(202)
+    expect(renderRows(250).alerts).toBe(500)
+  })
+
+  it('emits nothing for a group with no rows', () => {
+    expect(renderRows(0).names).toEqual([])
+  })
+})

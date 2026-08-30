@@ -78,6 +78,9 @@ export default function RuleEditor({ rule, columns = [], onChange, onRemove, onA
   }
 
   const used = [...ruleVars(rule)]
+  // A reference with no column renders as an empty value at deploy time, so it
+  // is called out here rather than discovered in the rendered resource.
+  const missing = used.filter(name => !columns.includes(name))
 
   return (
     <div style={{ border: '1px solid #e8e8e8', borderRadius: 6, padding: 12, marginBottom: 12 }}>
@@ -188,9 +191,29 @@ export default function RuleEditor({ rule, columns = [], onChange, onRemove, onA
       )}
 
       {used.length > 0 && (
-        <Text type="secondary" style={{ fontSize: 11, marginTop: 10, display: 'block' }}>
-          Columns used: {used.join(', ')}
-        </Text>
+        <div style={{ marginTop: 10 }}>
+          <Text type="secondary" style={{ fontSize: 11 }}>
+            Columns used:{' '}
+            {used.map((name, i) => (
+              <span key={name}>
+                {i > 0 && ', '}
+                <span style={missing.includes(name) ? { color: '#cf1322', fontWeight: 600 } : undefined}>{name}</span>
+              </span>
+            ))}
+          </Text>
+          {missing.length > 0 && (
+            <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Text type="danger" style={{ fontSize: 11 }}>
+                No column named {missing.join(', ')}. Create {missing.length > 1 ? 'them' : 'it'}, or fix the reference.
+              </Text>
+              {missing.map(name => (
+                <Button key={name} size="small" onClick={() => onAddColumn?.(name, '')}>
+                  Create {name}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       <Modal

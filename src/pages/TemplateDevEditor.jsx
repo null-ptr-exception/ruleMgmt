@@ -5,7 +5,8 @@ import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined
 import { schemaAlertNames, getCommonVars, setCommonVars } from '../utils/schemaUtils'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
-import { generateGroupTemplate } from '../utils/templateGenerator'
+import { generateGroupTemplate, normalizeRules } from '../utils/templateGenerator'
+import { danglingRefs } from '../utils/ruleModel'
 import {
   listCharts, createChart, deleteChart,
   getChartInfo, getChartTemplateFile, saveChartTemplateFile, deleteChartTemplate,
@@ -219,8 +220,38 @@ export default function TemplateDevEditor() {
     }
   }, [fileContent])
 
+  /** Acceptance condition 3: every ${var} must name a column that exists. */
+  function unresolvedReferences() {
+    const commonNames = Object.keys(schema?.['x-common-vars']?.properties || {})
+    return Object.entries(schema?.properties || {})
+      .filter(([group]) => !group.startsWith('$'))
+      .map(([group, def]) => ({
+        group,
+        missing: danglingRefs(
+          normalizeRules(group, def),
+          [...Object.keys(def?.items?.properties || {}), ...commonNames]
+        )
+      }))
+      .filter(g => g.missing.length > 0)
+  }
+
   async function handleSave(confirmBreaking = false) {
     if (!activeChart) return
+
+    const unresolved = unresolvedReferences()
+    if (unresolved.length > 0) {
+      Modal.error({
+        title: 'Some references have no column',
+        content: (
+          <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+            {unresolved.map(g => (
+              <li key={g.group}>{g.group}: {g.missing.join(', ')}</li>
+            ))}
+          </ul>
+        )
+      })
+      return
+    }
     const saved = await saveChartSchema(activeChart, schema, confirmBreaking)
     if (saved?.blocked) {
       Modal.confirm({

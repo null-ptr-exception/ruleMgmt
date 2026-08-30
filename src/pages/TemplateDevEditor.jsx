@@ -424,7 +424,12 @@ export default function TemplateDevEditor() {
   // showing it under Selectors was misleading.
   const selectors = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'selector')
   const thresholds = Object.entries(props).filter(([, p]) => p['x-var-type'] === 'threshold')
-  const variables = Object.entries(props).filter(([, p]) => !p['x-var-type'])
+  // Roles only exist for the legacy generator, so an x-rules group lists every
+  // column here — otherwise a column left over from before the conversion,
+  // still carrying x-var-type, would vanish from the editor entirely.
+  const variables = alertDef?.['x-rules']
+    ? Object.entries(props)
+    : Object.entries(props).filter(([, p]) => !p['x-var-type'])
 
   function addVariable(varType) {
     const newName = ''
@@ -655,7 +660,9 @@ export default function TemplateDevEditor() {
                       <RuleEditor
                         key={i}
                         rule={rule}
-                        columns={Object.keys(props)}
+                        // A rule may refer to a chart-level common variable
+                        // just as freely as to one of this table's own columns.
+                        columns={[...Object.keys(props), ...commonVars.map(v => v.name)]}
                         onChange={next => setRules(xRules.map((r, idx) => (idx === i ? next : r)))}
                         onRemove={() => setRules(xRules.filter((_, idx) => idx !== i))}
                         onAddColumn={addColumn}
@@ -701,6 +708,13 @@ export default function TemplateDevEditor() {
                   </div>
                 </div>
 
+                {/* Selector and threshold roles only mean something to the
+                    legacy generator: it derives the labels from selectors and
+                    fans one alert out per threshold. An x-rules group writes
+                    its own labels and its own rules, so there a column is just
+                    a column and the two roles would have no effect. */}
+                {!xRules && (
+                  <>
                 {/* Selectors */}
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -710,28 +724,6 @@ export default function TemplateDevEditor() {
                   </div>
                   {selectors.length === 0 && <Text type="secondary" style={{ fontSize: 12 }}>No selectors defined</Text>}
                   {selectors.map(([name, prop]) => (
-                    <VariableRow key={name} name={name} prop={prop}
-                      showRequired isRequired={required.has(name)}
-                      onRename={val => updateVariable(name, val, {})}
-                      onUpdate={updates => updateVariable(name, name, updates)}
-                      onRemove={() => removeVariable(name)}
-                    />
-                  ))}
-                </div>
-
-                {/* Variables — columns a rule refers to by name */}
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Variables</Text>
-                    <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
-                    <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => addVariable(undefined)}>Add</Button>
-                  </div>
-                  {variables.length === 0 && (
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      Columns a rule refers to as {'${name}'}. Marking a literal in an expression creates one here.
-                    </Text>
-                  )}
-                  {variables.map(([name, prop]) => (
                     <VariableRow key={name} name={name} prop={prop}
                       showRequired isRequired={required.has(name)}
                       onRename={val => updateVariable(name, val, {})}
@@ -757,6 +749,31 @@ export default function TemplateDevEditor() {
                     />
                   ))}
                 </div>
+                  </>
+                )}
+
+                {/* Variables — columns a rule refers to by name */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Variables</Text>
+                    <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
+                    <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => addVariable(undefined)}>Add</Button>
+                  </div>
+                  {variables.length === 0 && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Columns a rule refers to as {'${name}'}. Marking a literal in an expression creates one here.
+                    </Text>
+                  )}
+                  {variables.map(([name, prop]) => (
+                    <VariableRow key={name} name={name} prop={prop}
+                      showRequired isRequired={required.has(name)}
+                      onRename={val => updateVariable(name, val, {})}
+                      onUpdate={updates => updateVariable(name, name, updates)}
+                      onRemove={() => removeVariable(name)}
+                    />
+                  ))}
+                </div>
+
               </div>
             ) : (
               <Empty style={{ margin: 'auto' }} description="Select or create an alert group" />

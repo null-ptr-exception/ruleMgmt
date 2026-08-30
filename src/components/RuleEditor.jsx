@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Input, Button, Select, Typography, Modal, Switch, Tooltip } from 'antd'
-import { DeleteOutlined, TagOutlined } from '@ant-design/icons'
+import { Input, Button, Select, Typography, Modal, Switch, Tooltip, Tag } from 'antd'
+import { DeleteOutlined, TagOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 import PromQLEditor from './PromQLEditor'
 import KVEditor from './KVEditor'
 import { ruleVars } from '../utils/ruleModel'
@@ -35,7 +35,7 @@ const label = text => (
  * it replaces the literal with ${name} here and opens a column for it in the
  * rule owner's table. Anything left un-marked stays fixed and they never see it.
  */
-export default function RuleEditor({ rule, columns = [], onChange, onRemove, onAddColumn }) {
+export default function RuleEditor({ rule, columns = [], collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn }) {
   const exprApi = useRef(null)
   const [naming, setNaming] = useState(null)
   const [varName, setVarName] = useState('')
@@ -77,14 +77,48 @@ export default function RuleEditor({ rule, columns = [], onChange, onRemove, onA
     if (at) exprApi.current.replaceRange(at.from, at.to, `\${${name}}`)
   }
 
+
   const used = [...ruleVars(rule)]
   // A reference with no column renders as an empty value at deploy time, so it
-  // is called out here rather than discovered in the rendered resource.
+  // is called out here rather than discovered in the rendered resource. A
+  // collapsed rule still says how many it has, so folding one away cannot hide
+  // a problem.
   const missing = used.filter(name => !columns.includes(name))
+
+  const severity = (rule.labels || {}).severity
+  const summary = (rule.raw || rule.expr || '').split('\n')[0]
+
+  if (collapsed) {
+    return (
+      <div
+        onClick={onToggleCollapse}
+        style={{
+          border: '1px solid #e8e8e8', borderRadius: 6, padding: '8px 12px', marginBottom: 8,
+          display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer'
+        }}
+      >
+        <RightOutlined style={{ fontSize: 11, color: '#999' }} />
+        <Text style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{rule.alert || '(unnamed)'}</Text>
+        {severity && <Tag style={{ marginInlineEnd: 0 }}>{severity}</Tag>}
+        {isRaw && <Tag style={{ marginInlineEnd: 0 }}>raw</Tag>}
+        {missing.length > 0 && <Tag color="error" style={{ marginInlineEnd: 0 }}>{missing.length} unresolved</Tag>}
+        <Text type="secondary" ellipsis style={{ fontSize: 11, fontFamily: 'monospace', flex: 1, minWidth: 0 }}>
+          {summary}
+        </Text>
+        <Button size="small" danger icon={<DeleteOutlined />} onClick={e => { e.stopPropagation(); onRemove() }} />
+      </div>
+    )
+  }
 
   return (
     <div style={{ border: '1px solid #e8e8e8', borderRadius: 6, padding: 12, marginBottom: 12 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <Button
+          size="small"
+          type="text"
+          icon={<DownOutlined style={{ fontSize: 11, color: '#999' }} />}
+          onClick={onToggleCollapse}
+        />
         <Input
           size="small"
           placeholder="alert name"

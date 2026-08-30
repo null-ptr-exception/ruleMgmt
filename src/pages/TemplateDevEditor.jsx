@@ -99,6 +99,7 @@ export default function TemplateDevEditor() {
   const [alertNames, setAlertNames] = useState([])
   const [activeAlert, setActiveAlert] = useSessionState('templates:alert', null)
   const [dirty, setDirty] = useState(false)
+  const [collapsedRules, setCollapsedRules] = useState({})
   const [yamlExpanded, setYamlExpanded] = useSessionState('templates:yamlExpanded', false)
   const [editorEditable, setEditorEditable] = useSessionState('templates:editorEditable', false)
   const [fileContent, setFileContent] = useState('')
@@ -654,7 +655,20 @@ export default function TemplateDevEditor() {
                       <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
                         Rules ({xRules.length}) — one table, one alert per rule
                       </Text>
-                      <Button size="small" icon={<PlusOutlined />} onClick={addRule}>Add rule</Button>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {xRules.length > 1 && (
+                          <Button
+                            size="small"
+                            onClick={() => setCollapsedRules(prev => {
+                              const allCollapsed = xRules.every((_, i) => prev[`${activeAlert}:${i}`])
+                              return Object.fromEntries(xRules.map((_, i) => [`${activeAlert}:${i}`, !allCollapsed]))
+                            })}
+                          >
+                            {xRules.every((_, i) => collapsedRules[`${activeAlert}:${i}`]) ? 'Expand all' : 'Collapse all'}
+                          </Button>
+                        )}
+                        <Button size="small" icon={<PlusOutlined />} onClick={addRule}>Add rule</Button>
+                      </div>
                     </div>
                     {xRules.map((rule, i) => (
                       <RuleEditor
@@ -663,6 +677,11 @@ export default function TemplateDevEditor() {
                         // A rule may refer to a chart-level common variable
                         // just as freely as to one of this table's own columns.
                         columns={[...Object.keys(props), ...commonVars.map(v => v.name)]}
+                        collapsed={!!collapsedRules[`${activeAlert}:${i}`]}
+                        onToggleCollapse={() => setCollapsedRules(prev => ({
+                          ...prev,
+                          [`${activeAlert}:${i}`]: !prev[`${activeAlert}:${i}`]
+                        }))}
                         onChange={next => setRules(xRules.map((r, idx) => (idx === i ? next : r)))}
                         onRemove={() => setRules(xRules.filter((_, idx) => idx !== i))}
                         onAddColumn={addColumn}

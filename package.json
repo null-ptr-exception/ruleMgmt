@@ -3,7 +3,7 @@
   "version": "1.5.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"node server.js\" \"vite\"",
+    "dev": "concurrently \"node scripts/dev-api.mjs\" \"vite\"",
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server.js",

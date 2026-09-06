@@ -439,3 +439,110 @@ describe('common vars in template generation', () => {
     expect(matches).toHaveLength(1)
   })
 })
+
+// A column with no default and no `required` is simply absent from a row that
+// leaves it blank, so a reference to it has to be handled rather than rendered
+// as the literal string "<no value>". Which handling depends on where it is
+// read from — see doc/rules-format.md.
+describe('empty cells (#57)', () => {
+  const group = rules => ({
+    type: 'array',
+    'x-rules': rules,
+    items: {
+      type: 'object',
+      required: ['namespace'],
+      properties: {
+        namespace: { type: 'string' },
+        pod_regex: { type: 'string', default: '.*' },
+        warn:      { type: 'number', default: 80 },
+        crit:      { type: 'number' },
+        tier:      { type: 'string' }
+      }
+    }
+  })
+
+  const render = rules => generateGroupTemplate('cpu', group(rules), 'rel')
+
+  it('writes a default into the template, since Helm ignores the schema one', () => {
+    const out = render([{ alert: 'A', expr: 'cpu > ${warn}', labels: { severity: 'warning' } }])
+    expect(out).toContain('expr: cpu > {{ .warn | default 80 }}')
+  })
+
+  it('quotes a string default with a raw literal, which survives inside YAML quotes', () => {
+    const out = render([{ alert: 'A', expr: 'cpu{pod=~"${pod_regex}"} > 1' }])
+    expect(out).toContain('pod=~"{{ .pod_regex | default `.*` }}"')
+  })
+
+  it('leaves a required column alone', () => {
+    const out = render([{ alert: 'A', expr: 'cpu{ns="${namespace}"} > 1' }])
+    expect(out).toContain('ns="{{ .namespace }}"')
+  })
+
+  it('drops the whole rule for a row that omits a threshold it reads', () => {
+    const out = render([{ alert: 'A', expr: 'cpu > ${crit}', labels: { severity: 'critical' } }])
+    expect(out).toContain('{{- if hasKey . "crit" }}')
+    expect(out).toContain('- alert: A')
+    // The guard wraps the entry, not the value: omitting a threshold from the
+    // middle of an expression would change the query rather than drop the rule.
+    expect(out.indexOf('{{- if hasKey . "crit" }}')).toBeLessThan(out.indexOf('- alert: A'))
+  })
+
+  it('combines the conditions when the expression reads more than one', () => {
+    const out = render([{ alert: 'A', expr: 'cpu{tier="${tier}"} > ${crit}' }])
+    expect(out).toContain('{{- if and (hasKey . "crit") (hasKey . "tier") }}')
+  })
+
+  it('drops just the line when a label is nothing but the reference', () => {
+    const out = render([{ alert: 'A', expr: 'cpu > ${warn}', labels: { severity: 'warning', tier: '${tier}' } }])
+    expect(out).toContain('{{- if hasKey . "tier" }}')
+    expect(out).not.toContain('{{- if and')
+    expect(out).toContain('severity: warning')
+  })
+
+  it('does not guard a line twice when the rule already covers that column', () => {
+    const out = render([{ alert: 'A', expr: 'cpu > ${crit}', labels: { tier: '${crit}' } }])
+    expect(out.match(/hasKey \. "crit"/g)).toHaveLength(1)
+  })
+})
+
+// Edit-time variables exist so a query shared by two rules is stored once:
+// a band is the same expression with a different threshold, and two copies
+// drift apart the first time someone edits only one of them.
+describe('vars (#57)', () => {
+  const schema = {
+    properties: {
+      cpu: {
+        type: 'array',
+        vars: { load: 'rate(cpu_seconds_total{ns="${namespace}"}[5m])' },
+        'x-rules': [
+          { alert: 'CPUHigh', expr: '${load} > ${warn}', labels: { severity: 'warning' } },
+          { alert: 'CPUHigh', expr: '${load} > ${crit}', labels: { severity: 'critical' } }
+        ],
+        items: {
+          type: 'object',
+          required: ['namespace', 'warn', 'crit'],
+          properties: {
+            namespace: { type: 'string' },
+            warn: { type: 'number' },
+            crit: { type: 'number' }
+          }
+        }
+      }
+    }
+  }
+
+  const out = renderAll(schema, 'rel')
+
+  it('substitutes the text before anything else happens', () => {
+    expect(out).toContain('expr: rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .warn }}')
+    expect(out).toContain('expr: rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .crit }}')
+  })
+
+  it('leaves no placeholder of its own behind', () => {
+    expect(out).not.toContain('${load}')
+  })
+
+  it('resolves columns the variable itself references', () => {
+    expect(out.match(/\{\{ \.namespace \}\}/g)).toHaveLength(2)
+  })
+})

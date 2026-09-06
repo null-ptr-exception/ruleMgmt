@@ -32,14 +32,50 @@ export function escapePrometheusTemplates(str) {
   return String(str).replace(HELM_PASSTHROUGH_RE, (_, inner) => '{{ `{{' + inner + '}}` }}')
 }
 
-/** Replace our `${var}` placeholders with Helm references. */
-export function substituteVars(str, ref = '.') {
-  return String(str).replace(VAR_RE, (_, name) => `{{ ${ref}${name} }}`)
+/**
+ * Expand edit-time variables — see issue #57.
+ *
+ * A `vars` entry is text, substituted before anything else happens: it never
+ * becomes a column and the rule owner never sees it. Its text may reference
+ * columns, and those are resolved afterwards like any other reference. A vars
+ * entry may not reference another vars entry, so one pass is enough.
+ */
+export function expandVars(str, vars) {
+  if (!vars) return String(str)
+  return String(str).replace(VAR_RE, (whole, name) =>
+    (Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : whole))
+}
+
+/**
+ * A default written into the template rather than left in the schema: Helm
+ * does not apply `default` from values.schema.json, so a column that has one
+ * has to carry it here or an empty cell renders "<no value>".
+ *
+ * Strings use Go's raw string literal because the reference is often already
+ * inside a YAML double-quoted scalar, where a nested double quote would break
+ * the document.
+ */
+function helmLiteral(value) {
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return '`' + String(value) + '`'
+}
+
+/**
+ * Replace our `${var}` placeholders with Helm references.
+ * A column listed in `defaults` falls back to that value when the row omits it.
+ */
+export function substituteVars(str, ref = '.', defaults) {
+  return String(str).replace(VAR_RE, (_, name) => {
+    const fallback = defaults?.[name]
+    return fallback === undefined
+      ? `{{ ${ref}${name} }}`
+      : `{{ ${ref}${name} | default ${helmLiteral(fallback)} }}`
+  })
 }
 
 /** Escape first, substitute second — our placeholders must not be escaped. */
-export function renderValue(str, ref = '.') {
-  return substituteVars(escapePrometheusTemplates(str), ref)
+export function renderValue(str, ref = '.', defaults) {
+  return substituteVars(escapePrometheusTemplates(str), ref, defaults)
 }
 
 /** Every `${var}` name referenced by a string. */

@@ -16,7 +16,7 @@
  * }
  */
 
-import { renderValue } from './ruleModel.js'
+import { renderValue, expandVars, varsIn } from './ruleModel.js'
 import { emitRuleObjects } from './crConverter.js'
 
 function toPascalCase(str) {
@@ -37,22 +37,13 @@ function getSelectors(alertDef) {
     .map(([name]) => name)
 }
 
-function getCommonSelectors(schema) {
-  const props = schema?.['x-common-vars']?.properties || {}
-  return Object.keys(props)
-}
-
-function getCommonRequired(schema) {
-  return schema?.['x-common-vars']?.required || []
-}
-
 /** Values that are a bare word render unquoted, matching hand-written rules. */
 function needsQuote(value) {
   return value === '' || /[^A-Za-z0-9_.-]/.test(value)
 }
 
-function renderEntry(entry, ref, refVar, indent) {
-  const rendered = renderValue(entry.value, ref) + (entry.helmSuffix || '')
+function renderEntry(entry, ref, refVar, indent, defaults) {
+  const rendered = renderValue(entry.value, ref, defaults) + (entry.helmSuffix || '')
   const line = `${indent}${entry.key}: ${needsQuote(entry.value) ? `"${rendered}"` : rendered}`
   if (!entry.guard) return line
   return (
@@ -71,8 +62,8 @@ function renderEntry(entry, ref, refVar, indent) {
  * sharded. Placeholders are resolved exactly as in a structured rule — ${var}
  * reads the row, {{ ... }} is Prometheus and survives Helm.
  */
-function renderRawRule(raw, ref) {
-  const lines = renderValue(raw, ref).replace(/\s+$/, '').split('\n')
+function renderRawRule(raw, ref, defaults) {
+  const lines = renderValue(raw, ref, defaults).replace(/\s+$/, '').split('\n')
   const indents = lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length)
   const base = indents.length ? Math.min(...indents) : 0
   const body = lines.map(l => (l.trim() ? l.slice(base) : ''))
@@ -85,21 +76,45 @@ function renderRawRule(raw, ref) {
   return entry.map(l => (l ? ' '.repeat(8) + l : '')).join('\n')
 }
 
-function renderRule(rule, ref, refVar) {
-  if (rule.raw) return renderRawRule(rule.raw, ref)
+/**
+ * A rule whose expression reads a column that may not be there at all is not
+ * wrong for that row — it does not apply to it. Guarding the whole entry is
+ * what "clearing a default means leaving this blank is meaningful" turns into:
+ * four thresholds bounding three rules, and a row that fills only two of them
+ * produces only the rules those two cover.
+ *
+ * The guard has to wrap the entry rather than the value, because omitting a
+ * threshold from the middle of an expression would change the query rather
+ * than drop the rule.
+ */
+function guarded(text, guards, refVar, indent) {
+  if (!guards?.length) return text
+  const condition = guards.length === 1
+    ? `hasKey ${refVar} "${guards[0]}"`
+    : `and ${guards.map(g => `(hasKey ${refVar} "${g}")`).join(' ')}`
+  return (
+    `${indent}{{- if ${condition} }}\n` +
+    text + '\n' +
+    `${indent}{{- end }}`
+  )
+}
+
+function renderRule(rule, ref, refVar, defaults) {
+  const indent = ' '.repeat(8)
+  if (rule.raw) return guarded(renderRawRule(rule.raw, ref, defaults), rule.guards, refVar, indent)
 
   const parts = [
     `        - alert: ${rule.alert}\n` +
-    `          expr: ${renderValue(rule.expr, ref)}\n` +
-    `          for: ${renderValue(rule.for, ref)}`
+    `          expr: ${renderValue(rule.expr, ref, defaults)}\n` +
+    `          for: ${renderValue(rule.for, ref, defaults)}`
   ]
   if (rule.labels?.length) {
-    parts.push(`          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12))).join('\n'))
+    parts.push(`          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n'))
   }
   if (rule.annotations?.length) {
-    parts.push(`          annotations:\n` + rule.annotations.map(a => renderEntry(a, ref, refVar, ' '.repeat(12))).join('\n'))
+    parts.push(`          annotations:\n` + rule.annotations.map(a => renderEntry(a, ref, refVar, ' '.repeat(12), defaults)).join('\n'))
   }
-  return parts.join('\n')
+  return guarded(parts.join('\n'), rule.guards, refVar, indent)
 }
 
 function toEntries(mapOrList) {
@@ -142,12 +157,20 @@ function legacyRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVa
 
 export function normalizeRules(alertGroup, alertDef, allSelectors = [], requiredSet = new Set(), ref = '.', refVar = '.') {
   if (Array.isArray(alertDef?.['x-rules'])) {
-    return alertDef['x-rules'].map(rule => (rule.raw ? { raw: rule.raw } : {
+    // Edit-time variables are expanded here rather than at render time so that
+    // everything downstream — the reference check included — sees the same
+    // vars-free text. A `vars` name is not a column and must not be reported
+    // as one.
+    const vars = alertDef.vars || alertDef['x-vars']
+    const expand = s => expandVars(s || '', vars)
+    const expandEntries = entries => entries.map(e => ({ ...e, value: expand(e.value) }))
+
+    return alertDef['x-rules'].map(rule => (rule.raw ? { raw: expand(rule.raw) } : {
       alert: rule.alert,
-      expr: rule.expr || '',
-      for: rule.for || alertDef['x-for'] || '5m',
-      labels: toEntries(rule.labels),
-      annotations: toEntries(rule.annotations)
+      expr: expand(rule.expr),
+      for: expand(rule.for || alertDef['x-for'] || '5m'),
+      labels: expandEntries(toEntries(rule.labels)),
+      annotations: expandEntries(toEntries(rule.annotations))
     }))
   }
   if (!alertDef?.['x-promql']) return []
@@ -159,9 +182,61 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
  * come from, and one rendered block per rule. The resource that wraps them and
  * how the rows are chunked across objects is not this function's business.
  */
-function buildGroupParts(alertGroup, alertDef, commonSelectors = [], commonRequired = []) {
+/**
+ * Which columns can simply not be there in a given row: no default to fall
+ * back on and not required, so `values.yaml` omits the key entirely when the
+ * cell is empty.
+ */
+function columnFallbacks(alertDef, commonProps, requiredSet) {
+  const props = { ...commonProps, ...(alertDef?.items?.properties || {}) }
+  const defaults = {}
+  const mayBeAbsent = new Set()
+  for (const [name, prop] of Object.entries(props)) {
+    if (prop?.default !== undefined) defaults[name] = prop.default
+    else if (!requiredSet.has(name)) mayBeAbsent.add(name)
+  }
+  return { defaults, mayBeAbsent }
+}
+
+/**
+ * Work out what has to be guarded, per rule.
+ *
+ * A column that may be absent is guarded at the largest unit that still means
+ * something: the whole rule when the expression reads it, one line when it is
+ * a label's entire value. A reference in the middle of a longer string has no
+ * meaningful omission and is rejected before it gets here.
+ */
+function attachGuards(rules, mayBeAbsent) {
+  if (!mayBeAbsent.size) return rules
+
+  return rules.map(rule => {
+    const guards = new Set()
+    for (const text of [rule.expr, rule.for, rule.raw]) {
+      for (const name of varsIn(text || '')) if (mayBeAbsent.has(name)) guards.add(name)
+    }
+    // A line whose entire value is one reference disappears with it. Already
+    // guarded at the rule level means the line guard would be dead weight.
+    const guardLine = entry => {
+      const whole = /^\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}$/.exec(String(entry.value).trim())
+      const name = whole?.[1]
+      return name && mayBeAbsent.has(name) && !guards.has(name) ? { ...entry, guard: name } : entry
+    }
+
+    return {
+      ...rule,
+      guards: [...guards].sort(),
+      ...(rule.labels ? { labels: rule.labels.map(guardLine) } : {}),
+      ...(rule.annotations ? { annotations: rule.annotations.map(guardLine) } : {})
+    }
+  })
+}
+
+function buildGroupParts(alertGroup, alertDef, commonVars) {
   if (!alertDef['x-promql'] && !Array.isArray(alertDef['x-rules'])) return null
 
+  const commonProps = commonVars?.properties || {}
+  const commonRequired = commonVars?.required || []
+  const commonSelectors = Object.keys(commonProps)
   const selectors = getSelectors(alertDef)
   const allSelectors = [...new Set([...commonSelectors, ...selectors])]
   const hasCommon = commonSelectors.length > 0
@@ -174,8 +249,18 @@ function buildGroupParts(alertGroup, alertDef, commonSelectors = [], commonRequi
   // string "<no value>".
   const requiredSet = new Set([...(alertDef?.items?.required || []), ...commonRequired])
 
-  const ruleTexts = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
-    .map(rule => renderRule(rule, ref, refVar))
+  // A legacy `x-promql` group renders exactly as it always has. Defaults and
+  // guards are part of the x-rules model, and quietly changing what an
+  // un-migrated chart deploys is the surprise this whole design avoids — it
+  // picks them up when it is rewritten, not before.
+  const legacy = !Array.isArray(alertDef['x-rules'])
+  const { defaults, mayBeAbsent } = legacy
+    ? { defaults: undefined, mayBeAbsent: new Set() }
+    : columnFallbacks(alertDef, commonProps, requiredSet)
+
+  const rules = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
+  const ruleTexts = attachGuards(rules, mayBeAbsent)
+    .map(rule => renderRule(rule, ref, refVar, defaults))
 
   if (ruleTexts.length === 0) return null
 
@@ -188,12 +273,7 @@ function buildGroupParts(alertGroup, alertDef, commonSelectors = [], commonRequi
 }
 
 export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema, options) {
-  const parts = buildGroupParts(
-    alertGroup,
-    alertDef,
-    schema ? getCommonSelectors(schema) : [],
-    schema ? getCommonRequired(schema) : []
-  )
+  const parts = buildGroupParts(alertGroup, alertDef, schema?.['x-common-vars'])
   if (!parts) return null
 
   return emitRuleObjects({

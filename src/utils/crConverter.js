@@ -74,12 +74,21 @@ export function shardRules(ruleTexts, { maxBytes = MAX_OBJECT_BYTES, rowsPerObje
  *
  * `$` is used throughout because `.` inside the chunk loop is the chunk.
  */
-function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, ruleTexts, objectMeta }) {
-  const rowLoop = hasCommon
+/**
+ * The loop every rule sits inside, and where a row picks up the chart-level
+ * common values. Kept out of the object builder so another wrapper — a plain
+ * rule file, say — can put the same rules in a different shell.
+ */
+export function rowLoopHeader(hasCommon) {
+  return hasCommon
     ? `        {{- $common := $.Values._common | default dict }}\n` +
       `        {{- range $rows }}\n` +
       `        {{- $row := merge . $common }}\n`
     : `        {{- range $rows }}\n`
+}
+
+function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, ruleTexts, objectMeta }) {
+  const rowLoop = rowLoopHeader(hasCommon)
 
   const name = releaseName.includes('{{')
     // The release name is itself a template, and inside the chunk loop it has
@@ -116,10 +125,15 @@ export function emitRuleObjects({ releaseName, group, groupName, valuesKey, hasC
   const shards = shardRules(ruleTexts, options)
   const base = group.replace(/_/g, '-')
 
+  // Both indices are always present, for the same reason the chunk index is:
+  // adding one only past a threshold renames the object the moment a chart
+  // crosses it, and renaming a resource deletes the old one and creates a new
+  // one. Numbering from the start costs one rename when this lands and none
+  // afterwards.
   return shards
     .map((shard, i) => buildObject({
       releaseName,
-      baseName: shards.length === 1 ? base : `${base}-${i + 1}`,
+      baseName: `${base}-${i + 1}`,
       groupName,
       valuesKey,
       hasCommon,

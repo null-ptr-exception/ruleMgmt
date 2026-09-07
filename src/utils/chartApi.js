@@ -89,18 +89,31 @@ export async function saveChartSchema(chart, schema, confirmBreaking = false) {
  * regenerates values.schema.json and every templates/*.yaml from it and writes
  * the lot all-or-nothing. `files` is { '<name>.yaml': text }.
  *
- * A breaking change comes back as 409 (same shape as saveChartSchema); parse
- * errors and failed rule checks come back as 400 with `errors` / `findings`.
+ * A breaking change comes back as 409 with `breaking` / `notices` / `added` /
+ * `deployments` (each `readonly`); parse errors and failed rule checks come
+ * back as 400 with `errors` / `findings`. `migration` ({ groups?, columns?,
+ * dropped? }) with confirmBreaking rewrites every affected deployment's values.
  */
-export async function saveChartRules(chart, files, confirmBreaking = false) {
+export async function saveChartRules(chart, files, confirmBreaking = false, migration = undefined) {
   const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/rules`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files, confirmBreaking })
+    body: JSON.stringify({ files, confirmBreaking, migration })
   })
   if (res.status === 409) return { blocked: true, ...(await res.json()) }
   if (res.status === 400) return { invalid: true, ...(await res.json()) }
   if (!res.ok) return {}
+  return res.json()
+}
+
+/** Preview what a breaking change + mapping does to each deployment. */
+export async function migrationPreview(chart, files, migration) {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/migration-preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, migration })
+  })
+  if (!res.ok) return { deployments: [] }
   return res.json()
 }
 

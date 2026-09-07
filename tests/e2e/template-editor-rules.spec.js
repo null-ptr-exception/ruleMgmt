@@ -77,6 +77,45 @@ test.describe.serial('Template editor — rules source', () => {
     await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES } } })
   })
 
+  test('removing a column a deployment uses goes through the breaking dialog', async ({ page, request }) => {
+    // A rules file where `warn` is a column no rule references, plus a
+    // deployment whose row fills it — so deleting `warn` is breaking, not a
+    // dangling reference.
+    const orphanWarn = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number}
+rules:
+  - alert: A
+    expr: cpu{ns="\${namespace}"} > 1
+`
+    await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': orphanWarn }, confirmBreaking: true } })
+    await request.post(`/api/v2/deployments/${CHART}/prod`, {
+      data: { values: { cpu: [{ namespace: 'p', warn: 90 }] } },
+    })
+
+    await openChart(page)
+    // Delete the `warn` column: its row's delete button.
+    await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
+    await page.getByRole('button', { name: 'Save' }).first().click()
+
+    const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await dialog.getByRole('button', { name: 'Continue' }).click()   // step 1 -> map
+    await dialog.getByRole('button', { name: 'Continue' }).click()   // step 2 (warn -> Delete) -> preview
+    await expect(dialog.getByText(/prod-values/)).toBeVisible({ timeout: 5000 })
+    await dialog.getByRole('button', { name: 'Change in place' }).click()
+
+    await expect.poll(async () => {
+      const dep = await (await request.get(`/api/v2/deployments/${CHART}/prod`)).json()
+      return dep.content || ''
+    }, { timeout: 8000 }).not.toContain('warn')
+
+    // reset the fixture for the tests after this one
+    await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+    await request.delete(`/api/v2/deployments/${CHART}/prod`)
+  })
+
   test('a reference to a missing column is refused on save', async ({ page }) => {
     await openChart(page)
 

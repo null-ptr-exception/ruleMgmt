@@ -2,6 +2,8 @@ import express from 'express'
 import { diffSchema, describeChange } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts } from '../lib/chartFiles.js'
+import { planDeploymentMigration } from '../lib/migrate.js'
+import { readSyncRegistry, isTarget } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts } from '../../src/utils/drift.js'
@@ -16,6 +18,26 @@ const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 // A rules/ filename: a group file, or _common.yaml. Guards path traversal in
 // the keys of the POST /:chart/rules body.
 const RULES_FILE_RE = /^(_common|[a-z0-9][a-z0-9_-]*)\.yaml$/
+
+/** Groups and per-group columns that are new in `after` vs `before` — mapping
+ *  targets for a disappearing column or group in the breaking-change dialog. */
+function addedInSchema(before, after) {
+  const added = { groups: [], columns: {} }
+  const beforeGroups = before?.properties || {}
+  for (const [key, def] of Object.entries(after?.properties || {})) {
+    if (!isAlertGroup(key)) continue
+    if (!beforeGroups[key]) { added.groups.push(key); continue }
+    const oldCols = Object.keys(beforeGroups[key].items?.properties || {})
+    const fresh = Object.keys(def.items?.properties || {}).filter(c => !oldCols.includes(c))
+    if (fresh.length) added.columns[key] = fresh
+  }
+  return added
+}
+
+async function withReadonly(gitopsDir, deployments) {
+  const registry = await readSyncRegistry(gitopsDir)
+  return deployments.map(d => ({ ...d, readonly: isTarget(registry, d.path) }))
+}
 
 export default function templatesRouter() {
   const router = express.Router()
@@ -154,7 +176,7 @@ export default function templatesRouter() {
   // are written through verbatim so hand-added comments survive.
   router.post('/:chart/rules', async (req, res) => {
     const { chartDir, tmplDir, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
-    const { files, confirmBreaking } = req.body || {}
+    const { files, confirmBreaking, migration } = req.body || {}
 
     if (!files || typeof files !== 'object' || Array.isArray(files)) {
       return res.status(400).json({ error: 'files object required' })
@@ -193,7 +215,8 @@ export default function templatesRouter() {
             error: 'Breaking schema change',
             breaking: withDesc(breaking),
             notices: withDesc(notices),
-            deployments
+            added: addedInSchema(before, newSchema),
+            deployments: await withReadonly(req.gitopsDir, deployments),
           })
         }
       }
@@ -206,11 +229,26 @@ export default function templatesRouter() {
         return res.status(500).json({ error: `Generation failed: ${err.message}` })
       }
 
+      // A confirmed breaking change carries a mapping — rewrite every affected
+      // deployment's values.yaml in the same request.
+      let migratedDeployments = []
+      let migrationWrites = []
+      if (confirmBreaking && migration && isBreaking) {
+        try {
+          const plan = await planDeploymentMigration(req.gitopsDir, req.params.chart, newSchema, migration, { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR })
+          migratedDeployments = plan.deployments
+          migrationWrites = plan.writes
+        } catch (err) {
+          return res.status(500).json({ error: `Deployment migration failed: ${err.message}` })
+        }
+      }
+
       const rulesDir = path.join(chartDir, 'rules')
       const entries = [
         ...Object.entries(files).map(([name, text]) => [path.join(rulesDir, name), text]),
         ...Object.entries(products.templates).map(([name, text]) => [path.join(tmplDir, name), text]),
         [schemaFile, products.schemaText],
+        ...migrationWrites,
       ]
       let chartYamlRaw = null
       try { chartYamlRaw = await fs.readFile(chartYamlFile, 'utf-8') } catch { /* absent */ }
@@ -247,7 +285,26 @@ export default function templatesRouter() {
           ...removed.map(p => `- ${path.relative(chartDir, p)}`),
         ],
         notices: withDesc(notices),
+        migrated: migratedDeployments.map(d => ({ deployment: d.deployment, path: d.path, readonly: d.readonly, rowsChanged: d.rowsChanged })),
       })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // What a breaking change plus a mapping would do to every affected
+  // deployment — feeds step 3 of the breaking-change dialog. Writes nothing.
+  router.post('/:chart/migration-preview', async (req, res) => {
+    const { schemaFile } = chartPaths(req, req.params.chart)
+    const { files, migration } = req.body || {}
+    if (!files || typeof files !== 'object') return res.status(400).json({ error: 'files object required' })
+    try {
+      const { model, errors } = parseRulesDir(files)
+      if (errors.length) return res.status(400).json({ error: 'Invalid rules', errors })
+      const targetSchema = modelToSchema(model, await readSchema(schemaFile))
+      const { deployments } = await planDeploymentMigration(
+        req.gitopsDir, req.params.chart, targetSchema, migration || {}, { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR })
+      res.json({ deployments })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

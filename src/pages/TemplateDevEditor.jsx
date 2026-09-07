@@ -6,6 +6,7 @@ import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
 import KVEditor from '../components/KVEditor'
 import ImportRulesModal from '../components/ImportRulesModal'
+import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { parseRulesDir, schemaToModel, groupFileText, commonFileText } from '../utils/rulesFile'
 import { importRules } from '../utils/ruleImport'
 import { ruleVars } from '../utils/ruleModel'
@@ -111,6 +112,7 @@ export default function TemplateDevEditor() {
   const [drift, setDrift] = useState(null)
   const [collapsedRules, setCollapsedRules] = useState({})
   const [importTarget, setImportTarget] = useState(null)
+  const [breaking, setBreaking] = useState(null)   // the 409 payload while the dialog is open
   const [sidebarWidth, setSidebarWidth] = useState(220)
   const resizingRef = useRef(false)
   // The rules/*.yaml texts as loaded — for conflict detection, and to pass
@@ -282,30 +284,33 @@ export default function TemplateDevEditor() {
       return
     }
     if (result?.blocked) {
-      Modal.confirm({
-        title: 'This change breaks deployments that already exist',
-        width: 620,
-        content: (
-          <div>
-            <ul style={{ paddingLeft: 18, marginTop: 8 }}>
-              {result.breaking.map((c, i) => <li key={i}>{c.description}</li>)}
-            </ul>
-            <p style={{ marginTop: 12 }}>
-              In use by {result.deployments.length} deployment(s):{' '}
-              {result.deployments.map(d => d.path).join(', ')}
-            </p>
-            <p>Cloning the chart and changing the copy leaves these untouched.</p>
-          </div>
-        ),
-        okText: 'Save anyway', okButtonProps: { danger: true },
-        onOk: () => handleSave(true),
-      })
+      setBreaking(result)
       return
     }
     if (!result?.ok) return
 
     await saveChartMeta(activeChart, chartMeta)
     await loadChart(activeChart)
+  }
+
+  async function applyInPlace(migration) {
+    const result = await saveChartRules(activeChart, buildFiles(), true, migration)
+    setBreaking(null)
+    if (result?.invalid) {
+      Modal.error({ title: result.error || 'Save was refused', content: (result.errors || (result.findings || []).map(f => f.description || f.message) || []).join('; ') })
+      return
+    }
+    await saveChartMeta(activeChart, chartMeta)
+    await loadChart(activeChart)
+  }
+
+  async function cloneWithEdits(newName, migration) {
+    const res = await cloneChart(activeChart, newName, migration)
+    if (res?.error) { Modal.error({ title: 'Clone failed', content: res.error }); return }
+    await saveChartRules(newName, buildFiles(), true)   // the clone gets the edited rules
+    setBreaking(null)
+    await loadCharts()
+    setActiveChart(newName)
   }
 
   // ── chart-level actions ───────────────────────────────────────────────────
@@ -435,6 +440,15 @@ export default function TemplateDevEditor() {
           applyImport(result)
           setImportTarget(null)
         }}
+      />
+      <BreakingChangeDialog
+        open={!!breaking}
+        payload={breaking}
+        chart={activeChart}
+        files={breaking ? buildFiles() : {}}
+        onCancel={() => setBreaking(null)}
+        onApplyInPlace={applyInPlace}
+        onClone={cloneWithEdits}
       />
 
       <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

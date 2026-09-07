@@ -1,7 +1,7 @@
 import express from 'express'
 import { diffSchema, describeChange } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing } from '../lib/chartUsage.js'
-import { chartDrift, regenerateProducts, writeChanged } from '../lib/chartFiles.js'
+import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts } from '../lib/chartFiles.js'
 import { parseRulesDir, modelToSchema } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts } from '../../src/utils/drift.js'
@@ -91,7 +91,11 @@ export default function templatesRouter() {
         chartMeta = yaml.load(raw) || {}
       } catch { /* use default */ }
 
-      res.json({ templateFiles, schema, values, chartMeta, drift })
+      // The editor loads from these; null when the chart has not been migrated
+      // to the rules/ format yet (it falls back to reading `schema`).
+      const { rulesFiles } = await readChartArtifacts(chartDir)
+
+      res.json({ templateFiles, schema, values, chartMeta, drift, rulesFiles })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -166,6 +170,15 @@ export default function templatesRouter() {
       if (errors.length) return res.status(400).json({ error: 'Invalid rules', errors })
 
       const before = await readSchema(schemaFile)
+
+      // An x-custom-template group has no rules file — carry it over from the
+      // schema so its hand-written template is neither regenerated nor deleted.
+      for (const [key, def] of Object.entries(before?.properties || {})) {
+        if (isAlertGroup(key) && def['x-custom-template'] && !model.groups[key]) {
+          model.groups[key] = { group: key, custom: true }
+        }
+      }
+
       const newSchema = modelToSchema(model, before)
 
       const findings = saveBlockers(checkRules(newSchema))

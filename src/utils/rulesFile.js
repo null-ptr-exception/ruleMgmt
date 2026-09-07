@@ -227,7 +227,9 @@ function flowColumn(col) {
   return yaml.dump(ordered, { ...DUMP, flowLevel: 0 }).trimEnd()
 }
 
-function dumpGroupFile(group) {
+/** One group's rules/<key>.yaml text. The editor re-dumps only the groups it
+ *  actually touched and passes every other file through verbatim. */
+export function groupFileText(group) {
   const lines = [`group: ${group.group}`]
   if (group.interval !== undefined) lines.push(`interval: ${scalar(group.interval)}`)
   if (group.limit !== undefined) lines.push(`limit: ${scalar(group.limit)}`)
@@ -246,7 +248,8 @@ function dumpGroupFile(group) {
   return lines.join('\n') + '\n'
 }
 
-function dumpCommonFile(columns) {
+/** The rules/_common.yaml text for a chart's common columns. */
+export function commonFileText(columns) {
   const lines = ['columns:']
   for (const [name, col] of Object.entries(columns)) lines.push(`  ${name}: ${flowColumn(col)}`)
   return lines.join('\n') + '\n'
@@ -256,10 +259,10 @@ function dumpCommonFile(columns) {
 export function modelToFiles(model) {
   const files = {}
   const commonCols = model.common?.columns || {}
-  if (Object.keys(commonCols).length) files['_common.yaml'] = dumpCommonFile(commonCols)
+  if (Object.keys(commonCols).length) files['_common.yaml'] = commonFileText(commonCols)
   for (const [key, group] of sortedGroups(model.groups)) {
     if (group.custom) continue
-    files[`${key}.yaml`] = dumpGroupFile(group)
+    files[`${key}.yaml`] = groupFileText(group)
   }
   return files
 }

@@ -176,4 +176,14 @@ describe('GET /:chart drift', () => {
     const { data } = await api('GET', '/api/v2/templates/demo')
     expect(data.drift.state).toBe('legacy')
   })
+
+  it('returns rulesFiles so the editor can load them; null before migration', async () => {
+    const legacy = await api('GET', '/api/v2/templates/demo')
+    expect(legacy.data.rulesFiles).toBeNull()
+
+    await api('POST', '/api/v2/templates/demo/rules', { files: { '_common.yaml': COMMON, 'cpu.yaml': CPU } })
+    const migrated = await api('GET', '/api/v2/templates/demo')
+    expect(migrated.data.rulesFiles['cpu.yaml']).toBe(CPU)
+    expect(migrated.data.rulesFiles['_common.yaml']).toBe(COMMON)
+  })
 })

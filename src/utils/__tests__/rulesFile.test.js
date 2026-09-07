@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import {
-  schemaToModel, modelToSchema, modelToFiles, parseGroupFile, parseCommonFile,
+  schemaToModel, modelToSchema, modelToFiles, groupFileText, commonFileText, parseGroupFile, parseCommonFile,
   parseRulesDir, validateValues,
 } from '../rulesFile.js'
 import { generateGroupTemplate } from '../templateGenerator.js'
@@ -125,6 +125,18 @@ describe('deterministic writer', () => {
     const { model } = schemaToModel(sampleSchema)
     const names = Object.keys(modelToFiles(model)).filter(n => n !== '_common.yaml')
     expect(names).toEqual([...names].sort())
+  })
+
+  it('exposes per-file dumpers that round-trip through the parser', () => {
+    const { model } = schemaToModel(sampleSchema)
+    for (const [key, group] of Object.entries(model.groups)) {
+      const text = groupFileText(group)
+      const { group: reparsed, errors } = parseGroupFile(text, key)
+      expect(errors, key).toEqual([])
+      expect(groupFileText(reparsed), key).toBe(text)
+    }
+    const commonText = commonFileText(model.common.columns)
+    expect(commonFileText(parseCommonFile(commonText).columns)).toBe(commonText)
   })
 })
 

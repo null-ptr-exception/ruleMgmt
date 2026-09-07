@@ -3,7 +3,7 @@ import { Input, Button, Select, Typography, Modal, Switch, Tooltip, Tag } from '
 import { DeleteOutlined, TagOutlined, DownOutlined, RightOutlined } from '@ant-design/icons'
 import PromQLEditor from './PromQLEditor'
 import KVEditor from './KVEditor'
-import { ruleVars } from '../utils/ruleModel'
+import { ruleVars, varsIn } from '../utils/ruleModel'
 import { ruleToYaml, ruleFromYaml } from '../utils/ruleImport'
 
 const { Text } = Typography
@@ -36,7 +36,7 @@ const label = text => (
  * it replaces the literal with ${name} here and opens a column for it in the
  * rule owner's table. Anything left un-marked stays fixed and they never see it.
  */
-export default function RuleEditor({ rule, columns = [], collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn }) {
+export default function RuleEditor({ rule, columns = [], columnDefs = {}, collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn }) {
   const exprApi = useRef(null)
   const [naming, setNaming] = useState(null)
   const [varName, setVarName] = useState('')
@@ -101,6 +101,11 @@ export default function RuleEditor({ rule, columns = [], collapsed = false, onTo
   // collapsed rule still says how many it has, so folding one away cannot hide
   // a problem.
   const missing = used.filter(name => !columns.includes(name))
+  // A column with no default that the expression reads: a row that leaves it
+  // blank produces no alert at all for this rule.
+  const exprVars = new Set([...varsIn(rule.expr || ''), ...varsIn(rule.for || '')])
+  const dropsRule = used.filter(name =>
+    exprVars.has(name) && columnDefs[name] && columnDefs[name].default === undefined && !columnDefs[name].required)
 
   const severity = (rule.labels || {}).severity
   const summary = (rule.raw || rule.expr || '').split('\n')[0]
@@ -236,12 +241,22 @@ export default function RuleEditor({ rule, columns = [], collapsed = false, onTo
               alert fires, not here.
             </Text>
           </div>
+
+          <div style={{ marginTop: 12 }}>
+            {label('Note')}
+            <Input
+              size="small"
+              placeholder="Why this rule is the way it is — never reaches the alert"
+              value={rule.note || ''}
+              onChange={e => update({ note: e.target.value || undefined })}
+            />
+          </div>
         </>
       )}
 
       {used.length > 0 && (
         <div style={{ marginTop: 10 }}>
-          <Text type="secondary" style={{ fontSize: 11 }}>
+          <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>
             Columns used:{' '}
             {used.map((name, i) => (
               <span key={name}>
@@ -250,6 +265,12 @@ export default function RuleEditor({ rule, columns = [], collapsed = false, onTo
               </span>
             ))}
           </Text>
+          {dropsRule.length > 0 && (
+            <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
+              Blank leaves this rule out: <span style={{ fontWeight: 600 }}>{dropsRule.join(', ')}</span>
+              {' '}(no default — a row that omits it produces no alert here)
+            </Text>
+          )}
           {missing.length > 0 && (
             <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <Text type="danger" style={{ fontSize: 11 }}>

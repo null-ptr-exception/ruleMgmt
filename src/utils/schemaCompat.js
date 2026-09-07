@@ -16,6 +16,21 @@ const alertsOf = group => (group?.['x-rules'] || []).map(r => r.alert).filter(Bo
 /** before -> after transitions that still accept every value already stored. */
 const WIDENING = { integer: ['number'] }
 
+/**
+ * How a column's `default` changed. Removing or changing one is breaking:
+ * a column with no default that a row leaves blank drops its rule entirely,
+ * so "these rows get 80" quietly becomes "these rows produce no alert". Adding
+ * one is additive — it only fills blanks that were already being handled.
+ */
+function defaultChange(before, after) {
+  const had = before?.default !== undefined
+  const has = after?.default !== undefined
+  if (had && !has) return 'removed'
+  if (had && has && !Object.is(before.default, after.default)) return 'changed'
+  if (!had && has) return 'added'
+  return null
+}
+
 function typeNarrowed(before, after) {
   if (!before?.type || !after?.type) return false
   if (before.type === after.type) {
@@ -36,6 +51,7 @@ function typeNarrowed(before, after) {
  */
 export function diffSchema(before, after) {
   const breaking = []
+  const notices = []
   const beforeGroups = before?.properties || {}
   const afterGroups = after?.properties || {}
   const beforeCommon = commonOf(before)
@@ -44,9 +60,15 @@ export function diffSchema(before, after) {
   for (const name of Object.keys(beforeCommon)) {
     if (!(name in afterCommon)) {
       breaking.push({ kind: 'common-column-removed', column: name })
-    } else if (typeNarrowed(beforeCommon[name], afterCommon[name])) {
+      continue
+    }
+    if (typeNarrowed(beforeCommon[name], afterCommon[name])) {
       breaking.push({ kind: 'common-type-narrowed', column: name })
     }
+    const dc = defaultChange(beforeCommon[name], afterCommon[name])
+    if (dc === 'removed') breaking.push({ kind: 'common-default-removed', column: name })
+    else if (dc === 'changed') breaking.push({ kind: 'common-default-changed', column: name })
+    else if (dc === 'added') notices.push({ kind: 'common-default-added', column: name })
   }
 
   for (const [group, beforeGroup] of Object.entries(beforeGroups)) {
@@ -71,9 +93,15 @@ export function diffSchema(before, after) {
           group,
           column
         })
-      } else if (typeNarrowed(prop, afterColumns[column])) {
+        continue
+      }
+      if (typeNarrowed(prop, afterColumns[column])) {
         breaking.push({ kind: 'type-narrowed', group, column })
       }
+      const dc = defaultChange(prop, afterColumns[column])
+      if (dc === 'removed') breaking.push({ kind: 'default-removed', group, column })
+      else if (dc === 'changed') breaking.push({ kind: 'default-changed', group, column })
+      else if (dc === 'added') notices.push({ kind: 'default-added', group, column })
     }
 
     for (const column of afterRequired) {
@@ -89,7 +117,7 @@ export function diffSchema(before, after) {
     }
   }
 
-  return { breaking, isBreaking: breaking.length > 0 }
+  return { breaking, isBreaking: breaking.length > 0, notices }
 }
 
 const DESCRIPTIONS = {
@@ -99,8 +127,14 @@ const DESCRIPTIONS = {
   'type-narrowed': c => `${c.group}: "${c.column}" no longer accepts the values it used to`,
   'newly-required': c => `${c.group}: "${c.column}" is now required — rows that left it empty become invalid`,
   'rule-removed': c => `${c.group}: rule "${c.alert}" is gone`,
+  'default-removed': c => `${c.group}: "${c.column}" lost its default — every row that left it blank now produces no alert instead of using that value`,
+  'default-changed': c => `${c.group}: "${c.column}" has a different default — every row that left it blank changes value`,
+  'default-added': c => `${c.group}: "${c.column}" gained a default — rows that leave it blank will use it`,
   'common-column-removed': c => `common variable "${c.column}" is gone`,
-  'common-type-narrowed': c => `common variable "${c.column}" no longer accepts the values it used to`
+  'common-type-narrowed': c => `common variable "${c.column}" no longer accepts the values it used to`,
+  'common-default-removed': c => `common variable "${c.column}" lost its default — every row that left it blank now produces no alert`,
+  'common-default-changed': c => `common variable "${c.column}" has a different default — every row that left it blank changes value`,
+  'common-default-added': c => `common variable "${c.column}" gained a default — rows that leave it blank will use it`
 }
 
 export function describeChange(change) {

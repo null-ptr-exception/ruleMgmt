@@ -89,22 +89,22 @@ export default function templatesRouter() {
     const { schemaFile } = chartPaths(req, req.params.chart)
     const { schema, confirmBreaking } = req.body
     try {
-      if (!confirmBreaking) {
-        const before = await readSchema(schemaFile)
-        const { breaking, isBreaking } = diffSchema(before, schema)
-        if (isBreaking) {
-          const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
-          if (deployments.length > 0) {
-            return res.status(409).json({
-              error: 'Breaking schema change',
-              breaking: breaking.map(c => ({ ...c, description: describeChange(c) })),
-              deployments
-            })
-          }
+      const before = await readSchema(schemaFile)
+      const { breaking, isBreaking, notices } = diffSchema(before, schema)
+      const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
+      if (!confirmBreaking && isBreaking) {
+        const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
+        if (deployments.length > 0) {
+          return res.status(409).json({
+            error: 'Breaking schema change',
+            breaking: withDesc(breaking),
+            notices: withDesc(notices),
+            deployments
+          })
         }
       }
       await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
-      res.json({ ok: true })
+      res.json({ ok: true, notices: withDesc(notices) })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

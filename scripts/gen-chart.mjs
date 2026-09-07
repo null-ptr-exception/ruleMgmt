@@ -13,8 +13,8 @@
 
 import fs from 'fs/promises'
 import path from 'path'
-import { generateGroupTemplate, normalizeRules } from '../src/utils/templateGenerator.js'
-import { danglingRefs } from '../src/utils/ruleModel.js'
+import { generateGroupTemplate } from '../src/utils/templateGenerator.js'
+import { checkRules } from '../src/utils/ruleChecks.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 
 const args = process.argv.slice(2)
@@ -24,13 +24,6 @@ const chartDir = args.find(a => !a.startsWith('--'))
 if (!chartDir) {
   console.error('usage: node scripts/gen-chart.mjs <chart-dir> [--check]')
   process.exit(2)
-}
-
-function definedVars(schema, alertDef) {
-  return [
-    ...Object.keys(alertDef?.items?.properties || {}),
-    ...Object.keys(schema?.['x-common-vars']?.properties || {})
-  ]
 }
 
 async function readIfExists(file) {
@@ -55,6 +48,14 @@ if (!check) await fs.mkdir(tmplDir, { recursive: true })
 const results = []
 let failed = 0
 
+// The CLI is a commit-time gate (it is the round-trip / CI tool), so it holds
+// rules to every check, not just the ones that block a save.
+const findingsByGroup = new Map()
+for (const finding of checkRules(schema)) {
+  if (!findingsByGroup.has(finding.group)) findingsByGroup.set(finding.group, [])
+  findingsByGroup.get(finding.group).push(finding)
+}
+
 for (const [group, alertDef] of Object.entries(schema.properties || {})) {
   if (group.startsWith('$')) continue
   const file = path.join(tmplDir, `${group.replace(/_/g, '-')}.yaml`)
@@ -64,10 +65,9 @@ for (const [group, alertDef] of Object.entries(schema.properties || {})) {
     continue
   }
 
-  // Acceptance condition 3: every ${var} must resolve to a column.
-  const missing = danglingRefs(normalizeRules(group, alertDef), definedVars(schema, alertDef))
-  if (missing.length) {
-    results.push(['ERROR', group, `undefined variables: ${missing.join(', ')}`])
+  const problems = findingsByGroup.get(group) || []
+  if (problems.length) {
+    results.push(['ERROR', group, problems.map(p => p.message).join('; ')])
     failed++
     continue
   }

@@ -187,7 +187,7 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
  * back on and not required, so `values.yaml` omits the key entirely when the
  * cell is empty.
  */
-function columnFallbacks(alertDef, commonProps, requiredSet) {
+export function columnFallbacks(alertDef, commonProps, requiredSet) {
   const props = { ...commonProps, ...(alertDef?.items?.properties || {}) }
   const defaults = {}
   const mayBeAbsent = new Set()

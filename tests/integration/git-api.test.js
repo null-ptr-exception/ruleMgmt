@@ -186,4 +186,29 @@ describe('Git API', () => {
     expect(data.original).toBe('')
     expect(data.modified).toBe('new content')
   })
+
+  it('POST /commit is refused when a chart fails its rule checks', async () => {
+    const chartDir = path.join(tmpDir, 'charts', 'broken')
+    await fs.mkdir(chartDir, { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify({
+      properties: {
+        cpu: {
+          type: 'array',
+          'x-rules': [{ alert: 'A', expr: 'cpu > ${ghost}' }],
+          items: { type: 'object', required: ['ns'], properties: { ns: { type: 'string' } } }
+        }
+      }
+    }))
+
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'add broken chart' })
+    expect(status).toBe(409)
+    expect(data.findings.some(f => f.kind === 'undefined-var')).toBe(true)
+
+    // Nothing was committed.
+    const log = await api('GET', '/api/v2/git/log?limit=1')
+    expect(log.data[0].message).not.toBe('add broken chart')
+
+    await git(tmpDir, 'reset')
+    await fs.rm(path.join(tmpDir, 'charts'), { recursive: true, force: true })
+  })
 })

@@ -88,6 +88,51 @@ describe('changes that orphan existing rows', () => {
   })
 })
 
+// Clearing or changing a default is breaking: a column with no default that a
+// row leaves blank drops its rule, so "these rows get 80" quietly becomes
+// "these rows produce no alert". Adding one only fills blanks — additive.
+describe('default changes', () => {
+  const withDefault = chart({
+    namespace: { type: 'string' },
+    recv_warn: { type: 'number', default: 80 }
+  })
+
+  it('flags a removed default', () => {
+    const after = chart({ namespace: { type: 'string' }, recv_warn: { type: 'number' } })
+    expect(kinds(diffSchema(withDefault, after))).toEqual(['default-removed'])
+    expect(diffSchema(withDefault, after).isBreaking).toBe(true)
+  })
+
+  it('flags a changed default', () => {
+    const after = chart({ namespace: { type: 'string' }, recv_warn: { type: 'number', default: 90 } })
+    expect(kinds(diffSchema(withDefault, after))).toEqual(['default-changed'])
+  })
+
+  it('treats an added default as a notice, not a breaking change', () => {
+    const after = chart({ namespace: { type: 'string' }, recv_warn: { type: 'number', default: 80 } })
+    const result = diffSchema(base, after)
+    expect(result.isBreaking).toBe(false)
+    expect(result.breaking).toEqual([])
+    expect(result.notices.map(c => c.kind)).toEqual(['default-added'])
+  })
+
+  it('does the same for a common variable', () => {
+    const before = chart({ recv_warn: { type: 'number' } }, { common: { env: { type: 'string', default: 'prod' } } })
+    const removed = chart({ recv_warn: { type: 'number' } }, { common: { env: { type: 'string' } } })
+    expect(kinds(diffSchema(before, removed))).toEqual(['common-default-removed'])
+
+    const added = chart({ recv_warn: { type: 'number' } }, { common: { env: { type: 'string', default: 'prod' } } })
+    const plain = chart({ recv_warn: { type: 'number' } }, { common: { env: { type: 'string' } } })
+    expect(diffSchema(plain, added).notices.map(c => c.kind)).toEqual(['common-default-added'])
+  })
+
+  it('describes a removed default in terms of the rows it affects', () => {
+    const after = chart({ namespace: { type: 'string' }, recv_warn: { type: 'number' } })
+    const [change] = diffSchema(withDefault, after).breaking
+    expect(describeChange(change)).toMatch(/recv_warn.*row that left it blank/)
+  })
+})
+
 describe('describeChange', () => {
   it('says what breaks in plain terms', () => {
     const after = chart({ namespace: { type: 'string' } })

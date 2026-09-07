@@ -78,6 +78,24 @@ export function renderValue(str, ref = '.', defaults) {
   return substituteVars(escapePrometheusTemplates(str), ref, defaults)
 }
 
+/**
+ * `{{ … }}` spans that contain a `${…}`.
+ *
+ * This nesting cannot be written: escaping (step 4) runs before substitution
+ * (step 5), so the whole span is passed through as literal text and the
+ * column's value is never substituted — silently. Callers reject a rule that
+ * has any. Run this after `vars` expansion so nesting a `vars` entry
+ * introduces is caught too.
+ */
+export function nestedPlaceholders(str) {
+  const spans = []
+  String(str).replace(HELM_PASSTHROUGH_RE, whole => {
+    if (whole.match(VAR_RE)) spans.push(whole.trim())
+    return ''
+  })
+  return spans
+}
+
 /** Every `${var}` name referenced by a string. */
 export function varsIn(str) {
   const names = []

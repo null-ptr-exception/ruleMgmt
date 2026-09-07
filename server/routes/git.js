@@ -3,6 +3,38 @@ import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import git from '../lib/git.js'
+import { checkRules } from '../../src/utils/ruleChecks.js'
+
+/**
+ * Rule checks across every chart in the gitops repo, run before a commit —
+ * see issue #57. A hand-edited file that never passed through the editor still
+ * has to clear reference integrity, the ${}/{{ }} split, and "a rule reads no
+ * column". Silent when there is no charts directory.
+ */
+async function chartRuleFindings(gitopsDir) {
+  const chartsDir = path.join(gitopsDir, process.env.CHARTS_DIR || 'charts')
+  let entries
+  try {
+    entries = await fs.readdir(chartsDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const findings = []
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    let schema
+    try {
+      schema = JSON.parse(await fs.readFile(path.join(chartsDir, entry.name, 'values.schema.json'), 'utf-8'))
+    } catch {
+      continue
+    }
+    for (const finding of checkRules(schema)) {
+      findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
+    }
+  }
+  return findings
+}
 
 function parseStatus(raw) {
   const changes = { modified: [], added: [], deleted: [] }
@@ -63,6 +95,11 @@ export default function gitRouter() {
       const statusRaw = await git(cwd, 'status', '--porcelain')
       if (!statusRaw.trim()) {
         return res.status(400).json({ error: 'no changes to commit' })
+      }
+
+      const findings = await chartRuleFindings(cwd)
+      if (findings.length) {
+        return res.status(409).json({ error: 'Rule checks failed', findings })
       }
 
       await git(cwd, 'commit', '-m', message)

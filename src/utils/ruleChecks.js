@@ -18,6 +18,7 @@
 
 import { normalizeRules, columnFallbacks } from './templateGenerator.js'
 import { danglingRefs, ruleVars, varsIn, nestedPlaceholders } from './ruleModel.js'
+import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 
 const WHOLE_REF_RE = /^\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}$/
 
@@ -30,7 +31,7 @@ function wholeRefName(value) {
 function definedColumns(schema, alertDef) {
   return [
     ...Object.keys(alertDef?.items?.properties || {}),
-    ...Object.keys(schema?.['x-common-vars']?.properties || {}),
+    ...Object.keys(getCommonSchema(schema)?.properties || {}),
   ]
 }
 
@@ -40,11 +41,12 @@ function definedColumns(schema, alertDef) {
  */
 export function checkRules(schema) {
   const findings = []
-  const commonProps = schema?.['x-common-vars']?.properties || {}
-  const commonRequired = schema?.['x-common-vars']?.required || []
+  const common = getCommonSchema(schema)
+  const commonProps = common?.properties || {}
+  const commonRequired = common?.required || []
 
   for (const [group, alertDef] of Object.entries(schema?.properties || {})) {
-    if (group.startsWith('$') || alertDef?.['x-custom-template']) continue
+    if (!isAlertGroup(group) || alertDef?.['x-custom-template']) continue
 
     const rules = normalizeRules(group, alertDef)
 

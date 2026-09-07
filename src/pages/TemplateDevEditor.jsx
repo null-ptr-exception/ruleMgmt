@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
 import { Button, Input, Select, Empty, Typography, Switch, Collapse, Modal, Dropdown } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, DownOutlined, RightOutlined, ImportOutlined } from '@ant-design/icons'
-import { schemaAlertNames, getCommonVars, setCommonVars } from '../utils/schemaUtils'
+import { schemaAlertNames, getCommonVars, setCommonVars, isAlertGroup, getCommonSchema } from '../utils/schemaUtils'
 import { schemaFromImport } from '../utils/ruleImport'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
@@ -232,9 +232,9 @@ export default function TemplateDevEditor() {
 
   /** Acceptance condition 3: every ${var} must name a column that exists. */
   function unresolvedReferences() {
-    const commonNames = Object.keys(schema?.['x-common-vars']?.properties || {})
+    const commonNames = Object.keys(getCommonSchema(schema)?.properties || {})
     return Object.entries(schema?.properties || {})
-      .filter(([group]) => !group.startsWith('$'))
+      .filter(([group]) => isAlertGroup(group))
       .map(([group, def]) => ({
         group,
         missing: danglingRefs(
@@ -293,7 +293,7 @@ export default function TemplateDevEditor() {
 
     const newTemplateFiles = []
     for (const [alertGroup, alertDef] of Object.entries(schema.properties || {})) {
-      if (alertGroup.startsWith('$')) continue
+      if (!isAlertGroup(alertGroup)) continue
       const fileName = alertGroup.replace(/_/g, '-')
 
       if (alertDef['x-custom-template']) {
@@ -583,7 +583,7 @@ export default function TemplateDevEditor() {
       <ImportRulesModal
         open={importTarget !== null}
         needsName={importTarget === 'new'}
-        existingGroups={Object.keys(schema?.properties || {})}
+        existingGroups={Object.keys(schema?.properties || {}).filter(isAlertGroup)}
         onCancel={() => setImportTarget(null)}
         onApply={(result, name) => {
           if (importTarget === 'new') return createChartFromRules(result, name)

@@ -8,9 +8,11 @@
  * diff is enough, and what it feeds is a decision, not a rewrite.
  */
 
+import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
+
 const columnsOf = group => group?.items?.properties || {}
 const requiredOf = group => new Set(group?.items?.required || [])
-const commonOf = schema => schema?.['x-common-vars']?.properties || {}
+const commonOf = schema => getCommonSchema(schema)?.properties || {}
 const alertsOf = group => (group?.['x-rules'] || []).map(r => r.alert).filter(Boolean)
 
 /** before -> after transitions that still accept every value already stored. */
@@ -72,7 +74,7 @@ export function diffSchema(before, after) {
   }
 
   for (const [group, beforeGroup] of Object.entries(beforeGroups)) {
-    if (group.startsWith('$')) continue
+    if (!isAlertGroup(group)) continue
     const afterGroup = afterGroups[group]
     if (!afterGroup) {
       breaking.push({ kind: 'group-removed', group })

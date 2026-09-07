@@ -15,6 +15,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { generateGroupTemplate } from '../src/utils/templateGenerator.js'
 import { checkRules } from '../src/utils/ruleChecks.js'
+import { isAlertGroup } from '../src/utils/schemaUtils.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 
 const args = process.argv.slice(2)
@@ -57,7 +58,7 @@ for (const finding of checkRules(schema)) {
 }
 
 for (const [group, alertDef] of Object.entries(schema.properties || {})) {
-  if (group.startsWith('$')) continue
+  if (!isAlertGroup(group)) continue
   const file = path.join(tmplDir, `${group.replace(/_/g, '-')}.yaml`)
 
   if (alertDef['x-custom-template']) {

@@ -18,6 +18,7 @@
 
 import { renderValue, expandVars, varsIn } from './ruleModel.js'
 import { emitRuleObjects } from './crConverter.js'
+import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 
 function toPascalCase(str) {
   return str.split(/[_\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
@@ -273,7 +274,7 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
 }
 
 export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema, options) {
-  const parts = buildGroupParts(alertGroup, alertDef, schema?.['x-common-vars'])
+  const parts = buildGroupParts(alertGroup, alertDef, getCommonSchema(schema))
   if (!parts) return null
 
   return emitRuleObjects({
@@ -285,10 +286,10 @@ export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema,
 
 export function generateDefaultValues(schema) {
   if (!schema?.properties) return {}
-  const commonProps = schema?.['x-common-vars']?.properties || {}
+  const commonProps = getCommonSchema(schema)?.properties || {}
   const values = {}
   for (const [alertGroup, alertDef] of Object.entries(schema.properties)) {
-    if (alertGroup.startsWith('$')) continue
+    if (!isAlertGroup(alertGroup)) continue
     const props = alertDef?.items?.properties || {}
     const row = {}
     for (const [name, prop] of Object.entries(commonProps)) {

@@ -84,6 +84,26 @@ export async function saveChartSchema(chart, schema, confirmBreaking = false) {
   return res.json()
 }
 
+/**
+ * Save a chart's whole rules/*.yaml source in one request; the server
+ * regenerates values.schema.json and every templates/*.yaml from it and writes
+ * the lot all-or-nothing. `files` is { '<name>.yaml': text }.
+ *
+ * A breaking change comes back as 409 (same shape as saveChartSchema); parse
+ * errors and failed rule checks come back as 400 with `errors` / `findings`.
+ */
+export async function saveChartRules(chart, files, confirmBreaking = false) {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/rules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, confirmBreaking })
+  })
+  if (res.status === 409) return { blocked: true, ...(await res.json()) }
+  if (res.status === 400) return { invalid: true, ...(await res.json()) }
+  if (!res.ok) return {}
+  return res.json()
+}
+
 export async function listChartDeployments(chart) {
   const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/deployments`)
   if (!res.ok) return { deployments: [] }

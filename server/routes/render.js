@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
 import { KIND } from '../../src/utils/crConverter.js'
+import { chartDrift } from '../lib/chartFiles.js'
 import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -140,7 +141,10 @@ export default function renderRouter() {
 
       const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000, maxBuffer: MAX_BUFFER })
       const check = await checkPrometheusRules(output)
-      res.json({ ok: true, output, check })
+      // The rule owner is looking at products; if they are older than the
+      // chart's rules/ source, what they see here may not be current.
+      const drift = await chartDrift(chartDir).catch(() => ({ state: 'ok' }))
+      res.json({ ok: true, output, check, drift })
     } catch (err) {
       res.json({ ok: false, error: err.stderr || err.stdout || err.message })
     }

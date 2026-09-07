@@ -1,11 +1,21 @@
 import express from 'express'
 import { diffSchema, describeChange } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing } from '../lib/chartUsage.js'
+import { chartDrift, regenerateProducts, writeChanged } from '../lib/chartFiles.js'
+import { parseRulesDir, modelToSchema } from '../../src/utils/rulesFile.js'
+import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
+import { generateProducts } from '../../src/utils/drift.js'
+import { isAlertGroup } from '../../src/utils/schemaUtils.js'
+import { ensureChartYaml } from '../../src/utils/chartYaml.js'
+import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+// A rules/ filename: a group file, or _common.yaml. Guards path traversal in
+// the keys of the POST /:chart/rules body.
+const RULES_FILE_RE = /^(_common|[a-z0-9][a-z0-9_-]*)\.yaml$/
 
 export default function templatesRouter() {
   const router = express.Router()
@@ -38,10 +48,29 @@ export default function templatesRouter() {
     }
   }
 
-  // Get chart-level info: schema + values + Chart.yaml metadata + template file list
+  // Get chart-level info: schema + values + Chart.yaml metadata + template file
+  // list + product drift.
+  //
+  // Opening a chart is the moment a missing Chart.yaml is filled in and missing
+  // products are generated (nothing is overwritten either way) — deliberately
+  // not the list route, where a write would be a side effect of scrolling past.
   router.get('/:chart', async (req, res) => {
-    const { tmplDir, valuesFile, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
+    const { chartDir, tmplDir, valuesFile, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
     try {
+      try {
+        await fs.access(chartYamlFile)
+      } catch {
+        const { text } = ensureChartYaml(null, req.params.chart)
+        await fs.mkdir(chartDir, { recursive: true })
+        await fs.writeFile(chartYamlFile, text, 'utf-8')
+      }
+
+      let drift = await chartDrift(chartDir)
+      if (drift.state === 'missing') {
+        await regenerateProducts(chartDir)
+        drift = await chartDrift(chartDir)
+      }
+
       let templateFiles = []
       try {
         const files = await fs.readdir(tmplDir)
@@ -62,7 +91,7 @@ export default function templatesRouter() {
         chartMeta = yaml.load(raw) || {}
       } catch { /* use default */ }
 
-      res.json({ templateFiles, schema, values, chartMeta })
+      res.json({ templateFiles, schema, values, chartMeta, drift })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -105,6 +134,107 @@ export default function templatesRouter() {
       }
       await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
       res.json({ ok: true, notices: withDesc(notices) })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // Save a chart's rules/*.yaml source, and regenerate every product from it
+  // in one request.
+  //
+  // The client sends the whole set of rules files as text; the server parses
+  // them, checks them, works out what breaks, generates values.schema.json and
+  // every templates/*.yaml, and writes the lot all-or-nothing — everything is
+  // computed in memory first, so a generation failure leaves the chart
+  // untouched. Only files whose content changed are written; the rules files
+  // are written through verbatim so hand-added comments survive.
+  router.post('/:chart/rules', async (req, res) => {
+    const { chartDir, tmplDir, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
+    const { files, confirmBreaking } = req.body || {}
+
+    if (!files || typeof files !== 'object' || Array.isArray(files)) {
+      return res.status(400).json({ error: 'files object required' })
+    }
+    for (const name of Object.keys(files)) {
+      if (!RULES_FILE_RE.test(name) || typeof files[name] !== 'string') {
+        return res.status(400).json({ error: `Invalid rules file name: ${name}` })
+      }
+    }
+
+    try {
+      const { model, errors } = parseRulesDir(files)
+      if (errors.length) return res.status(400).json({ error: 'Invalid rules', errors })
+
+      const before = await readSchema(schemaFile)
+      const newSchema = modelToSchema(model, before)
+
+      const findings = saveBlockers(checkRules(newSchema))
+      if (findings.length) return res.status(400).json({ error: 'Rule checks failed', findings })
+
+      const { breaking, isBreaking, notices } = diffSchema(before, newSchema)
+      const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
+      if (!confirmBreaking && isBreaking) {
+        const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
+        if (deployments.length > 0) {
+          return res.status(409).json({
+            error: 'Breaking schema change',
+            breaking: withDesc(breaking),
+            notices: withDesc(notices),
+            deployments
+          })
+        }
+      }
+
+      // Compute every output before writing anything.
+      let products
+      try {
+        products = generateProducts(model, before, objectMetaFromEnv())
+      } catch (err) {
+        return res.status(500).json({ error: `Generation failed: ${err.message}` })
+      }
+
+      const rulesDir = path.join(chartDir, 'rules')
+      const entries = [
+        ...Object.entries(files).map(([name, text]) => [path.join(rulesDir, name), text]),
+        ...Object.entries(products.templates).map(([name, text]) => [path.join(tmplDir, name), text]),
+        [schemaFile, products.schemaText],
+      ]
+      let chartYamlRaw = null
+      try { chartYamlRaw = await fs.readFile(chartYamlFile, 'utf-8') } catch { /* absent */ }
+      const { text: chartYamlText, created } = ensureChartYaml(chartYamlRaw, req.params.chart)
+      if (created) entries.push([chartYamlFile, chartYamlText])
+
+      // Files on disk with no counterpart any more: a removed group, or a
+      // _common.yaml for a chart that no longer has common columns. A
+      // hand-written x-custom-template's file is left alone.
+      const customTemplates = new Set(
+        Object.entries(newSchema.properties || {})
+          .filter(([k, d]) => isAlertGroup(k) && d['x-custom-template'])
+          .map(([k]) => `${k.replace(/_/g, '-')}.yaml`)
+      )
+      const keep = { rules: new Set(Object.keys(files)), templates: new Set(Object.keys(products.templates)) }
+      const removed = []
+      for (const [dir, kind] of [[rulesDir, 'rules'], [tmplDir, 'templates']]) {
+        let onDisk = []
+        try { onDisk = (await fs.readdir(dir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
+        for (const f of onDisk) {
+          if (keep[kind].has(f)) continue
+          if (kind === 'templates' && customTemplates.has(f)) continue
+          removed.push(path.join(dir, f))
+        }
+      }
+
+      const wrote = await writeChanged(entries)
+      for (const abs of removed) await fs.rm(abs, { force: true })
+
+      res.json({
+        ok: true,
+        written: [
+          ...wrote.map(p => path.relative(chartDir, p)),
+          ...removed.map(p => `- ${path.relative(chartDir, p)}`),
+        ],
+        notices: withDesc(notices),
+      })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

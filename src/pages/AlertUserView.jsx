@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Alert, Button, Modal, Typography, Empty, Input, Select, message, Segmented } from 'antd'
+import { Button, Modal, Typography, Empty, Input, Select, message, Segmented } from 'antd'
 import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
 import OverviewTemplateTree from '../components/OverviewTemplateTree'
 import AlertTable from '../components/AlertTable'
 import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
+import PreviewModal from '../components/PreviewModal'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
 import { pruneAllValues } from '../utils/valueUtils'
 import {
@@ -40,6 +41,8 @@ export default function AlertUserView() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
   const [previewCheck, setPreviewCheck] = useState(null)
+  const [previewSelfCheck, setPreviewSelfCheck] = useState(null)
+  const [previewSummary, setPreviewSummary] = useState(null)
 
   const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
 
@@ -128,6 +131,20 @@ export default function AlertUserView() {
     setRows(allValues[activeAlert] || [])
   }, [activeAlert, allValues])
 
+  // After creating a deployment, if the chart has a required common variable
+  // with no default, land on the Common Values page — Helm would otherwise
+  // reject the deployment on save and the rule owner has no reason to look
+  // under COMMON VARIABLES on their own.
+  const pendingCommonCheckRef = useRef(false)
+  useEffect(() => {
+    if (!pendingCommonCheckRef.current || !schema) return
+    pendingCommonCheckRef.current = false
+    const unmet = getCommonVars(schema).some(
+      v => v.required && v.default === undefined && !(v.name in commonValues)
+    )
+    if (unmet) setActiveAlert('__common_vars__')
+  }, [schema, commonValues])
+
   async function handleNewDeployOpen() {
     const charts = await listCharts()
     setAvailableCharts(charts)
@@ -148,6 +165,11 @@ export default function AlertUserView() {
       setSelectedFolder(newDeployPath)
       setSelectedChart(chart)
       setActiveAlert(null)
+      // A fresh deployment has no _common filled in; clear any left over from
+      // the previous selection so the required-common check below sees the
+      // real (empty) state and not stale values.
+      setCommonValues({})
+      pendingCommonCheckRef.current = true
       setTreeRefreshKey(k => k + 1)
       message.success(`Deployment created at ${newDeployPath}`)
     }
@@ -288,6 +310,8 @@ export default function AlertUserView() {
     const result = await renderDeployment(selectedChart, folderBasename, selectedFolder)
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
     setPreviewCheck(result.ok ? result.check : null)
+    setPreviewSelfCheck(result.ok ? result.selfCheck : null)
+    setPreviewSummary(result.ok ? result.summary : null)
     setPreviewOpen(true)
   }
 
@@ -486,29 +510,14 @@ export default function AlertUserView() {
       </div>
 
       {/* Mounted outside the mode branches: both single and overview open it. */}
-      <Modal title="Rendered PrometheusRule" open={previewOpen} onCancel={() => setPreviewOpen(false)}
-        footer={null} width={800}>
-        {previewCheck && (
-          <Alert
-            style={{ marginBottom: 12 }}
-            type={previewCheck.skipped ? 'info' : previewCheck.passed ? 'success' : 'error'}
-            showIcon
-            message={previewCheck.skipped ? 'Promtool check skipped' : previewCheck.passed ? 'Promtool check passed' : 'Promtool check failed'}
-            description={
-              previewCheck.output
-                ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto' }}>{previewCheck.output}</div>
-                : null
-            }
-          />
-        )}
-        <pre style={{
-          background: '#0f172a', color: '#7dd3fc', padding: 16, borderRadius: 8,
-          fontSize: 12, fontFamily: 'monospace', maxHeight: 500, overflow: 'auto',
-          whiteSpace: 'pre-wrap', wordBreak: 'break-all'
-        }}>
-          {previewYaml || 'No output'}
-        </pre>
-      </Modal>
+      <PreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        yaml={previewYaml}
+        check={previewCheck}
+        selfCheck={previewSelfCheck}
+        summary={previewSummary}
+      />
 
       <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}
         onOk={handleNewDeployCreate} okText="Create"

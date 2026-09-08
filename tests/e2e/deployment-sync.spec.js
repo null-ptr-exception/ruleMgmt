@@ -195,6 +195,8 @@ test.describe.serial('deployment sync', () => {
 
     const modal = page.getByRole('dialog')
     await expect(modal).toBeVisible({ timeout: 10000 })
+    // Preview defaults to the summary now; flip to raw YAML for the text check.
+    await modal.getByRole('switch').click()
     await expect(modal.locator('pre')).toContainText('PrometheusRule', { timeout: 15000 })
     await expect(page.getByText('Save failed')).not.toBeVisible()
     expect(saveRequests).toEqual([])

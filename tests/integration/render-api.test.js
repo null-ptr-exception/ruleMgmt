@@ -5,7 +5,12 @@ import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
 
-let server, baseURL, tmpDir, helmOutputFile, helmArgsFile, promtoolCaptureFile, fakePromtool
+let server, baseURL, tmpDir, helmOutputFile, helmArgsFile, promtoolCaptureFile, promtoolCaptureDir, fakePromtool
+
+async function readPromtoolInvocations() {
+  const files = (await fs.readdir(promtoolCaptureDir)).sort((a, b) => parseInt(a) - parseInt(b))
+  return Promise.all(files.map(async f => yaml.load(await fs.readFile(path.join(promtoolCaptureDir, f), 'utf-8'))))
+}
 
 beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'render-test-'))
@@ -38,7 +43,13 @@ cat "$FAKE_HELM_OUTPUT_FILE"
   process.env.FAKE_HELM_ARGS_FILE = helmArgsFile
 
   fakePromtool = path.join(tmpDir, 'fake-promtool')
+  // Capture every invocation: render.js now checks one temp file per rendered
+  // CR, so a single capture path would only ever hold the last one.
   await fs.writeFile(fakePromtool, `#!/bin/sh
+n=$(cat "$PROMTOOL_CAPTURE_COUNTER" 2>/dev/null || echo 0)
+n=$((n + 1))
+echo "$n" > "$PROMTOOL_CAPTURE_COUNTER"
+cp "$3" "$PROMTOOL_CAPTURE_DIR/$n.yaml"
 cp "$3" "$PROMTOOL_CAPTURE_FILE"
 if [ "$PROMTOOL_FAIL" = "1" ]; then
   echo "bad promql" >&2
@@ -48,6 +59,10 @@ echo "Checking rules"
 `, { mode: 0o755 })
   process.env.PROMTOOL_BIN = fakePromtool
   process.env.PROMTOOL_CAPTURE_FILE = promtoolCaptureFile
+  promtoolCaptureDir = path.join(tmpDir, 'promtool-invocations')
+  await fs.mkdir(promtoolCaptureDir, { recursive: true })
+  process.env.PROMTOOL_CAPTURE_DIR = promtoolCaptureDir
+  process.env.PROMTOOL_CAPTURE_COUNTER = path.join(tmpDir, 'promtool-counter')
 
   const { default: renderRouter } = await import('../../server/routes/render.js')
 
@@ -69,6 +84,9 @@ beforeEach(async () => {
   process.env.PROMTOOL_BIN = fakePromtool
   await fs.writeFile(helmOutputFile, '---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: rendered\n')
   await fs.rm(promtoolCaptureFile, { force: true })
+  await fs.rm(promtoolCaptureDir, { recursive: true, force: true })
+  await fs.mkdir(promtoolCaptureDir, { recursive: true })
+  await fs.rm(process.env.PROMTOOL_CAPTURE_COUNTER, { force: true })
 })
 
 afterAll(async () => {
@@ -76,6 +94,8 @@ afterAll(async () => {
   delete process.env.FAKE_HELM_OUTPUT_FILE
   delete process.env.PROMTOOL_BIN
   delete process.env.PROMTOOL_CAPTURE_FILE
+  delete process.env.PROMTOOL_CAPTURE_DIR
+  delete process.env.PROMTOOL_CAPTURE_COUNTER
   delete process.env.PROMTOOL_FAIL
   if (server) await new Promise(resolve => server.close(resolve))
   if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true })
@@ -126,10 +146,241 @@ spec:
 
     expect(status).toBe(200)
     expect(data.ok).toBe(true)
-    expect(data.check).toMatchObject({ passed: true, errors: [], output: 'Checking rules' })
+    expect(data.check.passed).toBe(true)
+    expect(data.check.errors).toEqual([])
+    // More than one object, so the aggregated output names each one.
+    expect(data.check.output).toContain('first:')
+    expect(data.check.output).toContain('second:')
 
-    const checkedRules = yaml.load(await fs.readFile(promtoolCaptureFile, 'utf-8'))
-    expect(checkedRules.groups.map(group => group.name)).toEqual(['first.rules', 'second.rules'])
+    // Each CR is checked in its own file, never merged.
+    const invocations = await readPromtoolInvocations()
+    expect(invocations.map(inv => inv.groups.map(g => g.name))).toEqual([
+      ['first.rules'],
+      ['second.rules'],
+    ])
+  })
+
+  it('checks each CR in its own file, so a group sharded across objects is not a false duplicate', async () => {
+    // A group over the row/byte budget renders as several CRs that all carry
+    // the same spec.groups[].name. Merged into one file, promtool would report
+    // "groupname ... is repeated in the same file"; per file it is fine.
+    await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-traffic-1-1
+spec:
+  groups:
+    - name: traffic
+      rules:
+        - alert: TrafficHigh
+          expr: up == 0
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-traffic-1-2
+spec:
+  groups:
+    - name: traffic
+      rules:
+        - alert: TrafficHigh
+          expr: up == 1
+`)
+
+    const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(status).toBe(200)
+    expect(data.check.passed).toBe(true)
+
+    const invocations = await readPromtoolInvocations()
+    expect(invocations).toHaveLength(2)
+    for (const inv of invocations) {
+      expect(inv.groups.map(g => g.name)).toEqual(['traffic'])
+    }
+  })
+
+  it('names the offending object when one CR fails promtool', async () => {
+    await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-good-1-1
+spec:
+  groups:
+    - name: good
+      rules:
+        - alert: GoodAlert
+          expr: up == 0
+`)
+    process.env.PROMTOOL_FAIL = '1'
+
+    const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(data.ok).toBe(true)
+    expect(data.check.passed).toBe(false)
+    expect(data.check.output).toContain('rel-good-1-1')
+    expect(data.check.output).toContain('bad promql')
+  })
+
+  it('flags <no value> and leftover ${...} placeholders in the rendered output', async () => {
+    await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-x-1-1
+spec:
+  groups:
+    - name: x
+      rules:
+        - alert: XAlert
+          expr: up > <no value>
+          annotations:
+            summary: "over \${recv_warn}"
+`)
+
+    const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(data.selfCheck.passed).toBe(false)
+    expect(data.selfCheck.problems.join('\n')).toContain('<no value>')
+    expect(data.selfCheck.problems.join('\n')).toContain('${recv_warn}')
+  })
+
+  it('passes the self-check for clean rendered output', async () => {
+    await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-x-1-1
+spec:
+  groups:
+    - name: x
+      rules:
+        - alert: XAlert
+          expr: up == 0
+`)
+
+    const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(data.selfCheck).toMatchObject({ passed: true, problems: [] })
+  })
+
+  describe('summary', () => {
+    const schemaFile = () => path.join(tmpDir, 'charts', 'test-chart', 'values.schema.json')
+    const valuesFile = () => path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml')
+
+    afterEach(async () => {
+      await fs.rm(schemaFile(), { force: true })
+      await fs.writeFile(valuesFile(), 'replicas: 1\n')
+    })
+
+    it('counts rendered alerts by group, name and severity, and lists template alerts that produced nothing', async () => {
+      await fs.writeFile(schemaFile(), JSON.stringify({
+        type: 'object',
+        properties: {
+          traffic: {
+            type: 'array',
+            'x-rules': [
+              { alert: 'TrafficHigh', expr: 'x > ${warn}', labels: { severity: 'warning' } },
+              { alert: 'TrafficHigh', expr: 'x > ${crit}', labels: { severity: 'critical' } },
+            ],
+            items: { type: 'object', properties: { warn: { type: 'number' }, crit: { type: 'number' } } },
+          },
+          errors: {
+            type: 'array',
+            'x-rules': [{ alert: 'ErrorsHigh', expr: 'e > ${t}', labels: { severity: 'warning' } }],
+            items: { type: 'object', properties: { t: { type: 'number' } } },
+          },
+        },
+      }))
+      await fs.writeFile(valuesFile(), yaml.dump({
+        traffic: [{ warn: 1, crit: 2 }, { warn: 3 }],
+        errors: [],
+      }))
+      await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-traffic-1-1
+spec:
+  groups:
+    - name: traffic
+      rules:
+        - alert: TrafficHigh
+          expr: x > 1
+          labels: { severity: warning }
+        - alert: TrafficHigh
+          expr: x > 3
+          labels: { severity: warning }
+        - alert: TrafficHigh
+          expr: x > 2
+          labels: { severity: critical }
+`)
+
+      const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+      expect(data.summary.total).toBe(3)
+      const traffic = data.summary.groups.find(g => g.name === 'traffic')
+      expect(traffic.rowCount).toBe(2)
+      expect(traffic.state).toBe('ok')
+      expect(traffic.alerts).toEqual([
+        { alert: 'TrafficHigh', severity: 'critical', count: 1 },
+        { alert: 'TrafficHigh', severity: 'warning', count: 2 },
+      ])
+      // Both of the template's (alert, severity) pairs rendered at least once.
+      expect(traffic.missing).toEqual([])
+
+      const errors = data.summary.groups.find(g => g.name === 'errors')
+      expect(errors.rowCount).toBe(0)
+      expect(errors.state).toBe('empty')
+      expect(errors.missing).toEqual([{ alert: 'ErrorsHigh', severity: 'warning' }])
+    })
+
+    it('marks a group with rows but no rendered alerts as no-alerts, distinct from empty', async () => {
+      await fs.writeFile(schemaFile(), JSON.stringify({
+        type: 'object',
+        properties: {
+          errors: {
+            type: 'array',
+            'x-rules': [{ alert: 'ErrorsHigh', expr: 'e > ${t}', labels: { severity: 'warning' } }],
+            items: { type: 'object', properties: { t: { type: 'number' } } },
+          },
+        },
+      }))
+      await fs.writeFile(valuesFile(), yaml.dump({ errors: [{ t: 5 }] }))
+      // Helm rendered no PrometheusRule at all (e.g. every rule guarded off).
+      await fs.writeFile(helmOutputFile, '---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: rendered\n')
+
+      const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+      const errors = data.summary.groups.find(g => g.name === 'errors')
+      expect(errors.rowCount).toBe(1)
+      expect(errors.state).toBe('no-alerts')
+    })
+
+    it('reports value keys the schema no longer has as orphan fields', async () => {
+      await fs.writeFile(schemaFile(), JSON.stringify({
+        type: 'object',
+        properties: {
+          _common: { type: 'object', properties: { owner: { type: 'string' } } },
+          traffic: {
+            type: 'array',
+            'x-rules': [{ alert: 'TrafficHigh', expr: 'x > ${warn}', labels: { severity: 'warning' } }],
+            items: { type: 'object', properties: { warn: { type: 'number' } } },
+          },
+        },
+      }))
+      await fs.writeFile(valuesFile(), yaml.dump({
+        _common: { owner: 'team-a', old_common: 'x' },
+        traffic: [{ warn: 1, dropped_field: 9 }],
+        gone_group: [{ a: 1 }],
+      }))
+      await fs.writeFile(helmOutputFile, '---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: rendered\n')
+
+      const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+      expect(data.summary.orphanFields.sort()).toEqual(['dropped_field', 'gone_group', 'old_common'])
+    })
   })
 
   it('keeps preview response ok when promtool reports rule errors', async () => {

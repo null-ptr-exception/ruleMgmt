@@ -142,7 +142,7 @@ test.describe('Alert Overview Save', () => {
 
       await page.getByRole('button', { name: 'Preview' }).click()
 
-      await expect(page.getByText('Rendered PrometheusRule')).toBeVisible({ timeout: 60000 })
+      await expect(page.getByRole('dialog')).toBeVisible({ timeout: 60000 })
     })
 
     test('Preview saves overview edits, not the single-mode row buffer', async ({ page }) => {

@@ -54,9 +54,11 @@ test.describe('nested deployment — save and preview', () => {
     // Click Preview
     await page.getByRole('button', { name: 'Preview' }).click()
 
-    // Modal opens and contains PrometheusRule YAML
+    // Modal opens on the summary; the raw YAML is one toggle away.
     const modal = page.getByRole('dialog')
     await expect(modal).toBeVisible({ timeout: 10000 })
+    await expect(modal.getByText(/alerts? total/)).toBeVisible({ timeout: 15000 })
+    await modal.getByRole('switch').click()
     await expect(modal.locator('pre')).toContainText('PrometheusRule', { timeout: 15000 })
     await expect(modal.locator('pre')).not.toContainText('invalid release name')
   })
@@ -117,6 +119,8 @@ test.describe('nested deployment — save and preview', () => {
       // Modal opens with valid PrometheusRule YAML (no release name error)
       const modal = page.getByRole('dialog')
       await expect(modal).toBeVisible({ timeout: 10000 })
+      // Preview defaults to the summary now; flip to raw YAML for the text check.
+      await modal.getByRole('switch').click()
       await expect(modal.locator('pre')).toContainText('PrometheusRule', { timeout: 15000 })
       await expect(modal.locator('pre')).not.toContainText('invalid release name')
     })

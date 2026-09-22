@@ -8,6 +8,7 @@ import { chartDrift } from '../lib/chartFiles.js'
 import { getDepName, unwrapValues } from '../lib/subchart.js'
 import { schemaToModel } from '../../src/utils/rulesFile.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
+import { logger } from '../lib/logger.js'
 import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -130,10 +131,17 @@ async function checkPrometheusRules(renderedYaml) {
 
 // Checks promtool structurally can't make: it only knows valid vs invalid
 // PromQL, not "this isn't what you meant". `<no value>` is Helm rendering a key
-// that has no value and no default; a leftover `${name}` is a schema-layer
-// placeholder the generator never turned into a Helm reference. Both are
-// syntactically fine and silently wrong — the second especially so inside a
-// label or annotation, where nothing else would ever flag it.
+// that has no value and no default — syntactically fine and silently wrong,
+// the guard/default logic's regression guard.
+//
+// This used to also scan for a leftover `${name}` placeholder, on the theory
+// that it would mean the generator failed to turn a column reference into a
+// Helm one. But `${x}` integrity is already fully owned by the save-time
+// danglingRefs check (ruleChecks.js) — a name that isn't a column is rejected
+// before it can be saved — so a post-render scan here adds no coverage. Worse,
+// it used a looser pattern than the save-time check's, so it false-positived
+// on a deliberately literal `${x:raw}` (a Grafana dashboard variable passed
+// through untouched — see issue #57).
 //
 // The other half of the deferred check — that every `{{ ... }}` the generator
 // deliberately preserved survives expansion verbatim — needs the generator's
@@ -143,10 +151,6 @@ function selfCheckRendered(renderedYaml) {
   const noValue = (renderedYaml.match(/<no value>/g) || []).length
   if (noValue > 0) {
     problems.push(`Rendered output contains ${noValue} \`<no value>\` — a referenced field had no value and no default.`)
-  }
-  const leftover = [...new Set([...renderedYaml.matchAll(/\$\{[^}\s]+\}/g)].map(m => m[0]))]
-  if (leftover.length > 0) {
-    problems.push(`Rendered output still contains unresolved placeholders: ${leftover.join(', ')}`)
   }
   return { passed: problems.length === 0, problems }
 }
@@ -231,17 +235,31 @@ async function buildSummary(renderedYaml, chartDir, valuesFilePaths) {
     break
   }
 
+  const alertsFor = rMap => [...rMap.entries()]
+    .map(([k, count]) => {
+      const [alert, severity] = k.split('\u0000')
+      return { alert, severity, count }
+    })
+    .sort((a, b) => a.alert.localeCompare(b.alert) || a.severity.localeCompare(b.severity))
+
+  // The rendered `spec.groups[].name` is guessed from the values key
+  // (`_` -> `-`, matching what the generator itself does in
+  // templateGenerator.js). That guess is only good for a generated group —
+  // an `x-custom-template` group is a hand-written CR free to use any group
+  // name, so guessing for it and reporting a mismatch as "no-alerts" would be
+  // reporting our own wrong guess as the chart's problem. Those are left
+  // unmatched here instead of force-matched — see `unmatchedGroups` below.
   const keys = new Set([...Object.keys(possible), ...Object.keys(groupRows)])
+  const matchedNames = new Set()
   const groups = [...keys].map(valuesKey => {
     const name = valuesKey.replace(/_/g, '-')
     const rowCount = groupRows[valuesKey] || 0
+    const custom = Boolean(schema?.properties?.[valuesKey]?.['x-custom-template'])
+    if (custom) return { name, valuesKey, rowCount, state: 'custom', alerts: [], missing: [] }
+
+    matchedNames.add(name)
     const rMap = rendered.byGroup.get(name) || new Map()
-    const alerts = [...rMap.entries()]
-      .map(([k, count]) => {
-        const [alert, severity] = k.split('\u0000')
-        return { alert, severity, count }
-      })
-      .sort((a, b) => a.alert.localeCompare(b.alert) || a.severity.localeCompare(b.severity))
+    const alerts = alertsFor(rMap)
     const renderedCount = alerts.reduce((n, a) => n + a.count, 0)
     const missing = (possible[valuesKey] || []).filter(p => !rMap.has(`${p.alert}\u0000${p.severity}`))
     let state = 'ok'
@@ -250,7 +268,15 @@ async function buildSummary(renderedYaml, chartDir, valuesFilePaths) {
     return { name, valuesKey, rowCount, state, alerts, missing }
   }).sort((a, b) => a.valuesKey.localeCompare(b.valuesKey))
 
-  return { total: rendered.total, groups, orphanFields: [...orphanFields] }
+  // Rendered groups no group above claimed — every x-custom-template group's
+  // actual output lands here, plus anything else whose rendered name simply
+  // never matched a guess (an import with an unconventional group name).
+  const unmatchedGroups = [...rendered.byGroup.entries()]
+    .filter(([name]) => !matchedNames.has(name))
+    .map(([name, rMap]) => ({ name, alerts: alertsFor(rMap) }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  return { total: rendered.total, groups, unmatchedGroups, orphanFields: [...orphanFields] }
 }
 
 export default function renderRouter() {
@@ -311,7 +337,10 @@ export default function renderRouter() {
       const valuesFilePaths = folder
         ? [path.join(deploymentsDir, 'values.yaml'), path.join(deploymentsDir, `${deployment}-values.yaml`)]
         : [path.join(deploymentsDir, `${deployment}-values.yaml`)]
-      const summary = await buildSummary(output, chartDir, valuesFilePaths).catch(() => null)
+      const summary = await buildSummary(output, chartDir, valuesFilePaths).catch(err => {
+        logger.error({ err, chart, deployment }, 'buildSummary failed, falling back to raw YAML')
+        return null
+      })
       // The rule owner is looking at products; if they are older than the
       // chart's rules/ source, what they see here may not be current.
       const drift = await chartDrift(chartDir).catch(() => ({ state: 'ok' }))

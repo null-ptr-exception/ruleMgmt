@@ -223,7 +223,7 @@ spec:
     expect(data.check.output).toContain('bad promql')
   })
 
-  it('flags <no value> and leftover ${...} placeholders in the rendered output', async () => {
+  it('flags <no value> in the rendered output', async () => {
     await fs.writeFile(helmOutputFile, `---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -235,15 +235,33 @@ spec:
       rules:
         - alert: XAlert
           expr: up > <no value>
-          annotations:
-            summary: "over \${recv_warn}"
 `)
 
     const { data } = await api('POST', '/api/v2/render/test-chart/staging')
 
     expect(data.selfCheck.passed).toBe(false)
     expect(data.selfCheck.problems.join('\n')).toContain('<no value>')
-    expect(data.selfCheck.problems.join('\n')).toContain('${recv_warn}')
+  })
+
+  it('does not flag a literal ${...} placeholder — that integrity is owned by the save-time check', async () => {
+    await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-x-1-1
+spec:
+  groups:
+    - name: x
+      rules:
+        - alert: XAlert
+          expr: up == 0
+          annotations:
+            summary: "using grafana var \${__interval:raw}"
+`)
+
+    const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(data.selfCheck).toMatchObject({ passed: true, problems: [] })
   })
 
   it('passes the self-check for clean rendered output', async () => {
@@ -380,6 +398,48 @@ spec:
       const { data } = await api('POST', '/api/v2/render/test-chart/staging')
 
       expect(data.summary.orphanFields.sort()).toEqual(['dropped_field', 'gone_group', 'old_common'])
+    })
+
+    // 7-c: an `x-custom-template` group is a hand-written CR free to use any
+    // rendered group name — guessing `valuesKey.replace('_','-')` for it and
+    // reporting the (likely) mismatch as "no-alerts" would blame the chart
+    // for our own wrong guess. It should show as `custom` instead, with its
+    // actual rendered output — under whatever name it really used — listed
+    // separately rather than silently dropped.
+    it('does not force-match an x-custom-template group by guessed name', async () => {
+      await fs.writeFile(schemaFile(), JSON.stringify({
+        type: 'object',
+        properties: {
+          weird_naming: {
+            type: 'array',
+            'x-custom-template': true,
+            items: { type: 'object', properties: { t: { type: 'number' } } },
+          },
+        },
+      }))
+      await fs.writeFile(valuesFile(), yaml.dump({ weird_naming: [{ t: 5 }] }))
+      // Rendered under a group name nothing would guess from the values key.
+      await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-custom-1-1
+spec:
+  groups:
+    - name: totally-different-name
+      rules:
+        - alert: CustomAlert
+          expr: up == 0
+`)
+
+      const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+      const custom = data.summary.groups.find(g => g.valuesKey === 'weird_naming')
+      expect(custom.state).toBe('custom')
+
+      expect(data.summary.unmatchedGroups).toEqual([
+        { name: 'totally-different-name', alerts: [{ alert: 'CustomAlert', severity: '', count: 1 }] },
+      ])
     })
   })
 

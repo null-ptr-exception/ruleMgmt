@@ -71,6 +71,14 @@ function Summary({ summary }) {
         />
       )}
       {summary.groups.map(g => <GroupRow key={g.name} group={g} />)}
+      {summary.unmatchedGroups.length > 0 && (
+        <div style={{ borderTop: '1px solid #f0f0f0', padding: '10px 0' }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Rendered but not shown above (hand-written or imported group name):
+          </Text>
+          {summary.unmatchedGroups.map(g => <GroupRow key={g.name} group={{ ...g, state: 'ok', rowCount: 0, missing: [] }} />)}
+        </div>
+      )}
     </div>
   )
 }
@@ -83,7 +91,9 @@ function GroupRow({ group }) {
         <Text strong style={{ fontFamily: 'monospace' }}>{group.name}</Text>
         {group.state === 'empty'
           ? <Text type="secondary">not filled in</Text>
-          : <Text type="secondary">{total} alert{total === 1 ? '' : 's'}</Text>}
+          : group.state === 'custom'
+            ? <Text type="secondary">hand-written template</Text>
+            : <Text type="secondary">{total} alert{total === 1 ? '' : 's'}</Text>}
       </div>
 
       {group.state === 'no-alerts' && (
@@ -92,7 +102,13 @@ function GroupRow({ group }) {
         </div>
       )}
 
-      {group.state !== 'empty' && (
+      {group.state === 'custom' && (
+        <div style={{ color: '#8c8c8c', fontSize: 13, marginTop: 4 }}>
+          x-custom-template — its rendered group name can't be guessed, see below
+        </div>
+      )}
+
+      {group.state !== 'empty' && group.state !== 'custom' && (
         <table style={{ marginTop: 6, fontSize: 13, borderCollapse: 'collapse' }}>
           <tbody>
             {group.alerts.map((a, i) => (

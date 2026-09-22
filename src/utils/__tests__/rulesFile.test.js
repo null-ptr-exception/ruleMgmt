@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import {
-  schemaToModel, modelToSchema, modelToFiles, groupFileText, commonFileText, parseGroupFile, parseCommonFile,
+  schemaToModel, modelToSchema, groupGenDef, modelToFiles, groupFileText, commonFileText, parseGroupFile, parseCommonFile,
   parseRulesDir, validateValues,
 } from '../rulesFile.js'
 import { generateGroupTemplate } from '../templateGenerator.js'
@@ -164,7 +164,7 @@ describe('model <-> schema idempotence', () => {
     let sawDefault = false
     for (const group of Object.keys(migrated.properties).filter(isAlertGroup)) {
       const before = generateGroupTemplate(group, sampleSchema.properties[group], 'rel', sampleSchema)
-      const after = generateGroupTemplate(group, migrated.properties[group], 'rel', migrated)
+      const after = generateGroupTemplate(group, groupGenDef(model.groups[group]), 'rel', migrated)
       if (after !== before) sawDefault = true
       expect(stripRowDefaults(after), group).toBe(before)
     }

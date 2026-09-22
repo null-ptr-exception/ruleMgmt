@@ -177,9 +177,11 @@ export function schemaToModel(schema) {
 /**
  * The canonical schema for a model. Common variables are a standard
  * `properties._common` (no `x-common-vars` extension — Helm validates it), and
- * `_common` comes first. It still carries `x-rules` per group so the existing
- * generator keeps working; making the schema carry no rules at all is P4, when
- * the generator reads `rules/` directly.
+ * `_common` comes first. It carries no rule data at all — `columns` becomes
+ * `items.properties` and nothing else — see "What gets generated" in
+ * doc/rules-format.md. `generateProducts` (drift.js) builds template output
+ * straight from the model via `groupGenDef`, so this function's output is
+ * never read back for generation.
  *
  * `originalSchema` supplies the verbatim definition of any `x-custom-template`
  * group, which the model does not carry.
@@ -204,15 +206,45 @@ export function modelToSchema(model, originalSchema = null) {
       continue
     }
     const { properties, required } = columnsToSchema(group.columns)
-    const def = { type: 'array', 'x-rules': group.rules.map(canonicalRule) }
-    if (group.vars && Object.keys(group.vars).length) def.vars = { ...group.vars }
-    if (group.interval !== undefined) def.interval = group.interval
-    if (group.limit !== undefined) def.limit = group.limit
-    def.items = { type: 'object', properties }
+    const def = { type: 'array', items: { type: 'object', properties } }
     if (required.length) def.items.required = required
     schema.properties[key] = def
   }
 
+  return schema
+}
+
+/**
+ * The schema-shaped input `generateGroupTemplate` expects for one group,
+ * built straight from the model. This is what decouples template generation
+ * from `modelToSchema`'s output: the persisted `values.schema.json` carries
+ * no rule data (see above), but the generator still needs `x-rules` / `vars`
+ * / `interval` / `limit` in the shape it already understands, so this builds
+ * that in memory without ever writing it to disk.
+ */
+export function groupGenDef(group) {
+  const { properties, required } = columnsToSchema(group.columns)
+  const def = { type: 'array', 'x-rules': group.rules.map(canonicalRule) }
+  if (group.vars && Object.keys(group.vars).length) def.vars = { ...group.vars }
+  if (group.interval !== undefined) def.interval = group.interval
+  if (group.limit !== undefined) def.limit = group.limit
+  def.items = { type: 'object', properties }
+  if (required.length) def.items.required = required
+  return def
+}
+
+/**
+ * `modelToSchema`'s output with `groupGenDef` merged back into every
+ * non-custom group. `checkRules` (ruleChecks.js) is written against the old
+ * schema shape (`x-rules` per group); this is what lets it keep working
+ * against a model without a rewrite. Never written to disk.
+ */
+export function genSchema(model, originalSchema = null) {
+  const schema = modelToSchema(model, originalSchema)
+  for (const [key, group] of Object.entries(model.groups || {})) {
+    if (group.custom) continue
+    schema.properties[key] = { ...schema.properties[key], ...groupGenDef(group) }
+  }
   return schema
 }
 

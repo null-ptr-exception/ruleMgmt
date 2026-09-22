@@ -4,8 +4,9 @@ import path from 'path'
 import os from 'os'
 import git from '../lib/git.js'
 import { checkRules } from '../../src/utils/ruleChecks.js'
-import { chartDrift } from '../lib/chartFiles.js'
+import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
 import { blocksCommit } from '../../src/utils/drift.js'
+import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
 
 /**
  * Reasons a commit should be refused, across every chart in the gitops repo —
@@ -31,13 +32,20 @@ async function chartCommitBlockers(gitopsDir) {
     if (!entry.isDirectory()) continue
     const chartDir = path.join(chartsDir, entry.name)
 
-    let schema
-    try {
-      schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
-    } catch {
-      schema = null
-    }
-    if (schema) {
+    // Schema carries no rule data (see modelToSchema in rulesFile.js), so a
+    // migrated chart's rules are checked from rules/*.yaml via `genSchema`,
+    // which rebuilds the old x-rules-per-group shape checkRules expects
+    // without writing it anywhere. A parse error here is left to the drift
+    // check below (`stale`), which already blocks on it.
+    const { rulesFiles, schema } = await readChartArtifacts(chartDir)
+    if (rulesFiles && Object.keys(rulesFiles).length) {
+      const { model, errors } = parseRulesDir(rulesFiles)
+      if (!errors.length) {
+        for (const finding of checkRules(genSchema(model, schema))) {
+          findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
+        }
+      }
+    } else if (schema) {
       for (const finding of checkRules(schema)) {
         findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
       }

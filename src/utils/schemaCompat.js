@@ -13,7 +13,17 @@ import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 const columnsOf = group => group?.items?.properties || {}
 const requiredOf = group => new Set(group?.items?.required || [])
 const commonOf = schema => getCommonSchema(schema)?.properties || {}
+// Schema carries no rule data (see modelToSchema in rulesFile.js), so a
+// group's alert names come from the model when the caller has one —
+// `alertMaps` — falling back to the schema's own (legacy, x-promql-era)
+// `x-rules`/`x-promql`-derived shape only when it doesn't.
 const alertsOf = group => (group?.['x-rules'] || []).map(r => r.alert).filter(Boolean)
+/** { [group]: [alert, ...] } from a rules/*.yaml model — see rulesFile.js. */
+export function modelAlerts(model) {
+  return Object.fromEntries(
+    Object.entries(model?.groups || {}).map(([g, e]) => [g, (e.rules || []).map(r => r.alert).filter(Boolean)])
+  )
+}
 
 /** before -> after transitions that still accept every value already stored. */
 const WIDENING = { integer: ['number'] }
@@ -51,13 +61,15 @@ function typeNarrowed(before, after) {
  * `breaking` lists the changes that would invalidate an existing values.yaml;
  * anything else is additive and needs no ceremony.
  */
-export function diffSchema(before, after) {
+export function diffSchema(before, after, alertMaps = null) {
   const breaking = []
   const notices = []
   const beforeGroups = before?.properties || {}
   const afterGroups = after?.properties || {}
   const beforeCommon = commonOf(before)
   const afterCommon = commonOf(after)
+  const beforeAlertsOf = alertMaps ? (name => alertMaps.before[name] || []) : (name => alertsOf(beforeGroups[name]))
+  const afterAlertsOf = alertMaps ? (name => alertMaps.after[name] || []) : (name => alertsOf(afterGroups[name]))
 
   for (const name of Object.keys(beforeCommon)) {
     if (!(name in afterCommon)) {
@@ -112,8 +124,8 @@ export function diffSchema(before, after) {
       }
     }
 
-    const beforeAlerts = alertsOf(beforeGroup)
-    const afterAlerts = alertsOf(afterGroup)
+    const beforeAlerts = beforeAlertsOf(group)
+    const afterAlerts = afterAlertsOf(group)
     for (const alert of beforeAlerts) {
       if (!afterAlerts.includes(alert)) breaking.push({ kind: 'rule-removed', group, alert })
     }

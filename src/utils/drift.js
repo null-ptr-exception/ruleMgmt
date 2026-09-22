@@ -12,20 +12,25 @@
  * This is a pure function; the caller reads the files off disk.
  */
 
-import { modelToSchema, parseRulesDir } from './rulesFile.js'
+import { modelToSchema, groupGenDef, parseRulesDir } from './rulesFile.js'
 import { generateGroupTemplate } from './templateGenerator.js'
 import { isAlertGroup } from './schemaUtils.js'
 import { objectMetaFromEnv } from './objectMeta.js'
 
 const templateFileName = group => `${group.replace(/_/g, '-')}.yaml`
 
-/** The generated products a model should have on disk. */
+/**
+ * The generated products a model should have on disk. Templates are built
+ * straight from `model.groups` (via `groupGenDef`), not from the schema this
+ * also produces — the schema carries no rule data, so re-reading it would
+ * not work. `schema` is only passed to the generator for `_common`.
+ */
 export function generateProducts(model, originalSchema, objectMeta) {
   const schema = modelToSchema(model, originalSchema)
   const templates = {}
-  for (const [group, def] of Object.entries(schema.properties || {})) {
-    if (!isAlertGroup(group) || def['x-custom-template']) continue
-    const content = generateGroupTemplate(group, def, '{{ .Release.Name }}', schema, { objectMeta })
+  for (const [group, entry] of Object.entries(model.groups || {})) {
+    if (entry.custom) continue
+    const content = generateGroupTemplate(group, groupGenDef(entry), '{{ .Release.Name }}', schema, { objectMeta })
     if (content) templates[templateFileName(group)] = content
   }
   return {

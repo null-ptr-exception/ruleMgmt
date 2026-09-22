@@ -66,7 +66,9 @@ describe('POST /:chart/rules', () => {
 
     const schema = JSON.parse(await read('values.schema.json'))
     expect(schema.properties._common.properties.cluster).toBeTruthy()
-    expect(schema.properties.cpu['x-rules'][0].alert).toBe('CpuHigh')
+    expect(schema.properties.cpu.items.properties.warn.default).toBe(80)
+    // The schema carries no rule data — rules/*.yaml is the sole source.
+    expect(schema.properties.cpu['x-rules']).toBeUndefined()
 
     const tmpl = await read('templates/cpu.yaml')
     expect(tmpl).toContain('- alert: CpuHigh')

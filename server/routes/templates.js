@@ -1,10 +1,10 @@
 import express from 'express'
-import { diffSchema, describeChange } from '../../src/utils/schemaCompat.js'
+import { diffSchema, describeChange, modelAlerts } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget } from '../lib/sync.js'
-import { parseRulesDir, modelToSchema } from '../../src/utils/rulesFile.js'
+import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts } from '../../src/utils/drift.js'
 import { isAlertGroup } from '../../src/utils/schemaUtils.js'
@@ -203,10 +203,18 @@ export default function templatesRouter() {
 
       const newSchema = modelToSchema(model, before)
 
-      const findings = saveBlockers(checkRules(newSchema))
+      const findings = saveBlockers(checkRules(genSchema(model, before)))
       if (findings.length) return res.status(400).json({ error: 'Rule checks failed', findings })
 
-      const { breaking, isBreaking, notices } = diffSchema(before, newSchema)
+      // Schema carries no rule data any more, so rule-removed detection reads
+      // alert names from the model on both sides — the old rules/*.yaml on
+      // disk (absent on a legacy chart's first migration, same as before).
+      const { rulesFiles: oldRulesFiles } = await readChartArtifacts(chartDir)
+      const beforeModel = oldRulesFiles ? parseRulesDir(oldRulesFiles).model : null
+      const { breaking, isBreaking, notices } = diffSchema(before, newSchema, {
+        before: modelAlerts(beforeModel),
+        after: modelAlerts(model),
+      })
       const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
       if (!confirmBreaking && isBreaking) {
         const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)

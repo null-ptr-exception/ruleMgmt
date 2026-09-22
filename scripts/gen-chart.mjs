@@ -17,6 +17,7 @@ import { generateGroupTemplate } from '../src/utils/templateGenerator.js'
 import { checkRules } from '../src/utils/ruleChecks.js'
 import { isAlertGroup } from '../src/utils/schemaUtils.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
+import { parseRulesDir, genSchema, groupGenDef } from '../src/utils/rulesFile.js'
 
 const args = process.argv.slice(2)
 const check = args.includes('--check')
@@ -46,13 +47,34 @@ const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
 const tmplDir = path.join(chartDir, 'templates')
 if (!check) await fs.mkdir(tmplDir, { recursive: true })
 
+// A migrated chart's rules live in rules/*.yaml, not the schema — see
+// modelToSchema in rulesFile.js: the persisted schema carries no rule data
+// any more. Read rules/ when present and generate/check from the model via
+// the same groupGenDef/genSchema shim the server uses. A chart with no
+// rules/ dir yet is still schema-only (legacy x-promql) and generates
+// exactly as it always has.
+let model = null
+try {
+  const ruleFiles = (await fs.readdir(path.join(chartDir, 'rules'))).filter(f => f.endsWith('.yaml'))
+  if (ruleFiles.length) {
+    const files = {}
+    for (const name of ruleFiles) files[name] = await fs.readFile(path.join(chartDir, 'rules', name), 'utf-8')
+    const parsed = parseRulesDir(files)
+    if (parsed.errors.length) {
+      for (const e of parsed.errors) console.error(`ERROR  ${e}`)
+      process.exit(1)
+    }
+    model = parsed.model
+  }
+} catch { /* no rules/ dir */ }
+
 const results = []
 let failed = 0
 
 // The CLI is a commit-time gate (it is the round-trip / CI tool), so it holds
 // rules to every check, not just the ones that block a save.
 const findingsByGroup = new Map()
-for (const finding of checkRules(schema)) {
+for (const finding of checkRules(model ? genSchema(model, schema) : schema)) {
   if (!findingsByGroup.has(finding.group)) findingsByGroup.set(finding.group, [])
   findingsByGroup.get(finding.group).push(finding)
 }
@@ -73,7 +95,8 @@ for (const [group, alertDef] of Object.entries(schema.properties || {})) {
     continue
   }
 
-  const content = generateGroupTemplate(group, alertDef, '{{ .Release.Name }}', schema, { objectMeta })
+  const genDef = model?.groups?.[group] ? groupGenDef(model.groups[group]) : alertDef
+  const content = generateGroupTemplate(group, genDef, '{{ .Release.Name }}', schema, { objectMeta })
   if (!content) {
     results.push(['skip', group, 'no rules to generate'])
     continue

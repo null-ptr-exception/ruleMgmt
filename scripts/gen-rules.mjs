@@ -2,7 +2,7 @@
 /**
  * Migrate a chart to rules/*.yaml as its source — see issue #57.
  *
- *   node scripts/gen-rules.mjs <chart-dir>            write rules/ and regenerate values.schema.json
+ *   node scripts/gen-rules.mjs <chart-dir>            write rules/, values.schema.json and templates/
  *   node scripts/gen-rules.mjs <chart-dir> --check    compare only, never write
  *   node scripts/gen-rules.mjs <chart-dir> --init     also create Chart.yaml if it is missing
  *
@@ -11,6 +11,11 @@
  * read-time adapter the generator uses. An x-custom-template group is left in
  * the schema and reported, never written to rules/.
  *
+ * templates/ is regenerated in the same pass as rules/ and values.schema.json
+ * — a chart migrated by this script alone is never left mid-migration with
+ * stale products (`drift: stale` blocks a commit; running gen-chart
+ * separately used to be a step this tool couldn't remind anyone to take).
+ *
  * --check is the round-trip tool: run it after a migration to confirm the
  * files on disk are exactly what the converter would produce.
  */
@@ -18,8 +23,10 @@
 import fs from 'fs/promises'
 import path from 'path'
 import {
-  schemaToModel, modelToSchema, modelToFiles, parseRulesDir, validateValues,
+  schemaToModel, modelToFiles, parseRulesDir, validateValues,
 } from '../src/utils/rulesFile.js'
+import { generateProducts } from '../src/utils/drift.js'
+import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { ensureChartYaml } from '../src/utils/chartYaml.js'
 import yaml from 'js-yaml'
 
@@ -66,7 +73,10 @@ if (Object.keys(onDisk).length) {
 }
 
 const files = modelToFiles(model)
-const wantSchema = JSON.stringify(modelToSchema(model, schema), null, 2) + '\n'
+const objectMeta = objectMetaFromEnv()
+for (const w of objectMeta.warnings) console.log(`note   ${w}`)
+const products = generateProducts(model, schema, objectMeta)
+const tmplDir = path.join(chartDir, 'templates')
 
 for (const w of warnings) console.log(`note   ${w}`)
 
@@ -87,7 +97,9 @@ async function reconcile(relPath, want) {
   results.push([have === null ? 'created' : 'updated', relPath])
 }
 
-// Remove a rules/ file whose group has gone from the schema.
+// Remove a rules/ file whose group has gone from the schema, and a
+// templates/ file whose group has gone or no longer generates one — but
+// never an x-custom-template group's hand-written file.
 if (!check) {
   await fs.mkdir(rulesDir, { recursive: true })
   for (const name of Object.keys(onDisk)) {
@@ -96,12 +108,28 @@ if (!check) {
       results.push(['removed', path.join('rules', name)])
     }
   }
+
+  const customTemplates = new Set(
+    Object.entries(model.groups)
+      .filter(([, g]) => g.custom)
+      .map(([k]) => `${k.replace(/_/g, '-')}.yaml`)
+  )
+  let existingTemplates = []
+  try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
+  for (const name of existingTemplates) {
+    if (name in products.templates || customTemplates.has(name)) continue
+    await fs.rm(path.join(tmplDir, name), { force: true })
+    results.push(['removed', path.join('templates', name)])
+  }
 }
 
 for (const [name, text] of Object.entries(files)) {
   await reconcile(path.join('rules', name), text)
 }
-await reconcile('values.schema.json', wantSchema)
+await reconcile('values.schema.json', products.schemaText)
+for (const [name, text] of Object.entries(products.templates)) {
+  await reconcile(path.join('templates', name), text)
+}
 
 if (init) {
   const chartYamlFile = path.join(chartDir, 'Chart.yaml')

@@ -94,23 +94,26 @@ async function checkPrometheusRules(renderedYaml) {
   const promtool = process.env.PROMTOOL_BIN || 'promtool'
 
   try {
-    const results = []
-    for (let i = 0; i < objects.length; i++) {
-      const obj = objects[i]
+    // One promtool invocation per rendered CR, run concurrently — they are
+    // independent (each its own temp file) and this was previously a serial
+    // loop, spawning promtool once per shard one at a time for no reason.
+    const results = await Promise.all(objects.map(async (obj, i) => {
       const objName = obj?.metadata?.name || `object-${i + 1}`
       const file = path.join(tmpDir, `${String(i).padStart(4, '0')}-${sanitizeFilename(objName)}.yaml`)
       await fs.writeFile(file, yaml.dump({ groups: obj.spec.groups }, { lineWidth: -1 }), 'utf-8')
       try {
         const { stdout, stderr } = await runCommand(promtool, ['check', 'rules', file], { timeout: 120000, maxBuffer: MAX_BUFFER })
-        results.push({ objName, passed: true, output: cleanPromtoolOutput(`${stdout || ''}${stderr || ''}`, file) })
+        return { objName, passed: true, output: cleanPromtoolOutput(`${stdout || ''}${stderr || ''}`, file) }
       } catch (err) {
-        if (err.code === 'ENOENT') {
-          const msg = `Promtool is not available: ${promtool}`
-          return { passed: false, errors: [msg], output: msg }
-        }
+        if (err.code === 'ENOENT') return { objName, missing: true }
         const output = cleanPromtoolOutput(`${err.stdout || ''}${err.stderr || ''}${err.message || ''}`, file)
-        results.push({ objName, passed: false, output: output || 'promtool check rules failed.' })
+        return { objName, passed: false, output: output || 'promtool check rules failed.' }
       }
+    }))
+
+    if (results.some(r => r.missing)) {
+      const msg = `Promtool is not available: ${promtool}`
+      return { passed: false, errors: [msg], output: msg }
     }
 
     const failed = results.filter(r => !r.passed)

@@ -44,12 +44,13 @@ cat "$FAKE_HELM_OUTPUT_FILE"
 
   fakePromtool = path.join(tmpDir, 'fake-promtool')
   // Capture every invocation: render.js now checks one temp file per rendered
-  // CR, so a single capture path would only ever hold the last one.
+  // CR, so a single capture path would only ever hold the last one. render.js
+  // runs these concurrently (Promise.all), so the capture name is derived
+  // from $3's own basename — which already carries a deterministic,
+  // zero-padded index — rather than a shared counter file, which would race
+  // across concurrent shells.
   await fs.writeFile(fakePromtool, `#!/bin/sh
-n=$(cat "$PROMTOOL_CAPTURE_COUNTER" 2>/dev/null || echo 0)
-n=$((n + 1))
-echo "$n" > "$PROMTOOL_CAPTURE_COUNTER"
-cp "$3" "$PROMTOOL_CAPTURE_DIR/$n.yaml"
+cp "$3" "$PROMTOOL_CAPTURE_DIR/$(basename "$3")"
 cp "$3" "$PROMTOOL_CAPTURE_FILE"
 if [ "$PROMTOOL_FAIL" = "1" ]; then
   echo "bad promql" >&2
@@ -62,7 +63,6 @@ echo "Checking rules"
   promtoolCaptureDir = path.join(tmpDir, 'promtool-invocations')
   await fs.mkdir(promtoolCaptureDir, { recursive: true })
   process.env.PROMTOOL_CAPTURE_DIR = promtoolCaptureDir
-  process.env.PROMTOOL_CAPTURE_COUNTER = path.join(tmpDir, 'promtool-counter')
 
   const { default: renderRouter } = await import('../../server/routes/render.js')
 
@@ -86,7 +86,6 @@ beforeEach(async () => {
   await fs.rm(promtoolCaptureFile, { force: true })
   await fs.rm(promtoolCaptureDir, { recursive: true, force: true })
   await fs.mkdir(promtoolCaptureDir, { recursive: true })
-  await fs.rm(process.env.PROMTOOL_CAPTURE_COUNTER, { force: true })
 })
 
 afterAll(async () => {
@@ -95,7 +94,6 @@ afterAll(async () => {
   delete process.env.PROMTOOL_BIN
   delete process.env.PROMTOOL_CAPTURE_FILE
   delete process.env.PROMTOOL_CAPTURE_DIR
-  delete process.env.PROMTOOL_CAPTURE_COUNTER
   delete process.env.PROMTOOL_FAIL
   if (server) await new Promise(resolve => server.close(resolve))
   if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true })

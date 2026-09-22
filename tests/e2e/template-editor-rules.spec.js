@@ -56,8 +56,13 @@ test.describe.serial('Template editor — rules source', () => {
     }, { timeout: 8000 }).toContain('alert: CpuTooHigh')
 
     const info = await (await request.get(`/api/v2/templates/${CHART}`)).json()
-    expect(info.schema.properties.cpu['x-rules'][0].alert).toBe('CpuTooHigh')
+    // The schema carries no rule data — rules/*.yaml is the sole source (see
+    // issue #57) — so the regenerated product is checked in the template,
+    // not the schema.
+    expect(info.schema.properties.cpu['x-rules']).toBeUndefined()
     expect(info.drift.state).toBe('ok')
+    const tmpl = await (await request.get(`/api/v2/templates/${CHART}/cpu`)).json()
+    expect(tmpl.content).toContain('- alert: CpuTooHigh')
   })
 
   test('renaming a group renames its rules file on save', async ({ page, request }) => {

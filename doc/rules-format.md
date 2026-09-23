@@ -8,10 +8,9 @@ For what the pieces mean and why they work this way, see
 [alert-rules.md](alert-rules.md). For the steps to do something, see
 [how-to.md](how-to.md). The design discussion is in issue #57.
 
-> This describes the format as specified. The editor still reads and writes
-> `values.schema.json` until the file-backed path lands; a chart with no
-> `rules/` directory is read through the upgrade adapter and rewritten into
-> this format the next time it is saved.
+> A chart with no `rules/` directory is not migrated yet. The editor reads it
+> through the upgrade adapter and writes it out in this format the next time
+> it is saved; `scripts/gen-rules.mjs` does the same from the command line.
 
 ## Where it lives
 
@@ -214,8 +213,12 @@ last two, and a row that fills only the first two produces only the first rule.
 
 Because of this, changing a default is a breaking change: removing one turns
 "these rows get 80" into "these rows produce no alert at all", silently. Saving
-a schema that removes or changes a default goes through the same dialog as
+a change that removes or changes a default goes through the same dialog as
 removing a column.
+
+A default only ever applies to a column that is not `required`: a required
+column left out fails Helm's schema validation before the template is reached,
+so its default is never used.
 
 ## `_common.yaml`
 

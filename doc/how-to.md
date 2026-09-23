@@ -33,6 +33,12 @@ a bare list of rule entries.
 **Templates** → **New ▾** → **Blank chart** → name it. Then **+** beside ALERT
 GROUPS to add your first group; it opens straight into the rules editor.
 
+### Start a chart from another one
+
+Open the chart to copy, then **New ▾** → **From existing chart…** and name the
+copy. It gets the same rules files; the original and its deployments are not
+touched.
+
 ### Turn a literal into something each deployment fills in
 
 This is the gesture that connects the two pages: it opens a column in the rule
@@ -86,38 +92,57 @@ cancelling is just not saving.
 
 ### Move an old chart onto the new model
 
-Open a group still showing **PromQL Expression** and press **Convert to
-rules**. If the group has optional selectors you are warned first: their labels
-are only emitted today when a row sets them, and converted rules emit every
-label unconditionally, so the rendered output changes.
+A chart from before `rules/` opens with a banner: *This chart still uses the
+old schema-only format.* Its groups are already shown as rules. **Save**, and
+it is written out as `rules/*.yaml` with the schema and templates regenerated.
 
-Nothing converts on its own — a chart you never open keeps working as it is.
+The only change to what it renders is that columns with a default now fall
+back to it when a row leaves them empty. Check with **Preview** on a
+deployment before committing if that matters.
+
+Nothing converts on its own, but a chart that is not migrated cannot be
+committed — see [Commit](#commit). From the command line, `gen-rules` does the
+same; see [below](#migrate-a-chart).
 
 ### Save
 
-**Save** writes the schema and regenerates every template. Two things can stop
-it:
+**Save** writes the rules files and regenerates `values.schema.json` and every
+template, all or nothing. Files you did not touch are written back exactly as
+they were, so comments added by hand survive. Three things can stop it:
 
-- **Some references have no column** — a `${var}` naming a column that does not
-  exist. Fix the reference, or press **Create &lt;name&gt;** on the rule that
-  flags it.
+- **The chart has a problem** — most often a `${var}` naming a column that
+  does not exist. The dialog lists each one; one in another group is a link
+  that jumps there. For a missing column, press **Create &lt;name&gt;** on the
+  rule that flags it. The full list of what is checked is in
+  [rules-format.md](rules-format.md#what-is-rejected-at-save-time).
+- **The rules files changed on disk since you opened the chart** — someone
+  edited them outside the editor. **Save anyway** overwrites their change;
+  cancel and reopen the chart to keep it.
 - **This change breaks deployments that already exist** — see below.
 
 ### Change a chart people are already using
 
-Removing a column, a group or a rule, narrowing a type, or making a column
-required invalidates rows that already exist. Save refuses and names what
-breaks and who is affected.
+Removing a column, a group or a rule, renaming a group, narrowing a type,
+making a column required, or removing or changing a default affects rows that
+already exist. Save opens a dialog instead of saving:
 
-The way through:
+1. **Summary** — *Needs a decision* lists columns and groups that go away;
+   *Just so you know* lists the rest. Every affected deployment is named, and
+   ones that follow another through sync are marked
+2. **Continue** → for each column that goes away, pick what it **Becomes**:
+   another column of the same group, or *Delete (value not kept)*. Everything
+   starts as delete
+3. **Continue** → the preview shows, per deployment, the rows that change and
+   the values that are lost
+4. **Change in place** rewrites the chart and every affected deployment in one
+   step
 
-1. Clone the chart, declaring what old columns become in the copy
-2. Change the copy
-3. Each rule owner moves over when they are ready — the original keeps working
-4. Retire the old chart once nobody is on it
+Deployments that follow another through sync are not rewritten; they follow
+their source.
 
-**Save anyway** exists for when you know the deployments can take it. It is
-listed with the affected paths so it is a decision, not an accident.
+If existing deployments should not change yet, use **Clone to a new chart** on
+the first step instead. The copy gets your edits and the mapping; the original
+keeps working, and each rule owner moves over when they are ready.
 
 ---
 
@@ -138,9 +163,17 @@ the template; if a name is unclear, that is worth telling them.
 
 ### Check what will actually be deployed
 
-**Preview** renders the chart with your rows through Helm and shows the
-resources that come out — the same path a deploy takes. Save first; Preview
-saves for you.
+**Preview** renders the chart with your rows through Helm — the same path a
+deploy takes — and opens on a summary of what came out: how many alerts each
+group produced, by alert name and severity. It also points out:
+
+- a group with no rows, which produces nothing
+- a group with rows but no alerts, usually a blank cell that drops a rule
+- value fields the template no longer has, left over from an older version of
+  the chart
+
+**Raw YAML** switches to the rendered resources themselves. Save first;
+Preview saves for you.
 
 If `promtool` is installed it also checks the rules and reports what it finds.
 
@@ -167,39 +200,84 @@ message box, and **Discard all changes** if you would rather start over.
 Nothing leaves the working tree until you commit, which is why Save is safe to
 experiment with.
 
+A commit is refused while any chart:
+
+- has a problem Save would refuse, or a rule that reads no column at all — it
+  would be emitted identically on every row. Save allows that, because a chart
+  being turned into a template passes through it
+- has generated files that are behind its rules files — open the chart and
+  save, or run `gen-rules`
+- is not migrated yet — see [Move an old chart onto the new model](#move-an-old-chart-onto-the-new-model)
+
 ---
 
 ## Command line
 
-### Generate templates without the UI
+### Migrate a chart
 
 ```bash
-node scripts/gen-chart.mjs charts/<name>
+node scripts/gen-rules.mjs charts/<name>          # write
+node scripts/gen-rules.mjs charts/<name> --check  # report only
+node scripts/gen-rules.mjs charts/<name> --init   # also create a missing Chart.yaml
 ```
 
-Reads the schema, writes one template per group. Needed when a schema is
-committed directly rather than saved through the editor.
+Writes `rules/*.yaml` from the schema, then regenerates the schema and every
+template from those, in one pass. Warnings about `values.yaml` — a key no
+column defines, a required column left out — are worth fixing before Helm sees
+them. Running it again on a migrated chart changes nothing, unless the rules
+files were edited by hand — see the next section.
 
-### Check a schema and its templates still agree
+### Edit the rules files directly
+
+Edit `rules/*.yaml`, then regenerate:
 
 ```bash
-node scripts/gen-chart.mjs charts/<name> --check
+node scripts/gen-rules.mjs charts/<name>   # schema and templates
+node scripts/gen-chart.mjs charts/<name>   # templates only
+```
+
+Which one depends on what you changed and whether you want your formatting
+kept:
+
+| | Regenerates | Your rules files |
+|---|---|---|
+| `gen-rules` | schema and templates | rewritten in canonical form — hand-added comments are lost |
+| `gen-chart` | templates only | untouched |
+
+`gen-chart` is enough for a change to rules — an expression, a label, a new
+rule. A change to columns — a type, a default, a new column — also changes the
+schema, and only `gen-rules` regenerates that. Saving in the editor does both
+and keeps comments, so it is the better way for a column change to a file you
+have commented.
+
+### Check a chart's generated files still agree
+
+```bash
+node scripts/gen-chart.mjs charts/<name> --check   # templates
+node scripts/gen-rules.mjs charts/<name> --check   # rules files, schema and templates
 ```
 
 Regenerates and compares instead of writing; non-zero exit on any difference.
-Worth wiring into CI or a pre-commit hook if templates are ever committed by
-hand — it is what enforces that the schema is the source.
+Worth wiring into CI or a pre-commit hook if files are ever committed by hand
+— it is what enforces that `rules/` is the source. `gen-rules --check` also
+reports a rules file that is not in canonical form.
 
 ### Import rules into a chart
+
+Use the editor ([above](#bring-more-rules-into-an-existing-chart)) for a
+migrated chart. `import-rules.mjs` still writes into `values.schema.json`,
+which a migrated chart no longer reads rules from: the import is ignored, and
+lost the next time the chart is regenerated.
+
+For a chart that is not migrated yet:
 
 ```bash
 node scripts/import-rules.mjs rules.yaml charts/<name> --dry-run   # report only
 node scripts/import-rules.mjs rules.yaml charts/<name>             # write
+node scripts/gen-rules.mjs charts/<name>                           # migrate and generate
 ```
 
-Writes `values.schema.json` only; run `gen-chart.mjs` afterwards for the
-templates. For a brand-new chart, create it in the UI first so it has a
-`Chart.yaml`.
+For a brand-new chart, create it in the UI first so it has a `Chart.yaml`.
 
 ---
 
@@ -215,8 +293,9 @@ RULE_OBJECT_ANNOTATIONS='{"alertforge.io/source":"generated"}'
 ```
 
 Values are literal; one containing `{{ }}` is dropped with a warning. Existing
-templates are not rewritten — regenerate them, and `--check` will report the
-drift until you do.
+templates are not rewritten — they turn stale, and commits are refused until
+they are regenerated. Opening and saving each chart does it, or
+`gen-chart.mjs` per chart.
 
 ### If rules deploy but never fire
 

@@ -8,7 +8,7 @@ import KVEditor from '../components/KVEditor'
 import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { parseRulesDir, schemaToModel, groupFileText, commonFileText } from '../utils/rulesFile'
-import { importRules } from '../utils/ruleImport'
+import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { ruleVars } from '../utils/ruleModel'
 import {
   listCharts, createChart, deleteChart, cloneChart,
@@ -343,13 +343,8 @@ export default function TemplateDevEditor() {
   function applyImport({ groups }) {
     setModel(m => {
       const next = { ...m, groups: { ...m.groups } }
-      for (const g of groups) {
-        next.groups[g.key] = {
-          group: g.key,
-          columns: Object.fromEntries(g.columns.map(name => [name, { type: columnType(name, g.rules) }])),
-          rules: g.rules,
-        }
-      }
+      const commonNames = Object.keys(m.common.columns)
+      for (const g of groups) next.groups[g.key] = modelGroupFromImport(g, commonNames)
       return next
     })
     setOrder(o => [...o, ...groups.map(g => g.key).filter(k => !o.includes(k))])
@@ -360,13 +355,7 @@ export default function TemplateDevEditor() {
   async function createChartFromRules({ groups }, name) {
     await createChart(name)
     const files = {}
-    for (const g of groups) {
-      files[`${g.key}.yaml`] = groupFileText({
-        group: g.key,
-        columns: Object.fromEntries(g.columns.map(n => [n, { type: columnType(n, g.rules) }])),
-        rules: g.rules,
-      })
-    }
+    for (const g of groups) files[`${g.key}.yaml`] = groupFileText(modelGroupFromImport(g))
     await saveChartRules(name, files, true)
     await loadCharts()
     setActiveChart(name)
@@ -653,10 +642,4 @@ export default function TemplateDevEditor() {
       )}
     </div>
   )
-}
-
-/** A placeholder on the right of a comparison is compared to a number. */
-function columnType(name, rules) {
-  const re = new RegExp(`(==|!=|>=|<=|>|<)\\s*\\$\\{\\s*${name}\\s*\\}`)
-  return rules.some(r => re.test([r.raw || '', r.expr || ''].join('\n'))) ? 'number' : 'string'
 }

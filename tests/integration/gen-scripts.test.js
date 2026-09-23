@@ -18,6 +18,7 @@ import os from 'os'
 
 const GEN_RULES = path.resolve('scripts/gen-rules.mjs')
 const GEN_CHART = path.resolve('scripts/gen-chart.mjs')
+const IMPORT_RULES = path.resolve('scripts/import-rules.mjs')
 
 let tmpDir, chartDir
 
@@ -97,6 +98,83 @@ describe('gen-rules.mjs + gen-chart.mjs', () => {
     const migrate = run(GEN_RULES, [chartDir])
     expect(migrate.status, migrate.stdout).toBe(0)
     expect(await fs.readdir(path.join(chartDir, 'templates'))).not.toContain('cpu.yaml')
+  })
+})
+
+describe('gen-rules.mjs on a chart whose rules/ was edited by hand', () => {
+  it('regenerates the schema and templates, and leaves the rules files as they are', async () => {
+    run(GEN_RULES, [chartDir])
+    const file = path.join(chartDir, 'rules', 'cpu.yaml')
+    const edited = '# tuned after an incident\n' + (await fs.readFile(file, 'utf-8')).replace('warn: {type: number}', 'warn: {type: number, default: 70}')
+    await fs.writeFile(file, edited)
+
+    const stale = run(GEN_RULES, [chartDir, '--check'])
+    expect(stale.status, stale.stdout).toBe(1)
+    expect(stale.stdout).not.toContain('rules/cpu.yaml')
+
+    const regen = run(GEN_RULES, [chartDir])
+    expect(regen.status, regen.stdout).toBe(0)
+    expect(await fs.readFile(file, 'utf-8')).toBe(edited)
+    expect(await fs.readFile(path.join(chartDir, 'templates', 'cpu.yaml'), 'utf-8')).toContain('default 70')
+    expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
+  })
+})
+
+describe('import-rules.mjs', () => {
+  const RULES = `groups:
+  - name: disk
+    rules:
+      - alert: DiskFull
+        expr: disk_used{namespace="\${namespace}"} > \${disk_warn}
+        labels: {severity: warning}
+`
+  let rulesFile
+  beforeEach(async () => {
+    rulesFile = path.join(tmpDir, 'rules.yaml')
+    await fs.writeFile(rulesFile, RULES)
+  })
+
+  it('writes the group into rules/ of a migrated chart, leaving the other files alone', async () => {
+    run(GEN_RULES, [chartDir])
+    const cpu = path.join(chartDir, 'rules', 'cpu.yaml')
+    const commented = '# keep me\n' + await fs.readFile(cpu, 'utf-8')
+    await fs.writeFile(cpu, commented)
+
+    const imported = run(IMPORT_RULES, [rulesFile, chartDir])
+    expect(imported.status, imported.stdout).toBe(0)
+    expect(await fs.readdir(path.join(chartDir, 'rules'))).toContain('disk.yaml')
+    expect(await fs.readdir(path.join(chartDir, 'templates'))).toContain('disk.yaml')
+    expect(await fs.readFile(cpu, 'utf-8')).toBe(commented)
+
+    // The regression: it used to write only values.schema.json, which a
+    // migrated chart no longer reads rules from — the import was ignored and
+    // dropped the next time the chart was regenerated.
+    const check = run(GEN_RULES, [chartDir, '--check'])
+    expect(check.status, check.stdout).toBe(0)
+  })
+
+  it('migrates a chart that has no rules/ yet, in the same step', async () => {
+    const imported = run(IMPORT_RULES, [rulesFile, chartDir])
+    expect(imported.status, imported.stdout).toBe(0)
+    expect((await fs.readdir(path.join(chartDir, 'rules'))).sort()).toEqual(['cpu.yaml', 'disk.yaml'])
+    expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
+  })
+
+  it('reads a column the chart has in _common from there, not as a second group column', async () => {
+    run(GEN_RULES, [chartDir])
+    await fs.writeFile(path.join(chartDir, 'rules', '_common.yaml'), 'columns:\n  namespace: {type: string, required: true}\n')
+    const imported = run(IMPORT_RULES, [rulesFile, chartDir])
+    expect(imported.status, imported.stdout).toBe(0)
+    const disk = await fs.readFile(path.join(chartDir, 'rules', 'disk.yaml'), 'utf-8')
+    expect(disk).toContain('disk_warn:')
+    expect(disk).not.toContain('namespace: {')
+  })
+
+  it('writes nothing on --dry-run', async () => {
+    run(GEN_RULES, [chartDir])
+    const dry = run(IMPORT_RULES, [rulesFile, chartDir, '--dry-run'])
+    expect(dry.status, dry.stdout).toBe(0)
+    expect(await fs.readdir(path.join(chartDir, 'rules'))).not.toContain('disk.yaml')
   })
 })
 

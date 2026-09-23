@@ -238,7 +238,7 @@ that never appears. An empty value omits its key.
 > ```
 
 Changing the configuration does not rewrite templates that already exist. They
-are a product and turn stale; regenerate them, and `gen-chart --check` reports
+are a product and turn stale; regenerate them, and `gen-rules --check` reports
 the drift until you do.
 
 ## Importing existing rules
@@ -261,14 +261,14 @@ typing it as a string would make Helm reject the values it is meant to hold.
 Recording rules are skipped. A rule keeping a field the model has no place for
 arrives hand-written rather than losing it.
 
+A placeholder naming a column the chart already has in `_common` reads it
+from there; it does not become a second column of the group.
+
 Importing into an open chart edits the chart in hand, so it inherits every
 check Save already makes; cancelling is just not saving.
-
-> `scripts/import-rules.mjs` does the same conversion from the command line,
-> but it still writes into `values.schema.json`. That is only right for a chart
-> that is not migrated yet; on a migrated chart the imported groups are
-> ignored, and lost the next time the chart is regenerated. Use the editor for
-> those.
+`scripts/import-rules.mjs` does the same from the command line, with one
+difference: it cannot see the deployments using the chart, so a replaced group
+that drops a column is a warning there rather than the breaking-change dialog.
 
 ## Changing a chart that people are already using
 
@@ -299,27 +299,24 @@ moves over when they are ready.
 ## Command line
 
 ```bash
-# migrate a chart to rules/, or regenerate everything from rules/
+# migrate a chart to rules/, or regenerate the schema and templates from rules/
 node scripts/gen-rules.mjs <chart-dir>
 
-# compare instead of writing: rules/, schema and templates
+# compare instead of writing
 node scripts/gen-rules.mjs <chart-dir> --check
 
-# regenerate templates only
-node scripts/gen-chart.mjs <chart-dir>
-
-# compare instead of writing: templates only
-node scripts/gen-chart.mjs <chart-dir> --check
+# import rules into a chart's rules/
+node scripts/import-rules.mjs <rules.yaml> <chart-dir> [--dry-run]
 ```
 
-`gen-rules` writes the rules files back in their canonical form, so comments
-and formatting added by hand are not kept — and `gen-rules --check` reports a
-hand-formatted file as different. `gen-chart` leaves `rules/` and the schema
-alone. See [how-to.md](how-to.md#edit-the-rules-files-directly) for which to
-use when.
+Once a chart has `rules/`, `gen-rules` treats it as the source and never
+rewrites it: comments and formatting added by hand survive, the same as a save
+in the editor. Only a migration writes rules files.
 
-Either `--check` is worth wiring into CI or a pre-commit hook. It is what
+`gen-rules --check` is worth wiring into CI or a pre-commit hook. It is what
 enforces "`rules/` is the source" when files are committed by hand.
+(`gen-chart.mjs` is the older, templates-only tool; it reads groups from the
+generated schema, so it misses a group added to `rules/` by hand.)
 
 ## What holds it together
 

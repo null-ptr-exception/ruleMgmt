@@ -132,6 +132,23 @@ function columnType(name, rules) {
 }
 
 /**
+ * One imported group as a rules-model group — what rules/<key>.yaml holds.
+ * Its columns are the placeholders its rules reference, less any the chart
+ * already has in _common: those resolve there, and a group column of the same
+ * name would show the rule owner a second, shadowing copy of it.
+ */
+export function modelGroupFromImport(group, commonNames = []) {
+  const common = new Set(commonNames)
+  return {
+    group: group.key,
+    columns: Object.fromEntries(group.columns
+      .filter(name => !common.has(name))
+      .map(name => [name, { type: columnType(name, group.rules) }])),
+    rules: group.rules,
+  }
+}
+
+/**
  * Turn imported groups into a values.schema.json.
  *
  * Every group becomes an array property — one row per monitored scope — whose

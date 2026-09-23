@@ -16,8 +16,13 @@
  * stale products (`drift: stale` blocks a commit; running gen-chart
  * separately used to be a step this tool couldn't remind anyone to take).
  *
- * --check is the round-trip tool: run it after a migration to confirm the
- * files on disk are exactly what the converter would produce.
+ * Once rules/ exists it is the source, and this only regenerates the
+ * products from it: the rules files are never rewritten, so comments and
+ * formatting added by hand survive — the same as a save in the editor.
+ *
+ * --check is the round-trip tool: run it after a migration, or after editing
+ * rules/ by hand, to confirm the products are exactly what the source
+ * regenerates to.
  */
 
 import fs from 'fs/promises'
@@ -57,22 +62,24 @@ try {
 } catch { /* no rules/ dir yet */ }
 
 // Once rules/ exists it is the source and the schema is a product; before that,
-// the schema is the source and this is the migration. Either way the outputs
-// are the canonical rules/ layout and a schema regenerated from the model.
+// the schema is the source and this is the migration, which writes rules/ in
+// its canonical layout. Either way the schema is regenerated from the model.
+const migrating = !Object.keys(onDisk).length
 let model, warnings
-if (Object.keys(onDisk).length) {
+if (!migrating) {
   const parsed = parseRulesDir(onDisk)
   if (parsed.errors.length) {
     for (const e of parsed.errors) console.log(`ERROR  ${e}`)
     process.exit(1)
   }
   model = parsed.model
-  warnings = ['rules/ already present — treating it as the source, regenerating values.schema.json from it']
+  warnings = ['rules/ already present — treating it as the source, regenerating values.schema.json and templates/ from it']
 } else {
   ;({ model, warnings } = schemaToModel(schema))
 }
 
-const files = modelToFiles(model)
+// Only a migration writes rules files; an existing rules/ is left as it is.
+const files = migrating ? modelToFiles(model) : {}
 const objectMeta = objectMetaFromEnv()
 for (const w of objectMeta.warnings) console.log(`note   ${w}`)
 const products = generateProducts(model, schema, objectMeta)
@@ -97,17 +104,11 @@ async function reconcile(relPath, want) {
   results.push([have === null ? 'created' : 'updated', relPath])
 }
 
-// Remove a rules/ file whose group has gone from the schema, and a
-// templates/ file whose group has gone or no longer generates one — but
-// never an x-custom-template group's hand-written file.
+// Remove a templates/ file whose group has gone or no longer generates one —
+// but never an x-custom-template group's hand-written file. rules/ is never
+// pruned: it is either being written for the first time or it is the source.
 if (!check) {
-  await fs.mkdir(rulesDir, { recursive: true })
-  for (const name of Object.keys(onDisk)) {
-    if (!(name in files)) {
-      await fs.rm(path.join(rulesDir, name), { force: true })
-      results.push(['removed', path.join('rules', name)])
-    }
-  }
+  if (migrating) await fs.mkdir(rulesDir, { recursive: true })
 
   const customTemplates = new Set(
     Object.entries(model.groups)

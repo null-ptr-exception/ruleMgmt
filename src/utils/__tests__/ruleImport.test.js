@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { importRules, schemaFromImport, importProblems, toGroupKey, columnsOf, ruleToYaml, ruleFromYaml } from '../ruleImport'
+import { importRules, modelGroupFromImport, schemaFromImport, importProblems, toGroupKey, columnsOf, ruleToYaml, ruleFromYaml } from '../ruleImport'
 import { generateGroupTemplate } from '../templateGenerator'
 
 const ruleFile = `
@@ -100,6 +100,20 @@ describe('group naming', () => {
 
   it('falls back to a positional name when the group is unnamed', () => {
     expect(toGroupKey(null, 2)).toBe('group_3')
+  })
+})
+
+describe('modelGroupFromImport', () => {
+  const [group] = importRules(`- alert: A
+  expr: x{namespace="\${namespace}"} > \${warn}
+`).groups
+
+  it('types a column compared to a number as a number', () => {
+    expect(modelGroupFromImport(group).columns).toEqual({ namespace: { type: 'string' }, warn: { type: 'number' } })
+  })
+
+  it('leaves a _common column to _common', () => {
+    expect(modelGroupFromImport(group, ['namespace']).columns).toEqual({ warn: { type: 'number' } })
   })
 })
 

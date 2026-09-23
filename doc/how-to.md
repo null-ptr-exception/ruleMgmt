@@ -224,60 +224,44 @@ node scripts/gen-rules.mjs charts/<name> --init   # also create a missing Chart.
 Writes `rules/*.yaml` from the schema, then regenerates the schema and every
 template from those, in one pass. Warnings about `values.yaml` — a key no
 column defines, a required column left out — are worth fixing before Helm sees
-them. Running it again on a migrated chart changes nothing, unless the rules
-files were edited by hand — see the next section.
+them.
 
 ### Edit the rules files directly
 
 Edit `rules/*.yaml`, then regenerate:
 
 ```bash
-node scripts/gen-rules.mjs charts/<name>   # schema and templates
-node scripts/gen-chart.mjs charts/<name>   # templates only
+node scripts/gen-rules.mjs charts/<name>
 ```
 
-Which one depends on what you changed and whether you want your formatting
-kept:
-
-| | Regenerates | Your rules files |
-|---|---|---|
-| `gen-rules` | schema and templates | rewritten in canonical form — hand-added comments are lost |
-| `gen-chart` | templates only | untouched |
-
-`gen-chart` is enough for a change to rules — an expression, a label, a new
-rule. A change to columns — a type, a default, a new column — also changes the
-schema, and only `gen-rules` regenerates that. Saving in the editor does both
-and keeps comments, so it is the better way for a column change to a file you
-have commented.
+On a chart that already has `rules/`, this regenerates `values.schema.json`
+and every template and leaves the rules files exactly as you wrote them,
+comments included.
 
 ### Check a chart's generated files still agree
 
 ```bash
-node scripts/gen-chart.mjs charts/<name> --check   # templates
-node scripts/gen-rules.mjs charts/<name> --check   # rules files, schema and templates
+node scripts/gen-rules.mjs charts/<name> --check
 ```
 
 Regenerates and compares instead of writing; non-zero exit on any difference.
 Worth wiring into CI or a pre-commit hook if files are ever committed by hand
-— it is what enforces that `rules/` is the source. `gen-rules --check` also
-reports a rules file that is not in canonical form.
+— it is what enforces that `rules/` is the source.
 
 ### Import rules into a chart
-
-Use the editor ([above](#bring-more-rules-into-an-existing-chart)) for a
-migrated chart. `import-rules.mjs` still writes into `values.schema.json`,
-which a migrated chart no longer reads rules from: the import is ignored, and
-lost the next time the chart is regenerated.
-
-For a chart that is not migrated yet:
 
 ```bash
 node scripts/import-rules.mjs rules.yaml charts/<name> --dry-run   # report only
 node scripts/import-rules.mjs rules.yaml charts/<name>             # write
-node scripts/gen-rules.mjs charts/<name>                           # migrate and generate
 ```
 
-For a brand-new chart, create it in the UI first so it has a `Chart.yaml`.
+Writes each imported group to `rules/<group>.yaml` and regenerates the schema
+and templates; the chart's other rules files are left as they are. A chart
+with no `rules/` yet is migrated in the same step. A group that already exists
+is replaced, and a column it loses is reported — unlike the editor's Import,
+this cannot see which deployments set it. For a brand-new chart, create it in
+the UI first, or run `gen-rules.mjs --init` afterwards, so it has a
+`Chart.yaml`.
 
 ---
 
@@ -295,7 +279,7 @@ RULE_OBJECT_ANNOTATIONS='{"alertforge.io/source":"generated"}'
 Values are literal; one containing `{{ }}` is dropped with a warning. Existing
 templates are not rewritten — they turn stale, and commits are refused until
 they are regenerated. Opening and saving each chart does it, or
-`gen-chart.mjs` per chart.
+`gen-rules.mjs` per chart.
 
 ### If rules deploy but never fire
 

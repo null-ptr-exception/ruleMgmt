@@ -15,12 +15,12 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbTrafficNetworkTransmit_WarnBytes
-          expr: rate(container_network_transmit_bytes_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.warn_bytes }}
+          expr: rate(container_network_transmit_bytes_total{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.warn_bytes | default 104857600 }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace }}"
+            namespace: "{{ $row.namespace | default `default` }}"
           annotations:
             summary: "MariadbTrafficNetworkTransmit_WarnBytes triggered on {{ $row.owner }}"
         {{- end }}

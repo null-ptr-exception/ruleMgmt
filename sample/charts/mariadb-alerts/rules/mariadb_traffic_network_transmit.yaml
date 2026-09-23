@@ -1,0 +1,15 @@
+group: mariadb_traffic_network_transmit
+
+columns:
+  warn_bytes: {type: number, default: 104857600, description: Transmit bytes/sec warning}
+
+rules:
+  - alert: MariadbTrafficNetworkTransmit_WarnBytes
+    expr: rate(container_network_transmit_bytes_total{namespace="${namespace}"}[5m]) > ${warn_bytes}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbTrafficNetworkTransmit_WarnBytes triggered on ${owner}

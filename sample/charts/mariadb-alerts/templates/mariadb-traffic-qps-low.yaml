@@ -15,12 +15,12 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbTrafficQpsLow_MinQps
-          expr: rate(mysql_global_status_questions{namespace="{{ $row.namespace }}"}[5m]) < {{ $row.min_qps }}
+          expr: rate(mysql_global_status_questions{namespace="{{ $row.namespace | default `default` }}"}[5m]) < {{ $row.min_qps | default 10 }}
           for: 10m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace }}"
+            namespace: "{{ $row.namespace | default `default` }}"
           annotations:
             summary: "MariadbTrafficQpsLow_MinQps triggered on {{ $row.owner }}"
         {{- end }}

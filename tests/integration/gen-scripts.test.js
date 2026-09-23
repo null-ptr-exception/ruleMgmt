@@ -99,3 +99,22 @@ describe('gen-rules.mjs + gen-chart.mjs', () => {
     expect(await fs.readdir(path.join(chartDir, 'templates'))).not.toContain('cpu.yaml')
   })
 })
+
+// The sample chart is the golden fixture for the rules/ format (#57 P8): it is
+// committed fully migrated, so any generator change that alters its products
+// shows up here as drift, and has to be regenerated and reviewed on purpose.
+describe('sample chart golden (sample/charts/mariadb-alerts)', () => {
+  const SAMPLE = path.resolve('sample/charts/mariadb-alerts')
+
+  it('gen-rules --check reports no drift', () => {
+    const check = run(GEN_RULES, [SAMPLE, '--check'])
+    expect(check.status, check.stdout).toBe(0)
+    expect(check.stdout).not.toMatch(/MISSING|DIFFERS/)
+  })
+
+  it('gen-chart --check reports every group the same', () => {
+    const check = run(GEN_CHART, [SAMPLE, '--check'])
+    expect(check.status, check.stdout).toBe(0)
+    expect(check.stdout).toContain('13 groups, 0 problem(s)')
+  })
+})

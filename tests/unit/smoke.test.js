@@ -1,73 +1,86 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import path from 'path'
+import { parseRulesDir } from '../../src/utils/rulesFile.js'
 
 describe('sample data integrity', () => {
   const sampleDir = path.resolve('sample')
+  const chartDir = path.join(sampleDir, 'charts/mariadb-alerts')
+
+  // The sample chart is migrated (#57 P8): rules/*.yaml is the source,
+  // values.schema.json and templates/ are products regenerated from it.
+  const rulesDir = path.join(chartDir, 'rules')
+  const ruleFiles = fs.existsSync(rulesDir)
+    ? Object.fromEntries(fs.readdirSync(rulesDir).filter(f => f.endsWith('.yaml'))
+      .map(f => [f, fs.readFileSync(path.join(rulesDir, f), 'utf8')]))
+    : {}
+  const { model, errors } = parseRulesDir(ruleFiles)
+  const groupNames = Object.keys(model?.groups || {})
+  const refs = text => [...String(text).matchAll(/\$\{(\w+)\}/g)].map(m => m[1])
 
   it('mariadb-alerts chart has required files', () => {
-    const chartDir = path.join(sampleDir, 'charts/mariadb-alerts')
     expect(fs.existsSync(path.join(chartDir, 'Chart.yaml'))).toBe(true)
     expect(fs.existsSync(path.join(chartDir, 'values.yaml'))).toBe(true)
     expect(fs.existsSync(path.join(chartDir, 'values.schema.json'))).toBe(true)
-    // One template per alert group — the merged single-file format was dropped
-    // when the generator switched to per-group output.
-    const schema = JSON.parse(fs.readFileSync(path.join(chartDir, 'values.schema.json'), 'utf8'))
-    for (const group of Object.keys(schema.properties).filter(k => !k.startsWith('$'))) {
+    expect(fs.existsSync(path.join(rulesDir, '_common.yaml'))).toBe(true)
+    // One rules file and one template per alert group.
+    for (const group of groupNames) {
+      expect(fs.existsSync(path.join(rulesDir, `${group}.yaml`))).toBe(true)
       expect(fs.existsSync(path.join(chartDir, 'templates', `${group.replace(/_/g, '-')}.yaml`))).toBe(true)
     }
   })
 
-  it('schema has valid JSON with x-promql on all alert groups', () => {
-    const schema = JSON.parse(fs.readFileSync(path.join(sampleDir, 'charts/mariadb-alerts/values.schema.json'), 'utf8'))
+  it('rules/ parses, with alert, expr and for on every rule', () => {
+    expect(errors).toEqual([])
+    expect(groupNames.length).toBeGreaterThanOrEqual(10)
+    for (const name of groupNames) {
+      const rules = model.groups[name].rules
+      expect(rules.length, name).toBeGreaterThanOrEqual(1)
+      for (const rule of rules) {
+        expect(rule.alert, name).toBeTruthy()
+        expect(rule.expr, name).toBeTruthy()
+        expect(rule.for, name).toBeTruthy()
+      }
+    }
+  })
+
+  it('schema is a product that carries no rule data', () => {
+    const schema = JSON.parse(fs.readFileSync(path.join(chartDir, 'values.schema.json'), 'utf8'))
     expect(schema.$schema).toContain('json-schema.org')
-    const props = schema.properties
-    const alertNames = Object.keys(props).filter(k => !k.startsWith('$'))
-    expect(alertNames.length).toBeGreaterThanOrEqual(10)
-    for (const name of alertNames) {
-      expect(props[name]['x-promql']).toBeTruthy()
-      expect(props[name]['x-for']).toBeTruthy()
-      expect(props[name].items.properties).toBeTruthy()
+    for (const name of groupNames) {
+      expect(schema.properties[name], name).toBeTruthy()
+      expect(schema.properties[name]['x-promql'], name).toBeUndefined()
+      expect(schema.properties[name]['x-rules'], name).toBeUndefined()
     }
   })
 
-  it('values.yaml keys match schema properties', () => {
-    const schema = JSON.parse(fs.readFileSync(path.join(sampleDir, 'charts/mariadb-alerts/values.schema.json'), 'utf8'))
-    const yaml = fs.readFileSync(path.join(sampleDir, 'charts/mariadb-alerts/values.yaml'), 'utf8')
-    const schemaKeys = Object.keys(schema.properties).filter(k => !k.startsWith('$'))
-    for (const key of schemaKeys) {
+  it('values.yaml keys match the rule groups', () => {
+    const yaml = fs.readFileSync(path.join(chartDir, 'values.yaml'), 'utf8')
+    for (const key of groupNames) {
       expect(yaml).toContain(`${key}:`)
     }
   })
 
-  it('production deployment keys match schema', () => {
-    const schema = JSON.parse(fs.readFileSync(path.join(sampleDir, 'charts/mariadb-alerts/values.schema.json'), 'utf8'))
+  it('production deployment keys match the rule groups', () => {
     const yaml = fs.readFileSync(path.join(sampleDir, 'deployments/mariadb-1/production/values.yaml'), 'utf8')
-    const schemaKeys = Object.keys(schema.properties).filter(k => !k.startsWith('$'))
-    for (const key of schemaKeys) {
+    for (const key of groupNames) {
       expect(yaml).toContain(`${key}:`)
     }
   })
 
-  it('each alert group has at least one threshold variable', () => {
-    const schema = JSON.parse(fs.readFileSync(path.join(sampleDir, 'charts/mariadb-alerts/values.schema.json'), 'utf8'))
-    const alertNames = Object.keys(schema.properties).filter(k => !k.startsWith('$'))
-    for (const name of alertNames) {
-      const props = schema.properties[name].items.properties
-      const thresholds = Object.values(props).filter(p => p['x-var-type'] === 'threshold')
-      expect(thresholds.length).toBeGreaterThanOrEqual(1)
+  it('each alert group compares against at least one of its own columns', () => {
+    for (const name of groupNames) {
+      const { columns, rules } = model.groups[name]
+      const used = rules.flatMap(r => refs(r.expr)).filter(c => c in (columns || {}))
+      expect(used.length, name).toBeGreaterThanOrEqual(1)
     }
   })
 
-  it('chart has at least one selector variable (per-group or common)', () => {
-    const schema = JSON.parse(fs.readFileSync(path.join(sampleDir, 'charts/mariadb-alerts/values.schema.json'), 'utf8'))
-    const commonProps = schema['x-common-vars']?.properties || {}
-    const commonSelectors = Object.values(commonProps).filter(p => p['x-var-type'] === 'selector')
-    const alertNames = Object.keys(schema.properties).filter(k => !k.startsWith('$'))
-    for (const name of alertNames) {
-      const props = schema.properties[name].items?.properties || {}
-      const groupSelectors = Object.values(props).filter(p => p['x-var-type'] === 'selector')
-      expect(commonSelectors.length + groupSelectors.length).toBeGreaterThanOrEqual(1)
+  it('every alert group selects on at least one common column', () => {
+    const common = model.common?.columns || {}
+    for (const name of groupNames) {
+      const used = model.groups[name].rules.flatMap(r => refs(r.expr)).filter(c => c in common)
+      expect(used.length, name).toBeGreaterThanOrEqual(1)
     }
   })
 })

@@ -1,0 +1,25 @@
+group: mariadb_saturation_memory
+
+columns:
+  warn_pct: {type: number, default: 80, description: Memory usage warning (%)}
+  critical_pct: {type: number, default: 95, description: Memory usage critical (%)}
+
+rules:
+  - alert: MariadbSaturationMemory_WarnPct
+    expr: (container_memory_working_set_bytes{namespace="${namespace}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="${namespace}", resource="memory"}) * 100 > ${warn_pct}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbSaturationMemory_WarnPct triggered on ${owner}
+  - alert: MariadbSaturationMemory_CriticalPct
+    expr: (container_memory_working_set_bytes{namespace="${namespace}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="${namespace}", resource="memory"}) * 100 > ${critical_pct}
+    for: 5m
+    labels:
+      severity: critical
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbSaturationMemory_CriticalPct triggered on ${owner}

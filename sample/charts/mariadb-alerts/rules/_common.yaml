@@ -1,0 +1,3 @@
+columns:
+  owner: {type: string, required: true, description: Application team that owns this alert instance}
+  namespace: {type: string, required: true, default: default, description: Kubernetes namespace}

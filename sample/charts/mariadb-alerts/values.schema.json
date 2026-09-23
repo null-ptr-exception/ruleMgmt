@@ -2,10 +2,70 @@
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
   "properties": {
+    "_common": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Application team that owns this alert instance"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Kubernetes namespace",
+          "default": "default"
+        }
+      },
+      "required": [
+        "owner",
+        "namespace"
+      ]
+    },
+    "mariadb_errors_aborted_clients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "warn_rate": {
+            "type": "number",
+            "description": "Aborted clients/sec warning",
+            "default": 3
+          }
+        }
+      }
+    },
+    "mariadb_errors_aborted_connects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "warn_rate": {
+            "type": "number",
+            "description": "Aborted connects/sec warning",
+            "default": 3
+          }
+        }
+      }
+    },
+    "mariadb_errors_connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "warn_rate": {
+            "type": "number",
+            "description": "Connection errors/sec warning",
+            "default": 5
+          },
+          "critical_rate": {
+            "type": "number",
+            "description": "Connection errors/sec critical",
+            "default": 20
+          }
+        }
+      }
+    },
     "mariadb_latency_slow_queries": {
       "type": "array",
-      "x-promql": "rate(mysql_global_status_slow_queries{namespace=\"{{ .namespace }}\"}[5m]) > {{ THRESHOLD }}",
-      "x-for": "5m",
       "items": {
         "type": "object",
         "properties": {
@@ -16,284 +76,157 @@
           "warn_threshold": {
             "type": "number",
             "description": "Slow queries/sec warning",
-            "default": 1,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
+            "default": 1
           },
           "critical_threshold": {
             "type": "number",
             "description": "Slow queries/sec critical",
-            "default": 5,
-            "x-var-type": "threshold",
-            "x-severity": "critical"
-          }
-        }
-      }
-    },
-    "mariadb_traffic_qps_low": {
-      "type": "array",
-      "x-promql": "rate(mysql_global_status_questions{namespace=\"{{ .namespace }}\"}[5m]) < {{ THRESHOLD }}",
-      "x-for": "10m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "min_qps": {
-            "type": "number",
-            "description": "Minimum QPS threshold",
-            "default": 10,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          }
-        }
-      }
-    },
-    "mariadb_traffic_qps_high": {
-      "type": "array",
-      "x-promql": "rate(mysql_global_status_questions{namespace=\"{{ .namespace }}\"}[5m]) > {{ THRESHOLD }}",
-      "x-for": "5m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "max_qps": {
-            "type": "number",
-            "description": "Maximum QPS threshold",
-            "default": 10000,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          }
-        }
-      }
-    },
-    "mariadb_traffic_network_receive": {
-      "type": "array",
-      "x-promql": "rate(container_network_receive_bytes_total{namespace=\"{{ .namespace }}\"}[5m]) > {{ THRESHOLD }}",
-      "x-for": "5m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "warn_bytes": {
-            "type": "number",
-            "description": "Receive bytes/sec warning",
-            "default": 104857600,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          }
-        }
-      }
-    },
-    "mariadb_traffic_network_transmit": {
-      "type": "array",
-      "x-promql": "rate(container_network_transmit_bytes_total{namespace=\"{{ .namespace }}\"}[5m]) > {{ THRESHOLD }}",
-      "x-for": "5m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "warn_bytes": {
-            "type": "number",
-            "description": "Transmit bytes/sec warning",
-            "default": 104857600,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          }
-        }
-      }
-    },
-    "mariadb_errors_connections": {
-      "type": "array",
-      "x-promql": "rate(mysql_global_status_connection_errors_total{namespace=\"{{ .namespace }}\"}[5m]) > {{ THRESHOLD }}",
-      "x-for": "5m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "warn_rate": {
-            "type": "number",
-            "description": "Connection errors/sec warning",
-            "default": 5,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          },
-          "critical_rate": {
-            "type": "number",
-            "description": "Connection errors/sec critical",
-            "default": 20,
-            "x-var-type": "threshold",
-            "x-severity": "critical"
-          }
-        }
-      }
-    },
-    "mariadb_errors_aborted_clients": {
-      "type": "array",
-      "x-promql": "rate(mysql_global_status_aborted_clients{namespace=\"{{ .namespace }}\"}[5m]) > {{ THRESHOLD }}",
-      "x-for": "5m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "warn_rate": {
-            "type": "number",
-            "description": "Aborted clients/sec warning",
-            "default": 3,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          }
-        }
-      }
-    },
-    "mariadb_errors_aborted_connects": {
-      "type": "array",
-      "x-promql": "rate(mysql_global_status_aborted_connects{namespace=\"{{ .namespace }}\"}[5m]) > {{ THRESHOLD }}",
-      "x-for": "5m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "warn_rate": {
-            "type": "number",
-            "description": "Aborted connects/sec warning",
-            "default": 3,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          }
-        }
-      }
-    },
-    "mariadb_saturation_connections": {
-      "type": "array",
-      "x-promql": "(mysql_global_status_threads_connected{namespace=\"{{ .namespace }}\"} / mysql_global_variables_max_connections{namespace=\"{{ .namespace }}\"}) * 100 > {{ THRESHOLD }}",
-      "x-for": "5m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "warn_pct": {
-            "type": "number",
-            "description": "Connection saturation warning (%)",
-            "default": 70,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          },
-          "critical_pct": {
-            "type": "number",
-            "description": "Connection saturation critical (%)",
-            "default": 90,
-            "x-var-type": "threshold",
-            "x-severity": "critical"
+            "default": 5
           }
         }
       }
     },
     "mariadb_saturation_buffer_pool": {
       "type": "array",
-      "x-promql": "(1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace=\"{{ .namespace }}\"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace=\"{{ .namespace }}\"}) * 100 > {{ THRESHOLD }}",
-      "x-for": "10m",
       "items": {
         "type": "object",
         "properties": {
           "warn_pct": {
             "type": "number",
             "description": "Buffer pool usage warning (%)",
-            "default": 85,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
+            "default": 85
           },
           "critical_pct": {
             "type": "number",
             "description": "Buffer pool usage critical (%)",
-            "default": 95,
-            "x-var-type": "threshold",
-            "x-severity": "critical"
+            "default": 95
+          }
+        }
+      }
+    },
+    "mariadb_saturation_connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "warn_pct": {
+            "type": "number",
+            "description": "Connection saturation warning (%)",
+            "default": 70
+          },
+          "critical_pct": {
+            "type": "number",
+            "description": "Connection saturation critical (%)",
+            "default": 90
           }
         }
       }
     },
     "mariadb_saturation_cpu": {
       "type": "array",
-      "x-promql": "(rate(container_cpu_usage_seconds_total{namespace=\"{{ .namespace }}\"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace=\"{{ .namespace }}\", resource=\"cpu\"}) * 100 > {{ THRESHOLD }}",
-      "x-for": "5m",
       "items": {
         "type": "object",
         "properties": {
           "warn_pct": {
             "type": "number",
             "description": "CPU usage warning (%)",
-            "default": 80,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
+            "default": 80
           },
           "critical_pct": {
             "type": "number",
             "description": "CPU usage critical (%)",
-            "default": 95,
-            "x-var-type": "threshold",
-            "x-severity": "critical"
-          }
-        }
-      }
-    },
-    "mariadb_saturation_memory": {
-      "type": "array",
-      "x-promql": "(container_memory_working_set_bytes{namespace=\"{{ .namespace }}\"} / on(namespace, pod) kube_pod_container_resource_limits{namespace=\"{{ .namespace }}\", resource=\"memory\"}) * 100 > {{ THRESHOLD }}",
-      "x-for": "5m",
-      "items": {
-        "type": "object",
-        "properties": {
-          "warn_pct": {
-            "type": "number",
-            "description": "Memory usage warning (%)",
-            "default": 80,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
-          },
-          "critical_pct": {
-            "type": "number",
-            "description": "Memory usage critical (%)",
-            "default": 95,
-            "x-var-type": "threshold",
-            "x-severity": "critical"
+            "default": 95
           }
         }
       }
     },
     "mariadb_saturation_disk": {
       "type": "array",
-      "x-promql": "(kubelet_volume_stats_used_bytes{namespace=\"{{ .namespace }}\"} / kubelet_volume_stats_capacity_bytes{namespace=\"{{ .namespace }}\"}) * 100 > {{ THRESHOLD }}",
-      "x-for": "10m",
       "items": {
         "type": "object",
         "properties": {
           "warn_pct": {
             "type": "number",
             "description": "Disk usage warning (%)",
-            "default": 75,
-            "x-var-type": "threshold",
-            "x-severity": "warning"
+            "default": 75
           },
           "critical_pct": {
             "type": "number",
             "description": "Disk usage critical (%)",
-            "default": 90,
-            "x-var-type": "threshold",
-            "x-severity": "critical"
+            "default": 90
+          }
+        }
+      }
+    },
+    "mariadb_saturation_memory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "warn_pct": {
+            "type": "number",
+            "description": "Memory usage warning (%)",
+            "default": 80
+          },
+          "critical_pct": {
+            "type": "number",
+            "description": "Memory usage critical (%)",
+            "default": 95
+          }
+        }
+      }
+    },
+    "mariadb_traffic_network_receive": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "warn_bytes": {
+            "type": "number",
+            "description": "Receive bytes/sec warning",
+            "default": 104857600
+          }
+        }
+      }
+    },
+    "mariadb_traffic_network_transmit": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "warn_bytes": {
+            "type": "number",
+            "description": "Transmit bytes/sec warning",
+            "default": 104857600
+          }
+        }
+      }
+    },
+    "mariadb_traffic_qps_high": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "max_qps": {
+            "type": "number",
+            "description": "Maximum QPS threshold",
+            "default": 10000
+          }
+        }
+      }
+    },
+    "mariadb_traffic_qps_low": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "min_qps": {
+            "type": "number",
+            "description": "Minimum QPS threshold",
+            "default": 10
           }
         }
       }
     }
-  },
-  "x-common-vars": {
-    "type": "object",
-    "properties": {
-      "owner": {
-        "type": "string",
-        "description": "Application team that owns this alert instance"
-      },
-      "namespace": {
-        "type": "string",
-        "description": "Kubernetes namespace",
-        "default": "default",
-        "x-var-type": "selector"
-      }
-    },
-    "required": [
-      "owner",
-      "namespace"
-    ]
   }
 }

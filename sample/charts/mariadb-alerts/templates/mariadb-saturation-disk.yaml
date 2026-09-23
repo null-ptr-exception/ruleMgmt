@@ -15,21 +15,21 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbSaturationDisk_WarnPct
-          expr: (kubelet_volume_stats_used_bytes{namespace="{{ $row.namespace }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.warn_pct }}
+          expr: (kubelet_volume_stats_used_bytes{namespace="{{ $row.namespace | default `default` }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.warn_pct | default 75 }}
           for: 10m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace }}"
+            namespace: "{{ $row.namespace | default `default` }}"
           annotations:
             summary: "MariadbSaturationDisk_WarnPct triggered on {{ $row.owner }}"
         - alert: MariadbSaturationDisk_CriticalPct
-          expr: (kubelet_volume_stats_used_bytes{namespace="{{ $row.namespace }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ $row.namespace }}"}) * 100 > {{ $row.critical_pct }}
+          expr: (kubelet_volume_stats_used_bytes{namespace="{{ $row.namespace | default `default` }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.critical_pct | default 90 }}
           for: 10m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace }}"
+            namespace: "{{ $row.namespace | default `default` }}"
           annotations:
             summary: "MariadbSaturationDisk_CriticalPct triggered on {{ $row.owner }}"
         {{- end }}

@@ -5,7 +5,7 @@ import { schemaToModel, modelToSchema, modelToFiles } from '../rulesFile.js'
 import { objectMetaFromEnv } from '../objectMeta.js'
 
 const legacySchema = JSON.parse(
-  fs.readFileSync('sample/charts/mariadb-alerts/values.schema.json', 'utf-8')
+  fs.readFileSync('src/utils/__fixtures__/mariadb-legacy.schema.json', 'utf-8')
 )
 const objectMeta = objectMetaFromEnv({})
 

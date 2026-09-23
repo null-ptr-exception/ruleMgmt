@@ -8,7 +8,7 @@ import { generateGroupTemplate } from '../templateGenerator.js'
 import { isAlertGroup } from '../schemaUtils.js'
 
 const sampleSchema = JSON.parse(
-  fs.readFileSync('sample/charts/mariadb-alerts/values.schema.json', 'utf-8')
+  fs.readFileSync('src/utils/__fixtures__/mariadb-legacy.schema.json', 'utf-8')
 )
 
 // A hand-built x-rules chart, the shape the format targets.

@@ -1,0 +1,15 @@
+group: mariadb_traffic_qps_low
+
+columns:
+  min_qps: {type: number, default: 10, description: Minimum QPS threshold}
+
+rules:
+  - alert: MariadbTrafficQpsLow_MinQps
+    expr: rate(mysql_global_status_questions{namespace="${namespace}"}[5m]) < ${min_qps}
+    for: 10m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbTrafficQpsLow_MinQps triggered on ${owner}

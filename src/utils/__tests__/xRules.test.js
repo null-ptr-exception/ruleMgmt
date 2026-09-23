@@ -5,7 +5,7 @@ import { renderValue, fieldOwnership, danglingRefs } from '../ruleModel'
 import golden from '../__fixtures__/mariadb-golden.json'
 
 const sampleSchema = JSON.parse(
-  fs.readFileSync('sample/charts/mariadb-alerts/values.schema.json', 'utf-8')
+  fs.readFileSync('src/utils/__fixtures__/mariadb-legacy.schema.json', 'utf-8')
 )
 
 describe('round-trip equivalence (issue #57 acceptance condition 1)', () => {

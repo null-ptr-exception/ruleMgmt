@@ -26,9 +26,8 @@ export const MAX_OBJECT_BYTES = 1_000_000
 /** Rows per object. The template chunks its row loop at this size. */
 export const MAX_ROWS_PER_OBJECT = 100
 
-const API_VERSION = 'monitoring.coreos.com/v1'
-
 /** Exported so anything inspecting the output cannot drift from what it emits. */
+export const API_VERSION = 'monitoring.coreos.com/v1'
 export const KIND = 'PrometheusRule'
 
 // The generator runs in the browser as well as in scripts, so size is measured

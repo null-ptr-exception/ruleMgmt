@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { generateHelmUnittestSuite } from '../../src/utils/helmTestGenerator.js'
+import yaml from 'js-yaml'
+import { generateHelmUnittestSuite, goFloat } from '../../src/utils/helmTestGenerator.js'
+import { parseRulesDir } from '../../src/utils/rulesFile.js'
 
 // The suite is written into a copy of the chart. Writing it into sample/ meant
 // creating and deleting a tests/ directory inside a chart another test renders
@@ -13,6 +15,36 @@ const sourceChart = path.resolve('sample/charts/mariadb-alerts')
 let workDir
 let chartDir
 let testFile
+let content
+
+function readModel(dir) {
+  const rulesDir = path.join(dir, 'rules')
+  const files = Object.fromEntries(fs.readdirSync(rulesDir).filter(f => f.endsWith('.yaml'))
+    .map(f => [f, fs.readFileSync(path.join(rulesDir, f), 'utf8')]))
+  const { model, errors } = parseRulesDir(files)
+  if (errors.length) throw new Error(errors.join('\n'))
+  return model
+}
+
+function helmUnittest(dir) {
+  try {
+    return { ok: true, output: execFileSync('helm', ['unittest', dir], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }) }
+  } catch (e) {
+    // helm unittest exits non-zero on failure
+    return { ok: false, output: `${e.stdout || ''}${e.stderr || ''}` || e.message }
+  }
+}
+
+describe('goFloat', () => {
+  it('prints numbers the way Helm prints a float64 from values', () => {
+    expect(goFloat(104857600)).toBe('1.048576e+08')
+    expect(goFloat(1000000)).toBe('1e+06')
+    expect(goFloat(999999)).toBe('999999')
+    expect(goFloat(0.5)).toBe('0.5')
+    expect(goFloat(0.00001)).toBe('1e-05')
+    expect(goFloat(10000)).toBe('10000')
+  })
+})
 
 describe('helm-unittest via generated tests', () => {
   beforeAll(() => {
@@ -21,32 +53,47 @@ describe('helm-unittest via generated tests', () => {
     fs.cpSync(sourceChart, chartDir, { recursive: true })
 
     testFile = path.join(chartDir, 'tests', 'generated_test.yaml')
-    const schema = JSON.parse(fs.readFileSync(path.join(chartDir, 'values.schema.json'), 'utf8'))
+    content = generateHelmUnittestSuite(readModel(chartDir))
     fs.mkdirSync(path.dirname(testFile), { recursive: true })
-    fs.writeFileSync(testFile, generateHelmUnittestSuite(schema), 'utf8')
+    fs.writeFileSync(testFile, content, 'utf8')
   })
 
   afterAll(() => {
     if (workDir) fs.rmSync(workDir, { recursive: true, force: true })
   })
 
-  it('generates a non-empty test file', () => {
-    const content = fs.readFileSync(testFile, 'utf8')
-    expect(content).toContain('suite: generated alert rule tests')
+  it('generates a test for every group, named after the rules in rules/', () => {
+    const suite = yaml.load(content)
+    expect(suite.suite).toBe('generated alert rule tests')
+    expect(suite.templates).toHaveLength(13)
+    for (const template of suite.templates) {
+      expect(suite.tests.some(t => t.template === template), template).toBe(true)
+    }
     expect(content).toContain('isKind')
     expect(content).toContain('MariadbSaturationDisk_WarnPct')
   })
 
   it('helm unittest passes all generated tests', () => {
-    let output
-    try {
-      output = execSync(`helm unittest ${chartDir}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
-    } catch (e) {
-      // helm unittest exits non-zero on failure, capture output
-      output = e.stdout || e.stderr || e.message
-      throw new Error(`helm unittest failed:\n${output}`)
-    }
+    const { ok, output } = helmUnittest(chartDir)
+    if (!ok) throw new Error(`helm unittest failed:\n${output}`)
     expect(output).toContain('PASS')
     expect(output).not.toContain('FAIL')
+  })
+
+  it('fails when a template no longer matches its rules', () => {
+    const file = path.join(chartDir, 'templates', 'mariadb-saturation-disk.yaml')
+    const original = fs.readFileSync(file, 'utf8')
+    try {
+      // Swap the two thresholds, as a generator bug reading the wrong column would.
+      fs.writeFileSync(file, original
+        .replace('$row.warn_pct |', '$row.TMP |')
+        .replace('$row.critical_pct |', '$row.warn_pct |')
+        .replace('$row.TMP |', '$row.critical_pct |'), 'utf8')
+      const { ok, output } = helmUnittest(chartDir)
+      expect(ok).toBe(false)
+      expect(output).toContain('mariadb_saturation_disk')
+    } finally {
+      fs.writeFileSync(file, original, 'utf8')
+    }
   })
 })

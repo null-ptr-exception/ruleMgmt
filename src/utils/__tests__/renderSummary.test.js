@@ -18,6 +18,44 @@ describe('selfCheckRendered', () => {
   it('does not flag a literal ${...} placeholder — that is the save-time check\'s job', () => {
     expect(selfCheckRendered('summary: "grafana var ${__interval:raw}"')).toEqual({ passed: true, problems: [] })
   })
+
+  describe('preserved {{ }} spans', () => {
+    const model = {
+      groups: {
+        traffic: {
+          vars: { val: 'now {{ $value | humanize }}' },
+          rules: [
+            { alert: 'TrafficHigh', expr: 'x > 1', labels: { severity: 'warning' },
+              annotations: { summary: '${val} on {{ $labels.pod }}' } },
+            { alert: 'TrafficHigh', expr: 'x > 2', labels: { severity: 'critical' } },
+          ],
+        },
+      },
+    }
+    const rendered = summary => CR([{ name: 'traffic', rules: [
+      { alert: 'TrafficHigh', expr: 'x > 1', labels: { severity: 'warning' }, annotations: { summary } },
+      { alert: 'TrafficHigh', expr: 'x > 2', labels: { severity: 'critical' } },
+    ] }])
+
+    // The critical instance carries no spans, and neither does its source rule:
+    // it passes although the warning rule of the same name has two.
+    it('passes when every span, including one a vars entry brings in, came through verbatim', () => {
+      expect(selfCheckRendered(rendered('now {{ $value | humanize }} on {{ $labels.pod }}'), model))
+        .toEqual({ passed: true, problems: [] })
+    })
+
+    it('names the alert and the span the rendering lost', () => {
+      const { passed, problems } = selfCheckRendered(rendered('now {{ $value | humanize }} on '), model)
+      expect(passed).toBe(false)
+      expect(problems).toEqual(['Alert "TrafficHigh" rendered without `{{ $labels.pod }}` from its rules source — the generator\'s escaping lost it.'])
+    })
+
+    it('ignores rendered alerts the model does not define, and skips without a model', () => {
+      const other = CR([{ name: 'x', rules: [{ alert: 'Other', expr: 'up', annotations: { summary: 'plain' } }] }])
+      expect(selfCheckRendered(other, model).passed).toBe(true)
+      expect(selfCheckRendered(rendered('lost'), undefined).passed).toBe(true)
+    })
+  })
 })
 
 describe('tallyRendered', () => {

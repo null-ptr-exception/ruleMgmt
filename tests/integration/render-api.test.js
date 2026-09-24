@@ -352,6 +352,57 @@ spec:
       expect(errors.missing).toEqual([{ alert: 'ErrorsHigh', severity: 'warning' }])
     })
 
+    // A migrated chart's schema carries no rules — they live in rules/ — so the
+    // summary and the self-check have to read them from there. Reading the
+    // schema instead left every group with no possible alerts: `missing` never
+    // fired, and no `{{ }}` was ever checked.
+    it('reads a migrated chart\'s rules/ for missing alerts and preserved {{ }}', async () => {
+      const rulesDir = path.join(tmpDir, 'charts', 'test-chart', 'rules')
+      await fs.mkdir(rulesDir, { recursive: true })
+      try {
+        await fs.writeFile(path.join(rulesDir, 'traffic.yaml'), `group: traffic
+columns:
+  warn: {type: number}
+rules:
+  - alert: TrafficHigh
+    expr: x > \${warn}
+    labels: {severity: warning}
+    annotations: {summary: "{{ $value }} on {{ $labels.pod }}"}
+  - alert: TrafficLow
+    expr: x < \${warn}
+    labels: {severity: warning}
+`)
+        await fs.writeFile(schemaFile(), JSON.stringify({
+          type: 'object',
+          properties: { traffic: { type: 'array', items: { type: 'object', properties: { warn: { type: 'number' } } } } },
+        }))
+        await fs.writeFile(valuesFile(), yaml.dump({ traffic: [{ warn: 1 }] }))
+        await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-traffic-1-1
+spec:
+  groups:
+    - name: traffic
+      rules:
+        - alert: TrafficHigh
+          expr: x > 1
+          labels: { severity: warning }
+          annotations: { summary: "{{ $value }} on " }
+`)
+
+        const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+        const traffic = data.summary.groups.find(g => g.name === 'traffic')
+        expect(traffic.missing).toEqual([{ alert: 'TrafficLow', severity: 'warning' }])
+        expect(data.selfCheck.passed).toBe(false)
+        expect(data.selfCheck.problems.join('\n')).toContain('"TrafficHigh" rendered without `{{ $labels.pod }}`')
+      } finally {
+        await fs.rm(rulesDir, { recursive: true, force: true })
+      }
+    })
+
     it('marks a group with rows but no rendered alerts as no-alerts, distinct from empty', async () => {
       await fs.writeFile(schemaFile(), JSON.stringify({
         type: 'object',

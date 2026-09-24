@@ -176,6 +176,11 @@ group produced, by alert name and severity. It also points out:
 Preview saves for you.
 
 If `promtool` is installed it also checks the rules and reports what it finds.
+Two things promtool accepts but are still wrong are flagged on top: a
+`<no value>` in the output (a field that had no value and no default), and a
+`{{ … }}` from the template's rules that did not come through verbatim. Either
+one is a problem in the chart, not in your rows — pass it on to whoever
+maintains the template.
 
 ### Work across many groups at once
 

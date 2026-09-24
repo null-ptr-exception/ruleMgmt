@@ -96,6 +96,15 @@ export function nestedPlaceholders(str) {
   return spans
 }
 
+/**
+ * The `{{ … }}` spans a string carries, verbatim — what the generator escapes
+ * so Helm passes them through, and so what must reappear, character for
+ * character, in the rendered output.
+ */
+export function prometheusTemplatesIn(str) {
+  return String(str).match(HELM_PASSTHROUGH_RE) || []
+}
+
 /** Every `${var}` name referenced by a string. */
 export function varsIn(str) {
   const names = []

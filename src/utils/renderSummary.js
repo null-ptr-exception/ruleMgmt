@@ -11,6 +11,7 @@
 
 import yaml from 'js-yaml'
 import { KIND } from './crConverter.js'
+import { expandVars, prometheusTemplatesIn } from './ruleModel.js'
 
 // Checks promtool structurally can't make: it only knows valid vs invalid
 // PromQL, not "this isn't what you meant". `<no value>` is Helm rendering a
@@ -26,16 +27,71 @@ import { KIND } from './crConverter.js'
 // on a deliberately literal `${x:raw}` (a Grafana dashboard variable passed
 // through untouched — see issue #57).
 //
-// The other half of the deferred check — that every `{{ ... }}` the generator
-// deliberately preserved survives expansion verbatim — needs the generator's
-// pre-expansion token list and so lives with the commit-time checks, not here.
-export function selfCheckRendered(renderedYaml) {
+// The other half: every `{{ ... }}` a rule carries in its source must reappear
+// verbatim in each rendered instance of that rule. The generator escapes them
+// so Helm passes them through; a span missing afterwards means the escaping
+// lost it. `model` is the chart's rules/ model — pass it only for a chart that
+// has one: the legacy x-promql path is generated differently and is not held
+// to this.
+export function selfCheckRendered(renderedYaml, model) {
   const problems = []
   const noValue = (renderedYaml.match(/<no value>/g) || []).length
   if (noValue > 0) {
     problems.push(`Rendered output contains ${noValue} \`<no value>\` — a referenced field had no value and no default.`)
   }
+  if (model) problems.push(...lostTemplates(renderedYaml, model))
   return { passed: problems.length === 0, problems }
+}
+
+const ruleTexts = rule => [
+  rule?.expr, rule?.for,
+  ...Object.values(rule?.labels || {}),
+  ...Object.values(rule?.annotations || {}),
+].filter(t => t !== undefined && t !== null).map(String)
+
+function lostTemplates(renderedYaml, model) {
+  // alert name -> one entry per source rule of that name (a name can repeat,
+  // e.g. one per severity), with the labels whose value is fixed text — what
+  // tells the rendered instances of same-named rules apart.
+  const expected = new Map()
+  for (const group of Object.values(model.groups || {})) {
+    for (const rule of group.rules || []) {
+      if (!rule.alert) continue
+      const tokens = new Set(ruleTexts(rule).flatMap(t => prometheusTemplatesIn(expandVars(t, group.vars))))
+      const fixedLabels = Object.entries(rule.labels || {})
+        .map(([k, v]) => [k, expandVars(v, group.vars)])
+        .filter(([, v]) => !/\$\{|\{\{/.test(v))
+      if (!expected.has(rule.alert)) expected.set(rule.alert, [])
+      expected.get(rule.alert).push({ tokens, fixedLabels })
+    }
+  }
+  if (![...expected.values()].some(rules => rules.some(r => r.tokens.size))) return []
+
+  const problems = new Set()
+  try {
+    yaml.loadAll(renderedYaml, doc => {
+      if (doc?.kind !== KIND) return
+      for (const g of doc?.spec?.groups || []) {
+        for (const r of g?.rules || []) {
+          const named = expected.get(r?.alert)
+          if (!named) continue
+          const labelsMatch = ({ fixedLabels }) => fixedLabels.every(([k, v]) => String(r.labels?.[k] ?? '') === v)
+          const candidates = named.filter(labelsMatch).length ? named.filter(labelsMatch) : named
+          const text = ruleTexts(r).join('\n')
+          // Still ambiguous after the labels: whichever it is missing least of.
+          const missing = candidates
+            .map(({ tokens }) => [...tokens].filter(t => !text.includes(t)))
+            .reduce((a, b) => (b.length < a.length ? b : a))
+          for (const t of missing) {
+            problems.add(`Alert "${r.alert}" rendered without \`${t}\` from its rules source — the generator's escaping lost it.`)
+          }
+        }
+      }
+    })
+  } catch {
+    // Unparseable output is promtool's to report, not this check's.
+  }
+  return [...problems]
 }
 
 // Tally the rendered output by prometheus group name: how many rules carry each

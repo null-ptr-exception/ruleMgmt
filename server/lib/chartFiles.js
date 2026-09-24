@@ -6,7 +6,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { computeDrift, generateProducts } from '../../src/utils/drift.js'
-import { parseRulesDir } from '../../src/utils/rulesFile.js'
+import { parseRulesDir, schemaToModel } from '../../src/utils/rulesFile.js'
 import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
 
 async function readOr(file) {
@@ -58,6 +58,23 @@ export async function readChartArtifacts(chartDir) {
   } catch { /* absent or unparseable */ }
 
   return { rulesFiles, templateFiles, schema }
+}
+
+/**
+ * The chart's rule model: parsed from rules/ when the chart has one, else
+ * adapted from a legacy schema. The schema of a migrated chart carries no
+ * rules, so reading it there yields groups with none. `fromRules` says which;
+ * `model` is null when there is neither.
+ */
+export async function readChartModel(chartDir) {
+  const { rulesFiles, schema } = await readChartArtifacts(chartDir)
+  const fromRules = !!(rulesFiles && Object.keys(rulesFiles).length)
+  let model = null
+  try {
+    if (fromRules) model = parseRulesDir(rulesFiles).model
+    else if (schema) model = schemaToModel(schema).model
+  } catch { /* an unparseable source: callers go without */ }
+  return { model, fromRules, schema }
 }
 
 /** { state, files?, errors? } — see computeDrift. */

@@ -4,9 +4,8 @@ import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
 import { KIND } from '../../src/utils/crConverter.js'
-import { chartDrift } from '../lib/chartFiles.js'
+import { chartDrift, readChartModel } from '../lib/chartFiles.js'
 import { getDepName, unwrapValues } from '../lib/subchart.js'
-import { schemaToModel } from '../../src/utils/rulesFile.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
 import { logger } from '../lib/logger.js'
@@ -138,7 +137,7 @@ async function checkPrometheusRules(renderedYaml) {
 // of the template's alerts produced nothing, and whether a group is empty
 // (no rows) versus filled-but-silent (rows, zero alerts). Plus any value keys
 // the schema no longer has — orphans left by a migration that didn't finish.
-async function buildSummary(renderedYaml, chartDir, valuesFilePaths) {
+async function buildSummary(renderedYaml, { model, schema }, valuesFilePaths) {
   let rendered
   try {
     rendered = tallyRendered(renderedYaml)
@@ -146,23 +145,14 @@ async function buildSummary(renderedYaml, chartDir, valuesFilePaths) {
     return null
   }
 
-  let schema = null
-  try {
-    schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
-  } catch { /* a chart with no schema yet: no possible-alert list, no orphan check */ }
-
-  // Possible (alert, severity) pairs per group key, via the same read-time
-  // adapter the generator uses — legacy x-promql and x-rules both resolve here.
+  // Possible (alert, severity) pairs per group key, from the chart's rules/
+  // (or a legacy schema through the upgrade adapter). With no schema yet there
+  // is no possible-alert list and no orphan check.
   const possible = {}
-  if (schema) {
-    try {
-      const { model } = schemaToModel(schema)
-      for (const [key, g] of Object.entries(model.groups || {})) {
-        possible[key] = (g.rules || [])
-          .filter(r => r.alert)
-          .map(r => ({ alert: r.alert, severity: r.labels?.severity ?? '' }))
-      }
-    } catch { /* leave possible empty; the summary still shows rendered counts */ }
+  for (const [key, g] of Object.entries(model?.groups || {})) {
+    possible[key] = (g.rules || [])
+      .filter(r => r.alert)
+      .map(r => ({ alert: r.alert, severity: r.labels?.severity ?? '' }))
   }
 
   const schemaGroups = new Set(schema ? Object.keys(schema.properties || {}).filter(isAlertGroup) : [])
@@ -247,14 +237,15 @@ export default function renderRouter() {
 
       const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000, maxBuffer: MAX_BUFFER })
       const check = await checkPrometheusRules(output)
-      const selfCheck = selfCheckRendered(output)
+      const chartModel = await readChartModel(chartDir)
+      const selfCheck = selfCheckRendered(output, chartModel.fromRules ? chartModel.model : null)
       // Same file the frontend saves: `values.yaml` in folder mode, the legacy
       // `<deployment>-values.yaml` otherwise. Both are tried; the first that
       // parses wins.
       const valuesFilePaths = folder
         ? [path.join(deploymentsDir, 'values.yaml'), path.join(deploymentsDir, `${deployment}-values.yaml`)]
         : [path.join(deploymentsDir, `${deployment}-values.yaml`)]
-      const summary = await buildSummary(output, chartDir, valuesFilePaths).catch(err => {
+      const summary = await buildSummary(output, chartModel, valuesFilePaths).catch(err => {
         logger.error({ err, chart, deployment }, 'buildSummary failed, falling back to raw YAML')
         return null
       })

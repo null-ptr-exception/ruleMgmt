@@ -247,6 +247,13 @@ describe('validateValues', () => {
     expect(out.join()).toMatch(/missing required "namespace"/)
   })
 
+  it('flags a missing required column even when it has a default, as Helm does', () => {
+    const { model: m } = parseRulesDir({
+      'cpu.yaml': 'group: cpu\ncolumns:\n  ns: {type: string, required: true, default: prod}\nrules: []\n',
+    })
+    expect(validateValues({ cpu: [{}] }, m).join()).toMatch(/cpu\[0\] is missing required "ns"/)
+  })
+
   it('flags a group with no rules file', () => {
     expect(validateValues({ ghost: [{}] }, model).join()).toMatch(/no matching rules file/)
   })

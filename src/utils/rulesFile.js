@@ -406,7 +406,9 @@ export function validateValues(values, model) {
     const known = { ...commonCols, ...columns }
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
       for (const [name, col] of Object.entries(columns)) {
-        if (col.required && col.default === undefined && !(name in row)) {
+        // Not relaxed by a default: JSON Schema's `required` ignores `default`,
+        // so Helm rejects the row whatever the column's default says.
+        if (col.required && !(name in row)) {
           problems.push(`values.yaml: ${group}[${i}] is missing required "${name}"`)
         }
       }

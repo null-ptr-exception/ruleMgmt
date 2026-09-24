@@ -379,6 +379,36 @@ export function parseCommonFile(text) {
  * included when present. Cross-file checks (a vars name or a column colliding
  * with a `_common` column) are applied here.
  */
+export function parseRulesDir(files) {
+  const errors = []
+  const model = { common: { columns: {} }, groups: {} }
+
+  if (files['_common.yaml'] !== undefined) {
+    const { columns, errors: e } = parseCommonFile(files['_common.yaml'])
+    model.common.columns = columns
+    errors.push(...e)
+  }
+  const commonNames = new Set(Object.keys(model.common.columns))
+
+  for (const [name, text] of Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    if (name === '_common.yaml') continue
+    const filename = name.replace(/\.yaml$/, '')
+    const { group, errors: e } = parseGroupFile(text, filename)
+    errors.push(...e)
+    for (const varName of Object.keys(group.vars || {})) {
+      if (commonNames.has(varName)) errors.push(`${name}: vars "${varName}" collides with a _common column`)
+    }
+    // A row wins over _common in both columnFallbacks and Helm's `merge $row
+    // $common`, so a collision would silently shadow the common value.
+    for (const colName of Object.keys(group.columns)) {
+      if (commonNames.has(colName)) errors.push(`${name}: column "${colName}" collides with a _common column`)
+    }
+    model.groups[filename] = group
+  }
+
+  return { model, errors }
+}
+
 // ── values check ────────────────────────────────────────────────────────────
 
 const typeOk = (value, type) =>
@@ -419,34 +449,4 @@ export function validateValues(values, model) {
     }
   }
   return problems
-}
-
-export function parseRulesDir(files) {
-  const errors = []
-  const model = { common: { columns: {} }, groups: {} }
-
-  if (files['_common.yaml'] !== undefined) {
-    const { columns, errors: e } = parseCommonFile(files['_common.yaml'])
-    model.common.columns = columns
-    errors.push(...e)
-  }
-  const commonNames = new Set(Object.keys(model.common.columns))
-
-  for (const [name, text] of Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
-    if (name === '_common.yaml') continue
-    const filename = name.replace(/\.yaml$/, '')
-    const { group, errors: e } = parseGroupFile(text, filename)
-    errors.push(...e)
-    for (const varName of Object.keys(group.vars || {})) {
-      if (commonNames.has(varName)) errors.push(`${name}: vars "${varName}" collides with a _common column`)
-    }
-    // A row wins over _common in both columnFallbacks and Helm's `merge $row
-    // $common`, so a collision would silently shadow the common value.
-    for (const colName of Object.keys(group.columns)) {
-      if (commonNames.has(colName)) errors.push(`${name}: column "${colName}" collides with a _common column`)
-    }
-    model.groups[filename] = group
-  }
-
-  return { model, errors }
 }

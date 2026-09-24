@@ -172,7 +172,8 @@ export default function templatesRouter() {
   // them, checks them, works out what breaks, generates values.schema.json and
   // every templates/*.yaml, and writes the lot all-or-nothing — everything is
   // computed in memory first, so a generation failure leaves the chart
-  // untouched. Only files whose content changed are written; the rules files
+  // untouched (an I/O failure mid-write is not rolled back; see writeChanged).
+  // Only files whose content changed are written; the rules files
   // are written through verbatim so hand-added comments survive.
   router.post('/:chart/rules', async (req, res) => {
     const { chartDir, tmplDir, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)

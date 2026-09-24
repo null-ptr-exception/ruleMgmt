@@ -13,7 +13,16 @@ async function readOr(file) {
   try { return await fs.readFile(file, 'utf-8') } catch { return null }
 }
 
-/** Write only the entries whose on-disk content differs. Returns their paths. */
+/**
+ * Write only the entries whose on-disk content differs. Returns their paths.
+ *
+ * Sequential, not transactional. Callers compute every entry before calling
+ * this, so a generation, check or breaking-change failure leaves the chart
+ * untouched — that is the "all-or-nothing" the save route promises. An I/O
+ * failure partway through (disk full, permissions) is not rolled back and
+ * leaves the files before it written; ruling that out would take writing to
+ * temp files and renaming them into place.
+ */
 export async function writeChanged(entries) {
   const written = []
   for (const [abs, content] of entries) {

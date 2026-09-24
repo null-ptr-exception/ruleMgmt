@@ -376,8 +376,8 @@ export function parseCommonFile(text) {
 
 /**
  * A whole `rules/` directory. `files` is { '<name>.yaml': text }, `_common.yaml`
- * included when present. Cross-file checks (a vars name colliding with a
- * `_common` column) are applied here.
+ * included when present. Cross-file checks (a vars name or a column colliding
+ * with a `_common` column) are applied here.
  */
 // ── values check ────────────────────────────────────────────────────────────
 
@@ -437,6 +437,11 @@ export function parseRulesDir(files) {
     errors.push(...e)
     for (const varName of Object.keys(group.vars || {})) {
       if (commonNames.has(varName)) errors.push(`${name}: vars "${varName}" collides with a _common column`)
+    }
+    // A row wins over _common in both columnFallbacks and Helm's `merge $row
+    // $common`, so a collision would silently shadow the common value.
+    for (const colName of Object.keys(group.columns)) {
+      if (commonNames.has(colName)) errors.push(`${name}: column "${colName}" collides with a _common column`)
     }
     model.groups[filename] = group
   }

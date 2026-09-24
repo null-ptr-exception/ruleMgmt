@@ -217,6 +217,14 @@ rules:
     expect(parseRulesDir(files).errors.join()).toMatch(/collides with a _common column/)
   })
 
+  it('flags a group column colliding with a _common column', () => {
+    const files = {
+      '_common.yaml': 'columns:\n  cluster: {type: string}\n',
+      'cpu.yaml': 'group: cpu\ncolumns:\n  cluster: {type: string}\nrules: []\n',
+    }
+    expect(parseRulesDir(files).errors.join()).toMatch(/cpu\.yaml: column "cluster" collides with a _common column/)
+  })
+
   it('reports unknown keys in _common.yaml', () => {
     expect(parseCommonFile('rules: []\n').errors.join()).toMatch(/unknown key "rules"/)
   })

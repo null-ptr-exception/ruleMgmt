@@ -162,6 +162,13 @@ describe('import-rules.mjs', () => {
 
   it('reads a column the chart has in _common from there, not as a second group column', async () => {
     run(GEN_RULES, [chartDir])
+    // Move namespace from cpu into _common — leaving it in both is a collision
+    // parseRulesDir rejects.
+    const cpu = path.join(chartDir, 'rules', 'cpu.yaml')
+    const cpuText = await fs.readFile(cpu, 'utf-8')
+    const withoutNs = cpuText.replace('  namespace: {type: string}\n', '')
+    expect(withoutNs).not.toBe(cpuText)
+    await fs.writeFile(cpu, withoutNs)
     await fs.writeFile(path.join(chartDir, 'rules', '_common.yaml'), 'columns:\n  namespace: {type: string, required: true}\n')
     const imported = run(IMPORT_RULES, [rulesFile, chartDir])
     expect(imported.status, imported.stdout).toBe(0)

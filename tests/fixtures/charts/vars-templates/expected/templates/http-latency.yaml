@@ -1,0 +1,26 @@
+{{- $chunks := chunk 100 ($.Values.http_latency | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-http-latency-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: http-latency
+      rules:
+        {{- range $rows }}
+        - alert: LatencyHigh
+          expr: histogram_quantile(0.99, sum by (le, pod) (rate(http_request_duration_seconds_bucket{namespace="{{ .namespace }}"}[5m]))) > {{ .warn_seconds }}
+          for: 10m
+          labels:
+            severity: warning
+            namespace: "{{ .namespace }}"
+          annotations:
+            summary: "p99 is {{ `{{ $value | humanizeDuration }}` }} on {{ `{{ $labels.pod }}` }}"
+            description: "{{ `{{ printf \"%.2f\" $value }}` }}s over {{ .warn_seconds }}s in {{ .namespace }}"
+            pods: "pods matching web-\\d+ in {{ `{{ $labels.namespace }}` }}"
+        {{- end }}
+{{- end }}

@@ -43,9 +43,21 @@ function needsQuote(value) {
   return value === '' || /[^A-Za-z0-9_.-]/.test(value)
 }
 
+/**
+ * A quoted value is a YAML double-quoted scalar once Helm has rendered it, so
+ * the rule's own `\` and `"` have to reach YAML escaped — including inside a
+ * Prometheus `{{ … }}`, which Helm passes through verbatim, escape and all
+ * (`{{ printf "%.2f" $value }}` otherwise breaks the whole chart). Done on the
+ * source text, before any Helm action is added, so those are never touched.
+ */
+function yamlQuotedText(value) {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
 function renderEntry(entry, ref, refVar, indent, defaults) {
-  const rendered = renderValue(entry.value, ref, defaults) + (entry.helmSuffix || '')
-  const line = `${indent}${entry.key}: ${needsQuote(entry.value) ? `"${rendered}"` : rendered}`
+  const quoted = needsQuote(entry.value)
+  const rendered = renderValue(quoted ? yamlQuotedText(entry.value) : entry.value, ref, defaults) + (entry.helmSuffix || '')
+  const line = `${indent}${entry.key}: ${quoted ? `"${rendered}"` : rendered}`
   if (!entry.guard) return line
   return (
     `${indent}{{- if hasKey ${refVar} "${entry.guard}" }}\n` +

@@ -192,6 +192,10 @@ export function modelToSchema(model, originalSchema = null) {
     type: originalSchema?.type || 'object',
     properties: {},
   }
+  // A clone's record of where it came from (server/routes/charts.js) — not
+  // derived from rules/, so a regenerated schema has to carry it over or the
+  // clone reads as stale and its first save drops the record.
+  if (originalSchema?.['x-migrated-from']) schema['x-migrated-from'] = originalSchema['x-migrated-from']
 
   const commonCols = model.common?.columns || {}
   if (Object.keys(commonCols).length) {

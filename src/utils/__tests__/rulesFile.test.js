@@ -155,6 +155,14 @@ describe('model <-> schema idempotence', () => {
     expect(out.properties._common).toMatchObject({ type: 'object', required: ['owner', 'namespace'] })
   })
 
+  // A clone records where it came from; that is not derived from rules/, so a
+  // regenerated schema that dropped it would make every clone read as stale.
+  it('carries a clone\'s x-migrated-from over from the schema on disk', () => {
+    const from = { chart: 'src', columns: { warn: 'warn_pct' } }
+    const out = modelToSchema(schemaToModel(sampleSchema).model, { ...sampleSchema, 'x-migrated-from': from })
+    expect(out['x-migrated-from']).toEqual(from)
+  })
+
   it('a migrated chart still passes gen-chart with only `| default` added', () => {
     const { model } = schemaToModel(sampleSchema)
     const migrated = modelToSchema(model, sampleSchema)

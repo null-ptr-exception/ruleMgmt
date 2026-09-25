@@ -30,7 +30,20 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
         onRefresh()
       } else {
         const data = await res.json().catch(() => ({}))
-        message.error(data.error || 'Commit failed')
+        // A refused commit says which chart and why — "Rule checks failed"
+        // alone leaves the person committing nothing to go and fix.
+        if (data.findings?.length) {
+          Modal.error({
+            title: data.error || 'Commit refused',
+            content: (
+              <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+                {data.findings.map((f, i) => <li key={i}>{f.description || f.message}</li>)}
+              </ul>
+            ),
+          })
+        } else {
+          message.error(data.error || 'Commit failed')
+        }
       }
     } catch {
       message.error('Commit failed: network error')

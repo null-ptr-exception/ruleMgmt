@@ -234,3 +234,41 @@ rules:
     await expect(page.getByText('Changes committed')).toHaveCount(0)
   })
 })
+
+test.describe('A value a quoted label cannot take', () => {
+  // The sample chart writes owner and namespace into labels, so both are
+  // quoted in the rendered YAML.
+  const CHART = 'mariadb-alerts'
+  const FOLDER = 'e2e-safeguard-quoted/dev'
+
+  test.beforeAll(async ({ request }) => {
+    const res = await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: CHART } })
+    expect(res.status()).toBeLessThan(300)
+  })
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
+  })
+
+  test('is refused on Save, naming the cell', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = page.locator('.ant-tree')
+    const folder = tree.locator('.ant-tree-treenode').filter({ hasText: /^e2e-safeguard-quoted$/ }).first()
+    await expect(folder).toBeVisible({ timeout: 8000 })
+    const switcher = folder.locator('.ant-tree-switcher_close')
+    if (await switcher.count() > 0) await switcher.click()
+    await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
+      .filter({ hasText: CHART }).first().locator('.ant-tree-node-content-wrapper').click()
+
+    await page.getByText('Common Values').click()
+    const input = page.locator('input.ant-input:visible').first()
+    await expect(input).toBeVisible({ timeout: 3000 })
+    await input.fill('team "a"')
+    await page.getByRole('button', { name: 'Save' }).click()
+
+    const modal = page.locator('.ant-modal').filter({ hasText: 'Some values cannot be rendered' })
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    await expect(modal.getByText(/Common Values, "(owner|namespace)": contains " or \\/)).toBeVisible()
+    await expect(page.getByText(/Saved at/)).toHaveCount(0)
+  })
+})

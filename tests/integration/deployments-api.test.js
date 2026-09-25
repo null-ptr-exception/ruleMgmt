@@ -257,3 +257,55 @@ describe('deployments API — NAME_RE with folder param', () => {
     expect(fs.existsSync(path.join(dir, 'staging-values.yaml'))).toBe(true)
   })
 })
+
+// A value that cannot sit inside a quoted label is refused at save, naming
+// the cell — otherwise it surfaces as a Helm YAML parse error at Preview.
+describe('deployments API — values a quoted label cannot take', () => {
+  let tmpDir, app
+
+  const RULES = `columns:
+  pod_regex: {type: string, default: ".*"}
+  team: {type: string}
+rules:
+  - alert: CpuHigh
+    expr: cpu{pod=~"\${pod_regex}"} > 1
+    labels: {severity: warning, team: "\${team}"}
+`
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deployments-quoted-'))
+    fs.mkdirSync(path.join(tmpDir, 'charts', 'mariadb-alerts', 'rules'), { recursive: true })
+    fs.writeFileSync(path.join(tmpDir, 'charts', 'mariadb-alerts', 'rules', 'cpu.yaml'), RULES)
+    fs.mkdirSync(path.join(tmpDir, 'dep'), { recursive: true })
+    fs.writeFileSync(path.join(tmpDir, 'dep', 'Chart.yaml'), CHART_WITH_DEP)
+    fs.writeFileSync(path.join(tmpDir, 'dep', 'values.yaml'), '')
+    app = express()
+    app.use(express.json())
+    app.use((req, res, next) => { req.gitopsDir = tmpDir; next() })
+    app.use('/api/deployments', deploymentsRouter())
+  })
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  const save = values => request(app).post('/api/deployments/any/prod?folder=dep').send({ values })
+
+  it('refuses a " or \\ in a column a label reads, and writes nothing', async () => {
+    const res = await save({ cpu: [{ team: 'ok' }, { team: 'a\\b' }] })
+    expect(res.status).toBe(400)
+    expect(res.body.problems).toEqual([expect.objectContaining({ group: 'cpu', row: 1, column: 'team' })])
+    expect(res.body.problems[0].message).toMatch(/cpu row 2, "team"/)
+    expect(fs.readFileSync(path.join(tmpDir, 'dep', 'values.yaml'), 'utf-8')).toBe('')
+  })
+
+  it('accepts a backslash in a column only an expr reads', async () => {
+    const res = await save({ cpu: [{ pod_regex: 'web-\\d+', team: 'ok' }] })
+    expect(res.status).toBe(200)
+  })
+
+  it('checks a raw values.yaml string too, unwrapping the subchart key', async () => {
+    const res = await save(yaml.dump({ 'mariadb-alerts': { cpu: [{ team: 'say "hi"' }] } }))
+    expect(res.status).toBe(400)
+  })
+})

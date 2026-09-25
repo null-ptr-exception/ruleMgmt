@@ -185,6 +185,19 @@ summary: "{{ humanize $value }} exceeded ${recv_warn}"
 There is no way to emit a literal `${…}`. PromQL does not use the syntax and
 label values almost never do.
 
+### What a row's value can hold
+
+The generator escapes the rule's own text, but a row's value is substituted
+by Helm when it renders, and a label or annotation is a quoted YAML string.
+So **a column read by a label or annotation cannot hold `"` or `\`** — nor
+one read by an `expr` or `for` that has to be quoted (one starting with `{`,
+or containing `: ` or ` #`). Saving a deployment with such a value is refused,
+naming the row and column; `gen-rules` reports it as a warning.
+
+A column read only by an ordinary `expr` has no such limit, which is where a
+regex like `web-\d+` usually goes. A `raw` entry is quoted by hand and is
+not checked.
+
 ## Empty cells
 
 What happens when a rule owner leaves a cell empty depends on the column, in

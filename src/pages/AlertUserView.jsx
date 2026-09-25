@@ -262,6 +262,23 @@ export default function AlertUserView() {
     await refreshFrozenSource(path)
   }
 
+  // A save refused for specific cells lists them; anything else is still
+  // just "Save failed".
+  function reportSaveFailure(result) {
+    if (!result.problems?.length) {
+      message.error('Save failed')
+      return
+    }
+    Modal.error({
+      title: result.error || 'Save failed',
+      content: (
+        <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+          {result.problems.map((p, i) => <li key={i}>{p.message}</li>)}
+        </ul>
+      ),
+    })
+  }
+
   async function handleSave() {
     if (!selectedChart || !selectedFolder) return
     const isCommon = activeAlert === '__common_vars__'
@@ -271,7 +288,7 @@ export default function AlertUserView() {
       : merged
     const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
     if (!result.ok) {
-      message.error('Save failed')
+      reportSaveFailure(result)
       return false
     }
     if (!isCommon) setAllValues(merged)
@@ -287,7 +304,7 @@ export default function AlertUserView() {
       : allValues
     const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
     if (!result.ok) {
-      message.error('Save failed')
+      reportSaveFailure(result)
       return false
     }
     setDirty(false)

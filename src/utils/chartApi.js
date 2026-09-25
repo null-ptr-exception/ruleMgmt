@@ -166,7 +166,8 @@ export async function saveDeployment(chart, deployment, values, folder) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ values })
   })
-  if (!res.ok) return {}
+  // A refusal carries { error, problems } — which cells, and why.
+  if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({}))) }
   return res.json()
 }
 

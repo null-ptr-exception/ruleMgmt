@@ -71,6 +71,34 @@ function renderScalar(value, ref, defaults) {
     : renderValue(value, ref, defaults)
 }
 
+/**
+ * Columns whose value lands inside a YAML double-quoted scalar: every label
+ * or annotation that reads one, plus an expr / for / keep_firing_for that
+ * has to be quoted (see needsQuotePlain). The rule's own text is escaped for
+ * that; a row's value is substituted by Helm at render time and is not, so
+ * a `"` or `\` in it would break the rendered YAML. The row owner's values
+ * are checked against this set instead (quotedValueProblems in rulesFile.js)
+ * — escaping at render time would change every such label's output.
+ *
+ * A raw entry is left out: its quoting is written by hand.
+ */
+export function columnsInQuotedValues(group) {
+  const names = new Set()
+  const expand = s => expandVars(String(s ?? ''), group.vars)
+  for (const rule of group.rules || []) {
+    if (rule.raw) continue
+    for (const entry of [...toEntries(rule.labels), ...toEntries(rule.annotations)]) {
+      const value = expand(entry.value)
+      if (needsQuote(value)) varsIn(value).forEach(n => names.add(n))
+    }
+    for (const field of [rule.expr, rule.for, rule.keep_firing_for]) {
+      const value = expand(field)
+      if (value && needsQuotePlain(value)) varsIn(value).forEach(n => names.add(n))
+    }
+  }
+  return names
+}
+
 function renderEntry(entry, ref, refVar, indent, defaults) {
   const quoted = needsQuote(entry.value)
   const rendered = renderValue(quoted ? yamlQuotedText(entry.value) : entry.value, ref, defaults) + (entry.helmSuffix || '')

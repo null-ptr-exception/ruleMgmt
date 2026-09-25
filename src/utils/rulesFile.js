@@ -29,7 +29,7 @@
  */
 
 import yaml from 'js-yaml'
-import { normalizeRules } from './templateGenerator.js'
+import { normalizeRules, columnsInQuotedValues } from './templateGenerator.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 
 const GROUP_KEYS = ['group', 'interval', 'limit', 'vars', 'columns', 'rules']
@@ -426,6 +426,42 @@ const typeOk = (value, type) =>
  * the real validation from the generated schema; this is the migration CLI's
  * early warning that a conversion would orphan rows.
  */
+/**
+ * Cells whose value would break the rendered YAML: a `"` or `\` in a column
+ * that is written into a quoted label or annotation (columnsInQuotedValues).
+ * Checked when a deployment is saved, so the row owner hears about it at the
+ * cell rather than as a Helm parse error at Preview.
+ *
+ * @returns [{ group, row, column, message }] — row is null for _common
+ */
+export function quotedValueProblems(values, model) {
+  const problems = []
+  const bad = v => typeof v === 'string' && /["\\]/.test(v)
+  const why = 'contains " or \\, which a quoted label or annotation cannot take'
+  const commonCols = model.common?.columns || {}
+  const quotedCommon = new Set()
+
+  for (const [group, entry] of Object.entries(model.groups || {})) {
+    if (entry.custom) continue
+    const quoted = columnsInQuotedValues(entry)
+    for (const name of quoted) if (name in commonCols && !(name in (entry.columns || {}))) quotedCommon.add(name)
+    const rows = values?.[group]
+    for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
+      for (const name of quoted) {
+        if (bad(row?.[name])) {
+          problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}` })
+        }
+      }
+    }
+  }
+  for (const name of quotedCommon) {
+    if (bad(values?._common?.[name])) {
+      problems.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${why}` })
+    }
+  }
+  return problems
+}
+
 export function validateValues(values, model) {
   const problems = []
   const commonCols = model.common?.columns || {}
@@ -452,5 +488,6 @@ export function validateValues(values, model) {
       }
     }
   }
+  for (const p of quotedValueProblems(values, model)) problems.push(`values.yaml: ${p.message}`)
   return problems
 }

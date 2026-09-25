@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import {
-  schemaToModel, modelToSchema, groupGenDef, modelToFiles, groupFileText, commonFileText, parseGroupFile, parseCommonFile,
+  quotedValueProblems, schemaToModel, modelToSchema, groupGenDef, modelToFiles, groupFileText, commonFileText, parseGroupFile, parseCommonFile,
   parseRulesDir, validateValues,
 } from '../rulesFile.js'
 import { generateGroupTemplate } from '../templateGenerator.js'
@@ -264,5 +264,52 @@ describe('validateValues', () => {
 
   it('flags a group with no rules file', () => {
     expect(validateValues({ ghost: [{}] }, model).join()).toMatch(/no matching rules file/)
+  })
+})
+
+// Which cells a row owner may not put a " or \ in: the ones Helm substitutes
+// into a quoted scalar. Everything else is left alone.
+describe('quotedValueProblems', () => {
+  const model = files => parseRulesDir(files).model
+  const m = model({
+    '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n  cluster: {type: string}\n',
+    'cpu.yaml': [
+      'vars:',
+      '  who: "${team} on ${cluster}"',
+      'columns:',
+      '  pod_regex: {type: string, default: ".*"}',
+      '  team: {type: string}',
+      '  job: {type: string}',
+      '  raw_col: {type: string}',
+      'rules:',
+      '  - alert: A',
+      '    expr: cpu{pod=~"${pod_regex}"} > 1',
+      '    labels: {severity: warning}',
+      '    annotations: {summary: "${who}, owned by ${owner}"}',
+      '  - alert: B',
+      "    expr: '{job=\"${job}\"} == 0'",
+      '  - raw: |',
+      '      alert: C',
+      '      expr: x{a="${raw_col}"} > 1',
+      '',
+    ].join('\n'),
+  })
+
+  const cells = values => quotedValueProblems(values, m).map(p => `${p.group}:${p.row}:${p.column}`)
+
+  it('flags a column read by an annotation, through vars', () => {
+    expect(cells({ cpu: [{ team: 'a"b' }] })).toEqual(['cpu:0:team'])
+  })
+
+  it('flags a _common column once, as Common Values', () => {
+    expect(cells({ _common: { owner: 'x\\y', cluster: 'c"d' } }).sort()).toEqual(['_common:null:cluster', '_common:null:owner'])
+  })
+
+  it('flags a column in an expr the generator has to quote', () => {
+    expect(cells({ cpu: [{ job: 'a\\b' }] })).toEqual(['cpu:0:job'])
+  })
+
+  it('leaves an expr-only column, a raw entry and clean values alone', () => {
+    expect(cells({ cpu: [{ pod_regex: 'web-\\d+', raw_col: 'a"b', team: 'ok' }] })).toEqual([])
   })
 })

@@ -3,16 +3,19 @@ import { test, expect } from '@playwright/test'
 const UPPERCASE_FOLDER = 'deployments/e2e-test/PROD'
 const CHART = 'mariadb-alerts'
 
-// Expand the ant-tree until a deployment node (has .ant-tag) is visible
-async function expandToFirstDeployment(page) {
+// A sample deployment of mariadb-alerts, scaffolded into every fresh gitops
+// repo from sample/. Named rather than "the first deployment in the tree":
+// other specs create deployments of their own charts in parallel, and the
+// first one can be any of them.
+async function expandToSampleDeployment(page) {
   const tree = page.locator('.ant-tree')
-  for (let i = 0; i < 6; i++) {
-    const collapsed = tree.locator('.ant-tree-switcher_close').first()
-    if (await collapsed.count() === 0) break
-    await collapsed.click()
-    await page.waitForTimeout(300)
+  for (const segment of ['deployments', 'mariadb-1']) {
+    const node = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${segment}$`) }).first()
+    await expect(node).toBeVisible({ timeout: 8000 })
+    const switcher = node.locator('.ant-tree-switcher_close')
+    if (await switcher.count() > 0) await switcher.click()
   }
-  return tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).first()
+  return tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'staging' }).first()
 }
 
 // Expand tree until the PROD node (with .ant-tag) under e2e-test is visible
@@ -44,7 +47,7 @@ test.describe('nested deployment — save and preview', () => {
     await page.goto('/#/alerts')
     await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
 
-    const deploymentNode = await expandToFirstDeployment(page)
+    const deploymentNode = await expandToSampleDeployment(page)
     await deploymentNode.locator('.ant-tree-node-content-wrapper').click()
 
     // Click first leaf alert template in sidebar

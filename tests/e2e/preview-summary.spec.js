@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test'
 
-// Coverage for two things that only ever had backend/unit tests (see issue
+// Coverage for things that only ever had backend/unit tests (see issue
 // #57's P7 pending list): landing on Common Values when a chart has a
 // required common variable with no default, and the PreviewModal branches
-// that logic feeds — empty / no-alerts / orphan fields. `custom` and
-// `missing` already have direct unit coverage (src/utils/__tests__/
-// renderSummary.test.js) and are not repeated here.
+// that logic feeds — empty / no-alerts / orphan fields, and the `missing`
+// row. `custom` has direct unit coverage (src/utils/__tests__/
+// renderSummary.test.js) and is not repeated here.
 
 const CHART = 'e2e-preview-summary'
 
@@ -156,5 +156,62 @@ test.describe('Common Values landing (7-d)', () => {
     // redirects here instead of leaving the rule owner on an alert template
     // (or nothing selected) with no reason to look under Common Values.
     await expect(page.getByText(`${path} / Common Values`)).toBeVisible({ timeout: 10000 })
+  })
+})
+
+// `missing`: an (alert, severity) the template has but the deployment rendered
+// zero times. For a migrated chart it went unseen until 381a313 — Preview read
+// the rules from values.schema.json, which no longer carries them — and only
+// an integration test was added then.
+test.describe('Preview summary — an alert the rows never produce', () => {
+  const MCHART = 'e2e-preview-missing'
+  const FOLDER = `deployments/${MCHART}/dev`
+
+  // Bands: the critical threshold has no default, so a row that leaves it
+  // out produces the warning and not the critical.
+  const CPU = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number, default: 80}
+  crit: {type: number}
+rules:
+  - alert: CpuHigh
+    expr: cpu{ns="\${namespace}"} > \${warn}
+    labels: {severity: warning}
+  - alert: CpuHigh
+    expr: cpu{ns="\${namespace}"} > \${crit}
+    labels: {severity: critical}
+`
+
+  test.beforeAll(async ({ request }) => {
+    await request.delete(`/api/v2/charts/${MCHART}`)
+    let res = await request.post('/api/v2/charts', { data: { name: MCHART } })
+    expect(res.ok()).toBeTruthy()
+    res = await request.post(`/api/v2/templates/${MCHART}/rules`, { data: { files: { 'cpu.yaml': CPU } } })
+    expect(res.ok()).toBeTruthy()
+    const init = await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: MCHART } })
+    expect(init.status()).toBeLessThan(300)
+    const save = await request.post(`/api/v2/deployments/${MCHART}/dev?folder=${FOLDER}`, {
+      data: { values: { cpu: [{ namespace: 'a' }, { namespace: 'b' }] } },
+    })
+    expect(save.status()).toBeLessThan(300)
+  })
+
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/v2/charts/${MCHART}`)
+  })
+
+  test('lists the critical band with a 0, and the total counts only what rendered', async ({ page }) => {
+    await selectDeployment(page, ['deployments', MCHART, 'dev'])
+    await page.getByText('cpu', { exact: true }).first().click()
+    await page.getByRole('button', { name: 'Preview' }).click()
+
+    const modal = page.getByRole('dialog')
+    await expect(modal.getByText('2 alerts total')).toBeVisible({ timeout: 15000 })
+
+    const rows = modal.locator('tr').filter({ hasText: 'CpuHigh' })
+    await expect(rows).toHaveCount(2)
+    await expect(rows.filter({ hasText: 'warning' }).locator('td').last()).toHaveText('2')
+    await expect(rows.filter({ hasText: 'critical' }).locator('td').last()).toHaveText('0')
   })
 })

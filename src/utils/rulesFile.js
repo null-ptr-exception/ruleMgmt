@@ -427,8 +427,14 @@ const typeOk = (value, type) =>
  * early warning that a conversion would orphan rows.
  */
 /**
- * Cells whose value would break the rendered YAML: a `"` or `\` in a column
- * that is written into a quoted label or annotation (columnsInQuotedValues).
+ * Cells whose value would break the rendered YAML. Two kinds:
+ *
+ * - a `"` or `\` in a column a label reads — a label is a double-quoted
+ *   scalar and a row's value reaches it unescaped (columnsInQuotedValues)
+ * - a newline in any column: it breaks a block scalar's indentation and is
+ *   folded away inside quotes. The table is single-line input; this catches
+ *   a hand-edited values.yaml.
+ *
  * Checked when a deployment is saved, so the row owner hears about it at the
  * cell rather than as a Helm parse error at Preview.
  *
@@ -436,8 +442,10 @@ const typeOk = (value, type) =>
  */
 export function quotedValueProblems(values, model) {
   const problems = []
-  const bad = v => typeof v === 'string' && /["\\]/.test(v)
-  const why = 'contains " or \\, which a quoted label or annotation cannot take'
+  const quoteBreaks = v => typeof v === 'string' && /["\\]/.test(v)
+  const hasNewline = v => typeof v === 'string' && /[\r\n]/.test(v)
+  const quoteWhy = 'contains " or \\, which a label cannot take'
+  const newlineWhy = 'contains a line break — values are one line'
   const commonCols = model.common?.columns || {}
   const quotedCommon = new Set()
 
@@ -447,17 +455,17 @@ export function quotedValueProblems(values, model) {
     for (const name of quoted) if (name in commonCols && !(name in (entry.columns || {}))) quotedCommon.add(name)
     const rows = values?.[group]
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
-      for (const name of quoted) {
-        if (bad(row?.[name])) {
-          problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}` })
-        }
+      for (const [name, value] of Object.entries(row || {})) {
+        const where = `${group} row ${i + 1}, "${name}"`
+        if (hasNewline(value)) problems.push({ group, row: i, column: name, message: `${where}: ${newlineWhy}` })
+        else if (quoted.has(name) && quoteBreaks(value)) problems.push({ group, row: i, column: name, message: `${where}: ${quoteWhy}` })
       }
     }
   }
-  for (const name of quotedCommon) {
-    if (bad(values?._common?.[name])) {
-      problems.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${why}` })
-    }
+  for (const [name, value] of Object.entries(values?._common || {})) {
+    const where = `Common Values, "${name}"`
+    if (hasNewline(value)) problems.push({ group: '_common', row: null, column: name, message: `${where}: ${newlineWhy}` })
+    else if (quotedCommon.has(name) && quoteBreaks(value)) problems.push({ group: '_common', row: null, column: name, message: `${where}: ${quoteWhy}` })
   }
   return problems
 }

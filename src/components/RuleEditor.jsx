@@ -103,7 +103,7 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
   const missing = used.filter(name => !columns.includes(name))
   // A column with no default that the expression reads: a row that leaves it
   // blank produces no alert at all for this rule.
-  const exprVars = new Set([...varsIn(rule.expr || ''), ...varsIn(rule.for || '')])
+  const exprVars = new Set([...varsIn(rule.expr || ''), ...varsIn(rule.for || ''), ...varsIn(rule.keep_firing_for || '')])
   const dropsRule = used.filter(name =>
     exprVars.has(name) && columnDefs[name] && columnDefs[name].default === undefined && !columnDefs[name].required)
 

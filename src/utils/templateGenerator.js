@@ -107,7 +107,8 @@ function renderRule(rule, ref, refVar, defaults) {
   const parts = [
     `        - alert: ${rule.alert}\n` +
     `          expr: ${renderValue(rule.expr, ref, defaults)}\n` +
-    `          for: ${renderValue(rule.for, ref, defaults)}`
+    `          for: ${renderValue(rule.for, ref, defaults)}` +
+    (rule.keep_firing_for ? `\n          keep_firing_for: ${renderValue(rule.keep_firing_for, ref, defaults)}` : '')
   ]
   if (rule.labels?.length) {
     parts.push(`          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n'))
@@ -170,6 +171,7 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
       alert: rule.alert,
       expr: expand(rule.expr),
       for: expand(rule.for || alertDef['x-for'] || '5m'),
+      ...(rule.keep_firing_for ? { keep_firing_for: expand(String(rule.keep_firing_for)) } : {}),
       labels: expandEntries(toEntries(rule.labels)),
       annotations: expandEntries(toEntries(rule.annotations))
     }))
@@ -212,7 +214,7 @@ function attachGuards(rules, mayBeAbsent) {
 
   return rules.map(rule => {
     const guards = new Set()
-    for (const text of [rule.expr, rule.for, rule.raw]) {
+    for (const text of [rule.expr, rule.for, rule.keep_firing_for, rule.raw]) {
       for (const name of varsIn(text || '')) if (mayBeAbsent.has(name)) guards.add(name)
     }
     // A line whose entire value is one reference disappears with it. Already
@@ -267,6 +269,7 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
 
   return {
     groupName: alertGroup.replace(/_/g, '-'),
+    groupFields: { interval: alertDef.interval, limit: alertDef.limit },
     valuesKey: alertGroup,
     hasCommon,
     ruleTexts

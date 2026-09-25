@@ -201,7 +201,7 @@ nothing renders exactly what it rendered before.
 
 | Referenced in | An empty cell means | What is emitted |
 |---|---|---|
-| `expr` or `for` | This rule does not apply to this row | **The whole rule is omitted for that row** |
+| `expr`, `for` or `keep_firing_for` | This rule does not apply to this row | **The whole rule is omitted for that row** |
 | A label or annotation whose entire value is `${x}` | This row has no such label | That line is omitted |
 | The middle of a longer string | Neither omission makes sense | **Rejected at save time** — give it a default or make it required |
 

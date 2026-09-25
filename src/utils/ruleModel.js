@@ -125,6 +125,7 @@ export function ruleVars(rule) {
   add(rule.raw)
   add(rule.expr)
   add(rule.for)
+  add(rule.keep_firing_for)
   for (const [k, v] of pairs(rule.labels)) { add(k); add(v) }
   for (const [k, v] of pairs(rule.annotations)) { add(k); add(v) }
   return names

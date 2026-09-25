@@ -456,7 +456,8 @@ describe('empty cells (#57)', () => {
         pod_regex: { type: 'string', default: '.*' },
         warn:      { type: 'number', default: 80 },
         crit:      { type: 'number' },
-        tier:      { type: 'string' }
+        tier:      { type: 'string' },
+        linger:    { type: 'string' }
       }
     }
   })
@@ -502,6 +503,14 @@ describe('empty cells (#57)', () => {
   it('does not guard a line twice when the rule already covers that column', () => {
     const out = render([{ alert: 'A', expr: 'cpu > ${crit}', labels: { tier: '${crit}' } }])
     expect(out.match(/hasKey \. "crit"/g)).toHaveLength(1)
+  })
+
+  // keep_firing_for sits next to `for` and is read the same way: a row that
+  // leaves it blank with nothing to fall back on is not a row for this rule.
+  it('drops the whole rule for a row that omits a keep_firing_for column', () => {
+    const out = render([{ alert: 'A', expr: 'cpu > 1', keep_firing_for: '${linger}' }])
+    expect(out).toContain('{{- if hasKey . "linger" }}')
+    expect(out).toContain('keep_firing_for: {{ .linger }}')
   })
 })
 

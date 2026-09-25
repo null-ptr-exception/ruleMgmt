@@ -86,7 +86,19 @@ export function rowLoopHeader(hasCommon) {
     : `        {{- range $rows }}\n`
 }
 
-function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, ruleTexts, objectMeta }) {
+/**
+ * The Prometheus rule-group fields the template owner sets — how often the
+ * group is evaluated and how many series it may produce. They belong to the
+ * group, so every object the group is split into carries them.
+ */
+function renderGroupFields({ interval, limit } = {}) {
+  let out = ''
+  if (interval !== undefined && interval !== '') out += `      interval: ${interval}\n`
+  if (limit !== undefined && limit !== '') out += `      limit: ${limit}\n`
+  return out
+}
+
+function buildObject({ releaseName, baseName, groupName, groupFields, valuesKey, hasCommon, ruleTexts, objectMeta }) {
   const rowLoop = rowLoopHeader(hasCommon)
 
   const name = releaseName.includes('{{')
@@ -108,6 +120,7 @@ function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, r
     `spec:\n` +
     `  groups:\n` +
     `    - name: ${groupName}\n` +
+    renderGroupFields(groupFields) +
     `      rules:\n` +
     rowLoop +
     ruleTexts.join('\n') + '\n' +
@@ -120,7 +133,7 @@ function buildObject({ releaseName, baseName, groupName, valuesKey, hasCommon, r
  * Render one alert group as a template that emits one or more custom
  * resources: one per rule shard, times one per row chunk.
  */
-export function emitRuleObjects({ releaseName, group, groupName, valuesKey, hasCommon, ruleTexts }, options) {
+export function emitRuleObjects({ releaseName, group, groupName, groupFields, valuesKey, hasCommon, ruleTexts }, options) {
   const shards = shardRules(ruleTexts, options)
   const base = group.replace(/_/g, '-')
 
@@ -134,6 +147,7 @@ export function emitRuleObjects({ releaseName, group, groupName, valuesKey, hasC
       releaseName,
       baseName: `${base}-${i + 1}`,
       groupName,
+      groupFields,
       valuesKey,
       hasCommon,
       ruleTexts: shard,

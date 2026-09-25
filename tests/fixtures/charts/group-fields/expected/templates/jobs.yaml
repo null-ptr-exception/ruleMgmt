@@ -1,0 +1,24 @@
+{{- $chunks := chunk 100 ($.Values.jobs | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-jobs-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: jobs
+      interval: 30s
+      limit: 10
+      rules:
+        {{- range $rows }}
+        - alert: JobAbsent
+          expr: absent(up{job="{{ .job }}"})
+          for: 2m
+          keep_firing_for: 5m
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

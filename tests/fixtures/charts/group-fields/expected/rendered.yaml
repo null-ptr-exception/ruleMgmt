@@ -1,0 +1,11 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-jobs-1-1:
+  - name: jobs
+    interval: 30s
+    limit: 10
+    rules:
+      - alert: JobAbsent
+        expr: absent(up{job="api"})
+        for: 2m
+        keep_firing_for: 5m
+        labels: { severity: warning }

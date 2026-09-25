@@ -72,7 +72,7 @@ export function checkRules(schema) {
       const entries = [...(rule.labels || []), ...(rule.annotations || [])]
       const strings = rule.raw
         ? [rule.raw]
-        : [rule.expr, rule.for, ...entries.map(e => e.value)]
+        : [rule.expr, rule.for, rule.keep_firing_for, ...entries.map(e => e.value)]
 
       // ${} nested inside {{ }} — escaping runs before substitution, so the
       // column value would never be substituted, silently.

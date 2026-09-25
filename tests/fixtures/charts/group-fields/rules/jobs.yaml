@@ -1,0 +1,13 @@
+# Prometheus rule-group and rule fields the format passes through.
+interval: 30s
+limit: 10
+
+columns:
+  job: { type: string, required: true }
+
+rules:
+  - alert: JobAbsent
+    expr: absent(up{job="${job}"})
+    for: 2m
+    keep_firing_for: 5m
+    labels: { severity: warning }

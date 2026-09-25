@@ -44,7 +44,7 @@ export function selfCheckRendered(renderedYaml, model) {
 }
 
 const ruleTexts = rule => [
-  rule?.expr, rule?.for,
+  rule?.expr, rule?.for, rule?.keep_firing_for,
   ...Object.values(rule?.labels || {}),
   ...Object.values(rule?.annotations || {}),
 ].filter(t => t !== undefined && t !== null).map(String)

@@ -40,6 +40,11 @@ describe('reference integrity', () => {
     expect(checkRules(schema)).toEqual([])
   })
 
+  it('flags a ${var} in keep_firing_for that is not a column', () => {
+    const findings = checkRules(chart([{ alert: 'A', expr: 'cpu > ${warn}', keep_firing_for: '${linger}' }]))
+    expect(kinds(findings)).toContain('undefined-var')
+  })
+
   it('does not report a vars name as an undefined column', () => {
     const schema = chart(
       [{ alert: 'A', expr: '${load} > ${warn}' }],

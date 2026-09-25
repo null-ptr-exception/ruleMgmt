@@ -15,22 +15,26 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbSaturationConnections_WarnPct
-          expr: (mysql_global_status_threads_connected{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.warn_pct | default 70 }}
+          expr: |-
+            (mysql_global_status_threads_connected{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.warn_pct | default 70 }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbSaturationConnections_WarnPct triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbSaturationConnections_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationConnections_CriticalPct
-          expr: (mysql_global_status_threads_connected{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.critical_pct | default 90 }}
+          expr: |-
+            (mysql_global_status_threads_connected{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.critical_pct | default 90 }}
           for: 5m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbSaturationConnections_CriticalPct triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbSaturationConnections_CriticalPct triggered on {{ $row.owner }}
         {{- end }}
 {{- end }}

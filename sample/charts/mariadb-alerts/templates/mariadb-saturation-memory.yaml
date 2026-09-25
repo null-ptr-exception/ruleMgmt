@@ -15,22 +15,26 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbSaturationMemory_WarnPct
-          expr: (container_memory_working_set_bytes{namespace="{{ $row.namespace | default `default` }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace | default `default` }}", resource="memory"}) * 100 > {{ $row.warn_pct | default 80 }}
+          expr: |-
+            (container_memory_working_set_bytes{namespace="{{ $row.namespace | default `default` }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace | default `default` }}", resource="memory"}) * 100 > {{ $row.warn_pct | default 80 }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbSaturationMemory_WarnPct triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbSaturationMemory_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationMemory_CriticalPct
-          expr: (container_memory_working_set_bytes{namespace="{{ $row.namespace | default `default` }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace | default `default` }}", resource="memory"}) * 100 > {{ $row.critical_pct | default 95 }}
+          expr: |-
+            (container_memory_working_set_bytes{namespace="{{ $row.namespace | default `default` }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace | default `default` }}", resource="memory"}) * 100 > {{ $row.critical_pct | default 95 }}
           for: 5m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbSaturationMemory_CriticalPct triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbSaturationMemory_CriticalPct triggered on {{ $row.owner }}
         {{- end }}
 {{- end }}

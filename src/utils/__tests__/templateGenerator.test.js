@@ -259,7 +259,7 @@ describe('summary annotation selector choice', () => {
       }
     }
     const yaml = renderAll(schema, 'test')
-    expect(yaml).toContain('summary: "G_Warn triggered on {{ .host }}"')
+    expect(yaml).toContain('summary: |-\n              G_Warn triggered on {{ .host }}\n')
   })
 
   it('guards the summary reference when only optional selectors exist', () => {
@@ -281,7 +281,7 @@ describe('summary annotation selector choice', () => {
       }
     }
     const yaml = renderAll(schema, 'test')
-    expect(yaml).toContain('summary: "G_Warn triggered{{ if hasKey . "team" }} on {{ .team }}{{ end }}"')
+    expect(yaml).toContain('summary: |-\n              G_Warn triggered{{ if hasKey . "team" }} on {{ .team }}{{ end }}\n')
   })
 
   it('omits the on-clause when there are no selectors', () => {
@@ -302,7 +302,7 @@ describe('summary annotation selector choice', () => {
       }
     }
     const yaml = renderAll(schema, 'test')
-    expect(yaml).toContain('summary: "G_Warn triggered"')
+    expect(yaml).toContain('summary: |-\n              G_Warn triggered\n')
     expect(yaml).not.toContain('<no value>')
     expect(yaml).not.toContain('{{ .namespace }}')
   })
@@ -466,7 +466,7 @@ describe('empty cells (#57)', () => {
 
   it('writes a default into the template, since Helm ignores the schema one', () => {
     const out = render([{ alert: 'A', expr: 'cpu > ${warn}', labels: { severity: 'warning' } }])
-    expect(out).toContain('expr: cpu > {{ .warn | default 80 }}')
+    expect(out).toContain('expr: |-\n            cpu > {{ .warn | default 80 }}\n')
   })
 
   it('quotes a string default with a raw literal, which survives inside YAML quotes', () => {
@@ -547,8 +547,8 @@ describe('vars (#57)', () => {
   const out = renderAll(schema, 'rel')
 
   it('substitutes the text before anything else happens', () => {
-    expect(out).toContain('expr: rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .warn }}')
-    expect(out).toContain('expr: rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .crit }}')
+    expect(out).toContain('expr: |-\n            rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .warn }}\n')
+    expect(out).toContain('expr: |-\n            rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .crit }}\n')
   })
 
   it('leaves no placeholder of its own behind', () => {

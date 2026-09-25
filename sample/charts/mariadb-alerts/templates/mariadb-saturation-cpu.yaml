@@ -15,22 +15,26 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbSaturationCpu_WarnPct
-          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace | default `default` }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace | default `default` }}", resource="cpu"}) * 100 > {{ $row.warn_pct | default 80 }}
+          expr: |-
+            (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace | default `default` }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace | default `default` }}", resource="cpu"}) * 100 > {{ $row.warn_pct | default 80 }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbSaturationCpu_WarnPct triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbSaturationCpu_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationCpu_CriticalPct
-          expr: (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace | default `default` }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace | default `default` }}", resource="cpu"}) * 100 > {{ $row.critical_pct | default 95 }}
+          expr: |-
+            (rate(container_cpu_usage_seconds_total{namespace="{{ $row.namespace | default `default` }}"}[5m]) / on(namespace, pod) kube_pod_container_resource_requests{namespace="{{ $row.namespace | default `default` }}", resource="cpu"}) * 100 > {{ $row.critical_pct | default 95 }}
           for: 5m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbSaturationCpu_CriticalPct triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbSaturationCpu_CriticalPct triggered on {{ $row.owner }}
         {{- end }}
 {{- end }}

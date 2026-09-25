@@ -13,11 +13,13 @@ spec:
       rules:
         {{- range $rows }}
         - alert: ErrorRateHigh
-          expr: sum(rate(errors_total{job="{{ .job }}"}[{{ .window | default `5m` }}])) / sum(rate(requests_total{job="{{ .job }}"}[{{ .window | default `5m` }}])) > {{ .threshold | default 0.05 }}
+          expr: |-
+            sum(rate(errors_total{job="{{ .job }}"}[{{ .window | default `5m` }}])) / sum(rate(requests_total{job="{{ .job }}"}[{{ .window | default `5m` }}])) > {{ .threshold | default 0.05 }}
           for: {{ .window | default `5m` }}
           labels:
             severity: "{{ .severity | default `warning` }}"
           annotations:
-            summary: "error ratio {{ `{{ $value | humanizePercentage }}` }} for {{ .job }}"
+            summary: |-
+              error ratio {{ `{{ $value | humanizePercentage }}` }} for {{ .job }}
         {{- end }}
 {{- end }}

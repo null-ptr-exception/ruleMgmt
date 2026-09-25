@@ -1,0 +1,21 @@
+{{- $chunks := chunk 100 ($.Values.instance_up | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-instance-up-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: instance-up
+      rules:
+        {{- range $rows }}
+        - alert: InstanceDown
+          expr: up{instance="{{ .instance }}"} == 0
+          for: 1m
+          labels:
+            severity: critical
+        {{- end }}
+{{- end }}

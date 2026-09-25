@@ -1,0 +1,12 @@
+# env left to its default, oncall left out: the label disappears
+_common:
+  cluster: east-1
+
+memory:
+  - namespace: a
+    limit_pct: 90
+  - namespace: b
+    limit_pct: 75
+
+cpu_throttle:
+  - namespace: a

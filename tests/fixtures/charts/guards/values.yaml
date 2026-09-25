@@ -1,0 +1,14 @@
+disk:
+  # everything filled: both rules, with the team label
+  - mount: /data
+    warn_pct: 80
+    crit_pct: 95
+    team: storage
+  # no crit_pct, no team: the warning rule only, without the team label
+  - mount: /logs
+    warn_pct: 70
+  # a threshold of 0 is filled in, not empty
+  - mount: /boot
+    warn_pct: 0
+  # no thresholds at all: nothing
+  - mount: /tmp

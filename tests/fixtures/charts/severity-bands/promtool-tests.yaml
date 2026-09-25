@@ -1,0 +1,25 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # 3000 B/s: over shop's warning (1000), under its critical (5000)
+      - series: 'node_receive_bytes_total{namespace="shop", pod="web-1"}'
+        values: '0+180000x30'
+      # 10000 B/s: over both of shop's bands
+      - series: 'node_receive_bytes_total{namespace="shop", pod="web-2"}'
+        values: '0+600000x30'
+      # 10000 B/s in batch: under batch's own warning (100000)
+      - series: 'node_receive_bytes_total{namespace="batch", pod="job-1"}'
+        values: '0+600000x30'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ReceiveHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, pod: web-1 }
+            exp_annotations: { summary: "receive is 3000 B/s on web-1" }
+          - exp_labels: { severity: warning, pod: web-2 }
+            exp_annotations: { summary: "receive is 10000 B/s on web-2" }
+          - exp_labels: { severity: critical, pod: web-2 }
+            exp_annotations: { summary: "receive is 10000 B/s on web-2" }

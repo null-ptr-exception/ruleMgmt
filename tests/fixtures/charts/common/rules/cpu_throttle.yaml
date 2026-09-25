@@ -1,0 +1,8 @@
+columns:
+  namespace: { type: string, required: true }
+
+rules:
+  - alert: CPUThrottled
+    expr: throttle_ratio{cluster="${cluster}", namespace="${namespace}"} > 0.5
+    for: 15m
+    labels: { severity: info }

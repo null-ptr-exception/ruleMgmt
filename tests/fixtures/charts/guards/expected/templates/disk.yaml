@@ -1,0 +1,40 @@
+{{- $chunks := chunk 100 ($.Values.disk | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-disk-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: disk
+      rules:
+        {{- range $rows }}
+        {{- if hasKey . "warn_pct" }}
+        - alert: DiskFull
+          expr: disk_used_pct{mount="{{ .mount }}"} > {{ .warn_pct }}
+          for: 5m
+          labels:
+            severity: warning
+            {{- if hasKey . "team" }}
+            team: "{{ .team }}"
+            {{- end }}
+          annotations:
+            summary: "{{ `{{ $labels.mount }}` }} is {{ `{{ $value }}` }}% full"
+        {{- end }}
+        {{- if hasKey . "crit_pct" }}
+        - alert: DiskFull
+          expr: disk_used_pct{mount="{{ .mount }}"} > {{ .crit_pct }}
+          for: 5m
+          labels:
+            severity: critical
+            {{- if hasKey . "team" }}
+            team: "{{ .team }}"
+            {{- end }}
+          annotations:
+            summary: "{{ `{{ $labels.mount }}` }} is {{ `{{ $value }}` }}% full"
+        {{- end }}
+        {{- end }}
+{{- end }}

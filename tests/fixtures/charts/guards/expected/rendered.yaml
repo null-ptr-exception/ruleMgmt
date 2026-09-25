@@ -1,0 +1,24 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-disk-1-1:
+  - name: disk
+    rules:
+      - alert: DiskFull
+        expr: disk_used_pct{mount="/data"} > 80
+        for: 5m
+        labels: { severity: warning, team: storage }
+        annotations: { summary: "{{ $labels.mount }} is {{ $value }}% full" }
+      - alert: DiskFull
+        expr: disk_used_pct{mount="/data"} > 95
+        for: 5m
+        labels: { severity: critical, team: storage }
+        annotations: { summary: "{{ $labels.mount }} is {{ $value }}% full" }
+      - alert: DiskFull
+        expr: disk_used_pct{mount="/logs"} > 70
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.mount }} is {{ $value }}% full" }
+      - alert: DiskFull
+        expr: disk_used_pct{mount="/boot"} > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "{{ $labels.mount }} is {{ $value }}% full" }

@@ -1,0 +1,21 @@
+# The escape hatch next to a structured rule: ${} still reads the row and
+# {{ }} is still Prometheus.
+columns:
+  queue:   { type: string, required: true }
+  max_age: { type: number, required: true }
+
+rules:
+  - raw: |
+      alert: QueueStuck
+      expr: max(queue_oldest_message_age_seconds{queue="${queue}"}) > ${max_age}
+      for: 10m
+      labels:
+        severity: critical
+        queue: ${queue}
+      annotations:
+        summary: "oldest message in {{ $labels.queue }} is {{ $value | humanizeDuration }} old"
+
+  - alert: QueueDeep
+    expr: queue_depth{queue="${queue}"} > 1000
+    for: 5m
+    labels: { severity: warning }

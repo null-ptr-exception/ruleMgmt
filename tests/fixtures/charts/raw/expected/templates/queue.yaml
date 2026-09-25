@@ -1,0 +1,29 @@
+{{- $chunks := chunk 100 ($.Values.queue | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-queue-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: queue
+      rules:
+        {{- range $rows }}
+        - alert: QueueStuck
+          expr: max(queue_oldest_message_age_seconds{queue="{{ .queue }}"}) > {{ .max_age }}
+          for: 10m
+          labels:
+            severity: critical
+            queue: {{ .queue }}
+          annotations:
+            summary: "oldest message in {{ `{{ $labels.queue }}` }} is {{ `{{ $value | humanizeDuration }}` }} old"
+        - alert: QueueDeep
+          expr: queue_depth{queue="{{ .queue }}"} > 1000
+          for: 5m
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

@@ -1,0 +1,5 @@
+net_receive:
+  - namespace: shop
+  - namespace: batch
+    recv_warn: 100000
+    recv_crit: 50000000

@@ -1,0 +1,6 @@
+error_rate:
+  - job: api
+  - job: worker
+    threshold: 0.2
+    window: 15m
+    severity: critical

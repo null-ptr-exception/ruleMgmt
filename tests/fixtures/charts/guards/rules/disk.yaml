@@ -1,0 +1,20 @@
+# Optional columns with no default: in expr the whole rule is omitted for a
+# row that leaves them out; as a label's entire value only that line is.
+columns:
+  mount:    { type: string, required: true }
+  warn_pct: { type: number }
+  crit_pct: { type: number }
+  team:     { type: string }
+
+rules:
+  - alert: DiskFull
+    expr: disk_used_pct{mount="${mount}"} > ${warn_pct}
+    for: 5m
+    labels:   { severity: warning, team: "${team}" }
+    annotations: { summary: "{{ $labels.mount }} is {{ $value }}% full" }
+
+  - alert: DiskFull
+    expr: disk_used_pct{mount="${mount}"} > ${crit_pct}
+    for: 5m
+    labels:   { severity: critical, team: "${team}" }
+    annotations: { summary: "{{ $labels.mount }} is {{ $value }}% full" }

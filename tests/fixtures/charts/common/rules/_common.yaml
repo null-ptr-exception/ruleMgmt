@@ -1,0 +1,6 @@
+# Chart-level columns, filled once per deployment and read by every row of
+# every group: required, with a default, and optional with none.
+columns:
+  cluster: { type: string, required: true }
+  env:     { type: string, default: prod, enum: [dev, staging, prod] }
+  oncall:  { type: string }

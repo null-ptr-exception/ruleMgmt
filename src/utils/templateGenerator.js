@@ -54,6 +54,23 @@ function yamlQuotedText(value) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
+/**
+ * `expr` and `for` are written as plain YAML scalars, which is what a
+ * hand-written rule looks like — but valid PromQL is not always a valid plain
+ * scalar: a leading `{` or `[` opens a flow collection, `: ` starts a mapping
+ * and ` #` a comment. Only those are quoted, so every other rule keeps the
+ * form it has always had.
+ */
+function needsQuotePlain(value) {
+  return /^([{}[\]!&*?|>%@`'"#,]|- )|: |:$| #/.test(value)
+}
+
+function renderScalar(value, ref, defaults) {
+  return needsQuotePlain(value)
+    ? `"${renderValue(yamlQuotedText(value), ref, defaults)}"`
+    : renderValue(value, ref, defaults)
+}
+
 function renderEntry(entry, ref, refVar, indent, defaults) {
   const quoted = needsQuote(entry.value)
   const rendered = renderValue(quoted ? yamlQuotedText(entry.value) : entry.value, ref, defaults) + (entry.helmSuffix || '')
@@ -118,9 +135,9 @@ function renderRule(rule, ref, refVar, defaults) {
 
   const parts = [
     `        - alert: ${rule.alert}\n` +
-    `          expr: ${renderValue(rule.expr, ref, defaults)}\n` +
-    `          for: ${renderValue(rule.for, ref, defaults)}` +
-    (rule.keep_firing_for ? `\n          keep_firing_for: ${renderValue(rule.keep_firing_for, ref, defaults)}` : '')
+    `          expr: ${renderScalar(rule.expr, ref, defaults)}\n` +
+    `          for: ${renderScalar(rule.for, ref, defaults)}` +
+    (rule.keep_firing_for ? `\n          keep_firing_for: ${renderScalar(rule.keep_firing_for, ref, defaults)}` : '')
   ]
   if (rule.labels?.length) {
     parts.push(`          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n'))

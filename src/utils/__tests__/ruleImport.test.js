@@ -143,7 +143,7 @@ describe('schemaFromImport', () => {
     // one shared table: namespace is filled once and read by both rules
     expect(out.match(/\{\{ \.namespace \}\}/g)).toHaveLength(2)
     // the Prometheus template survives Helm
-    expect(out).toContain('summary: "receive is {{ `{{ $value }}` }} B/s"')
+    expect(out).toContain('summary: |-\n              receive is {{ `{{ $value }}` }} B/s\n')
   })
 })
 

@@ -187,16 +187,17 @@ label values almost never do.
 
 ### What a row's value can hold
 
-The generator escapes the rule's own text, but a row's value is substituted
-by Helm when it renders, and a label or annotation is a quoted YAML string.
-So **a column read by a label or annotation cannot hold `"` or `\`** — nor
-one read by an `expr` or `for` that has to be quoted (one starting with `{`,
-or containing `: ` or ` #`). Saving a deployment with such a value is refused,
-naming the row and column; `gen-rules` reports it as a warning.
+A row's value is substituted by Helm when it renders, with no escaping, so
+two things are refused when a deployment is saved — naming the row and
+column — and reported by `gen-rules` as a warning:
 
-A column read only by an ordinary `expr` has no such limit, which is where a
-regex like `web-\d+` usually goes. A `raw` entry is quoted by hand and is
-not checked.
+- **A newline, in any column.** Values are one line; the table never
+  produces one, a hand-edited `values.yaml` can.
+- **`"` or `\`, in a column a label reads.** A label value is a quoted YAML
+  string (see [what gets generated](#what-gets-generated)).
+
+`expr` and annotations take anything else, which is where a regex like
+`web-\\d+` usually goes. A `raw` entry is quoted by hand and is not checked.
 
 ## Empty cells
 
@@ -297,7 +298,29 @@ table the rule owner fills in. `columns` become `items.properties`, `_common`
 becomes `properties._common`. It carries no rule definitions at all.
 
 **`templates/<group>.yaml`** — one file per group, emitting one or more
-`PrometheusRule` objects:
+`PrometheusRule` objects.
+
+`expr` and every annotation are written as literal block scalars, so nothing
+in them is ever escaped — several lines, a leading `{`, `: `, ` #`, quotes and
+backslashes go through as written, from the source or from a row:
+
+```yaml
+- alert: MariaDBReceiveHigh
+  expr: |-
+    rate(node_receive_bytes_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.recv_warn | default 10000000 }}
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: |-
+      receive is {{ `{{ $value }}` }} B/s on {{ `{{ $labels.pod }}` }}
+```
+
+Label values are quoted strings, `for` and `keep_firing_for` plain. Leading
+and trailing whitespace of an expression or annotation is dropped — the
+trailing newline `expr: |` leaves in the source means nothing.
+
+Objects are named:
 
 ```
 {release}-{group}-{shard}-{chunk}

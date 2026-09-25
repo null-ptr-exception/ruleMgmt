@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { execFileSync } from 'child_process'
+import yaml from 'js-yaml'
 import { generateGroupTemplate, normalizeRules } from '../templateGenerator'
 import { renderValue, fieldOwnership, danglingRefs } from '../ruleModel'
 import golden from '../__fixtures__/mariadb-golden.json'
@@ -8,12 +12,49 @@ const sampleSchema = JSON.parse(
   fs.readFileSync('src/utils/__fixtures__/mariadb-legacy.schema.json', 'utf-8')
 )
 
+// Acceptance condition 1, as relaxed on 2026-09-25: what Helm renders from
+// the legacy templates and from today's generator parses to the same rules.
+// Not byte-for-byte any more — expr and annotations are block scalars now
+// (`|-`), a format change with no change in content — so both are rendered
+// with the sample chart's own values and compared as data.
+function renderTemplates(templates) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'round-trip-'))
+  try {
+    fs.writeFileSync(path.join(dir, 'Chart.yaml'), 'apiVersion: v2\nname: rt\nversion: 0.1.0\n')
+    fs.copyFileSync('sample/charts/mariadb-alerts/values.yaml', path.join(dir, 'values.yaml'))
+    fs.mkdirSync(path.join(dir, 'templates'))
+    for (const [group, text] of Object.entries(templates)) fs.writeFileSync(path.join(dir, 'templates', `${group}.yaml`), text)
+    const out = execFileSync('helm', ['template', 'rel', dir], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+    return yaml.loadAll(out).filter(d => d?.kind === 'PrometheusRule').map(d => ({ name: d.metadata.name, groups: trimEnds(d.spec.groups) }))
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+// Trailing whitespace on a value's last line is the one thing the format
+// change does not keep: in a block scalar it sits right before the row loop's
+// `{{- end }}`, which trims it. The legacy summary "... on {{ $row.owner }}"
+// with an empty owner rendered "... on " and now renders "... on". It means
+// nothing to PromQL or to an annotation, so it is not compared.
+function trimEnds(v) {
+  if (typeof v === 'string') return v.trimEnd()
+  if (Array.isArray(v)) return v.map(trimEnds)
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, trimEnds(x)]))
+  return v
+}
+
+let hasHelm = true
+try { execFileSync('helm', ['version'], { stdio: 'ignore' }) } catch { hasHelm = false }
+
 describe('round-trip equivalence (issue #57 acceptance condition 1)', () => {
-  it('reproduces every legacy group byte-for-byte', () => {
-    for (const [group, expected] of Object.entries(golden)) {
-      const actual = generateGroupTemplate(group, sampleSchema.properties[group], null, sampleSchema)
-      expect(actual, `group ${group}`).toBe(expected)
+  it.skipIf(!hasHelm)('renders every legacy group to the same rules as before', () => {
+    const current = {}
+    for (const group of Object.keys(golden)) {
+      current[group] = generateGroupTemplate(group, sampleSchema.properties[group], null, sampleSchema)
     }
+    const before = renderTemplates(golden)
+    expect(before.length).toBeGreaterThan(0)
+    expect(renderTemplates(current)).toEqual(before)
   })
 
   it('covers all 13 groups of the sample chart', () => {
@@ -115,7 +156,7 @@ describe('x-rules groups', () => {
   it('keeps static labels literal and escapes Prometheus templates', () => {
     const out = generateGroupTemplate('network_traffic', def, 'test')
     expect(out).toContain('component: network')
-    expect(out).toContain('summary: "receive is {{ `{{ $value }}` }} B/s"')
+    expect(out).toContain('summary: |-\n              receive is {{ `{{ $value }}` }} B/s\n')
   })
 
   it('normalizes label maps into ordered entries', () => {

@@ -15,13 +15,15 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbTrafficQpsHigh_MaxQps
-          expr: rate(mysql_global_status_questions{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.max_qps | default 10000 }}
+          expr: |-
+            rate(mysql_global_status_questions{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.max_qps | default 10000 }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbTrafficQpsHigh_MaxQps triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbTrafficQpsHigh_MaxQps triggered on {{ $row.owner }}
         {{- end }}
 {{- end }}

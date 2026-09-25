@@ -15,22 +15,26 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MariadbSaturationBufferPool_WarnPct
-          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.warn_pct | default 85 }}
+          expr: |-
+            (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.warn_pct | default 85 }}
           for: 10m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbSaturationBufferPool_WarnPct triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbSaturationBufferPool_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationBufferPool_CriticalPct
-          expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.critical_pct | default 95 }}
+          expr: |-
+            (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.critical_pct | default 95 }}
           for: 10m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
             namespace: "{{ $row.namespace | default `default` }}"
           annotations:
-            summary: "MariadbSaturationBufferPool_CriticalPct triggered on {{ $row.owner }}"
+            summary: |-
+              MariadbSaturationBufferPool_CriticalPct triggered on {{ $row.owner }}
         {{- end }}
 {{- end }}

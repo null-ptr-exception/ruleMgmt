@@ -154,13 +154,21 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: NetworkReceiveHigh
-          expr: rate(receive_bytes_total{namespace="{{ $row.namespace }}",…}[5m]) > {{ $row.recv_warn | default 10000000 }}
+          expr: |-
+            rate(receive_bytes_total{namespace="{{ $row.namespace }}",…}[5m]) > {{ $row.recv_warn | default 10000000 }}
           for: {{ $row.window | default `5m` }}
         {{- end }}
 {{- end }}
 ```
 
 Each row is merged with `_common`, so a common column reads like any other.
+
+`expr` and annotations are literal block scalars (`|-`): nothing in them is
+escaped, so multi-line expressions and descriptions, quotes, backslashes and
+PromQL that YAML would otherwise misread (`{job="x"} == 0`, `"(.*): .*"`, a
+`# comment`) all go through as written. Labels stay quoted strings, which is
+why a label's column cannot take `"` or `\` — see
+[rules-format.md](rules-format.md#what-a-rows-value-can-hold).
 
 Output grows as **rows × rules**, and the two are cut in different places
 because only one of them is knowable when the template is written:
@@ -264,11 +272,35 @@ arrives hand-written rather than losing it.
 A placeholder naming a column the chart already has in `_common` reads it
 from there; it does not become a second column of the group.
 
+Multi-line expressions and descriptions arrive as they are, and render as
+they are. To check an imported chart against the file it came from, compare
+the rendered rules as YAML (`dyff`, or parse both), not as text: the generator
+writes `expr` and annotations as block scalars, so the same rule is formatted
+differently from a hand-written one.
+
 Importing into an open chart edits the chart in hand, so it inherits every
 check Save already makes; cancelling is just not saving.
 `scripts/import-rules.mjs` does the same from the command line, with one
 difference: it cannot see the deployments using the chart, so a replaced group
 that drops a column is a warning there rather than the breaking-change dialog.
+
+## When an upgrade changes the output format
+
+The products are regenerated from `rules/`, so a release that changes how the
+generator writes them makes every migrated chart `stale` at once — the editor
+shows the banner, and a commit is refused — even though no rule changed.
+Version 1.6 is one: `expr` and annotations moved to block scalars.
+
+After upgrading, regenerate every chart once and commit the result on its
+own (see [how-to](how-to.md#regenerate-every-chart-after-an-upgrade)). What
+Helm renders parses to the same rules as before, so the resources in the
+cluster do not change and a tool that compares objects, like Argo CD, sees no
+difference. Review the commit with a YAML-aware diff (`dyff`), not a text one:
+every `expr` line moves.
+
+The one thing not kept is trailing whitespace at the end of a value — a
+summary ending in a column that was empty used to render with a trailing
+space. It means nothing to PromQL or an annotation.
 
 ## Changing a chart that people are already using
 

@@ -1,0 +1,7 @@
+# A backslash and quotes in row values: pattern is read by an expr and an
+# annotation, owner by an annotation — neither is a label, so both are fine.
+# The PromQL string needs its regex backslash doubled: \\. matches a dot.
+errors:
+  - job: api
+    pattern: '/v1/.*\\.json'
+    owner: 'team "core"'

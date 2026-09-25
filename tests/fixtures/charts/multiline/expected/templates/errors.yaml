@@ -1,0 +1,37 @@
+{{- $chunks := chunk 100 ($.Values.errors | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-errors-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: errors
+      rules:
+        {{- range $rows }}
+        - alert: ErrorRatioHigh
+          expr: |-
+            sum by (job) (rate(errors_total{job="{{ .job }}"}[5m]))
+              / sum by (job) (rate(requests_total{job="{{ .job }}"}[5m]))
+              > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: |-
+              Error ratio {{ `{{ $value | humanizePercentage }}` }} on "{{ .job }}"
+            description: |-
+              Owned by {{ .owner }}.
+              Check: {{ `{{ $labels.job }}` }} # dashboards/errors
+              Paths matching {{ .pattern }} are excluded.
+        - alert: RouteDown
+          expr: |-
+            {__name__="probe_success", job="{{ .job }}", path=~"{{ .pattern }}"} == 0 # probe: ok
+          for: 5m
+          labels:
+            severity: critical
+        {{- end }}
+{{- end }}

@@ -21,7 +21,8 @@ spec:
           annotations:
             summary: "oldest message in {{ `{{ $labels.queue }}` }} is {{ `{{ $value | humanizeDuration }}` }} old"
         - alert: QueueDeep
-          expr: queue_depth{queue="{{ .queue }}"} > 1000
+          expr: |-
+            queue_depth{queue="{{ .queue }}"} > 1000
           for: 5m
           labels:
             severity: warning

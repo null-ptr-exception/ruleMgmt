@@ -13,7 +13,8 @@ spec:
       rules:
         {{- range $rows }}
         - alert: InstanceDown
-          expr: up{instance="{{ .instance }}"} == 0
+          expr: |-
+            up{instance="{{ .instance }}"} == 0
           for: 1m
           labels:
             severity: critical

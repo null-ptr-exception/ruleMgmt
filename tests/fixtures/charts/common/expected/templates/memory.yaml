@@ -15,7 +15,8 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: MemoryHigh
-          expr: mem_used_pct{cluster="{{ $row.cluster }}", namespace="{{ $row.namespace }}"} > {{ $row.limit_pct }}
+          expr: |-
+            mem_used_pct{cluster="{{ $row.cluster }}", namespace="{{ $row.namespace }}"} > {{ $row.limit_pct }}
           for: 5m
           labels:
             severity: warning
@@ -24,6 +25,7 @@ spec:
             oncall: "{{ $row.oncall }}"
             {{- end }}
           annotations:
-            summary: "memory in {{ $row.cluster }}/{{ $row.namespace }} is {{ `{{ $value }}` }}%"
+            summary: |-
+              memory in {{ $row.cluster }}/{{ $row.namespace }} is {{ `{{ $value }}` }}%
         {{- end }}
 {{- end }}

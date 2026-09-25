@@ -15,7 +15,8 @@ spec:
         {{- range $rows }}
         {{- $row := merge . $common }}
         - alert: CPUThrottled
-          expr: throttle_ratio{cluster="{{ $row.cluster }}", namespace="{{ $row.namespace }}"} > 0.5
+          expr: |-
+            throttle_ratio{cluster="{{ $row.cluster }}", namespace="{{ $row.namespace }}"} > 0.5
           for: 15m
           labels:
             severity: info

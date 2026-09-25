@@ -44,41 +44,39 @@ function needsQuote(value) {
 }
 
 /**
- * A quoted value is a YAML double-quoted scalar once Helm has rendered it, so
+ * A label value is a YAML double-quoted scalar once Helm has rendered it, so
  * the rule's own `\` and `"` have to reach YAML escaped — including inside a
- * Prometheus `{{ … }}`, which Helm passes through verbatim, escape and all
- * (`{{ printf "%.2f" $value }}` otherwise breaks the whole chart). Done on the
- * source text, before any Helm action is added, so those are never touched.
+ * Prometheus `{{ … }}`, which Helm passes through verbatim, escape and all.
+ * Done on the source text, before any Helm action is added, so those are
+ * never touched.
  */
 function yamlQuotedText(value) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
 /**
- * `expr` and `for` are written as plain YAML scalars, which is what a
- * hand-written rule looks like — but valid PromQL is not always a valid plain
- * scalar: a leading `{` or `[` opens a flow collection, `: ` starts a mapping
- * and ` #` a comment. Only those are quoted, so every other rule keeps the
- * form it has always had.
+ * `expr` and annotation values are written as literal block scalars (`|-`).
+ * A block scalar does no escaping at all, so PromQL and description text go
+ * through as they are — a leading `{`, `: `, ` #`, quotes, backslashes and
+ * several lines alike — and a row's value substituted into it needs none
+ * either. Leading and trailing whitespace is trimmed (the trailing newline
+ * `expr: |` leaves in the source means nothing to PromQL); the lines after
+ * the first keep their own indentation.
  */
-function needsQuotePlain(value) {
-  return /^([{}[\]!&*?|>%@`'"#,]|- )|: |:$| #/.test(value)
-}
-
-function renderScalar(value, ref, defaults) {
-  return needsQuotePlain(value)
-    ? `"${renderValue(yamlQuotedText(value), ref, defaults)}"`
-    : renderValue(value, ref, defaults)
+function renderBlock(key, value, ref, defaults, indent, suffix = '') {
+  const text = renderValue(String(value ?? '').trim(), ref, defaults) + suffix
+  const lines = text.split('\n').map(l => (l ? `${indent}  ${l}` : ''))
+  return `${indent}${key}: |-\n` + lines.join('\n')
 }
 
 /**
- * Columns whose value lands inside a YAML double-quoted scalar: every label
- * or annotation that reads one, plus an expr / for / keep_firing_for that
- * has to be quoted (see needsQuotePlain). The rule's own text is escaped for
- * that; a row's value is substituted by Helm at render time and is not, so
- * a `"` or `\` in it would break the rendered YAML. The row owner's values
- * are checked against this set instead (quotedValueProblems in rulesFile.js)
- * — escaping at render time would change every such label's output.
+ * Columns whose value lands inside a YAML double-quoted scalar — every label
+ * that reads one. The rule's own text is escaped for that; a row's value is
+ * substituted by Helm at render time and is not, so a `"` or `\` in it would
+ * break the rendered YAML. The row owner's values are checked against this
+ * set instead (quotedValueProblems in rulesFile.js) — escaping at render
+ * time would change every such label's output. `expr` and annotations are
+ * block scalars (renderBlock) and take anything but a newline.
  *
  * A raw entry is left out: its quoting is written by hand.
  */
@@ -87,22 +85,23 @@ export function columnsInQuotedValues(group) {
   const expand = s => expandVars(String(s ?? ''), group.vars)
   for (const rule of group.rules || []) {
     if (rule.raw) continue
-    for (const entry of [...toEntries(rule.labels), ...toEntries(rule.annotations)]) {
+    for (const entry of toEntries(rule.labels)) {
       const value = expand(entry.value)
       if (needsQuote(value)) varsIn(value).forEach(n => names.add(n))
-    }
-    for (const field of [rule.expr, rule.for, rule.keep_firing_for]) {
-      const value = expand(field)
-      if (value && needsQuotePlain(value)) varsIn(value).forEach(n => names.add(n))
     }
   }
   return names
 }
 
-function renderEntry(entry, ref, refVar, indent, defaults) {
-  const quoted = needsQuote(entry.value)
-  const rendered = renderValue(quoted ? yamlQuotedText(entry.value) : entry.value, ref, defaults) + (entry.helmSuffix || '')
-  const line = `${indent}${entry.key}: ${quoted ? `"${rendered}"` : rendered}`
+function renderEntry(entry, ref, refVar, indent, defaults, block = false) {
+  let line
+  if (block) {
+    line = renderBlock(entry.key, entry.value, ref, defaults, indent, entry.helmSuffix || '')
+  } else {
+    const quoted = needsQuote(entry.value)
+    const rendered = renderValue(quoted ? yamlQuotedText(entry.value) : entry.value, ref, defaults) + (entry.helmSuffix || '')
+    line = `${indent}${entry.key}: ${quoted ? `"${rendered}"` : rendered}`
+  }
   if (!entry.guard) return line
   return (
     `${indent}{{- if hasKey ${refVar} "${entry.guard}" }}\n` +
@@ -163,11 +162,12 @@ function renderRule(rule, ref, refVar, defaults) {
 
   const parts = [
     `        - alert: ${rule.alert}\n` +
-    `          expr: ${renderScalar(rule.expr, ref, defaults)}\n` +
-    `          for: ${renderScalar(rule.for, ref, defaults)}`
+    renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10)) + '\n' +
+    // A duration or a single reference — plain, as a hand-written rule has it.
+    `          for: ${renderValue(rule.for, ref, defaults)}`
   ]
   if (rule.keep_firing_for) {
-    const line = `          keep_firing_for: ${renderScalar(rule.keep_firing_for, ref, defaults)}`
+    const line = `          keep_firing_for: ${renderValue(rule.keep_firing_for, ref, defaults)}`
     parts[0] += '\n' + (rule.keepFiringGuard
       ? `          {{- if hasKey ${refVar} "${rule.keepFiringGuard}" }}\n${line}\n          {{- end }}`
       : line)
@@ -176,7 +176,7 @@ function renderRule(rule, ref, refVar, defaults) {
     parts.push(`          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n'))
   }
   if (rule.annotations?.length) {
-    parts.push(`          annotations:\n` + rule.annotations.map(a => renderEntry(a, ref, refVar, ' '.repeat(12), defaults)).join('\n'))
+    parts.push(`          annotations:\n` + rule.annotations.map(a => renderEntry(a, ref, refVar, ' '.repeat(12), defaults, true)).join('\n'))
   }
   return guarded(parts.join('\n'), rule.guards, refVar, indent)
 }

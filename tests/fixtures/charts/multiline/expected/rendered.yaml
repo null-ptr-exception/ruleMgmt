@@ -1,0 +1,21 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-errors-1-1:
+  - name: errors
+    rules:
+      - alert: ErrorRatioHigh
+        expr: |-
+          sum by (job) (rate(errors_total{job="api"}[5m]))
+            / sum by (job) (rate(requests_total{job="api"}[5m]))
+            > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: 'Error ratio {{ $value | humanizePercentage }} on "api"'
+          description: |-
+            Owned by team "core".
+            Check: {{ $labels.job }} # dashboards/errors
+            Paths matching /v1/.*\\.json are excluded.
+      - alert: RouteDown
+        expr: '{__name__="probe_success", job="api", path=~"/v1/.*\\.json"} == 0 # probe: ok'
+        for: 5m
+        labels: { severity: critical }

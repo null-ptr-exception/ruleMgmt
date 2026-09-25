@@ -267,15 +267,16 @@ describe('validateValues', () => {
   })
 })
 
-// Which cells a row owner may not put a " or \ in: the ones Helm substitutes
-// into a quoted scalar. Everything else is left alone.
+// Which cells a row owner may not fill with what: a " or \ only where Helm
+// substitutes into a quoted label; a newline nowhere. expr and annotations
+// are block scalars and take anything else.
 describe('quotedValueProblems', () => {
   const model = files => parseRulesDir(files).model
   const m = model({
     '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n  cluster: {type: string}\n',
     'cpu.yaml': [
       'vars:',
-      '  who: "${team} on ${cluster}"',
+      '  where: "${team} on ${cluster}"',
       'columns:',
       '  pod_regex: {type: string, default: ".*"}',
       '  team: {type: string}',
@@ -284,8 +285,8 @@ describe('quotedValueProblems', () => {
       'rules:',
       '  - alert: A',
       '    expr: cpu{pod=~"${pod_regex}"} > 1',
-      '    labels: {severity: warning}',
-      '    annotations: {summary: "${who}, owned by ${owner}"}',
+      '    labels: {severity: warning, where: "${where}"}',
+      '    annotations: {summary: "owned by ${owner}"}',
       '  - alert: B',
       "    expr: '{job=\"${job}\"} == 0'",
       '  - raw: |',
@@ -295,21 +296,29 @@ describe('quotedValueProblems', () => {
     ].join('\n'),
   })
 
-  const cells = values => quotedValueProblems(values, m).map(p => `${p.group}:${p.row}:${p.column}`)
+  const cells = values => quotedValueProblems(values, m).map(p => `${p.group}:${p.row}:${p.column}`).sort()
 
-  it('flags a column read by an annotation, through vars', () => {
+  it('flags " or \\ in a column a label reads, through vars', () => {
     expect(cells({ cpu: [{ team: 'a"b' }] })).toEqual(['cpu:0:team'])
   })
 
-  it('flags a _common column once, as Common Values', () => {
-    expect(cells({ _common: { owner: 'x\\y', cluster: 'c"d' } }).sort()).toEqual(['_common:null:cluster', '_common:null:owner'])
+  it('flags a _common column a label reads, as Common Values', () => {
+    const problems = quotedValueProblems({ _common: { cluster: 'c\\d' } }, m)
+    expect(problems.map(p => p.column)).toEqual(['cluster'])
+    expect(problems[0].message).toMatch(/^Common Values, "cluster"/)
   })
 
-  it('flags a column in an expr the generator has to quote', () => {
-    expect(cells({ cpu: [{ job: 'a\\b' }] })).toEqual(['cpu:0:job'])
+  it('leaves columns read only by expr, annotations or a raw entry alone', () => {
+    expect(cells({
+      _common: { owner: 'x"y\\z' },
+      cpu: [{ pod_regex: 'web-\\d+', job: 'a"b', raw_col: 'a\\b', team: 'ok' }],
+    })).toEqual([])
   })
 
-  it('leaves an expr-only column, a raw entry and clean values alone', () => {
-    expect(cells({ cpu: [{ pod_regex: 'web-\\d+', raw_col: 'a"b', team: 'ok' }] })).toEqual([])
+  it('flags a newline in any column, wherever it is read', () => {
+    expect(cells({
+      _common: { owner: 'two\nlines' },
+      cpu: [{ pod_regex: 'a\nb', job: 'ok' }],
+    })).toEqual(['_common:null:owner', 'cpu:0:pod_regex'])
   })
 })

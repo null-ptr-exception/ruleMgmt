@@ -568,7 +568,9 @@ spec:
     expect(status).toBe(200)
     expect(data.ok).toBe(true)
     const helmCalls = (await fs.readFile(helmArgsFile, 'utf-8')).trim().split('\n')
-    expect(helmCalls[0]).toContain(`dependency update ${chartDir}`)
+    // --skip-refresh: the dependencies are file://, and a refresh would fetch
+    // every repo index configured on the machine first.
+    expect(helmCalls[0]).toContain(`dependency update --skip-refresh ${chartDir}`)
     expect(helmCalls[1]).toContain(`template test-chart-staging ${chartDir}`)
   })
 

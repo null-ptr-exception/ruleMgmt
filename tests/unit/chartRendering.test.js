@@ -144,7 +144,7 @@ describe('helm template with custom values', () => {
     workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chart-render-'))
     fs.cpSync(path.resolve('sample'), path.join(workDir, 'sample'), { recursive: true })
     const deployDir = path.join(workDir, 'sample/deployments/mariadb-1/production')
-    execFileSync('helm', ['dependency', 'build', deployDir], { encoding: 'utf8' })
+    execFileSync('helm', ['dependency', 'build', '--skip-refresh', deployDir], { encoding: 'utf8' })
     const output = execFileSync('helm', ['template', 'prod-release', deployDir], { encoding: 'utf8' })
     customRendered = YAML.parseAllDocuments(output).map(doc => doc.toJSON())
   })

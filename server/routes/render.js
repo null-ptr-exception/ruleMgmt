@@ -233,7 +233,12 @@ export default function renderRouter() {
       // out of sync"), and the lock carries no pinning value for same-repo
       // file:// dependencies anyway. update re-resolves every time and prunes
       // outdated .tgz files as a side effect.
-      await runCommand(helm, ['dependency', 'update', templateDir], { timeout: 120000 })
+      //
+      // --skip-refresh: the dependencies are file:// charts, so there is no
+      // repository index to fetch — and without it helm refreshes every repo
+      // configured on the machine first, adding seconds (tens, for a large
+      // index on a slow link) to every Preview.
+      await runCommand(helm, ['dependency', 'update', '--skip-refresh', templateDir], { timeout: 120000 })
 
       const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000, maxBuffer: MAX_BUFFER })
       const check = await checkPrometheusRules(output)

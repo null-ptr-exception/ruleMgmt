@@ -104,7 +104,7 @@ beforeAll(() => {
   }), 'utf-8')
   fs.writeFileSync(path.join(deployDir, 'values.yaml'), yaml.dump({ [CHART]: { [GROUP]: rows } }), 'utf-8')
 
-  execFileSync('helm', ['dependency', 'build', deployDir], { encoding: 'utf8' })
+  execFileSync('helm', ['dependency', 'build', '--skip-refresh', deployDir], { encoding: 'utf8' })
   const output = execFileSync('helm', ['template', 'rel', deployDir], { encoding: 'utf8' })
   rendered = YAML.parseAllDocuments(output).map(doc => doc.toJSON())
 })
@@ -210,7 +210,7 @@ describe('the schema is still editable afterwards', () => {
     fs.writeFileSync(path.join(deployDir, 'values.yaml'), yaml.dump({
       [CHART]: { [GROUP]: rows.map(r => ({ ...r, recv_crit: r.recv_warn * 2 })) }
     }), 'utf-8')
-    execFileSync('helm', ['dependency', 'build', deployDir], { encoding: 'utf8' })
+    execFileSync('helm', ['dependency', 'build', '--skip-refresh', deployDir], { encoding: 'utf8' })
     const output = execFileSync('helm', ['template', 'rel', deployDir], { encoding: 'utf8' })
     const again = YAML.parseAllDocuments(output)
       .map(d => d.toJSON())
@@ -231,7 +231,7 @@ describe('rows are cut across objects, since only a deployment knows how many th
   beforeAll(() => {
     fs.writeFileSync(path.join(chartDir, 'values.schema.json'), JSON.stringify(schema, null, 2), 'utf-8')
     writeTemplates(schema)
-    execFileSync('helm', ['dependency', 'build', deployDir], { encoding: 'utf8' })
+    execFileSync('helm', ['dependency', 'build', '--skip-refresh', deployDir], { encoding: 'utf8' })
   })
 
   const renderRows = count => {

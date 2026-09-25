@@ -253,6 +253,21 @@ Regenerates and compares instead of writing; non-zero exit on any difference.
 Worth wiring into CI or a pre-commit hook if files are ever committed by hand
 — it is what enforces that `rules/` is the source.
 
+### Regenerate every chart after an upgrade
+
+When a release changes the generated format (1.6 moved `expr` and annotations
+to block scalars), every migrated chart turns `stale` and commits are refused
+until its products are regenerated:
+
+```bash
+for c in charts/*/; do [ -d "$c/rules" ] && node scripts/gen-rules.mjs "$c"; done
+node scripts/gen-rules.mjs charts/<name> --check   # spot-check: no DIFFERS
+```
+
+Commit that on its own, with nothing else in it. The rendered rules are the
+same; review it with `dyff` rather than a text diff. See
+[alert-rules.md](alert-rules.md#when-an-upgrade-changes-the-output-format).
+
 ### Import rules into a chart
 
 ```bash

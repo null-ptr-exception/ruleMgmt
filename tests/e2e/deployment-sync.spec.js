@@ -42,6 +42,13 @@ async function rightClickMenuItem(page, node, itemLabel) {
 test.describe.serial('deployment sync', () => {
   test.beforeAll(async ({ request }) => {
     await initDeployment(request, `${ROOT}/prod`)
+    // A freshly initialised deployment has zero rows in every group, and a
+    // group with no rows renders nothing (#57) — give the one staging is
+    // synced from something for Preview to show.
+    const fill = await request.post(`/api/v2/deployments/${CHART}/prod?folder=${encodeURIComponent(`${ROOT}/prod`)}`, {
+      data: { values: { _common: { owner: 'team-e2e', namespace: 'e2e' }, mariadb_latency_slow_queries: [{ instance_name: 'e2e' }] } },
+    })
+    expect(fill.status()).toBeLessThan(300)
     await initDeployment(request, `${ROOT}/staging`)
     await initDeployment(request, `${ROOT}/dev`)
     await initDeployment(request, `${ROOT}/canary`)

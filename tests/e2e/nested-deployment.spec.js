@@ -72,6 +72,13 @@ test.describe('nested deployment — save and preview', () => {
         data: { folder: UPPERCASE_FOLDER, chart: CHART }
       })
       expect(res.status()).toBeLessThan(300)
+      // Zero rows render nothing (#57); one row is enough for Preview to
+      // show whether the uppercase folder name reaches Helm as a valid
+      // release name.
+      const fill = await request.post(`/api/v2/deployments/${CHART}/PROD?folder=${encodeURIComponent(UPPERCASE_FOLDER)}`, {
+        data: { values: { _common: { owner: 'team-e2e', namespace: 'e2e' }, mariadb_latency_slow_queries: [{ instance_name: 'e2e' }] } },
+      })
+      expect(fill.status()).toBeLessThan(300)
     })
 
     test('Save succeeds and shows timestamp for uppercase folder name', async ({ page }) => {

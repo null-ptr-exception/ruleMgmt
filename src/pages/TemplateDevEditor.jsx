@@ -228,6 +228,10 @@ export default function TemplateDevEditor() {
   }
 
   // ── save ──────────────────────────────────────────────────────────────────
+  // The banner for a legacy or stale chart says Save fixes it, so Save has to
+  // be available before anything has been edited.
+  const needsSave = drift?.state === 'legacy' || drift?.state === 'stale'
+
   function buildFiles() {
     const files = {}
     const common = model.common.columns
@@ -472,7 +476,7 @@ export default function TemplateDevEditor() {
               style={{ flex: 1, maxWidth: 400 }} />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
               <Button icon={<ImportOutlined />} onClick={() => setImportTarget('existing')}>Import</Button>
-              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={!dirty}>Save</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={!dirty && !needsSave}>Save</Button>
               <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
             </div>
           </>

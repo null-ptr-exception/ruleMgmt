@@ -93,7 +93,12 @@ export function checkRules(schema) {
       // right, so it is rejected. A value that is nothing but the reference is
       // fine — that line just disappears with it.
       if (mayBeAbsent.size) {
-        for (const entry of entries) {
+        // keep_firing_for drops as a line too (see attachGuards), so it
+        // follows the same rule as a label value.
+        const lines = rule.keep_firing_for
+          ? [...entries, { key: 'keep_firing_for', value: rule.keep_firing_for }]
+          : entries
+        for (const entry of lines) {
           if (mayBeAbsent.has(wholeRefName(entry.value))) continue
           for (const name of varsIn(entry.value)) {
             if (mayBeAbsent.has(name)) {

@@ -9,3 +9,18 @@ blind-jobs-1-1:
         for: 2m
         keep_firing_for: 5m
         labels: { severity: warning }
+      - alert: JobFlapping
+        expr: changes(up{job="api"}[10m]) > 3
+        for: 1m
+        keep_firing_for: 15m
+        labels: { severity: info }
+      - alert: JobAbsent
+        expr: absent(up{job="worker"})
+        for: 2m
+        keep_firing_for: 5m
+        labels: { severity: warning }
+      # worker leaves linger out: the alert stays, without keep_firing_for
+      - alert: JobFlapping
+        expr: changes(up{job="worker"}[10m]) > 3
+        for: 1m
+        labels: { severity: info }

@@ -20,5 +20,13 @@ spec:
           keep_firing_for: 5m
           labels:
             severity: warning
+        - alert: JobFlapping
+          expr: changes(up{job="{{ .job }}"}[10m]) > 3
+          for: 1m
+          {{- if hasKey . "linger" }}
+          keep_firing_for: {{ .linger }}
+          {{- end }}
+          labels:
+            severity: info
         {{- end }}
 {{- end }}

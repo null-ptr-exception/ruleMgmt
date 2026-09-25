@@ -45,6 +45,22 @@ describe('reference integrity', () => {
     expect(kinds(findings)).toContain('undefined-var')
   })
 
+  it('rejects an optional no-default column in the middle of keep_firing_for', () => {
+    const findings = checkRules(chart(
+      [{ alert: 'A', expr: 'cpu > ${warn}', keep_firing_for: '${linger}m' }],
+      { namespace: { type: 'string' }, warn: { type: 'number', default: 80 }, linger: { type: 'number' } }
+    ))
+    expect(kinds(findings)).toContain('optional-mid-string')
+  })
+
+  it('accepts keep_firing_for that is nothing but an optional column', () => {
+    const findings = checkRules(chart(
+      [{ alert: 'A', expr: 'cpu{ns="${namespace}"} > ${warn}', keep_firing_for: '${linger}' }],
+      { namespace: { type: 'string' }, warn: { type: 'number', default: 80 }, linger: { type: 'string' } }
+    ))
+    expect(findings).toEqual([])
+  })
+
   it('does not report a vars name as an undefined column', () => {
     const schema = chart(
       [{ alert: 'A', expr: '${load} > ${warn}' }],

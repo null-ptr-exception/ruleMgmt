@@ -201,8 +201,9 @@ nothing renders exactly what it rendered before.
 
 | Referenced in | An empty cell means | What is emitted |
 |---|---|---|
-| `expr`, `for` or `keep_firing_for` | This rule does not apply to this row | **The whole rule is omitted for that row** |
+| `expr` or `for` | This rule does not apply to this row | **The whole rule is omitted for that row** |
 | A label or annotation whose entire value is `${x}` | This row has no such label | That line is omitted |
+| `keep_firing_for` whose entire value is `${x}` | The alert resolves as soon as it stops matching | That line is omitted — the alert is still whole without it |
 | The middle of a longer string | Neither omission makes sense | **Rejected at save time** — give it a default or make it required |
 
 The principle is to omit the smallest unit that still means something.

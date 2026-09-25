@@ -505,12 +505,16 @@ describe('empty cells (#57)', () => {
     expect(out.match(/hasKey \. "crit"/g)).toHaveLength(1)
   })
 
-  // keep_firing_for sits next to `for` and is read the same way: a row that
-  // leaves it blank with nothing to fall back on is not a row for this rule.
-  it('drops the whole rule for a row that omits a keep_firing_for column', () => {
+  // keep_firing_for is dropped as a line, like a label: without it the rule is
+  // still whole, it just resolves as soon as it stops matching.
+  it('drops only the keep_firing_for line for a row that omits its column', () => {
     const out = render([{ alert: 'A', expr: 'cpu > 1', keep_firing_for: '${linger}' }])
-    expect(out).toContain('{{- if hasKey . "linger" }}')
-    expect(out).toContain('keep_firing_for: {{ .linger }}')
+    expect(out).toContain(
+      '          {{- if hasKey . "linger" }}\n' +
+      '          keep_firing_for: {{ .linger }}\n' +
+      '          {{- end }}')
+    // The rule itself is not guarded.
+    expect(out.indexOf('{{- if hasKey . "linger" }}')).toBeGreaterThan(out.indexOf('- alert: A'))
   })
 })
 

@@ -136,9 +136,14 @@ function renderRule(rule, ref, refVar, defaults) {
   const parts = [
     `        - alert: ${rule.alert}\n` +
     `          expr: ${renderScalar(rule.expr, ref, defaults)}\n` +
-    `          for: ${renderScalar(rule.for, ref, defaults)}` +
-    (rule.keep_firing_for ? `\n          keep_firing_for: ${renderScalar(rule.keep_firing_for, ref, defaults)}` : '')
+    `          for: ${renderScalar(rule.for, ref, defaults)}`
   ]
+  if (rule.keep_firing_for) {
+    const line = `          keep_firing_for: ${renderScalar(rule.keep_firing_for, ref, defaults)}`
+    parts[0] += '\n' + (rule.keepFiringGuard
+      ? `          {{- if hasKey ${refVar} "${rule.keepFiringGuard}" }}\n${line}\n          {{- end }}`
+      : line)
+  }
   if (rule.labels?.length) {
     parts.push(`          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n'))
   }
@@ -243,20 +248,31 @@ function attachGuards(rules, mayBeAbsent) {
 
   return rules.map(rule => {
     const guards = new Set()
-    for (const text of [rule.expr, rule.for, rule.keep_firing_for, rule.raw]) {
+    for (const text of [rule.expr, rule.for, rule.raw]) {
       for (const name of varsIn(text || '')) if (mayBeAbsent.has(name)) guards.add(name)
     }
     // A line whose entire value is one reference disappears with it. Already
     // guarded at the rule level means the line guard would be dead weight.
-    const guardLine = entry => {
-      const whole = /^\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}$/.exec(String(entry.value).trim())
+    const lineGuard = value => {
+      const whole = /^\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}$/.exec(String(value).trim())
       const name = whole?.[1]
-      return name && mayBeAbsent.has(name) && !guards.has(name) ? { ...entry, guard: name } : entry
+      return name && mayBeAbsent.has(name) && !guards.has(name) ? name : null
     }
+    const guardLine = entry => {
+      const name = lineGuard(entry.value)
+      return name ? { ...entry, guard: name } : entry
+    }
+    // keep_firing_for is guarded like a label, not like `for`: without it the
+    // rule is still whole — it just resolves as soon as it stops matching —
+    // so a row that leaves it blank loses the line, not the alert. (Dropping
+    // the alert would also open a coverage gap under a selector contract.)
+    // A reference in the middle of it is rejected by the checks.
+    const keepFiringGuard = rule.keep_firing_for ? lineGuard(rule.keep_firing_for) : null
 
     return {
       ...rule,
       guards: [...guards].sort(),
+      ...(keepFiringGuard ? { keepFiringGuard } : {}),
       ...(rule.labels ? { labels: rule.labels.map(guardLine) } : {}),
       ...(rule.annotations ? { annotations: rule.annotations.map(guardLine) } : {})
     }

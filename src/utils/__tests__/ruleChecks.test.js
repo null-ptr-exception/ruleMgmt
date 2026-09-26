@@ -140,6 +140,25 @@ describe('a rule that references no column', () => {
     const schema = chart([{ alert: 'A', expr: 'up == 0' }], {})
     expect(kinds(checkRules(schema))).not.toContain('no-column-ref')
   })
+
+  // Every row carries the same _common, so reading only _common is as
+  // identical per row as reading nothing (#70).
+  it('counts a rule reading only _common as reading no column', () => {
+    const schema = chart(
+      [{ alert: 'A', expr: 'up{cluster="${cluster}"} == 0' }],
+      undefined,
+      { common: { properties: { cluster: { type: 'string' } }, required: ['cluster'] } }
+    )
+    const noRef = checkRules(schema).filter(f => f.kind === 'no-column-ref')
+    expect(noRef).toHaveLength(1)
+    expect(noRef[0].message).toMatch(/move it to a group with once: true/)
+  })
+
+  it('names a recording rule by its record', () => {
+    const noRef = checkRules(chart([{ record: 'job:up', expr: 'sum(up)' }])).filter(f => f.kind === 'no-column-ref')
+    expect(noRef[0].message).toMatch(/recording rule "job:up"/)
+    expect(noRef[0].alert).toBe('job:up')
+  })
 })
 
 describe('scope', () => {

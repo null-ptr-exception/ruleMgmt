@@ -1,0 +1,29 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # 10/s in c1 for both jobs
+      - series: 'errors_total{cluster="c1", job="checkout"}'
+        values: '0+600x30'
+      - series: 'errors_total{cluster="c1", job="search"}'
+        values: '0+600x30'
+      # another cluster, 100/s: must not reach the recorded series
+      - series: 'errors_total{cluster="c2", job="checkout"}'
+        values: '0+6000x30'
+    promql_expr_test:
+      - expr: job:errors:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'job:errors:rate5m{cluster="c1", job="checkout"}'
+            value: 10
+          - labels: 'job:errors:rate5m{cluster="c1", job="search"}'
+            value: 10
+    alert_rule_test:
+      # checkout's 10 is over its default 5; search's is under its own 20
+      - eval_time: 15m
+        alertname: ApiErrors
+        exp_alerts:
+          - exp_labels: { severity: warning, cluster: c1, job: checkout }
+            exp_annotations: { summary: "checkout: 10 errors/s" }

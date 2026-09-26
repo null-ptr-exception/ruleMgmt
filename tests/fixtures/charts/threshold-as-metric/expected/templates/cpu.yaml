@@ -1,0 +1,20 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-cpu-1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: cpu
+      rules:
+        - alert: CPUHigh
+          expr: |-
+            cpu_usage > on(namespace, workload) group_left cpu_threshold
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: |-
+              {{ `{{ $labels.workload }}` }}: {{ `{{ $value }}` }}%

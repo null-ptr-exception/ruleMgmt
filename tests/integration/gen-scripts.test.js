@@ -86,6 +86,24 @@ describe('a chart mixing output profiles', () => {
   })
 })
 
+// #70: a once group has no entry in values.schema.json. gen-chart used to
+// walk only the schema's groups, so it never generated or checked one.
+describe('a chart with a once group', () => {
+  it('gen-chart generates and checks the once group, which the schema does not list', async () => {
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), '{}')
+    await fs.cp(path.resolve('tests/fixtures/charts/recording-once/rules'), path.join(chartDir, 'rules'), { recursive: true })
+    expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+    await fs.rm(path.join(chartDir, 'templates', 'api-recording.yaml'))
+
+    const gen = run(GEN_CHART, [chartDir])
+    expect(gen.status, gen.stdout).toBe(0)
+    expect(gen.stdout).toMatch(/created\s+api_recording/)
+    const check = run(GEN_CHART, [chartDir, '--check'])
+    expect(check.status, check.stdout).toBe(0)
+    expect(check.stdout).toMatch(/same\s+api_recording/)
+  })
+})
+
 describe('an x-custom-template group across gen-rules runs', () => {
   it('keeps its hand-written template and its schema entry, and stays clean', async () => {
     const schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))

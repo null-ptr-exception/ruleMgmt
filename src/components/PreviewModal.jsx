@@ -97,17 +97,26 @@ function GroupRow({ group }) {
           {group.checked === false && (
             <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>not syntax-checked</Text>
           )}
+          {group.once && (
+            <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>once per deployment</Text>
+          )}
         </span>
         {group.state === 'empty'
           ? <Text type="secondary">not filled in</Text>
           : group.state === 'custom'
             ? <Text type="secondary">hand-written template</Text>
-            : <Text type="secondary">{total} alert{total === 1 ? '' : 's'}</Text>}
+            : <Text type="secondary">
+              {total} alert{total === 1 ? '' : 's'}
+              {/* Recording rules (#70) are not alerts and not in the total. */}
+              {group.records > 0 && `, ${group.records} recording rule${group.records === 1 ? '' : 's'}`}
+            </Text>}
       </div>
 
       {group.state === 'no-alerts' && (
         <div style={{ color: '#d46b08', fontSize: 13, marginTop: 4 }}>
-          ⚠ has {group.rowCount} row{group.rowCount === 1 ? '' : 's'} but produced no alerts
+          {group.once
+            ? '⚠ produced nothing'
+            : `⚠ has ${group.rowCount} row${group.rowCount === 1 ? '' : 's'} but produced no alerts`}
         </div>
       )}
 

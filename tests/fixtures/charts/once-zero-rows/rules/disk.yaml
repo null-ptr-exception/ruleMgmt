@@ -1,0 +1,8 @@
+# A per-row group with no rows renders nothing, as before.
+columns:
+  mount: { type: string, required: true }
+
+rules:
+  - alert: DiskFull
+    expr: disk_used_percent{mount="${mount}"} > 90
+    labels: { severity: warning }

@@ -1,0 +1,10 @@
+# ...and one alert, once, compares usage against whichever threshold series
+# matches. A workload with no row has no threshold and never fires.
+once: true
+
+rules:
+  - alert: CPUHigh
+    expr: cpu_usage > on(namespace, workload) group_left cpu_threshold
+    for: 5m
+    labels: { severity: warning }
+    annotations: { summary: '{{ $labels.workload }}: {{ $value }}%' }

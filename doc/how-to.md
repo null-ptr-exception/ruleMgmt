@@ -82,6 +82,19 @@ whole group. Switching the type changes what `expr` is written in, and the
 group's objects are replaced when it is saved — see
 [alert-rules.md](alert-rules.md#log-alerts-groups-of-another-type).
 
+### Render rules once per deployment, or record a series
+
+**Once per deployment** in the same row makes the group render once for the
+whole deployment instead of once per row — for a recording rule that
+aggregates everything, a watchdog, an alert on chart-wide values. It can be
+turned on only while the group has no columns; its rules can read the common
+variables. Saving tells you the group's objects are replaced.
+
+A rule's **Alert / Record** switch, left of its name, makes it a recording
+rule: it keeps the name, `expr` and labels, and loses `for` and annotations,
+which a recording rule does not have. See
+[alert-rules.md](alert-rules.md#recording-rules-and-once-groups).
+
 ### Hand-write a rule
 
 When a rule needs something the fields do not cover — `limit`,
@@ -170,6 +183,9 @@ of every group in this deployment.
 Each row is one monitored scope. What the columns mean is set by whoever wrote
 the template; if a name is unclear, that is worth telling them.
 
+A group marked **No values needed** renders once per deployment and has no
+table — there is nothing to fill in. Preview shows what it produces.
+
 ### Check what will actually be deployed
 
 **Preview** renders the chart with your rows through Helm — the same path a
@@ -177,6 +193,8 @@ deploy takes — and opens on a summary of what came out: how many alerts each
 group produced, by alert name and severity. It also points out:
 
 - a group with no rows, which produces nothing
+- a group marked *once per deployment*, which needs no rows; recording rules
+  are counted next to the alerts, not in the total
 - a group with rows but no alerts, usually a blank cell that drops a rule
 - value fields the template no longer has, left over from an older version of
   the chart

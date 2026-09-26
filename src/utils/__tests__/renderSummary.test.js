@@ -127,3 +127,39 @@ describe('summarizeGroups', () => {
     expect(traffic.missing).toEqual([{ alert: 'TrafficHigh', severity: 'critical' }])
   })
 })
+
+// #70: recording rules are counted apart from alerts; a once group has no
+// rows and is never "empty".
+describe('recording rules and once groups in the summary', () => {
+  const rendered = () => tallyRendered(CR([
+    { name: 'api-recording', rules: [{ record: 'job:errors:rate5m' }] },
+    { name: 'api', rules: [{ alert: 'ApiErrors', labels: { severity: 'warning' } }, { record: 'job:x' }] },
+  ]))
+
+  it('counts recording rules per group, not in the alert total', () => {
+    const r = rendered()
+    expect(r.total).toBe(1)
+    expect(r.recordsByGroup.get('api-recording')).toBe(1)
+    expect(r.recordsByGroup.get('api')).toBe(1)
+  })
+
+  it('marks a once group, with no rows, as rendered — not empty', () => {
+    const { groups } = summarizeGroups({
+      rendered: rendered(),
+      possible: { api_recording: [], api: [{ alert: 'ApiErrors', severity: 'warning' }] },
+      groupRows: { api: 1 },
+      schema: null,
+      onceGroups: ['api_recording'],
+    })
+    const once = groups.find(g => g.valuesKey === 'api_recording')
+    expect(once).toMatchObject({ once: true, rowCount: 0, state: 'ok', records: 1, alerts: [] })
+    expect(groups.find(g => g.valuesKey === 'api')).toMatchObject({ once: false, state: 'ok', records: 1 })
+  })
+
+  it('reports a once group that rendered nothing as no-alerts', () => {
+    const { groups } = summarizeGroups({
+      rendered: tallyRendered(CR([])), possible: { w: [{ alert: 'W', severity: '' }] }, groupRows: {}, schema: null, onceGroups: ['w'],
+    })
+    expect(groups[0].state).toBe('no-alerts')
+  })
+})

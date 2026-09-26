@@ -42,7 +42,25 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
   const [varName, setVarName] = useState('')
 
   const isRaw = rule.raw !== undefined
+  // A recording rule (#70) has a record name and no for, keep_firing_for or
+  // annotations — Prometheus gives it none.
+  const isRecord = rule.record !== undefined
+  const name = isRecord ? rule.record : rule.alert
   const update = patch => onChange({ ...rule, ...patch })
+
+  // Switching keeps what both kinds have — the name, expr, labels and note —
+  // and drops what the other kind cannot carry.
+  function setKind(kind) {
+    if ((kind === 'record') === isRecord) return
+    const kept = {
+      expr: rule.expr,
+      ...(rule.labels ? { labels: rule.labels } : {}),
+      ...(rule.note ? { note: rule.note } : {}),
+    }
+    onChange(kind === 'record'
+      ? { record: rule.alert || '', ...kept }
+      : { alert: rule.record || '', ...kept, for: '5m', annotations: {} })
+  }
 
   // Labels and annotations are a map in the schema, which cannot hold the blank
   // row you get right after pressing Add row — the key is its identity. The
@@ -123,7 +141,8 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
         }}
       >
         <RightOutlined style={{ fontSize: 11, color: '#999' }} />
-        <Text style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{rule.alert || '(unnamed)'}</Text>
+        <Text style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>{name || '(unnamed)'}</Text>
+        {isRecord && <Tag style={{ marginInlineEnd: 0 }}>record</Tag>}
         {severity && <Tag style={{ marginInlineEnd: 0 }}>{severity}</Tag>}
         {isRaw && <Tag style={{ marginInlineEnd: 0 }}>raw</Tag>}
         {missing.length > 0 && <Tag color="error" style={{ marginInlineEnd: 0 }}>{missing.length} unresolved</Tag>}
@@ -144,12 +163,21 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
           icon={<DownOutlined style={{ fontSize: 11, color: '#999' }} />}
           onClick={onToggleCollapse}
         />
+        <Select
+          size="small"
+          aria-label="Rule kind"
+          value={isRecord ? 'record' : 'alert'}
+          disabled={isRaw}
+          style={{ width: 90, flexShrink: 0 }}
+          options={[{ value: 'alert', label: 'Alert' }, { value: 'record', label: 'Record' }]}
+          onChange={setKind}
+        />
         <Input
           size="small"
-          placeholder="alert name"
-          value={rule.alert || ''}
+          placeholder={isRecord ? 'record name, e.g. job:errors:rate5m' : 'alert name'}
+          value={name || ''}
           disabled={isRaw}
-          onChange={e => update({ alert: e.target.value })}
+          onChange={e => update(isRecord ? { record: e.target.value } : { alert: e.target.value })}
           style={{ fontWeight: 600 }}
         />
         <Tooltip title="Hand-write this one rule as YAML. The resource around it stays generated.">
@@ -210,7 +238,7 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
             </Text>
           </div>
 
-          <div style={{ marginBottom: 12, maxWidth: 220 }}>
+          {!isRecord && <div style={{ marginBottom: 12, maxWidth: 220 }}>
             {label('For')}
             <Input
               size="small"
@@ -221,7 +249,7 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
             <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
               A duration, or a column: <code>{'${window}'}</code>.
             </Text>
-          </div>
+          </div>}
 
           <div style={{ marginBottom: 12 }}>
             {label('Labels')}
@@ -235,7 +263,7 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
             </Text>
           </div>
 
-          <div>
+          {!isRecord && <div>
             {label('Annotations')}
             <KVEditor
               rows={annotationRows}
@@ -245,7 +273,7 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
               Same as labels — <code>{'{{ $value }}'}</code> is evaluated by Prometheus when the
               alert fires, not here.
             </Text>
-          </div>
+          </div>}
 
           <div style={{ marginTop: 12 }}>
             {label('Note')}

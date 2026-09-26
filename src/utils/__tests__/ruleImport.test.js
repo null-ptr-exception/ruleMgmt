@@ -77,11 +77,6 @@ describe('what import does not do', () => {
     expect(groups[0].columns).toEqual(['namespace', 'recv_warn', 'xmit_warn'])
   })
 
-  it('skips recording rules and says so', () => {
-    const { groups, warnings } = importRules('groups:\n  - name: g\n    rules:\n      - record: job:up\n        expr: up\n')
-    expect(groups).toEqual([])
-    expect(warnings.join(' ')).toMatch(/recording rule/)
-  })
 
   it('keeps a rule it cannot model by hand-writing it, rather than dropping fields', () => {
     const { groups, warnings } = importRules(
@@ -127,6 +122,57 @@ spec:
     const { groups, warnings } = importRules(vmrule.replace('type: vlogs', 'type: graphite'))
     expect(groups).toEqual([])
     expect(warnings.join()).toMatch(/panics: type "graphite" has no output profile \(prometheus, vlogs\) — group skipped/)
+  })
+})
+
+// #70: recording rules come in like any other rule, into their own group —
+// not split off by kind (a recording rule is not necessarily once). A group
+// with no columns of its own renders once in its source, so it is once here.
+describe('recording rules and once groups', () => {
+  const mixed = `
+groups:
+  - name: api
+    rules:
+      - record: job:errors:rate5m
+        expr: sum by (job) (rate(errors_total[5m]))
+        labels:
+          team: api
+      - alert: ApiErrors
+        expr: job:errors:rate5m > 0.05
+        for: 5m
+`
+
+  it('imports a recording rule in place, next to the alert', () => {
+    const { groups, warnings } = importRules(mixed)
+    expect(warnings).toEqual([])
+    expect(groups[0].rules).toEqual([
+      { record: 'job:errors:rate5m', expr: 'sum by (job) (rate(errors_total[5m]))', labels: { team: 'api' } },
+      { alert: 'ApiErrors', expr: 'job:errors:rate5m > 0.05', for: '5m' },
+    ])
+  })
+
+  it('marks a group with no columns of its own as once', () => {
+    const [group] = importRules(mixed).groups
+    expect(modelGroupFromImport(group)).toMatchObject({ group: 'api', once: true, columns: {} })
+  })
+
+  it('marks a group once when every reference is a _common column', () => {
+    const [group] = importRules('- alert: A\n  expr: up{cluster="${cluster}"} == 0\n').groups
+    expect(modelGroupFromImport(group, ['cluster']).once).toBe(true)
+    expect(modelGroupFromImport(group).once).toBeUndefined()
+  })
+
+  it('keeps a group with a placeholder per row, recording rule and all', () => {
+    const [group] = importRules('- record: cpu_threshold\n  expr: vector(${threshold})\n').groups
+    const imported = modelGroupFromImport(group)
+    expect(imported.once).toBeUndefined()
+    expect(imported.columns).toEqual({ threshold: { type: 'string' } })
+  })
+
+  it('hand-writes a recording rule with a field the model does not carry', () => {
+    const { groups, warnings } = importRules('- record: r\n  expr: up\n  for: 5m\n')
+    expect(groups[0].rules[0].raw).toContain('for: 5m')
+    expect(warnings.join()).toMatch(/r keeps for only by hand-writing/)
   })
 })
 

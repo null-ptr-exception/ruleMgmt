@@ -78,6 +78,7 @@ the query lives in `vars` so there is only ever one copy of it.
 | Field | Required | Meaning |
 |---|---|---|
 | `group` | no | Must equal the filename if present |
+| `once` | no | `true`: the rules render **once per deployment** instead of once per row — see [once groups](#once-groups). A once group has no `columns` |
 | `type` | no | Which kind of rules these are, and so what they are wrapped in: `prometheus` (the default — `expr` is PromQL, emitted as a `PrometheusRule`) or `vlogs` (`expr` is LogsQL, evaluated against VictoriaLogs, emitted as a `VMRule`). The choices are the profiles in `config/outputs.json` — see [output profiles](#output-profiles) |
 | `interval` | no | How often the group is evaluated — a duration such as `30s`, `1m`, `1h30m`. Left out, the evaluator's own default applies |
 | `limit` | no | Maximum series the group may produce — a whole number, `0` or more. Left out, there is no limit |
@@ -107,6 +108,7 @@ Different groups in one chart may have different types.
 | Field | Meaning |
 |---|---|
 | `alert` | The alert name. Written by you; the generator never composes one |
+| `record` | Instead of `alert`: the name of the series a recording rule records, e.g. `job:errors:rate5m`. A rule has exactly one of the two |
 | `expr` | PromQL, with `${…}` placeholders |
 | `for` | A duration, or a placeholder |
 | `keep_firing_for` | Passed through |
@@ -117,6 +119,66 @@ Different groups in one chart may have different types.
 
 Any other key is rejected. A rule that needs a field the list does not cover
 goes through `raw`.
+
+A recording rule (`record`) has only `record`, `expr`, `labels` and `note` —
+Prometheus gives it no `for`, `keep_firing_for` or annotations, and each of
+those is rejected on one.
+
+### Once groups
+
+A group renders its rules once per row. Some rules belong once per
+deployment instead: a recording rule that aggregates across everything
+(`sum by (job) (rate(errors_total[5m]))`), a watchdog, an alert that reads
+only chart-wide values. Put those in a group of their own and mark it:
+
+```yaml
+# rules/api_recording.yaml
+once: true
+
+rules:
+  - record: job:errors:rate5m
+    expr: sum by (job) (rate(errors_total{cluster="${cluster}"}[5m]))
+```
+
+- A once group has **no `columns`** — it has no rows to read them from. Its
+  rules may read `_common`.
+- It renders whatever `values.yaml` holds, zero rows included, and it has no
+  entry in `values.schema.json`: the rule owner has nothing to fill in, and
+  the Alerts page says so.
+- A group cannot mix the two. A per-row rule and a once rule sit in separate
+  Prometheus groups either way, and are evaluated separately — keeping them
+  in separate files says so. A rule in a per-row group that reads none of its
+  group's columns is refused at commit, pointing here.
+- Switching a group between per-row and once renames its objects (see
+  [what gets generated](#what-gets-generated)); the save says so.
+
+Recording rules are not necessarily once. **Threshold as a metric** records
+one series per row and compares against it in a single alert:
+
+```yaml
+# rules/cpu_thresholds.yaml — one recording rule per row
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, required: true }
+  threshold: { type: number, default: 80 }
+rules:
+  - record: cpu_threshold
+    expr: vector(${threshold})
+    labels: { namespace: "${namespace}", workload: "${workload}" }
+```
+
+```yaml
+# rules/cpu.yaml — one alert, once
+once: true
+rules:
+  - alert: CPUHigh
+    expr: cpu_usage > on(namespace, workload) group_left cpu_threshold
+    for: 5m
+    labels: { severity: warning }
+```
+
+The two groups are evaluated separately, so a changed threshold reaches the
+alert up to one evaluation later.
 
 ### `vars`
 
@@ -292,9 +354,15 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 
 And, before a commit:
 
-- A rule that references no column at all — it would be emitted once per row,
-  identical every time. Save allows it (a chart being variabilised passes
-  through this state); committing does not.
+- In a group with columns, a rule that references none of them (reading only
+  `_common` counts as none) — it would be emitted once per row, identical
+  every time. Save allows it (a chart being variabilised passes through this
+  state); committing does not. A rule that belongs once per deployment goes in
+  a [once group](#once-groups).
+
+A once group with `columns`, a rule with both or neither of `alert` and
+`record`, and a recording rule with `for`, `keep_firing_for` or annotations
+are rejected at save time.
 
 ## What gets generated
 
@@ -342,6 +410,9 @@ a new one, at a threshold nobody is watching.
   budget. Known when the templates are generated
 - **chunk** — rows are chunked at a fixed size by the template itself. Only
   known when Helm renders
+
+A [once group](#once-groups) has no rows and so no chunk: its objects are
+`{release}-{group}-{shard}`.
 
 Neither ever changes an alert's identity: the `alert` names and labels are
 identical however the group is split. Only `metadata.name` differs.

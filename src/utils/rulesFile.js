@@ -14,7 +14,7 @@
  *     common: { columns: { <name>: <column> } },        // omitted when empty
  *     groups: {
  *       <key>: {                                          // key = filename = values key
- *         group: <key>, interval?, limit?,
+ *         group: <key>, once?, type?, interval?, limit?,
  *         vars?: { <name>: <text> },
  *         columns: { <name>: <column> },
  *         rules: [ <rule> ],
@@ -25,7 +25,12 @@
  *   }
  *
  *   <column> = { type, required?, default?, enum?, description? }
- *   <rule>   = { alert, expr, for?, keep_firing_for?, labels?, annotations?, raw?, note? }
+ *   <rule>   = { alert, expr, for?, keep_firing_for?, labels?, annotations?, note? }
+ *            | { record, expr, labels?, note? }
+ *            | { raw, note? }
+ *
+ * A group with `once: true` (#70) renders its rules once per deployment,
+ * outside the row loop: it has no columns and takes no rows.
  */
 
 import yaml from 'js-yaml'
@@ -33,8 +38,11 @@ import { normalizeRules, columnsInQuotedValues } from './templateGenerator.js'
 import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 
-const GROUP_KEYS = ['group', 'type', 'interval', 'limit', 'vars', 'columns', 'rules']
-const RULE_KEYS = ['alert', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
+const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'vars', 'columns', 'rules']
+const RULE_KEYS = ['alert', 'record', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
+// A recording rule has no `for`, `keep_firing_for` or annotations in
+// Prometheus — only these.
+const RECORD_KEYS = ['record', 'expr', 'labels', 'note']
 const COLUMN_KEYS = ['type', 'required', 'default', 'enum', 'description']
 const RESERVED = new Set(['selector'])
 // A Prometheus duration: one or more <number><unit>, e.g. 30s, 1m, 1h30m.
@@ -91,6 +99,14 @@ function canonicalRule(rule) {
   const out = {}
   if (rule.raw !== undefined) {
     out.raw = String(rule.raw).replace(/\n+$/, '')
+    if (rule.note) out.note = rule.note
+    return out
+  }
+  if (rule.record !== undefined) {
+    out.record = rule.record
+    out.expr = rule.expr
+    const labels = normalizeMap(rule.labels)
+    if (labels) out.labels = labels
     if (rule.note) out.note = rule.note
     return out
   }
@@ -222,6 +238,9 @@ export function modelToSchema(model, originalSchema = null) {
       schema.properties[key] = originalSchema?.properties?.[key] || { type: 'array', 'x-custom-template': true }
       continue
     }
+    // A once group takes no rows, so values.yaml has nothing to hold for it
+    // and the schema no array to validate (#70).
+    if (group.once) continue
     const { properties, required } = columnsToSchema(group.columns)
     const def = { type: 'array', items: { type: 'object', properties } }
     if (required.length) def.items.required = required
@@ -250,6 +269,7 @@ export function groupGenDef(group) {
   const { properties, required } = columnsToSchema(group.columns)
   const def = { type: 'array', 'x-rules': group.rules.map(canonicalRule) }
   if (group.vars && Object.keys(group.vars).length) def.vars = { ...group.vars }
+  if (group.once) def.once = true
   // `type` is JSON Schema's here (`array`), so the group's output type rides
   // as groupType — in memory only, never written.
   if (group.type !== undefined) def.groupType = group.type
@@ -290,6 +310,7 @@ function flowColumn(col) {
  *  actually touched and passes every other file through verbatim. */
 export function groupFileText(group) {
   const lines = [`group: ${group.group}`]
+  if (group.once) lines.push('once: true')
   if (group.type !== undefined) lines.push(`type: ${scalar(group.type)}`)
   if (group.interval !== undefined) lines.push(`interval: ${scalar(group.interval)}`)
   if (group.limit !== undefined) lines.push(`limit: ${scalar(group.limit)}`)
@@ -350,6 +371,27 @@ function parseColumns(columns, where, errors) {
   return out
 }
 
+/**
+ * A rule is an alert, a recording rule or a raw entry — exactly one. A
+ * recording rule carries only what Prometheus gives one (RECORD_KEYS).
+ */
+function checkRuleKind(rule, where, errors) {
+  if (rule?.raw !== undefined) return
+  const hasAlert = rule?.alert !== undefined
+  const hasRecord = rule?.record !== undefined
+  if (hasAlert === hasRecord) {
+    errors.push(`${where}: a rule needs exactly one of alert or record`)
+    return
+  }
+  if (hasRecord) {
+    for (const key of Object.keys(rule)) {
+      if (RULE_KEYS.includes(key) && !RECORD_KEYS.includes(key)) {
+        errors.push(`${where}: recording rule "${rule.record}" cannot have ${key} — a recording rule has only record, expr and labels`)
+      }
+    }
+  }
+}
+
 /** One group file. `filename` is the stem, without `.yaml`. */
 export function parseGroupFile(text, filename) {
   const errors = []
@@ -377,7 +419,9 @@ export function parseGroupFile(text, filename) {
   }
 
   const rules = (Array.isArray(doc.rules) ? doc.rules : []).map((rule, i) => {
-    rejectUnknown(rule, RULE_KEYS, `${filename}.yaml rules[${i}]`, errors)
+    const where = `${filename}.yaml rules[${i}]`
+    rejectUnknown(rule, RULE_KEYS, where, errors)
+    checkRuleKind(rule, where, errors)
     return canonicalRule(rule)
   })
   if (!Array.isArray(doc.rules)) errors.push(`${filename}.yaml: rules is required and must be a list`)
@@ -395,8 +439,18 @@ export function parseGroupFile(text, filename) {
   if (doc.limit !== undefined && !(Number.isInteger(doc.limit) && doc.limit >= 0)) {
     errors.push(`${filename}.yaml: limit "${doc.limit}" must be a whole number, 0 or more`)
   }
+  // once (#70): the group renders once per deployment, outside the row loop.
+  // Columns would be read from rows it never has, so it cannot have any —
+  // per-row and once rules live in separate groups.
+  if (doc.once !== undefined && typeof doc.once !== 'boolean') {
+    errors.push(`${filename}.yaml: once must be true or false`)
+  }
+  if (doc.once === true && Object.keys(columns).length) {
+    errors.push(`${filename}.yaml: a once group renders once per deployment and takes no rows — it cannot have columns (move per-row rules to a group of their own)`)
+  }
 
   const group = { group: filename, columns, rules }
+  if (doc.once === true) group.once = true
   if (doc.type !== undefined) group.type = doc.type
   if (doc.interval !== undefined) group.interval = doc.interval
   if (doc.limit !== undefined) group.limit = doc.limit
@@ -518,6 +572,10 @@ export function validateValues(values, model) {
     const columns = model.groups?.[group]?.columns
     if (!columns) {
       problems.push(`values.yaml: group "${group}" has no matching rules file`)
+      continue
+    }
+    if (model.groups[group].once) {
+      if (Array.isArray(rows) && rows.length) problems.push(`values.yaml: group "${group}" is a once group and takes no rows`)
       continue
     }
     const known = { ...commonCols, ...columns }

@@ -157,6 +157,15 @@ function renderRule(rule, ref, refVar, defaults) {
   const indent = ' '.repeat(8)
   if (rule.raw) return guarded(renderRawRule(rule.raw, ref, defaults), rule.guards, refVar, indent)
 
+  // A recording rule has no for, keep_firing_for or annotations (#70).
+  if (rule.record !== undefined) {
+    let text = `        - record: ${rule.record}\n` + renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10))
+    if (rule.labels?.length) {
+      text += `\n          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n')
+    }
+    return guarded(text, rule.guards, refVar, indent)
+  }
+
   const parts = [
     `        - alert: ${rule.alert}\n` +
     renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10)) + '\n' +
@@ -226,7 +235,12 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
     const expand = s => expandVars(s || '', vars)
     const expandEntries = entries => entries.map(e => ({ ...e, value: expand(e.value) }))
 
-    return alertDef['x-rules'].map(rule => (rule.raw ? { raw: expand(rule.raw) } : {
+    return alertDef['x-rules'].map(rule => (rule.raw ? { raw: expand(rule.raw) } : rule.record !== undefined ? {
+      record: rule.record,
+      expr: expand(rule.expr),
+      labels: expandEntries(toEntries(rule.labels)),
+      annotations: []
+    } : {
       alert: rule.alert,
       expr: expand(rule.expr),
       for: expand(rule.for || alertDef['x-for'] || '5m'),
@@ -313,6 +327,8 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
   const selectors = getSelectors(alertDef)
   const allSelectors = [...new Set([...commonSelectors, ...selectors])]
   const hasCommon = commonSelectors.length > 0
+  // A once group (#70) renders outside the row loop: `$row` is _common itself.
+  const once = alertDef.once === true
   const ref = hasCommon ? '$row.' : '.'
   const refVar = hasCommon ? '$row' : '.'
   // "Set" means "key present": optional vars are omitted from values.yaml
@@ -344,6 +360,7 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
     profile: profileFor(alertDef.groupType),
     valuesKey: alertGroup,
     hasCommon,
+    once,
     ruleTexts
   }
 }

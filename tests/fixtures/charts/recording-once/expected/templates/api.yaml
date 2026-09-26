@@ -1,0 +1,27 @@
+{{- $chunks := chunk 100 ($.Values.api | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-api-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: api
+      rules:
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
+        {{- $row := merge . $common }}
+        - alert: ApiErrors
+          expr: |-
+            job:errors:rate5m{job="{{ $row.job }}"} > {{ dig "warn" 5 $row }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: |-
+              {{ `{{ $labels.job }}` }}: {{ `{{ $value }}` }} errors/s
+        {{- end }}
+{{- end }}

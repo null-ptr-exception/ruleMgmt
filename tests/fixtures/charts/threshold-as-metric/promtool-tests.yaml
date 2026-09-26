@@ -1,0 +1,28 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # 85: under api's 90, over web's default 80
+      - series: 'cpu_usage{namespace="prod", workload="api", pod="api-1"}'
+        values: '85x20'
+      - series: 'cpu_usage{namespace="prod", workload="web", pod="web-1"}'
+        values: '85x20'
+      # no row, no threshold series: never fires
+      - series: 'cpu_usage{namespace="prod", workload="batch", pod="batch-1"}'
+        values: '99x20'
+    promql_expr_test:
+      - expr: cpu_threshold
+        eval_time: 1m
+        exp_samples:
+          - labels: 'cpu_threshold{namespace="prod", workload="api"}'
+            value: 90
+          - labels: 'cpu_threshold{namespace="prod", workload="web"}'
+            value: 80
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: CPUHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: prod, workload: web, pod: web-1 }
+            exp_annotations: { summary: "web: 85%" }

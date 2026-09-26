@@ -95,9 +95,12 @@ function lostTemplates(renderedYaml, model) {
 }
 
 // Tally the rendered output by prometheus group name: how many rules carry each
-// (alert name, severity) pair, and the grand total.
+// (alert name, severity) pair, and the grand total. Recording rules (#70) are
+// counted apart, per group — they are not alerts, and adding them to the
+// total would make "N alerts" untrue.
 export function tallyRendered(renderedYaml) {
   const byGroup = new Map()
+  const recordsByGroup = new Map()
   let total = 0
   // Every output profile's objects (#65), not only PrometheusRule: a vlogs
   // group's alerts count like any other.
@@ -106,6 +109,7 @@ export function tallyRendered(renderedYaml) {
     for (const g of doc?.spec?.groups || []) {
       const m = byGroup.get(g.name) || new Map()
       for (const r of g?.rules || []) {
+        if (r?.record) recordsByGroup.set(g.name, (recordsByGroup.get(g.name) || 0) + 1)
         if (!r?.alert) continue
         const key = `${r.alert}\u0000${r?.labels?.severity ?? ''}`
         m.set(key, (m.get(key) || 0) + 1)
@@ -114,7 +118,7 @@ export function tallyRendered(renderedYaml) {
       byGroup.set(g.name, m)
     }
   })
-  return { byGroup, total }
+  return { byGroup, recordsByGroup, total }
 }
 
 const alertsFor = rMap => [...rMap.entries()]
@@ -139,8 +143,9 @@ const alertsFor = rMap => [...rMap.entries()]
  * guess as the chart's problem. Those are left unmatched here instead of
  * force-matched — see `unmatchedGroups`.
  */
-export function summarizeGroups({ rendered, possible, groupRows, schema, types = {} }) {
-  const keys = new Set([...Object.keys(possible), ...Object.keys(groupRows)])
+export function summarizeGroups({ rendered, possible, groupRows, schema, types = {}, onceGroups = [] }) {
+  const once = new Set(onceGroups)
+  const keys = new Set([...Object.keys(possible), ...Object.keys(groupRows), ...once])
   const matchedNames = new Set()
   const groups = [...keys].map(valuesKey => {
     const name = valuesKey.replace(/_/g, '-')
@@ -152,14 +157,16 @@ export function summarizeGroups({ rendered, possible, groupRows, schema, types =
     const rMap = rendered.byGroup.get(name) || new Map()
     const alerts = alertsFor(rMap)
     const renderedCount = alerts.reduce((n, a) => n + a.count, 0)
+    const records = rendered.recordsByGroup?.get(name) || 0
     const missing = (possible[valuesKey] || []).filter(p => !rMap.has(`${p.alert}\u0000${p.severity}`))
     let state = 'ok'
-    if (rowCount === 0) state = 'empty'
-    else if (renderedCount === 0) state = 'no-alerts'
+    // A once group (#70) takes no rows, so it is never "empty".
+    if (rowCount === 0 && !once.has(valuesKey)) state = 'empty'
+    else if (renderedCount === 0 && records === 0) state = 'no-alerts'
     // A group whose profile promtool cannot read (#65) says so on its own row:
     // one "promtool passed" for a mixed chart must not read as all of it.
     const checked = (profileFor(types[valuesKey])?.validate ?? 'promtool') === 'promtool'
-    return { name, valuesKey, rowCount, state, alerts, missing, checked }
+    return { name, valuesKey, rowCount, state, alerts, missing, checked, records, once: once.has(valuesKey) }
   }).sort((a, b) => a.valuesKey.localeCompare(b.valuesKey))
 
   // Rendered groups no group above claimed — every x-custom-template group's

@@ -276,6 +276,63 @@ rules:
   })
 })
 
+// once groups and recording rules (#70).
+describe('once groups and recording rules', () => {
+  const onceSrc = `
+group: api_recording
+once: true
+rules:
+  - record: job:errors:rate5m
+    expr: sum by (job) (rate(errors_total[5m]))
+    labels: {team: api}
+`.trimStart()
+
+  it('parses once: true and a recording rule, and writes them back the same', () => {
+    const { group, errors } = parseGroupFile(onceSrc, 'api_recording')
+    expect(errors).toEqual([])
+    expect(group.once).toBe(true)
+    expect(group.rules).toEqual([{ record: 'job:errors:rate5m', expr: 'sum by (job) (rate(errors_total[5m]))', labels: { team: 'api' } }])
+    const text = groupFileText(group)
+    expect(text.startsWith('group: api_recording\nonce: true\n')).toBe(true)
+    expect(parseGroupFile(text, 'api_recording').group).toEqual(group)
+  })
+
+  it('refuses a once group with columns', () => {
+    const src = onceSrc.replace('rules:', 'columns:\n  ns: {type: string}\nrules:')
+    expect(parseGroupFile(src, 'api_recording').errors.join()).toMatch(/once group .* cannot have columns/)
+  })
+
+  it('refuses once that is not a boolean', () => {
+    expect(parseGroupFile(onceSrc.replace('once: true', 'once: yes please'), 'api_recording').errors.join())
+      .toMatch(/once must be true or false/)
+  })
+
+  it('refuses a rule with both alert and record, or neither', () => {
+    const both = 'group: g\nrules:\n  - alert: A\n    record: r\n    expr: up\n'
+    const neither = 'group: g\nrules:\n  - expr: up\n'
+    expect(parseGroupFile(both, 'g').errors.join()).toMatch(/exactly one of alert or record/)
+    expect(parseGroupFile(neither, 'g').errors.join()).toMatch(/exactly one of alert or record/)
+  })
+
+  it('refuses for, keep_firing_for and annotations on a recording rule', () => {
+    const src = 'group: g\nrules:\n  - record: r\n    expr: up\n    for: 5m\n    keep_firing_for: 1m\n    annotations: {summary: x}\n'
+    const errs = parseGroupFile(src, 'g').errors.join('\n')
+    for (const key of ['for', 'keep_firing_for', 'annotations']) expect(errs).toMatch(new RegExp(`cannot have ${key} `))
+  })
+
+  it('leaves a once group out of values.schema.json, and tells the generator it is once', () => {
+    const { model } = parseRulesDir({ 'api_recording.yaml': onceSrc })
+    expect(modelToSchema(model).properties).toEqual({})
+    expect(groupGenDef(model.groups.api_recording).once).toBe(true)
+  })
+
+  it('flags rows given to a once group', () => {
+    const { model } = parseRulesDir({ 'api_recording.yaml': onceSrc })
+    expect(validateValues({ api_recording: [] }, model)).toEqual([])
+    expect(validateValues({ api_recording: [{ x: 1 }] }, model).join()).toMatch(/is a once group and takes no rows/)
+  })
+})
+
 describe('validateValues', () => {
   const { model } = schemaToModel(xRulesSchema)
 

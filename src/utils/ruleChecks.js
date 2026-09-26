@@ -65,10 +65,12 @@ export function checkRules(schema) {
 
     const requiredSet = new Set([...(alertDef?.items?.required || []), ...commonRequired])
     const { mayBeAbsent } = columnFallbacks(alertDef, commonProps, requiredSet)
-    const groupHasColumns = Object.keys(alertDef?.items?.properties || {}).length > 0
+    const groupColumns = new Set(Object.keys(alertDef?.items?.properties || {}))
 
     for (const rule of rules) {
-      const where = rule.alert ? `rule "${rule.alert}"` : 'a raw rule'
+      const where = rule.alert ? `rule "${rule.alert}"`
+        : rule.record ? `recording rule "${rule.record}"`
+          : 'a raw rule'
       const entries = [...(rule.labels || []), ...(rule.annotations || [])]
       const strings = rule.raw
         ? [rule.raw]
@@ -114,17 +116,20 @@ export function checkRules(schema) {
         }
       }
 
-      // A rule that reads no column at all would be emitted once per row,
-      // identical every time. A save is allowed here (a chart being
-      // variabilised passes through this state); a commit is not. An empty
-      // `columns` is that just-imported state and is left alone.
-      if (groupHasColumns && ruleVars(rule).size === 0) {
+      // A rule that reads none of its group's columns would be emitted once
+      // per row, identical every time — reading only _common included, since
+      // every row carries the same _common. A save is allowed here (a chart
+      // being variabilised passes through this state); a commit is not. A
+      // rule that belongs once per deployment goes in a `once: true` group
+      // (#70). An empty `columns` is the just-imported state and is left
+      // alone.
+      if (groupColumns.size && ![...ruleVars(rule)].some(name => groupColumns.has(name))) {
         findings.push({
           severity: 'commit',
           kind: 'no-column-ref',
           group,
-          alert: rule.alert,
-          message: `${where} references no column — it would be identical on every row`,
+          alert: rule.alert || rule.record,
+          message: `${where} references none of this group's columns — it would be identical on every row; move it to a group with once: true`,
         })
       }
     }

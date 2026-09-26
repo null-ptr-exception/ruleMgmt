@@ -215,6 +215,58 @@ spec:
     }
   })
 
+  // #70: a once group with zero rows still renders, is checked like any
+  // other object, and the summary marks it once — not empty — with its
+  // recording rules counted apart from the alerts.
+  it('checks and summarises a once group of recording rules, with no rows', async () => {
+    const rulesDir = path.join(tmpDir, 'charts', 'test-chart', 'rules')
+    await fs.mkdir(rulesDir, { recursive: true })
+    await fs.writeFile(path.join(rulesDir, 'api_recording.yaml'), 'once: true\nrules:\n  - record: job:errors:rate5m\n    expr: sum by (job) (rate(errors_total[5m]))\n')
+    await fs.writeFile(path.join(rulesDir, 'api.yaml'), 'columns:\n  job: {type: string, required: true}\nrules:\n  - alert: ApiErrors\n    expr: job:errors:rate5m{job="${job}"} > 5\n    labels: {severity: warning}\n')
+    await fs.writeFile(path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml'), 'api: [{job: checkout}]\n')
+    try {
+      await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-api-1-1
+spec:
+  groups:
+    - name: api
+      rules:
+        - alert: ApiErrors
+          expr: job:errors:rate5m{job="checkout"} > 5
+          labels: { severity: warning }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-api-recording-1
+spec:
+  groups:
+    - name: api-recording
+      rules:
+        - record: job:errors:rate5m
+          expr: sum by (job) (rate(errors_total[5m]))
+`)
+      const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+      expect(status).toBe(200)
+
+      const invocations = await readPromtoolInvocations()
+      expect(invocations.map(inv => inv.groups.map(g => g.name)).sort()).toEqual([['api'], ['api-recording']])
+      expect(data.check.passed).toBe(true)
+
+      const byName = Object.fromEntries(data.summary.groups.map(g => [g.name, g]))
+      expect(data.summary.total).toBe(1)
+      expect(byName['api-recording']).toMatchObject({ once: true, rowCount: 0, state: 'ok', records: 1, alerts: [] })
+      expect(byName.api).toMatchObject({ once: false, rowCount: 1, state: 'ok', records: 0 })
+      expect(data.summary.orphanFields).toEqual([])
+    } finally {
+      await fs.rm(rulesDir, { recursive: true, force: true })
+      await fs.writeFile(path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml'), 'replicas: 1\n')
+    }
+  })
+
   it('checks each CR in its own file, so a group sharded across objects is not a false duplicate', async () => {
     // A group over the row/byte budget renders as several CRs that all carry
     // the same spec.groups[].name. Merged into one file, promtool would report

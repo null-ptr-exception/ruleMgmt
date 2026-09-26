@@ -306,9 +306,25 @@ export default function TemplateDevEditor() {
       reportFailedSave(result)
       return
     }
+    reportNotices(result.notices)
 
     await saveChartMeta(activeChart, chartMeta)
     await loadChart(activeChart)
+  }
+
+  // Changes that break nothing but are worth knowing — a group changing type
+  // replaces its objects (#65). With a breaking change they are listed in the
+  // dialog; a save with none says them here.
+  function reportNotices(notices) {
+    if (!notices?.length) return
+    Modal.info({
+      title: 'Saved — worth knowing',
+      content: (
+        <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+          {notices.map((n, i) => <li key={i}>{n.description || n.kind}</li>)}
+        </ul>
+      ),
+    })
   }
 
   // A save that did not happen says why, and leaves the editor as it is —

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffSchema, describeChange } from '../schemaCompat'
+import { diffSchema, describeChange, groupTypeChanges } from '../schemaCompat'
 
 const chart = (columns, extra = {}) => ({
   properties: {
@@ -138,5 +138,27 @@ describe('describeChange', () => {
     const after = chart({ namespace: { type: 'string' } })
     const [change] = diffSchema(base, after).breaking
     expect(describeChange(change)).toBe('traffic: column "recv_warn" is gone')
+  })
+})
+
+// #65: a group changing output profile replaces its objects — never
+// breaking (no row loses anything), always said.
+describe('groupTypeChanges', () => {
+  const model = type => ({ groups: { app: { group: 'app', columns: {}, rules: [], ...(type ? { type } : {}) } } })
+
+  it('reports a group whose type changed, with both kinds', () => {
+    const [change] = groupTypeChanges(model(undefined), model('vlogs'))
+    expect(change).toEqual({ kind: 'group-type-changed', group: 'app', from: 'prometheus', to: 'vlogs', fromKind: 'PrometheusRule', toKind: 'VMRule' })
+    expect(describeChange(change)).toMatch(/app: type changed from prometheus to vlogs — its objects become VMRule instead of PrometheusRule/)
+  })
+
+  it('says nothing when the type is the same, spelled out or left out', () => {
+    expect(groupTypeChanges(model(undefined), model('prometheus'))).toEqual([])
+    expect(groupTypeChanges(model('vlogs'), model('vlogs'))).toEqual([])
+  })
+
+  it('says nothing for a new group, or with nothing before (a first migration)', () => {
+    expect(groupTypeChanges({ groups: {} }, model('vlogs'))).toEqual([])
+    expect(groupTypeChanges(null, model('vlogs'))).toEqual([])
   })
 })

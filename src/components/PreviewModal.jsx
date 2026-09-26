@@ -92,7 +92,12 @@ function GroupRow({ group }) {
   return (
     <div style={{ borderTop: '1px solid #f0f0f0', padding: '10px 0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <Text strong style={{ fontFamily: 'monospace' }}>{group.name}</Text>
+        <span>
+          <Text strong style={{ fontFamily: 'monospace' }}>{group.name}</Text>
+          {group.checked === false && (
+            <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>not syntax-checked</Text>
+          )}
+        </span>
         {group.state === 'empty'
           ? <Text type="secondary">not filled in</Text>
           : group.state === 'custom'

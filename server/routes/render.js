@@ -3,7 +3,7 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
-import { KIND } from '../../src/utils/crConverter.js'
+import { profileOfObject } from '../../src/utils/outputs.js'
 import { chartDrift, readChartModel } from '../lib/chartFiles.js'
 import { getDepName, unwrapValues } from '../lib/subchart.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
@@ -33,17 +33,19 @@ function runCommand(command, args, options = {}) {
   })
 }
 
-// The kind comes from the converter rather than a literal here: if the
-// platform ever emits something else, a checker still looking for the old one
-// would find nothing and report that as fine.
-function extractPrometheusRuleObjects(renderedYaml) {
+// Which objects promtool checks is the output profile's call (#65), not a
+// literal kind here: a profile marked `validate: promtool` is checked, one
+// marked `none` (LogsQL) is counted and reported as not syntax-checked.
+function objectsForPromtool(renderedYaml) {
   const objects = []
+  let unchecked = 0
   yaml.loadAll(renderedYaml, doc => {
-    if (doc?.kind === KIND && Array.isArray(doc?.spec?.groups)) {
-      objects.push(doc)
-    }
+    const profile = profileOfObject(doc)
+    if (!profile || !Array.isArray(doc?.spec?.groups)) return
+    if (profile.validate === 'promtool') objects.push(doc)
+    else unchecked++
   })
-  return objects
+  return { objects, unchecked }
 }
 
 function sanitizeFilename(name) {
@@ -68,9 +70,9 @@ function cleanPromtoolOutput(text, file) {
 // groups into one file made promtool report "groupname ... is repeated in the
 // same file", a false positive that fires for any sufficiently large deployment.
 async function checkPrometheusRules(renderedYaml) {
-  let objects
+  let objects, unchecked
   try {
-    objects = extractPrometheusRuleObjects(renderedYaml)
+    ;({ objects, unchecked } = objectsForPromtool(renderedYaml))
   } catch (err) {
     return {
       passed: false,
@@ -79,14 +81,21 @@ async function checkPrometheusRules(renderedYaml) {
     }
   }
 
+  // Said on every result, so a mixed chart's "passed" never reads as all of it.
+  const uncheckedNote = unchecked
+    ? `${unchecked} object(s) not syntax-checked — their rules are not PromQL (e.g. LogsQL), which promtool cannot read.`
+    : ''
+  const withNote = text => [text, uncheckedNote].filter(Boolean).join('\n')
+
   if (objects.length === 0) {
     // Not a failure: a deployment with no rows renders no resources at all,
     // which is the ordinary state of a chart nobody has filled in yet.
     return {
       passed: true,
       skipped: true,
+      unchecked,
       errors: [],
-      output: `Nothing to check — this deployment rendered no ${KIND} resources. A group with no rows produces none.`
+      output: withNote(unchecked ? 'Nothing promtool can check was rendered.' : 'Nothing to check — this deployment rendered no rule resources. A group with no rows produces none.')
     }
   }
 
@@ -123,10 +132,10 @@ async function checkPrometheusRules(renderedYaml) {
       const output = objects.length === 1
         ? results[0].output
         : results.map(r => `${r.objName}: ${r.output || 'SUCCESS'}`).join('\n')
-      return { passed: true, errors: [], output }
+      return { passed: true, unchecked, errors: [], output: withNote(output) }
     }
     const output = failed.map(r => `${r.objName}:\n${r.output}`).join('\n\n')
-    return { passed: false, errors: [output], output }
+    return { passed: false, unchecked, errors: [output], output: withNote(output) }
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true })
   }
@@ -182,7 +191,8 @@ async function buildSummary(renderedYaml, { model, schema }, valuesFilePaths) {
     break
   }
 
-  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema })
+  const types = Object.fromEntries(Object.entries(model?.groups || {}).map(([k, g]) => [k, g.type]))
+  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema, types })
   return { total: rendered.total, groups, unmatchedGroups, orphanFields: [...orphanFields] }
 }
 

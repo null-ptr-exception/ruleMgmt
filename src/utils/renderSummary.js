@@ -10,7 +10,7 @@
  */
 
 import yaml from 'js-yaml'
-import { KIND } from './crConverter.js'
+import { profileOfObject, profileFor } from './outputs.js'
 import { expandVars, prometheusTemplatesIn } from './ruleModel.js'
 
 // Checks promtool structurally can't make: it only knows valid vs invalid
@@ -70,7 +70,7 @@ function lostTemplates(renderedYaml, model) {
   const problems = new Set()
   try {
     yaml.loadAll(renderedYaml, doc => {
-      if (doc?.kind !== KIND) return
+      if (!profileOfObject(doc)) return
       for (const g of doc?.spec?.groups || []) {
         for (const r of g?.rules || []) {
           const named = expected.get(r?.alert)
@@ -99,8 +99,10 @@ function lostTemplates(renderedYaml, model) {
 export function tallyRendered(renderedYaml) {
   const byGroup = new Map()
   let total = 0
+  // Every output profile's objects (#65), not only PrometheusRule: a vlogs
+  // group's alerts count like any other.
   yaml.loadAll(renderedYaml, doc => {
-    if (doc?.kind !== KIND) return
+    if (!profileOfObject(doc)) return
     for (const g of doc?.spec?.groups || []) {
       const m = byGroup.get(g.name) || new Map()
       for (const r of g?.rules || []) {
@@ -137,7 +139,7 @@ const alertsFor = rMap => [...rMap.entries()]
  * guess as the chart's problem. Those are left unmatched here instead of
  * force-matched — see `unmatchedGroups`.
  */
-export function summarizeGroups({ rendered, possible, groupRows, schema }) {
+export function summarizeGroups({ rendered, possible, groupRows, schema, types = {} }) {
   const keys = new Set([...Object.keys(possible), ...Object.keys(groupRows)])
   const matchedNames = new Set()
   const groups = [...keys].map(valuesKey => {
@@ -154,7 +156,10 @@ export function summarizeGroups({ rendered, possible, groupRows, schema }) {
     let state = 'ok'
     if (rowCount === 0) state = 'empty'
     else if (renderedCount === 0) state = 'no-alerts'
-    return { name, valuesKey, rowCount, state, alerts, missing }
+    // A group whose profile promtool cannot read (#65) says so on its own row:
+    // one "promtool passed" for a mixed chart must not read as all of it.
+    const checked = (profileFor(types[valuesKey])?.validate ?? 'promtool') === 'promtool'
+    return { name, valuesKey, rowCount, state, alerts, missing, checked }
   }).sort((a, b) => a.valuesKey.localeCompare(b.valuesKey))
 
   // Rendered groups no group above claimed — every x-custom-template group's

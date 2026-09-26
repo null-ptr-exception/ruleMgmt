@@ -98,22 +98,23 @@ describe('helm-unittest via generated tests', () => {
   })
 })
 
-// expr and annotations are block scalars, trimmed. The sample chart has
-// neither a multi-line expr nor a multi-line annotation; the blind-test case
-// `multiline` has both, so the suite generated for it has to pass too.
-describe('helm-unittest for a chart with multi-line expr and annotations', () => {
+// Blind-test cases whose shape the sample chart lacks: multi-line expr and
+// annotations (block scalars, trimmed), and output profiles other than
+// PrometheusRule (#65) — a vlogs group is a VMRule with `type: vlogs`, and a
+// mixed chart has both. The suite generated for each has to pass.
+describe.each(['multiline', 'vlogs', 'mixed'])('helm-unittest for the %s blind case', name => {
   let dir
 
   beforeAll(async () => {
     const { generateCase } = await import('../blind/harness.js')
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'helm-unittest-multiline-'))
-    const source = path.resolve('tests/fixtures/charts/multiline')
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), `helm-unittest-${name}-`))
+    const source = path.resolve('tests/fixtures/charts', name)
     fs.cpSync(path.join(source, 'rules'), path.join(dir, 'rules'), { recursive: true })
-    fs.writeFileSync(path.join(dir, 'Chart.yaml'), 'apiVersion: v2\nname: multiline\nversion: 0.1.0\n')
-    const products = generateCase('multiline')
+    fs.writeFileSync(path.join(dir, 'Chart.yaml'), `apiVersion: v2\nname: ${name}\nversion: 0.1.0\n`)
+    const products = generateCase(name)
     fs.writeFileSync(path.join(dir, 'values.schema.json'), products.schemaText)
     fs.mkdirSync(path.join(dir, 'templates'))
-    for (const [name, text] of Object.entries(products.templates)) fs.writeFileSync(path.join(dir, 'templates', name), text)
+    for (const [file, text] of Object.entries(products.templates)) fs.writeFileSync(path.join(dir, 'templates', file), text)
     fs.mkdirSync(path.join(dir, 'tests'))
     fs.writeFileSync(path.join(dir, 'tests', 'generated_test.yaml'), generateHelmUnittestSuite(readModel(dir)))
   })

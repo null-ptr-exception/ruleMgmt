@@ -24,7 +24,7 @@
 import yaml from 'js-yaml'
 import { groupGenDef } from './rulesFile.js'
 import { normalizeRules } from './templateGenerator.js'
-import { API_VERSION, KIND } from './crConverter.js'
+import { profileFor } from './outputs.js'
 import { needsQuote } from './yamlScalar.js'
 
 const VAR_RE = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
@@ -147,15 +147,20 @@ export function generateHelmUnittestSuite(model) {
         .map(([name, v]) => [name, typeof v === 'number' ? goFloat(v) : String(v)])
     )
 
+    // The resource is the group's output profile (#65): a vlogs group is a
+    // VMRule with `type: vlogs`, and a suite expecting PrometheusRule would
+    // fail a correct chart.
+    const profile = profileFor(group.type)
     tests.push({
       it: `renders ${key} with every column set`,
       template,
       set: setFor(key, commonValues, ownValues),
       asserts: [
         { hasDocuments: { count: 1 } },
-        { isKind: { of: KIND } },
-        { isAPIVersion: { of: API_VERSION } },
+        { isKind: { of: profile.kind } },
+        { isAPIVersion: { of: profile.apiVersion } },
         { equal: { path: 'spec.groups[0].name', value: key.replace(/_/g, '-') } },
+        ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
         { lengthEqual: { path: 'spec.groups[0].rules', count: rules.length } },
         ...ruleAsserts(rules, text),
       ],

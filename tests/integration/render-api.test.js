@@ -158,6 +158,63 @@ spec:
     ])
   })
 
+  // #65: a mixed chart. promtool checks only what the output profiles mark
+  // `validate: promtool`; the vlogs VMRule is counted in the summary, marked
+  // not syntax-checked, and said so in the check's output — one "passed"
+  // must not read as the whole chart.
+  it('checks only promtool profiles in a mixed chart, and marks the rest not syntax-checked', async () => {
+    const rulesDir = path.join(tmpDir, 'charts', 'test-chart', 'rules')
+    await fs.mkdir(rulesDir, { recursive: true })
+    await fs.writeFile(path.join(rulesDir, 'latency.yaml'), 'columns: {}\nrules:\n  - alert: SlowRequests\n    expr: up == 0\n    labels: {severity: warning}\n')
+    await fs.writeFile(path.join(rulesDir, 'panics.yaml'), 'type: vlogs\ncolumns: {}\nrules:\n  - alert: Panics\n    expr: \'"panic:" | stats count() as n | filter n:>0\'\n    labels: {severity: critical}\n')
+    await fs.writeFile(path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml'), 'latency: [{}]\npanics: [{}]\n')
+    try {
+      await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-latency-1-1
+spec:
+  groups:
+    - name: latency
+      rules:
+        - alert: SlowRequests
+          expr: up == 0
+          labels: { severity: warning }
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: rel-panics-1-1
+spec:
+  groups:
+    - name: panics
+      type: vlogs
+      rules:
+        - alert: Panics
+          expr: '"panic:" | stats count() as n | filter n:>0'
+          labels: { severity: critical }
+`)
+      const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+      expect(status).toBe(200)
+
+      const invocations = await readPromtoolInvocations()
+      expect(invocations.map(inv => inv.groups.map(g => g.name))).toEqual([['latency']])
+      expect(data.check.passed).toBe(true)
+      expect(data.check.unchecked).toBe(1)
+      expect(data.check.output).toMatch(/1 object\(s\) not syntax-checked/)
+
+      const byName = Object.fromEntries(data.summary.groups.map(g => [g.name, g]))
+      expect(data.summary.total).toBe(2)
+      expect(byName.latency.checked).toBe(true)
+      expect(byName.panics.checked).toBe(false)
+      expect(byName.panics.alerts).toEqual([{ alert: 'Panics', severity: 'critical', count: 1 }])
+    } finally {
+      await fs.rm(rulesDir, { recursive: true, force: true })
+      await fs.writeFile(path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml'), 'replicas: 1\n')
+    }
+  })
+
   it('checks each CR in its own file, so a group sharded across objects is not a false duplicate', async () => {
     // A group over the row/byte budget renders as several CRs that all carry
     // the same spec.groups[].name. Merged into one file, promtool would report

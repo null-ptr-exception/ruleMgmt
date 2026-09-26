@@ -112,6 +112,7 @@ class RenderAndCheckTest(unittest.TestCase):
     def test_check_rules_invokes_promtool_with_temp_rules_file(self):
         target = RenderTarget("cpu-alerts", Path("."), Path("charts/cpu-alerts"), Path("charts/cpu-alerts/values.yaml"))
         rendered = """
+apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 spec:
   groups:
@@ -147,6 +148,7 @@ spec:
     def test_check_rules_returns_nonzero_when_promtool_fails(self):
         target = RenderTarget("cpu-alerts", Path("."), Path("charts/cpu-alerts"), Path("charts/cpu-alerts/values.yaml"))
         rendered = """
+apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 spec:
   groups:
@@ -214,6 +216,7 @@ dependencies:
                         args=command,
                         returncode=0,
                         stdout="""
+apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 spec:
   groups:

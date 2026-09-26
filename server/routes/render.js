@@ -192,7 +192,8 @@ async function buildSummary(renderedYaml, { model, schema }, valuesFilePaths) {
   }
 
   const types = Object.fromEntries(Object.entries(model?.groups || {}).map(([k, g]) => [k, g.type]))
-  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema, types })
+  const onceGroups = Object.entries(model?.groups || {}).filter(([, g]) => g.once).map(([k]) => k)
+  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema, types, onceGroups })
   return { total: rendered.total, groups, unmatchedGroups, orphanFields: [...orphanFields] }
 }
 

@@ -161,6 +161,37 @@ describe('POST /:chart/rules — a group changing type', () => {
   })
 })
 
+// #70: a once group has no schema entry and no rows; switching a group
+// between per-row and once renames its objects, and the save says so.
+describe('POST /:chart/rules — once groups', () => {
+  const ONCE = 'group: watchdog\nonce: true\nrules:\n  - alert: Watchdog\n    expr: vector(1)\n'
+
+  it('generates a once group\'s template, with no entry in the schema', async () => {
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU, 'watchdog.yaml': ONCE } })
+    expect(status).toBe(200)
+    const schema = JSON.parse(await read('values.schema.json'))
+    expect(Object.keys(schema.properties)).toEqual(['cpu'])
+    const template = await read('templates/watchdog.yaml')
+    expect(template).toContain('name: {{ $.Release.Name }}-watchdog-1\n')
+    expect(template).not.toContain('range')
+  })
+
+  it('refuses a once group with columns', async () => {
+    const withColumns = ONCE.replace('rules:', 'columns:\n  ns: {type: string}\nrules:')
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'watchdog.yaml': withColumns } })
+    expect(status).toBe(400)
+    expect(JSON.stringify(data)).toMatch(/cannot have columns/)
+  })
+
+  it('says a group turning once replaces its objects', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'watchdog.yaml': ONCE.replace('once: true\n', '') } })
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'watchdog.yaml': ONCE } })
+    expect(status).toBe(200)
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-once-changed', group: 'watchdog', to: 'once' })])
+    expect(data.notices[0].description).toMatch(/objects are renamed/)
+  })
+})
+
 describe('GET /:chart drift', () => {
   it('fills in a missing Chart.yaml and regenerates missing products on open', async () => {
     await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffSchema, describeChange, groupTypeChanges } from '../schemaCompat'
+import { diffSchema, describeChange, groupTypeChanges, groupOnceChanges, modelAlerts } from '../schemaCompat'
 
 const chart = (columns, extra = {}) => ({
   properties: {
@@ -160,5 +160,37 @@ describe('groupTypeChanges', () => {
   it('says nothing for a new group, or with nothing before (a first migration)', () => {
     expect(groupTypeChanges({ groups: {} }, model('vlogs'))).toEqual([])
     expect(groupTypeChanges(null, model('vlogs'))).toEqual([])
+  })
+})
+
+// #70: switching between per-row and once renames every object of the group.
+describe('groupOnceChanges', () => {
+  const model = once => ({ groups: { app: { group: 'app', columns: {}, rules: [], ...(once ? { once: true } : {}) } } })
+
+  it('reports a switch either way, and says the objects are replaced', () => {
+    const [toOnce] = groupOnceChanges(model(false), model(true))
+    expect(toOnce).toEqual({ kind: 'group-once-changed', group: 'app', to: 'once' })
+    expect(describeChange(toOnce)).toMatch(/app: now renders once per deployment — its objects are renamed .* deleted and new ones created/)
+    const [toRows] = groupOnceChanges(model(true), model(false))
+    expect(describeChange(toRows)).toMatch(/app: now renders once per row/)
+  })
+
+  it('says nothing when nothing switched, or for a new group', () => {
+    expect(groupOnceChanges(model(true), model(true))).toEqual([])
+    expect(groupOnceChanges({ groups: {} }, model(true))).toEqual([])
+    expect(groupOnceChanges(null, model(true))).toEqual([])
+  })
+})
+
+describe('modelAlerts', () => {
+  it('names a recording rule by its record, so removing one is seen', () => {
+    const model = { groups: { g: { rules: [{ alert: 'A' }, { record: 'job:up' }, { raw: 'x' }] } } }
+    expect(modelAlerts(model)).toEqual({ g: ['A', 'job:up'] })
+    const { breaking } = diffSchema(
+      { properties: { g: { type: 'array', items: { properties: {} } } } },
+      { properties: { g: { type: 'array', items: { properties: {} } } } },
+      { before: modelAlerts(model), after: { g: ['A'] } }
+    )
+    expect(breaking).toEqual([{ kind: 'rule-removed', group: 'g', alert: 'job:up' }])
   })
 })

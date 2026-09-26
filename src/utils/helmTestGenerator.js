@@ -17,6 +17,10 @@
  *      renders each rule with the default substituted (#51: an empty cell is
  *      omitted, not zero-filled, and the template supplies the default)
  *
+ * A once group (#70) is set with no rows at all — only _common — and must
+ * still render its one object. A recording rule is asserted on its record,
+ * expr and labels, which is all it has.
+ *
  * A hand-written (raw) rule keeps its place in the order but is not asserted
  * on: its YAML is the rule owner's, not the converter's.
  */
@@ -95,6 +99,14 @@ function ruleAsserts(rules, text) {
   rules.forEach((rule, i) => {
     if (rule.raw) return
     const path = `spec.groups[0].rules[${i}]`
+    if (rule.record !== undefined) {
+      asserts.push({ equal: { path: `${path}.record`, value: rule.record } })
+      asserts.push({ equal: { path: `${path}.expr`, value: blockValue(rule.expr, text) } })
+      if (rule.labels?.length) {
+        asserts.push({ equal: { path: `${path}.labels`, value: Object.fromEntries(rule.labels.map(e => [e.key, labelValue(e, text)])) } })
+      }
+      return
+    }
     asserts.push({ equal: { path: `${path}.alert`, value: rule.alert } })
     asserts.push({ equal: { path: `${path}.expr`, value: blockValue(rule.expr, text) } })
     asserts.push({ equal: { path: `${path}.for`, value: substitute(rule.for, text) } })
@@ -112,10 +124,10 @@ function ruleAsserts(rules, text) {
  * Values for one row: common columns go under `_common`, the way a
  * deployment sets them, so the template's merge of the two is exercised.
  */
-function setFor(groupKey, commonValues, ownValues) {
+function setFor(groupKey, commonValues, ownValues, once = false) {
   const set = {}
   if (Object.keys(commonValues).length) set._common = commonValues
-  set[groupKey] = [ownValues]
+  if (!once) set[groupKey] = [ownValues]
   return set
 }
 
@@ -152,9 +164,9 @@ export function generateHelmUnittestSuite(model) {
     // fail a correct chart.
     const profile = profileFor(group.type)
     tests.push({
-      it: `renders ${key} with every column set`,
+      it: group.once ? `renders ${key} once, with no rows` : `renders ${key} with every column set`,
       template,
-      set: setFor(key, commonValues, ownValues),
+      set: setFor(key, commonValues, ownValues, group.once),
       asserts: [
         { hasDocuments: { count: 1 } },
         { isKind: { of: profile.kind } },
@@ -175,7 +187,7 @@ export function generateHelmUnittestSuite(model) {
     tests.push({
       it: `renders ${key} with defaults for ${defaulted.join(', ')}`,
       template,
-      set: setFor(key, omitDefaults(commonValues, commonColumns), omitDefaults(ownValues, ownColumns)),
+      set: setFor(key, omitDefaults(commonValues, commonColumns), omitDefaults(ownValues, ownColumns), group.once),
       asserts: ruleAsserts(rules, withDefaults),
     })
   }

@@ -22,7 +22,7 @@ const alertsOf = group => (group?.['x-rules'] || []).map(r => r.alert).filter(Bo
 /** { [group]: [alert, ...] } from a rules/*.yaml model — see rulesFile.js. */
 export function modelAlerts(model) {
   return Object.fromEntries(
-    Object.entries(model?.groups || {}).map(([g, e]) => [g, (e.rules || []).map(r => r.alert).filter(Boolean)])
+    Object.entries(model?.groups || {}).map(([g, e]) => [g, (e.rules || []).map(r => r.alert || r.record).filter(Boolean)])
   )
 }
 
@@ -150,6 +150,9 @@ const DESCRIPTIONS = {
   'common-default-removed': c => `common variable "${c.column}" lost its default — every row that left it blank now produces no alert`,
   'common-default-changed': c => `common variable "${c.column}" has a different default — every row that left it blank changes value`,
   'common-default-added': c => `common variable "${c.column}" gained a default — rows that leave it blank will use it`,
+  'group-once-changed': c => c.to === 'once'
+    ? `${c.group}: now renders once per deployment — its objects are renamed (no chunk index): the old ones are deleted and new ones created, and its rows are no longer read`
+    : `${c.group}: now renders once per row — its objects are renamed (with a chunk index): the old ones are deleted and new ones created`,
   'group-type-changed': c => `${c.group}: type changed from ${c.from} to ${c.to} — its objects become ${c.toKind} instead of ${c.fromKind}: the old ones are deleted and new ones created, and the alerts are reloaded`
 }
 
@@ -167,6 +170,23 @@ export function groupTypeChanges(beforeModel, afterModel) {
     const to = profileFor(after.type)
     if (!from || !to || from.name === to.name) continue
     changes.push({ kind: 'group-type-changed', group, from: from.name, to: to.name, fromKind: from.kind, toKind: to.kind })
+  }
+  return changes
+}
+
+/**
+ * Groups that switched between per-row and once (#70). Like a type change it
+ * loses no row by itself — the rows a once group stops reading are reported
+ * as group-removed by diffSchema — but every object of the group is renamed,
+ * which deletes and recreates it, so it is always said.
+ */
+export function groupOnceChanges(beforeModel, afterModel) {
+  const changes = []
+  for (const [group, after] of Object.entries(afterModel?.groups || {})) {
+    const before = beforeModel?.groups?.[group]
+    if (!before || before.custom || after.custom) continue
+    if (!!before.once === !!after.once) continue
+    changes.push({ kind: 'group-once-changed', group, to: after.once ? 'once' : 'per-row' })
   }
   return changes
 }

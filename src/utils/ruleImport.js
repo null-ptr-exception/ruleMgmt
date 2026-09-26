@@ -21,6 +21,8 @@ import { profileNames } from './outputs.js'
  */
 
 const RULE_FIELDS = ['alert', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations']
+// What Prometheus gives a recording rule, and so all the model carries (#70).
+const RECORD_FIELDS = ['record', 'expr', 'labels']
 
 function asGroups(doc) {
   if (Array.isArray(doc)) return [{ name: null, rules: doc }]
@@ -40,13 +42,23 @@ export function toGroupKey(name, index) {
   return /^[a-z]/.test(slug) ? slug : `group_${slug}`
 }
 
-function importRule(rule, warnings, where) {
-  if (rule?.record !== undefined) {
-    warnings.push(`${where}: recording rule "${rule.record}" skipped — only alerting rules are imported`)
-    return null
+function importRecord(rule, warnings, where) {
+  const unknown = Object.keys(rule).filter(k => !RECORD_FIELDS.includes(k))
+  if (unknown.length) {
+    warnings.push(`${where}: ${rule.record} keeps ${unknown.join(', ')} only by hand-writing the entry`)
+    return { raw: yaml.dump([rule], { lineWidth: -1 }).trimEnd() }
   }
+  const imported = { record: rule.record, expr: String(rule.expr ?? '') }
+  if (rule.labels && Object.keys(rule.labels).length) imported.labels = { ...rule.labels }
+  return imported
+}
+
+function importRule(rule, warnings, where) {
+  // A recording rule is imported like any other, into the same group — it is
+  // not necessarily a once rule (threshold-as-metric records one per row).
+  if (rule?.record !== undefined) return importRecord(rule, warnings, where)
   if (!rule?.alert) {
-    warnings.push(`${where}: entry without an alert name skipped`)
+    warnings.push(`${where}: entry without an alert or record name skipped`)
     return null
   }
 
@@ -115,7 +127,7 @@ export function importRules(yamlText) {
         .map(rule => importRule(rule, warnings, where))
         .filter(Boolean)
       if (rules.length === 0) {
-        warnings.push(`${where}: no alerting rules found`)
+        warnings.push(`${where}: no rules found`)
         continue
       }
       // The rule-group fields travel with it; interval and limit used to be dropped.
@@ -150,12 +162,17 @@ function columnType(name, rules) {
  */
 export function modelGroupFromImport(group, commonNames = []) {
   const common = new Set(commonNames)
+  const columns = Object.fromEntries(group.columns
+    .filter(name => !common.has(name))
+    .map(name => [name, { type: columnType(name, group.rules) }]))
   return {
     group: group.key,
+    // A group with no columns of its own renders once in its source file, so
+    // it is imported as once (#70) — what it renders stays the same. Nothing
+    // is guessed: the template owner turns it per-row when they add columns.
+    ...(Object.keys(columns).length ? {} : { once: true }),
     ...Object.fromEntries(['type', 'interval', 'limit'].filter(k => group[k] !== undefined).map(k => [k, group[k]])),
-    columns: Object.fromEntries(group.columns
-      .filter(name => !common.has(name))
-      .map(name => [name, { type: columnType(name, group.rules) }])),
+    columns,
     rules: group.rules,
   }
 }

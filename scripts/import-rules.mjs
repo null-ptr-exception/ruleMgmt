@@ -90,7 +90,7 @@ for (const group of result.groups) {
   const fromCommon = group.columns.filter(c => commonNames.includes(c))
   console.log(
     `${before ? 'replaces' : 'adds    '} ${group.key.padEnd(width)}  ${group.rules.length} rule(s), ` +
-    `${columns.length ? `columns: ${columns.join(', ')}` : 'no columns yet'}` +
+    `${columns.length ? `columns: ${columns.join(', ')}` : 'once — no columns'}` +
     `${fromCommon.length ? ` (from _common: ${fromCommon.join(', ')})` : ''}`
   )
   // A replaced group's rows lose any column the import does not bring back.

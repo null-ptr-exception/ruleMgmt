@@ -109,4 +109,34 @@ describe('breaking change + migration', () => {
     expect(flat).not.toContain('warn')
     expect(flat).toContain('namespace: p')
   })
+
+  // A folder deployment's values.yaml can hold more than this chart's block.
+  it('keeps the other top-level keys of a folder deployment', async () => {
+    const own = path.join(tmpDir, 'deployments', 'e2e', 'own')
+    await fs.mkdir(own, { recursive: true })
+    await fs.writeFile(path.join(own, 'Chart.yaml'), 'apiVersion: v2\nname: own\ndependencies:\n  - name: demo\n    version: 0.1.0\n')
+    await fs.writeFile(path.join(own, 'values.yaml'), 'global:\n  region: eu\ndemo:\n  cpu:\n    - namespace: o\n      warn: 70\n')
+
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', {
+      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { warn: 'threshold' } },
+    })
+    expect(status).toBe(200)
+    const values = await fs.readFile(path.join(own, 'values.yaml'), 'utf-8')
+    expect(values).toContain('region: eu')
+    expect(values).toContain('threshold: 70')
+  })
+
+  // Migrating what could not be read would write {} over the deployment.
+  it('refuses, and writes nothing, when a deployment\'s values cannot be parsed', async () => {
+    const file = path.join(tmpDir, 'deployments', 'demo', 'prod-values.yaml')
+    const broken = 'cpu:\n  - namespace: p\n    warn: [unclosed\n'
+    await fs.writeFile(file, broken)
+
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', {
+      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { warn: 'threshold' } },
+    })
+    expect(status).toBeGreaterThanOrEqual(400)
+    expect(await fs.readFile(file, 'utf-8')).toBe(broken)
+    expect(await fs.readFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'utf-8')).toBe(withWarn)
+  })
 })

@@ -55,8 +55,14 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     const readonly = isTarget(registry, dep.path)
     const { valuesFile, depName } = await locate(gitopsDir, dep.path)
 
+    // Only a missing file is empty. One that cannot be read or parsed stops
+    // the plan: migrating `{}` would write an empty file over its data.
     let parsed = {}
-    try { parsed = yaml.load(await fs.readFile(valuesFile, 'utf-8')) || {} } catch { /* empty */ }
+    try {
+      parsed = yaml.load(await fs.readFile(valuesFile, 'utf-8')) || {}
+    } catch (err) {
+      if (err?.code !== 'ENOENT') throw new Error(`${dep.path}: values cannot be read (${err.message})`)
+    }
     const before = unwrapValues(parsed, depName)
 
     const { values: after, orphaned } = migrateValues(before, migration, targetSchema)
@@ -70,7 +76,12 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     })
 
     // A sync follower is written by its source's own save, not here.
-    if (!readonly) writes.push([valuesFile, yaml.dump(wrapValues(after, depName), { lineWidth: -1 })])
+    // Only the chart's own block is replaced; anything else at the top of a
+    // folder deployment's values.yaml (global:, other dependencies) stays.
+    const doc = depName && parsed && typeof parsed === 'object' && depName in parsed
+      ? { ...parsed, [depName]: after }
+      : wrapValues(after, depName)
+    if (!readonly) writes.push([valuesFile, yaml.dump(doc, { lineWidth: -1 })])
   }
 
   return { deployments, writes }

@@ -9,3 +9,5 @@ mockups/
 gitops/
 sample/**/tests/
 sample/promtool-tests/
+src/**/__tests__/
+src/**/__fixtures__/

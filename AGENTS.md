@@ -32,6 +32,17 @@ After `make init`, the following are available:
 - **Gitea UI:** `http://localhost:3000` (requires port-forward: `kubectl --context minikube port-forward svc/gitea-http 3000:3000`)
 - **JupyterHub:** `http://localhost:12014` (via proxy)
 
+## New machine
+
+Beyond `npm ci`, a fresh Linux / WSL machine needs:
+
+- **Git identity, set globally** — E2E commits into `gitops/`, a separate repo, so a repo-level identity does not reach it:
+  `git config --global user.name …` / `user.email …`
+- **Chromium's system libraries** for Playwright. When node lives in `~/.local/bin`, `sudo` does not find `npx`:
+  `sudo env PATH="$PATH" npx playwright install-deps chromium`, then `npx playwright install chromium`
+- **promtool** at the `Dockerfile`'s `PROMETHEUS_VERSION` (distro packages can be years older). Without it, the tests that run promtool are skipped.
+- **helm-unittest** `--version v0.8.2` (newer ones need a newer helm than 3.15).
+
 ## Test output
 
 Never pipe test output through grep. Redirect to a temp file first, then grep the file:

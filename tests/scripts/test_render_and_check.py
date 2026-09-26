@@ -201,7 +201,8 @@ dependencies:
             def fake_run_command(command, cwd=None):
                 commands.append(command)
                 if command[:3] == ["helm", "dependency", "build"]:
-                    build_dir = Path(command[3])
+                    self.assertIn("--skip-refresh", command)
+                    build_dir = Path(command[-1])
                     self.assertNotEqual(build_dir, chart_dir)
                     (build_dir / "Chart.lock").write_text("generated\n", encoding="utf-8")
                     (build_dir / "charts").mkdir()

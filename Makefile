@@ -31,7 +31,7 @@ deploy: ## Build image and deploy to minikube via Skaffold
 init: ## Initialize Gitea and configure JupyterHub OAuth
 	bash scripts/init-gitea.sh
 
-proxy: ## Start local proxy (127.0.0.1:12014 → minikube:30080)
+proxy: minikube ## Start local proxy (127.0.0.1:12014 → minikube:30080)
 	@test -n "$(MINIKUBE_IP)" || { echo "minikube ip is empty — is minikube running? (make minikube)"; exit 1; }
 	$(MINIKUBE_COMPOSE) up -d
 

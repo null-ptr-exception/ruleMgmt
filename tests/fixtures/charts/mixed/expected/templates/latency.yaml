@@ -1,0 +1,25 @@
+{{- $chunks := chunk 100 ($.Values.latency | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-latency-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: latency
+      rules:
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
+        {{- $row := merge . $common }}
+        - alert: SlowRequests
+          expr: |-
+            histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job="{{ $row.job }}"}[5m]))) > 1
+          for: 10m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+        {{- end }}
+{{- end }}

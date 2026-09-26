@@ -78,14 +78,19 @@ the query lives in `vars` so there is only ever one copy of it.
 | Field | Required | Meaning |
 |---|---|---|
 | `group` | no | Must equal the filename if present |
-| `interval` | no | How often Prometheus evaluates this group |
-| `limit` | no | Maximum series the group may produce |
+| `type` | no | Which kind of rules these are, and so what they are wrapped in: `prometheus` (the default — `expr` is PromQL, emitted as a `PrometheusRule`) or `vlogs` (`expr` is LogsQL, evaluated against VictoriaLogs, emitted as a `VMRule`). The choices are the profiles in `config/outputs.json` — see [output profiles](#output-profiles) |
+| `interval` | no | How often the group is evaluated — a duration such as `30s`, `1m`, `1h30m`. Left out, the evaluator's own default applies |
+| `limit` | no | Maximum series the group may produce — a whole number, `0` or more. Left out, there is no limit |
 | `vars` | no | Edit-time text substitutions |
 | `columns` | no | The table's columns |
 | `rules` | yes | The rules |
 
 Any other key is rejected. Unknown keys are never ignored silently: a typo
 (`intervel:`) is caught at save time, and widening the list later stays safe.
+
+`type`, `interval` and `limit` belong to the whole group and are the
+template owner's, set per group (in the editor, the group's settings row).
+Different groups in one chart may have different types.
 
 ### `columns`
 
@@ -340,6 +345,36 @@ a new one, at a threshold nobody is watching.
 
 Neither ever changes an alert's identity: the `alert` names and labels are
 identical however the group is split. Only `metadata.name` differs.
+
+## Output profiles
+
+What a group is wrapped in is decided by its `type`, looked up in
+`config/outputs.json` in this repository. The file is part of the release —
+a site does not override it; a site's own values, such as the labels a
+rule evaluator selects objects by, come from the environment (see
+[alert-rules.md](alert-rules.md)).
+
+```json
+{
+  "outputs": {
+    "prometheus": { "apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule", "validate": "promtool" },
+    "vlogs": { "apiVersion": "operator.victoriametrics.com/v1beta1", "kind": "VMRule",
+               "groupFields": { "type": "vlogs" }, "validate": "none" }
+  }
+}
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `outputs.<name>` | — | A profile; `<name>` is what a group's `type` says. Lower-case letters, digits, `_`, `-`. `prometheus` must exist: it is the profile of a group with no `type` |
+| `apiVersion`, `kind` | yes | The resource the group's objects are |
+| `groupFields` | no | Fields written as they are onto every `spec.groups[]` entry of the profile's objects — strings, numbers or booleans. Not `name` or `rules` (the generator's) nor `interval` or `limit` (the template owner's) |
+| `validate` | yes | `promtool`, to check the rendered rules with promtool; or `none`, for rules promtool cannot read — Preview then marks the group as not syntax-checked. There is no default |
+
+Any other key is an error. The file is checked when the server starts and
+when the frontend is built, and a mistake stops both. Changing a profile's
+`kind` replaces every object that profile emits — they are deleted and
+created again — so it is a release-level change.
 
 ## Names, one source
 

@@ -65,6 +65,27 @@ afterEach(async () => {
 // schema. The first gen-rules (the migration) kept it; every run after that
 // read the model from rules/, dropped the group from the schema and deleted
 // its template.
+// #65: a chart with a vlogs group next to a prometheus one regenerates and
+// checks clean, and each group's template is its own profile's resource.
+describe('a chart mixing output profiles', () => {
+  it('generates a VMRule for the vlogs group, a PrometheusRule for the other, and --check is clean', async () => {
+    await fs.rm(path.join(chartDir, 'values.schema.json'))
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), '{}')
+    await fs.cp(path.resolve('tests/fixtures/charts/mixed/rules'), path.join(chartDir, 'rules'), { recursive: true })
+
+    expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+    const check = run(GEN_RULES, [chartDir, '--check'])
+    expect(check.status, check.stdout).toBe(0)
+    expect(check.stdout).not.toMatch(/MISSING|DIFFERS/)
+
+    const panics = await fs.readFile(path.join(chartDir, 'templates', 'panics.yaml'), 'utf-8')
+    expect(panics).toContain('kind: VMRule')
+    expect(panics).toContain('      type: vlogs')
+    const latency = await fs.readFile(path.join(chartDir, 'templates', 'latency.yaml'), 'utf-8')
+    expect(latency).toContain('kind: PrometheusRule')
+  })
+})
+
 describe('an x-custom-template group across gen-rules runs', () => {
   it('keeps its hand-written template and its schema entry, and stays clean', async () => {
     const schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))

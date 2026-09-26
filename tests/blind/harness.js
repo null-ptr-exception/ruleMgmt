@@ -29,7 +29,7 @@ import yaml from 'js-yaml'
 import { parseRulesDir } from '../../src/utils/rulesFile.js'
 import { generateProducts } from '../../src/utils/drift.js'
 import { parseObjectMeta } from '../../src/utils/objectMeta.js'
-import { KIND } from '../../src/utils/crConverter.js'
+import { profileOfObject, profileFor } from '../../src/utils/outputs.js'
 
 export const CASES_DIR = path.resolve('tests/fixtures/charts')
 
@@ -112,14 +112,27 @@ export function renderCase(name, products) {
 /**
  * The part of the rendered output a person can write down: object name to
  * its spec.groups. Metadata labels are the site's (see generateCase) and the
- * rest of the envelope is fixed by crConverter.js, so neither is repeated in
- * every expectation.
+ * rest of the envelope comes from the output profile, so neither is repeated
+ * in every expectation — except the kind, which is what a profile decides:
+ * an object of the default profile's kind is keyed by its bare name, any
+ * other as "<kind> <name>" (e.g. "VMRule blind-app-errors-1-1").
  */
 export function renderedGroups(renderedYaml) {
   const out = {}
+  const defaultKind = profileFor(undefined).kind
   for (const doc of yaml.loadAll(renderedYaml)) {
-    if (doc?.kind !== KIND) continue
-    out[doc.metadata.name] = doc.spec.groups
+    if (!profileOfObject(doc)) continue
+    const key = doc.kind === defaultKind ? doc.metadata.name : `${doc.kind} ${doc.metadata.name}`
+    out[key] = doc.spec.groups
+  }
+  return out
+}
+
+/** Object name → spec.groups, for the objects whose profile promtool can check. */
+export function promtoolGroups(renderedYaml) {
+  const out = {}
+  for (const doc of yaml.loadAll(renderedYaml)) {
+    if (profileOfObject(doc)?.validate === 'promtool') out[doc.metadata.name] = doc.spec.groups
   }
   return out
 }

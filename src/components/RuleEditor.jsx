@@ -36,7 +36,7 @@ const label = text => (
  * it replaces the literal with ${name} here and opens a column for it in the
  * rule owner's table. Anything left un-marked stays fixed and they never see it.
  */
-export default function RuleEditor({ rule, columns = [], columnDefs = {}, collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn }) {
+export default function RuleEditor({ rule, columns = [], columnDefs = {}, collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn, exprLanguage = 'promql' }) {
   const exprApi = useRef(null)
   const [naming, setNaming] = useState(null)
   const [varName, setVarName] = useState('')
@@ -198,6 +198,8 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
               </div>
             </div>
             <PromQLEditor
+              key={exprLanguage}
+              language={exprLanguage}
               apiRef={exprApi}
               value={rule.expr || ''}
               onChange={expr => update({ expr })}

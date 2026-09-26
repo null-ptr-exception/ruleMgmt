@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, Select, Empty, Typography, Modal, Dropdown, Alert, message } from 'antd'
+import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, message } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, ImportOutlined, EditOutlined } from '@ant-design/icons'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
@@ -10,6 +10,7 @@ import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { parseRulesDir, schemaToModel, groupFileText, commonFileText } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { ruleVars } from '../utils/ruleModel'
+import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
 import {
   listCharts, createChart, deleteChart, cloneChart,
   getChartInfo, saveChartRules, saveChartMeta,
@@ -39,6 +40,45 @@ const emptyGroup = key => ({
 // The name is the row's key, so it is renamed once — on blur or Enter —
 // not on every keystroke: each keystroke would remount the row and drop
 // focus, and a half-typed name could land on another column's.
+// The rule-group fields, the template owner's per group (#65): which output
+// profile wraps the group, how often it is evaluated, how many series it may
+// produce. Left blank, a field is left out of the rules file — the type is
+// then the default profile, the interval the evaluator's own.
+function GroupSettings({ group, onChange }) {
+  const set = (field, value) => onChange(g => {
+    const next = { ...g }
+    if (value === undefined || value === null || value === '') delete next[field]
+    else next[field] = value
+    return next
+  })
+  return (
+    <div data-testid="group-settings" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+      <span>
+        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Type</Text>
+        <Select size="small" aria-label="Group type" style={{ width: 130 }}
+          value={group.type ?? DEFAULT_TYPE}
+          options={profileNames().map(name => ({ value: name, label: name }))}
+          onChange={v => set('type', v === DEFAULT_TYPE ? undefined : v)} />
+      </span>
+      <span>
+        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Interval</Text>
+        <Input size="small" aria-label="Group interval" style={{ width: 90 }} placeholder="default"
+          value={group.interval ?? ''} onChange={e => set('interval', e.target.value.trim())} />
+      </span>
+      <span>
+        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Limit</Text>
+        <InputNumber size="small" aria-label="Group limit" style={{ width: 90 }} placeholder="none" min={0} precision={0}
+          value={group.limit ?? null} onChange={v => set('limit', v)} />
+      </span>
+      {profileFor(group.type)?.validate !== 'promtool' && (
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          expr is not PromQL here — Preview cannot syntax-check it
+        </Text>
+      )}
+    </div>
+  )
+}
+
 function ColumnRow({ name, col, usage, onRename, onPatch, onRemove }) {
   const uiType = col.enum ? 'enum' : (col.type || 'string')
   const [draft, setDraft] = useState(name)
@@ -306,9 +346,25 @@ export default function TemplateDevEditor() {
       reportFailedSave(result)
       return
     }
+    reportNotices(result.notices)
 
     await saveChartMeta(activeChart, chartMeta)
     await loadChart(activeChart)
+  }
+
+  // Changes that break nothing but are worth knowing — a group changing type
+  // replaces its objects (#65). With a breaking change they are listed in the
+  // dialog; a save with none says them here.
+  function reportNotices(notices) {
+    if (!notices?.length) return
+    Modal.info({
+      title: 'Saved — worth knowing',
+      content: (
+        <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+          {notices.map((n, i) => <li key={i}>{n.description || n.kind}</li>)}
+        </ul>
+      ),
+    })
   }
 
   // A save that did not happen says why, and leaves the editor as it is —
@@ -599,6 +655,8 @@ export default function TemplateDevEditor() {
                   <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeGroup(activeGroup)}>Remove</Button>
                 </div>
 
+                {!group.custom && <GroupSettings group={group} onChange={fn => updateGroup(activeGroup, fn)} />}
+
                 {group.custom ? (
                   <Alert type="info" showIcon
                     message="Hand-written template"
@@ -626,6 +684,8 @@ export default function TemplateDevEditor() {
                           onChange={next => setRules(group.rules.map((r, idx) => idx === i ? next : r))}
                           onRemove={() => setRules(group.rules.filter((_, idx) => idx !== i))}
                           onAddColumn={(name, sample) => addColumnTo(activeGroup, name, sample)}
+                          // PromQL editing help only where expr is PromQL (#65)
+                          exprLanguage={profileFor(group.type)?.validate === 'promtool' ? 'promql' : 'text'}
                         />
                       ))}
                       {group.rules.length === 0 && <Empty description="No rules yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />}

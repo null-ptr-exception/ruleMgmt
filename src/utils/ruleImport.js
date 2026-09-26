@@ -1,5 +1,6 @@
 import yaml from 'js-yaml'
 import { varsIn, danglingRefs } from './ruleModel.js'
+import { profileNames } from './outputs.js'
 
 /**
  * Import Prometheus alerting rules into an editor schema — see issue #57.
@@ -103,6 +104,13 @@ export function importRules(yamlText) {
     }
     for (const group of found) {
       const where = group.name || `group ${groups.length + 1}`
+      // A group's type decides what its expr is (#65): a vlogs group taken in
+      // as prometheus would carry LogsQL as PromQL, silently broken. One with
+      // no output profile is refused rather than guessed at.
+      if (group.type !== undefined && !profileNames().includes(group.type)) {
+        warnings.push(`${where}: type "${group.type}" has no output profile (${profileNames().join(', ')}) — group skipped`)
+        continue
+      }
       const rules = (group.rules || [])
         .map(rule => importRule(rule, warnings, where))
         .filter(Boolean)
@@ -110,7 +118,10 @@ export function importRules(yamlText) {
         warnings.push(`${where}: no alerting rules found`)
         continue
       }
-      groups.push({ key: toGroupKey(group.name, groups.length), name: group.name, rules, columns: columnsOf(rules) })
+      // The rule-group fields travel with it; interval and limit used to be dropped.
+      const fields = Object.fromEntries(['type', 'interval', 'limit']
+        .filter(k => group[k] !== undefined).map(k => [k, group[k]]))
+      groups.push({ key: toGroupKey(group.name, groups.length), name: group.name, ...fields, rules, columns: columnsOf(rules) })
     }
   }
   return { groups, warnings }
@@ -141,6 +152,7 @@ export function modelGroupFromImport(group, commonNames = []) {
   const common = new Set(commonNames)
   return {
     group: group.key,
+    ...Object.fromEntries(['type', 'interval', 'limit'].filter(k => group[k] !== undefined).map(k => [k, group[k]])),
     columns: Object.fromEntries(group.columns
       .filter(name => !common.has(name))
       .map(name => [name, { type: columnType(name, group.rules) }])),

@@ -8,6 +8,7 @@
  * diff is enough, and what it feeds is a decision, not a rewrite.
  */
 
+import { profileFor } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 
 const columnsOf = group => group?.items?.properties || {}
@@ -148,7 +149,26 @@ const DESCRIPTIONS = {
   'common-type-narrowed': c => `common variable "${c.column}" no longer accepts the values it used to`,
   'common-default-removed': c => `common variable "${c.column}" lost its default — every row that left it blank now produces no alert`,
   'common-default-changed': c => `common variable "${c.column}" has a different default — every row that left it blank changes value`,
-  'common-default-added': c => `common variable "${c.column}" gained a default — rows that leave it blank will use it`
+  'common-default-added': c => `common variable "${c.column}" gained a default — rows that leave it blank will use it`,
+  'group-type-changed': c => `${c.group}: type changed from ${c.from} to ${c.to} — its objects become ${c.toKind} instead of ${c.fromKind}: the old ones are deleted and new ones created, and the alerts are reloaded`
+}
+
+/**
+ * Groups whose `type` (output profile, #65) changed between two rules models.
+ * Not breaking — no row loses anything — but every object of the group is
+ * replaced by one of another kind, so it is always said.
+ */
+export function groupTypeChanges(beforeModel, afterModel) {
+  const changes = []
+  for (const [group, after] of Object.entries(afterModel?.groups || {})) {
+    const before = beforeModel?.groups?.[group]
+    if (!before || before.custom || after.custom) continue
+    const from = profileFor(before.type)
+    const to = profileFor(after.type)
+    if (!from || !to || from.name === to.name) continue
+    changes.push({ kind: 'group-type-changed', group, from: from.name, to: to.name, fromKind: from.kind, toKind: to.kind })
+  }
+  return changes
 }
 
 export function describeChange(change) {

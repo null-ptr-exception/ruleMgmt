@@ -1,5 +1,5 @@
 import express from 'express'
-import { diffSchema, describeChange, modelAlerts } from '../../src/utils/schemaCompat.js'
+import { diffSchema, describeChange, modelAlerts, groupTypeChanges } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
@@ -218,6 +218,9 @@ export default function templatesRouter() {
         before: modelAlerts(beforeModel),
         after: modelAlerts(model),
       })
+      // A group changing output profile replaces its objects (#65): a notice,
+      // shown with a breaking change or on its own after the save.
+      notices.push(...groupTypeChanges(beforeModel, model))
       const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
       if (!confirmBreaking && isBreaking) {
         const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)

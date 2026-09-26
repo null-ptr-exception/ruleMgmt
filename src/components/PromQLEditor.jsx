@@ -37,7 +37,11 @@ const promqlTheme = EditorView.theme({
   '.tok-metricName': { color: '#93c5fd', fontWeight: 600 },
 }, { dark: true })
 
-export default function PromQLEditor({ value = '', onChange, metrics = [], minHeight = 56, apiRef }) {
+// `language` other than 'promql' (a vlogs group's LogsQL, #65) drops the PromQL
+// highlighting, completion and linting — they would flag every line of it —
+// and keeps the rest, including the selection API variables are marked with.
+// It is read once, when the editor mounts: remount (a `key`) to change it.
+export default function PromQLEditor({ value = '', onChange, metrics = [], minHeight = 56, apiRef, language = 'promql' }) {
   const containerRef = useRef(null)
   const viewRef      = useRef(null)
   const onChangeRef  = useRef(onChange)
@@ -117,7 +121,7 @@ export default function PromQLEditor({ value = '', onChange, metrics = [], minHe
           ...historyKeymap,
           indentWithTab,
         ]),
-        promql.asExtension(),
+        ...(language === 'promql' ? [promql.asExtension()] : []),
         promqlTheme,
         updateListener,
         EditorView.lineWrapping,

@@ -19,6 +19,7 @@
 import { renderValue, expandVars, varsIn } from './ruleModel.js'
 import { emitRuleObjects } from './crConverter.js'
 import { needsQuote } from './yamlScalar.js'
+import { profileFor } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 
 function toPascalCase(str) {
@@ -339,6 +340,8 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
   return {
     groupName: alertGroup.replace(/_/g, '-'),
     groupFields: { interval: alertDef.interval, limit: alertDef.limit },
+    // The parser has already refused a type with no profile.
+    profile: profileFor(alertDef.groupType),
     valuesKey: alertGroup,
     hasCommon,
     ruleTexts

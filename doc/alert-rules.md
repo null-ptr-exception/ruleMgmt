@@ -112,6 +112,43 @@ summary: "receive is {{ $value }} B/s in prod"
 
 You never write the escaping yourself.
 
+## Log alerts: groups of another type
+
+A group's `type` says what kind of rules it holds. Left out it is
+`prometheus`: `expr` is PromQL, and the group is emitted as a
+`PrometheusRule`. `type: vlogs` makes `expr` LogsQL, evaluated against
+VictoriaLogs, and the group is emitted as a `VMRule` with `type: vlogs` on it:
+
+```yaml
+# rules/app_errors.yaml
+type: vlogs
+columns:
+  service: { type: string, required: true }
+  warn:    { type: number, default: 10 }
+rules:
+  - alert: AppErrors
+    expr: '_time:5m service:"${service}" level:error | stats count() as errors | filter errors:>${warn}'
+    for: 5m
+    labels: { severity: warning }
+    annotations: { summary: '{{ $labels.service }}: {{ $value }} errors' }
+```
+
+Everything else is the same — columns, `vars`, defaults, guards, `_common`,
+labels and annotations. One chart can mix both, so a service's metric and
+log alerts share its Common Values.
+
+What each type is wrapped in lives in `config/outputs.json`
+([rules-format.md](rules-format.md#output-profiles)), part of the release.
+Two things differ for a `vlogs` group:
+
+- **Nothing checks its syntax.** promtool reads PromQL only, so Preview runs
+  it on the other groups and marks this one *not syntax-checked*; the editor
+  drops PromQL's highlighting for its `expr`. A typo shows up only when the
+  evaluator loads the rule.
+- **Changing a group's type replaces its objects.** A `PrometheusRule`
+  becomes a `VMRule` (or back): the old object is deleted, a new one
+  created, and the alerts reload. Saving says so.
+
 ## Hand-writing one rule
 
 When a rule needs a field the model has no place for — `limit`,

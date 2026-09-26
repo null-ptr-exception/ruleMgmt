@@ -148,6 +148,19 @@ rules:
   })
 })
 
+// #65: changing a group's type replaces its objects — not breaking, but
+// the save says so.
+describe('POST /:chart/rules — a group changing type', () => {
+  it('saves, and returns a notice naming both kinds', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': 'type: vlogs\n' + CPU } })
+    expect(status).toBe(200)
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-type-changed', group: 'cpu', from: 'prometheus', to: 'vlogs' })])
+    expect(data.notices[0].description).toMatch(/VMRule instead of PrometheusRule/)
+    expect(await read('templates/cpu.yaml')).toContain('kind: VMRule')
+  })
+})
+
 describe('GET /:chart drift', () => {
   it('fills in a missing Chart.yaml and regenerates missing products on open', async () => {
     await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })

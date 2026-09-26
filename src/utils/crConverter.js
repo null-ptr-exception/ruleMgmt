@@ -26,9 +26,11 @@ export const MAX_OBJECT_BYTES = 1_000_000
 /** Rows per object. The template chunks its row loop at this size. */
 export const MAX_ROWS_PER_OBJECT = 100
 
-/** Exported so anything inspecting the output cannot drift from what it emits. */
-export const API_VERSION = 'monitoring.coreos.com/v1'
-export const KIND = 'PrometheusRule'
+// The resource itself — apiVersion, kind, fields every group carries — is the
+// group's output profile (config/outputs.json, #65), passed in as `profile`.
+// Anything inspecting the output reads the same profiles (outputs.js), so it
+// cannot drift from what is emitted.
+import { profileFor } from './outputs.js'
 
 // The generator runs in the browser as well as in scripts, so size is measured
 // with TextEncoder rather than Buffer.
@@ -91,14 +93,17 @@ export function rowLoopHeader(hasCommon) {
  * group is evaluated and how many series it may produce. They belong to the
  * group, so every object the group is split into carries them.
  */
-function renderGroupFields({ interval, limit } = {}) {
+function renderGroupFields({ interval, limit } = {}, profile) {
   let out = ''
+  // The profile's own group fields first (e.g. `type: vlogs`), then the
+  // template owner's.
+  for (const [key, value] of Object.entries(profile?.groupFields || {})) out += `      ${key}: ${value}\n`
   if (interval !== undefined && interval !== '') out += `      interval: ${interval}\n`
   if (limit !== undefined && limit !== '') out += `      limit: ${limit}\n`
   return out
 }
 
-function buildObject({ releaseName, baseName, groupName, groupFields, valuesKey, hasCommon, ruleTexts, objectMeta }) {
+function buildObject({ releaseName, baseName, groupName, groupFields, profile, valuesKey, hasCommon, ruleTexts, objectMeta }) {
   const rowLoop = rowLoopHeader(hasCommon)
 
   const name = releaseName.includes('{{')
@@ -111,8 +116,8 @@ function buildObject({ releaseName, baseName, groupName, groupFields, valuesKey,
     `{{- $chunks := chunk ${MAX_ROWS_PER_OBJECT} ($.Values.${valuesKey} | default list) }}\n` +
     `{{- range $chunkIndex, $rows := $chunks }}\n` +
     `---\n` +
-    `apiVersion: ${API_VERSION}\n` +
-    `kind: ${KIND}\n` +
+    `apiVersion: ${profile.apiVersion}\n` +
+    `kind: ${profile.kind}\n` +
     `metadata:\n` +
     `  name: ${name}-${baseName}-{{ add1 $chunkIndex }}\n` +
     renderMetaMap('labels', objectMeta?.labels || BUILT_IN_LABELS) +
@@ -120,7 +125,7 @@ function buildObject({ releaseName, baseName, groupName, groupFields, valuesKey,
     `spec:\n` +
     `  groups:\n` +
     `    - name: ${groupName}\n` +
-    renderGroupFields(groupFields) +
+    renderGroupFields(groupFields, profile) +
     `      rules:\n` +
     rowLoop +
     ruleTexts.join('\n') + '\n' +
@@ -133,7 +138,7 @@ function buildObject({ releaseName, baseName, groupName, groupFields, valuesKey,
  * Render one alert group as a template that emits one or more custom
  * resources: one per rule shard, times one per row chunk.
  */
-export function emitRuleObjects({ releaseName, group, groupName, groupFields, valuesKey, hasCommon, ruleTexts }, options) {
+export function emitRuleObjects({ releaseName, group, groupName, groupFields, profile = profileFor(undefined), valuesKey, hasCommon, ruleTexts }, options) {
   const shards = shardRules(ruleTexts, options)
   const base = group.replace(/_/g, '-')
 
@@ -148,6 +153,7 @@ export function emitRuleObjects({ releaseName, group, groupName, groupFields, va
       baseName: `${base}-${i + 1}`,
       groupName,
       groupFields,
+      profile,
       valuesKey,
       hasCommon,
       ruleTexts: shard,

@@ -92,6 +92,44 @@ describe('what import does not do', () => {
   })
 })
 
+// #65: the rule-group fields come along — a vlogs group taken in as
+// prometheus would carry LogsQL as PromQL, silently broken; interval and
+// limit used to be dropped.
+describe('rule-group fields', () => {
+  const vmrule = `
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+spec:
+  groups:
+    - name: panics
+      type: vlogs
+      interval: 30s
+      limit: 5
+      rules:
+        - alert: Panics
+          expr: '"panic:" | stats count() as n | filter n:>\${max}'
+`
+
+  it('carries type, interval and limit into the imported group and its rules file', () => {
+    const { groups, warnings } = importRules(vmrule)
+    expect(warnings).toEqual([])
+    expect(groups[0]).toMatchObject({ key: 'panics', type: 'vlogs', interval: '30s', limit: 5 })
+    expect(modelGroupFromImport(groups[0])).toMatchObject({ group: 'panics', type: 'vlogs', interval: '30s', limit: 5 })
+  })
+
+  it('leaves them out when the source has none', () => {
+    const { groups } = importRules('groups:\n  - name: g\n    rules:\n      - alert: A\n        expr: up == 0\n')
+    expect(modelGroupFromImport(groups[0])).not.toHaveProperty('type')
+    expect(modelGroupFromImport(groups[0])).not.toHaveProperty('interval')
+  })
+
+  it('refuses a group whose type has no output profile, and says why', () => {
+    const { groups, warnings } = importRules(vmrule.replace('type: vlogs', 'type: graphite'))
+    expect(groups).toEqual([])
+    expect(warnings.join()).toMatch(/panics: type "graphite" has no output profile \(prometheus, vlogs\) — group skipped/)
+  })
+})
+
 describe('group naming', () => {
   it('turns a rule group name into a values key', () => {
     expect(toGroupKey('mariadb-traffic', 0)).toBe('mariadb_traffic')

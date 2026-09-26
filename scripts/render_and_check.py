@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from extract_rules import RuleExtractionError, extract_prometheus_rule_groups
+from extract_rules import RuleExtractionError, skipped_note, split_rule_groups
 
 
 @dataclass(frozen=True)
@@ -152,10 +152,12 @@ def render_target(target: RenderTarget) -> tuple[int, str]:
 
 def check_rules(target: RenderTarget, rendered_yaml: str, promtool: str) -> int:
     try:
-        groups = extract_prometheus_rule_groups(rendered_yaml)
+        groups, skipped = split_rule_groups(rendered_yaml)
     except RuleExtractionError as exc:
         print(f"{target.name}: {exc}", file=sys.stderr)
         return 1
+    if skipped:
+        print(f"{target.name}: {skipped_note(skipped)}", file=sys.stderr)
 
     if not groups:
         print(f"{target.name}: no PrometheusRule spec.groups found", file=sys.stderr)

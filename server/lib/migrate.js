@@ -61,7 +61,7 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     try {
       parsed = yaml.load(await fs.readFile(valuesFile, 'utf-8')) || {}
     } catch (err) {
-      if (err?.code !== 'ENOENT') throw new Error(`${dep.path}: values cannot be read (${err.message})`)
+      if (err?.code !== 'ENOENT') throw new Error(`${dep.path}: values cannot be read (${err.message})`, { cause: err })
     }
     const before = unwrapValues(parsed, depName)
 

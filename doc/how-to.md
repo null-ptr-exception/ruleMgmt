@@ -73,6 +73,15 @@ Type it. All three take the same three kinds of value:
 
 Blank rows in Labels and Annotations only become real once you name the key.
 
+### Set a group's type, interval or limit
+
+The row under the group's name: **Type** (`prometheus`, or `vlogs` for
+LogsQL log alerts), **Interval** (a duration such as `30s`; blank is the
+evaluator's default) and **Limit** (blank is no limit). They apply to the
+whole group. Switching the type changes what `expr` is written in, and the
+group's objects are replaced when it is saved — see
+[alert-rules.md](alert-rules.md#log-alerts-groups-of-another-type).
+
 ### Hand-write a rule
 
 When a rule needs something the fields do not cover — `limit`,

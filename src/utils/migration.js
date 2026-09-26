@@ -8,15 +8,28 @@
  *
  * The declaration lives on the clone as `x-migrated-from`:
  *
- *   { chart: 'mariadb-alerts', columns: { warn_pct: 'warn_ratio' }, dropped: ['crit_pct'] }
+ *   { chart: 'mariadb-alerts',
+ *     columns: { mariadb_cpu: { warn_pct: 'warn_ratio' } },
+ *     dropped: { mariadb_cpu: ['crit_pct'] },
+ *     groups:  { old_group: 'new_group' } }
  *
+ * Columns are declared per group, keyed by the group's name in the rows
+ * being moved. The same column name (`warn`, `namespace`) is common across
+ * groups, and a decision made for one group must never touch another's.
  * A column not named anywhere keeps its name.
  */
 
+/** The column decisions for one group. */
+function forGroup(migration, group) {
+  return {
+    renames: migration?.columns?.[group] || {},
+    dropped: new Set(migration?.dropped?.[group] || []),
+  }
+}
+
 /** Rows for one alert group, moved through a declaration. */
-export function migrateRows(rows, migration) {
-  const renames = migration?.columns || {}
-  const dropped = new Set(migration?.dropped || [])
+export function migrateRows(rows, migration, group) {
+  const { renames, dropped } = forGroup(migration, group)
 
   return (rows || []).map(row => {
     const moved = {}
@@ -43,7 +56,7 @@ export function migrateValues(values, migration, targetSchema) {
       orphaned.push(group)
       continue
     }
-    migrated[targetGroup] = Array.isArray(rows) ? migrateRows(rows, migration) : rows
+    migrated[targetGroup] = Array.isArray(rows) ? migrateRows(rows, migration, group) : rows
   }
 
   return { values: migrated, orphaned }
@@ -54,14 +67,13 @@ export function migrateValues(values, migration, targetSchema) {
  * rather than discover it afterwards.
  */
 export function migrationLosses(values, migration, targetSchema) {
-  const dropped = new Set(migration?.dropped || [])
   const losses = []
 
   for (const [group, rows] of Object.entries(values || {})) {
     if (!Array.isArray(rows)) continue
     const targetGroup = migration?.groups?.[group] || group
     const targetColumns = Object.keys(targetSchema?.properties?.[targetGroup]?.items?.properties || {})
-    const renames = migration?.columns || {}
+    const { renames, dropped } = forGroup(migration, group)
 
     const lost = new Set()
     for (const row of rows) {

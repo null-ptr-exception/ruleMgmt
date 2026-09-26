@@ -78,7 +78,7 @@ describe('breaking change + migration', () => {
 
   it('migration-preview reports the rows and values each deployment would lose', async () => {
     const { data } = await api('POST', '/api/v2/templates/demo/migration-preview', {
-      files: { 'cpu.yaml': withThreshold }, migration: { dropped: ['warn'] },
+      files: { 'cpu.yaml': withThreshold }, migration: { dropped: { cpu: ['warn'] } },
     })
     const flat = data.deployments.find(d => d.path.includes('prod-values'))
     expect(flat.rowsChanged).toBe(1)
@@ -87,7 +87,7 @@ describe('breaking change + migration', () => {
 
   it('a confirmed change with a mapping renames the column in every writable deployment', async () => {
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', {
-      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { warn: 'threshold' } },
+      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { cpu: { warn: 'threshold' } } },
     })
     expect(status).toBe(200)
     expect(data.migrated.length).toBe(2)
@@ -103,7 +103,7 @@ describe('breaking change + migration', () => {
 
   it('drops the value when a removed column is mapped to Delete', async () => {
     await api('POST', '/api/v2/templates/demo/rules', {
-      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { dropped: ['warn'] },
+      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { dropped: { cpu: ['warn'] } },
     })
     const flat = await fs.readFile(path.join(tmpDir, 'deployments', 'demo', 'prod-values.yaml'), 'utf-8')
     expect(flat).not.toContain('warn')
@@ -122,6 +122,24 @@ describe('breaking change + migration', () => {
     expect(await fs.readFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'utf-8')).toBe(withWarn)
   })
 
+  // `warn` in cpu and `warn` in mem are different columns: deleting one must
+  // leave the other. The declaration used to be chart-wide and deleted both.
+  it('a decision for one group leaves the same column in another group alone', async () => {
+    const memWithWarn = withWarn.replace('group: cpu', 'group: mem').replace('alert: A', 'alert: M')
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': withWarn, 'mem.yaml': memWithWarn }, confirmBreaking: true })
+    const file = path.join(tmpDir, 'deployments', 'demo', 'prod-values.yaml')
+    await fs.writeFile(file, 'cpu:\n  - namespace: p\n    warn: 90\nmem:\n  - namespace: p\n    warn: 70\n')
+
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', {
+      files: { 'cpu.yaml': withThreshold, 'mem.yaml': memWithWarn }, confirmBreaking: true,
+      migration: { dropped: { cpu: ['warn'] } },
+    })
+    expect(status).toBe(200)
+    const values = await fs.readFile(file, 'utf-8')
+    expect(values).not.toContain('warn: 90')
+    expect(values).toContain('warn: 70')
+  })
+
   // A folder deployment's values.yaml can hold more than this chart's block.
   it('keeps the other top-level keys of a folder deployment', async () => {
     const own = path.join(tmpDir, 'deployments', 'e2e', 'own')
@@ -130,7 +148,7 @@ describe('breaking change + migration', () => {
     await fs.writeFile(path.join(own, 'values.yaml'), 'global:\n  region: eu\ndemo:\n  cpu:\n    - namespace: o\n      warn: 70\n')
 
     const { status } = await api('POST', '/api/v2/templates/demo/rules', {
-      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { warn: 'threshold' } },
+      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { cpu: { warn: 'threshold' } } },
     })
     expect(status).toBe(200)
     const values = await fs.readFile(path.join(own, 'values.yaml'), 'utf-8')
@@ -145,7 +163,7 @@ describe('breaking change + migration', () => {
     await fs.writeFile(file, broken)
 
     const { status } = await api('POST', '/api/v2/templates/demo/rules', {
-      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { warn: 'threshold' } },
+      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { cpu: { warn: 'threshold' } } },
     })
     expect(status).toBeGreaterThanOrEqual(400)
     expect(await fs.readFile(file, 'utf-8')).toBe(broken)

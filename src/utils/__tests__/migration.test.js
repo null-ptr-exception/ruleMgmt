@@ -12,8 +12,8 @@ const targetSchema = {
 
 const migration = {
   chart: 'mariadb-alerts',
-  columns: { warn_pct: 'warn_ratio' },
-  dropped: ['crit_pct']
+  columns: { traffic: { warn_pct: 'warn_ratio' } },
+  dropped: { traffic: ['crit_pct'] }
 }
 
 const rows = [
@@ -23,7 +23,7 @@ const rows = [
 
 describe('migrateRows', () => {
   it('renames the columns the declaration names', () => {
-    expect(migrateRows(rows, migration)).toEqual([
+    expect(migrateRows(rows, migration, 'traffic')).toEqual([
       { namespace: 'prod', warn_ratio: 80 },
       { namespace: 'stage', warn_ratio: 70 }
     ])
@@ -34,11 +34,19 @@ describe('migrateRows', () => {
   })
 
   it('drops what the declaration says to drop', () => {
-    expect(migrateRows(rows, migration)[0]).not.toHaveProperty('crit_pct')
+    expect(migrateRows(rows, migration, 'traffic')[0]).not.toHaveProperty('crit_pct')
   })
 
   it('is a no-op without a declaration', () => {
-    expect(migrateRows(rows, undefined)).toEqual(rows)
+    expect(migrateRows(rows, undefined, 'traffic')).toEqual(rows)
+  })
+
+  // Column names repeat across groups. Deleting `warn` from cpu must not
+  // delete mem's `warn` — it did, when the declaration was chart-wide.
+  it('applies a group\'s decisions to that group only', () => {
+    const decl = { columns: { cpu: { crit: 'critical' } }, dropped: { cpu: ['warn'] } }
+    expect(migrateRows([{ warn: 90, crit: 95 }], decl, 'cpu')).toEqual([{ critical: 95 }])
+    expect(migrateRows([{ warn: 70, crit: 80 }], decl, 'mem')).toEqual([{ warn: 70, crit: 80 }])
   })
 })
 

@@ -30,12 +30,13 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
   }, [open])
 
   const migration = useMemo(() => {
-    const m = { columns: {}, groups: {}, dropped: [] }
+    // Per group: the same column name in another group is another column.
+    const m = { columns: {}, groups: {}, dropped: {} }
     for (const c of decisions) {
       if (c.kind === 'column-removed') {
         const target = colMap[`${c.group}␟${c.column}`]
-        if (!target || target === DELETE) m.dropped.push(c.column)
-        else m.columns[c.column] = target
+        if (!target || target === DELETE) (m.dropped[c.group] ||= []).push(c.column)
+        else (m.columns[c.group] ||= {})[c.column] = target
       } else if (c.kind === 'group-removed') {
         const target = groupMap[c.group]
         if (target && target !== DELETE) m.groups[c.group] = target

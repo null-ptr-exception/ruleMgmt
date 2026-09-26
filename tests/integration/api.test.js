@@ -230,11 +230,11 @@ describe('reads and failed writes leave no chart behind', () => {
     await api('POST', '/api/v2/charts', { name: 'clone-origin' })
     await fs.writeFile(path.join(tmpDir, 'charts', 'clone-origin', 'values.schema.json'), '{"type":"object","properties":{}}')
     const { status } = await api('POST', '/api/v2/charts/clone-origin/clone', {
-      newName: 'clone-copy', migration: { chart: 'somewhere-else', columns: { a: 'b' } },
+      newName: 'clone-copy', migration: { chart: 'somewhere-else', columns: { g: { a: 'b' } } },
     })
     expect(status).toBe(200)
     const schema = JSON.parse(await fs.readFile(path.join(tmpDir, 'charts', 'clone-copy', 'values.schema.json'), 'utf-8'))
-    expect(schema['x-migrated-from']).toEqual({ chart: 'clone-origin', columns: { a: 'b' } })
+    expect(schema['x-migrated-from']).toEqual({ chart: 'clone-origin', columns: { g: { a: 'b' } } })
     await api('DELETE', '/api/v2/charts/clone-origin')
     await api('DELETE', '/api/v2/charts/clone-copy')
   })

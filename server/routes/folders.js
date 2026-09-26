@@ -203,7 +203,10 @@ export default function foldersRouter() {
 
       const chartDir = path.join(chartsDir, chart)
       const chartMeta = yaml.load(await fs.readFile(path.join(chartDir, 'Chart.yaml'), 'utf-8'))
-      const relPath = path.relative(deployDir, chartDir)
+      // Helm reads this as a URL, and the file is committed and rendered on
+      // Linux even when it was written on Windows, so the separator has to be
+      // a forward slash regardless of the platform that produced it.
+      const relPath = path.relative(deployDir, chartDir).replace(/\\/g, '/')
 
       const deployChart = {
         apiVersion: 'v2',

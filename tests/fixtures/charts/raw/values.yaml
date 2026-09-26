@@ -1,0 +1,5 @@
+queue:
+  - queue: orders
+    max_age: 300
+  - queue: billing-v2
+    max_age: 60

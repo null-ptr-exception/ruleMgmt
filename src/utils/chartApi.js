@@ -68,13 +68,60 @@ export async function deleteChartTemplate(chart, template) {
   return res.json()
 }
 
-export async function saveChartSchema(chart, schema) {
+/**
+ * A schema change that would orphan a rule owner's rows comes back as 409 with
+ * what breaks and who is affected. Pass confirmBreaking once the person making
+ * the change has seen that and said to go ahead.
+ */
+export async function saveChartSchema(chart, schema, confirmBreaking = false) {
   const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/schema`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ schema })
+    body: JSON.stringify({ schema, confirmBreaking })
   })
+  if (res.status === 409) return { blocked: true, ...(await res.json()) }
   if (!res.ok) return {}
+  return res.json()
+}
+
+/**
+ * Save a chart's whole rules/*.yaml source in one request; the server
+ * regenerates values.schema.json and every templates/*.yaml from it and writes
+ * the lot all-or-nothing. `files` is { '<name>.yaml': text }.
+ *
+ * A breaking change comes back as 409 with `breaking` / `notices` / `added` /
+ * `deployments` (each `readonly`); parse errors and failed rule checks come
+ * back as 400 with `errors` / `findings`. `migration` ({ groups?, columns?,
+ * dropped? }) with confirmBreaking rewrites every affected deployment's values.
+ */
+export async function saveChartRules(chart, files, confirmBreaking = false, migration = undefined) {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/rules`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, confirmBreaking, migration })
+  })
+  if (res.status === 409) return { blocked: true, ...(await res.json()) }
+  if (res.status === 400) return { invalid: true, ...(await res.json()) }
+  // Anything else — "Generation failed", "Deployment migration failed" — keeps
+  // its message, so the editor can say what went wrong instead of nothing.
+  if (!res.ok) return { failed: true, ...(await res.json().catch(() => ({}))) }
+  return res.json()
+}
+
+/** Preview what a breaking change + mapping does to each deployment. */
+export async function migrationPreview(chart, files, migration) {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/migration-preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files, migration })
+  })
+  if (!res.ok) return { deployments: [] }
+  return res.json()
+}
+
+export async function listChartDeployments(chart) {
+  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/deployments`)
+  if (!res.ok) return { deployments: [] }
   return res.json()
 }
 
@@ -121,7 +168,8 @@ export async function saveDeployment(chart, deployment, values, folder) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ values })
   })
-  if (!res.ok) return {}
+  // A refusal carries { error, problems } — which cells, and why.
+  if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({}))) }
   return res.json()
 }
 
@@ -243,4 +291,14 @@ export async function unlinkSync(target) {
   const body = await res.json().catch(() => ({}))
   if (!res.ok) return { ok: false, error: body.error || 'Unlink failed' }
   return body
+}
+
+export async function cloneChart(chart, newName, migration) {
+  const res = await apiFetch(`${BASE}/charts/${encodeURIComponent(chart)}/clone`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newName, migration })
+  })
+  if (!res.ok) return { error: (await res.json().catch(() => ({}))).error || 'Clone failed' }
+  return res.json()
 }

@@ -1,0 +1,34 @@
+{{- $chunks := chunk 100 ($.Values.probe | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-probe-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: probe
+      rules:
+        {{- range $rows }}
+        - alert: TargetDown
+          expr: |-
+            {job="{{ .job }}", __name__="up"} == 0
+          for: 5m
+          labels:
+            severity: critical
+        - alert: VersionSkew
+          expr: |-
+            count(count by (v) (label_replace(build_info{job="{{ .job }}"}, "v", "$1", "version", "(.*): .*"))) > 1
+          for: 5m
+          labels:
+            severity: warning
+        - alert: Flapping
+          expr: |-
+            changes(up{job="{{ .job }}"}[15m]) > 4 # restarts, not scrapes
+          for: 5m
+          labels:
+            severity: info
+        {{- end }}
+{{- end }}

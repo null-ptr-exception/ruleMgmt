@@ -1,0 +1,19 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-error-rate-1-1:
+  - name: error-rate
+    rules:
+      - alert: ErrorRateHigh
+        expr: sum(rate(errors_total{job="api"}[5m])) / sum(rate(requests_total{job="api"}[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "error ratio {{ $value | humanizePercentage }} for api" }
+      - alert: ErrorRateHigh
+        expr: sum(rate(errors_total{job="worker"}[15m])) / sum(rate(requests_total{job="worker"}[15m])) > 0.2
+        for: 15m
+        labels: { severity: critical }
+        annotations: { summary: "error ratio {{ $value | humanizePercentage }} for worker" }
+      - alert: ErrorRateHigh
+        expr: sum(rate(errors_total{job="batch"}[5m])) / sum(rate(requests_total{job="batch"}[5m])) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "error ratio {{ $value | humanizePercentage }} for batch" }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { schemaAlertNames, schemaToVars, varsMapToSchema, updateSchemaAlert, getCommonVars, setCommonVars } from '../schemaUtils.js'
+import { schemaAlertNames, schemaToVars, varsMapToSchema, updateSchemaAlert, getCommonVars, setCommonVars, isAlertGroup } from '../schemaUtils.js'
 
 const sampleSchema = {
   $schema: 'https://json-schema.org/draft-07/schema#',
@@ -37,6 +37,14 @@ describe('schemaAlertNames', () => {
   it('returns empty array for empty/null schema', () => {
     expect(schemaAlertNames({})).toEqual([])
     expect(schemaAlertNames(null)).toEqual([])
+  })
+})
+
+describe('isAlertGroup', () => {
+  it('accepts a normal group key and rejects $-prefixed meta keys', () => {
+    expect(isAlertGroup('cpu_alert')).toBe(true)
+    expect(isAlertGroup('$schema')).toBe(false)
+    expect(isAlertGroup(undefined)).toBe(false)
   })
 })
 
@@ -183,22 +191,27 @@ describe('getCommonVars', () => {
 })
 
 describe('setCommonVars', () => {
-  it('adds x-common-vars to schema', () => {
+  it('adds the common block as properties._common', () => {
     const updated = setCommonVars(sampleSchema, [
       { name: 'owner', type: 'string', description: 'Team', required: true }
     ])
-    expect(updated['x-common-vars'].properties.owner.type).toBe('string')
-    expect(updated['x-common-vars'].required).toEqual(['owner'])
-    expect(updated.properties).toEqual(sampleSchema.properties)
+    expect(updated).not.toHaveProperty('x-common-vars')
+    expect(updated.properties._common.properties.owner.type).toBe('string')
+    expect(updated.properties._common.required).toEqual(['owner'])
+    // the alert groups are untouched
+    for (const g of Object.keys(sampleSchema.properties)) {
+      expect(updated.properties[g]).toEqual(sampleSchema.properties[g])
+    }
   })
 
-  it('removes x-common-vars when vars is empty', () => {
+  it('removes the common block when vars is empty, legacy or not', () => {
     const withCommon = {
       ...sampleSchema,
       'x-common-vars': { type: 'object', properties: { owner: { type: 'string' } } }
     }
     const updated = setCommonVars(withCommon, [])
     expect(updated).not.toHaveProperty('x-common-vars')
+    expect(updated.properties).not.toHaveProperty('_common')
     expect(updated.properties).toEqual(sampleSchema.properties)
   })
 })

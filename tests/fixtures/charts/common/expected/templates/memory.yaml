@@ -1,0 +1,31 @@
+{{- $chunks := chunk 100 ($.Values.memory | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-memory-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: memory
+      rules:
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
+        {{- $row := merge . $common }}
+        - alert: MemoryHigh
+          expr: |-
+            mem_used_pct{cluster="{{ $row.cluster }}", namespace="{{ $row.namespace }}"} > {{ $row.limit_pct }}
+          for: 5m
+          labels:
+            severity: warning
+            env: "{{ dig "env" `prod` $row }}"
+            {{- if hasKey $row "oncall" }}
+            oncall: "{{ $row.oncall }}"
+            {{- end }}
+          annotations:
+            summary: |-
+              memory in {{ $row.cluster }}/{{ $row.namespace }} is {{ `{{ $value }}` }}%
+        {{- end }}
+{{- end }}

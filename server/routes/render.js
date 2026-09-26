@@ -3,6 +3,12 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
+import { KIND } from '../../src/utils/crConverter.js'
+import { chartDrift, readChartModel } from '../lib/chartFiles.js'
+import { getDepName, unwrapValues } from '../lib/subchart.js'
+import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
+import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
+import { logger } from '../lib/logger.js'
 import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -27,20 +33,44 @@ function runCommand(command, args, options = {}) {
   })
 }
 
-function extractPrometheusRuleGroups(renderedYaml) {
-  const groups = []
+// The kind comes from the converter rather than a literal here: if the
+// platform ever emits something else, a checker still looking for the old one
+// would find nothing and report that as fine.
+function extractPrometheusRuleObjects(renderedYaml) {
+  const objects = []
   yaml.loadAll(renderedYaml, doc => {
-    if (doc?.kind === 'PrometheusRule' && Array.isArray(doc?.spec?.groups)) {
-      groups.push(...doc.spec.groups)
+    if (doc?.kind === KIND && Array.isArray(doc?.spec?.groups)) {
+      objects.push(doc)
     }
   })
-  return groups
+  return objects
 }
 
+function sanitizeFilename(name) {
+  return name.replace(/[^a-zA-Z0-9_.-]/g, '_')
+}
+
+// promtool echoes the temp file path it was handed ("Checking /tmp/...").
+// That path is an internal detail the rule owner should never see, and it
+// makes the aggregated multi-object output noisy — drop the whole line.
+function cleanPromtoolOutput(text, file) {
+  return text
+    .split('\n')
+    .filter(line => !line.startsWith(`Checking ${file}`))
+    .join('\n')
+    .trim()
+}
+
+// One temp file per rendered CR, checked separately, results aggregated.
+// prometheus-operator writes one CR per file, so the same group name appearing
+// in two CRs is legal — and it always does once a group is sharded across
+// objects by byte budget or row count (100 rows/object). Merging every CR's
+// groups into one file made promtool report "groupname ... is repeated in the
+// same file", a false positive that fires for any sufficiently large deployment.
 async function checkPrometheusRules(renderedYaml) {
-  let groups
+  let objects
   try {
-    groups = extractPrometheusRuleGroups(renderedYaml)
+    objects = extractPrometheusRuleObjects(renderedYaml)
   } catch (err) {
     return {
       passed: false,
@@ -49,38 +79,111 @@ async function checkPrometheusRules(renderedYaml) {
     }
   }
 
-  if (groups.length === 0) {
+  if (objects.length === 0) {
+    // Not a failure: a deployment with no rows renders no resources at all,
+    // which is the ordinary state of a chart nobody has filled in yet.
     return {
       passed: true,
       skipped: true,
       errors: [],
-      output: 'No PrometheusRule resources found.'
+      output: `Nothing to check — this deployment rendered no ${KIND} resources. A group with no rows produces none.`
     }
   }
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'alertforge-promtool-'))
-  const rulesFile = path.join(tmpDir, 'rules.yaml')
   const promtool = process.env.PROMTOOL_BIN || 'promtool'
 
   try {
-    await fs.writeFile(rulesFile, yaml.dump({ groups }, { lineWidth: -1 }), 'utf-8')
-    const { stdout, stderr } = await runCommand(promtool, ['check', 'rules', rulesFile], { timeout: 120000, maxBuffer: MAX_BUFFER })
-    return {
-      passed: true,
-      errors: [],
-      output: `${stdout || ''}${stderr || ''}`.trim()
+    // One promtool invocation per rendered CR, run concurrently — they are
+    // independent (each its own temp file) and this was previously a serial
+    // loop, spawning promtool once per shard one at a time for no reason.
+    const results = await Promise.all(objects.map(async (obj, i) => {
+      const objName = obj?.metadata?.name || `object-${i + 1}`
+      const file = path.join(tmpDir, `${String(i).padStart(4, '0')}-${sanitizeFilename(objName)}.yaml`)
+      await fs.writeFile(file, yaml.dump({ groups: obj.spec.groups }, { lineWidth: -1 }), 'utf-8')
+      try {
+        const { stdout, stderr } = await runCommand(promtool, ['check', 'rules', file], { timeout: 120000, maxBuffer: MAX_BUFFER })
+        return { objName, passed: true, output: cleanPromtoolOutput(`${stdout || ''}${stderr || ''}`, file) }
+      } catch (err) {
+        if (err.code === 'ENOENT') return { objName, missing: true }
+        const output = cleanPromtoolOutput(`${err.stdout || ''}${err.stderr || ''}${err.message || ''}`, file)
+        return { objName, passed: false, output: output || 'promtool check rules failed.' }
+      }
+    }))
+
+    if (results.some(r => r.missing)) {
+      const msg = `Promtool is not available: ${promtool}`
+      return { passed: false, errors: [msg], output: msg }
     }
-  } catch (err) {
-    const unavailable = err.code === 'ENOENT' ? `Promtool is not available: ${promtool}` : ''
-    const output = `${err.stdout || ''}${err.stderr || ''}${unavailable || err.message || ''}`.trim()
-    return {
-      passed: false,
-      errors: output ? [output] : ['promtool check rules failed.'],
-      output
+
+    const failed = results.filter(r => !r.passed)
+    if (failed.length === 0) {
+      // A single object keeps the bare promtool output; name objects only once
+      // there is more than one, so the reader can tell which shard is which.
+      const output = objects.length === 1
+        ? results[0].output
+        : results.map(r => `${r.objName}: ${r.output || 'SUCCESS'}`).join('\n')
+      return { passed: true, errors: [], output }
     }
+    const output = failed.map(r => `${r.objName}:\n${r.output}`).join('\n\n')
+    return { passed: false, errors: [output], output }
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true })
   }
+}
+
+// The Preview summary the rule owner sees instead of raw YAML: per group, how
+// many alerts it actually produced (by name and severity, never merged), which
+// of the template's alerts produced nothing, and whether a group is empty
+// (no rows) versus filled-but-silent (rows, zero alerts). Plus any value keys
+// the schema no longer has — orphans left by a migration that didn't finish.
+async function buildSummary(renderedYaml, { model, schema }, valuesFilePaths) {
+  let rendered
+  try {
+    rendered = tallyRendered(renderedYaml)
+  } catch {
+    return null
+  }
+
+  // Possible (alert, severity) pairs per group key, from the chart's rules/
+  // (or a legacy schema through the upgrade adapter). With no schema yet there
+  // is no possible-alert list and no orphan check.
+  const possible = {}
+  for (const [key, g] of Object.entries(model?.groups || {})) {
+    possible[key] = (g.rules || [])
+      .filter(r => r.alert)
+      .map(r => ({ alert: r.alert, severity: r.labels?.severity ?? '' }))
+  }
+
+  const schemaGroups = new Set(schema ? Object.keys(schema.properties || {}).filter(isAlertGroup) : [])
+  const commonSchemaProps = new Set(Object.keys(getCommonSchema(schema)?.properties || {}))
+
+  const groupRows = {}
+  const orphanFields = new Set()
+  for (const candidate of valuesFilePaths) {
+    let parsed
+    try {
+      parsed = yaml.load(await fs.readFile(candidate, 'utf-8'))
+    } catch {
+      continue
+    }
+    const values = unwrapValues(parsed || {}, await getDepName(path.dirname(candidate)))
+    for (const [k, v] of Object.entries(values || {})) {
+      if (k === '_common') {
+        if (schema) for (const f of Object.keys(v || {})) if (!commonSchemaProps.has(f)) orphanFields.add(f)
+        continue
+      }
+      if (!Array.isArray(v)) continue
+      groupRows[k] = v.length
+      if (schema && !schemaGroups.has(k)) { orphanFields.add(k); continue }
+      const groupFields = new Set(Object.keys(schema?.properties?.[k]?.items?.properties || {}))
+      if (schema) for (const row of v) for (const f of Object.keys(row || {})) if (!groupFields.has(f)) orphanFields.add(f)
+    }
+    break
+  }
+
+  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema })
+  return { total: rendered.total, groups, unmatchedGroups, orphanFields: [...orphanFields] }
 }
 
 export default function renderRouter() {
@@ -130,11 +233,41 @@ export default function renderRouter() {
       // out of sync"), and the lock carries no pinning value for same-repo
       // file:// dependencies anyway. update re-resolves every time and prunes
       // outdated .tgz files as a side effect.
-      await runCommand(helm, ['dependency', 'update', templateDir], { timeout: 120000 })
+      //
+      // --skip-refresh: the dependencies are file:// charts, so there is no
+      // repository index to fetch — and without it helm refreshes every repo
+      // configured on the machine first, adding seconds (tens, for a large
+      // index on a slow link) to every Preview.
+      await runCommand(helm, ['dependency', 'update', '--skip-refresh', templateDir], { timeout: 120000 })
 
       const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000, maxBuffer: MAX_BUFFER })
       const check = await checkPrometheusRules(output)
-      res.json({ ok: true, output, check })
+      // Like the summary and drift below: optional, so a failure here cannot
+      // turn a good render into { ok: false }.
+      const chartModel = await readChartModel(chartDir).catch(err => {
+        logger.error({ err, chart, deployment }, 'readChartModel failed, rendering without a model')
+        return { model: null, fromRules: false, schema: null }
+      })
+      let selfCheck = null
+      try {
+        selfCheck = selfCheckRendered(output, chartModel.fromRules ? chartModel.model : null)
+      } catch (err) {
+        logger.error({ err, chart, deployment }, 'selfCheckRendered failed, skipping the self-check')
+      }
+      // Same file the frontend saves: `values.yaml` in folder mode, the legacy
+      // `<deployment>-values.yaml` otherwise. Both are tried; the first that
+      // parses wins.
+      const valuesFilePaths = folder
+        ? [path.join(deploymentsDir, 'values.yaml'), path.join(deploymentsDir, `${deployment}-values.yaml`)]
+        : [path.join(deploymentsDir, `${deployment}-values.yaml`)]
+      const summary = await buildSummary(output, chartModel, valuesFilePaths).catch(err => {
+        logger.error({ err, chart, deployment }, 'buildSummary failed, falling back to raw YAML')
+        return null
+      })
+      // The rule owner is looking at products; if they are older than the
+      // chart's rules/ source, what they see here may not be current.
+      const drift = await chartDrift(chartDir).catch(() => ({ state: 'ok' }))
+      res.json({ ok: true, output, check, selfCheck, summary, drift })
     } catch (err) {
       res.json({ ok: false, error: err.stderr || err.stdout || err.message })
     }

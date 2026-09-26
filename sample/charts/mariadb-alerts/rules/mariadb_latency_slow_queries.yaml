@@ -1,0 +1,26 @@
+group: mariadb_latency_slow_queries
+
+columns:
+  instance_name: {type: string, description: 'Unique name for this alert instance (e.g. prod, staging)'}
+  warn_threshold: {type: number, default: 1, description: Slow queries/sec warning}
+  critical_threshold: {type: number, default: 5, description: Slow queries/sec critical}
+
+rules:
+  - alert: MariadbLatencySlowQueries_WarnThreshold
+    expr: rate(mysql_global_status_slow_queries{namespace="${namespace}"}[5m]) > ${warn_threshold}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbLatencySlowQueries_WarnThreshold triggered on ${owner}
+  - alert: MariadbLatencySlowQueries_CriticalThreshold
+    expr: rate(mysql_global_status_slow_queries{namespace="${namespace}"}[5m]) > ${critical_threshold}
+    for: 5m
+    labels:
+      severity: critical
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbLatencySlowQueries_CriticalThreshold triggered on ${owner}

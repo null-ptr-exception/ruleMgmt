@@ -1,0 +1,413 @@
+# Hand-written expectation — expanded by a shell loop over the row
+# numbers, never by the generator. See tests/blind/harness.js.
+blind-instance-up-1-1:
+  - name: instance-up
+    rules:
+      - alert: InstanceDown
+        expr: up{instance="host-001"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-002"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-003"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-004"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-005"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-006"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-007"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-008"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-009"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-010"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-011"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-012"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-013"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-014"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-015"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-016"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-017"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-018"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-019"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-020"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-021"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-022"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-023"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-024"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-025"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-026"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-027"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-028"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-029"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-030"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-031"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-032"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-033"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-034"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-035"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-036"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-037"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-038"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-039"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-040"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-041"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-042"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-043"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-044"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-045"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-046"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-047"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-048"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-049"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-050"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-051"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-052"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-053"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-054"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-055"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-056"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-057"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-058"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-059"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-060"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-061"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-062"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-063"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-064"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-065"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-066"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-067"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-068"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-069"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-070"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-071"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-072"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-073"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-074"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-075"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-076"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-077"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-078"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-079"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-080"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-081"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-082"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-083"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-084"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-085"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-086"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-087"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-088"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-089"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-090"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-091"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-092"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-093"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-094"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-095"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-096"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-097"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-098"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-099"} == 0
+        for: 1m
+        labels: { severity: critical }
+      - alert: InstanceDown
+        expr: up{instance="host-100"} == 0
+        for: 1m
+        labels: { severity: critical }
+
+blind-instance-up-1-2:
+  - name: instance-up
+    rules:
+      - alert: InstanceDown
+        expr: up{instance="host-101"} == 0
+        for: 1m
+        labels: { severity: critical }

@@ -51,8 +51,8 @@ describe('schemaAlertNames', () => {
     expect(schemaAlertNames(BASE_SCHEMA)).toEqual(['my_alert', 'other_alert'])
   })
 
-  it('excludes $-prefixed keys', () => {
-    const s = { properties: { $schema: {}, my_alert: {} } }
+  it('excludes $-prefixed keys and _common', () => {
+    const s = { properties: { $schema: {}, _common: {}, my_alert: {} } }
     expect(schemaAlertNames(s)).toEqual(['my_alert'])
   })
 
@@ -93,6 +93,18 @@ describe('getCommonVars', () => {
 
   it('returns empty array for null schema', () => {
     expect(getCommonVars(null)).toEqual([])
+  })
+
+  it('reads the standard properties._common representation too', () => {
+    const standard = {
+      properties: {
+        _common: { type: 'object', properties: { namespace: { type: 'string', default: 'default' } }, required: ['namespace'] },
+        my_alert: { type: 'array', items: { properties: {} } },
+      },
+    }
+    expect(getCommonVars(standard)).toEqual([
+      { name: 'namespace', type: 'string', description: '', required: true, default: 'default' },
+    ])
   })
 })
 
@@ -156,36 +168,46 @@ describe('schemaToVars', () => {
 // ─── setCommonVars ────────────────────────────────────────────────────────────
 
 describe('setCommonVars', () => {
-  it('sets x-common-vars on schema', () => {
+  it('writes the common block as the standard properties._common', () => {
     const vars = [
       { name: 'namespace', type: 'string', description: 'ns', required: true },
       { name: 'owner', type: 'string', description: 'team', required: false },
     ]
     const result = setCommonVars({}, vars)
-    expect(result['x-common-vars'].properties).toHaveProperty('namespace')
-    expect(result['x-common-vars'].required).toContain('namespace')
-    expect(result['x-common-vars'].required).not.toContain('owner')
+    expect(result).not.toHaveProperty('x-common-vars')
+    expect(result.properties._common.type).toBe('object')
+    expect(result.properties._common.properties).toHaveProperty('namespace')
+    expect(result.properties._common.required).toEqual(['namespace'])
   })
 
-  it('removes x-common-vars when vars is empty', () => {
+  it('drops a legacy x-common-vars while moving it to _common', () => {
+    const result = setCommonVars(BASE_SCHEMA, [{ name: 'ns', type: 'string', required: false }])
+    expect(result).not.toHaveProperty('x-common-vars')
+    expect(result.properties._common.properties).toHaveProperty('ns')
+  })
+
+  it('removes the common block entirely when vars is empty', () => {
     const result = setCommonVars(BASE_SCHEMA, [])
     expect(result).not.toHaveProperty('x-common-vars')
+    expect(result.properties).not.toHaveProperty('_common')
   })
 
-  it('removes x-common-vars when vars is null', () => {
+  it('removes the common block when vars is null', () => {
     const result = setCommonVars(BASE_SCHEMA, null)
     expect(result).not.toHaveProperty('x-common-vars')
+    expect(result.properties).not.toHaveProperty('_common')
   })
 
-  it('preserves other schema properties', () => {
+  it('preserves the alert group properties', () => {
     const result = setCommonVars(BASE_SCHEMA, [{ name: 'ns', type: 'string', required: false }])
-    expect(result.properties).toEqual(BASE_SCHEMA.properties)
+    expect(result.properties.my_alert).toEqual(BASE_SCHEMA.properties.my_alert)
+    expect(result.properties.other_alert).toEqual(BASE_SCHEMA.properties.other_alert)
   })
 
   it('handles enum var correctly', () => {
     const vars = [{ name: 'env', type: 'enum', enum: ['a', 'b'], required: true }]
     const result = setCommonVars({}, vars)
-    expect(result['x-common-vars'].properties.env).toMatchObject({ type: 'string', enum: ['a', 'b'] })
+    expect(result.properties._common.properties.env).toMatchObject({ type: 'string', enum: ['a', 'b'] })
   })
 })
 

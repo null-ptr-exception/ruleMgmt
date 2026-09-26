@@ -1,0 +1,14 @@
+# A column with a default renders it when the row leaves the cell out —
+# in expr, in `for`, and as a label — and only then: a row's explicit 0 stays.
+columns:
+  job:       { type: string, required: true }
+  threshold: { type: number, default: 0.05 }
+  window:    { type: string, default: 5m }
+  severity:  { type: string, default: warning, enum: [warning, critical] }
+
+rules:
+  - alert: ErrorRateHigh
+    expr: sum(rate(errors_total{job="${job}"}[${window}])) / sum(rate(requests_total{job="${job}"}[${window}])) > ${threshold}
+    for: ${window}
+    labels: { severity: "${severity}" }
+    annotations: { summary: "error ratio {{ $value | humanizePercentage }} for ${job}" }

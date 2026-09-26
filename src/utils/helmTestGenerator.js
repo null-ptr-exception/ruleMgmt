@@ -1,129 +1,183 @@
 /**
- * Generate helm-unittest test YAML from a schema with x- extensions.
+ * Generate a helm-unittest suite from a chart's rules model — see issue #57.
  *
- * For each alert group, generates test cases that:
- * 1. Verify the rendered output is a valid PrometheusRule
- * 2. For each threshold variable, verify an alert rule is rendered with:
- *    - Correct alert name (PascalCase group + threshold)
- *    - Correct severity label
- *    - Threshold value substituted in expr
- *    - Correct `for` duration
+ * The model is what parseRulesDir() reads from rules/*.yaml, the chart's
+ * source. Every expected value is worked out from the rule itself, not
+ * guessed from naming: the alert name is the rule's `alert`, the expression
+ * is its `expr` with each ${column} replaced by the value the test sets, and
+ * a Prometheus {{ ... }} template is expected verbatim, because Helm must
+ * pass it through untouched.
+ *
+ * Per group (x-custom-template groups are skipped — their template is
+ * hand-written and has no rules to derive anything from):
+ *   1. one row with every column set to a distinct value renders one object
+ *      of the right kind, holding the group with every rule in order, each
+ *      with its alert, expr, for, labels and annotations
+ *   2. when an optional column has a default, the same row with it left out
+ *      renders each rule with the default substituted (#51: an empty cell is
+ *      omitted, not zero-filled, and the template supplies the default)
+ *
+ * A hand-written (raw) rule keeps its place in the order but is not asserted
+ * on: its YAML is the rule owner's, not the converter's.
  */
 
-function toPascalCase(str) {
-  return str.split(/[_\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
+import yaml from 'js-yaml'
+import { groupGenDef } from './rulesFile.js'
+import { normalizeRules } from './templateGenerator.js'
+import { API_VERSION, KIND } from './crConverter.js'
+import { needsQuote } from './yamlScalar.js'
+
+const VAR_RE = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
+
+/**
+ * How Helm prints a float64 — every number that reaches a template through
+ * values (YAML numbers are decoded as float64): Go's %v, which switches to an
+ * exponent below 1e-4 and from 1e6 up, with at least two exponent digits.
+ * 104857600 renders as 1.048576e+08.
+ */
+export function goFloat(value) {
+  if (!Number.isFinite(value) || value === 0) return String(value)
+  const [mantissa, exp] = value.toExponential().split('e')
+  const e = Number(exp)
+  if (e >= -4 && e < 6) return String(value)
+  return `${mantissa}e${e < 0 ? '-' : '+'}${String(Math.abs(e)).padStart(2, '0')}`
 }
 
-function getThresholds(alertDef) {
-  const props = alertDef?.items?.properties || {}
-  return Object.entries(props)
-    .filter(([, p]) => p['x-var-type'] === 'threshold')
-    .map(([name, p]) => ({
-      name,
-      severity: p['x-severity'] || 'warning',
-      defaultValue: p.default
-    }))
+/**
+ * How Helm prints a default written into the template (helmLiteral in
+ * ruleModel.js): an integer literal is a Go int and prints as written; any
+ * other number is a float64 like a value.
+ */
+function defaultText(value) {
+  if (typeof value !== 'number') return String(value)
+  return Number.isInteger(value) ? String(value) : goFloat(value)
 }
 
 
+function substitute(str, text) {
+  return String(str).replace(VAR_RE, (whole, name) => (name in text ? text[name] : whole))
+}
 
-function buildTestValues(alertGroup, alertDef) {
-  const props = alertDef?.items?.properties || {}
-  const row = {}
-  for (const [name, prop] of Object.entries(props)) {
-    if (prop.default !== undefined) {
-      row[name] = prop.default
-    } else if (prop.type === 'number' || prop.type === 'integer') {
-      row[name] = 42
-    } else {
-      row[name] = `test-${name}`
-    }
+/**
+ * A distinct value per column, so a template that reads the wrong column
+ * renders the wrong number. Small integers print the same in Go and JS.
+ */
+function testValues(columns) {
+  const values = {}
+  let next = 11
+  for (const [name, col] of Object.entries(columns)) {
+    if (col.enum?.length) values[name] = col.enum[0]
+    else if (col.type === 'number' || col.type === 'integer') values[name] = next++
+    else if (col.type === 'boolean') values[name] = true
+    else values[name] = `test-${name.replace(/_/g, '-')}`
   }
-  return { [alertGroup]: [row] }
+  return values
 }
 
-export function generateHelmUnittestSuite(schema, templateFile = 'templates/prometheus-rule.yaml') {
-  if (!schema?.properties) return ''
+/**
+ * A label as helm-unittest reads it back: a quoted line is a string, a bare
+ * word goes through YAML (and is only ever bare when YAML reads it as one).
+ */
+function labelValue(entry, text) {
+  const rendered = substitute(entry.value, text)
+  return needsQuote(entry.value) ? rendered : yaml.load(rendered)
+}
 
-  const lines = []
-  lines.push('suite: generated alert rule tests')
-  lines.push('templates:')
-  lines.push(`  - ${templateFile}`)
-  lines.push('tests:')
+/**
+ * expr and annotations are block scalars (`|-`): always a string, with the
+ * leading and trailing whitespace the generator trims — the trailing newline
+ * `expr: |` leaves in the source included.
+ */
+const blockValue = (value, text) => substitute(String(value ?? '').trim(), text)
 
-  // Global structure test
-  lines.push('  - it: renders a PrometheusRule')
-  lines.push('    asserts:')
-  lines.push('      - isKind:')
-  lines.push('          of: PrometheusRule')
-  lines.push('      - isAPIVersion:')
-  lines.push('          of: monitoring.coreos.com/v1')
-
-  for (const [alertGroup, alertDef] of Object.entries(schema.properties)) {
-    if (alertGroup.startsWith('$')) continue
-    if (alertDef['x-custom-template']) continue
-    if (!alertDef['x-promql']) continue
-
-    const thresholds = getThresholds(alertDef)
-    const forDuration = alertDef['x-for'] || '5m'
-    const testValues = buildTestValues(alertGroup, alertDef)
-
-    if (thresholds.length === 0) continue
-
-    // Test: group exists with correct name
-    lines.push(`  - it: renders ${alertGroup} group`)
-    lines.push('    set:')
-    for (const [key, val] of Object.entries(testValues)) {
-      lines.push(`      ${key}:`)
-      for (const row of val) {
-        lines.push(`        - ${Object.entries(row).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join('\n          ')}`)
-      }
+function ruleAsserts(rules, text) {
+  const asserts = []
+  rules.forEach((rule, i) => {
+    if (rule.raw) return
+    const path = `spec.groups[0].rules[${i}]`
+    asserts.push({ equal: { path: `${path}.alert`, value: rule.alert } })
+    asserts.push({ equal: { path: `${path}.expr`, value: blockValue(rule.expr, text) } })
+    asserts.push({ equal: { path: `${path}.for`, value: substitute(rule.for, text) } })
+    for (const field of ['labels', 'annotations']) {
+      if (!rule[field]?.length) continue
+      const value = field === 'annotations' ? e => blockValue(e.value, text) : e => labelValue(e, text)
+      const expected = Object.fromEntries(rule[field].map(e => [e.key, value(e)]))
+      asserts.push({ equal: { path: `${path}.${field}`, value: expected } })
     }
-    lines.push('    asserts:')
-    lines.push('      - contains:')
-    lines.push('          path: spec.groups')
-    lines.push('          content:')
-    lines.push(`            name: ${alertGroup.replace(/_/g, '-')}`)
-    lines.push('          any: true')
+  })
+  return asserts
+}
 
-    // Test: each threshold generates a rule with correct severity
-    for (const threshold of thresholds) {
-      const alertName = `${toPascalCase(alertGroup)}_${toPascalCase(threshold.name)}`
-      const thresholdValue = threshold.defaultValue !== undefined ? threshold.defaultValue : 42
-      const groupIndex = Object.keys(schema.properties).filter(k => !k.startsWith('$') && !schema.properties[k]['x-custom-template'] && schema.properties[k]['x-promql']).indexOf(alertGroup)
+/**
+ * Values for one row: common columns go under `_common`, the way a
+ * deployment sets them, so the template's merge of the two is exercised.
+ */
+function setFor(groupKey, commonValues, ownValues) {
+  const set = {}
+  if (Object.keys(commonValues).length) set._common = commonValues
+  set[groupKey] = [ownValues]
+  return set
+}
 
-      const thresholdIndex = thresholds.indexOf(threshold)
+/**
+ * A column can be left out of a row only when it is optional: a required one
+ * fails the chart's schema before the template is reached, default or not.
+ */
+const omittable = col => col?.default !== undefined && !col.required
 
-      lines.push(`  - it: renders ${alertName} with severity ${threshold.severity}`)
-      lines.push('    set:')
-      for (const [key, val] of Object.entries(testValues)) {
-        lines.push(`      ${key}:`)
-        for (const row of val) {
-          lines.push(`        - ${Object.entries(row).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join('\n          ')}`)
-        }
-      }
-      lines.push('    asserts:')
-      lines.push('      - equal:')
-      lines.push(`          path: spec.groups[${groupIndex}].rules[${thresholdIndex}].alert`)
-      lines.push(`          value: ${alertName}`)
-      lines.push('      - equal:')
-      lines.push(`          path: spec.groups[${groupIndex}].rules[${thresholdIndex}].for`)
-      lines.push(`          value: ${forDuration}`)
-      lines.push('      - equal:')
-      lines.push(`          path: spec.groups[${groupIndex}].rules[${thresholdIndex}].labels.severity`)
-      lines.push(`          value: ${threshold.severity}`)
-      // For large numbers, Helm may render in scientific notation (e.g. 1.048576e+08)
-      let patternValue = String(thresholdValue)
-      if (typeof thresholdValue === 'number' && thresholdValue >= 1000000) {
-        // Match either the literal number or scientific notation with optional leading zeros in exponent
-        const sci = thresholdValue.toExponential().replace('+', '\\\\+').replace(/(e\\\\\+)(\d+)/, '$10*$2')
-        patternValue = `(${thresholdValue}|${sci})`
-      }
-      lines.push('      - matchRegex:')
-      lines.push(`          path: spec.groups[${groupIndex}].rules[${thresholdIndex}].expr`)
-      lines.push(`          pattern: "${patternValue}"`)
-    }
+function omitDefaults(values, columns) {
+  return Object.fromEntries(Object.entries(values).filter(([name]) => !omittable(columns[name])))
+}
+
+export function generateHelmUnittestSuite(model) {
+  const groups = Object.entries(model?.groups || {}).filter(([, g]) => !g.custom)
+  if (!groups.length) return ''
+
+  const commonColumns = model.common?.columns || {}
+  const commonValues = testValues(commonColumns)
+  const tests = []
+
+  for (const [key, group] of groups) {
+    const template = `templates/${key.replace(/_/g, '-')}.yaml`
+    const rules = normalizeRules(key, groupGenDef(group))
+    const ownColumns = group.columns || {}
+    const ownValues = testValues(ownColumns)
+    const text = Object.fromEntries(
+      Object.entries({ ...commonValues, ...ownValues })
+        .map(([name, v]) => [name, typeof v === 'number' ? goFloat(v) : String(v)])
+    )
+
+    tests.push({
+      it: `renders ${key} with every column set`,
+      template,
+      set: setFor(key, commonValues, ownValues),
+      asserts: [
+        { hasDocuments: { count: 1 } },
+        { isKind: { of: KIND } },
+        { isAPIVersion: { of: API_VERSION } },
+        { equal: { path: 'spec.groups[0].name', value: key.replace(/_/g, '-') } },
+        { lengthEqual: { path: 'spec.groups[0].rules', count: rules.length } },
+        ...ruleAsserts(rules, text),
+      ],
+    })
+
+    const allColumns = { ...commonColumns, ...ownColumns }
+    const defaulted = Object.keys(allColumns).filter(name => omittable(allColumns[name]))
+    if (!defaulted.length) continue
+
+    const withDefaults = { ...text }
+    for (const name of defaulted) withDefaults[name] = defaultText(allColumns[name].default)
+    tests.push({
+      it: `renders ${key} with defaults for ${defaulted.join(', ')}`,
+      template,
+      set: setFor(key, omitDefaults(commonValues, commonColumns), omitDefaults(ownValues, ownColumns)),
+      asserts: ruleAsserts(rules, withDefaults),
+    })
   }
 
-  return lines.join('\n') + '\n'
+  return yaml.dump({
+    suite: 'generated alert rule tests',
+    templates: groups.map(([key]) => `templates/${key.replace(/_/g, '-')}.yaml`),
+    tests,
+  }, { lineWidth: -1, noRefs: true })
 }

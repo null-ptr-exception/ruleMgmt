@@ -37,11 +37,37 @@ const promqlTheme = EditorView.theme({
   '.tok-metricName': { color: '#93c5fd', fontWeight: 600 },
 }, { dark: true })
 
-export default function PromQLEditor({ value = '', onChange, metrics = [], minHeight = 56 }) {
+export default function PromQLEditor({ value = '', onChange, metrics = [], minHeight = 56, apiRef }) {
   const containerRef = useRef(null)
   const viewRef      = useRef(null)
   const onChangeRef  = useRef(onChange)
   onChangeRef.current = onChange
+
+  // Turning a literal into a variable needs the selection, so hand the caller
+  // the two operations it takes: read what is selected, put something else
+  // there.
+  if (apiRef) {
+    apiRef.current = {
+      // Returns the range as well as the text: naming a variable happens in a
+      // dialog, and by the time it is confirmed the editor has lost focus, so
+      // the caller has to hold on to where the literal was.
+      getSelection() {
+        const view = viewRef.current
+        if (!view) return null
+        const { from, to } = view.state.selection.main
+        return { from, to, text: view.state.sliceDoc(from, to) }
+      },
+      replaceRange(from, to, text) {
+        const view = viewRef.current
+        if (!view) return
+        view.dispatch({
+          changes: { from, to, insert: text },
+          selection: { anchor: from + text.length }
+        })
+        view.focus()
+      }
+    }
+  }
 
   useEffect(() => {
     if (!containerRef.current) return

@@ -1,0 +1,111 @@
+/**
+ * Reading a chart's source and products off disk, and the drift between them
+ * — see issue #57. Shared by the templates, render and git routes.
+ */
+
+import fs from 'fs/promises'
+import path from 'path'
+import { computeDrift, generateProducts } from '../../src/utils/drift.js'
+import { parseRulesDir, schemaToModel } from '../../src/utils/rulesFile.js'
+import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
+
+async function readOr(file) {
+  try { return await fs.readFile(file, 'utf-8') } catch { return null }
+}
+
+/**
+ * Write only the entries whose on-disk content differs. Returns their paths.
+ *
+ * Sequential, not transactional. Callers compute every entry before calling
+ * this, so a generation, check or breaking-change failure leaves the chart
+ * untouched — that is the "all-or-nothing" the save route promises. An I/O
+ * failure partway through (disk full, permissions) is not rolled back and
+ * leaves the files before it written; ruling that out would take writing to
+ * temp files and renaming them into place.
+ */
+export async function writeChanged(entries) {
+  const written = []
+  for (const [abs, content] of entries) {
+    if (await readOr(abs) !== content) {
+      await fs.mkdir(path.dirname(abs), { recursive: true })
+      await fs.writeFile(abs, content, 'utf-8')
+      written.push(abs)
+    }
+  }
+  return written
+}
+
+/** { '<name>.yaml': text } for a directory, or null when the directory is absent. */
+async function readYamlDir(dir) {
+  let names
+  try {
+    names = (await fs.readdir(dir)).filter(f => f.endsWith('.yaml'))
+  } catch {
+    return null
+  }
+  const out = {}
+  for (const name of names) out[name] = await fs.readFile(path.join(dir, name), 'utf-8')
+  return out
+}
+
+export async function readChartArtifacts(chartDir) {
+  const rulesFiles = await readYamlDir(path.join(chartDir, 'rules'))
+  const templateFiles = (await readYamlDir(path.join(chartDir, 'templates'))) || {}
+
+  let schema = null
+  try {
+    schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
+  } catch { /* absent or unparseable */ }
+
+  return { rulesFiles, templateFiles, schema }
+}
+
+/**
+ * The chart's rule model: parsed from rules/ when the chart has one, else
+ * adapted from a legacy schema. The schema of a migrated chart carries no
+ * rules, so reading it there yields groups with none. `fromRules` says which;
+ * `model` is null when there is neither.
+ */
+export async function readChartModel(chartDir) {
+  const { rulesFiles, schema } = await readChartArtifacts(chartDir)
+  const fromRules = !!(rulesFiles && Object.keys(rulesFiles).length)
+  let model = null
+  try {
+    if (fromRules) model = parseRulesDir(rulesFiles).model
+    else if (schema) model = schemaToModel(schema).model
+  } catch { /* an unparseable source: callers go without */ }
+  return { model, fromRules, schema }
+}
+
+/** { state, files?, errors? } — see computeDrift. */
+export async function chartDrift(chartDir) {
+  const { rulesFiles, templateFiles, schema } = await readChartArtifacts(chartDir)
+  return computeDrift({ rulesFiles, schema, templateFiles, objectMeta: objectMetaFromEnv() })
+}
+
+/**
+ * Write the products a chart's own `rules/*.yaml` generates that are absent
+ * on disk. Used when a chart is opened and some are missing — there is
+ * nothing to orphan, so it is not asked. A product that is there but differs
+ * (hand-edited, or behind the source) is left alone: that is `stale`, which
+ * the editor reports and a Save resolves, not something a read overwrites.
+ * Returns null when there is no rules/ source, or { errors } / { written }.
+ */
+export async function regenerateProducts(chartDir) {
+  const { rulesFiles, schema } = await readChartArtifacts(chartDir)
+  if (!rulesFiles || !Object.keys(rulesFiles).length) return null
+
+  const { model, errors } = parseRulesDir(rulesFiles)
+  if (errors.length) return { errors }
+
+  const { schemaText, templates } = generateProducts(model, schema, objectMetaFromEnv())
+  const tmplDir = path.join(chartDir, 'templates')
+  const entries = [
+    [path.join(chartDir, 'values.schema.json'), schemaText],
+    ...Object.entries(templates).map(([name, content]) => [path.join(tmplDir, name), content]),
+  ]
+  const absent = []
+  for (const entry of entries) if (await readOr(entry[0]) === null) absent.push(entry)
+  const written = await writeChanged(absent)
+  return { written: written.map(p => path.relative(chartDir, p)) }
+}

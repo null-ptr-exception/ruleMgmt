@@ -1,0 +1,25 @@
+group: mariadb_saturation_connections
+
+columns:
+  warn_pct: {type: number, default: 70, description: Connection saturation warning (%)}
+  critical_pct: {type: number, default: 90, description: Connection saturation critical (%)}
+
+rules:
+  - alert: MariadbSaturationConnections_WarnPct
+    expr: (mysql_global_status_threads_connected{namespace="${namespace}"} / mysql_global_variables_max_connections{namespace="${namespace}"}) * 100 > ${warn_pct}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbSaturationConnections_WarnPct triggered on ${owner}
+  - alert: MariadbSaturationConnections_CriticalPct
+    expr: (mysql_global_status_threads_connected{namespace="${namespace}"} / mysql_global_variables_max_connections{namespace="${namespace}"}) * 100 > ${critical_pct}
+    for: 5m
+    labels:
+      severity: critical
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbSaturationConnections_CriticalPct triggered on ${owner}

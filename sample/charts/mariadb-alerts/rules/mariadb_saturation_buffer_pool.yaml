@@ -1,0 +1,25 @@
+group: mariadb_saturation_buffer_pool
+
+columns:
+  warn_pct: {type: number, default: 85, description: Buffer pool usage warning (%)}
+  critical_pct: {type: number, default: 95, description: Buffer pool usage critical (%)}
+
+rules:
+  - alert: MariadbSaturationBufferPool_WarnPct
+    expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="${namespace}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="${namespace}"}) * 100 > ${warn_pct}
+    for: 10m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbSaturationBufferPool_WarnPct triggered on ${owner}
+  - alert: MariadbSaturationBufferPool_CriticalPct
+    expr: (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="${namespace}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="${namespace}"}) * 100 > ${critical_pct}
+    for: 10m
+    labels:
+      severity: critical
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbSaturationBufferPool_CriticalPct triggered on ${owner}

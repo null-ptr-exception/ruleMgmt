@@ -3,6 +3,8 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
+import { readChartModel } from '../lib/chartFiles.js'
+import { quotedValueProblems } from '../../src/utils/rulesFile.js'
 import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -117,9 +119,27 @@ export default function deploymentsRouter() {
       await fs.mkdir(dir, { recursive: true })
       let file = legacyFile
       try { await fs.access(directFile); file = directFile } catch { /* use legacy */ }
+      const depName = await getDepName(dir)
       let values = req.body.values
+
+      // A value Helm cannot render inside a quoted label is refused here,
+      // naming the cell, rather than surfacing later as a YAML parse error
+      // in Preview — see quotedValueProblems. Only a chart with a model to
+      // check against; an unparseable values string is left to Helm.
+      const chartName = depName || req.params.chart
+      const { model } = await readChartModel(path.join(req.gitopsDir, chartsDirName(), chartName))
+      if (model) {
+        let bare = values
+        if (typeof values === 'string') {
+          try { bare = unwrapValues(yaml.load(values) || {}, depName) } catch { bare = null }
+        }
+        const problems = bare ? quotedValueProblems(bare, model) : []
+        if (problems.length) {
+          return res.status(400).json({ error: 'Some values cannot be rendered', problems })
+        }
+      }
+
       if (typeof values !== 'string') {
-        const depName = await getDepName(dir)
         values = yaml.dump(wrapValues(values, depName), { lineWidth: -1 })
       }
       await fs.writeFile(file, values, 'utf-8')

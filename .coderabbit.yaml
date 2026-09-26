@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+reviews:
+  # Test data and generated products: machine review adds little, and they
+  # push a large PR over CodeRabbit's 100-file limit (#63). People still
+  # review them — the blind-test expectations under tests/fixtures/ are
+  # meant to be read by a person (#57 §十五).
+  path_filters:
+    - "!tests/fixtures/**"
+    - "!sample/**"
+    - "!src/utils/__fixtures__/**"

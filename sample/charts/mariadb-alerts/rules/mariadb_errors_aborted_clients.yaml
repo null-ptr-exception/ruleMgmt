@@ -1,0 +1,15 @@
+group: mariadb_errors_aborted_clients
+
+columns:
+  warn_rate: {type: number, default: 3, description: Aborted clients/sec warning}
+
+rules:
+  - alert: MariadbErrorsAbortedClients_WarnRate
+    expr: rate(mysql_global_status_aborted_clients{namespace="${namespace}"}[5m]) > ${warn_rate}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbErrorsAbortedClients_WarnRate triggered on ${owner}

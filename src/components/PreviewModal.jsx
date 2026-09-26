@@ -90,7 +90,7 @@ function Summary({ summary }) {
 function GroupRow({ group }) {
   const total = group.alerts.reduce((n, a) => n + a.count, 0)
   return (
-    <div style={{ borderTop: '1px solid #f0f0f0', padding: '10px 0' }}>
+    <div data-testid={`summary-group-${group.name}`} style={{ borderTop: '1px solid #f0f0f0', padding: '10px 0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
         <span>
           <Text strong style={{ fontFamily: 'monospace' }}>{group.name}</Text>

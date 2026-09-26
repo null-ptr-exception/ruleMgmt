@@ -1,0 +1,15 @@
+{
+  "outputs": {
+    "prometheus": {
+      "apiVersion": "monitoring.coreos.com/v1",
+      "kind": "PrometheusRule",
+      "validate": "promtool"
+    },
+    "vlogs": {
+      "apiVersion": "operator.victoriametrics.com/v1beta1",
+      "kind": "VMRule",
+      "groupFields": { "type": "vlogs" },
+      "validate": "none"
+    }
+  }
+}

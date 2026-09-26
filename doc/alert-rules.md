@@ -149,6 +149,32 @@ Two things differ for a `vlogs` group:
   becomes a `VMRule` (or back): the old object is deleted, a new one
   created, and the alerts reload. Saving says so.
 
+## Recording rules and once groups
+
+A rule can be a recording rule — `record:` instead of `alert:` — with
+`expr` and `labels` and nothing else. And a group can render **once per
+deployment** instead of once per row, with `once: true`:
+
+```yaml
+# rules/api_recording.yaml
+once: true
+rules:
+  - record: job:errors:rate5m
+    expr: sum by (job) (rate(errors_total[5m]))
+```
+
+A once group has no columns and nothing for the rule owner to fill in; it
+renders even when the deployment has no rows anywhere, and its rules may
+read Common Values. Per-row and once rules do not mix in one group: a rule
+that reads none of its group's columns is refused at commit, pointing at a
+once group. The two are independent — a recording rule can just as well be
+per row. *Threshold as a metric* is the case: each row records its
+threshold as a series, and a single once alert compares against it. The
+full example is in [rules-format.md](rules-format.md#once-groups).
+
+Turning a group once, or back, renames its objects — no chunk index for a
+once group — so they are deleted and created again. Saving says so.
+
 ## Hand-writing one rule
 
 When a rule needs a field the model has no place for — `limit`,
@@ -304,7 +330,12 @@ that vary is the next step, in the editor. The one guess is a column's starting
 type: a placeholder on the right of a comparison starts as a number, because
 typing it as a string would make Helm reject the values it is meant to hold.
 
-Recording rules are skipped. A rule keeping a field the model has no place for
+Recording rules come in like alerts, in the group they were in — not split
+off, since a recording rule is not necessarily once. A group that has no
+columns of its own after import (no `${…}` placeholder, or only `_common`
+ones) renders once in the file it came from, so it arrives as a
+[once group](#recording-rules-and-once-groups); adding columns later means
+turning `once` off first. A rule keeping a field the model has no place for
 arrives hand-written rather than losing it.
 
 A placeholder naming a column the chart already has in `_common` reads it

@@ -291,19 +291,32 @@ export default function TemplateDevEditor() {
       setBreaking(result)
       return
     }
-    if (!result?.ok) return
+    if (!result?.ok) {
+      reportFailedSave(result)
+      return
+    }
 
     await saveChartMeta(activeChart, chartMeta)
     await loadChart(activeChart)
   }
 
+  // A save that did not happen says why, and leaves the editor as it is —
+  // reloading the chart after a failure would throw the edits away.
+  function reportFailedSave(result, title = 'Save failed') {
+    const lines = result?.errors || (result?.findings || []).map(f => f.description || f.message)
+    Modal.error({
+      title: result?.error || title,
+      content: lines?.length ? lines.join('; ') : 'The server did not save the chart.',
+    })
+  }
+
   async function applyInPlace(migration) {
     const result = await saveChartRules(activeChart, buildFiles(), true, migration)
-    setBreaking(null)
-    if (result?.invalid) {
-      Modal.error({ title: result.error || 'Save was refused', content: (result.errors || (result.findings || []).map(f => f.description || f.message) || []).join('; ') })
+    if (!result?.ok) {
+      reportFailedSave(result)
       return
     }
+    setBreaking(null)
     await saveChartMeta(activeChart, chartMeta)
     await loadChart(activeChart)
   }
@@ -311,7 +324,13 @@ export default function TemplateDevEditor() {
   async function cloneWithEdits(newName, migration) {
     const res = await cloneChart(activeChart, newName, migration)
     if (res?.error) { Modal.error({ title: 'Clone failed', content: res.error }); return }
-    await saveChartRules(newName, buildFiles(), true)   // the clone gets the edited rules
+    const saved = await saveChartRules(newName, buildFiles(), true)   // the clone gets the edited rules
+    if (!saved?.ok) {
+      // The clone exists but holds the old rules; the edits are still here.
+      reportFailedSave(saved, `Created ${newName}, but saving the edits into it failed`)
+      await loadCharts()
+      return
+    }
     setBreaking(null)
     await loadCharts()
     setActiveChart(newName)

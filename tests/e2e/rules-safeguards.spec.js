@@ -89,6 +89,23 @@ test.describe('Save over a change made elsewhere', () => {
     expect((await chartInfo(request, CHART)).rulesFiles['cpu.yaml']).not.toContain('ChangedElsewhere')
   })
 
+  // A server-side failure (500) used to come back as {} and end the save
+  // silently; after a breaking-change dialog it also reloaded the chart and
+  // threw the edits away.
+  test('a save the server fails says why and keeps the edits', async ({ page, request }) => {
+    await openChart(page, CHART)
+    await page.getByPlaceholder('alert name').fill('MyEdit')
+    await page.route(`**/api/v2/templates/${CHART}/rules`, route =>
+      route.request().method() === 'POST'
+        ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Generation failed' }) })
+        : route.continue())
+
+    await page.getByRole('button', { name: 'Save' }).first().click()
+    await expect(page.locator('.ant-modal').filter({ hasText: 'Generation failed' })).toBeVisible({ timeout: 5000 })
+    await expect(page.getByPlaceholder('alert name')).toHaveValue('MyEdit')
+    expect((await chartInfo(request, CHART)).rulesFiles['cpu.yaml']).not.toContain('MyEdit')
+  })
+
   test('a save with nothing changed elsewhere does not ask', async ({ page, request }) => {
     await openChart(page, CHART)
     await page.getByPlaceholder('alert name').fill('MyEdit')

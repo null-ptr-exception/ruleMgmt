@@ -102,7 +102,9 @@ export async function saveChartRules(chart, files, confirmBreaking = false, migr
   })
   if (res.status === 409) return { blocked: true, ...(await res.json()) }
   if (res.status === 400) return { invalid: true, ...(await res.json()) }
-  if (!res.ok) return {}
+  // Anything else — "Generation failed", "Deployment migration failed" — keeps
+  // its message, so the editor can say what went wrong instead of nothing.
+  if (!res.ok) return { failed: true, ...(await res.json().catch(() => ({}))) }
   return res.json()
 }
 

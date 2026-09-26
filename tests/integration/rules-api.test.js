@@ -171,6 +171,21 @@ describe('GET /:chart drift', () => {
     expect(await read('templates/cpu.yaml')).toBe(tampered)
   })
 
+  // Opening a chart fills in what is missing — and only that. A product that
+  // is there but hand-edited is stale, and stays as it is for a person to
+  // look at, even when another product is missing at the same time.
+  it('regenerates only the missing product when another one is hand-edited', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU, 'mem.yaml': CPU.replace(/cpu/g, 'mem').replace('CpuHigh', 'MemHigh') } })
+    await fs.rm(path.join(chartDir, 'templates', 'mem.yaml'))
+    const tampered = (await read('templates/cpu.yaml')) + '\n# hand edit\n'
+    await fs.writeFile(path.join(chartDir, 'templates', 'cpu.yaml'), tampered)
+
+    const { data } = await api('GET', '/api/v2/templates/demo')
+    expect(await exists('templates/mem.yaml')).toBe(true)
+    expect(await read('templates/cpu.yaml')).toBe(tampered)
+    expect(data.drift.state).toBe('stale')
+  })
+
   it('reports legacy for a schema-only chart', async () => {
     await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify({
       properties: { cpu: { type: 'array', 'x-promql': 'up > {{ THRESHOLD }}', items: { properties: { warn: { type: 'number', 'x-var-type': 'threshold' } } } } },

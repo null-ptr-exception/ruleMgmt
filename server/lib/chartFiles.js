@@ -84,9 +84,11 @@ export async function chartDrift(chartDir) {
 }
 
 /**
- * Regenerate `values.schema.json` + `templates/*` from a chart's own
- * `rules/*.yaml`, writing only what changed. Used when a chart is opened and
- * its products are missing — there is nothing to orphan, so it is not asked.
+ * Write the products a chart's own `rules/*.yaml` generates that are absent
+ * on disk. Used when a chart is opened and some are missing — there is
+ * nothing to orphan, so it is not asked. A product that is there but differs
+ * (hand-edited, or behind the source) is left alone: that is `stale`, which
+ * the editor reports and a Save resolves, not something a read overwrites.
  * Returns null when there is no rules/ source, or { errors } / { written }.
  */
 export async function regenerateProducts(chartDir) {
@@ -102,6 +104,8 @@ export async function regenerateProducts(chartDir) {
     [path.join(chartDir, 'values.schema.json'), schemaText],
     ...Object.entries(templates).map(([name, content]) => [path.join(tmplDir, name), content]),
   ]
-  const written = await writeChanged(entries)
+  const absent = []
+  for (const entry of entries) if (await readOr(entry[0]) === null) absent.push(entry)
+  const written = await writeChanged(absent)
   return { written: written.map(p => path.relative(chartDir, p)) }
 }

@@ -18,27 +18,17 @@ async function expandToSampleDeployment(page) {
   return tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'staging' }).first()
 }
 
-// Expand tree until the PROD node (with .ant-tag) under e2e-test is visible
+// Expand deployments → e2e-test until the PROD deployment node is visible.
+// Each level is waited for rather than slept past: the tree loads after the
+// page, and a fixed pause lost that race now and then.
 async function expandToUppercaseDeployment(page) {
   const tree = page.locator('.ant-tree')
-
-  // Expand "deployments"
-  const deploymentsNode = tree.locator('.ant-tree-treenode').filter({ hasText: /^deployments$/ })
-  const deploymentsSwitcher = deploymentsNode.locator('.ant-tree-switcher_close')
-  if (await deploymentsSwitcher.count() > 0) {
-    await deploymentsSwitcher.click()
-    await page.waitForTimeout(400)
+  for (const segment of ['deployments', 'e2e-test']) {
+    const node = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${segment}$`) }).first()
+    await expect(node).toBeVisible({ timeout: 8000 })
+    const switcher = node.locator('.ant-tree-switcher_close')
+    if (await switcher.count() > 0) await switcher.click()
   }
-
-  // Expand "e2e-test"
-  const e2eNode = tree.locator('.ant-tree-treenode').filter({ hasText: /^e2e-test$/ })
-  const e2eSwitcher = e2eNode.locator('.ant-tree-switcher_close')
-  if (await e2eSwitcher.count() > 0) {
-    await e2eSwitcher.click()
-    await page.waitForTimeout(400)
-  }
-
-  // PROD should now be visible as a deployment node
   return tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'PROD' })
 }
 

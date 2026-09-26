@@ -28,7 +28,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import {
-  schemaToModel, modelToFiles, parseRulesDir, validateValues,
+  schemaToModel, modelToFiles, parseRulesDir, validateValues, customTemplateGroups,
 } from '../src/utils/rulesFile.js'
 import { generateProducts } from '../src/utils/drift.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
@@ -110,10 +110,11 @@ async function reconcile(relPath, want) {
 if (!check) {
   if (migrating) await fs.mkdir(rulesDir, { recursive: true })
 
+  // From the model during a migration, from the schema on disk after it:
+  // a model read from rules/ never has these groups.
   const customTemplates = new Set(
-    Object.entries(model.groups)
-      .filter(([, g]) => g.custom)
-      .map(([k]) => `${k.replace(/_/g, '-')}.yaml`)
+    [...Object.entries(model.groups).filter(([, g]) => g.custom).map(([k]) => k), ...customTemplateGroups(schema)]
+      .map(k => `${k.replace(/_/g, '-')}.yaml`)
   )
   let existingTemplates = []
   try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }

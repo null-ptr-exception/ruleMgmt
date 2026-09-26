@@ -204,7 +204,17 @@ export function modelToSchema(model, originalSchema = null) {
     if (required.length) schema.properties._common.required = required
   }
 
-  for (const [key, group] of sortedGroups(model.groups)) {
+  // An x-custom-template group is never written to rules/, so a model read
+  // back from rules/ does not have it. It lives only in the schema on disk —
+  // carry it over from there, in the same sorted place, or every save after
+  // the migration drops the group and gen-rules deletes its hand-written
+  // template.
+  const groups = { ...model.groups }
+  for (const key of customTemplateGroups(originalSchema)) {
+    if (!(key in groups)) groups[key] = { custom: true }
+  }
+
+  for (const [key, group] of sortedGroups(groups)) {
     if (group.custom) {
       schema.properties[key] = originalSchema?.properties?.[key] || { type: 'array', 'x-custom-template': true }
       continue
@@ -216,6 +226,13 @@ export function modelToSchema(model, originalSchema = null) {
   }
 
   return schema
+}
+
+/** The groups a schema marks as hand-written templates (x-custom-template). */
+export function customTemplateGroups(schema) {
+  return Object.entries(schema?.properties || {})
+    .filter(([, def]) => def?.['x-custom-template'])
+    .map(([key]) => key)
 }
 
 /**

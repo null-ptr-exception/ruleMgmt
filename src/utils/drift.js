@@ -12,7 +12,7 @@
  * This is a pure function; the caller reads the files off disk.
  */
 
-import { modelToSchema, groupGenDef, parseRulesDir } from './rulesFile.js'
+import { modelToSchema, groupGenDef, parseRulesDir, customTemplateGroups } from './rulesFile.js'
 import { generateGroupTemplate } from './templateGenerator.js'
 import { isAlertGroup } from './schemaUtils.js'
 import { objectMetaFromEnv } from './objectMeta.js'
@@ -76,9 +76,11 @@ export function computeDrift({ rulesFiles, schema, templateFiles = {}, objectMet
   for (const [name, content] of Object.entries(want.templates)) {
     if (templateFiles[name] !== content) differing.push(`templates/${name}`)
   }
-  // A template file with no matching group any more is also drift.
+  // A template file with no matching group any more is also drift — except
+  // an x-custom-template group's, which is hand-written and never generated.
+  const custom = new Set(customTemplateGroups(schema).map(templateFileName))
   for (const name of Object.keys(templateFiles)) {
-    if (!(name in want.templates)) differing.push(`templates/${name} (orphaned)`)
+    if (!(name in want.templates) && !custom.has(name)) differing.push(`templates/${name} (orphaned)`)
   }
   if (differing.length) return { state: 'stale', files: differing }
 

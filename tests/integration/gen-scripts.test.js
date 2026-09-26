@@ -61,6 +61,31 @@ afterEach(async () => {
   await fs.rm(tmpDir, { recursive: true, force: true })
 })
 
+// An x-custom-template group is hand-written: never in rules/, only in the
+// schema. The first gen-rules (the migration) kept it; every run after that
+// read the model from rules/, dropped the group from the schema and deleted
+// its template.
+describe('an x-custom-template group across gen-rules runs', () => {
+  it('keeps its hand-written template and its schema entry, and stays clean', async () => {
+    const schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
+    schema.properties.handmade = { type: 'array', 'x-custom-template': true, items: { type: 'object', properties: { x: { type: 'string' } } } }
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify(schema, null, 2))
+    await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'templates', 'handmade.yaml'), '# hand-written\n')
+
+    for (let i = 0; i < 3; i++) expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+
+    expect(await fs.readFile(path.join(chartDir, 'templates', 'handmade.yaml'), 'utf-8')).toBe('# hand-written\n')
+    const after = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
+    expect(after.properties.handmade['x-custom-template']).toBe(true)
+    const check = run(GEN_RULES, [chartDir, '--check'])
+    expect(check.status, check.stdout).toBe(0)
+
+    const { chartDrift } = await import('../../server/lib/chartFiles.js')
+    expect((await chartDrift(chartDir)).state).toBe('ok')
+  })
+})
+
 describe('gen-rules.mjs + gen-chart.mjs', () => {
   it('a single gen-rules run leaves the chart fully migrated — rules/, schema and templates all in sync', async () => {
     const migrate = run(GEN_RULES, [chartDir])

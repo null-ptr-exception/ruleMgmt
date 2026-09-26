@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, Select, Empty, Typography, Modal, Dropdown, Alert } from 'antd'
+import { Button, Input, Select, Empty, Typography, Modal, Dropdown, Alert, message } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, ImportOutlined, EditOutlined } from '@ant-design/icons'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
@@ -36,13 +36,24 @@ const emptyGroup = key => ({
 })
 
 /** One column definition row — shared by group columns and _common columns. */
+// The name is the row's key, so it is renamed once — on blur or Enter —
+// not on every keystroke: each keystroke would remount the row and drop
+// focus, and a half-typed name could land on another column's.
 function ColumnRow({ name, col, usage, onRename, onPatch, onRemove }) {
   const uiType = col.enum ? 'enum' : (col.type || 'string')
+  const [draft, setDraft] = useState(name)
+  useEffect(() => { setDraft(name) }, [name])
+  const commit = () => {
+    const next = draft.trim()
+    if (next === name) { setDraft(name); return }
+    if (!onRename(next)) setDraft(name)
+  }
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Input size="small" value={name} placeholder="name"
-          onChange={e => onRename(e.target.value)}
+        <Input size="small" value={draft} placeholder="name"
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit} onPressEnter={commit}
           style={{ width: 150, fontWeight: 600 }} />
         <Select size="small" value={uiType} options={TYPE_OPTIONS} style={{ width: 90 }}
           onChange={val => onPatch(val === 'enum'
@@ -416,6 +427,25 @@ export default function TemplateDevEditor() {
 
   const missingDescriptions = cols => Object.values(cols).filter(c => !c.description).length
 
+  // Returns whether it renamed. A name has to be valid and free — among this
+  // group's columns and _common's, which share one namespace.
+  function renameColumn(target, oldName, newName) {
+    const own = target === COMMON ? model.common.columns : model.groups[target]?.columns || {}
+    const taken = target === COMMON
+      ? Object.keys(own)
+      : [...Object.keys(own), ...Object.keys(model.common.columns || {})]
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
+      message.warning(`"${newName}" is not a valid column name`)
+      return false
+    }
+    if (taken.includes(newName)) {
+      message.warning(`There is already a column named "${newName}"`)
+      return false
+    }
+    patchColumn(target, oldName, newName, {})
+    return true
+  }
+
   function patchColumn(target, oldName, newName, patch) {
     const apply = cols => {
       const out = {}
@@ -556,7 +586,7 @@ export default function TemplateDevEditor() {
                 {Object.entries(model.common.columns).map(([name, col]) => (
                   <ColumnRow key={name} name={name} col={col}
                     usage={commonUsage[name] ? `${commonUsage[name].size} group(s)` : ''}
-                    onRename={val => patchColumn(COMMON, name, val, {})}
+                    onRename={val => renameColumn(COMMON, name, val)}
                     onPatch={patch => patchColumn(COMMON, name, name, patch)}
                     onRemove={() => removeColumn(COMMON, name)} />
                 ))}
@@ -619,7 +649,7 @@ export default function TemplateDevEditor() {
                       {Object.entries(group.columns).map(([name, col]) => (
                         <ColumnRow key={name} name={name} col={col}
                           usage={(usedByColumn[name] || []).join(', ')}
-                          onRename={val => patchColumn(activeGroup, name, val, {})}
+                          onRename={val => renameColumn(activeGroup, name, val)}
                           onPatch={patch => patchColumn(activeGroup, name, name, patch)}
                           onRemove={() => removeColumn(activeGroup, name)} />
                       ))}

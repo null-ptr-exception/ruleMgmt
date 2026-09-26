@@ -117,6 +117,34 @@ test.describe('Save over a change made elsewhere', () => {
   })
 })
 
+test.describe('Renaming a column', () => {
+  const CHART = 'e2e-safeguard-rename'
+
+  test.beforeEach(async ({ request }) => { await createRulesChart(request, CHART) })
+  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
+
+  // It used to rename on every keystroke, remounting the row: focus went
+  // after the first character, and a half-typed name could overwrite
+  // another column.
+  test('takes a whole typed name, and refuses one already in use', async ({ page }) => {
+    await openChart(page, CHART)
+    const warn = page.locator('input[value="warn"]')
+    await warn.click()
+    await warn.press('ControlOrMeta+A')
+    await page.keyboard.type('limit_pct')
+    await page.keyboard.press('Enter')
+    await expect(page.locator('input[value="limit_pct"]')).toBeVisible()
+
+    const renamed = page.locator('input[value="limit_pct"]')
+    await renamed.click()
+    await renamed.press('ControlOrMeta+A')
+    await page.keyboard.type('namespace')
+    await page.keyboard.press('Enter')
+    await expect(page.getByText('There is already a column named "namespace"')).toBeVisible()
+    await expect(page.locator('input[value="limit_pct"]')).toBeVisible()
+  })
+})
+
 test.describe('A legacy chart migrates on its first save', () => {
   const CHART = 'e2e-safeguard-legacy'
 

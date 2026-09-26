@@ -280,6 +280,45 @@ rules:
   })
 })
 
+// #51 Phase 2: Add instance backfills a required column with "", and Helm's
+// `required` passes "" — it rendered `namespace=""`, valid PromQL that
+// matches nothing. A save now names the cell instead.
+test.describe('A required cell left empty', () => {
+  const CHART = 'e2e-safeguard-required'
+  const FOLDER = 'e2e-safeguard-required/dev'
+
+  test.beforeAll(async ({ request }) => {
+    await createRulesChart(request, CHART)
+    const res = await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: CHART } })
+    expect(res.status()).toBeLessThan(300)
+  })
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
+    await request.delete(`/api/v2/charts/${CHART}`)
+  })
+
+  test('is refused on Save, naming the row and column', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = page.locator('.ant-tree')
+    const folder = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${CHART}$`) }).first()
+    await expect(folder).toBeVisible({ timeout: 8000 })
+    const switcher = folder.locator('.ant-tree-switcher_close')
+    if (await switcher.count() > 0) await switcher.click()
+    await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
+      .filter({ hasText: CHART }).first().locator('.ant-tree-node-content-wrapper').click()
+
+    await page.getByText('cpu', { exact: true }).first().click()
+    await page.getByRole('button', { name: 'Add instance' }).click()
+    await page.getByRole('button', { name: 'Save' }).click()
+
+    const modal = page.locator('.ant-modal').filter({ hasText: 'Some values cannot be rendered' })
+    await expect(modal).toBeVisible({ timeout: 5000 })
+    await expect(modal.getByText('cpu row 1, "namespace": required — fill it in')).toBeVisible()
+    await expect(page.getByText(/Saved at/)).toHaveCount(0)
+  })
+})
+
 test.describe('A value a quoted label cannot take', () => {
   // The sample chart writes owner and namespace into labels, so both are
   // quoted in the rendered YAML.

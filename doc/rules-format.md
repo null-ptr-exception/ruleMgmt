@@ -187,10 +187,18 @@ label values almost never do.
 
 ### What a row's value can hold
 
-A row's value is substituted by Helm when it renders, with no escaping, so
-two things are refused when a deployment is saved — naming the row and
-column — and reported by `gen-rules` as a warning:
+"Not set" means the key is absent from the row (#51) — the table drops an
+empty cell on save. A key that is there holds a value, and Helm substitutes it
+with no escaping. So a save is refused — naming the row and column — and
+`gen-rules` warns, when:
 
+- **A required column is missing or empty.** Helm's `required` only checks
+  that the key exists, so `namespace: ""` would pass and render
+  `namespace=""` — valid PromQL that matches nothing. A required `_common`
+  column counts whenever the deployment has any row: with no `_common` block
+  at all, Helm checks nothing and every reference renders empty.
+- **`""` or `null` in any other column.** A guard reads the key as set, so
+  the rule would render with the value missing. Leave the cell out instead.
 - **A newline, in any column.** Values are one line; the table never
   produces one, a hand-edited `values.yaml` can.
 - **`"` or `\`, in a column a label reads.** A label value is a quoted YAML

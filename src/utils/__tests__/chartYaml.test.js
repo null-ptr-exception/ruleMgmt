@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
 import { ensureChartYaml } from '../chartYaml.js'
+import { findAlertTemplateCharts } from '../../../server/lib/chartDiscovery.js'
 
 describe('ensureChartYaml', () => {
   it('creates a minimal Chart.yaml when there is none', () => {
@@ -8,6 +12,20 @@ describe('ensureChartYaml', () => {
     expect(text).toContain('name: mariadb-alerts')
     expect(text).toContain('apiVersion: v2')
     expect(text.endsWith('\n')).toBe(true)
+  })
+
+  // Chart discovery only lists charts marked as ours; a Chart.yaml this
+  // writes (gen-rules --init, opening a chart without one) must be listed.
+  it('writes a chart the chart list will show', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chartyaml-'))
+    try {
+      fs.mkdirSync(path.join(dir, 'fresh'))
+      fs.writeFileSync(path.join(dir, 'fresh', 'Chart.yaml'), ensureChartYaml(null, 'fresh').text)
+      const charts = await findAlertTemplateCharts(dir)
+      expect(charts.map(c => c.name)).toContain('fresh')
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('leaves an existing file untouched', () => {

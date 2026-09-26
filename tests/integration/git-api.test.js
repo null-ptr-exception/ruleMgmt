@@ -214,7 +214,7 @@ describe('Git API', () => {
 
   it('POST /commit is refused when a chart\'s products are stale', async () => {
     const { generateProducts } = await import('../../src/utils/drift.js')
-    const { parseRulesDir, modelToSchema } = await import('../../src/utils/rulesFile.js')
+    const { parseRulesDir } = await import('../../src/utils/rulesFile.js')
     const { objectMetaFromEnv } = await import('../../src/utils/objectMeta.js')
 
     const chartDir = path.join(tmpDir, 'charts', 'drift')

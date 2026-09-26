@@ -13,6 +13,9 @@ export function ensureChartYaml(existingText, name) {
     `name: ${name}\n` +
     `description: Alert rules for ${name}\n` +
     `version: 0.1.0\n` +
-    `type: application\n`
+    `type: application\n` +
+    // Chart discovery lists only charts marked as ours (server/lib/chartDiscovery.js).
+    `annotations:\n` +
+    `  app: alertforge\n`
   return { text, created: true }
 }

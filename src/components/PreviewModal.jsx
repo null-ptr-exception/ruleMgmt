@@ -58,7 +58,11 @@ export default function PreviewModal({ open, onClose, yaml, check, selfCheck, su
 }
 
 function Summary({ summary }) {
-  if (!summary.groups.length) return <Empty description="This deployment rendered nothing" />
+  // Only when there is nothing at all to show: a chart with no matching model
+  // groups can still have rendered (unmatched) groups or orphan fields.
+  if (!summary.groups.length && !summary.unmatchedGroups.length && !summary.orphanFields.length) {
+    return <Empty description="This deployment rendered nothing" />
+  }
 
   return (
     <div>

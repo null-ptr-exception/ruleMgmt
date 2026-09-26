@@ -226,7 +226,12 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
     const expand = s => expandVars(s || '', vars)
     const expandEntries = entries => entries.map(e => ({ ...e, value: expand(e.value) }))
 
-    return alertDef['x-rules'].map(rule => (rule.raw ? { raw: expand(rule.raw) } : {
+    return alertDef['x-rules'].map(rule => (rule.raw ? { raw: expand(rule.raw) } : rule.record !== undefined ? {
+      record: rule.record,
+      expr: expand(rule.expr),
+      labels: expandEntries(toEntries(rule.labels)),
+      annotations: []
+    } : {
       alert: rule.alert,
       expr: expand(rule.expr),
       for: expand(rule.for || alertDef['x-for'] || '5m'),

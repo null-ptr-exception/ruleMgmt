@@ -16,23 +16,23 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbSaturationConnections_WarnPct
           expr: |-
-            (mysql_global_status_threads_connected{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.warn_pct | default 70 }}
+            (mysql_global_status_threads_connected{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_variables_max_connections{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "warn_pct" 70 $row }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbSaturationConnections_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationConnections_CriticalPct
           expr: |-
-            (mysql_global_status_threads_connected{namespace="{{ $row.namespace | default `default` }}"} / mysql_global_variables_max_connections{namespace="{{ $row.namespace | default `default` }}"}) * 100 > {{ $row.critical_pct | default 90 }}
+            (mysql_global_status_threads_connected{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_variables_max_connections{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "critical_pct" 90 $row }}
           for: 5m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbSaturationConnections_CriticalPct triggered on {{ $row.owner }}

@@ -14,10 +14,10 @@ spec:
         {{- range $rows }}
         - alert: ErrorRateHigh
           expr: |-
-            sum(rate(errors_total{job="{{ .job }}"}[{{ .window | default `5m` }}])) / sum(rate(requests_total{job="{{ .job }}"}[{{ .window | default `5m` }}])) > {{ .threshold | default 0.05 }}
-          for: {{ .window | default `5m` }}
+            sum(rate(errors_total{job="{{ .job }}"}[{{ dig "window" `5m` . }}])) / sum(rate(requests_total{job="{{ .job }}"}[{{ dig "window" `5m` . }}])) > {{ dig "threshold" 0.05 . }}
+          for: {{ dig "window" `5m` . }}
           labels:
-            severity: "{{ .severity | default `warning` }}"
+            severity: "{{ dig "severity" `warning` . }}"
           annotations:
             summary: |-
               error ratio {{ `{{ $value | humanizePercentage }}` }} for {{ .job }}

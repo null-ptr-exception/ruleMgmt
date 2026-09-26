@@ -205,7 +205,9 @@ What happens when a rule owner leaves a cell empty depends on the column, in
 this order.
 
 **Does the column have a `default`?** Then that value is used and nothing else
-happens.
+happens. "Empty" means the key is absent from the row — the table drops an
+empty cell on save — so a row that sets `0`, `false` or `""` keeps it: a
+threshold of `0` against a default of `80` is `0`.
 
 Most columns get one for free: marking a literal as a variable stores the
 literal it replaced as the default, so marking something and then filling in
@@ -307,7 +309,7 @@ backslashes go through as written, from the source or from a row:
 ```yaml
 - alert: MariaDBReceiveHigh
   expr: |-
-    rate(node_receive_bytes_total{namespace="{{ $row.namespace }}"}[5m]) > {{ $row.recv_warn | default 10000000 }}
+    rate(node_receive_bytes_total{namespace="{{ $row.namespace }}"}[5m]) > {{ dig "recv_warn" 10000000 $row }}
   for: 5m
   labels:
     severity: warning

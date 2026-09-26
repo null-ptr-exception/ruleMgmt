@@ -16,12 +16,12 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbTrafficNetworkReceive_WarnBytes
           expr: |-
-            rate(container_network_receive_bytes_total{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.warn_bytes | default 104857600 }}
+            rate(container_network_receive_bytes_total{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_bytes" 104857600 $row }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbTrafficNetworkReceive_WarnBytes triggered on {{ $row.owner }}

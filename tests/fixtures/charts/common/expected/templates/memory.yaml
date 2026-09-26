@@ -20,7 +20,7 @@ spec:
           for: 5m
           labels:
             severity: warning
-            env: "{{ $row.env | default `prod` }}"
+            env: "{{ dig "env" `prod` $row }}"
             {{- if hasKey $row "oncall" }}
             oncall: "{{ $row.oncall }}"
             {{- end }}

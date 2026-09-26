@@ -86,9 +86,9 @@ describe('helm-unittest via generated tests', () => {
     try {
       // Swap the two thresholds, as a generator bug reading the wrong column would.
       fs.writeFileSync(file, original
-        .replace('$row.warn_pct |', '$row.TMP |')
-        .replace('$row.critical_pct |', '$row.warn_pct |')
-        .replace('$row.TMP |', '$row.critical_pct |'), 'utf8')
+        .replace('dig "warn_pct"', 'dig "TMP"')
+        .replace('dig "critical_pct"', 'dig "warn_pct"')
+        .replace('dig "TMP"', 'dig "critical_pct"'), 'utf8')
       const { ok, output } = helmUnittest(chartDir)
       expect(ok).toBe(false)
       expect(output).toContain('mariadb_saturation_disk')

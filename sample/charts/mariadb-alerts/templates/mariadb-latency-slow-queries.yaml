@@ -16,23 +16,23 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbLatencySlowQueries_WarnThreshold
           expr: |-
-            rate(mysql_global_status_slow_queries{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.warn_threshold | default 1 }}
+            rate(mysql_global_status_slow_queries{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_threshold" 1 $row }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbLatencySlowQueries_WarnThreshold triggered on {{ $row.owner }}
         - alert: MariadbLatencySlowQueries_CriticalThreshold
           expr: |-
-            rate(mysql_global_status_slow_queries{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.critical_threshold | default 5 }}
+            rate(mysql_global_status_slow_queries{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "critical_threshold" 5 $row }}
           for: 5m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbLatencySlowQueries_CriticalThreshold triggered on {{ $row.owner }}

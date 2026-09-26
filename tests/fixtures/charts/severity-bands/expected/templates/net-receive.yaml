@@ -14,7 +14,7 @@ spec:
         {{- range $rows }}
         - alert: ReceiveHigh
           expr: |-
-            sum by (pod) (rate(node_receive_bytes_total{namespace="{{ .namespace }}"}[5m])) > {{ .recv_warn | default 1000 }}
+            sum by (pod) (rate(node_receive_bytes_total{namespace="{{ .namespace }}"}[5m])) > {{ dig "recv_warn" 1000 . }}
           for: 5m
           labels:
             severity: warning
@@ -23,7 +23,7 @@ spec:
               receive is {{ `{{ $value }}` }} B/s on {{ `{{ $labels.pod }}` }}
         - alert: ReceiveHigh
           expr: |-
-            sum by (pod) (rate(node_receive_bytes_total{namespace="{{ .namespace }}"}[5m])) > {{ .recv_crit | default 5000 }}
+            sum by (pod) (rate(node_receive_bytes_total{namespace="{{ .namespace }}"}[5m])) > {{ dig "recv_crit" 5000 . }}
           for: 5m
           labels:
             severity: critical

@@ -16,23 +16,23 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbErrorsConnections_WarnRate
           expr: |-
-            rate(mysql_global_status_connection_errors_total{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.warn_rate | default 5 }}
+            rate(mysql_global_status_connection_errors_total{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_rate" 5 $row }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbErrorsConnections_WarnRate triggered on {{ $row.owner }}
         - alert: MariadbErrorsConnections_CriticalRate
           expr: |-
-            rate(mysql_global_status_connection_errors_total{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.critical_rate | default 20 }}
+            rate(mysql_global_status_connection_errors_total{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "critical_rate" 20 $row }}
           for: 5m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbErrorsConnections_CriticalRate triggered on {{ $row.owner }}

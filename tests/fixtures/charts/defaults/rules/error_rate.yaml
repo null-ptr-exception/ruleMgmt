@@ -1,5 +1,5 @@
 # A column with a default renders it when the row leaves the cell out —
-# in expr, in `for`, and as a label.
+# in expr, in `for`, and as a label — and only then: a row's explicit 0 stays.
 columns:
   job:       { type: string, required: true }
   threshold: { type: number, default: 0.05 }

@@ -115,7 +115,7 @@ describe('gen-rules.mjs on a chart whose rules/ was edited by hand', () => {
     const regen = run(GEN_RULES, [chartDir])
     expect(regen.status, regen.stdout).toBe(0)
     expect(await fs.readFile(file, 'utf-8')).toBe(edited)
-    expect(await fs.readFile(path.join(chartDir, 'templates', 'cpu.yaml'), 'utf-8')).toContain('default 70')
+    expect(await fs.readFile(path.join(chartDir, 'templates', 'cpu.yaml'), 'utf-8')).toContain('dig "warn" 70')
     expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
   })
 })

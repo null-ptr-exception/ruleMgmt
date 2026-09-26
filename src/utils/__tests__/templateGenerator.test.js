@@ -466,12 +466,12 @@ describe('empty cells (#57)', () => {
 
   it('writes a default into the template, since Helm ignores the schema one', () => {
     const out = render([{ alert: 'A', expr: 'cpu > ${warn}', labels: { severity: 'warning' } }])
-    expect(out).toContain('expr: |-\n            cpu > {{ .warn | default 80 }}\n')
+    expect(out).toContain('expr: |-\n            cpu > {{ dig "warn" 80 . }}\n')
   })
 
   it('quotes a string default with a raw literal, which survives inside YAML quotes', () => {
     const out = render([{ alert: 'A', expr: 'cpu{pod=~"${pod_regex}"} > 1' }])
-    expect(out).toContain('pod=~"{{ .pod_regex | default `.*` }}"')
+    expect(out).toContain('pod=~"{{ dig "pod_regex" `.*` . }}"')
   })
 
   it('leaves a required column alone', () => {

@@ -12,3 +12,8 @@ blind-error-rate-1-1:
         for: 15m
         labels: { severity: critical }
         annotations: { summary: "error ratio {{ $value | humanizePercentage }} for worker" }
+      - alert: ErrorRateHigh
+        expr: sum(rate(errors_total{job="batch"}[5m])) / sum(rate(requests_total{job="batch"}[5m])) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "error ratio {{ $value | humanizePercentage }} for batch" }

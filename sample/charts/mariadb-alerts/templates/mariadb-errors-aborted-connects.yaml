@@ -16,12 +16,12 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbErrorsAbortedConnects_WarnRate
           expr: |-
-            rate(mysql_global_status_aborted_connects{namespace="{{ $row.namespace | default `default` }}"}[5m]) > {{ $row.warn_rate | default 3 }}
+            rate(mysql_global_status_aborted_connects{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_rate" 3 $row }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbErrorsAbortedConnects_WarnRate triggered on {{ $row.owner }}

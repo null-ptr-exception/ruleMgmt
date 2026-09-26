@@ -155,8 +155,8 @@ spec:
         {{- $row := merge . $common }}
         - alert: NetworkReceiveHigh
           expr: |-
-            rate(receive_bytes_total{namespace="{{ $row.namespace }}",…}[5m]) > {{ $row.recv_warn | default 10000000 }}
-          for: {{ $row.window | default `5m` }}
+            rate(receive_bytes_total{namespace="{{ $row.namespace }}",…}[5m]) > {{ dig "recv_warn" 10000000 $row }}
+          for: {{ dig "window" `5m` $row }}
         {{- end }}
 {{- end }}
 ```
@@ -218,7 +218,8 @@ exists to avoid.
 Migrating it is one step: open it in the editor and save, or run `gen-rules`
 on it. Either way the schema is read once through an adapter, written out as
 `rules/*.yaml`, and the products regenerated. The only change to what it
-renders is the `| default` fallback on columns that have a default. The sample
+renders is the fallback on columns that have a default (`dig`, which applies
+only when the row leaves the key out). The sample
 chart went through exactly this, and rendered byte-for-byte the same with its
 own values.
 

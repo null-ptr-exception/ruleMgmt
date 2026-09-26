@@ -16,23 +16,23 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbSaturationMemory_WarnPct
           expr: |-
-            (container_memory_working_set_bytes{namespace="{{ $row.namespace | default `default` }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace | default `default` }}", resource="memory"}) * 100 > {{ $row.warn_pct | default 80 }}
+            (container_memory_working_set_bytes{namespace="{{ dig "namespace" `default` $row }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ dig "namespace" `default` $row }}", resource="memory"}) * 100 > {{ dig "warn_pct" 80 $row }}
           for: 5m
           labels:
             severity: warning
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbSaturationMemory_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationMemory_CriticalPct
           expr: |-
-            (container_memory_working_set_bytes{namespace="{{ $row.namespace | default `default` }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ $row.namespace | default `default` }}", resource="memory"}) * 100 > {{ $row.critical_pct | default 95 }}
+            (container_memory_working_set_bytes{namespace="{{ dig "namespace" `default` $row }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ dig "namespace" `default` $row }}", resource="memory"}) * 100 > {{ dig "critical_pct" 95 $row }}
           for: 5m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"
-            namespace: "{{ $row.namespace | default `default` }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
           annotations:
             summary: |-
               MariadbSaturationMemory_CriticalPct triggered on {{ $row.owner }}

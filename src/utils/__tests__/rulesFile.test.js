@@ -163,12 +163,12 @@ describe('model <-> schema idempotence', () => {
     expect(out['x-migrated-from']).toEqual(from)
   })
 
-  it('a migrated chart still passes gen-chart with only `| default` added', () => {
+  it('a migrated chart still passes gen-chart with only the row defaults added', () => {
     const { model } = schemaToModel(sampleSchema)
     const migrated = modelToSchema(model, sampleSchema)
     // The only difference the migration introduces is per-row Helm defaults,
     // which the legacy path never emitted (Helm ignores the schema ones).
-    const stripRowDefaults = s => s.replace(/(\{\{ \$row\.\w+) \| default (?:`[^`]*`|[^ ]+) \}\}/g, '$1 }}')
+    const stripRowDefaults = s => s.replace(/\{\{ dig "(\w+)" (?:`[^`]*`|[^ ]+) \$row \}\}/g, '{{ $row.$1 }}')
     let sawDefault = false
     for (const group of Object.keys(migrated.properties).filter(isAlertGroup)) {
       const before = generateGroupTemplate(group, sampleSchema.properties[group], 'rel', sampleSchema)

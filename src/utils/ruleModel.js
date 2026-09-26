@@ -62,14 +62,21 @@ function helmLiteral(value) {
 
 /**
  * Replace our `${var}` placeholders with Helm references.
- * A column listed in `defaults` falls back to that value when the row omits it.
+ *
+ * A column listed in `defaults` falls back to that value when the row omits
+ * the key — and only then. "Not set" is "key absent" (#51): an empty cell is
+ * dropped from values.yaml on save, and an explicit 0 is kept. So the lookup
+ * is `dig`, which falls back on a missing key, not Sprig's `default`, which
+ * also replaces 0, "" and false — a row setting a threshold of 0 against a
+ * default of 80 rendered `> 80`.
  */
 export function substituteVars(str, ref = '.', defaults) {
+  const dict = ref === '.' ? '.' : ref.replace(/\.$/, '')
   return String(str).replace(VAR_RE, (_, name) => {
     const fallback = defaults?.[name]
     return fallback === undefined
       ? `{{ ${ref}${name} }}`
-      : `{{ ${ref}${name} | default ${helmLiteral(fallback)} }}`
+      : `{{ dig "${name}" ${helmLiteral(fallback)} ${dict} }}`
   })
 }
 

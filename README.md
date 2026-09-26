@@ -91,7 +91,7 @@ singleuser:
     GITLAB_PROJECT: "<group/project>"
 ```
 
-See `k8s/dev-values.yaml.example` for a complete example.
+For local minikube development these go in `k8s/dev-values.yaml` — see [Local Minikube Development](#local-minikube-development).
 
 ### 3. Install
 
@@ -157,14 +157,14 @@ Create an OAuth application in GitLab (**Admin > Applications** or group-level):
 For iterating on the Docker image with a local minikube cluster:
 
 ```bash
-# 1. Copy and fill in dev credentials
-cp k8s/dev-values.yaml.example k8s/dev-values.yaml
-
-# 2. Build, deploy, and start proxy — all in one command
 make up
 ```
 
-This runs `minikube start` (if needed), builds the image via Skaffold, deploys JupyterHub, and starts a local socat proxy so the app is reachable at `http://127.0.0.1:12014`.
+This runs `minikube start --driver=docker --container-runtime=docker` (if needed), builds the image via Skaffold, deploys Gitea and JupyterHub, provisions the Gitea user and OAuth app (`make init`), and starts a local socat proxy so the app is reachable at `http://127.0.0.1:12014`. The proxy targets `minikube ip`, read each time, so it survives a recreated cluster.
+
+`k8s/dev-values.yaml` (gitignored) holds optional site-specific JupyterHub overrides, such as public URLs; `make deploy` creates an empty one if it is missing. The OAuth credentials go in `k8s/gitea-oauth-values.yaml`, which `make init` writes.
+
+If the Kubernetes preload downloads too slowly, pull images individually instead: `make up MINIKUBE_START_FLAGS=--preload=false`.
 
 ### Make Targets
 

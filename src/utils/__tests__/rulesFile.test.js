@@ -194,6 +194,44 @@ rules:
     expect(parseGroupFile(ok, 'cpu').errors).toEqual([])
   })
 
+  // Rule-group fields (#65): type picks an output profile; interval and limit
+  // are Prometheus's and used to go unchecked.
+  const withFields = fields => ok.replace('group: cpu\n', `group: cpu\n${fields}\n`)
+
+  it('accepts a type that names an output profile, and valid interval / limit', () => {
+    const { group, errors } = parseGroupFile(withFields('type: vlogs\ninterval: 1h30m\nlimit: 0'), 'cpu')
+    expect(errors).toEqual([])
+    expect(group).toMatchObject({ type: 'vlogs', interval: '1h30m', limit: 0 })
+  })
+
+  it('refuses a type that is no output profile', () => {
+    expect(parseGroupFile(withFields('type: graphite'), 'cpu').errors.join())
+      .toMatch(/type "graphite" is not an output profile — one of prometheus, vlogs/)
+  })
+
+  it('refuses an interval that is not a duration, and a limit that is not a whole number', () => {
+    for (const bad of ['interval: 30', 'interval: 1 m', 'interval: soon']) {
+      expect(parseGroupFile(withFields(bad), 'cpu').errors.join(), bad).toMatch(/is not a duration/)
+    }
+    for (const bad of ['limit: -1', 'limit: 1.5', 'limit: ten']) {
+      expect(parseGroupFile(withFields(bad), 'cpu').errors.join(), bad).toMatch(/must be a whole number/)
+    }
+  })
+
+  it('writes type, interval and limit back, right under group:', () => {
+    const { group } = parseGroupFile(withFields('limit: 5\ninterval: 30s\ntype: vlogs'), 'cpu')
+    const text = groupFileText(group)
+    expect(text.startsWith('group: cpu\ntype: vlogs\ninterval: 30s\nlimit: 5\n')).toBe(true)
+    expect(parseGroupFile(text, 'cpu').group).toEqual(group)
+  })
+
+  it('carries type to the generator as groupType, never as the schema\'s type', () => {
+    const { group } = parseGroupFile(withFields('type: vlogs'), 'cpu')
+    const def = groupGenDef(group)
+    expect(def.type).toBe('array')
+    expect(def.groupType).toBe('vlogs')
+  })
+
   it('rejects an unknown key at every level', () => {
     const bad = 'group: cpu\nintervel: 1m\ncolumns:\n  ns: {type: string, wat: 1}\nrules:\n  - alert: A\n    expr: up\n    severity: page\n'
     const errs = parseGroupFile(bad, 'cpu').errors.join('\n')

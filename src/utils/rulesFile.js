@@ -30,12 +30,15 @@
 
 import yaml from 'js-yaml'
 import { normalizeRules, columnsInQuotedValues } from './templateGenerator.js'
+import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 
-const GROUP_KEYS = ['group', 'interval', 'limit', 'vars', 'columns', 'rules']
+const GROUP_KEYS = ['group', 'type', 'interval', 'limit', 'vars', 'columns', 'rules']
 const RULE_KEYS = ['alert', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
 const COLUMN_KEYS = ['type', 'required', 'default', 'enum', 'description']
 const RESERVED = new Set(['selector'])
+// A Prometheus duration: one or more <number><unit>, e.g. 30s, 1m, 1h30m.
+const DURATION_RE = /^(\d+(ms|s|m|h|d|w|y))+$/
 
 const DUMP = { lineWidth: -1, noRefs: true }
 
@@ -247,6 +250,9 @@ export function groupGenDef(group) {
   const { properties, required } = columnsToSchema(group.columns)
   const def = { type: 'array', 'x-rules': group.rules.map(canonicalRule) }
   if (group.vars && Object.keys(group.vars).length) def.vars = { ...group.vars }
+  // `type` is JSON Schema's here (`array`), so the group's output type rides
+  // as groupType — in memory only, never written.
+  if (group.type !== undefined) def.groupType = group.type
   if (group.interval !== undefined) def.interval = group.interval
   if (group.limit !== undefined) def.limit = group.limit
   def.items = { type: 'object', properties }
@@ -284,6 +290,7 @@ function flowColumn(col) {
  *  actually touched and passes every other file through verbatim. */
 export function groupFileText(group) {
   const lines = [`group: ${group.group}`]
+  if (group.type !== undefined) lines.push(`type: ${scalar(group.type)}`)
   if (group.interval !== undefined) lines.push(`interval: ${scalar(group.interval)}`)
   if (group.limit !== undefined) lines.push(`limit: ${scalar(group.limit)}`)
 
@@ -375,7 +382,22 @@ export function parseGroupFile(text, filename) {
   })
   if (!Array.isArray(doc.rules)) errors.push(`${filename}.yaml: rules is required and must be a list`)
 
+  // Rule-group fields, the template owner's (#57 §一). `type` picks the output
+  // profile (config/outputs.json, #65); the other two are Prometheus's own
+  // and were never checked — a bad one only surfaced in promtool, or not at
+  // all under a profile promtool does not check.
+  if (doc.type !== undefined && !profileNames().includes(doc.type)) {
+    errors.push(`${filename}.yaml: type "${doc.type}" is not an output profile — one of ${profileNames().join(', ')}`)
+  }
+  if (doc.interval !== undefined && !(typeof doc.interval === 'string' && DURATION_RE.test(doc.interval))) {
+    errors.push(`${filename}.yaml: interval "${doc.interval}" is not a duration (e.g. 30s, 1m, 1h30m)`)
+  }
+  if (doc.limit !== undefined && !(Number.isInteger(doc.limit) && doc.limit >= 0)) {
+    errors.push(`${filename}.yaml: limit "${doc.limit}" must be a whole number, 0 or more`)
+  }
+
   const group = { group: filename, columns, rules }
+  if (doc.type !== undefined) group.type = doc.type
   if (doc.interval !== undefined) group.interval = doc.interval
   if (doc.limit !== undefined) group.limit = doc.limit
   if (vars) group.vars = vars

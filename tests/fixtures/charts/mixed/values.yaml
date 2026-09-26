@@ -1,0 +1,8 @@
+_common:
+  owner: shop-team
+
+latency:
+  - job: checkout
+
+panics:
+  - app: checkout

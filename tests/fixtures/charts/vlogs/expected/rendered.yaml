@@ -1,0 +1,23 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# A key "<kind> <name>" is an object of that kind; a bare name is a PrometheusRule.
+# No promtool-tests.yaml: promtool cannot read LogsQL (validate: none).
+VMRule blind-app-errors-1-1:
+  - name: app-errors
+    type: vlogs
+    interval: 1m
+    rules:
+      - alert: AppErrors
+        expr: '_time:5m service:"checkout" level:error | stats count() as errors | filter errors:>10'
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: '{{ $labels.service }}: {{ $value }} errors in 5m' }
+      - alert: AppErrors
+        expr: '_time:5m service:"checkout" level:error | stats count() as errors | filter errors:>50'
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: '{{ $labels.service }}: {{ $value }} errors in 5m' }
+      - alert: AppErrors
+        expr: '_time:5m service:"search" level:error | stats count() as errors | filter errors:>3'
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: '{{ $labels.service }}: {{ $value }} errors in 5m' }

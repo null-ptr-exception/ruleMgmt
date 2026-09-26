@@ -1,0 +1,18 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# A key "<kind> <name>" is an object of that kind; a bare name is a PrometheusRule.
+blind-latency-1-1:
+  - name: latency
+    rules:
+      - alert: SlowRequests
+        expr: histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job="checkout"}[5m]))) > 1
+        for: 10m
+        labels: { severity: warning, owner: shop-team }
+
+VMRule blind-panics-1-1:
+  - name: panics
+    type: vlogs
+    rules:
+      - alert: Panics
+        expr: '_time:10m app:"checkout" "panic:" | stats count() as panics | filter panics:>0'
+        for: 5m
+        labels: { severity: critical, owner: shop-team }

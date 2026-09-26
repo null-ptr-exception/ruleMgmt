@@ -1,0 +1,9 @@
+type: vlogs
+
+columns:
+  app: { type: string, required: true }
+
+rules:
+  - alert: Panics
+    expr: '_time:10m app:"${app}" "panic:" | stats count() as panics | filter panics:>0'
+    labels: { severity: critical, owner: "${owner}" }

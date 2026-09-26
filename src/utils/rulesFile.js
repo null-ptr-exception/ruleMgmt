@@ -444,45 +444,67 @@ const typeOk = (value, type) =>
  * early warning that a conversion would orphan rows.
  */
 /**
- * Cells whose value would break the rendered YAML. Two kinds:
+ * Cells a deployment cannot be saved with. "Not set" is "key absent" (#51):
+ * the table drops an empty cell on save, and a key that is there holds a
+ * value. Anything else renders wrong, and some of it silently:
  *
- * - a `"` or `\` in a column a label reads — a label is a double-quoted
- *   scalar and a row's value reaches it unescaped (columnsInQuotedValues)
- * - a newline in any column: it breaks a block scalar's indentation and is
- *   folded away inside quotes. The table is single-line input; this catches
- *   a hand-edited values.yaml.
+ * - a required column that is missing or empty. Helm's `required` only
+ *   checks that the key is there, so `namespace: ""` passes — and renders
+ *   `namespace=""`, valid PromQL that matches nothing. A required _common
+ *   column counts whenever the deployment has any row: with no `_common`
+ *   block at all, Helm checks nothing and every `${owner}` renders empty.
+ * - `""` or `null` in any other column. hasKey guards read the key as set,
+ *   so the rule is emitted with the value missing (`x > `).
+ * - a newline, in any column: it breaks a block scalar's indentation and is
+ *   folded away inside quotes. The table is single-line input.
+ * - `"` or `\` in a column a label reads — a label is a double-quoted
+ *   scalar and a row's value reaches it unescaped (columnsInQuotedValues).
  *
  * Checked when a deployment is saved, so the row owner hears about it at the
- * cell rather than as a Helm parse error at Preview.
+ * cell rather than as a render error in Preview — or not at all.
  *
  * @returns [{ group, row, column, message }] — row is null for _common
  */
-export function quotedValueProblems(values, model) {
+export function valueProblems(values, model) {
   const problems = []
+  const isEmpty = v => v === null || v === ''
   const quoteBreaks = v => typeof v === 'string' && /["\\]/.test(v)
   const hasNewline = v => typeof v === 'string' && /[\r\n]/.test(v)
-  const quoteWhy = 'contains " or \\, which a label cannot take'
-  const newlineWhy = 'contains a line break — values are one line'
   const commonCols = model.common?.columns || {}
   const quotedCommon = new Set()
 
+  // What is wrong with one cell, or null. `present` is whether the key is there.
+  const cellProblem = (col, present, value, quoted) => {
+    if (col?.required && (!present || isEmpty(value))) return 'required — fill it in'
+    if (!present) return null
+    if (isEmpty(value)) return 'empty — fill it in, or leave the cell out'
+    if (hasNewline(value)) return 'contains a line break — values are one line'
+    if (quoted && quoteBreaks(value)) return 'contains " or \\, which a label cannot take'
+    return null
+  }
+
+  let anyRows = false
   for (const [group, entry] of Object.entries(model.groups || {})) {
     if (entry.custom) continue
+    const columns = entry.columns || {}
     const quoted = columnsInQuotedValues(entry)
-    for (const name of quoted) if (name in commonCols && !(name in (entry.columns || {}))) quotedCommon.add(name)
+    for (const name of quoted) if (name in commonCols && !(name in columns)) quotedCommon.add(name)
     const rows = values?.[group]
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
-      for (const [name, value] of Object.entries(row || {})) {
-        const where = `${group} row ${i + 1}, "${name}"`
-        if (hasNewline(value)) problems.push({ group, row: i, column: name, message: `${where}: ${newlineWhy}` })
-        else if (quoted.has(name) && quoteBreaks(value)) problems.push({ group, row: i, column: name, message: `${where}: ${quoteWhy}` })
+      anyRows = true
+      const cells = new Set([...Object.keys(columns), ...Object.keys(row || {}).filter(k => !(k in commonCols))])
+      for (const name of cells) {
+        const why = cellProblem(columns[name], name in (row || {}), row?.[name], quoted.has(name))
+        if (why) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}` })
       }
     }
   }
-  for (const [name, value] of Object.entries(values?._common || {})) {
-    const where = `Common Values, "${name}"`
-    if (hasNewline(value)) problems.push({ group: '_common', row: null, column: name, message: `${where}: ${newlineWhy}` })
-    else if (quotedCommon.has(name) && quoteBreaks(value)) problems.push({ group: '_common', row: null, column: name, message: `${where}: ${quoteWhy}` })
+
+  const common = values?._common || {}
+  const commonCells = new Set([...(anyRows ? Object.keys(commonCols) : []), ...Object.keys(common)])
+  for (const name of commonCells) {
+    const why = cellProblem(commonCols[name], name in common, common[name], quotedCommon.has(name))
+    if (why) problems.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${why}` })
   }
   return problems
 }
@@ -500,19 +522,15 @@ export function validateValues(values, model) {
     }
     const known = { ...commonCols, ...columns }
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
-      for (const [name, col] of Object.entries(columns)) {
-        // Not relaxed by a default: JSON Schema's `required` ignores `default`,
-        // so Helm rejects the row whatever the column's default says.
-        if (col.required && !(name in row)) {
-          problems.push(`values.yaml: ${group}[${i}] is missing required "${name}"`)
-        }
-      }
       for (const [name, value] of Object.entries(row || {})) {
         if (!(name in known)) problems.push(`values.yaml: ${group}[${i}] has "${name}", which no column defines`)
         else if (!typeOk(value, known[name].type)) problems.push(`values.yaml: ${group}[${i}] "${name}" should be ${known[name].type}`)
       }
     }
   }
-  for (const p of quotedValueProblems(values, model)) problems.push(`values.yaml: ${p.message}`)
+  // Required (not relaxed by a default: JSON Schema's `required` ignores
+  // `default`, so Helm rejects the row whatever the default says), empty,
+  // multi-line and label-breaking values — the same checks a save makes.
+  for (const p of valueProblems(values, model)) problems.push(`values.yaml: ${p.message}`)
   return problems
 }

@@ -70,7 +70,7 @@ function renderBlock(key, value, ref, defaults, indent, suffix = '') {
  * that reads one. The rule's own text is escaped for that; a row's value is
  * substituted by Helm at render time and is not, so a `"` or `\` in it would
  * break the rendered YAML. The row owner's values are checked against this
- * set instead (quotedValueProblems in rulesFile.js) — escaping at render
+ * set instead (valueProblems in rulesFile.js) — escaping at render
  * time would change every such label's output. `expr` and annotations are
  * block scalars (renderBlock) and take anything but a newline.
  *

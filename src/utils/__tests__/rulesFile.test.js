@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import {
-  quotedValueProblems, schemaToModel, modelToSchema, groupGenDef, modelToFiles, groupFileText, commonFileText, parseGroupFile, parseCommonFile,
+  valueProblems, schemaToModel, modelToSchema, groupGenDef, modelToFiles, groupFileText, commonFileText, parseGroupFile, parseCommonFile,
   parseRulesDir, validateValues,
 } from '../rulesFile.js'
 import { generateGroupTemplate } from '../templateGenerator.js'
@@ -242,7 +242,7 @@ describe('validateValues', () => {
   const { model } = schemaToModel(xRulesSchema)
 
   it('is silent when rows match the columns', () => {
-    expect(validateValues({ mariadb_traffic: [{ namespace: 'prod', recv_warn: 1 }] }, model)).toEqual([])
+    expect(validateValues({ _common: { cluster: 'east' }, mariadb_traffic: [{ namespace: 'prod', recv_warn: 1 }] }, model)).toEqual([])
   })
 
   it('flags a row key no column defines', () => {
@@ -252,14 +252,14 @@ describe('validateValues', () => {
 
   it('flags a missing required column with no default', () => {
     const out = validateValues({ mariadb_traffic: [{ recv_warn: 1 }] }, model)
-    expect(out.join()).toMatch(/missing required "namespace"/)
+    expect(out.join()).toMatch(/mariadb_traffic row 1, "namespace": required/)
   })
 
   it('flags a missing required column even when it has a default, as Helm does', () => {
     const { model: m } = parseRulesDir({
       'cpu.yaml': 'group: cpu\ncolumns:\n  ns: {type: string, required: true, default: prod}\nrules: []\n',
     })
-    expect(validateValues({ cpu: [{}] }, m).join()).toMatch(/cpu\[0\] is missing required "ns"/)
+    expect(validateValues({ cpu: [{}] }, m).join()).toMatch(/cpu row 1, "ns": required/)
   })
 
   it('flags a group with no rules file', () => {
@@ -267,10 +267,9 @@ describe('validateValues', () => {
   })
 })
 
-// Which cells a row owner may not fill with what: a " or \ only where Helm
-// substitutes into a quoted label; a newline nowhere. expr and annotations
-// are block scalars and take anything else.
-describe('quotedValueProblems', () => {
+// What a deployment cannot be saved with (#51): a required column missing or
+// empty, "" / null anywhere, a newline anywhere, " or \\ where a label reads it.
+describe('valueProblems', () => {
   const model = files => parseRulesDir(files).model
   const m = model({
     '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n  cluster: {type: string}\n',
@@ -278,13 +277,14 @@ describe('quotedValueProblems', () => {
       'vars:',
       '  where: "${team} on ${cluster}"',
       'columns:',
+      '  namespace: {type: string, required: true}',
       '  pod_regex: {type: string, default: ".*"}',
       '  team: {type: string}',
       '  job: {type: string}',
       '  raw_col: {type: string}',
       'rules:',
       '  - alert: A',
-      '    expr: cpu{pod=~"${pod_regex}"} > 1',
+      '    expr: cpu{ns="${namespace}", pod=~"${pod_regex}"} > 1',
       '    labels: {severity: warning, where: "${where}"}',
       '    annotations: {summary: "owned by ${owner}"}',
       '  - alert: B',
@@ -296,29 +296,54 @@ describe('quotedValueProblems', () => {
     ].join('\n'),
   })
 
-  const cells = values => quotedValueProblems(values, m).map(p => `${p.group}:${p.row}:${p.column}`).sort()
+  const ok = { _common: { owner: 'dba' }, cpu: [{ namespace: 'prod' }] }
+  const cells = values => valueProblems(values, m).map(p => `${p.group}:${p.row}:${p.column}`).sort()
+  const why = values => valueProblems(values, m).map(p => p.message)
 
-  it('flags " or \\ in a column a label reads, through vars', () => {
-    expect(cells({ cpu: [{ team: 'a"b' }] })).toEqual(['cpu:0:team'])
+  it('accepts a complete deployment', () => {
+    expect(cells(ok)).toEqual([])
   })
 
-  it('flags a _common column a label reads, as Common Values', () => {
-    const problems = quotedValueProblems({ _common: { cluster: 'c\\d' } }, m)
-    expect(problems.map(p => p.column)).toEqual(['cluster'])
-    expect(problems[0].message).toMatch(/^Common Values, "cluster"/)
+  it('refuses a required column that is missing or empty, in a row', () => {
+    expect(cells({ ...ok, cpu: [{}, { namespace: '' }, { namespace: null }] }))
+      .toEqual(['cpu:0:namespace', 'cpu:1:namespace', 'cpu:2:namespace'])
+    expect(why({ ...ok, cpu: [{}] })).toEqual(['cpu row 1, "namespace": required — fill it in'])
   })
 
-  it('leaves columns read only by expr, annotations or a raw entry alone', () => {
+  // Helm checks _common's `required` only when a _common block exists; with
+  // none, every ${owner} would render empty.
+  it('refuses a required _common column whenever there are rows — block or no block', () => {
+    expect(cells({ cpu: [{ namespace: 'prod' }] })).toEqual(['_common:null:owner'])
+    expect(cells({ _common: { owner: '' }, cpu: [{ namespace: 'prod' }] })).toEqual(['_common:null:owner'])
+    expect(cells({ cpu: [] })).toEqual([])
+  })
+
+  it('refuses "" and null in an optional column — leave the cell out instead', () => {
+    expect(cells({ ...ok, cpu: [{ namespace: 'p', job: '' }, { namespace: 'p', job: null }] }))
+      .toEqual(['cpu:0:job', 'cpu:1:job'])
+    expect(why({ ...ok, cpu: [{ namespace: 'p', job: '' }] }))
+      .toEqual(['cpu row 1, "job": empty — fill it in, or leave the cell out'])
+  })
+
+  it('keeps 0 and false — they are values', () => {
+    expect(cells({ ...ok, cpu: [{ namespace: 'p', job: 0, team: false }] })).toEqual([])
+  })
+
+  it('refuses " or \\ in a column a label reads, through vars, and as Common Values', () => {
+    expect(cells({ ...ok, cpu: [{ namespace: 'p', team: 'a"b' }] })).toEqual(['cpu:0:team'])
+    const problems = valueProblems({ _common: { owner: 'dba', cluster: 'c\\d' }, cpu: [{ namespace: 'p' }] }, m)
+    expect(problems.map(p => p.message)).toEqual(['Common Values, "cluster": contains " or \\, which a label cannot take'])
+  })
+
+  it('leaves quotes and backslashes alone where only expr, annotations or a raw entry read them', () => {
     expect(cells({
       _common: { owner: 'x"y\\z' },
-      cpu: [{ pod_regex: 'web-\\d+', job: 'a"b', raw_col: 'a\\b', team: 'ok' }],
+      cpu: [{ namespace: 'p', pod_regex: 'web-\\d+', job: 'a"b', raw_col: 'a\\b', team: 'ok' }],
     })).toEqual([])
   })
 
-  it('flags a newline in any column, wherever it is read', () => {
-    expect(cells({
-      _common: { owner: 'two\nlines' },
-      cpu: [{ pod_regex: 'a\nb', job: 'ok' }],
-    })).toEqual(['_common:null:owner', 'cpu:0:pod_regex'])
+  it('refuses a newline in any column', () => {
+    expect(cells({ _common: { owner: 'two\nlines' }, cpu: [{ namespace: 'p', pod_regex: 'a\nb' }] }))
+      .toEqual(['_common:null:owner', 'cpu:0:pod_regex'])
   })
 })

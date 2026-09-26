@@ -76,9 +76,12 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
   // Switching either way carries the rule across: to YAML on the way in, and
   // back to fields on the way out. A hand-written entry the model cannot hold
   // stays raw and says why, rather than being emptied out.
+  // `note` is ours, not Prometheus's, so it is never part of the YAML — it is
+  // carried alongside in both directions.
   function toggleRaw(on) {
+    const note = rule.note ? { note: rule.note } : {}
     if (on) {
-      onChange({ raw: ruleToYaml(rule) })
+      onChange({ raw: ruleToYaml(rule), ...note })
       return
     }
     const { rule: parsed, error } = ruleFromYaml(rule.raw || '')
@@ -86,7 +89,7 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
       Modal.error({ title: 'This rule has to stay hand-written', content: error })
       return
     }
-    onChange(parsed)
+    onChange({ ...parsed, ...note })
   }
 
   function insertVariable(name) {

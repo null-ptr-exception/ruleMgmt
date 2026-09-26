@@ -214,6 +214,13 @@ describe('the raw toggle round-trips a rule', () => {
     expect(ruleFromYaml(ruleToYaml(structured)).rule).toEqual(structured)
   })
 
+  // It is in the rules format, so the toggle must not drop it either way.
+  it('carries keep_firing_for across, both ways', () => {
+    const withKeep = { ...structured, keep_firing_for: '10m' }
+    expect(ruleToYaml(withKeep)).toContain('keep_firing_for: 10m')
+    expect(ruleFromYaml(ruleToYaml(withKeep)).rule).toEqual(withKeep)
+  })
+
   it('leaves out fields that are empty rather than writing blanks', () => {
     expect(ruleToYaml({ alert: 'A', expr: 'up == 0' })).toBe('alert: A\nexpr: up == 0')
   })

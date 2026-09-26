@@ -202,6 +202,7 @@ export function ruleToYaml(rule) {
   if (rule.alert) entry.alert = rule.alert
   if (rule.expr) entry.expr = rule.expr
   if (rule.for) entry.for = rule.for
+  if (rule.keep_firing_for) entry.keep_firing_for = rule.keep_firing_for
   if (rule.labels && Object.keys(rule.labels).length) entry.labels = rule.labels
   if (rule.annotations && Object.keys(rule.annotations).length) entry.annotations = rule.annotations
   return yaml.dump(entry, { lineWidth: -1 }).trimEnd()
@@ -233,6 +234,7 @@ export function ruleFromYaml(raw) {
       alert: entry.alert || '',
       expr: String(entry.expr ?? ''),
       for: entry.for ? String(entry.for) : '',
+      ...(entry.keep_firing_for ? { keep_firing_for: String(entry.keep_firing_for) } : {}),
       labels: entry.labels || {},
       annotations: entry.annotations || {}
     }

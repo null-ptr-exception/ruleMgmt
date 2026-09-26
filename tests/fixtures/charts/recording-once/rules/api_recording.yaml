@@ -1,0 +1,8 @@
+# once (#70): one recording rule per deployment, not per row, and emitted
+# with no rows at all. Its object has no chunk index.
+once: true
+
+rules:
+  - record: job:errors:rate5m
+    expr: sum by (job) (rate(errors_total{cluster="${cluster}"}[5m]))
+    labels: { cluster: '${cluster}', team: '${team}' }

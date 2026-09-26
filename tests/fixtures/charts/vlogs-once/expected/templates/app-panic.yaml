@@ -1,0 +1,19 @@
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: {{ $.Release.Name }}-app-panic-1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: app-panic
+      type: vlogs
+      rules:
+        {{- $row := $.Values._common | default dict }}
+        - alert: AppPanic
+          expr: |-
+            _time:5m service:"{{ $row.service }}" panic | stats count() as panics | filter panics:>0
+          for: 5m
+          labels:
+            severity: critical

@@ -1,0 +1,11 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# Only the once group's object: disk has no rows, so no object.
+blind-watchdog-1:
+  - name: watchdog
+    interval: 1m
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        for: 5m
+        labels: { severity: none }
+        annotations: { summary: always firing — proves the pipeline delivers }

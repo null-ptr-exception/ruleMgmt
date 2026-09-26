@@ -1,0 +1,20 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-api-recording-1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: api-recording
+      rules:
+        {{- $row := $.Values._common | default dict }}
+        - record: job:errors:rate5m
+          expr: |-
+            sum by (job) (rate(errors_total{cluster="{{ $row.cluster }}"}[5m]))
+          labels:
+            cluster: "{{ $row.cluster }}"
+            {{- if hasKey $row "team" }}
+            team: "{{ $row.team }}"
+            {{- end }}

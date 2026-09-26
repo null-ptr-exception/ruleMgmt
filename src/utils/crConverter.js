@@ -103,30 +103,50 @@ function renderGroupFields({ interval, limit } = {}, profile) {
   return out
 }
 
-function buildObject({ releaseName, baseName, groupName, groupFields, profile, valuesKey, hasCommon, ruleTexts, objectMeta }) {
-  const rowLoop = rowLoopHeader(hasCommon)
-
-  const name = releaseName.includes('{{')
-    // The release name is itself a template, and inside the chunk loop it has
-    // to be rooted at $.
-    ? releaseName.replace(/\{\{\s*\.Release\.Name\s*\}\}/g, '{{ $.Release.Name }}')
-    : releaseName
-
+function objectHead({ profile, name, objectMeta, groupName, groupFields }) {
   return (
-    `{{- $chunks := chunk ${MAX_ROWS_PER_OBJECT} ($.Values.${valuesKey} | default list) }}\n` +
-    `{{- range $chunkIndex, $rows := $chunks }}\n` +
     `---\n` +
     `apiVersion: ${profile.apiVersion}\n` +
     `kind: ${profile.kind}\n` +
     `metadata:\n` +
-    `  name: ${name}-${baseName}-{{ add1 $chunkIndex }}\n` +
+    `  name: ${name}\n` +
     renderMetaMap('labels', objectMeta?.labels || BUILT_IN_LABELS) +
     renderMetaMap('annotations', objectMeta?.annotations) +
     `spec:\n` +
     `  groups:\n` +
     `    - name: ${groupName}\n` +
     renderGroupFields(groupFields, profile) +
-    `      rules:\n` +
+    `      rules:\n`
+  )
+}
+
+/**
+ * A once group's object (#70): no row loop and no chunk index — it has no
+ * rows to chunk, and it is emitted whatever values.yaml holds, zero rows
+ * included. A reference reads `_common`, which is all a once rule can see.
+ */
+function buildOnceObject({ name, baseName, hasCommon, ruleTexts, ...head }) {
+  return (
+    objectHead({ ...head, name: `${name}-${baseName}` }) +
+    (hasCommon ? `        {{- $row := $.Values._common | default dict }}\n` : '') +
+    ruleTexts.join('\n') + '\n'
+  )
+}
+
+function buildObject({ releaseName, baseName, groupName, groupFields, profile, valuesKey, hasCommon, once, ruleTexts, objectMeta }) {
+  const name = releaseName.includes('{{')
+    // The release name is itself a template, and inside the chunk loop it has
+    // to be rooted at $.
+    ? releaseName.replace(/\{\{\s*\.Release\.Name\s*\}\}/g, '{{ $.Release.Name }}')
+    : releaseName
+
+  if (once) return buildOnceObject({ name, baseName, hasCommon, ruleTexts, profile, objectMeta, groupName, groupFields })
+
+  const rowLoop = rowLoopHeader(hasCommon)
+  return (
+    `{{- $chunks := chunk ${MAX_ROWS_PER_OBJECT} ($.Values.${valuesKey} | default list) }}\n` +
+    `{{- range $chunkIndex, $rows := $chunks }}\n` +
+    objectHead({ profile, name: `${name}-${baseName}-{{ add1 $chunkIndex }}`, objectMeta, groupName, groupFields }) +
     rowLoop +
     ruleTexts.join('\n') + '\n' +
     `        {{- end }}\n` +
@@ -138,8 +158,10 @@ function buildObject({ releaseName, baseName, groupName, groupFields, profile, v
  * Render one alert group as a template that emits one or more custom
  * resources: one per rule shard, times one per row chunk.
  */
-export function emitRuleObjects({ releaseName, group, groupName, groupFields, profile = profileFor(undefined), valuesKey, hasCommon, ruleTexts }, options) {
-  const shards = shardRules(ruleTexts, options)
+export function emitRuleObjects({ releaseName, group, groupName, groupFields, profile = profileFor(undefined), valuesKey, hasCommon, once = false, ruleTexts }, options) {
+  // A once group's rules are not multiplied by rows, so its whole budget is
+  // one object's.
+  const shards = shardRules(ruleTexts, once ? { ...options, rowsPerObject: 1 } : options)
   const base = group.replace(/_/g, '-')
 
   // Both indices are always present, for the same reason the chunk index is:
@@ -156,6 +178,7 @@ export function emitRuleObjects({ releaseName, group, groupName, groupFields, pr
       profile,
       valuesKey,
       hasCommon,
+      once,
       ruleTexts: shard,
       objectMeta: options?.objectMeta
     }))

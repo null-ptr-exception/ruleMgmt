@@ -1,0 +1,22 @@
+{{- $chunks := chunk 100 ($.Values.disk | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-disk-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: disk
+      rules:
+        {{- range $rows }}
+        - alert: DiskFull
+          expr: |-
+            disk_used_percent{mount="{{ .mount }}"} > 90
+          for: 5m
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

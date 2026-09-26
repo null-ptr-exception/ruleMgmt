@@ -79,8 +79,14 @@ for (const finding of checkRules(model ? genSchema(model, schema) : schema)) {
   findingsByGroup.get(finding.group).push(finding)
 }
 
-for (const [group, alertDef] of Object.entries(schema.properties || {})) {
-  if (!isAlertGroup(group)) continue
+// A once group (#70) has no entry in the schema — it takes no rows — so the
+// model's groups are walked as well as the schema's.
+const groupNames = [...new Set([
+  ...Object.keys(schema.properties || {}).filter(isAlertGroup),
+  ...Object.keys(model?.groups || {}),
+])]
+for (const group of groupNames) {
+  const alertDef = schema.properties?.[group] || {}
   const file = path.join(tmplDir, `${group.replace(/_/g, '-')}.yaml`)
 
   if (alertDef['x-custom-template']) {

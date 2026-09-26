@@ -1,0 +1,8 @@
+_common:
+  cluster: c1
+  # no team: the recording rule's team label is left out
+api:
+  # warn from its default
+  - job: checkout
+  - job: search
+    warn: 20

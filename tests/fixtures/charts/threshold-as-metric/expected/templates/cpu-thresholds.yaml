@@ -1,0 +1,22 @@
+{{- $chunks := chunk 100 ($.Values.cpu_thresholds | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-cpu-thresholds-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: cpu-thresholds
+      rules:
+        {{- range $rows }}
+        - record: cpu_threshold
+          expr: |-
+            vector({{ dig "threshold" 80 . }})
+          labels:
+            namespace: "{{ .namespace }}"
+            workload: "{{ .workload }}"
+        {{- end }}
+{{- end }}

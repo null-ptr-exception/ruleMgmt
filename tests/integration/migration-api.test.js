@@ -110,6 +110,18 @@ describe('breaking change + migration', () => {
     expect(flat).toContain('namespace: p')
   })
 
+  // Not being able to look for deployments is not the same as finding none —
+  // an empty answer would let the breaking change through with no dialog.
+  it('fails rather than skipping the dialog when the deployments cannot be read', async () => {
+    const flat = path.join(tmpDir, 'deployments', 'demo')
+    await fs.rm(flat, { recursive: true, force: true })
+    await fs.writeFile(flat, 'not a directory')
+
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': withThreshold } })
+    expect(status).toBe(500)
+    expect(await fs.readFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'utf-8')).toBe(withWarn)
+  })
+
   // A folder deployment's values.yaml can hold more than this chart's block.
   it('keeps the other top-level keys of a folder deployment', async () => {
     const own = path.join(tmpDir, 'deployments', 'e2e', 'own')

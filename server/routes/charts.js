@@ -68,17 +68,25 @@ export default function chartsRouter() {
         // Not there yet, which is what we want.
       }
 
+      // The recorded source is always the chart cloned from; a mapping in
+      // the body cannot replace it, and anything but an object is ignored.
+      const mapping = migration && typeof migration === 'object' && !Array.isArray(migration) ? migration : {}
       await fs.cp(source, target, { recursive: true })
+      try {
+        const chartYamlFile = path.join(target, 'Chart.yaml')
+        const chartYaml = yaml.load(await fs.readFile(chartYamlFile, 'utf-8')) || {}
+        chartYaml.name = newName
+        await fs.writeFile(chartYamlFile, yaml.dump(chartYaml), 'utf-8')
 
-      const chartYamlFile = path.join(target, 'Chart.yaml')
-      const chartYaml = yaml.load(await fs.readFile(chartYamlFile, 'utf-8')) || {}
-      chartYaml.name = newName
-      await fs.writeFile(chartYamlFile, yaml.dump(chartYaml), 'utf-8')
-
-      const schemaFile = path.join(target, 'values.schema.json')
-      const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
-      schema['x-migrated-from'] = { chart: req.params.name, ...(migration || {}) }
-      await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
+        const schemaFile = path.join(target, 'values.schema.json')
+        const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
+        schema['x-migrated-from'] = { ...mapping, chart: req.params.name }
+        await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
+      } catch (err) {
+        // A half-made copy would block a retry with "already exists".
+        await fs.rm(target, { recursive: true, force: true })
+        throw err
+      }
 
       res.json({ ok: true, chart: newName })
     } catch (err) {

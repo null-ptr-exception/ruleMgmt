@@ -208,3 +208,34 @@ describe('Deployments API', () => {
     expect(data).toHaveLength(1)
   })
 })
+
+// From the CodeRabbit review of #63.
+describe('reads and failed writes leave no chart behind', () => {
+  it('GET on a chart that does not exist is a 404 and creates nothing', async () => {
+    const { status } = await api('GET', '/api/v2/templates/no-such-chart')
+    expect(status).toBe(404)
+    await expect(fs.access(path.join(tmpDir, 'charts', 'no-such-chart'))).rejects.toThrow()
+  })
+
+  it('a clone that fails part-way is removed, so a retry is not "already exists"', async () => {
+    await api('POST', '/api/v2/charts', { name: 'clone-src' })
+    await fs.rm(path.join(tmpDir, 'charts', 'clone-src', 'values.schema.json'), { force: true })
+    const { status } = await api('POST', '/api/v2/charts/clone-src/clone', { newName: 'clone-half' })
+    expect(status).toBe(500)
+    await expect(fs.access(path.join(tmpDir, 'charts', 'clone-half'))).rejects.toThrow()
+    await api('DELETE', '/api/v2/charts/clone-src')
+  })
+
+  it('a clone records the chart it came from, whatever the mapping says', async () => {
+    await api('POST', '/api/v2/charts', { name: 'clone-origin' })
+    await fs.writeFile(path.join(tmpDir, 'charts', 'clone-origin', 'values.schema.json'), '{"type":"object","properties":{}}')
+    const { status } = await api('POST', '/api/v2/charts/clone-origin/clone', {
+      newName: 'clone-copy', migration: { chart: 'somewhere-else', columns: { a: 'b' } },
+    })
+    expect(status).toBe(200)
+    const schema = JSON.parse(await fs.readFile(path.join(tmpDir, 'charts', 'clone-copy', 'values.schema.json'), 'utf-8'))
+    expect(schema['x-migrated-from']).toEqual({ chart: 'clone-origin', columns: { a: 'b' } })
+    await api('DELETE', '/api/v2/charts/clone-origin')
+    await api('DELETE', '/api/v2/charts/clone-copy')
+  })
+})

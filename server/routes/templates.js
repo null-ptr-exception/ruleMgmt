@@ -79,11 +79,13 @@ export default function templatesRouter() {
   router.get('/:chart', async (req, res) => {
     const { chartDir, tmplDir, valuesFile, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
     try {
+      // Reading a chart that does not exist must not create it — a typo or a
+      // stale saved selection would leave a directory under charts/.
+      try { await fs.access(chartDir) } catch { return res.status(404).json({ error: 'Chart not found' }) }
       try {
         await fs.access(chartYamlFile)
       } catch {
         const { text } = ensureChartYaml(null, req.params.chart)
-        await fs.mkdir(chartDir, { recursive: true })
         await fs.writeFile(chartYamlFile, text, 'utf-8')
       }
 

@@ -242,8 +242,18 @@ export default function renderRouter() {
 
       const { stdout: output } = await runCommand(helm, templateArgs, { timeout: 120000, maxBuffer: MAX_BUFFER })
       const check = await checkPrometheusRules(output)
-      const chartModel = await readChartModel(chartDir)
-      const selfCheck = selfCheckRendered(output, chartModel.fromRules ? chartModel.model : null)
+      // Like the summary and drift below: optional, so a failure here cannot
+      // turn a good render into { ok: false }.
+      const chartModel = await readChartModel(chartDir).catch(err => {
+        logger.error({ err, chart, deployment }, 'readChartModel failed, rendering without a model')
+        return { model: null, fromRules: false, schema: null }
+      })
+      let selfCheck = null
+      try {
+        selfCheck = selfCheckRendered(output, chartModel.fromRules ? chartModel.model : null)
+      } catch (err) {
+        logger.error({ err, chart, deployment }, 'selfCheckRendered failed, skipping the self-check')
+      }
       // Same file the frontend saves: `values.yaml` in folder mode, the legacy
       // `<deployment>-values.yaml` otherwise. Both are tried; the first that
       // parses wins.

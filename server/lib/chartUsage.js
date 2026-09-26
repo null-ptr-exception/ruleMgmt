@@ -15,11 +15,15 @@ import { getDepName } from './subchart.js'
 const SKIP = new Set(['.git', 'node_modules', 'charts'])
 const MAX_DEPTH = 4
 
+// Only an absent directory is empty. Any other error has to surface: an
+// empty result here reads as "no deployment uses this chart", which lets a
+// breaking change through without the dialog.
 async function readDir(dir) {
   try {
     return await fs.readdir(dir, { withFileTypes: true })
-  } catch {
-    return []
+  } catch (err) {
+    if (err?.code === 'ENOENT') return []
+    throw err
   }
 }
 

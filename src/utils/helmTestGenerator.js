@@ -75,13 +75,20 @@ function testValues(columns) {
 }
 
 /**
- * A label or annotation as helm-unittest reads it back: a quoted line is a
- * string; a bare word goes through YAML, so `priority: 1` is a number.
+ * A label as helm-unittest reads it back: a quoted line is a string, a bare
+ * word goes through YAML (and is only ever bare when YAML reads it as one).
  */
-function entryValue(entry, text) {
+function labelValue(entry, text) {
   const rendered = substitute(entry.value, text)
   return needsQuote(entry.value) ? rendered : yaml.load(rendered)
 }
+
+/**
+ * expr and annotations are block scalars (`|-`): always a string, with the
+ * leading and trailing whitespace the generator trims — the trailing newline
+ * `expr: |` leaves in the source included.
+ */
+const blockValue = (value, text) => substitute(String(value ?? '').trim(), text)
 
 function ruleAsserts(rules, text) {
   const asserts = []
@@ -89,11 +96,12 @@ function ruleAsserts(rules, text) {
     if (rule.raw) return
     const path = `spec.groups[0].rules[${i}]`
     asserts.push({ equal: { path: `${path}.alert`, value: rule.alert } })
-    asserts.push({ equal: { path: `${path}.expr`, value: substitute(rule.expr, text) } })
+    asserts.push({ equal: { path: `${path}.expr`, value: blockValue(rule.expr, text) } })
     asserts.push({ equal: { path: `${path}.for`, value: substitute(rule.for, text) } })
     for (const field of ['labels', 'annotations']) {
       if (!rule[field]?.length) continue
-      const expected = Object.fromEntries(rule[field].map(e => [e.key, entryValue(e, text)]))
+      const value = field === 'annotations' ? e => blockValue(e.value, text) : e => labelValue(e, text)
+      const expected = Object.fromEntries(rule[field].map(e => [e.key, value(e)]))
       asserts.push({ equal: { path: `${path}.${field}`, value: expected } })
     }
   })

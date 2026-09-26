@@ -97,3 +97,34 @@ describe('helm-unittest via generated tests', () => {
     }
   })
 })
+
+// expr and annotations are block scalars, trimmed. The sample chart has
+// neither a multi-line expr nor a multi-line annotation; the blind-test case
+// `multiline` has both, so the suite generated for it has to pass too.
+describe('helm-unittest for a chart with multi-line expr and annotations', () => {
+  let dir
+
+  beforeAll(async () => {
+    const { generateCase } = await import('../blind/harness.js')
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'helm-unittest-multiline-'))
+    const source = path.resolve('tests/fixtures/charts/multiline')
+    fs.cpSync(path.join(source, 'rules'), path.join(dir, 'rules'), { recursive: true })
+    fs.writeFileSync(path.join(dir, 'Chart.yaml'), 'apiVersion: v2\nname: multiline\nversion: 0.1.0\n')
+    const products = generateCase('multiline')
+    fs.writeFileSync(path.join(dir, 'values.schema.json'), products.schemaText)
+    fs.mkdirSync(path.join(dir, 'templates'))
+    for (const [name, text] of Object.entries(products.templates)) fs.writeFileSync(path.join(dir, 'templates', name), text)
+    fs.mkdirSync(path.join(dir, 'tests'))
+    fs.writeFileSync(path.join(dir, 'tests', 'generated_test.yaml'), generateHelmUnittestSuite(readModel(dir)))
+  })
+
+  afterAll(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('passes', () => {
+    const { ok, output } = helmUnittest(dir)
+    if (!ok) throw new Error(`helm unittest failed:\n${output}`)
+    expect(output).not.toContain('FAIL')
+  })
+})

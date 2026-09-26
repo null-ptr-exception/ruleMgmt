@@ -18,6 +18,7 @@
 
 import { renderValue, expandVars, varsIn } from './ruleModel.js'
 import { emitRuleObjects } from './crConverter.js'
+import { needsQuote } from './yamlScalar.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 
 function toPascalCase(str) {
@@ -36,11 +37,6 @@ function getSelectors(alertDef) {
   return Object.entries(props)
     .filter(([, p]) => p['x-var-type'] === 'selector')
     .map(([name]) => name)
-}
-
-/** Values that are a bare word render unquoted, matching hand-written rules. */
-function needsQuote(value) {
-  return value === '' || /[^A-Za-z0-9_.-]/.test(value)
 }
 
 /**

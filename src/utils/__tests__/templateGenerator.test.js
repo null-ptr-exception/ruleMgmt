@@ -493,6 +493,16 @@ describe('empty cells (#57)', () => {
     expect(out).toContain('{{- if and (hasKey . "crit") (hasKey . "tier") }}')
   })
 
+  // A label value is a string to Kubernetes; `priority: 1` written bare is a
+  // number, and the API server rejects the whole object.
+  it('quotes a literal label value YAML would read as a number, boolean or null', () => {
+    const out = render([{ alert: 'A', expr: 'cpu > ${warn}', labels: { severity: 'warning', priority: '1', page: 'true', team: 'null' } }])
+    expect(out).toContain('priority: "1"')
+    expect(out).toContain('page: "true"')
+    expect(out).toContain('team: "null"')
+    expect(out).toContain('severity: warning')
+  })
+
   it('drops just the line when a label is nothing but the reference', () => {
     const out = render([{ alert: 'A', expr: 'cpu > ${warn}', labels: { severity: 'warning', tier: '${tier}' } }])
     expect(out).toContain('{{- if hasKey . "tier" }}')

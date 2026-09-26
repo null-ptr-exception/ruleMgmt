@@ -70,6 +70,15 @@ describe('rendering the metadata block', () => {
 
   it('quotes a value a bare scalar would not survive', () => {
     expect(renderMetaMap('annotations', { note: 'has spaces' })).toContain('note: "has spaces"')
+  })
+
+  // Kubernetes metadata values are strings; bare, YAML reads these as others.
+  it('quotes values YAML would read as a number, boolean or null', () => {
+    const out = renderMetaMap('labels', { tier: '1', enabled: 'true', owner: 'null', team: 'core' })
+    expect(out).toContain('tier: "1"')
+    expect(out).toContain('enabled: "true"')
+    expect(out).toContain('owner: "null"')
+    expect(out).toContain('team: core')
     expect(renderMetaMap('labels', { release: 'kps-1.2' })).toContain('release: kps-1.2')
   })
 })

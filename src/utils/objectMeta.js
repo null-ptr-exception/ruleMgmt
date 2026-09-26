@@ -16,6 +16,8 @@
  * that never appears.
  */
 
+import { readsAsNonString } from './yamlScalar.js'
+
 /** Always present: this is the product's own statement about the resource. */
 export const BUILT_IN_LABELS = { 'app.kubernetes.io/managed-by': 'Helm' }
 
@@ -81,7 +83,7 @@ export function renderMetaMap(name, map, indent = '  ') {
   )
 }
 
-/** Quote anything a bare YAML scalar would not survive. */
+/** Quote anything a bare YAML scalar would not survive, or would not read as a string. */
 function quote(value) {
-  return /^[A-Za-z0-9_][A-Za-z0-9_.\-/]*$/.test(value) ? value : JSON.stringify(value)
+  return /^[A-Za-z0-9_][A-Za-z0-9_.\-/]*$/.test(value) && !readsAsNonString(value) ? value : JSON.stringify(value)
 }

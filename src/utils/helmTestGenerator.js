@@ -25,6 +25,7 @@ import yaml from 'js-yaml'
 import { groupGenDef } from './rulesFile.js'
 import { normalizeRules } from './templateGenerator.js'
 import { API_VERSION, KIND } from './crConverter.js'
+import { needsQuote } from './yamlScalar.js'
 
 const VAR_RE = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 
@@ -52,10 +53,6 @@ function defaultText(value) {
   return Number.isInteger(value) ? String(value) : goFloat(value)
 }
 
-/** Same rule as templateGenerator.js: a bare word renders unquoted. */
-function needsQuote(value) {
-  return value === '' || /[^A-Za-z0-9_.-]/.test(value)
-}
 
 function substitute(str, text) {
   return String(str).replace(VAR_RE, (whole, name) => (name in text ? text[name] : whole))

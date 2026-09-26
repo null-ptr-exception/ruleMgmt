@@ -275,7 +275,7 @@ rules:
     // Not just "Rule checks failed": the person committing has to be able to
     // find the problem.
     await expect(page.getByText(/e2e-safeguard-stale: products are out of date/)).toBeVisible({ timeout: 8000 })
-    await expect(page.getByText(/e2e-safeguard-noref\/cpu: .*references no column/)).toBeVisible()
+    await expect(page.getByText(/e2e-safeguard-noref\/cpu: .*references none of this group's columns/)).toBeVisible()
     await expect(page.getByText('Changes committed')).toHaveCount(0)
   })
 })

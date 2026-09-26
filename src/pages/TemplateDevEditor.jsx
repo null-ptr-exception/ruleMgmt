@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, message } from 'antd'
+import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, Tooltip, message } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, ImportOutlined, EditOutlined } from '@ant-design/icons'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
@@ -45,6 +45,9 @@ const emptyGroup = key => ({
 // produce. Left blank, a field is left out of the rules file — the type is
 // then the default profile, the interval the evaluator's own.
 function GroupSettings({ group, onChange }) {
+  // once (#70): the group renders once per deployment and has no rows, so it
+  // cannot have columns — turned on only once they are gone.
+  const hasColumns = Object.keys(group.columns || {}).length > 0
   const set = (field, value) => onChange(g => {
     const next = { ...g }
     if (value === undefined || value === null || value === '') delete next[field]
@@ -60,6 +63,14 @@ function GroupSettings({ group, onChange }) {
           options={profileNames().map(name => ({ value: name, label: name }))}
           onChange={v => set('type', v === DEFAULT_TYPE ? undefined : v)} />
       </span>
+      <Tooltip title={hasColumns && !group.once ? 'A once group has no rows and so no columns — remove them first' : 'Render these rules once per deployment instead of once per row'}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input type="checkbox" aria-label="Once per deployment" checked={!!group.once}
+            disabled={hasColumns && !group.once}
+            onChange={e => set('once', e.target.checked || undefined)} />
+          <Text type="secondary" style={{ fontSize: 12 }}>Once per deployment</Text>
+        </label>
+      </Tooltip>
       <span>
         <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Interval</Text>
         <Input size="small" aria-label="Group interval" style={{ width: 90 }} placeholder="default"
@@ -469,7 +480,7 @@ export default function TemplateDevEditor() {
   const usedByColumn = {}
   if (group && !group.custom) {
     for (const r of group.rules) {
-      for (const n of ruleVars(r)) (usedByColumn[n] ||= []).push(r.alert || '(unnamed)')
+      for (const n of ruleVars(r)) (usedByColumn[n] ||= []).push(r.alert || r.record || '(unnamed)')
     }
   }
   // A common column's usage spans every group.
@@ -517,6 +528,11 @@ export default function TemplateDevEditor() {
     else updateGroup(target, g => ({ ...g, columns: apply(g.columns) }))
   }
   function addColumnTo(target, name = '', sample) {
+    // A once group has no columns (#70): a value it reads is chart-wide.
+    if (target !== COMMON && model.groups[target]?.once) {
+      target = COMMON
+      if (name) message.info(`"${name}" added to common variables — a once group has no columns of its own`)
+    }
     const numeric = sample !== undefined && String(sample).trim() !== '' && !Number.isNaN(Number(sample))
     const col = { type: numeric ? 'number' : 'string' }
     const apply = cols => ({ ...cols, [name]: col })
@@ -666,7 +682,9 @@ export default function TemplateDevEditor() {
                     <div style={{ marginBottom: 20 }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
-                          Rules ({group.rules.length}) — one table, one alert per rule
+                          {group.once
+                            ? `Rules (${group.rules.length}) — each renders once per deployment`
+                            : `Rules (${group.rules.length}) — one table, one alert per rule`}
                         </Text>
                         <Button size="small" icon={<PlusOutlined />}
                           onClick={() => setRules([...group.rules, { alert: '', expr: '', for: '5m', labels: { severity: 'warning' }, annotations: {} }])}>
@@ -691,6 +709,14 @@ export default function TemplateDevEditor() {
                       {group.rules.length === 0 && <Empty description="No rules yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
                     </div>
 
+                    {group.once ? (
+                      <div data-testid="once-no-columns" style={{ marginBottom: 20 }}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          Once per deployment: no rows, so no columns. A rule here can read the common
+                          variables{commonNames.length > 0 ? ` (${commonNames.join(', ')})` : ''}.
+                        </Text>
+                      </div>
+                    ) : (
                     <div style={{ marginBottom: 20 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                         <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
@@ -719,6 +745,7 @@ export default function TemplateDevEditor() {
                         </Text>
                       )}
                     </div>
+                    )}
 
                     <div style={{ marginBottom: 20 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>

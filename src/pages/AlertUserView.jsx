@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Modal, Typography, Empty, Input, Select, message, Segmented } from 'antd'
+import { Button, Modal, Typography, Empty, Input, Select, message, Segmented, Alert } from 'antd'
 import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
@@ -10,6 +10,7 @@ import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
 import PreviewModal from '../components/PreviewModal'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
 import { pruneAllValues } from '../utils/valueUtils'
+import { parseRulesDir } from '../utils/rulesFile'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -29,6 +30,7 @@ export default function AlertUserView() {
   const [mode, setMode] = useSessionState('alerts:mode', 'single')
 
   const [schema, setSchema] = useState(null)
+  const [onceGroups, setOnceGroups] = useState([])
   const [alertNames, setAlertNames] = useState([])
 
   const [allValues, setAllValues] = useState({})
@@ -90,9 +92,18 @@ export default function AlertUserView() {
       return
     }
     getChartInfo(selectedChart).then(info => {
+      // A once group (#70) has no rows and so no entry in the schema; it is
+      // listed from the chart's rules/ so the rule owner sees it exists.
+      let once = []
+      try {
+        const { model } = parseRulesDir(info.rulesFiles || {})
+        once = Object.entries(model.groups).filter(([, g]) => g.once).map(([k]) => k)
+      } catch { /* an unparseable rules/ is the template owner's to fix */ }
+      const names = [...schemaAlertNames(info.schema), ...once]
       setSchema(info.schema)
-      setAlertNames(schemaAlertNames(info.schema))
-      if (activeAlert && activeAlert !== '__common_vars__' && !schemaAlertNames(info.schema).includes(activeAlert)) {
+      setOnceGroups(once)
+      setAlertNames(names)
+      if (activeAlert && activeAlert !== '__common_vars__' && !names.includes(activeAlert)) {
         setActiveAlert(null)
       }
     })
@@ -399,7 +410,7 @@ export default function AlertUserView() {
                 </div>
               ) : (
                 <OverviewTemplateTree
-                  templates={alertNames}
+                  templates={alertNames.filter(n => !onceGroups.includes(n))}
                   checked={checkedAlerts}
                   onCheckedChange={setCheckedAlerts}
                 />
@@ -491,6 +502,14 @@ export default function AlertUserView() {
                     </div>
                   ))}
                 </div>
+              ) : onceGroups.includes(activeAlert) ? (
+                <Alert
+                  data-testid="once-group-notice"
+                  type="info"
+                  showIcon
+                  message="No values needed"
+                  description="This group renders once per deployment — it has no rows to fill in. Preview shows what it produces."
+                />
               ) : (
                 <AlertTable
                   vars={vars}

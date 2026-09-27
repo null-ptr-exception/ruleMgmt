@@ -1,0 +1,15 @@
+# The hierarchy starts with a _common column, and a row leaves workload out
+# (default .*): every row is read merged with _common and defaulted, the
+# same way on both sides of the comparison.
+selectors: [cluster, namespace, workload]
+
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, default: ".*" }
+  threshold: { type: number, default: 80 }
+
+rules:
+  - alert: CpuHigh
+    expr: cpu_usage{${selector}} > ${threshold}
+    for: 1m
+    labels: { severity: warning }

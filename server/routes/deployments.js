@@ -5,6 +5,7 @@ import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
 import { readChartModel } from '../lib/chartFiles.js'
 import { quotedValueProblems } from '../../src/utils/rulesFile.js'
+import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -136,6 +137,13 @@ export default function deploymentsRouter() {
         const problems = bare ? quotedValueProblems(bare, model) : []
         if (problems.length) {
           return res.status(400).json({ error: 'Some values cannot be rendered', problems })
+        }
+        // A group with selectors (#60): rows that overlap without one being a
+        // step inside the other have no answer for which threshold applies.
+        // The rows that would fix it go back with the refusal.
+        const selectors = bare ? selectorValueProblems(bare, model) : { problems: [] }
+        if (selectors.problems.length) {
+          return res.status(400).json({ error: 'Some rows overlap', problems: selectors.problems, proposals: selectors.proposals })
         }
       }
 

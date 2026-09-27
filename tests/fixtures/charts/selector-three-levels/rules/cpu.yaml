@@ -1,0 +1,15 @@
+# Three levels: the middle row is excluded by the base and excludes the
+# noisy pod in turn.
+selectors: [namespace, workload, pod]
+
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, default: ".*" }
+  pod:       { type: string, default: ".*" }
+  threshold: { type: number, default: 80 }
+
+rules:
+  - alert: CpuHigh
+    expr: cpu_usage{${selector}} > ${threshold}
+    for: 1m
+    labels: { severity: warning }

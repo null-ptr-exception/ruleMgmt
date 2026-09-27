@@ -309,3 +309,61 @@ rules:
     expect(res.status).toBe(400)
   })
 })
+
+// #60: a group with selectors refuses rows whose overlap has no answer, and
+// sends back the rows that would give it one.
+describe('deployments API — a group with selectors', () => {
+  let tmpDir, app
+
+  const RULES = `selectors: [namespace, workload, pod]
+columns:
+  namespace: {type: string, required: true}
+  workload: {type: string, default: ".*"}
+  pod: {type: string, default: ".*"}
+  threshold: {type: number, default: 80}
+rules:
+  - alert: CpuHigh
+    expr: cpu{\${selector}} > \${threshold}
+    labels: {severity: warning}
+`
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'deployments-selectors-'))
+    fs.mkdirSync(path.join(tmpDir, 'charts', 'mariadb-alerts', 'rules'), { recursive: true })
+    fs.writeFileSync(path.join(tmpDir, 'charts', 'mariadb-alerts', 'rules', 'cpu.yaml'), RULES)
+    fs.mkdirSync(path.join(tmpDir, 'dep'), { recursive: true })
+    fs.writeFileSync(path.join(tmpDir, 'dep', 'Chart.yaml'), CHART_WITH_DEP)
+    fs.writeFileSync(path.join(tmpDir, 'dep', 'values.yaml'), '')
+    app = express()
+    app.use(express.json())
+    app.use((req, res, next) => { req.gitopsDir = tmpDir; next() })
+    app.use('/api/deployments', deploymentsRouter())
+  })
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  const save = values => request(app).post('/api/deployments/any/prod?folder=dep').send({ values })
+
+  it('saves a well-formed hierarchy', async () => {
+    const res = await save({ cpu: [{ namespace: 'prod' }, { namespace: 'prod', workload: 'api', threshold: 95 }] })
+    expect(res.status).toBe(200)
+  })
+
+  it('refuses a skipped level, proposes the middle row, and writes nothing', async () => {
+    const res = await save({ cpu: [{ namespace: 'prod' }, { namespace: 'prod', workload: 'api', pod: 'noisy', threshold: 95 }] })
+    expect(res.status).toBe(400)
+    expect(res.body.problems[0]).toMatchObject({ group: 'cpu', row: 1 })
+    expect(res.body.proposals).toEqual([
+      expect.objectContaining({ group: 'cpu', row: { namespace: 'prod', workload: 'api', pod: '.*' } }),
+    ])
+    expect(fs.readFileSync(path.join(tmpDir, 'dep', 'values.yaml'), 'utf-8')).toBe('')
+  })
+
+  it('refuses a regex in a selector cell, naming it', async () => {
+    const res = await save({ cpu: [{ namespace: 'prod', workload: 'api|web' }] })
+    expect(res.status).toBe(400)
+    expect(res.body.problems).toEqual([expect.objectContaining({ group: 'cpu', row: 0, column: 'workload' })])
+  })
+})

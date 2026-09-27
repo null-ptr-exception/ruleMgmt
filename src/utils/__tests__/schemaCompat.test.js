@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffSchema, describeChange, groupTypeChanges, groupOnceChanges, modelAlerts } from '../schemaCompat'
+import { diffSchema, describeChange, groupTypeChanges, groupOnceChanges, groupSelectorChanges, modelAlerts } from '../schemaCompat'
 
 const chart = (columns, extra = {}) => ({
   properties: {
@@ -192,5 +192,27 @@ describe('modelAlerts', () => {
       { before: modelAlerts(model), after: { g: ['A'] } }
     )
     expect(breaking).toEqual([{ kind: 'rule-removed', group: 'g', alert: 'job:up' }])
+  })
+})
+
+// #60: selectors changing — content or order — recomputes which rows exclude
+// which; values.yaml is untouched, so the schema diff cannot see it.
+describe('groupSelectorChanges', () => {
+  const model = selectors => ({ groups: { cpu: { group: 'cpu', columns: {}, rules: [], ...(selectors ? { selectors } : {}) } } })
+
+  it('reports a change of order as well as of content', () => {
+    const [c] = groupSelectorChanges(model(['namespace', 'workload']), model(['workload', 'namespace']))
+    expect(c).toEqual({ kind: 'group-selectors-changed', group: 'cpu', from: ['namespace', 'workload'], to: ['workload', 'namespace'] })
+    expect(describeChange(c)).toMatch(/cpu: selectors changed from \[namespace, workload\] to \[workload, namespace\] — .*no row is lost/)
+  })
+
+  it('says set and removed plainly', () => {
+    expect(describeChange(groupSelectorChanges(model(null), model(['namespace']))[0])).toMatch(/selectors set to \[namespace\]/)
+    expect(describeChange(groupSelectorChanges(model(['namespace']), model(null))[0])).toMatch(/selectors removed — rows no longer exclude each other/)
+  })
+
+  it('says nothing when they are the same, or for a new group', () => {
+    expect(groupSelectorChanges(model(['a', 'b']), model(['a', 'b']))).toEqual([])
+    expect(groupSelectorChanges({ groups: {} }, model(['a']))).toEqual([])
   })
 })

@@ -22,6 +22,14 @@ import {
 
 const { Title, Text } = Typography
 
+/** The defaults of a group's selector columns, _common's included (#60). */
+function selectorDefaultsOf(model, group) {
+  const entry = model?.groups?.[group]
+  if (!entry?.selectors) return {}
+  const cols = { ...(model.common?.columns || {}), ...(entry.columns || {}) }
+  return Object.fromEntries(entry.selectors.filter(l => cols[l]?.default !== undefined).map(l => [l, cols[l].default]))
+}
+
 export default function AlertUserView() {
   const [selectedFolder, setSelectedFolder] = useSessionState('alerts:folder', null)
   const [selectedChart, setSelectedChart] = useSessionState('alerts:chart', null)
@@ -31,6 +39,8 @@ export default function AlertUserView() {
 
   const [schema, setSchema] = useState(null)
   const [onceGroups, setOnceGroups] = useState([])
+  // The chart's rules model — for once groups (#70) and selectors (#60).
+  const [rulesModel, setRulesModel] = useState(null)
   const [alertNames, setAlertNames] = useState([])
 
   const [allValues, setAllValues] = useState({})
@@ -95,10 +105,12 @@ export default function AlertUserView() {
       // A once group (#70) has no rows and so no entry in the schema; it is
       // listed from the chart's rules/ so the rule owner sees it exists.
       let once = []
+      let parsed = null
       try {
-        const { model } = parseRulesDir(info.rulesFiles || {})
-        once = Object.entries(model.groups).filter(([, g]) => g.once).map(([k]) => k)
+        parsed = parseRulesDir(info.rulesFiles || {}).model
+        once = Object.entries(parsed.groups).filter(([, g]) => g.once).map(([k]) => k)
       } catch { /* an unparseable rules/ is the template owner's to fix */ }
+      setRulesModel(parsed)
       const names = [...schemaAlertNames(info.schema), ...once]
       setSchema(info.schema)
       setOnceGroups(once)
@@ -273,19 +285,40 @@ export default function AlertUserView() {
     await refreshFrozenSource(path)
   }
 
+  // A proposed row (#60) goes into its group's table; Save is still the
+  // owner's to press.
+  function addProposedRow(group, row) {
+    if (group === activeAlert) setRows(r => [...r, row])
+    setAllValues(v => ({ ...v, [group]: [...(group === activeAlert ? rows : (v[group] || [])), row] }))
+    setDirty(true)
+  }
+
   // A save refused for specific cells lists them; anything else is still
-  // just "Save failed".
+  // just "Save failed". Rows that would fix a selector overlap (#60) each
+  // come with a button that adds them.
   function reportSaveFailure(result) {
     if (!result.problems?.length) {
       message.error('Save failed')
       return
     }
-    Modal.error({
+    const dialog = Modal.error({
       title: result.error || 'Save failed',
+      width: 560,
       content: (
-        <ul style={{ paddingLeft: 18, marginTop: 8 }}>
-          {result.problems.map((p, i) => <li key={i}>{p.message}</li>)}
-        </ul>
+        <>
+          <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+            {result.problems.map((p, i) => <li key={i}>{p.message}</li>)}
+          </ul>
+          {(result.proposals || []).map((p, i) => (
+            <div key={i} data-testid="proposal" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <Button size="small" onClick={() => { addProposedRow(p.group, p.row); dialog.destroy() }}>Add this row</Button>
+              <Text style={{ fontSize: 12 }}>
+                {p.group}: {Object.entries(p.row).map(([k, v]) => `${k}=${v}`).join(', ')}
+                <Text type="secondary" style={{ fontSize: 11 }}> — {p.reason}</Text>
+              </Text>
+            </div>
+          ))}
+        </>
       ),
     })
   }
@@ -514,6 +547,8 @@ export default function AlertUserView() {
                 <AlertTable
                   vars={vars}
                   rows={rows}
+                  selectors={rulesModel?.groups?.[activeAlert]?.selectors || null}
+                  selectorDefaults={selectorDefaultsOf(rulesModel, activeAlert)}
                   commonValues={commonValues}
                   filters={filters}
                   onFiltersChange={setFilters}

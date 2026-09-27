@@ -95,6 +95,14 @@ rule: it keeps the name, `expr` and labels, and loses `for` and annotations,
 which a recording rule does not have. See
 [alert-rules.md](alert-rules.md#recording-rules-and-once-groups).
 
+### Give a group a default with exceptions
+
+**Selectors** in the group's settings row: add the columns that narrow what a
+row watches, coarsest first (↑ ↓ to reorder), and write `${selector}` in each
+rule's expr where the label matchers go — `cpu{${selector}}`. Those columns
+become `.*`-or-a-name, and give each a default, usually `.*`. See
+[rules-format.md](rules-format.md#selectors-a-default-with-exceptions).
+
 ### Hand-write a rule
 
 When a rule needs something the fields do not cover — `limit`,
@@ -182,6 +190,14 @@ of every group in this deployment.
 
 Each row is one monitored scope. What the columns mean is set by whoever wrote
 the template; if a name is unclear, that is worth telling them.
+
+In a group with selectors, a row that is `.*` covers everything the rows
+under it do not. **Scope** says which rows a row gives up (*excludes N* —
+hover for which) and which row it is an exception to. **Add exception**
+(the branch icon) copies a row one step more specific in one level: that is
+how to carve out a workload with its own threshold. A save that would leave
+two rows overlapping is refused, with the row that fixes it offered — **Add
+this row**, then Save again.
 
 A group marked **No values needed** renders once per deployment and has no
 table — there is nothing to fill in. Preview shows what it produces.

@@ -14,7 +14,7 @@
  *     common: { columns: { <name>: <column> } },        // omitted when empty
  *     groups: {
  *       <key>: {                                          // key = filename = values key
- *         group: <key>, once?, type?, interval?, limit?,
+ *         group: <key>, once?, type?, interval?, limit?, selectors?,
  *         vars?: { <name>: <text> },
  *         columns: { <name>: <column> },
  *         rules: [ <rule> ],
@@ -37,8 +37,9 @@ import yaml from 'js-yaml'
 import { normalizeRules, columnsInQuotedValues } from './templateGenerator.js'
 import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
+import { SELECTOR_PATTERN } from './selectorContract.js'
 
-const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'vars', 'columns', 'rules']
+const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'vars', 'columns', 'rules']
 const RULE_KEYS = ['alert', 'record', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
 // A recording rule has no `for`, `keep_firing_for` or annotations in
 // Prometheus — only these.
@@ -74,8 +75,13 @@ function columnsFromSchema(props = {}, requiredList = []) {
   return columns
 }
 
-/** columns -> { properties, required } for a generated schema. */
-function columnsToSchema(columns = {}) {
+/**
+ * columns -> { properties, required } for a generated schema. A selector
+ * column (#60) gets a `pattern`, so Helm itself refuses a regex in it — the
+ * rule owner's values are checked on save too, but a hand-edited
+ * values.yaml only meets Helm.
+ */
+function columnsToSchema(columns = {}, selectorColumns = new Set()) {
   const properties = {}
   const required = []
   for (const [name, col] of Object.entries(columns)) {
@@ -83,6 +89,7 @@ function columnsToSchema(columns = {}) {
     if (col.description) prop.description = col.description
     if (col.default !== undefined) prop.default = col.default
     if (Array.isArray(col.enum)) prop.enum = col.enum
+    if (selectorColumns.has(name)) prop.pattern = SELECTOR_PATTERN
     properties[name] = prop
     if (col.required) required.push(name)
   }
@@ -217,8 +224,11 @@ export function modelToSchema(model, originalSchema = null) {
   if (originalSchema?.['x-migrated-from']) schema['x-migrated-from'] = originalSchema['x-migrated-from']
 
   const commonCols = model.common?.columns || {}
+  // A _common column any group arranges by is a selector column everywhere:
+  // it is one value per deployment, read by every group.
+  const commonSelectors = new Set(Object.values(model.groups || {}).flatMap(g => g.selectors || []).filter(n => n in commonCols))
   if (Object.keys(commonCols).length) {
-    const { properties, required } = columnsToSchema(commonCols)
+    const { properties, required } = columnsToSchema(commonCols, commonSelectors)
     schema.properties._common = { type: 'object', properties }
     if (required.length) schema.properties._common.required = required
   }
@@ -241,7 +251,7 @@ export function modelToSchema(model, originalSchema = null) {
     // A once group takes no rows, so values.yaml has nothing to hold for it
     // and the schema no array to validate (#70).
     if (group.once) continue
-    const { properties, required } = columnsToSchema(group.columns)
+    const { properties, required } = columnsToSchema(group.columns, new Set(group.selectors || []))
     const def = { type: 'array', items: { type: 'object', properties } }
     if (required.length) def.items.required = required
     schema.properties[key] = def
@@ -270,6 +280,7 @@ export function groupGenDef(group) {
   const def = { type: 'array', 'x-rules': group.rules.map(canonicalRule) }
   if (group.vars && Object.keys(group.vars).length) def.vars = { ...group.vars }
   if (group.once) def.once = true
+  if (group.selectors?.length) def.selectors = [...group.selectors]
   // `type` is JSON Schema's here (`array`), so the group's output type rides
   // as groupType — in memory only, never written.
   if (group.type !== undefined) def.groupType = group.type
@@ -314,6 +325,7 @@ export function groupFileText(group) {
   if (group.type !== undefined) lines.push(`type: ${scalar(group.type)}`)
   if (group.interval !== undefined) lines.push(`interval: ${scalar(group.interval)}`)
   if (group.limit !== undefined) lines.push(`limit: ${scalar(group.limit)}`)
+  if (group.selectors?.length) lines.push(`selectors: [${group.selectors.join(', ')}]`)
 
   if (group.vars && Object.keys(group.vars).length) {
     lines.push('', 'vars:')
@@ -449,8 +461,16 @@ export function parseGroupFile(text, filename) {
     errors.push(`${filename}.yaml: a once group renders once per deployment and takes no rows — it cannot have columns (move per-row rules to a group of their own)`)
   }
 
+  // selectors (#60): the group's hierarchy, coarsest first. What it may name
+  // and what it asks of the rules are save-time checks (selectorContract.js);
+  // here only its shape.
+  if (doc.selectors !== undefined && !(Array.isArray(doc.selectors) && doc.selectors.every(s => typeof s === 'string'))) {
+    errors.push(`${filename}.yaml: selectors must be a list of column names, coarsest first`)
+  }
+
   const group = { group: filename, columns, rules }
   if (doc.once === true) group.once = true
+  if (Array.isArray(doc.selectors) && doc.selectors.length) group.selectors = doc.selectors.map(String)
   if (doc.type !== undefined) group.type = doc.type
   if (doc.interval !== undefined) group.interval = doc.interval
   if (doc.limit !== undefined) group.limit = doc.limit

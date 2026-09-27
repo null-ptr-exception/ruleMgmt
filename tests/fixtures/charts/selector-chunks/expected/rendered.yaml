@@ -1,0 +1,416 @@
+# Hand-written expectation — expanded by a shell loop over the row
+# numbers, never by the generator. See tests/blind/harness.js.
+blind-cpu-1-1:
+  - name: cpu
+    rules:
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="prod", workload!~`api`} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-002"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-003"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-004"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-005"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-006"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-007"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-008"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-009"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-010"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-011"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-012"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-013"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-014"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-015"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-016"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-017"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-018"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-019"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-020"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-021"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-022"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-023"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-024"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-025"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-026"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-027"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-028"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-029"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-030"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-031"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-032"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-033"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-034"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-035"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-036"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-037"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-038"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-039"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-040"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-041"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-042"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-043"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-044"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-045"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-046"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-047"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-048"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-049"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-050"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-051"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-052"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-053"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-054"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-055"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-056"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-057"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-058"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-059"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-060"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-061"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-062"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-063"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-064"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-065"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-066"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-067"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-068"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-069"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-070"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-071"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-072"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-073"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-074"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-075"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-076"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-077"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-078"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-079"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-080"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-081"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-082"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-083"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-084"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-085"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-086"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-087"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-088"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-089"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-090"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-091"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-092"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-093"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-094"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-095"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-096"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-097"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-098"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-099"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-100"} > 80'
+        for: 1m
+        labels: { severity: warning }
+blind-cpu-1-2:
+  - name: cpu
+    rules:
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="ns-101"} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="prod", workload="api"} > 95'
+        for: 1m
+        labels: { severity: warning }

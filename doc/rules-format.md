@@ -464,28 +464,71 @@ Renaming a group means renaming the file. Every deployment's values key changes
 with it, so it goes through the breaking-change dialog like any other rename —
 the mapping is declared there and applied to every affected `values.yaml`.
 
-## Reserved for later: `selectors`
+## Selectors: a default with exceptions
 
-A group may declare its selector columns, coarsest first:
+"Most things at 80%, a few at 95%" is two rows once a group declares its
+selector columns, coarsest first:
 
 ```yaml
+# rules/cpu.yaml
 selectors: [namespace, workload, pod]
-```
 
-Declaring it turns on automatic exclusion: a row whose column is `.*` stops
-covering whatever a more specific row covers, so a baseline and its exceptions
-can live in the same table without overlapping and without anyone maintaining
-an exception list. `${selector}` then stands for the computed matcher set:
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, default: ".*" }
+  pod:       { type: string, default: ".*" }
+  threshold: { type: number, default: 80 }
 
-```yaml
 rules:
   - alert: CPUHigh
     expr: cpu{${selector}} > ${threshold}
 ```
 
-Declaring it also restricts those columns to a literal string or `.*` — telling
-which of two regexes is the more specific one is not decidable, and the whole
-mechanism rests on that comparison.
+```
+namespace  workload  pod    threshold   renders
+prod       .*        .*     80          cpu{namespace="prod", workload!~`api`} > 80
+prod       api       .*     90          cpu{namespace="prod", workload="api", pod!~`noisy`} > 90
+prod       api       noisy  99          cpu{namespace="prod", workload="api", pod="noisy"} > 99
+```
 
-**Not implemented yet.** The key is reserved so that adding it later is not a
-schema change. See issue #57 for the full contract.
+**Every monitored object is covered by exactly one row** — the most specific
+one that matches it. A row that is `.*` in a level gives up the rows one step
+more specific in that level, with one negative matcher; add a more specific
+row and the one above makes way. Nobody maintains an exclusion list.
+
+- A selector cell is `.*` or a plain name (letters, digits, `_`, `.`, `-`) —
+  never a regex. Which of two regexes is more specific cannot be decided;
+  which of `.*` and `api` is, can. A literal becomes an equality matcher; an
+  excluded name is escaped (`my.app` → `` `my\.app` ``).
+- `${selector}` stands for the matchers, in `expr` only, right after a metric
+  name's `{` or a `,` inside it: with every level `.*` it expands to nothing,
+  and `cpu{}` is valid where `{}` is not.
+- A level can be a `_common` column (e.g. `cluster`, first). Rows are read with
+  `_common` merged in and defaults applied, and every row of the group is
+  compared, so an exception in another chunk of 100 rows still counts.
+- Each group declares its own hierarchy; groups in one chart may use different
+  columns and depths. A group without `selectors` behaves exactly as before.
+
+What is refused when the template is saved:
+
+| Refused | Why |
+|---|---|
+| A selector that is not a string column of the group or `_common` | Nothing to arrange by |
+| A selector column that is optional with no default | A row leaving it empty would be neither `.*` nor a name |
+| Any rule whose whole-rule reference (`expr`, `for`) is optional with no default | A row that loses its rule leaves unwatched what its parent row gave up to it |
+| A rule whose `expr` does not use `${selector}`, or `${selector}` anywhere else | The rows would overlap in what that rule watches |
+| `${selector}` not right after `metric{` or a `,` inside it | It can expand to nothing |
+| `selectors` on a once group, or on a group whose `expr` is not PromQL | No rows; no label matchers |
+
+What is refused when a deployment is saved, with the row that would fix it
+offered alongside:
+
+| Refused | Offered |
+|---|---|
+| A selector cell that is a regex | — |
+| Two rows selecting the same thing | — |
+| **Crossing**: `prod/.*/noisy` and `prod/api/.*` overlap on `prod/api/noisy`, and neither contains the other | The overlap as a row, thresholds left for you to fill |
+| **Skipping**: `prod/api/noisy` under `prod/.*/.*` with no `prod/api/.*` between them — PromQL cannot exclude `NOT(workload=api AND pod=noisy)` | The middle row, with the parent's values: nothing changes |
+
+Changing a group's `selectors` — adding, removing or reordering — leaves
+`values.yaml` alone but changes what each row alerts on, so the save says so.

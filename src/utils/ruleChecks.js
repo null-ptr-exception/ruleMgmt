@@ -19,6 +19,7 @@
 import { normalizeRules, columnFallbacks } from './templateGenerator.js'
 import { danglingRefs, ruleVars, varsIn, nestedPlaceholders } from './ruleModel.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
+import { selectorTemplateProblems } from './selectorContract.js'
 
 const WHOLE_REF_RE = /^\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}$/
 
@@ -32,7 +33,23 @@ function definedColumns(schema, alertDef) {
   return [
     ...Object.keys(alertDef?.items?.properties || {}),
     ...Object.keys(getCommonSchema(schema)?.properties || {}),
+    // ${selector} expands to the group's selector matchers (#60)
+    ...(alertDef?.selectors?.length ? ['selector'] : []),
   ]
+}
+
+/** The model group a schema-shaped group def (genSchema) was built from. */
+function modelGroupOf(alertDef) {
+  const required = new Set(alertDef?.items?.required || [])
+  return {
+    selectors: alertDef.selectors,
+    once: alertDef.once,
+    type: alertDef.groupType,
+    vars: alertDef.vars,
+    rules: alertDef['x-rules'] || [],
+    columns: Object.fromEntries(Object.entries(alertDef?.items?.properties || {})
+      .map(([n, p]) => [n, { ...p, ...(required.has(n) ? { required: true } : {}) }])),
+  }
 }
 
 /**
@@ -66,6 +83,16 @@ export function checkRules(schema) {
     const requiredSet = new Set([...(alertDef?.items?.required || []), ...commonRequired])
     const { mayBeAbsent } = columnFallbacks(alertDef, commonProps, requiredSet)
     const groupColumns = new Set(Object.keys(alertDef?.items?.properties || {}))
+    // ${selector} reads the group's selector columns, so a rule using it reads
+    // the row (#60).
+    if (alertDef.selectors?.length) groupColumns.add('selector')
+
+    const commonRequiredSet = new Set(commonRequired)
+    const commonCols = Object.fromEntries(Object.entries(commonProps)
+      .map(([n, p]) => [n, { ...p, ...(commonRequiredSet.has(n) ? { required: true } : {}) }]))
+    for (const p of selectorTemplateProblems(modelGroupOf(alertDef), commonCols)) {
+      findings.push({ severity: 'save', group, ...p })
+    }
 
     for (const rule of rules) {
       const where = rule.alert ? `rule "${rule.alert}"`

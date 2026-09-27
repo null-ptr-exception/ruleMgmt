@@ -1,0 +1,23 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'cpu_usage{namespace="prod", workload="web", pod="web-1"}'
+        values: '85x10'
+      # over api's 90
+      - series: 'cpu_usage{namespace="prod", workload="api", pod="api-1"}'
+        values: '95x10'
+      # over 90 but under noisy's own 99
+      - series: 'cpu_usage{namespace="prod", workload="api", pod="noisy"}'
+        values: '97x10'
+      # under api's 90, though over the base's 80
+      - series: 'cpu_usage{namespace="prod", workload="api", pod="api-2"}'
+        values: '85x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: CpuHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: prod, workload: web, pod: web-1 }
+          - exp_labels: { severity: warning, namespace: prod, workload: api, pod: api-1 }

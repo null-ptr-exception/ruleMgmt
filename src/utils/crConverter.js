@@ -158,7 +158,7 @@ function buildObject({ releaseName, baseName, groupName, groupFields, profile, v
  * Render one alert group as a template that emits one or more custom
  * resources: one per rule shard, times one per row chunk.
  */
-export function emitRuleObjects({ releaseName, group, groupName, groupFields, profile = profileFor(undefined), valuesKey, hasCommon, once = false, ruleTexts }, options) {
+export function emitRuleObjects({ releaseName, group, groupName, groupFields, profile = profileFor(undefined), valuesKey, hasCommon, once = false, preamble = '', ruleTexts }, options) {
   // A once group's rules are not multiplied by rows, so its whole budget is
   // one object's.
   const shards = shardRules(ruleTexts, once ? { ...options, rowsPerObject: 1 } : options)
@@ -169,7 +169,9 @@ export function emitRuleObjects({ releaseName, group, groupName, groupFields, pr
   // crosses it, and renaming a resource deletes the old one and creates a new
   // one. Numbering from the start costs one rename when this lands and none
   // afterwards.
-  return shards
+  // A preamble (the selector helper, #60) is defined once, ahead of every
+  // object: a define renders nothing where it stands.
+  return preamble + shards
     .map((shard, i) => buildObject({
       releaseName,
       baseName: `${base}-${i + 1}`,

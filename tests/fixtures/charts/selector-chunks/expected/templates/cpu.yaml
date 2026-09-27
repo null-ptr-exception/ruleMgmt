@@ -1,0 +1,54 @@
+{{- define "alertforge.selector.cpu" -}}
+{{- $common := .common | default dict -}}
+{{- $self := merge (dict) .self $common -}}
+{{- $rows := list -}}
+{{- range .rows }}{{ $rows = append $rows (merge (dict) . $common) }}{{ end -}}
+{{- $parts := list -}}
+{{- $m0 := (toString (dig "namespace" "" $self)) -}}
+{{- $m1 := (toString (dig "workload" ".*" $self)) -}}
+{{- if ne $m0 ".*" -}}
+{{- $parts = append $parts (printf "%s=%q" "namespace" $m0) -}}
+{{- else -}}
+{{- $ex := list -}}
+{{- range $r := $rows -}}
+{{- if and (ne (toString (dig "namespace" "" $r)) ".*") (eq (toString (dig "workload" ".*" $r)) $m1) -}}
+{{- $ex = append $ex (regexQuoteMeta (toString (dig "namespace" "" $r))) -}}
+{{- end -}}
+{{- end -}}
+{{- if $ex -}}{{- $parts = append $parts (printf "%s!~`%s`" "namespace" (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}
+{{- end -}}
+{{- if ne $m1 ".*" -}}
+{{- $parts = append $parts (printf "%s=%q" "workload" $m1) -}}
+{{- else -}}
+{{- $ex := list -}}
+{{- range $r := $rows -}}
+{{- if and (ne (toString (dig "workload" ".*" $r)) ".*") (eq (toString (dig "namespace" "" $r)) $m0) -}}
+{{- $ex = append $ex (regexQuoteMeta (toString (dig "workload" ".*" $r))) -}}
+{{- end -}}
+{{- end -}}
+{{- if $ex -}}{{- $parts = append $parts (printf "%s!~`%s`" "workload" (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}
+{{- end -}}
+{{- join ", " $parts -}}
+{{- end }}
+{{- $chunks := chunk 100 ($.Values.cpu | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-cpu-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: cpu
+      rules:
+        {{- range $rows }}
+        - alert: CpuHigh
+          expr: |-
+            cpu_usage{ {{- include "alertforge.selector.cpu" (dict "self" . "rows" ($.Values.cpu | default list) "common" ($.Values._common | default dict)) -}} } > {{ dig "threshold" 80 . }}
+          for: 1m
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

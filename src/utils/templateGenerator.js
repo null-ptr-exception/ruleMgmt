@@ -60,8 +60,16 @@ function yamlQuotedText(value) {
  * `expr: |` leaves in the source means nothing to PromQL); the lines after
  * the first keep their own indentation.
  */
-function renderBlock(key, value, ref, defaults, indent, suffix = '') {
-  const text = renderValue(String(value ?? '').trim(), ref, defaults) + suffix
+// ${selector} (#60) becomes a call to the group's selector helper, put in
+// after escaping and substitution so neither touches it.
+const SELECTOR_SENTINEL = '\u0000selector\u0000'
+const SELECTOR_REF_RE = /\$\{\s*selector\s*\}/g
+
+function renderBlock(key, value, ref, defaults, indent, suffix = '', selectorCall = null) {
+  let source = String(value ?? '').trim()
+  if (selectorCall) source = source.replace(SELECTOR_REF_RE, SELECTOR_SENTINEL)
+  let text = renderValue(source, ref, defaults) + suffix
+  if (selectorCall) text = text.split(SELECTOR_SENTINEL).join(` {{- ${selectorCall} -}} `)
   const lines = text.split('\n').map(l => (l ? `${indent}  ${l}` : ''))
   return `${indent}${key}: |-\n` + lines.join('\n')
 }
@@ -116,8 +124,11 @@ function renderEntry(entry, ref, refVar, indent, defaults, block = false) {
  * sharded. Placeholders are resolved exactly as in a structured rule — ${var}
  * reads the row, {{ ... }} is Prometheus and survives Helm.
  */
-function renderRawRule(raw, ref, defaults) {
-  const lines = renderValue(raw, ref, defaults).replace(/\s+$/, '').split('\n')
+function renderRawRule(raw, ref, defaults, selectorCall = null) {
+  const source = selectorCall ? raw.replace(SELECTOR_REF_RE, SELECTOR_SENTINEL) : raw
+  let rendered = renderValue(source, ref, defaults)
+  if (selectorCall) rendered = rendered.split(SELECTOR_SENTINEL).join(` {{- ${selectorCall} -}} `)
+  const lines = rendered.replace(/\s+$/, '').split('\n')
   const indents = lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length)
   const base = indents.length ? Math.min(...indents) : 0
   const body = lines.map(l => (l.trim() ? l.slice(base) : ''))
@@ -153,13 +164,13 @@ function guarded(text, guards, refVar, indent) {
   )
 }
 
-function renderRule(rule, ref, refVar, defaults) {
+function renderRule(rule, ref, refVar, defaults, selectorCall = null) {
   const indent = ' '.repeat(8)
-  if (rule.raw) return guarded(renderRawRule(rule.raw, ref, defaults), rule.guards, refVar, indent)
+  if (rule.raw) return guarded(renderRawRule(rule.raw, ref, defaults, selectorCall), rule.guards, refVar, indent)
 
   // A recording rule has no for, keep_firing_for or annotations (#70).
   if (rule.record !== undefined) {
-    let text = `        - record: ${rule.record}\n` + renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10))
+    let text = `        - record: ${rule.record}\n` + renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10), '', selectorCall)
     if (rule.labels?.length) {
       text += `\n          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n')
     }
@@ -168,7 +179,7 @@ function renderRule(rule, ref, refVar, defaults) {
 
   const parts = [
     `        - alert: ${rule.alert}\n` +
-    renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10)) + '\n' +
+    renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10), '', selectorCall) + '\n' +
     // A duration or a single reference — plain, as a hand-written rule has it.
     `          for: ${renderValue(rule.for, ref, defaults)}`
   ]
@@ -318,6 +329,53 @@ function attachGuards(rules, mayBeAbsent) {
   })
 }
 
+/**
+ * The selector helper for one group (#60), defined in the group's own
+ * template: what `${selector}` expands to for a row.
+ *
+ * For each level, coarsest first: a literal in this row is an equality
+ * matcher; `.*` is either nothing or, when rows one step more specific exist
+ * in that column, one negative matcher excluding them. Every row is read the
+ * way the row loop reads it — merged with _common, the column's default when
+ * absent — and all of `.Values.<group>` is scanned, not this chunk's rows, so
+ * an exception in another chunk is still excluded.
+ *
+ * It is defined per group, not in a shared _helpers.tpl: the levels and
+ * defaults are the group's, and the group's template stays its one file.
+ */
+export function selectorHelper(alertGroup, levels, defaults) {
+  const name = `alertforge.selector.${alertGroup}`
+  const lit = l => (defaults[l] === undefined ? '""' : JSON.stringify(String(defaults[l])))
+  const cell = (l, v) => `(toString (dig "${l}" ${lit(l)} ${v}))`
+  const lines = [
+    `{{- define "${name}" -}}`,
+    `{{- $common := .common | default dict -}}`,
+    `{{- $self := merge (dict) .self $common -}}`,
+    `{{- $rows := list -}}`,
+    `{{- range .rows }}{{ $rows = append $rows (merge (dict) . $common) }}{{ end -}}`,
+    `{{- $parts := list -}}`,
+    ...levels.map((l, i) => `{{- $m${i} := ${cell(l, '$self')} -}}`),
+  ]
+  levels.forEach((l, i) => {
+    const same = levels.map((m, j) => (j === i ? null : `(eq ${cell(m, '$r')} $m${j})`)).filter(Boolean)
+    lines.push(
+      `{{- if ne $m${i} ".*" -}}`,
+      `{{- $parts = append $parts (printf "%s=%q" "${l}" $m${i}) -}}`,
+      `{{- else -}}`,
+      `{{- $ex := list -}}`,
+      `{{- range $r := $rows -}}`,
+      `{{- if and (ne ${cell(l, '$r')} ".*")${same.map(c => ' ' + c).join('')} -}}`,
+      `{{- $ex = append $ex (regexQuoteMeta ${cell(l, '$r')}) -}}`,
+      `{{- end -}}`,
+      `{{- end -}}`,
+      `{{- if $ex -}}{{- $parts = append $parts (printf "%s!~\`%s\`" "${l}" (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}`,
+      `{{- end -}}`,
+    )
+  })
+  lines.push(`{{- join ", " $parts -}}`, `{{- end }}`)
+  return { name, text: lines.join('\n') + '\n' }
+}
+
 function buildGroupParts(alertGroup, alertDef, commonVars) {
   if (!alertDef['x-promql'] && !Array.isArray(alertDef['x-rules'])) return null
 
@@ -347,9 +405,21 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
     ? { defaults: undefined, mayBeAbsent: new Set() }
     : columnFallbacks(alertDef, commonProps, requiredSet)
 
+  // Selector contract (#60): the helper, and the call ${selector} becomes.
+  let preamble = ''
+  let selectorCall = null
+  const levels = alertDef.selectors || []
+  if (levels.length && !legacy && !once) {
+    const cols = { ...commonProps, ...(alertDef?.items?.properties || {}) }
+    const levelDefaults = Object.fromEntries(levels.filter(l => cols[l]?.default !== undefined).map(l => [l, cols[l].default]))
+    const helper = selectorHelper(alertGroup, levels, levelDefaults)
+    preamble = helper.text
+    selectorCall = `include "${helper.name}" (dict "self" ${refVar} "rows" ($.Values.${alertGroup} | default list) "common" ($.Values._common | default dict))`
+  }
+
   const rules = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
   const ruleTexts = attachGuards(rules, mayBeAbsent)
-    .map(rule => renderRule(rule, ref, refVar, defaults))
+    .map(rule => renderRule(rule, ref, refVar, defaults, selectorCall))
 
   if (ruleTexts.length === 0) return null
 
@@ -361,6 +431,7 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
     valuesKey: alertGroup,
     hasCommon,
     once,
+    preamble,
     ruleTexts
   }
 }

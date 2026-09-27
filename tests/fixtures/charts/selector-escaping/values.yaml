@@ -1,0 +1,5 @@
+cpu:
+  - namespace: prod
+  - namespace: prod
+    workload: my.app
+    threshold: 95

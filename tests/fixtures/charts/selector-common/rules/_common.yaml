@@ -1,0 +1,2 @@
+columns:
+  cluster: { type: string, required: true }

@@ -1,0 +1,6 @@
+cpu:
+  - namespace: prod
+  - namespace: prod
+    workload: api
+    threshold: 95
+  - namespace: dev

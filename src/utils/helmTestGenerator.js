@@ -58,6 +58,14 @@ function defaultText(value) {
 }
 
 
+/**
+ * What ${selector} renders as for a lone row (#60): nothing to exclude, so an
+ * equality matcher per level that is not `.*`.
+ */
+function selectorText(levels, text) {
+  return levels.filter(l => text[l] !== '.*').map(l => `${l}="${text[l]}"`).join(', ')
+}
+
 function substitute(str, text) {
   return String(str).replace(VAR_RE, (whole, name) => (name in text ? text[name] : whole))
 }
@@ -158,6 +166,7 @@ export function generateHelmUnittestSuite(model) {
       Object.entries({ ...commonValues, ...ownValues })
         .map(([name, v]) => [name, typeof v === 'number' ? goFloat(v) : String(v)])
     )
+    if (group.selectors?.length) text.selector = selectorText(group.selectors, text)
 
     // The resource is the group's output profile (#65): a vlogs group is a
     // VMRule with `type: vlogs`, and a suite expecting PrometheusRule would
@@ -184,6 +193,7 @@ export function generateHelmUnittestSuite(model) {
 
     const withDefaults = { ...text }
     for (const name of defaulted) withDefaults[name] = defaultText(allColumns[name].default)
+    if (group.selectors?.length) withDefaults.selector = selectorText(group.selectors, withDefaults)
     tests.push({
       it: `renders ${key} with defaults for ${defaulted.join(', ')}`,
       template,

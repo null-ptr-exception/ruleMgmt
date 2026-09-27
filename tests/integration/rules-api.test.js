@@ -192,6 +192,36 @@ describe('POST /:chart/rules — once groups', () => {
   })
 })
 
+// #60: changing a group's selectors changes what each row alerts on; the
+// save says so.
+describe('POST /:chart/rules — selectors', () => {
+  const SEL = `group: cpu
+selectors: [namespace]
+columns:
+  namespace: {type: string, required: true}
+  workload: {type: string, default: ".*"}
+rules:
+  - alert: CpuHigh
+    expr: cpu{\${selector}} > 1
+    labels: {severity: warning}
+`
+
+  it('generates the helper and says the selectors changed', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL } })
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL.replace('[namespace]', '[namespace, workload]') } })
+    expect(status).toBe(200)
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-selectors-changed', group: 'cpu', from: ['namespace'], to: ['namespace', 'workload'] })])
+    expect(await read('templates/cpu.yaml')).toContain('{{- define "alertforge.selector.cpu" -}}')
+    expect(JSON.parse(await read('values.schema.json')).properties.cpu.items.properties.workload.pattern).toBeDefined()
+  })
+
+  it('refuses a rule that does not use ${selector}', async () => {
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL.replace('cpu{${selector}}', 'cpu') } })
+    expect(status).toBe(400)
+    expect(data.findings).toEqual([expect.objectContaining({ kind: 'selectors-unused' })])
+  })
+})
+
 describe('GET /:chart drift', () => {
   it('fills in a missing Chart.yaml and regenerates missing products on open', async () => {
     await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })

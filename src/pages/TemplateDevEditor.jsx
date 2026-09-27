@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, Tooltip, message } from 'antd'
+import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, Tooltip, Tag, message } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, ImportOutlined, EditOutlined } from '@ant-design/icons'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
@@ -44,7 +44,48 @@ const emptyGroup = key => ({
 // profile wraps the group, how often it is evaluated, how many series it may
 // produce. Left blank, a field is left out of the rules file — the type is
 // then the default profile, the interval the evaluator's own.
-function GroupSettings({ group, onChange }) {
+// The group's selector hierarchy (#60), coarsest first: picked from the
+// group's and _common's string columns, and put in order. Empty is off.
+function SelectorsEditor({ group, commonColumns, onChange }) {
+  const levels = group.selectors || []
+  const candidates = Object.entries({ ...commonColumns, ...(group.columns || {}) })
+    .filter(([name, col]) => (col.type || 'string') === 'string' && !levels.includes(name))
+    .map(([name]) => name)
+  const set = next => onChange(g => {
+    const out = { ...g }
+    if (next.length) out.selectors = next
+    else delete out.selectors
+    return out
+  })
+  const move = (i, d) => {
+    const next = [...levels]
+    ;[next[i], next[i + d]] = [next[i + d], next[i]]
+    set(next)
+  }
+  return (
+    <span data-testid="selectors-editor" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <Tooltip title="Coarsest first. A row that is .* in a level gives up the rows one step more specific in it — nobody maintains an exclusion list.">
+        <Text type="secondary" style={{ fontSize: 12 }}>Selectors</Text>
+      </Tooltip>
+      {levels.map((name, i) => (
+        <span key={name} data-testid={`selector-level-${name}`}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 2, border: '1px solid #d9d9d9', borderRadius: 4, padding: '0 4px' }}>
+          <Text style={{ fontSize: 12 }}>{i + 1}. {name}</Text>
+          <Button size="small" type="text" aria-label={`Move ${name} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</Button>
+          <Button size="small" type="text" aria-label={`Move ${name} down`} disabled={i === levels.length - 1} onClick={() => move(i, 1)}>↓</Button>
+          <Button size="small" type="text" aria-label={`Remove selector ${name}`} onClick={() => set(levels.filter(l => l !== name))}>×</Button>
+        </span>
+      ))}
+      {candidates.length > 0 && (
+        <Select size="small" aria-label="Add selector" placeholder="add level" style={{ width: 120 }} value={null}
+          options={candidates.map(c => ({ value: c, label: c }))}
+          onChange={name => set([...levels, name])} />
+      )}
+    </span>
+  )
+}
+
+function GroupSettings({ group, commonColumns = {}, onChange }) {
   // once (#70): the group renders once per deployment and has no rows, so it
   // cannot have columns — turned on only once they are gone.
   const hasColumns = Object.keys(group.columns || {}).length > 0
@@ -81,6 +122,9 @@ function GroupSettings({ group, onChange }) {
         <InputNumber size="small" aria-label="Group limit" style={{ width: 90 }} placeholder="none" min={0} precision={0}
           value={group.limit ?? null} onChange={v => set('limit', v)} />
       </span>
+      {!group.once && profileFor(group.type)?.validate === 'promtool' && (
+        <SelectorsEditor group={group} commonColumns={commonColumns} onChange={onChange} />
+      )}
       {profileFor(group.type)?.validate !== 'promtool' && (
         <Text type="secondary" style={{ fontSize: 12 }}>
           expr is not PromQL here — Preview cannot syntax-check it
@@ -90,7 +134,7 @@ function GroupSettings({ group, onChange }) {
   )
 }
 
-function ColumnRow({ name, col, usage, onRename, onPatch, onRemove }) {
+function ColumnRow({ name, col, usage, onRename, onPatch, onRemove, selectorLevel }) {
   const uiType = col.enum ? 'enum' : (col.type || 'string')
   const [draft, setDraft] = useState(name)
   useEffect(() => { setDraft(name) }, [name])
@@ -106,6 +150,11 @@ function ColumnRow({ name, col, usage, onRename, onPatch, onRemove }) {
           onChange={e => setDraft(e.target.value)}
           onBlur={commit} onPressEnter={commit}
           style={{ width: 150, fontWeight: 600 }} />
+        {selectorLevel !== undefined && (
+          <Tooltip title="A selector: its cells are .* or a plain name, never a regex">
+            <Tag color="blue" style={{ marginInlineEnd: 0 }}>selector {selectorLevel + 1}</Tag>
+          </Tooltip>
+        )}
         <Select size="small" value={uiType} options={TYPE_OPTIONS} style={{ width: 90 }}
           onChange={val => onPatch(val === 'enum'
             ? { type: 'string', enum: col.enum || [] }
@@ -468,7 +517,8 @@ export default function TemplateDevEditor() {
   const group = (!isCommon && activeGroup) ? model.groups[activeGroup] : null
   const commonNames = Object.keys(model.common.columns)
   const groupColumns = group && !group.custom
-    ? [...Object.keys(group.columns), ...commonNames]
+    // ${selector} is the group's selector matchers when it has selectors (#60)
+    ? [...Object.keys(group.columns), ...commonNames, ...(group.selectors?.length ? ['selector'] : [])]
     : []
   // Merged column definitions the rule cards need to say "blank leaves this rule out".
   const columnDefs = group && !group.custom
@@ -671,7 +721,7 @@ export default function TemplateDevEditor() {
                   <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeGroup(activeGroup)}>Remove</Button>
                 </div>
 
-                {!group.custom && <GroupSettings group={group} onChange={fn => updateGroup(activeGroup, fn)} />}
+                {!group.custom && <GroupSettings group={group} commonColumns={model.common.columns} onChange={fn => updateGroup(activeGroup, fn)} />}
 
                 {group.custom ? (
                   <Alert type="info" showIcon
@@ -734,6 +784,7 @@ export default function TemplateDevEditor() {
                       )}
                       {Object.entries(group.columns).map(([name, col]) => (
                         <ColumnRow key={name} name={name} col={col}
+                          selectorLevel={group.selectors?.includes(name) ? group.selectors.indexOf(name) : undefined}
                           usage={(usedByColumn[name] || []).join(', ')}
                           onRename={val => renameColumn(activeGroup, name, val)}
                           onPatch={patch => patchColumn(activeGroup, name, name, patch)}

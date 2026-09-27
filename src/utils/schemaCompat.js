@@ -150,6 +150,9 @@ const DESCRIPTIONS = {
   'common-default-removed': c => `common variable "${c.column}" lost its default — every row that left it blank now produces no alert`,
   'common-default-changed': c => `common variable "${c.column}" has a different default — every row that left it blank changes value`,
   'common-default-added': c => `common variable "${c.column}" gained a default — rows that leave it blank will use it`,
+  'group-selectors-changed': c => c.to.length
+    ? `${c.group}: selectors ${c.from.length ? `changed from [${c.from.join(', ')}] to` : 'set to'} [${c.to.join(', ')}] — which rows exclude which is worked out again; no row is lost, but what each row alerts on can change`
+    : `${c.group}: selectors removed — rows no longer exclude each other, so an object can be alerted on by more than one row`,
   'group-once-changed': c => c.to === 'once'
     ? `${c.group}: now renders once per deployment — its objects are renamed (no chunk index): the old ones are deleted and new ones created, and its rows are no longer read`
     : `${c.group}: now renders once per row — its objects are renamed (with a chunk index): the old ones are deleted and new ones created`,
@@ -187,6 +190,25 @@ export function groupOnceChanges(beforeModel, afterModel) {
     if (!before || before.custom || after.custom) continue
     if (!!before.once === !!after.once) continue
     changes.push({ kind: 'group-once-changed', group, to: after.once ? 'once' : 'per-row' })
+  }
+  return changes
+}
+
+/**
+ * Groups whose `selectors:` changed, in content or order (#60). values.yaml is
+ * untouched, so the schema diff sees nothing — but which rows exclude which
+ * is recomputed, so what a row alerts on can change. Always said, never
+ * breaking.
+ */
+export function groupSelectorChanges(beforeModel, afterModel) {
+  const changes = []
+  for (const [group, after] of Object.entries(afterModel?.groups || {})) {
+    const before = beforeModel?.groups?.[group]
+    if (!before || before.custom || after.custom) continue
+    const from = before.selectors || []
+    const to = after.selectors || []
+    if (from.join('\u0000') === to.join('\u0000')) continue
+    changes.push({ kind: 'group-selectors-changed', group, from, to })
   }
   return changes
 }

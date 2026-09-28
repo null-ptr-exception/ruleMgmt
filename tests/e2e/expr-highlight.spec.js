@@ -25,6 +25,18 @@ rules:
     labels: {severity: critical}
 `
 
+// A comment line, so every kind of token the palette colours is on screen.
+const MEM = `group: mem
+columns:
+  namespace: {type: string, required: true}
+rules:
+  - alert: MemHigh
+    expr: |
+      # bytes in use, by namespace
+      sum by (namespace) (mem_used_bytes{namespace="\${namespace}"}) > 1e9
+    labels: {severity: warning}
+`
+
 const CHART = 'e2e-expr-highlight'
 
 async function openGroup(page, group) {
@@ -48,7 +60,7 @@ test.describe('expr editor highlighting', () => {
   test.beforeAll(async ({ request }) => {
     await request.delete(`/api/v2/charts/${CHART}`)
     expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
-    const save = await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU, 'logs.yaml': LOGS } } })
+    const save = await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU, 'logs.yaml': LOGS, 'mem.yaml': MEM } } })
     expect(save.ok()).toBeTruthy()
   })
   test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
@@ -62,6 +74,27 @@ test.describe('expr editor highlighting', () => {
 
     const font = await page.locator('.cm-content').first().evaluate(el => getComputedStyle(el).fontFamily)
     expect(font).toContain('Consolas')
+  })
+
+  test('every token meets WCAG AA contrast (4.5:1) on the editor background', async ({ page }) => {
+    await openGroup(page, 'mem')
+    const low = await page.evaluate(() => {
+      const rgb = c => c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number)
+      const lum = c => {
+        const [r, g, b] = rgb(c).map(v => v / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+      }
+      const editor = document.querySelector('.cm-editor')
+      const bg = lum(getComputedStyle(editor).backgroundColor)
+      return [...editor.querySelector('.cm-content').querySelectorAll('span')]
+        .filter(s => s.textContent.trim())
+        .map(s => {
+          const fg = lum(getComputedStyle(s).color)
+          return { text: s.textContent, ratio: (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05) }
+        })
+        .filter(t => t.ratio < 4.5)
+    })
+    expect(low).toEqual([])
   })
 
   test('a ${column} is marked, not shown as a PromQL error', async ({ page }) => {

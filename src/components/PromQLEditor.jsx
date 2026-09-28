@@ -50,7 +50,7 @@ const promqlHighlight = HighlightStyle.define([
   { tag: tags.string, color: '#fbbf24' },
   { tag: tags.labelName, color: '#7dd3fc' },
   { tag: tags.variableName, color: '#93c5fd', fontWeight: '600' },
-  { tag: tags.comment, color: '#64748b', fontStyle: 'italic' },
+  { tag: tags.comment, color: '#94a3b8', fontStyle: 'italic' },
 ])
 
 const columnRefMatcher = new MatchDecorator({

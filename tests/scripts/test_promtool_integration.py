@@ -42,6 +42,7 @@ groups:
 
     def test_real_promtool_checks_merged_prometheus_rule_documents(self):
         rendered = """
+apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 spec:
   groups:
@@ -54,6 +55,7 @@ kind: ConfigMap
 metadata:
   name: ignored
 ---
+apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 spec:
   groups:

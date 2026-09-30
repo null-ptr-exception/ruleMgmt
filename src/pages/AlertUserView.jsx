@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Modal, Typography, Empty, Input, Select, message, Segmented, Alert } from 'antd'
+import { Button, Modal, Typography, Empty, Input, Select, message, Segmented, Alert, Tooltip } from 'antd'
 import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
 import OverviewTemplateTree from '../components/OverviewTemplateTree'
-import AlertTable from '../components/AlertTable'
+import AlertTable, { RequiredMark } from '../components/AlertTable'
+import { isMissingRequired } from '../utils/valueUtils'
 import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
 import PreviewModal from '../components/PreviewModal'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
@@ -507,11 +508,11 @@ export default function AlertUserView() {
                   <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
                     Values set here apply to all alert groups in this deployment.
                   </Text>
-                  {commonVarDefs.map(v => (
-                    <div key={v.name} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                      <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}</Text>
-                      {v.enum ? (
+                  {commonVarDefs.map(v => {
+                    const missing = !frozenSource && isMissingRequired(v, commonValues[v.name])
+                    const field = v.enum ? (
                         <Select size="small" value={commonValues[v.name] ?? ''}
+                          status={missing ? 'error' : undefined}
                           onChange={val => { setCommonValues({ ...commonValues, [v.name]: val }); setDirty(true) }}
                           style={{ flex: 1 }}
                           options={v.enum.map(opt => ({ value: opt, label: opt }))}
@@ -522,6 +523,7 @@ export default function AlertUserView() {
                       ) : (
                         <Input size="small" value={commonValues[v.name] ?? ''}
                           disabled={!!frozenSource}
+                          status={missing ? 'error' : undefined}
                           onChange={e => {
                             if (e.target.value) {
                               setCommonValues({ ...commonValues, [v.name]: e.target.value }); setDirty(true)
@@ -531,9 +533,14 @@ export default function AlertUserView() {
                           }}
                           style={{ flex: 1 }}
                         />
-                      )}
-                    </div>
-                  ))}
+                      )
+                    return (
+                      <div key={v.name} data-testid={`common-value-${v.name}`} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                        <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}{v.required && <RequiredMark />}</Text>
+                        {missing ? <Tooltip title="Required">{field}</Tooltip> : field}
+                      </div>
+                    )
+                  })}
                 </div>
               ) : onceGroups.includes(activeAlert) ? (
                 <Alert

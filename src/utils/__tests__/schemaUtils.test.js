@@ -230,8 +230,9 @@ describe('schemaToVars with common vars', () => {
 
   it('merges common vars before group-specific vars', () => {
     const vars = schemaToVars(schemaWithCommon, 'cpu_alert')
-    expect(vars[0]).toEqual({ name: 'owner', type: 'string', description: 'Team owner', required: true })
+    expect(vars[0]).toEqual({ name: 'owner', type: 'string', description: 'Team owner', required: true, common: true })
     expect(vars[1].name).toBe('host')
+    expect(vars[1].common).toBeUndefined()
   })
 
   it('does not duplicate if group has same var name as common', () => {

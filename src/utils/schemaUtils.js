@@ -93,7 +93,9 @@ export function schemaToVars(schema, alertName) {
       return v
     })
 
-  return [...common, ...groupVars]
+  // A _common column is shown in the group's table but filled in on Common
+  // Values: `common` tells the table not to treat it as the row's own.
+  return [...common.map(v => ({ ...v, common: true })), ...groupVars]
 }
 
 /**

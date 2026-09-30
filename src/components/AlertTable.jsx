@@ -3,7 +3,11 @@ import { Table, Button, Input, InputNumber, Select, Checkbox, Tooltip, Modal, Ty
 import { DeleteOutlined, PlusOutlined, FilterOutlined, BranchesOutlined } from '@ant-design/icons'
 import { selectorCells, directChildren, parentOf, ANY } from '../utils/selectorContract'
 import { matchesFilter, getFilterOperators } from '../utils/filterUtils'
-import { buildNewRow } from '../utils/valueUtils'
+import { buildNewRow, isMissingRequired } from '../utils/valueUtils'
+
+export const RequiredMark = () => (
+  <span data-testid="required-mark" aria-label="required" style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>
+)
 
 function FilterHeader({ varName, varDef, filter, onChange }) {
   const ops = getFilterOperators(varDef)
@@ -14,7 +18,7 @@ function FilterHeader({ varName, varDef, filter, onChange }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span>{varName}</span>
+        <span>{varName}{varDef?.required && !varDef.common && <RequiredMark />}</span>
         {active && <FilterOutlined style={{ fontSize: 10, color: '#1677ff' }} />}
       </div>
       <div style={{ display: 'flex', gap: 2 }}>
@@ -76,6 +80,11 @@ export default function AlertTable({
 
   const renderInput = (v, row, realIndex) => {
     const val = row[v.name]
+    // Only a hint: the server is what refuses the save (#66), so the two
+    // cannot disagree about what "required" means.
+    const missing = !readOnly && !v.common && isMissingRequired(v, val)
+    const status = missing ? 'error' : undefined
+    const hint = input => missing ? <Tooltip title="Required">{input}</Tooltip> : input
     if (v.type === 'boolean') {
       return (
         <Checkbox
@@ -86,34 +95,37 @@ export default function AlertTable({
       )
     }
     if (v.type === 'number' || v.type === 'integer') {
-      return (
+      return hint(
         <InputNumber
           size="small"
           step={v.type === 'integer' ? 1 : 'any'}
           value={val ?? ''}
           disabled={readOnly}
+          status={status}
           onChange={value => handleCellChange(realIndex, v.name, value)}
           style={{ width: '100%' }}
         />
       )
     }
     if (v.enum) {
-      return (
+      return hint(
         <Select
           size="small"
           value={val ?? ''}
           disabled={readOnly}
+          status={status}
           onChange={value => handleCellChange(realIndex, v.name, value)}
           style={{ width: '100%' }}
           options={v.enum.map(opt => ({ value: opt, label: opt }))}
         />
       )
     }
-    return (
+    return hint(
       <Input
         size="small"
         value={val ?? ''}
         disabled={readOnly}
+        status={status}
         onChange={e => handleCellChange(realIndex, v.name, e.target.value)}
       />
     )
@@ -152,7 +164,7 @@ export default function AlertTable({
               filter={filters[v.name]}
               onChange={f => onFiltersChange({ ...filters, [v.name]: f })}
             />
-          : v.name,
+          : <span>{v.name}{v.required && !v.common && <RequiredMark />}</span>,
         dataIndex: v.name,
         key: v.name,
         render: (_, row) => isCommon

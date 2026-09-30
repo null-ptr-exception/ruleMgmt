@@ -1,6 +1,14 @@
 import { schemaToVars } from './schemaUtils'
 
 /**
+ * A required cell with nothing in it (#67) — what the server refuses on save
+ * (valueProblems). A checkbox always holds a value.
+ */
+export function isMissingRequired(v, value) {
+  return !!v?.required && v.type !== 'boolean' && (value === undefined || value === null || value === '')
+}
+
+/**
  * Remove keys for non-required vars whose value is empty ('' / null /
  * undefined). An absent key is the only reliable representation of "no
  * value" in Helm's values layer (explicit null is a delete-key instruction

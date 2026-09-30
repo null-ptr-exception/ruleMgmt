@@ -191,8 +191,10 @@ of every group in this deployment.
 Each row is one monitored scope. What the columns mean is set by whoever wrote
 the template; if a name is unclear, that is worth telling them.
 
-A cell left empty is left out of the row, which is how an optional column
-says "not set". Save is refused, naming the row and column, when:
+A required column is marked `*`, here and on Common Values, and an empty
+required cell is outlined in red until it is filled. A cell left empty is
+left out of the row, which is how an optional column says "not set". Save is
+refused, naming the row and column, when:
 
 - a required column is empty — in a row, or in Common Values once anything
   renders (any row, or a group marked **No values needed**)

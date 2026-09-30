@@ -122,7 +122,10 @@ def copy_target_root_to_temp(target: RenderTarget, temp_root: Path) -> RenderTar
 
 
 def build_dependencies(target: RenderTarget) -> int:
-    result = run_command(["helm", "dependency", "build", str(target.chart_dir)])
+    # --skip-refresh: dependencies are file:// charts, so there is no repo index
+    # to fetch — without it helm refreshes every repo configured on the machine
+    # first, which is seconds (tens on a slow link) per chart.
+    result = run_command(["helm", "dependency", "build", "--skip-refresh", str(target.chart_dir)])
     if result.returncode != 0:
         print(f"{target.name}: helm dependency build failed", file=sys.stderr)
         if result.stderr:

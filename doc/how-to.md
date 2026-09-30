@@ -191,6 +191,14 @@ of every group in this deployment.
 Each row is one monitored scope. What the columns mean is set by whoever wrote
 the template; if a name is unclear, that is worth telling them.
 
+A cell left empty is left out of the row, which is how an optional column
+says "not set". Save is refused, naming the row and column, when:
+
+- a required column is empty — in a row, or in Common Values once the
+  deployment has any row
+- a value holds a line break
+- a value read by a label holds `"` or `\`
+
 In a group with selectors, a row that is `.*` covers everything the rows
 under it do not. **Scope** says which rows a row gives up (*excludes N* —
 hover for which) and which row it is an exception to. **Add exception**

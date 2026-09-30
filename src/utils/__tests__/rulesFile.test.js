@@ -413,6 +413,16 @@ describe('valueProblems', () => {
     expect(cells({ cpu: [] })).toEqual([])
   })
 
+  // A once group renders with no rows (#70), so it reads _common all the same.
+  it('refuses a required _common column when a once group renders, with no rows anywhere', () => {
+    const withOnce = model({
+      '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n',
+      'watchdog.yaml': 'once: true\nrules:\n  - alert: Watchdog\n    expr: vector(1)\n    labels: {owner: "${owner}"}\n',
+    })
+    expect(valueProblems({}, withOnce).map(p => `${p.group}:${p.column}`)).toEqual(['_common:owner'])
+    expect(valueProblems({ _common: { owner: 'dba' } }, withOnce)).toEqual([])
+  })
+
   it('refuses "" and null in an optional column — leave the cell out instead', () => {
     expect(cells({ ...ok, cpu: [{ namespace: 'p', job: '' }, { namespace: 'p', job: null }] }))
       .toEqual(['cpu:0:job', 'cpu:1:job'])

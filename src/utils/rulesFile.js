@@ -579,15 +579,18 @@ export function valueProblems(values, model) {
     return null
   }
 
-  let anyRows = false
+  // _common is read whenever anything renders: any row, or a once group,
+  // which renders with none (#70).
+  let rendersAnything = false
   for (const [group, entry] of Object.entries(model.groups || {})) {
     if (entry.custom) continue
+    if (entry.once) rendersAnything = true
     const columns = entry.columns || {}
     const quoted = columnsInQuotedValues(entry)
     for (const name of quoted) if (name in commonCols && !(name in columns)) quotedCommon.add(name)
     const rows = values?.[group]
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
-      anyRows = true
+      rendersAnything = true
       const cells = new Set([...Object.keys(columns), ...Object.keys(row || {}).filter(k => !(k in commonCols))])
       for (const name of cells) {
         const why = cellProblem(columns[name], name in (row || {}), row?.[name], quoted.has(name))
@@ -597,7 +600,7 @@ export function valueProblems(values, model) {
   }
 
   const common = values?._common || {}
-  const commonCells = new Set([...(anyRows ? Object.keys(commonCols) : []), ...Object.keys(common)])
+  const commonCells = new Set([...(rendersAnything ? Object.keys(commonCols) : []), ...Object.keys(common)])
   for (const name of commonCells) {
     const why = cellProblem(commonCols[name], name in common, common[name], quotedCommon.has(name))
     if (why) problems.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${why}` })

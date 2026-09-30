@@ -194,8 +194,8 @@ the template; if a name is unclear, that is worth telling them.
 A cell left empty is left out of the row, which is how an optional column
 says "not set". Save is refused, naming the row and column, when:
 
-- a required column is empty — in a row, or in Common Values once the
-  deployment has any row
+- a required column is empty — in a row, or in Common Values once anything
+  renders (any row, or a group marked **No values needed**)
 - a value holds a line break
 - a value read by a label holds `"` or `\`
 

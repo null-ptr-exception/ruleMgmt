@@ -14,5 +14,4 @@ VMRule blind-panics-1-1:
     rules:
       - alert: Panics
         expr: '_time:10m app:"checkout" "panic:" | stats count() as panics | filter panics:>0'
-        for: 5m
         labels: { severity: critical, owner: shop-team }

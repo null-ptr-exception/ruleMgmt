@@ -110,7 +110,7 @@ Different groups in one chart may have different types.
 | `alert` | The alert name. Written by you; the generator never composes one |
 | `record` | Instead of `alert`: the name of the series a recording rule records, e.g. `job:errors:rate5m`. A rule has exactly one of the two |
 | `expr` | PromQL, with `${…}` placeholders |
-| `for` | A duration, or a placeholder |
+| `for` | A duration, or a placeholder. Left out, there is none: the alert fires on the first evaluation, as in Prometheus |
 | `keep_firing_for` | Passed through |
 | `labels` | A map. Values may be literal, a placeholder, or a Prometheus template |
 | `annotations` | Same as labels |

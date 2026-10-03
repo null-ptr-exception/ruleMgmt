@@ -17,5 +17,4 @@ blind-errors-1-1:
             Paths matching /v1/.*\\.json are excluded.
       - alert: RouteDown
         expr: '{__name__="probe_success", job="api", path=~"/v1/.*\\.json"} == 0 # probe: ok'
-        for: 5m
         labels: { severity: critical }

@@ -6,6 +6,5 @@ blind-watchdog-1:
     rules:
       - alert: Watchdog
         expr: vector(1)
-        for: 5m
         labels: { severity: none }
         annotations: { summary: always firing — proves the pipeline delivers }

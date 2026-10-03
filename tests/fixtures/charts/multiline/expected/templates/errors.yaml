@@ -30,7 +30,6 @@ spec:
         - alert: RouteDown
           expr: |-
             {__name__="probe_success", job="{{ .job }}", path=~"{{ .pattern }}"} == 0 # probe: ok
-          for: 5m
           labels:
             severity: critical
         {{- end }}

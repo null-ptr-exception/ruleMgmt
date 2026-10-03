@@ -101,9 +101,10 @@ describe('helm-unittest via generated tests', () => {
 // Blind-test cases whose shape the sample chart lacks: multi-line expr and
 // annotations (block scalars, trimmed), and output profiles other than
 // PrometheusRule (#65) — a vlogs group is a VMRule with `type: vlogs`, and a
-// mixed chart has both; once groups and recording rules (#70). The suite
-// generated for each has to pass.
-describe.each(['multiline', 'vlogs', 'mixed', 'recording-once', 'threshold-as-metric', 'once-zero-rows', 'vlogs-once', 'selector-basic', 'selector-common'])('helm-unittest for the %s blind case', name => {
+// mixed chart has both; once groups and recording rules (#70); a rule with no
+// `for`, asserted absent rather than equal. The suite generated for each has
+// to pass.
+describe.each(['multiline', 'vlogs', 'mixed', 'recording-once', 'threshold-as-metric', 'once-zero-rows', 'vlogs-once', 'selector-basic', 'selector-common', 'for-omitted'])('helm-unittest for the %s blind case', name => {
   let dir
 
   beforeAll(async () => {

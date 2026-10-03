@@ -6,5 +6,4 @@ VMRule blind-app-panic-1:
     rules:
       - alert: AppPanic
         expr: '_time:5m service:"checkout" panic | stats count() as panics | filter panics:>0'
-        for: 5m
         labels: { severity: critical }

@@ -18,7 +18,6 @@ spec:
         - alert: Panics
           expr: |-
             _time:10m app:"{{ $row.app }}" "panic:" | stats count() as panics | filter panics:>0
-          for: 5m
           labels:
             severity: critical
             owner: "{{ $row.owner }}"

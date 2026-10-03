@@ -15,19 +15,16 @@ spec:
         - alert: TargetDown
           expr: |-
             {job="{{ .job }}", __name__="up"} == 0
-          for: 5m
           labels:
             severity: critical
         - alert: VersionSkew
           expr: |-
             count(count by (v) (label_replace(build_info{job="{{ .job }}"}, "v", "$1", "version", "(.*): .*"))) > 1
-          for: 5m
           labels:
             severity: warning
         - alert: Flapping
           expr: |-
             changes(up{job="{{ .job }}"}[15m]) > 4 # restarts, not scrapes
-          for: 5m
           labels:
             severity: info
         {{- end }}

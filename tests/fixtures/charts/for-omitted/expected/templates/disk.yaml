@@ -14,7 +14,13 @@ spec:
         {{- range $rows }}
         - alert: DiskFull
           expr: |-
-            disk_used_percent{mount="{{ .mount }}"} > 90
+            disk_free_bytes{device="{{ .device }}"} == 0
+          labels:
+            severity: critical
+        - alert: DiskLow
+          expr: |-
+            disk_free_bytes{device="{{ .device }}"} < 1000
+          for: 10m
           labels:
             severity: warning
         {{- end }}

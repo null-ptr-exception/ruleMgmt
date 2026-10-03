@@ -117,7 +117,9 @@ function ruleAsserts(rules, text) {
     }
     asserts.push({ equal: { path: `${path}.alert`, value: rule.alert } })
     asserts.push({ equal: { path: `${path}.expr`, value: blockValue(rule.expr, text) } })
-    asserts.push({ equal: { path: `${path}.for`, value: substitute(rule.for, text) } })
+    asserts.push(rule.for
+      ? { equal: { path: `${path}.for`, value: substitute(rule.for, text) } }
+      : { notExists: { path: `${path}.for` } })
     for (const field of ['labels', 'annotations']) {
       if (!rule[field]?.length) continue
       const value = field === 'annotations' ? e => blockValue(e.value, text) : e => labelValue(e, text)

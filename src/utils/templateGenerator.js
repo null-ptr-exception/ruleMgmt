@@ -179,9 +179,9 @@ function renderRule(rule, ref, refVar, defaults, selectorCall = null) {
 
   const parts = [
     `        - alert: ${rule.alert}\n` +
-    renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10), '', selectorCall) + '\n' +
+    renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10), '', selectorCall) +
     // A duration or a single reference — plain, as a hand-written rule has it.
-    `          for: ${renderValue(rule.for, ref, defaults)}`
+    (rule.for ? `\n          for: ${renderValue(rule.for, ref, defaults)}` : '')
   ]
   if (rule.keep_firing_for) {
     const line = `          keep_firing_for: ${renderValue(rule.keep_firing_for, ref, defaults)}`
@@ -254,7 +254,9 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
     } : {
       alert: rule.alert,
       expr: expand(rule.expr),
-      for: expand(rule.for || alertDef['x-for'] || '5m'),
+      // No `for` means none, as in Prometheus: the alert fires on the first
+      // evaluation. Only a legacy x-promql group has a default (5m).
+      ...(rule.for || alertDef['x-for'] ? { for: expand(String(rule.for || alertDef['x-for'])) } : {}),
       ...(rule.keep_firing_for ? { keep_firing_for: expand(String(rule.keep_firing_for)) } : {}),
       labels: expandEntries(toEntries(rule.labels)),
       annotations: expandEntries(toEntries(rule.annotations))

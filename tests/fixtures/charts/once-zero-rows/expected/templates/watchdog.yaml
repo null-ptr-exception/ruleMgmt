@@ -13,7 +13,6 @@ spec:
         - alert: Watchdog
           expr: |-
             vector(1)
-          for: 5m
           labels:
             severity: none
           annotations:

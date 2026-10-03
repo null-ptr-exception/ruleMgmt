@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import yaml from 'js-yaml'
 
 // The editor now loads a chart's rules/*.yaml (or adapts a schema-only chart),
 // and Save goes through the one atomic POST /:chart/rules. This drives that
@@ -132,5 +133,58 @@ rules:
 
     await page.getByRole('button', { name: 'Save' }).first().click()
     await expect(page.locator('.ant-modal').filter({ hasText: /not a column|Rule checks failed/ })).toBeVisible({ timeout: 5000 })
+  })
+})
+
+// Set as variable keeps what the literal was as the column's default, so a
+// chart pasted in and then marked renders what it did before until a row says
+// otherwise — and a row left empty does not lose the rule.
+test.describe('Set as variable', () => {
+  const MARK = 'e2e-set-as-variable'
+
+  test.beforeEach(async ({ request }) => {
+    await request.delete(`/api/v2/charts/${MARK}`)
+    expect((await request.post('/api/v2/charts', { data: { name: MARK } })).ok()).toBeTruthy()
+    const res = await request.post(`/api/v2/templates/${MARK}/rules`, {
+      data: { files: { 'cpu.yaml': 'group: cpu\nrules:\n  - alert: CpuHigh\n    expr: cpu{ns="shop"} > 0.8\n' } },
+    })
+    expect(res.ok()).toBeTruthy()
+  })
+  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${MARK}`) })
+
+  test('stores the literal it replaced as the default', async ({ page, request }) => {
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
+    await page.locator('.ant-select').first().click()
+    await page.locator('.ant-select-item-option').filter({ hasText: MARK }).click()
+    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await page.getByText('cpu', { exact: true }).first().click()
+
+    const mark = async (from, to, name) => {
+      const expr = page.locator('.cm-content').first()
+      await expr.click()
+      await page.keyboard.press('ControlOrMeta+End')
+      for (let i = 0; i < from; i++) await page.keyboard.press('ArrowLeft')
+      for (let i = from; i < to; i++) await page.keyboard.press('Shift+ArrowLeft')
+      await page.getByRole('button', { name: 'Set as variable' }).click()
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'Name this variable' })
+      await dialog.locator('input').fill(name)
+      await dialog.getByRole('button', { name: 'Create' }).click()
+      await expect(dialog).toBeHidden()
+    }
+    await mark(0, 3, 'warn')                // 0.8, counted back from the end
+    await mark(12, 16, 'namespace')         // shop, before `"} > ${warn}`
+
+    await page.getByRole('button', { name: 'Save' }).first().click()
+    await expect.poll(async () => {
+      const info = await (await request.get(`/api/v2/templates/${MARK}`)).json()
+      return info.rulesFiles?.['cpu.yaml'] || ''
+    }, { timeout: 8000 }).toContain('${warn}')
+
+    const info = await (await request.get(`/api/v2/templates/${MARK}`)).json()
+    const file = yaml.load(info.rulesFiles['cpu.yaml'])
+    expect(file.rules[0].expr).toBe('cpu{ns="${namespace}"} > ${warn}')
+    expect(file.columns.warn).toEqual({ type: 'number', default: 0.8 })
+    expect(file.columns.namespace).toEqual({ type: 'string', default: 'shop' })
   })
 })

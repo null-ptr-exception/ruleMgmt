@@ -583,8 +583,12 @@ export default function TemplateDevEditor() {
       target = COMMON
       if (name) message.info(`"${name}" added to common variables — a once group has no columns of its own`)
     }
-    const numeric = sample !== undefined && String(sample).trim() !== '' && !Number.isNaN(Number(sample))
+    const literal = sample === undefined ? '' : String(sample).trim()
+    const numeric = literal !== '' && !Number.isNaN(Number(literal))
     const col = { type: numeric ? 'number' : 'string' }
+    // The literal a marked column replaced is its default, so marking alone
+    // changes nothing that renders (doc/rules-format.md).
+    if (literal !== '') col.default = numeric ? Number(literal) : literal
     const apply = cols => ({ ...cols, [name]: col })
     if (target === COMMON) updateCommonColumns(apply)
     else updateGroup(target, g => ({ ...g, columns: apply(g.columns) }))

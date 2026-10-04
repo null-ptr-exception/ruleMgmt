@@ -1,0 +1,30 @@
+# rule_files is filled in by the harness: one file per rendered object.
+# Proves the rendered PromQL parses and means what it says: the multi-line
+# ratio fires, and the escaped regex matches a real dot and nothing else.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # 1 error/s over 10 requests/s: a ratio of 0.1, over 0.05
+      - series: 'errors_total{job="api"}'
+        values: '0+60x30'
+      - series: 'requests_total{job="api"}'
+        values: '0+600x30'
+      - series: 'probe_success{job="api", path="/v1/users.json"}'
+        values: '0x30'
+      # "X" where the regex wants a literal dot: must not match
+      - series: 'probe_success{job="api", path="/v1/usersXjson"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ErrorRatioHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, job: api }
+            exp_annotations:
+              summary: 'Error ratio 10% on "api"'
+              description: "Owned by team \"core\".\nCheck: api # dashboards/errors\nPaths matching /v1/.*\\\\.json are excluded."
+      - eval_time: 20m
+        alertname: RouteDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: api, path: /v1/users.json }

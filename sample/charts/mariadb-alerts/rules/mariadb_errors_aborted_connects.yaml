@@ -1,0 +1,15 @@
+group: mariadb_errors_aborted_connects
+
+columns:
+  warn_rate: {type: number, default: 3, description: Aborted connects/sec warning}
+
+rules:
+  - alert: MariadbErrorsAbortedConnects_WarnRate
+    expr: rate(mysql_global_status_aborted_connects{namespace="${namespace}"}[5m]) > ${warn_rate}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbErrorsAbortedConnects_WarnRate triggered on ${owner}

@@ -1,0 +1,17 @@
+# PromQL that is not a valid plain YAML scalar: a leading selector brace,
+# a ": " inside a string argument, and a PromQL comment.
+columns:
+  job: { type: string, required: true }
+
+rules:
+  - alert: TargetDown
+    expr: '{job="${job}", __name__="up"} == 0'
+    labels: { severity: critical }
+
+  - alert: VersionSkew
+    expr: 'count(count by (v) (label_replace(build_info{job="${job}"}, "v", "$1", "version", "(.*): .*"))) > 1'
+    labels: { severity: warning }
+
+  - alert: Flapping
+    expr: 'changes(up{job="${job}"}[15m]) > 4 # restarts, not scrapes'
+    labels: { severity: info }

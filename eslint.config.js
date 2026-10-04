@@ -4,7 +4,7 @@ export default [
   js.configs.recommended,
   {
     languageOptions: {
-      ecmaVersion: 2022,
+      ecmaVersion: 'latest',
       sourceType: 'module',
       globals: {
         console: 'readonly',
@@ -19,6 +19,9 @@ export default [
         clearInterval: 'readonly',
         HTMLElement: 'readonly',
         sessionStorage: 'readonly',
+        // Both in browsers and Node 22 — src/utils runs in each.
+        TextEncoder: 'readonly',
+        structuredClone: 'readonly',
       },
       parserOptions: {
         ecmaFeatures: { jsx: true },

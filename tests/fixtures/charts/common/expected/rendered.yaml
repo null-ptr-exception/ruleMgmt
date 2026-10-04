@@ -1,0 +1,22 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-cpu-throttle-1-1:
+  - name: cpu-throttle
+    rules:
+      - alert: CPUThrottled
+        expr: throttle_ratio{cluster="east-1", namespace="a"} > 0.5
+        for: 15m
+        labels: { severity: info }
+
+blind-memory-1-1:
+  - name: memory
+    rules:
+      - alert: MemoryHigh
+        expr: mem_used_pct{cluster="east-1", namespace="a"} > 90
+        for: 5m
+        labels: { severity: warning, env: prod }
+        annotations: { summary: "memory in east-1/a is {{ $value }}%" }
+      - alert: MemoryHigh
+        expr: mem_used_pct{cluster="east-1", namespace="b"} > 75
+        for: 5m
+        labels: { severity: warning, env: prod }
+        annotations: { summary: "memory in east-1/b is {{ $value }}%" }

@@ -1,0 +1,3 @@
+http_latency:
+  - namespace: shop
+    warn_seconds: 0.5

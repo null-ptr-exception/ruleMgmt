@@ -1,0 +1,11 @@
+# Per row, reading the series the once group records.
+columns:
+  job:  { type: string, required: true }
+  warn: { type: number, default: 5 }
+
+rules:
+  - alert: ApiErrors
+    expr: job:errors:rate5m{job="${job}"} > ${warn}
+    for: 5m
+    labels: { severity: warning }
+    annotations: { summary: '{{ $labels.job }}: {{ $value }} errors/s' }

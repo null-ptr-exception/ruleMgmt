@@ -1,0 +1,15 @@
+group: mariadb_traffic_network_receive
+
+columns:
+  warn_bytes: {type: number, default: 104857600, description: Receive bytes/sec warning}
+
+rules:
+  - alert: MariadbTrafficNetworkReceive_WarnBytes
+    expr: rate(container_network_receive_bytes_total{namespace="${namespace}"}[5m]) > ${warn_bytes}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbTrafficNetworkReceive_WarnBytes triggered on ${owner}

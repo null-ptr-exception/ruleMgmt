@@ -1,0 +1,5 @@
+# A once group can read _common — it is all a once rule sees. team is
+# optional with no default, so a deployment without it loses that label.
+columns:
+  cluster: { type: string, required: true }
+  team:    { type: string }

@@ -53,6 +53,19 @@ describe('Charts API', () => {
     expect(data.ok).toBe(true)
   })
 
+  // Creating over an existing chart rewrote its Chart.yaml, values.yaml and
+  // schema, and New → From rules… then replaced its rules/ outright.
+  it('refuses a name already taken, and leaves that chart alone', async () => {
+    const chartYaml = path.join(tmpDir, 'charts', 'test-app', 'Chart.yaml')
+    const original = await fs.readFile(chartYaml, 'utf-8')
+    await fs.writeFile(chartYaml, original.replace('version: 0.1.0', 'version: 3.1.4'))
+    const { status, data } = await api('POST', '/api/v2/charts', { name: 'test-app' })
+    expect(status).toBe(409)
+    expect(data.error).toContain('already exists')
+    expect(await fs.readFile(chartYaml, 'utf-8')).toContain('version: 3.1.4')
+    await fs.writeFile(chartYaml, original)
+  })
+
   it('rejects invalid chart name', async () => {
     const { status } = await api('POST', '/api/v2/charts', { name: 'BAD NAME!' })
     expect(status).toBe(400)
@@ -206,5 +219,36 @@ describe('Deployments API', () => {
     await api('DELETE', '/api/v2/deployments/test-app/prod')
     const { data } = await api('GET', '/api/v2/deployments/test-app')
     expect(data).toHaveLength(1)
+  })
+})
+
+// From the CodeRabbit review of #63.
+describe('reads and failed writes leave no chart behind', () => {
+  it('GET on a chart that does not exist is a 404 and creates nothing', async () => {
+    const { status } = await api('GET', '/api/v2/templates/no-such-chart')
+    expect(status).toBe(404)
+    await expect(fs.access(path.join(tmpDir, 'charts', 'no-such-chart'))).rejects.toThrow()
+  })
+
+  it('a clone that fails part-way is removed, so a retry is not "already exists"', async () => {
+    await api('POST', '/api/v2/charts', { name: 'clone-src' })
+    await fs.rm(path.join(tmpDir, 'charts', 'clone-src', 'values.schema.json'), { force: true })
+    const { status } = await api('POST', '/api/v2/charts/clone-src/clone', { newName: 'clone-half' })
+    expect(status).toBe(500)
+    await expect(fs.access(path.join(tmpDir, 'charts', 'clone-half'))).rejects.toThrow()
+    await api('DELETE', '/api/v2/charts/clone-src')
+  })
+
+  it('a clone records the chart it came from, whatever the mapping says', async () => {
+    await api('POST', '/api/v2/charts', { name: 'clone-origin' })
+    await fs.writeFile(path.join(tmpDir, 'charts', 'clone-origin', 'values.schema.json'), '{"type":"object","properties":{}}')
+    const { status } = await api('POST', '/api/v2/charts/clone-origin/clone', {
+      newName: 'clone-copy', migration: { chart: 'somewhere-else', columns: { g: { a: 'b' } } },
+    })
+    expect(status).toBe(200)
+    const schema = JSON.parse(await fs.readFile(path.join(tmpDir, 'charts', 'clone-copy', 'values.schema.json'), 'utf-8'))
+    expect(schema['x-migrated-from']).toEqual({ chart: 'clone-origin', columns: { g: { a: 'b' } } })
+    await api('DELETE', '/api/v2/charts/clone-origin')
+    await api('DELETE', '/api/v2/charts/clone-copy')
   })
 })

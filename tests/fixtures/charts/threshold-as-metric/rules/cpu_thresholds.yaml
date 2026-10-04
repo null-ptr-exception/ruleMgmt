@@ -1,0 +1,11 @@
+# threshold-as-metric (#70): each row records its threshold as a series —
+# a recording rule per row, not once.
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, required: true }
+  threshold: { type: number, default: 80 }
+
+rules:
+  - record: cpu_threshold
+    expr: vector(${threshold})
+    labels: { namespace: '${namespace}', workload: '${workload}' }

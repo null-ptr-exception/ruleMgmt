@@ -3,6 +3,64 @@ import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import git from '../lib/git.js'
+import { checkRules } from '../../src/utils/ruleChecks.js'
+import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
+import { blocksCommit } from '../../src/utils/drift.js'
+import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
+
+/**
+ * Reasons a commit should be refused, across every chart in the gitops repo —
+ * see issue #57. Into git means it is for someone else now.
+ *
+ * A hand-edited file that never passed through the editor still has to clear
+ * the rule checks (reference integrity, the ${}/{{ }} split, "a rule reads no
+ * column"). And the products must be current: `stale` (rules/ edited without
+ * regenerating) or `legacy` (never migrated) both block. Silent when there is
+ * no charts directory.
+ */
+async function chartCommitBlockers(gitopsDir) {
+  const chartsDir = path.join(gitopsDir, process.env.CHARTS_DIR || 'charts')
+  let entries
+  try {
+    entries = await fs.readdir(chartsDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const findings = []
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const chartDir = path.join(chartsDir, entry.name)
+
+    // Schema carries no rule data (see modelToSchema in rulesFile.js), so a
+    // migrated chart's rules are checked from rules/*.yaml via `genSchema`,
+    // which rebuilds the old x-rules-per-group shape checkRules expects
+    // without writing it anywhere. A parse error here is left to the drift
+    // check below (`stale`), which already blocks on it.
+    const { rulesFiles, schema } = await readChartArtifacts(chartDir)
+    if (rulesFiles && Object.keys(rulesFiles).length) {
+      const { model, errors } = parseRulesDir(rulesFiles)
+      if (!errors.length) {
+        for (const finding of checkRules(genSchema(model, schema))) {
+          findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
+        }
+      }
+    } else if (schema) {
+      for (const finding of checkRules(schema)) {
+        findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
+      }
+    }
+
+    const drift = await chartDrift(chartDir)
+    if (blocksCommit(drift.state)) {
+      const detail = drift.state === 'legacy'
+        ? 'chart still uses the old schema-only format — run gen-rules to migrate it'
+        : `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
+      findings.push({ severity: 'commit', kind: `drift-${drift.state}`, chart: entry.name, description: `${entry.name}: ${detail}` })
+    }
+  }
+  return findings
+}
 
 function parseStatus(raw) {
   const changes = { modified: [], added: [], deleted: [] }
@@ -63,6 +121,11 @@ export default function gitRouter() {
       const statusRaw = await git(cwd, 'status', '--porcelain')
       if (!statusRaw.trim()) {
         return res.status(400).json({ error: 'no changes to commit' })
+      }
+
+      const findings = await chartCommitBlockers(cwd)
+      if (findings.length) {
+        return res.status(409).json({ error: 'Rule checks failed', findings })
       }
 
       await git(cwd, 'commit', '-m', message)

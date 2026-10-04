@@ -1,0 +1,38 @@
+{{- $chunks := chunk 100 ($.Values.app_errors | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: {{ $.Release.Name }}-app-errors-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: app-errors
+      type: vlogs
+      interval: 1m
+      rules:
+        {{- range $rows }}
+        - alert: AppErrors
+          expr: |-
+            _time:5m service:"{{ .service }}" level:error | stats count() as errors | filter errors:>{{ dig "warn" 10 . }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: |-
+              {{ `{{ $labels.service }}` }}: {{ `{{ $value }}` }} errors in 5m
+        {{- if hasKey . "crit" }}
+        - alert: AppErrors
+          expr: |-
+            _time:5m service:"{{ .service }}" level:error | stats count() as errors | filter errors:>{{ .crit }}
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: |-
+              {{ `{{ $labels.service }}` }}: {{ `{{ $value }}` }} errors in 5m
+        {{- end }}
+        {{- end }}
+{{- end }}

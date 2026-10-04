@@ -1,0 +1,7 @@
+app_errors:
+  # warn from its default; crit set
+  - service: checkout
+    crit: 50
+  # warn set; no crit, so no critical rule
+  - service: search
+    warn: 3

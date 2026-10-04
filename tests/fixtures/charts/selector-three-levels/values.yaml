@@ -1,0 +1,9 @@
+cpu:
+  - namespace: prod
+  - namespace: prod
+    workload: api
+    threshold: 90
+  - namespace: prod
+    workload: api
+    pod: noisy
+    threshold: 99

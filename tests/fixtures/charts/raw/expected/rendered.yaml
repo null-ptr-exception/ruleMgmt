@@ -1,0 +1,22 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-queue-1-1:
+  - name: queue
+    rules:
+      - alert: QueueStuck
+        expr: max(queue_oldest_message_age_seconds{queue="orders"}) > 300
+        for: 10m
+        labels: { severity: critical, queue: orders }
+        annotations: { summary: "oldest message in {{ $labels.queue }} is {{ $value | humanizeDuration }} old" }
+      - alert: QueueDeep
+        expr: queue_depth{queue="orders"} > 1000
+        for: 5m
+        labels: { severity: warning }
+      - alert: QueueStuck
+        expr: max(queue_oldest_message_age_seconds{queue="billing-v2"}) > 60
+        for: 10m
+        labels: { severity: critical, queue: billing-v2 }
+        annotations: { summary: "oldest message in {{ $labels.queue }} is {{ $value | humanizeDuration }} old" }
+      - alert: QueueDeep
+        expr: queue_depth{queue="billing-v2"} > 1000
+        for: 5m
+        labels: { severity: warning }

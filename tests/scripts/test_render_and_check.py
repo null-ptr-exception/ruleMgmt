@@ -112,6 +112,7 @@ class RenderAndCheckTest(unittest.TestCase):
     def test_check_rules_invokes_promtool_with_temp_rules_file(self):
         target = RenderTarget("cpu-alerts", Path("."), Path("charts/cpu-alerts"), Path("charts/cpu-alerts/values.yaml"))
         rendered = """
+apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 spec:
   groups:
@@ -144,9 +145,33 @@ spec:
 
         self.assertEqual(code, 1)
 
+    def test_check_rules_passes_a_render_whose_rules_all_opt_out_of_promtool(self):
+        # A vlogs-only chart: its VMRule is validate: none, so there is nothing
+        # for promtool to check and nothing wrong with that (#65).
+        rendered = """
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: panics
+spec:
+  groups:
+    - name: panics
+      type: vlogs
+      rules:
+        - alert: Panics
+          expr: '"panic" | stats count() as n | filter n:>0'
+"""
+        stderr = StringIO()
+        with patch("render_and_check.run_command") as run, redirect_stderr(stderr):
+            code = check_rules(RenderTarget("vlogs-only", Path("."), Path("c"), Path("c/values.yaml")), rendered, "promtool")
+        self.assertEqual(code, 0)
+        run.assert_not_called()
+        self.assertIn("promtool cannot check", stderr.getvalue())
+
     def test_check_rules_returns_nonzero_when_promtool_fails(self):
         target = RenderTarget("cpu-alerts", Path("."), Path("charts/cpu-alerts"), Path("charts/cpu-alerts/values.yaml"))
         rendered = """
+apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 spec:
   groups:
@@ -201,7 +226,8 @@ dependencies:
             def fake_run_command(command, cwd=None):
                 commands.append(command)
                 if command[:3] == ["helm", "dependency", "build"]:
-                    build_dir = Path(command[3])
+                    self.assertIn("--skip-refresh", command)
+                    build_dir = Path(command[-1])
                     self.assertNotEqual(build_dir, chart_dir)
                     (build_dir / "Chart.lock").write_text("generated\n", encoding="utf-8")
                     (build_dir / "charts").mkdir()
@@ -214,6 +240,7 @@ dependencies:
                         args=command,
                         returncode=0,
                         stdout="""
+apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 spec:
   groups:

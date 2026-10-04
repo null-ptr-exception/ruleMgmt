@@ -186,4 +186,59 @@ describe('Git API', () => {
     expect(data.original).toBe('')
     expect(data.modified).toBe('new content')
   })
+
+  it('POST /commit is refused when a chart fails its rule checks', async () => {
+    const chartDir = path.join(tmpDir, 'charts', 'broken')
+    await fs.mkdir(chartDir, { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify({
+      properties: {
+        cpu: {
+          type: 'array',
+          'x-rules': [{ alert: 'A', expr: 'cpu > ${ghost}' }],
+          items: { type: 'object', required: ['ns'], properties: { ns: { type: 'string' } } }
+        }
+      }
+    }))
+
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'add broken chart' })
+    expect(status).toBe(409)
+    expect(data.findings.some(f => f.kind === 'undefined-var')).toBe(true)
+
+    // Nothing was committed.
+    const log = await api('GET', '/api/v2/git/log?limit=1')
+    expect(log.data[0].message).not.toBe('add broken chart')
+
+    await git(tmpDir, 'reset')
+    await fs.rm(path.join(tmpDir, 'charts'), { recursive: true, force: true })
+  })
+
+  it('POST /commit is refused when a chart\'s products are stale', async () => {
+    const { generateProducts } = await import('../../src/utils/drift.js')
+    const { parseRulesDir } = await import('../../src/utils/rulesFile.js')
+    const { objectMetaFromEnv } = await import('../../src/utils/objectMeta.js')
+
+    const chartDir = path.join(tmpDir, 'charts', 'drift')
+    await fs.mkdir(path.join(chartDir, 'rules'), { recursive: true })
+    await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
+    const cpu = 'group: cpu\ncolumns:\n  ns: {type: string, required: true}\nrules:\n  - alert: A\n    expr: cpu{n="${ns}"} > 1\n'
+    await fs.writeFile(path.join(chartDir, 'rules', 'cpu.yaml'), cpu)
+
+    const { model } = parseRulesDir({ 'cpu.yaml': cpu })
+    const { schemaText, templates } = generateProducts(model, null, objectMetaFromEnv({}))
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), schemaText)
+    // Write a *stale* template — one line off from what it regenerates to.
+    await fs.writeFile(path.join(chartDir, 'templates', 'cpu.yaml'), templates['cpu.yaml'] + '# stale\n')
+
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'commit stale chart' })
+    expect(status).toBe(409)
+    expect(data.findings.some(f => f.kind === 'drift-stale')).toBe(true)
+
+    // Fix it and the commit goes through.
+    await fs.writeFile(path.join(chartDir, 'templates', 'cpu.yaml'), templates['cpu.yaml'])
+    const ok = await api('POST', '/api/v2/git/commit', { message: 'commit fixed chart' })
+    expect(ok.status).toBe(200)
+
+    await git(tmpDir, 'reset', '--hard', 'HEAD~1')
+    await fs.rm(path.join(tmpDir, 'charts'), { recursive: true, force: true })
+  })
 })

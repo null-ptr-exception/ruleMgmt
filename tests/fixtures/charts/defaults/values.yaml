@@ -1,0 +1,9 @@
+error_rate:
+  - job: api
+  - job: worker
+    threshold: 0.2
+    window: 15m
+    severity: critical
+  # an explicit 0 is a value, not an empty cell (#51): it must not become 0.05
+  - job: batch
+    threshold: 0

@@ -1,0 +1,25 @@
+group: mariadb_errors_connections
+
+columns:
+  warn_rate: {type: number, default: 5, description: Connection errors/sec warning}
+  critical_rate: {type: number, default: 20, description: Connection errors/sec critical}
+
+rules:
+  - alert: MariadbErrorsConnections_WarnRate
+    expr: rate(mysql_global_status_connection_errors_total{namespace="${namespace}"}[5m]) > ${warn_rate}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbErrorsConnections_WarnRate triggered on ${owner}
+  - alert: MariadbErrorsConnections_CriticalRate
+    expr: rate(mysql_global_status_connection_errors_total{namespace="${namespace}"}[5m]) > ${critical_rate}
+    for: 5m
+    labels:
+      severity: critical
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbErrorsConnections_CriticalRate triggered on ${owner}

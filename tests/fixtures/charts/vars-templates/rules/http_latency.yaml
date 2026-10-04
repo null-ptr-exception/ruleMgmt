@@ -1,0 +1,20 @@
+# vars expansion, and Prometheus {{ }} passing through Helm untouched —
+# including a template that itself contains double quotes, and a backslash.
+vars:
+  p99: histogram_quantile(0.99, sum by (le, pod) (rate(http_request_duration_seconds_bucket{namespace="${namespace}"}[5m])))
+
+columns:
+  namespace:    { type: string, required: true }
+  warn_seconds: { type: number, required: true }
+
+rules:
+  - alert: LatencyHigh
+    expr: ${p99} > ${warn_seconds}
+    for: 10m
+    labels:
+      severity: warning
+      namespace: ${namespace}
+    annotations:
+      summary: "p99 is {{ $value | humanizeDuration }} on {{ $labels.pod }}"
+      description: '{{ printf "%.2f" $value }}s over ${warn_seconds}s in ${namespace}'
+      pods: 'pods matching web-\d+ in {{ $labels.namespace }}'

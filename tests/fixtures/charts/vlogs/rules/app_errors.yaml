@@ -1,0 +1,26 @@
+# LogsQL (#65): `type: vlogs` wraps the group in a VMRule with `type: vlogs`
+# on the group. The expr is LogsQL — pipes, colons, quotes — and ${}, vars,
+# defaults and guards work exactly as they do for PromQL.
+type: vlogs
+interval: 1m
+
+vars:
+  errors: '_time:5m service:"${service}" level:error | stats count() as errors'
+
+columns:
+  service: { type: string, required: true }
+  warn:    { type: number, default: 10 }
+  crit:    { type: number }
+
+rules:
+  - alert: AppErrors
+    expr: '${errors} | filter errors:>${warn}'
+    for: 5m
+    labels: { severity: warning }
+    annotations: { summary: '{{ $labels.service }}: {{ $value }} errors in 5m' }
+
+  - alert: AppErrors
+    expr: '${errors} | filter errors:>${crit}'
+    for: 5m
+    labels: { severity: critical }
+    annotations: { summary: '{{ $labels.service }}: {{ $value }} errors in 5m' }

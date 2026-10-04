@@ -1,0 +1,20 @@
+# rule_files is filled in by the harness: one file per rendered object, and
+# only for profiles checked with promtool — the VMRule's LogsQL would not
+# parse. That the vlogs object is left out is part of what this case checks.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # 3s at p99 for 20 minutes: over 1s long enough to fire
+      - series: 'http_request_duration_seconds_bucket{job="checkout", le="1"}'
+        values: '0x20'
+      - series: 'http_request_duration_seconds_bucket{job="checkout", le="5"}'
+        values: '0+60x20'
+      - series: 'http_request_duration_seconds_bucket{job="checkout", le="+Inf"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SlowRequests
+        exp_alerts:
+          - exp_labels: { severity: warning, owner: shop-team }

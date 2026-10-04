@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from extract_rules import RuleExtractionError, extract_prometheus_rule_groups
+from extract_rules import RuleExtractionError, skipped_note, split_rule_groups
 
 
 @dataclass(frozen=True)
@@ -122,7 +122,10 @@ def copy_target_root_to_temp(target: RenderTarget, temp_root: Path) -> RenderTar
 
 
 def build_dependencies(target: RenderTarget) -> int:
-    result = run_command(["helm", "dependency", "build", str(target.chart_dir)])
+    # --skip-refresh: dependencies are file:// charts, so there is no repo index
+    # to fetch — without it helm refreshes every repo configured on the machine
+    # first, which is seconds (tens on a slow link) per chart.
+    result = run_command(["helm", "dependency", "build", "--skip-refresh", str(target.chart_dir)])
     if result.returncode != 0:
         print(f"{target.name}: helm dependency build failed", file=sys.stderr)
         if result.stderr:
@@ -152,12 +155,18 @@ def render_target(target: RenderTarget) -> tuple[int, str]:
 
 def check_rules(target: RenderTarget, rendered_yaml: str, promtool: str) -> int:
     try:
-        groups = extract_prometheus_rule_groups(rendered_yaml)
+        groups, skipped = split_rule_groups(rendered_yaml)
     except RuleExtractionError as exc:
         print(f"{target.name}: {exc}", file=sys.stderr)
         return 1
+    if skipped:
+        print(f"{target.name}: {skipped_note(skipped)}", file=sys.stderr)
 
     if not groups:
+        # Rules that all opt out of promtool (validate: none, e.g. vlogs) are
+        # fine — the note above says so. Rendering no rules at all is not.
+        if skipped:
+            return 0
         print(f"{target.name}: no PrometheusRule spec.groups found", file=sys.stderr)
         return 1
 

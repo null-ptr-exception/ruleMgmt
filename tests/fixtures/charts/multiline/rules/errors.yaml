@@ -1,0 +1,28 @@
+# Output format (2026-09-25): expr and annotations are literal block scalars,
+# so none of this needs escaping — several lines, a leading brace, ": ",
+# " #", quotes and backslashes, whether they come from the source or a row.
+columns:
+  job:     { type: string, required: true }
+  pattern: { type: string, required: true }
+  owner:   { type: string, required: true }
+
+rules:
+  - alert: ErrorRatioHigh
+    expr: |
+      sum by (job) (rate(errors_total{job="${job}"}[5m]))
+        / sum by (job) (rate(requests_total{job="${job}"}[5m]))
+        > 0.05
+    for: 10m
+    labels: { severity: warning }
+    annotations:
+      summary: 'Error ratio {{ $value | humanizePercentage }} on "${job}"'
+      description: |
+        Owned by ${owner}.
+        Check: {{ $labels.job }} # dashboards/errors
+        Paths matching ${pattern} are excluded.
+
+  - alert: RouteDown
+    # A leading brace, with the name inside it: a selector with no metric name
+    # at all would also match the ALERTS series this rule produces.
+    expr: '{__name__="probe_success", job="${job}", path=~"${pattern}"} == 0 # probe: ok'
+    labels: { severity: critical }

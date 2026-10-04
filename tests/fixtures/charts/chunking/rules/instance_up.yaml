@@ -1,0 +1,10 @@
+# 101 rows: the template chunks its row loop at 100, so the group renders as
+# two objects — the alerts are identical either way, only metadata.name differs.
+columns:
+  instance: { type: string, required: true }
+
+rules:
+  - alert: InstanceDown
+    expr: up{instance="${instance}"} == 0
+    for: 1m
+    labels: { severity: critical }

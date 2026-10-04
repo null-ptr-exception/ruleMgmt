@@ -1,0 +1,14 @@
+# Selector contract (#60): the base row gives up the exception row, which has
+# a threshold of its own. The dev row is independent of both.
+selectors: [namespace, workload]
+
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, default: ".*" }
+  threshold: { type: number, default: 80 }
+
+rules:
+  - alert: CpuHigh
+    expr: cpu_usage{${selector}} > ${threshold}
+    for: 1m
+    labels: { severity: warning }

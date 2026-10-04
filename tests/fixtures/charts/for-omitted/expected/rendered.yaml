@@ -1,0 +1,11 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-disk-1-1:
+  - name: disk
+    rules:
+      - alert: DiskFull
+        expr: disk_free_bytes{device="sda"} == 0
+        labels: { severity: critical }
+      - alert: DiskLow
+        expr: disk_free_bytes{device="sda"} < 1000
+        for: 10m
+        labels: { severity: warning }

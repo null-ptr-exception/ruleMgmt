@@ -1,0 +1,22 @@
+# Prometheus rule-group and rule fields the format passes through, and
+# keep_firing_for read from an optional column: a row that leaves it out
+# loses that one line, not the alert.
+interval: 30s
+limit: 10
+
+columns:
+  job:    { type: string, required: true }
+  linger: { type: string }
+
+rules:
+  - alert: JobAbsent
+    expr: absent(up{job="${job}"})
+    for: 2m
+    keep_firing_for: 5m
+    labels: { severity: warning }
+
+  - alert: JobFlapping
+    expr: changes(up{job="${job}"}[10m]) > 3
+    for: 1m
+    keep_firing_for: ${linger}
+    labels: { severity: info }

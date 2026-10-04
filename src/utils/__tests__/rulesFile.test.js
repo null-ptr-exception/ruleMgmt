@@ -1,0 +1,489 @@
+import { describe, it, expect } from 'vitest'
+import fs from 'fs'
+import {
+  valueProblems, schemaToModel, modelToSchema, groupGenDef, modelToFiles, groupFileText, commonFileText, parseGroupFile, parseCommonFile,
+  parseRulesDir, validateValues,
+} from '../rulesFile.js'
+import { generateGroupTemplate } from '../templateGenerator.js'
+import { isAlertGroup } from '../schemaUtils.js'
+
+const sampleSchema = JSON.parse(
+  fs.readFileSync('src/utils/__fixtures__/mariadb-legacy.schema.json', 'utf-8')
+)
+
+// A hand-built x-rules chart, the shape the format targets.
+const xRulesSchema = {
+  $schema: 'https://json-schema.org/draft-07/schema#',
+  type: 'object',
+  properties: {
+    mariadb_traffic: {
+      type: 'array',
+      vars: { recv: 'rate(node_recv{ns="${namespace}"}[5m])' },
+      'x-rules': [
+        {
+          alert: 'RecvHigh',
+          expr: '${recv} > ${recv_warn}',
+          for: '5m',
+          labels: { severity: 'warning' },
+          annotations: { summary: 'recv is {{ $value }} B/s' },
+          note: 'raised after the 2024-11 incident',
+        },
+        { alert: 'RecvHigh', expr: '${recv} > ${recv_crit}', labels: { severity: 'critical' } },
+      ],
+      items: {
+        type: 'object',
+        required: ['namespace'],
+        properties: {
+          namespace: { type: 'string', description: 'ns' },
+          recv_warn: { type: 'number', default: 1e7 },
+          recv_crit: { type: 'number', default: 5e7 },
+        },
+      },
+    },
+  },
+  'x-common-vars': {
+    type: 'object',
+    properties: { cluster: { type: 'string' } },
+    required: ['cluster'],
+  },
+}
+
+describe('schema -> model (upgrade adapter)', () => {
+  it('reads the common block from properties._common as well as legacy x-common-vars', () => {
+    const viaLegacy = schemaToModel(xRulesSchema).model.common.columns
+    const withStandard = {
+      ...xRulesSchema,
+      'x-common-vars': undefined,
+      properties: { _common: { type: 'object', properties: { cluster: { type: 'string' } }, required: ['cluster'] }, ...xRulesSchema.properties },
+    }
+    expect(schemaToModel(withStandard).model.common.columns).toEqual(viaLegacy)
+  })
+
+  it('maps x-rules, items.properties and x-common-vars across', () => {
+    const { model } = schemaToModel(xRulesSchema)
+    const g = model.groups.mariadb_traffic
+    expect(g.vars).toEqual({ recv: 'rate(node_recv{ns="${namespace}"}[5m])' })
+    expect(g.columns.namespace).toEqual({ type: 'string', required: true, description: 'ns' })
+    expect(g.columns.recv_warn).toEqual({ type: 'number', default: 1e7 })
+    expect(g.rules[0]).toMatchObject({ alert: 'RecvHigh', for: '5m', note: 'raised after the 2024-11 incident' })
+    expect(g.rules[1]).toEqual({ alert: 'RecvHigh', expr: '${recv} > ${recv_crit}', labels: { severity: 'critical' } })
+    expect(model.common.columns).toEqual({ cluster: { type: 'string', required: true } })
+  })
+
+  it('strips x-var-type / x-severity from columns', () => {
+    const { model } = schemaToModel(sampleSchema)
+    for (const group of Object.values(model.groups)) {
+      for (const col of Object.values(group.columns || {})) {
+        expect(col).not.toHaveProperty('x-var-type')
+        expect(col).not.toHaveProperty('x-severity')
+      }
+    }
+  })
+
+  it('expands a legacy x-promql group through the read-time adapter, selectors intact', () => {
+    const { model } = schemaToModel(sampleSchema)
+    const g = model.groups.mariadb_traffic_network_receive
+    expect(g.rules[0].alert).toBe('MariadbTrafficNetworkReceive_WarnBytes')
+    expect(g.rules[0].expr).toContain('${namespace}')
+    expect(g.rules[0].expr).toContain('${warn_bytes}')
+    // owner + namespace are common vars → carried as per-rule labels
+    expect(g.rules[0].labels).toMatchObject({ severity: 'warning', owner: '${owner}', namespace: '${namespace}' })
+    expect(g.rules[0].annotations.summary).toContain('on ${owner}')
+  })
+
+  it('records an x-custom-template group without converting it', () => {
+    const withCustom = { properties: { esc: { type: 'array', 'x-custom-template': true } } }
+    const { model, warnings } = schemaToModel(withCustom)
+    expect(model.groups.esc).toEqual({ group: 'esc', custom: true })
+    expect(warnings.join()).toMatch(/x-custom-template/)
+  })
+})
+
+describe('deterministic writer', () => {
+  it('round-trips a model through files unchanged', () => {
+    const { model } = schemaToModel(sampleSchema)
+    const files = modelToFiles(model)
+    const back = parseRulesDir(files)
+    expect(back.errors).toEqual([])
+    expect(modelToFiles(back.model)).toEqual(files)
+  })
+
+  it('is byte-stable: dumping a model twice is identical and does not mutate it', () => {
+    const { model } = schemaToModel(xRulesSchema)
+    const snapshot = JSON.stringify(model)
+    const first = modelToFiles(model)
+    expect(modelToFiles(JSON.parse(snapshot))).toEqual(first)
+    expect(JSON.stringify(model)).toBe(snapshot)
+  })
+
+  it('emits _common.yaml only when there are common columns', () => {
+    const { model } = schemaToModel({ properties: { g: { type: 'array', 'x-rules': [{ alert: 'A', expr: 'up' }], items: { properties: {} } } } })
+    expect(modelToFiles(model)).not.toHaveProperty('_common.yaml')
+  })
+
+  it('orders group files by name', () => {
+    const { model } = schemaToModel(sampleSchema)
+    const names = Object.keys(modelToFiles(model)).filter(n => n !== '_common.yaml')
+    expect(names).toEqual([...names].sort())
+  })
+
+  it('exposes per-file dumpers that round-trip through the parser', () => {
+    const { model } = schemaToModel(sampleSchema)
+    for (const [key, group] of Object.entries(model.groups)) {
+      const text = groupFileText(group)
+      const { group: reparsed, errors } = parseGroupFile(text, key)
+      expect(errors, key).toEqual([])
+      expect(groupFileText(reparsed), key).toBe(text)
+    }
+    const commonText = commonFileText(model.common.columns)
+    expect(commonFileText(parseCommonFile(commonText).columns)).toBe(commonText)
+  })
+})
+
+describe('model <-> schema idempotence', () => {
+  it('schema -> model -> schema is stable across a file round-trip', () => {
+    const { model } = schemaToModel(sampleSchema)
+    const direct = modelToSchema(model, sampleSchema)
+    const viaFiles = modelToSchema(parseRulesDir(modelToFiles(model)).model, sampleSchema)
+    expect(viaFiles).toEqual(direct)
+  })
+
+  it('emits the common block as a standard properties._common, first, with no x-common-vars', () => {
+    const out = modelToSchema(schemaToModel(sampleSchema).model, sampleSchema)
+    expect(out).not.toHaveProperty('x-common-vars')
+    expect(Object.keys(out.properties)[0]).toBe('_common')
+    expect(out.properties._common).toMatchObject({ type: 'object', required: ['owner', 'namespace'] })
+  })
+
+  // A clone records where it came from; that is not derived from rules/, so a
+  // regenerated schema that dropped it would make every clone read as stale.
+  it('carries a clone\'s x-migrated-from over from the schema on disk', () => {
+    const from = { chart: 'src', columns: { warn: 'warn_pct' } }
+    const out = modelToSchema(schemaToModel(sampleSchema).model, { ...sampleSchema, 'x-migrated-from': from })
+    expect(out['x-migrated-from']).toEqual(from)
+  })
+
+  it('a migrated chart still passes gen-chart with only the row defaults added', () => {
+    const { model } = schemaToModel(sampleSchema)
+    const migrated = modelToSchema(model, sampleSchema)
+    // The only difference the migration introduces is per-row Helm defaults,
+    // which the legacy path never emitted (Helm ignores the schema ones).
+    const stripRowDefaults = s => s.replace(/\{\{ dig "(\w+)" (?:`[^`]*`|[^ ]+) \$row \}\}/g, '{{ $row.$1 }}')
+    let sawDefault = false
+    for (const group of Object.keys(migrated.properties).filter(isAlertGroup)) {
+      const before = generateGroupTemplate(group, sampleSchema.properties[group], 'rel', sampleSchema)
+      const after = generateGroupTemplate(group, groupGenDef(model.groups[group]), 'rel', migrated)
+      if (after !== before) sawDefault = true
+      expect(stripRowDefaults(after), group).toBe(before)
+    }
+    expect(sawDefault).toBe(true)
+  })
+})
+
+describe('parser validation', () => {
+  const ok = `
+group: cpu
+columns:
+  ns: {type: string, required: true}
+rules:
+  - alert: A
+    expr: cpu{n="\${ns}"} > 1
+`.trimStart()
+
+  it('accepts a well-formed group file', () => {
+    expect(parseGroupFile(ok, 'cpu').errors).toEqual([])
+  })
+
+  // A hand-edited typo, or a pull that brings one, has to come back as an
+  // error naming the file: callers (drift, save, commit) expect { model,
+  // errors } and a throw locked the chart out of being opened or fixed.
+  it('reports a file it cannot parse, and goes on to the rest', () => {
+    const { model, errors } = parseRulesDir({
+      'broken.yaml': 'rules: [\n',
+      'cpu.yaml': ok,
+      '_common.yaml': 'columns: {\n',
+    })
+    expect(errors.some(e => e.startsWith('broken.yaml:'))).toBe(true)
+    expect(errors.some(e => e.startsWith('_common.yaml:'))).toBe(true)
+    expect(Object.keys(model.groups)).toContain('cpu')
+  })
+
+  // The group key is a Helm field name: `$.Values.cpu-high` does not parse,
+  // so a chart with such a file saved fine and then never rendered.
+  it('refuses a group filename that cannot be a .Values field name', () => {
+    const body = 'columns: {}\nrules:\n  - alert: A\n    expr: up == 0\n'
+    for (const bad of ['cpu-high', '1cpu', 'Cpu', '_cpu']) {
+      expect(parseRulesDir({ [`${bad}.yaml`]: body }).errors, bad).toContain(
+        `${bad}.yaml: a group name is lower-case letters, digits and _, starting with a letter`)
+    }
+    expect(parseRulesDir({ 'cpu_high2.yaml': body }).errors).toEqual([])
+  })
+
+  it('refuses a rule that is not a mapping, and a file that is not one', () => {
+    const nullRule = parseGroupFile('rules:\n  -\n  - 3\n', 'cpu')
+    expect(nullRule.errors).toEqual(expect.arrayContaining([
+      'cpu.yaml rules[0]: a rule must be a mapping',
+      'cpu.yaml rules[1]: a rule must be a mapping',
+    ]))
+    expect(nullRule.group.rules).toEqual([])
+    expect(parseGroupFile('- a\n- b\n', 'cpu').errors).toContain('cpu.yaml: must be a mapping')
+  })
+
+  // Rule-group fields (#65): type picks an output profile; interval and limit
+  // are Prometheus's and used to go unchecked.
+  const withFields = fields => ok.replace('group: cpu\n', `group: cpu\n${fields}\n`)
+
+  it('accepts a type that names an output profile, and valid interval / limit', () => {
+    const { group, errors } = parseGroupFile(withFields('type: vlogs\ninterval: 1h30m\nlimit: 0'), 'cpu')
+    expect(errors).toEqual([])
+    expect(group).toMatchObject({ type: 'vlogs', interval: '1h30m', limit: 0 })
+  })
+
+  it('refuses a type that is no output profile', () => {
+    expect(parseGroupFile(withFields('type: graphite'), 'cpu').errors.join())
+      .toMatch(/type "graphite" is not an output profile — one of prometheus, vlogs/)
+  })
+
+  it('refuses an interval that is not a duration, and a limit that is not a whole number', () => {
+    for (const bad of ['interval: 30', 'interval: 1 m', 'interval: soon']) {
+      expect(parseGroupFile(withFields(bad), 'cpu').errors.join(), bad).toMatch(/is not a duration/)
+    }
+    for (const bad of ['limit: -1', 'limit: 1.5', 'limit: ten']) {
+      expect(parseGroupFile(withFields(bad), 'cpu').errors.join(), bad).toMatch(/must be a whole number/)
+    }
+  })
+
+  it('writes type, interval and limit back, right under group:', () => {
+    const { group } = parseGroupFile(withFields('limit: 5\ninterval: 30s\ntype: vlogs'), 'cpu')
+    const text = groupFileText(group)
+    expect(text.startsWith('group: cpu\ntype: vlogs\ninterval: 30s\nlimit: 5\n')).toBe(true)
+    expect(parseGroupFile(text, 'cpu').group).toEqual(group)
+  })
+
+  it('carries type to the generator as groupType, never as the schema\'s type', () => {
+    const { group } = parseGroupFile(withFields('type: vlogs'), 'cpu')
+    const def = groupGenDef(group)
+    expect(def.type).toBe('array')
+    expect(def.groupType).toBe('vlogs')
+  })
+
+  it('rejects an unknown key at every level', () => {
+    const bad = 'group: cpu\nintervel: 1m\ncolumns:\n  ns: {type: string, wat: 1}\nrules:\n  - alert: A\n    expr: up\n    severity: page\n'
+    const errs = parseGroupFile(bad, 'cpu').errors.join('\n')
+    expect(errs).toMatch(/unknown key "intervel"/)
+    expect(errs).toMatch(/unknown key "wat"/)
+    expect(errs).toMatch(/unknown key "severity"/)
+  })
+
+  it('rejects a group: that does not match the filename', () => {
+    expect(parseGroupFile('group: other\nrules: []\n', 'cpu').errors.join())
+      .toMatch(/does not match the filename/)
+  })
+
+  it('rejects a vars name that collides with a column', () => {
+    const src = 'group: cpu\nvars:\n  ns: rate(x[5m])\ncolumns:\n  ns: {type: string}\nrules: []\n'
+    expect(parseGroupFile(src, 'cpu').errors.join()).toMatch(/vars "ns" collides with a column/)
+  })
+
+  it('rejects the reserved name `selector`', () => {
+    const src = 'group: cpu\ncolumns:\n  selector: {type: string}\nrules: []\n'
+    expect(parseGroupFile(src, 'cpu').errors.join()).toMatch(/reserved/)
+  })
+
+  it('flags a vars name colliding with a _common column across files', () => {
+    const files = {
+      '_common.yaml': 'columns:\n  cluster: {type: string}\n',
+      'cpu.yaml': 'group: cpu\nvars:\n  cluster: rate(x[5m])\ncolumns: {}\nrules: []\n',
+    }
+    expect(parseRulesDir(files).errors.join()).toMatch(/collides with a _common column/)
+  })
+
+  it('flags a group column colliding with a _common column', () => {
+    const files = {
+      '_common.yaml': 'columns:\n  cluster: {type: string}\n',
+      'cpu.yaml': 'group: cpu\ncolumns:\n  cluster: {type: string}\nrules: []\n',
+    }
+    expect(parseRulesDir(files).errors.join()).toMatch(/cpu\.yaml: column "cluster" collides with a _common column/)
+  })
+
+  it('reports unknown keys in _common.yaml', () => {
+    expect(parseCommonFile('rules: []\n').errors.join()).toMatch(/unknown key "rules"/)
+  })
+})
+
+// once groups and recording rules (#70).
+describe('once groups and recording rules', () => {
+  const onceSrc = `
+group: api_recording
+once: true
+rules:
+  - record: job:errors:rate5m
+    expr: sum by (job) (rate(errors_total[5m]))
+    labels: {team: api}
+`.trimStart()
+
+  it('parses once: true and a recording rule, and writes them back the same', () => {
+    const { group, errors } = parseGroupFile(onceSrc, 'api_recording')
+    expect(errors).toEqual([])
+    expect(group.once).toBe(true)
+    expect(group.rules).toEqual([{ record: 'job:errors:rate5m', expr: 'sum by (job) (rate(errors_total[5m]))', labels: { team: 'api' } }])
+    const text = groupFileText(group)
+    expect(text.startsWith('group: api_recording\nonce: true\n')).toBe(true)
+    expect(parseGroupFile(text, 'api_recording').group).toEqual(group)
+  })
+
+  it('refuses a once group with columns', () => {
+    const src = onceSrc.replace('rules:', 'columns:\n  ns: {type: string}\nrules:')
+    expect(parseGroupFile(src, 'api_recording').errors.join()).toMatch(/once group .* cannot have columns/)
+  })
+
+  it('refuses once that is not a boolean', () => {
+    expect(parseGroupFile(onceSrc.replace('once: true', 'once: yes please'), 'api_recording').errors.join())
+      .toMatch(/once must be true or false/)
+  })
+
+  it('refuses a rule with both alert and record, or neither', () => {
+    const both = 'group: g\nrules:\n  - alert: A\n    record: r\n    expr: up\n'
+    const neither = 'group: g\nrules:\n  - expr: up\n'
+    expect(parseGroupFile(both, 'g').errors.join()).toMatch(/exactly one of alert or record/)
+    expect(parseGroupFile(neither, 'g').errors.join()).toMatch(/exactly one of alert or record/)
+  })
+
+  it('refuses for, keep_firing_for and annotations on a recording rule', () => {
+    const src = 'group: g\nrules:\n  - record: r\n    expr: up\n    for: 5m\n    keep_firing_for: 1m\n    annotations: {summary: x}\n'
+    const errs = parseGroupFile(src, 'g').errors.join('\n')
+    for (const key of ['for', 'keep_firing_for', 'annotations']) expect(errs).toMatch(new RegExp(`cannot have ${key} `))
+  })
+
+  it('leaves a once group out of values.schema.json, and tells the generator it is once', () => {
+    const { model } = parseRulesDir({ 'api_recording.yaml': onceSrc })
+    expect(modelToSchema(model).properties).toEqual({})
+    expect(groupGenDef(model.groups.api_recording).once).toBe(true)
+  })
+
+  it('flags rows given to a once group', () => {
+    const { model } = parseRulesDir({ 'api_recording.yaml': onceSrc })
+    expect(validateValues({ api_recording: [] }, model)).toEqual([])
+    expect(validateValues({ api_recording: [{ x: 1 }] }, model).join()).toMatch(/is a once group and takes no rows/)
+  })
+})
+
+describe('validateValues', () => {
+  const { model } = schemaToModel(xRulesSchema)
+
+  it('is silent when rows match the columns', () => {
+    expect(validateValues({ _common: { cluster: 'east' }, mariadb_traffic: [{ namespace: 'prod', recv_warn: 1 }] }, model)).toEqual([])
+  })
+
+  it('flags a row key no column defines', () => {
+    const out = validateValues({ mariadb_traffic: [{ namespace: 'prod', bogus: 1 }] }, model)
+    expect(out.join()).toMatch(/"bogus", which no column defines/)
+  })
+
+  it('flags a missing required column with no default', () => {
+    const out = validateValues({ mariadb_traffic: [{ recv_warn: 1 }] }, model)
+    expect(out.join()).toMatch(/mariadb_traffic row 1, "namespace": required/)
+  })
+
+  it('flags a missing required column even when it has a default, as Helm does', () => {
+    const { model: m } = parseRulesDir({
+      'cpu.yaml': 'group: cpu\ncolumns:\n  ns: {type: string, required: true, default: prod}\nrules: []\n',
+    })
+    expect(validateValues({ cpu: [{}] }, m).join()).toMatch(/cpu row 1, "ns": required/)
+  })
+
+  it('flags a group with no rules file', () => {
+    expect(validateValues({ ghost: [{}] }, model).join()).toMatch(/no matching rules file/)
+  })
+})
+
+// What a deployment cannot be saved with (#51): a required column missing or
+// empty, "" / null anywhere, a newline anywhere, " or \\ where a label reads it.
+describe('valueProblems', () => {
+  const model = files => parseRulesDir(files).model
+  const m = model({
+    '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n  cluster: {type: string}\n',
+    'cpu.yaml': [
+      'vars:',
+      '  where: "${team} on ${cluster}"',
+      'columns:',
+      '  namespace: {type: string, required: true}',
+      '  pod_regex: {type: string, default: ".*"}',
+      '  team: {type: string}',
+      '  job: {type: string}',
+      '  raw_col: {type: string}',
+      'rules:',
+      '  - alert: A',
+      '    expr: cpu{ns="${namespace}", pod=~"${pod_regex}"} > 1',
+      '    labels: {severity: warning, where: "${where}"}',
+      '    annotations: {summary: "owned by ${owner}"}',
+      '  - alert: B',
+      "    expr: '{job=\"${job}\"} == 0'",
+      '  - raw: |',
+      '      alert: C',
+      '      expr: x{a="${raw_col}"} > 1',
+      '',
+    ].join('\n'),
+  })
+
+  const ok = { _common: { owner: 'dba' }, cpu: [{ namespace: 'prod' }] }
+  const cells = values => valueProblems(values, m).map(p => `${p.group}:${p.row}:${p.column}`).sort()
+  const why = values => valueProblems(values, m).map(p => p.message)
+
+  it('accepts a complete deployment', () => {
+    expect(cells(ok)).toEqual([])
+  })
+
+  it('refuses a required column that is missing or empty, in a row', () => {
+    expect(cells({ ...ok, cpu: [{}, { namespace: '' }, { namespace: null }] }))
+      .toEqual(['cpu:0:namespace', 'cpu:1:namespace', 'cpu:2:namespace'])
+    expect(why({ ...ok, cpu: [{}] })).toEqual(['cpu row 1, "namespace": required — fill it in'])
+  })
+
+  // Helm checks _common's `required` only when a _common block exists; with
+  // none, every ${owner} would render empty.
+  it('refuses a required _common column whenever there are rows — block or no block', () => {
+    expect(cells({ cpu: [{ namespace: 'prod' }] })).toEqual(['_common:null:owner'])
+    expect(cells({ _common: { owner: '' }, cpu: [{ namespace: 'prod' }] })).toEqual(['_common:null:owner'])
+    expect(cells({ cpu: [] })).toEqual([])
+  })
+
+  // A once group renders with no rows (#70), so it reads _common all the same.
+  it('refuses a required _common column when a once group renders, with no rows anywhere', () => {
+    const withOnce = model({
+      '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n',
+      'watchdog.yaml': 'once: true\nrules:\n  - alert: Watchdog\n    expr: vector(1)\n    labels: {owner: "${owner}"}\n',
+    })
+    expect(valueProblems({}, withOnce).map(p => `${p.group}:${p.column}`)).toEqual(['_common:owner'])
+    expect(valueProblems({ _common: { owner: 'dba' } }, withOnce)).toEqual([])
+  })
+
+  it('refuses "" and null in an optional column — leave the cell out instead', () => {
+    expect(cells({ ...ok, cpu: [{ namespace: 'p', job: '' }, { namespace: 'p', job: null }] }))
+      .toEqual(['cpu:0:job', 'cpu:1:job'])
+    expect(why({ ...ok, cpu: [{ namespace: 'p', job: '' }] }))
+      .toEqual(['cpu row 1, "job": empty — fill it in, or leave the cell out'])
+  })
+
+  it('keeps 0 and false — they are values', () => {
+    expect(cells({ ...ok, cpu: [{ namespace: 'p', job: 0, team: false }] })).toEqual([])
+  })
+
+  it('refuses " or \\ in a column a label reads, through vars, and as Common Values', () => {
+    expect(cells({ ...ok, cpu: [{ namespace: 'p', team: 'a"b' }] })).toEqual(['cpu:0:team'])
+    const problems = valueProblems({ _common: { owner: 'dba', cluster: 'c\\d' }, cpu: [{ namespace: 'p' }] }, m)
+    expect(problems.map(p => p.message)).toEqual(['Common Values, "cluster": contains " or \\, which a label cannot take'])
+  })
+
+  it('leaves quotes and backslashes alone where only expr, annotations or a raw entry read them', () => {
+    expect(cells({
+      _common: { owner: 'x"y\\z' },
+      cpu: [{ namespace: 'p', pod_regex: 'web-\\d+', job: 'a"b', raw_col: 'a\\b', team: 'ok' }],
+    })).toEqual([])
+  })
+
+  it('refuses a newline in any column', () => {
+    expect(cells({ _common: { owner: 'two\nlines' }, cpu: [{ namespace: 'p', pod_regex: 'a\nb' }] }))
+      .toEqual(['_common:null:owner', 'cpu:0:pod_regex'])
+  })
+})

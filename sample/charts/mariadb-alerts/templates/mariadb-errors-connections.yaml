@@ -1,0 +1,40 @@
+{{- $chunks := chunk 100 ($.Values.mariadb_errors_connections | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-mariadb-errors-connections-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mariadb-errors-connections
+      rules:
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
+        {{- $row := merge . $common }}
+        - alert: MariadbErrorsConnections_WarnRate
+          expr: |-
+            rate(mysql_global_status_connection_errors_total{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_rate" 5 $row }}
+          for: 5m
+          labels:
+            severity: warning
+            owner: "{{ $row.owner }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
+          annotations:
+            summary: |-
+              MariadbErrorsConnections_WarnRate triggered on {{ $row.owner }}
+        - alert: MariadbErrorsConnections_CriticalRate
+          expr: |-
+            rate(mysql_global_status_connection_errors_total{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "critical_rate" 20 $row }}
+          for: 5m
+          labels:
+            severity: critical
+            owner: "{{ $row.owner }}"
+            namespace: "{{ dig "namespace" `default` $row }}"
+          annotations:
+            summary: |-
+              MariadbErrorsConnections_CriticalRate triggered on {{ $row.owner }}
+        {{- end }}
+{{- end }}

@@ -1,0 +1,14 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-http-latency-1-1:
+  - name: http-latency
+    rules:
+      - alert: LatencyHigh
+        expr: histogram_quantile(0.99, sum by (le, pod) (rate(http_request_duration_seconds_bucket{namespace="shop"}[5m]))) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          namespace: shop
+        annotations:
+          summary: "p99 is {{ $value | humanizeDuration }} on {{ $labels.pod }}"
+          description: '{{ printf "%.2f" $value }}s over 0.5s in shop'
+          pods: 'pods matching web-\d+ in {{ $labels.namespace }}'

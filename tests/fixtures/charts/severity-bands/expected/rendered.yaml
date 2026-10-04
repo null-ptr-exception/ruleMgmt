@@ -1,0 +1,27 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+#
+# Helm reads every number in values.yaml as a float64 and prints a large one
+# in exponent form: 50000000 comes out as 5e+07. PromQL reads that the same.
+blind-net-receive-1-1:
+  - name: net-receive
+    rules:
+      - alert: ReceiveHigh
+        expr: sum by (pod) (rate(node_receive_bytes_total{namespace="shop"}[5m])) > 1000
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "receive is {{ $value }} B/s on {{ $labels.pod }}" }
+      - alert: ReceiveHigh
+        expr: sum by (pod) (rate(node_receive_bytes_total{namespace="shop"}[5m])) > 5000
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "receive is {{ $value }} B/s on {{ $labels.pod }}" }
+      - alert: ReceiveHigh
+        expr: sum by (pod) (rate(node_receive_bytes_total{namespace="batch"}[5m])) > 100000
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "receive is {{ $value }} B/s on {{ $labels.pod }}" }
+      - alert: ReceiveHigh
+        expr: sum by (pod) (rate(node_receive_bytes_total{namespace="batch"}[5m])) > 5e+07
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "receive is {{ $value }} B/s on {{ $labels.pod }}" }

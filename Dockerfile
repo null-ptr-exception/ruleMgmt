@@ -25,6 +25,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=prometheus /bin/promtool /usr/local/bin/promtool
 COPY server.js ./
 COPY server/ ./server/
+# The generator, checks and drift are shared with the editor and live in
+# src/utils/; the server imports them (tests/unit/dockerImage.test.js).
+COPY src/utils/ ./src/utils/
+# Output profiles (#65), imported by src/utils/outputs.js.
+COPY config/outputs.json ./config/outputs.json
 COPY sample/ ./sample/
 COPY index.html ./
 

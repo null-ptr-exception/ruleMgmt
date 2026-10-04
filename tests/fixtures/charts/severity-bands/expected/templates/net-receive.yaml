@@ -1,0 +1,34 @@
+{{- $chunks := chunk 100 ($.Values.net_receive | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-net-receive-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: net-receive
+      rules:
+        {{- range $rows }}
+        - alert: ReceiveHigh
+          expr: |-
+            sum by (pod) (rate(node_receive_bytes_total{namespace="{{ .namespace }}"}[5m])) > {{ dig "recv_warn" 1000 . }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: |-
+              receive is {{ `{{ $value }}` }} B/s on {{ `{{ $labels.pod }}` }}
+        - alert: ReceiveHigh
+          expr: |-
+            sum by (pod) (rate(node_receive_bytes_total{namespace="{{ .namespace }}"}[5m])) > {{ dig "recv_crit" 5000 . }}
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: |-
+              receive is {{ `{{ $value }}` }} B/s on {{ `{{ $labels.pod }}` }}
+        {{- end }}
+{{- end }}

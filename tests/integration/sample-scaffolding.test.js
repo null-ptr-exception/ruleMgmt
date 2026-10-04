@@ -27,7 +27,7 @@ describe('sample scaffolding', () => {
     expect(chartYaml.type).toBe('application')
     expect(chartYaml.annotations.app).toBe('alertforge')
     expect(fs.existsSync(path.join(chartsDir, 'mariadb-alerts', 'values.yaml'))).toBe(true)
-    expect(fs.existsSync(path.join(chartsDir, 'mariadb-alerts', 'templates', 'prometheus-rule.yaml'))).toBe(true)
+    expect(fs.existsSync(path.join(chartsDir, 'mariadb-alerts', 'templates', 'mariadb-latency-slow-queries.yaml'))).toBe(true)
   })
 
   it('does not overwrite when alert-template charts already exist', async () => {

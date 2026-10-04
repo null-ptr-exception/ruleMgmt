@@ -1,0 +1,4 @@
+# One chart, two kinds of group (#65): metrics and logs for the same service,
+# sharing the deployment's Common Values.
+columns:
+  owner: { type: string, required: true }

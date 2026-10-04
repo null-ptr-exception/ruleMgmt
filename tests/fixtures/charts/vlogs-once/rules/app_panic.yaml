@@ -1,0 +1,9 @@
+# A once group of another output profile (#65, #70): one VMRule, type: vlogs
+# on the group, no chunk index.
+type: vlogs
+once: true
+
+rules:
+  - alert: AppPanic
+    expr: '_time:5m service:"${service}" panic | stats count() as panics | filter panics:>0'
+    labels: { severity: critical }

@@ -1,0 +1,14 @@
+# selector-basic with the exception row deleted: the base row covers api
+# again, at its own threshold.
+selectors: [namespace, workload]
+
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, default: ".*" }
+  threshold: { type: number, default: 80 }
+
+rules:
+  - alert: CpuHigh
+    expr: cpu_usage{${selector}} > ${threshold}
+    for: 1m
+    labels: { severity: warning }

@@ -1,0 +1,21 @@
+# Bands: one alert name, one rule per severity, the shared query in vars.
+vars:
+  recv: sum by (pod) (rate(node_receive_bytes_total{namespace="${namespace}"}[5m]))
+
+columns:
+  namespace: { type: string, required: true }
+  recv_warn: { type: number, default: 1000 }
+  recv_crit: { type: number, default: 5000 }
+
+rules:
+  - alert: ReceiveHigh
+    expr: ${recv} > ${recv_warn}
+    for: 5m
+    labels: { severity: warning }
+    annotations: { summary: "receive is {{ $value }} B/s on {{ $labels.pod }}" }
+
+  - alert: ReceiveHigh
+    expr: ${recv} > ${recv_crit}
+    for: 5m
+    labels: { severity: critical }
+    annotations: { summary: "receive is {{ $value }} B/s on {{ $labels.pod }}" }

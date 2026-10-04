@@ -1,0 +1,15 @@
+group: mariadb_traffic_qps_high
+
+columns:
+  max_qps: {type: number, default: 10000, description: Maximum QPS threshold}
+
+rules:
+  - alert: MariadbTrafficQpsHigh_MaxQps
+    expr: rate(mysql_global_status_questions{namespace="${namespace}"}[5m]) > ${max_qps}
+    for: 5m
+    labels:
+      severity: warning
+      owner: ${owner}
+      namespace: ${namespace}
+    annotations:
+      summary: MariadbTrafficQpsHigh_MaxQps triggered on ${owner}

@@ -1,0 +1,307 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'fs/promises'
+import path from 'path'
+import os from 'os'
+import express from 'express'
+
+let server, baseURL, tmpDir, chartDir
+
+beforeEach(async () => {
+  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'rules-api-'))
+  chartDir = path.join(tmpDir, 'charts', 'demo')
+  await fs.mkdir(chartDir, { recursive: true })
+
+  const { default: templatesRouter } = await import('../../server/routes/templates.js')
+  const app = express()
+  app.use(express.json())
+  app.use((req, res, next) => { req.gitopsDir = tmpDir; next() })
+  app.use('/api/v2/templates', templatesRouter())
+  await new Promise(resolve => {
+    server = app.listen(0, '127.0.0.1', () => {
+      baseURL = `http://127.0.0.1:${server.address().port}`
+      resolve()
+    })
+  })
+})
+
+afterEach(async () => {
+  if (server) await new Promise(resolve => server.close(resolve))
+  if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true })
+})
+
+async function api(method, urlPath, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } }
+  if (body) opts.body = JSON.stringify(body)
+  const res = await fetch(`${baseURL}${urlPath}`, opts)
+  return { status: res.status, data: await res.json() }
+}
+
+const read = rel => fs.readFile(path.join(chartDir, rel), 'utf-8')
+const exists = rel => read(rel).then(() => true, () => false)
+
+const CPU = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number, default: 80}
+rules:
+  - alert: CpuHigh
+    expr: cpu{ns="\${namespace}"} > \${warn}
+    labels: {severity: warning}
+`
+
+const COMMON = `columns:
+  cluster: {type: string, required: true}
+`
+
+describe('POST /:chart/rules', () => {
+  it('generates rules/, schema and templates in one atomic request', async () => {
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', {
+      files: { '_common.yaml': COMMON, 'cpu.yaml': CPU },
+    })
+    expect(status).toBe(200)
+    expect(data.ok).toBe(true)
+
+    expect(await read('rules/cpu.yaml')).toBe(CPU)
+    expect(await read('rules/_common.yaml')).toBe(COMMON)
+
+    const schema = JSON.parse(await read('values.schema.json'))
+    expect(schema.properties._common.properties.cluster).toBeTruthy()
+    expect(schema.properties.cpu.items.properties.warn.default).toBe(80)
+    // The schema carries no rule data — rules/*.yaml is the sole source.
+    expect(schema.properties.cpu['x-rules']).toBeUndefined()
+
+    const tmpl = await read('templates/cpu.yaml')
+    expect(tmpl).toContain('- alert: CpuHigh')
+    expect(tmpl).toContain('kind: PrometheusRule')
+
+    // Chart.yaml was filled in.
+    expect(await read('Chart.yaml')).toContain('name: demo')
+  })
+
+  it('writes nothing on a second identical request', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    const { data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    expect(data.written).toEqual([])
+  })
+
+  it('rejects a body with a bad file name and writes nothing', async () => {
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', {
+      files: { '../evil.yaml': 'group: evil\nrules: []\n' },
+    })
+    expect(status).toBe(400)
+    expect(await exists('rules/cpu.yaml')).toBe(false)
+  })
+
+  it('400s on a parse error, disk untouched', async () => {
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', {
+      files: { 'cpu.yaml': 'group: cpu\nintervel: 1m\nrules: []\n' },
+    })
+    expect(status).toBe(400)
+    expect(data.errors.join()).toMatch(/unknown key "intervel"/)
+    expect(await exists('values.schema.json')).toBe(false)
+  })
+
+  it('400s when a rule references a column that does not exist', async () => {
+    const bad = CPU.replace('> ${warn}', '> ${ghost}')
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': bad } })
+    expect(status).toBe(400)
+    expect(data.findings.some(f => f.kind === 'undefined-var')).toBe(true)
+    expect(await exists('rules/cpu.yaml')).toBe(false)
+  })
+
+  it('refuses a breaking change when a deployment uses the chart, then honours confirmBreaking', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    const depDir = path.join(tmpDir, 'deployments', 'demo')
+    await fs.mkdir(depDir, { recursive: true })
+    await fs.writeFile(path.join(depDir, 'prod-values.yaml'), 'cpu:\n  - namespace: p\n    warn: 90\n')
+
+    const dropWarn = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+rules:
+  - alert: CpuHigh
+    expr: cpu{ns="\${namespace}"} > 90
+    labels: {severity: warning}
+`
+    const blocked = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': dropWarn } })
+    expect(blocked.status).toBe(409)
+    expect(blocked.data.breaking.some(c => c.kind === 'column-removed')).toBe(true)
+    expect(blocked.data.deployments).toHaveLength(1)
+    expect(await read('rules/cpu.yaml')).toBe(CPU)   // unchanged
+
+    const forced = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': dropWarn }, confirmBreaking: true })
+    expect(forced.status).toBe(200)
+    expect(await read('rules/cpu.yaml')).toBe(dropWarn)
+  })
+
+  it('deletes the rules and template files of a group that is gone', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', {
+      files: { 'cpu.yaml': CPU, 'mem.yaml': CPU.replace(/cpu/g, 'mem').replace('CpuHigh', 'MemHigh') },
+    })
+    expect(await exists('rules/mem.yaml')).toBe(true)
+    expect(await exists('templates/mem.yaml')).toBe(true)
+
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    expect(await exists('rules/mem.yaml')).toBe(false)
+    expect(await exists('templates/mem.yaml')).toBe(false)
+    expect(await exists('rules/cpu.yaml')).toBe(true)
+  })
+})
+
+// #65: changing a group's type replaces its objects — not breaking, but
+// the save says so.
+describe('POST /:chart/rules — a group changing type', () => {
+  it('saves, and returns a notice naming both kinds', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': 'type: vlogs\n' + CPU } })
+    expect(status).toBe(200)
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-type-changed', group: 'cpu', from: 'prometheus', to: 'vlogs' })])
+    expect(data.notices[0].description).toMatch(/VMRule instead of PrometheusRule/)
+    expect(await read('templates/cpu.yaml')).toContain('kind: VMRule')
+  })
+})
+
+// #70: a once group has no schema entry and no rows; switching a group
+// between per-row and once renames its objects, and the save says so.
+describe('POST /:chart/rules — once groups', () => {
+  const ONCE = 'group: watchdog\nonce: true\nrules:\n  - alert: Watchdog\n    expr: vector(1)\n'
+
+  it('generates a once group\'s template, with no entry in the schema', async () => {
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU, 'watchdog.yaml': ONCE } })
+    expect(status).toBe(200)
+    const schema = JSON.parse(await read('values.schema.json'))
+    expect(Object.keys(schema.properties)).toEqual(['cpu'])
+    const template = await read('templates/watchdog.yaml')
+    expect(template).toContain('name: {{ $.Release.Name }}-watchdog-1\n')
+    expect(template).not.toContain('range')
+  })
+
+  it('refuses a once group with columns', async () => {
+    const withColumns = ONCE.replace('rules:', 'columns:\n  ns: {type: string}\nrules:')
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'watchdog.yaml': withColumns } })
+    expect(status).toBe(400)
+    expect(JSON.stringify(data)).toMatch(/cannot have columns/)
+  })
+
+  it('says a group turning once replaces its objects', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'watchdog.yaml': ONCE.replace('once: true\n', '') } })
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'watchdog.yaml': ONCE } })
+    expect(status).toBe(200)
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-once-changed', group: 'watchdog', to: 'once' })])
+    expect(data.notices[0].description).toMatch(/objects are renamed/)
+  })
+})
+
+// #60: changing a group's selectors changes what each row alerts on; the
+// save says so.
+describe('POST /:chart/rules — selectors', () => {
+  const SEL = `group: cpu
+selectors: [namespace]
+columns:
+  namespace: {type: string, required: true}
+  workload: {type: string, default: ".*"}
+rules:
+  - alert: CpuHigh
+    expr: cpu{\${selector}} > 1
+    labels: {severity: warning}
+`
+
+  it('generates the helper and says the selectors changed', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL } })
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL.replace('[namespace]', '[namespace, workload]') } })
+    expect(status).toBe(200)
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-selectors-changed', group: 'cpu', from: ['namespace'], to: ['namespace', 'workload'] })])
+    expect(await read('templates/cpu.yaml')).toContain('{{- define "alertforge.selector.cpu" -}}')
+    expect(JSON.parse(await read('values.schema.json')).properties.cpu.items.properties.workload.pattern).toBeDefined()
+  })
+
+  it('refuses a rule that does not use ${selector}', async () => {
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL.replace('cpu{${selector}}', 'cpu') } })
+    expect(status).toBe(400)
+    expect(data.findings).toEqual([expect.objectContaining({ kind: 'selectors-unused' })])
+  })
+})
+
+describe('GET /:chart drift', () => {
+  it('fills in a missing Chart.yaml and regenerates missing products on open', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    await fs.rm(path.join(chartDir, 'templates', 'cpu.yaml'))
+    await fs.rm(path.join(chartDir, 'Chart.yaml'))
+
+    const { data } = await api('GET', '/api/v2/templates/demo')
+    expect(data.drift.state).toBe('ok')
+    expect(await exists('templates/cpu.yaml')).toBe(true)
+    expect(await exists('Chart.yaml')).toBe(true)
+  })
+
+  it('reports stale without touching the hand-edited product', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    const tampered = (await read('templates/cpu.yaml')) + '\n# hand edit\n'
+    await fs.writeFile(path.join(chartDir, 'templates', 'cpu.yaml'), tampered)
+
+    const { data } = await api('GET', '/api/v2/templates/demo')
+    expect(data.drift.state).toBe('stale')
+    expect(data.drift.files).toContain('templates/cpu.yaml')
+    expect(await read('templates/cpu.yaml')).toBe(tampered)
+  })
+
+  // Opening a chart fills in what is missing — and only that. A product that
+  // is there but hand-edited is stale, and stays as it is for a person to
+  // look at, even when another product is missing at the same time.
+  it('regenerates only the missing product when another one is hand-edited', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU, 'mem.yaml': CPU.replace(/cpu/g, 'mem').replace('CpuHigh', 'MemHigh') } })
+    await fs.rm(path.join(chartDir, 'templates', 'mem.yaml'))
+    const tampered = (await read('templates/cpu.yaml')) + '\n# hand edit\n'
+    await fs.writeFile(path.join(chartDir, 'templates', 'cpu.yaml'), tampered)
+
+    const { data } = await api('GET', '/api/v2/templates/demo')
+    expect(await exists('templates/mem.yaml')).toBe(true)
+    expect(await read('templates/cpu.yaml')).toBe(tampered)
+    expect(data.drift.state).toBe('stale')
+  })
+
+  it('reports legacy for a schema-only chart', async () => {
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify({
+      properties: { cpu: { type: 'array', 'x-promql': 'up > {{ THRESHOLD }}', items: { properties: { warn: { type: 'number', 'x-var-type': 'threshold' } } } } },
+    }))
+    const { data } = await api('GET', '/api/v2/templates/demo')
+    expect(data.drift.state).toBe('legacy')
+  })
+
+  it('returns rulesFiles so the editor can load them; null before migration', async () => {
+    const legacy = await api('GET', '/api/v2/templates/demo')
+    expect(legacy.data.rulesFiles).toBeNull()
+
+    await api('POST', '/api/v2/templates/demo/rules', { files: { '_common.yaml': COMMON, 'cpu.yaml': CPU } })
+    const migrated = await api('GET', '/api/v2/templates/demo')
+    expect(migrated.data.rulesFiles['cpu.yaml']).toBe(CPU)
+    expect(migrated.data.rulesFiles['_common.yaml']).toBe(COMMON)
+  })
+})
+
+// A rules/ file that does not parse marks the chart stale with the reason; it
+// does not 500 the chart out of being opened, or out of the save that fixes it.
+describe('a rules/ file that does not parse', () => {
+  it('opens the chart as stale, and the save that fixes it goes through', async () => {
+    await fs.mkdir(path.join(chartDir, 'rules'), { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'Chart.yaml'), 'apiVersion: v2\nname: demo\nversion: 0.1.0\n')
+    await fs.writeFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'rules: [\n')
+
+    const opened = await api('GET', '/api/v2/templates/demo')
+    expect(opened.status).toBe(200)
+    expect(opened.data.drift.state).toBe('stale')
+    expect(JSON.stringify(opened.data.drift)).toContain('cpu.yaml')
+
+    const fixed = 'columns: {}\nrules:\n  - alert: A\n    expr: up == 0\n'
+    const saved = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': fixed }, confirmBreaking: true })
+    expect(saved.status).toBe(200)
+  })
+})
+
+describe('a group name', () => {
+  it('is refused on save when it cannot be a .Values field name', async () => {
+    const files = { 'cpu-high.yaml': 'columns: {}\nrules:\n  - alert: A\n    expr: up == 0\n' }
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', { files, confirmBreaking: true })
+    expect(status).toBe(400)
+  })
+})

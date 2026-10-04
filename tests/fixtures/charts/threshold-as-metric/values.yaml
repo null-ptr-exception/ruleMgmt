@@ -1,0 +1,7 @@
+cpu_thresholds:
+  - namespace: prod
+    workload: api
+    threshold: 90
+  # threshold from its default
+  - namespace: prod
+    workload: web

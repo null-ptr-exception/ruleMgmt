@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pruneEmptyValues, pruneAllValues, buildNewRow } from '../valueUtils.js'
+import { pruneEmptyValues, pruneAllValues, buildNewRow, isMissingRequired } from '../valueUtils.js'
 
 const vars = [
   { name: 'host', type: 'string', required: true },
@@ -113,5 +113,21 @@ describe('pruneAllValues', () => {
   it('leaves alert groups unknown to the schema untouched', () => {
     const values = { unknown_group: [{ anything: '' }] }
     expect(pruneAllValues(values, schema)).toEqual({ unknown_group: [{ anything: '' }] })
+  })
+})
+
+// #67: what the table marks as a required cell still to fill.
+describe('isMissingRequired', () => {
+  const req = { name: 'ns', type: 'string', required: true }
+  it('is true for a required cell that is absent, null or ""', () => {
+    for (const v of [undefined, null, '']) expect(isMissingRequired(req, v)).toBe(true)
+  })
+  it('is false once it holds a value, 0 included', () => {
+    expect(isMissingRequired(req, 'prod')).toBe(false)
+    expect(isMissingRequired({ ...req, type: 'number' }, 0)).toBe(false)
+  })
+  it('is false for an optional cell, and for a checkbox, which always holds a value', () => {
+    expect(isMissingRequired({ ...req, required: false }, '')).toBe(false)
+    expect(isMissingRequired({ ...req, type: 'boolean' }, undefined)).toBe(false)
   })
 })

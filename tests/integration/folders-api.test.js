@@ -113,6 +113,9 @@ describe('folders API', () => {
     expect(chartYaml.dependencies).toHaveLength(1)
     expect(chartYaml.dependencies[0].name).toBe('my-alerts')
     expect(chartYaml.dependencies[0].repository).toMatch(/^file:\/\//)
+    // Helm reads this as a URL and the chart is rendered on Linux even when the
+    // file was written on Windows, so it must never carry a backslash.
+    expect(chartYaml.dependencies[0].repository).not.toContain('\\')
 
     const savedValues = yaml.load(fs.readFileSync(path.join(tmpDir, deployFolder, 'values.yaml'), 'utf-8'))
     expect(savedValues).toHaveProperty('my-alerts')

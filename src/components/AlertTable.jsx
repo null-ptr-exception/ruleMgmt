@@ -1,8 +1,13 @@
-import { useCallback, useMemo } from 'react'
-import { Table, Button, Input, InputNumber, Select, Checkbox } from 'antd'
-import { DeleteOutlined, PlusOutlined, FilterOutlined } from '@ant-design/icons'
+import { useCallback, useMemo, useState } from 'react'
+import { Table, Button, Input, InputNumber, Select, Checkbox, Tooltip, Modal, Typography } from 'antd'
+import { DeleteOutlined, PlusOutlined, FilterOutlined, BranchesOutlined } from '@ant-design/icons'
+import { selectorCells, directChildren, parentOf, ANY } from '../utils/selectorContract'
 import { matchesFilter, getFilterOperators } from '../utils/filterUtils'
-import { buildNewRow } from '../utils/valueUtils'
+import { buildNewRow, isMissingRequired } from '../utils/valueUtils'
+
+export const RequiredMark = () => (
+  <span data-testid="required-mark" aria-label="required" style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>
+)
 
 function FilterHeader({ varName, varDef, filter, onChange }) {
   const ops = getFilterOperators(varDef)
@@ -13,7 +18,7 @@ function FilterHeader({ varName, varDef, filter, onChange }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span>{varName}</span>
+        <span>{varName}{varDef?.required && !varDef.common && <RequiredMark />}</span>
         {active && <FilterOutlined style={{ fontSize: 10, color: '#1677ff' }} />}
       </div>
       <div style={{ display: 'flex', gap: 2 }}>
@@ -49,7 +54,12 @@ export default function AlertTable({
   readOnly = false,
   scrollContainer = null,
   stickyOffsetHeader = 0,
+  // The group's selector hierarchy (#60) and its levels' defaults: adds the
+  // derived Scope column and "Add exception".
+  selectors = null,
+  selectorDefaults = {},
 }) {
+  const [exception, setException] = useState(null)
   const activeFilters = effectiveFilters ?? filters
   const filteredRows = useMemo(() => {
     const hasFilters = Object.values(activeFilters).some(f => f && f.value !== '' && f.value !== undefined)
@@ -70,6 +80,11 @@ export default function AlertTable({
 
   const renderInput = (v, row, realIndex) => {
     const val = row[v.name]
+    // Only a hint: the server is what refuses the save (#66), so the two
+    // cannot disagree about what "required" means.
+    const missing = !readOnly && !v.common && isMissingRequired(v, val)
+    const status = missing ? 'error' : undefined
+    const hint = input => missing ? <Tooltip title="Required">{input}</Tooltip> : input
     if (v.type === 'boolean') {
       return (
         <Checkbox
@@ -80,37 +95,62 @@ export default function AlertTable({
       )
     }
     if (v.type === 'number' || v.type === 'integer') {
-      return (
+      return hint(
         <InputNumber
           size="small"
           step={v.type === 'integer' ? 1 : 'any'}
           value={val ?? ''}
           disabled={readOnly}
+          status={status}
           onChange={value => handleCellChange(realIndex, v.name, value)}
           style={{ width: '100%' }}
         />
       )
     }
     if (v.enum) {
-      return (
+      return hint(
         <Select
           size="small"
           value={val ?? ''}
           disabled={readOnly}
+          status={status}
           onChange={value => handleCellChange(realIndex, v.name, value)}
           style={{ width: '100%' }}
           options={v.enum.map(opt => ({ value: opt, label: opt }))}
         />
       )
     }
-    return (
+    return hint(
       <Input
         size="small"
         value={val ?? ''}
         disabled={readOnly}
+        status={status}
         onChange={e => handleCellChange(realIndex, v.name, e.target.value)}
       />
     )
+  }
+
+  // Which rows each row gives up, and which row it is an exception to —
+  // derived from every row, never stored. Exclusion does not change how
+  // many alerts there are, so without this column the dependency between
+  // rows would be invisible.
+  const scope = useMemo(() => {
+    if (!selectors?.length) return null
+    const sels = rows.map(r => selectorCells(r, commonValues, selectorDefaults, selectors))
+    return { sels, children: directChildren(sels, selectors), parent: parentOf(sels, selectors) }
+  }, [rows, commonValues, selectorDefaults, selectors])
+  const path = sel => selectors.map(l => sel[l]).join(' / ')
+
+  // An exception is one step more specific than its row, in one level the
+  // row leaves at .* — the only way to add one here, so a crossing or a
+  // skipped level cannot be made from it.
+  function addException() {
+    const { index, level, value } = exception
+    const next = { ...rows[index], [level]: value.trim() }
+    const updated = [...rows.slice(0, index + 1), next, ...rows.slice(index + 1)]
+    onUpdate(updated)
+    setException(null)
   }
 
   const columns = [
@@ -124,7 +164,7 @@ export default function AlertTable({
               filter={filters[v.name]}
               onChange={f => onFiltersChange({ ...filters, [v.name]: f })}
             />
-          : v.name,
+          : <span>{v.name}{v.required && !v.common && <RequiredMark />}</span>,
         dataIndex: v.name,
         key: v.name,
         render: (_, row) => isCommon
@@ -132,14 +172,47 @@ export default function AlertTable({
           : renderInput(v, row, row.__realIndex),
       }
     }),
+    ...(scope ? [{
+      title: 'Scope',
+      key: 'scope',
+      width: 180,
+      render: (_, row) => {
+        const i = row.__realIndex
+        const kids = scope.children[i]
+        const parent = scope.parent[i]
+        return (
+          <span data-testid={`scope-${i}`} style={{ fontSize: 12, color: '#595959' }}>
+            {parent >= 0 && <div>exception to ↑ {path(scope.sels[parent])}</div>}
+            {kids.length > 0 && (
+              <Tooltip title={kids.map(k => path(scope.sels[k])).join(', ')}>
+                <div style={{ cursor: 'help' }}>excludes {kids.length}</div>
+              </Tooltip>
+            )}
+          </span>
+        )
+      },
+    }] : []),
     {
       title: '',
       key: 'actions',
-      width: 50,
-      render: (_, row) => (
-        <Button type="text" danger size="small" icon={<DeleteOutlined />} disabled={readOnly}
-          onClick={() => onDelete(row.__realIndex)} />
-      )
+      width: scope ? 80 : 50,
+      render: (_, row) => {
+        const i = row.__realIndex
+        const open = scope ? selectors.filter(l => scope.sels[i][l] === ANY) : []
+        return (
+          <span style={{ whiteSpace: 'nowrap' }}>
+            {scope && (
+              <Tooltip title="Add exception: a row one step more specific, in one level">
+                <Button type="text" size="small" icon={<BranchesOutlined />} aria-label={`Add exception to row ${i + 1}`}
+                  disabled={readOnly || open.length === 0}
+                  onClick={() => setException({ index: i, level: open[0], value: '' })} />
+              </Tooltip>
+            )}
+            <Button type="text" danger size="small" icon={<DeleteOutlined />} disabled={readOnly}
+              onClick={() => onDelete(i)} />
+          </span>
+        )
+      },
     }
   ]
 
@@ -161,6 +234,24 @@ export default function AlertTable({
         onClick={handleAdd} disabled={readOnly}>
         Add instance
       </Button>
+      {exception && (
+        <Modal open title={`Exception to ${path(scope.sels[exception.index])}`} okText="Add"
+          okButtonProps={{ disabled: !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(exception.value.trim()) }}
+          onOk={addException} onCancel={() => setException(null)}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            A copy of this row, more specific in one level. It takes over that part from this row,
+            with values of its own.
+          </Typography.Text>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <Select size="small" aria-label="Exception level" style={{ width: 140 }} value={exception.level}
+              options={selectors.filter(l => scope.sels[exception.index][l] === ANY).map(l => ({ value: l, label: l }))}
+              onChange={level => setException(e => ({ ...e, level }))} />
+            <Input size="small" aria-label="Exception value" placeholder="a name, e.g. api" autoFocus
+              value={exception.value} onChange={e => setException(x => ({ ...x, value: e.target.value }))}
+              onPressEnter={() => /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(exception.value.trim()) && addException()} />
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

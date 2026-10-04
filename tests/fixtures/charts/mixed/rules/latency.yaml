@@ -1,0 +1,9 @@
+# No type: the prometheus profile — a PrometheusRule, checked with promtool.
+columns:
+  job: { type: string, required: true }
+
+rules:
+  - alert: SlowRequests
+    expr: histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job="${job}"}[5m]))) > 1
+    for: 10m
+    labels: { severity: warning, owner: "${owner}" }

@@ -1,0 +1,13 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'cpu_usage{namespace="prod", workload="api"}'
+        values: '90x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: CpuHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: prod, workload: api }

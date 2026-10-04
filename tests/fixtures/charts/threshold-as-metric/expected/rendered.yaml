@@ -1,0 +1,18 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-cpu-thresholds-1-1:
+  - name: cpu-thresholds
+    rules:
+      - record: cpu_threshold
+        expr: vector(90)
+        labels: { namespace: prod, workload: api }
+      - record: cpu_threshold
+        expr: vector(80)
+        labels: { namespace: prod, workload: web }
+blind-cpu-1:
+  - name: cpu
+    rules:
+      - alert: CPUHigh
+        expr: cpu_usage > on(namespace, workload) group_left cpu_threshold
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: '{{ $labels.workload }}: {{ $value }}%' }

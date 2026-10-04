@@ -1,0 +1,10 @@
+columns:
+  namespace: { type: string, required: true }
+  limit_pct: { type: number, required: true }
+
+rules:
+  - alert: MemoryHigh
+    expr: mem_used_pct{cluster="${cluster}", namespace="${namespace}"} > ${limit_pct}
+    for: 5m
+    labels: { severity: warning, env: "${env}", oncall: "${oncall}" }
+    annotations: { summary: "memory in ${cluster}/${namespace} is {{ $value }}%" }

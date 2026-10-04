@@ -1,0 +1,16 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-cpu-1-1:
+  - name: cpu
+    rules:
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="prod", workload!~`api`} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="prod", workload="api"} > 95'
+        for: 1m
+        labels: { severity: warning }
+      - alert: CpuHigh
+        expr: 'cpu_usage{namespace="dev"} > 80'
+        for: 1m
+        labels: { severity: warning }

@@ -1,0 +1,20 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-watchdog-1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: watchdog
+      interval: 1m
+      rules:
+        - alert: Watchdog
+          expr: |-
+            vector(1)
+          labels:
+            severity: none
+          annotations:
+            summary: |-
+              always firing — proves the pipeline delivers

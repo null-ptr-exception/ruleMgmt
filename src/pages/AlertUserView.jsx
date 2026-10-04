@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Alert, Button, Modal, Typography, Empty, Input, Select, message, Segmented } from 'antd'
+import { Button, Modal, Typography, Empty, Input, Select, message, Segmented, Alert, Tooltip } from 'antd'
 import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
 import OverviewTemplateTree from '../components/OverviewTemplateTree'
-import AlertTable from '../components/AlertTable'
+import AlertTable, { RequiredMark } from '../components/AlertTable'
+import { isMissingRequired } from '../utils/valueUtils'
 import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
+import PreviewModal from '../components/PreviewModal'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
 import { pruneAllValues } from '../utils/valueUtils'
+import { parseRulesDir } from '../utils/rulesFile'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -20,6 +23,14 @@ import {
 
 const { Title, Text } = Typography
 
+/** The defaults of a group's selector columns, _common's included (#60). */
+function selectorDefaultsOf(model, group) {
+  const entry = model?.groups?.[group]
+  if (!entry?.selectors) return {}
+  const cols = { ...(model.common?.columns || {}), ...(entry.columns || {}) }
+  return Object.fromEntries(entry.selectors.filter(l => cols[l]?.default !== undefined).map(l => [l, cols[l].default]))
+}
+
 export default function AlertUserView() {
   const [selectedFolder, setSelectedFolder] = useSessionState('alerts:folder', null)
   const [selectedChart, setSelectedChart] = useSessionState('alerts:chart', null)
@@ -28,6 +39,9 @@ export default function AlertUserView() {
   const [mode, setMode] = useSessionState('alerts:mode', 'single')
 
   const [schema, setSchema] = useState(null)
+  const [onceGroups, setOnceGroups] = useState([])
+  // The chart's rules model — for once groups (#70) and selectors (#60).
+  const [rulesModel, setRulesModel] = useState(null)
   const [alertNames, setAlertNames] = useState([])
 
   const [allValues, setAllValues] = useState({})
@@ -40,6 +54,8 @@ export default function AlertUserView() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
   const [previewCheck, setPreviewCheck] = useState(null)
+  const [previewSelfCheck, setPreviewSelfCheck] = useState(null)
+  const [previewSummary, setPreviewSummary] = useState(null)
 
   const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
 
@@ -87,9 +103,20 @@ export default function AlertUserView() {
       return
     }
     getChartInfo(selectedChart).then(info => {
+      // A once group (#70) has no rows and so no entry in the schema; it is
+      // listed from the chart's rules/ so the rule owner sees it exists.
+      let once = []
+      let parsed = null
+      try {
+        parsed = parseRulesDir(info.rulesFiles || {}).model
+        once = Object.entries(parsed.groups).filter(([, g]) => g.once).map(([k]) => k)
+      } catch { /* an unparseable rules/ is the template owner's to fix */ }
+      setRulesModel(parsed)
+      const names = [...schemaAlertNames(info.schema), ...once]
       setSchema(info.schema)
-      setAlertNames(schemaAlertNames(info.schema))
-      if (activeAlert && activeAlert !== '__common_vars__' && !schemaAlertNames(info.schema).includes(activeAlert)) {
+      setOnceGroups(once)
+      setAlertNames(names)
+      if (activeAlert && activeAlert !== '__common_vars__' && !names.includes(activeAlert)) {
         setActiveAlert(null)
       }
     })
@@ -128,6 +155,20 @@ export default function AlertUserView() {
     setRows(allValues[activeAlert] || [])
   }, [activeAlert, allValues])
 
+  // After creating a deployment, if the chart has a required common variable
+  // with no default, land on the Common Values page — Helm would otherwise
+  // reject the deployment on save and the rule owner has no reason to look
+  // under COMMON VARIABLES on their own.
+  const pendingCommonCheckRef = useRef(false)
+  useEffect(() => {
+    if (!pendingCommonCheckRef.current || !schema) return
+    pendingCommonCheckRef.current = false
+    const unmet = getCommonVars(schema).some(
+      v => v.required && v.default === undefined && !(v.name in commonValues)
+    )
+    if (unmet) setActiveAlert('__common_vars__')
+  }, [schema, commonValues])
+
   async function handleNewDeployOpen() {
     const charts = await listCharts()
     setAvailableCharts(charts)
@@ -148,6 +189,11 @@ export default function AlertUserView() {
       setSelectedFolder(newDeployPath)
       setSelectedChart(chart)
       setActiveAlert(null)
+      // A fresh deployment has no _common filled in; clear any left over from
+      // the previous selection so the required-common check below sees the
+      // real (empty) state and not stale values.
+      setCommonValues({})
+      pendingCommonCheckRef.current = true
       setTreeRefreshKey(k => k + 1)
       message.success(`Deployment created at ${newDeployPath}`)
     }
@@ -240,6 +286,44 @@ export default function AlertUserView() {
     await refreshFrozenSource(path)
   }
 
+  // A proposed row (#60) goes into its group's table; Save is still the
+  // owner's to press.
+  function addProposedRow(group, row) {
+    if (group === activeAlert) setRows(r => [...r, row])
+    setAllValues(v => ({ ...v, [group]: [...(group === activeAlert ? rows : (v[group] || [])), row] }))
+    setDirty(true)
+  }
+
+  // A save refused for specific cells lists them; anything else is still
+  // just "Save failed". Rows that would fix a selector overlap (#60) each
+  // come with a button that adds them.
+  function reportSaveFailure(result) {
+    if (!result.problems?.length) {
+      message.error('Save failed')
+      return
+    }
+    const dialog = Modal.error({
+      title: result.error || 'Save failed',
+      width: 560,
+      content: (
+        <>
+          <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+            {result.problems.map((p, i) => <li key={i}>{p.message}</li>)}
+          </ul>
+          {(result.proposals || []).map((p, i) => (
+            <div key={i} data-testid="proposal" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <Button size="small" onClick={() => { addProposedRow(p.group, p.row); dialog.destroy() }}>Add this row</Button>
+              <Text style={{ fontSize: 12 }}>
+                {p.group}: {Object.entries(p.row).map(([k, v]) => `${k}=${v}`).join(', ')}
+                <Text type="secondary" style={{ fontSize: 11 }}> — {p.reason}</Text>
+              </Text>
+            </div>
+          ))}
+        </>
+      ),
+    })
+  }
+
   async function handleSave() {
     if (!selectedChart || !selectedFolder) return
     const isCommon = activeAlert === '__common_vars__'
@@ -249,7 +333,7 @@ export default function AlertUserView() {
       : merged
     const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
     if (!result.ok) {
-      message.error('Save failed')
+      reportSaveFailure(result)
       return false
     }
     if (!isCommon) setAllValues(merged)
@@ -265,7 +349,7 @@ export default function AlertUserView() {
       : allValues
     const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
     if (!result.ok) {
-      message.error('Save failed')
+      reportSaveFailure(result)
       return false
     }
     setDirty(false)
@@ -288,6 +372,8 @@ export default function AlertUserView() {
     const result = await renderDeployment(selectedChart, folderBasename, selectedFolder)
     setPreviewYaml(result.ok ? result.output : `Error: ${result.error || 'Unknown error'}`)
     setPreviewCheck(result.ok ? result.check : null)
+    setPreviewSelfCheck(result.ok ? result.selfCheck : null)
+    setPreviewSummary(result.ok ? result.summary : null)
     setPreviewOpen(true)
   }
 
@@ -358,7 +444,7 @@ export default function AlertUserView() {
                 </div>
               ) : (
                 <OverviewTemplateTree
-                  templates={alertNames}
+                  templates={alertNames.filter(n => !onceGroups.includes(n))}
                   checked={checkedAlerts}
                   onCheckedChange={setCheckedAlerts}
                 />
@@ -422,11 +508,11 @@ export default function AlertUserView() {
                   <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
                     Values set here apply to all alert groups in this deployment.
                   </Text>
-                  {commonVarDefs.map(v => (
-                    <div key={v.name} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                      <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}</Text>
-                      {v.enum ? (
+                  {commonVarDefs.map(v => {
+                    const missing = !frozenSource && isMissingRequired(v, commonValues[v.name])
+                    const field = v.enum ? (
                         <Select size="small" value={commonValues[v.name] ?? ''}
+                          status={missing ? 'error' : undefined}
                           onChange={val => { setCommonValues({ ...commonValues, [v.name]: val }); setDirty(true) }}
                           style={{ flex: 1 }}
                           options={v.enum.map(opt => ({ value: opt, label: opt }))}
@@ -437,6 +523,7 @@ export default function AlertUserView() {
                       ) : (
                         <Input size="small" value={commonValues[v.name] ?? ''}
                           disabled={!!frozenSource}
+                          status={missing ? 'error' : undefined}
                           onChange={e => {
                             if (e.target.value) {
                               setCommonValues({ ...commonValues, [v.name]: e.target.value }); setDirty(true)
@@ -446,14 +533,29 @@ export default function AlertUserView() {
                           }}
                           style={{ flex: 1 }}
                         />
-                      )}
-                    </div>
-                  ))}
+                      )
+                    return (
+                      <div key={v.name} data-testid={`common-value-${v.name}`} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                        <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}{v.required && <RequiredMark />}</Text>
+                        {missing ? <Tooltip title="Required">{field}</Tooltip> : field}
+                      </div>
+                    )
+                  })}
                 </div>
+              ) : onceGroups.includes(activeAlert) ? (
+                <Alert
+                  data-testid="once-group-notice"
+                  type="info"
+                  showIcon
+                  message="No values needed"
+                  description="This group renders once per deployment — it has no rows to fill in. Preview shows what it produces."
+                />
               ) : (
                 <AlertTable
                   vars={vars}
                   rows={rows}
+                  selectors={rulesModel?.groups?.[activeAlert]?.selectors || null}
+                  selectorDefaults={selectorDefaultsOf(rulesModel, activeAlert)}
                   commonValues={commonValues}
                   filters={filters}
                   onFiltersChange={setFilters}
@@ -486,29 +588,14 @@ export default function AlertUserView() {
       </div>
 
       {/* Mounted outside the mode branches: both single and overview open it. */}
-      <Modal title="Rendered PrometheusRule" open={previewOpen} onCancel={() => setPreviewOpen(false)}
-        footer={null} width={800}>
-        {previewCheck && (
-          <Alert
-            style={{ marginBottom: 12 }}
-            type={previewCheck.skipped ? 'info' : previewCheck.passed ? 'success' : 'error'}
-            showIcon
-            message={previewCheck.skipped ? 'Promtool check skipped' : previewCheck.passed ? 'Promtool check passed' : 'Promtool check failed'}
-            description={
-              previewCheck.output
-                ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto' }}>{previewCheck.output}</div>
-                : null
-            }
-          />
-        )}
-        <pre style={{
-          background: '#0f172a', color: '#7dd3fc', padding: 16, borderRadius: 8,
-          fontSize: 12, fontFamily: 'monospace', maxHeight: 500, overflow: 'auto',
-          whiteSpace: 'pre-wrap', wordBreak: 'break-all'
-        }}>
-          {previewYaml || 'No output'}
-        </pre>
-      </Modal>
+      <PreviewModal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        yaml={previewYaml}
+        check={previewCheck}
+        selfCheck={previewSelfCheck}
+        summary={previewSummary}
+      />
 
       <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}
         onOk={handleNewDeployCreate} okText="Create"

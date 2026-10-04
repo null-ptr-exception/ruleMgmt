@@ -1,0 +1,8 @@
+_common:
+  cluster: c1
+cpu:
+  # workload left out: .*
+  - namespace: prod
+  - namespace: prod
+    workload: api
+    threshold: 95

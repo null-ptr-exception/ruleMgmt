@@ -1,7 +1,7 @@
 services:
   proxy:
     image: alpine/socat
-    command: TCP-LISTEN:12014,fork,reuseaddr TCP:192.168.58.2:30080
+    command: TCP-LISTEN:12014,fork,reuseaddr TCP:${MINIKUBE_IP:-minikube-ip-not-set}:30080
     ports:
       - "127.0.0.1:12014:12014"
     networks:
@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
   gitea-proxy:
     image: alpine/socat
-    command: TCP-LISTEN:12016,fork,reuseaddr TCP:192.168.58.2:30081
+    command: TCP-LISTEN:12016,fork,reuseaddr TCP:${MINIKUBE_IP:-minikube-ip-not-set}:30081
     ports:
       - "127.0.0.1:12016:12016"
     networks:

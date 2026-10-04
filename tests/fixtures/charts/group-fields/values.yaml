@@ -1,0 +1,4 @@
+jobs:
+  - job: api
+    linger: 15m
+  - job: worker

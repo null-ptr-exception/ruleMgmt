@@ -1,0 +1,9 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# No promtool-tests.yaml: promtool cannot read LogsQL (validate: none).
+VMRule blind-app-panic-1:
+  - name: app-panic
+    type: vlogs
+    rules:
+      - alert: AppPanic
+        expr: '_time:5m service:"checkout" panic | stats count() as panics | filter panics:>0'
+        labels: { severity: critical }

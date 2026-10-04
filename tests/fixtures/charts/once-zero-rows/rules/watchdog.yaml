@@ -1,0 +1,9 @@
+# once (#70): rendered whatever values.yaml holds — here, no rows anywhere.
+once: true
+interval: 1m
+
+rules:
+  - alert: Watchdog
+    expr: vector(1)
+    labels: { severity: none }
+    annotations: { summary: always firing — proves the pipeline delivers }

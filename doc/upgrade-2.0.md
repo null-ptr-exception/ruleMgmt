@@ -45,7 +45,8 @@ stay next to the new ones and **every alert fires twice**.
 **3. Plan to convert every chart in one go.** In 2.0.0, a commit is refused
 while any chart in the repository is still in the 1.x format — including a
 commit that only edits a deployment's values. Convert all charts before
-anyone commits on 2.0.0.
+anyone commits on 2.0.0. A later 2.0.x lifts this, so that charts can be
+converted one at a time (#79).
 
 ## Converting
 

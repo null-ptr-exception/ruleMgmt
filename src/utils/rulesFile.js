@@ -362,6 +362,14 @@ export function modelToFiles(model) {
 
 // ── files -> model (the parser) ─────────────────────────────────────────────
 
+/**
+ * A group's key is its filename and its `.Values` field — `$.Values.<key>` in
+ * the generated template — so it has to be a Go template identifier: a
+ * hyphen or a leading digit saves fine and then never renders. Lower-case,
+ * and never a leading `_`, which is the system's (`_common`).
+ */
+export const GROUP_KEY_RE = /^[a-z][a-z0-9_]*$/
+
 const isMapping = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 /**
@@ -525,6 +533,9 @@ export function parseRulesDir(files) {
   for (const [name, text] of Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     if (name === '_common.yaml') continue
     const filename = name.replace(/\.yaml$/, '')
+    if (!GROUP_KEY_RE.test(filename)) {
+      errors.push(`${name}: a group name is lower-case letters, digits and _, starting with a letter`)
+    }
     const { group, errors: e } = parseGroupFile(text, filename)
     errors.push(...e)
     for (const varName of Object.keys(group.vars || {})) {

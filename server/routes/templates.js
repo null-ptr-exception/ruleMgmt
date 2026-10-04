@@ -16,8 +16,9 @@ import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 // A rules/ filename: a group file, or _common.yaml. Guards path traversal in
-// the keys of the POST /:chart/rules body.
-const RULES_FILE_RE = /^(_common|[a-z0-9][a-z0-9_-]*)\.yaml$/
+// the keys of the POST /:chart/rules body, and keeps a group key a name Helm
+// can read (the same rule as GROUP_KEY_RE in rulesFile.js).
+const RULES_FILE_RE = /^(_common|[a-z][a-z0-9_]*)\.yaml$/
 
 /** Groups and per-group columns that are new in `after` vs `before` — mapping
  *  targets for a disappearing column or group in the breaking-change dialog. */

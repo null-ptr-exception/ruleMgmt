@@ -208,6 +208,17 @@ rules:
     expect(Object.keys(model.groups)).toContain('cpu')
   })
 
+  // The group key is a Helm field name: `$.Values.cpu-high` does not parse,
+  // so a chart with such a file saved fine and then never rendered.
+  it('refuses a group filename that cannot be a .Values field name', () => {
+    const body = 'columns: {}\nrules:\n  - alert: A\n    expr: up == 0\n'
+    for (const bad of ['cpu-high', '1cpu', 'Cpu', '_cpu']) {
+      expect(parseRulesDir({ [`${bad}.yaml`]: body }).errors, bad).toContain(
+        `${bad}.yaml: a group name is lower-case letters, digits and _, starting with a letter`)
+    }
+    expect(parseRulesDir({ 'cpu_high2.yaml': body }).errors).toEqual([])
+  })
+
   it('refuses a rule that is not a mapping, and a file that is not one', () => {
     const nullRule = parseGroupFile('rules:\n  -\n  - 3\n', 'cpu')
     expect(nullRule.errors).toEqual(expect.arrayContaining([

@@ -88,6 +88,12 @@ describe('Templates write API', () => {
     expect(status).toBe(400)
   })
 
+  it('refuses to save a group whose name cannot be a .Values field name', async () => {
+    const files = { 'cpu-high.yaml': 'columns: {}\nrules:\n  - alert: A\n    expr: up == 0\n' }
+    const { status } = await api('POST', '/api/v2/templates/test-chart/rules', { files, confirmBreaking: true })
+    expect(status).toBe(400)
+  })
+
   // A rules/ file that does not parse marks the chart stale with the reason;
   // it does not 500 the chart out of being opened, or out of the save that
   // fixes it.

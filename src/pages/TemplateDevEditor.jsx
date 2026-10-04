@@ -7,7 +7,7 @@ import RuleEditor from '../components/RuleEditor'
 import KVEditor from '../components/KVEditor'
 import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
-import { parseRulesDir, schemaToModel, groupFileText, commonFileText } from '../utils/rulesFile'
+import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_RE } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { ruleVars } from '../utils/ruleModel'
 import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
@@ -308,7 +308,10 @@ export default function TemplateDevEditor() {
   function addGroup() {
     const name = prompt('Alert group name (e.g. mariadb_saturation_disk):')?.trim()
     if (!name) return
-    if (!NAME_RE.test(name) || model.groups[name]) return
+    if (!GROUP_KEY_RE.test(name) || model.groups[name]) {
+      Modal.error({ title: 'Invalid or taken name', content: 'Lower-case letters, digits and _, starting with a letter.' })
+      return
+    }
     setModel(m => ({ ...m, groups: { ...m.groups, [name]: emptyGroup(name) } }))
     setOrder(o => [...o, name])
     touch(`${name}.yaml`)
@@ -326,7 +329,10 @@ export default function TemplateDevEditor() {
   function renameGroup(oldKey) {
     const newKey = prompt(`Rename "${oldKey}" to:`, oldKey)?.trim()
     if (!newKey || newKey === oldKey) return
-    if (!NAME_RE.test(newKey) || model.groups[newKey]) { Modal.error({ title: 'Invalid or taken name' }); return }
+    if (!GROUP_KEY_RE.test(newKey) || model.groups[newKey]) {
+      Modal.error({ title: 'Invalid or taken name', content: 'Lower-case letters, digits and _, starting with a letter.' })
+      return
+    }
     // Renaming a group is a group-removed + group-added — the server sends it
     // through the breaking-change dialog when deployments are on the old name.
     setModel(m => {

@@ -83,6 +83,15 @@ test.describe.serial('Template editor — rules source', () => {
     await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES } } })
   })
 
+  // A group name is a .Values field name: `cpu-load` would save and then
+  // never render.
+  test('renaming a group to a name Helm cannot read is refused', async ({ page }) => {
+    await openChart(page)
+    page.once('dialog', d => d.accept('cpu-load'))
+    await page.getByRole('button', { name: 'Rename' }).click()
+    await expect(page.locator('.ant-modal').filter({ hasText: 'Invalid or taken name' })).toBeVisible({ timeout: 5000 })
+  })
+
   test('removing a column a deployment uses goes through the breaking dialog', async ({ page, request }) => {
     // A rules file where `warn` is a column no rule references, plus a
     // deployment whose row fills it — so deleting `warn` is breaking, not a

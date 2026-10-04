@@ -322,4 +322,17 @@ describe('the raw toggle round-trips a rule', () => {
   it('refuses invalid YAML instead of returning an empty rule', () => {
     expect(ruleFromYaml('alert: [').error).toMatch(/Not valid YAML/)
   })
+
+  // A recording rule went raw as an unnamed entry, and could not come back.
+  it('carries a recording rule across, both ways', () => {
+    const recording = { record: 'job:errors:rate5m', expr: 'sum by (job) (rate(errors_total[5m]))', labels: { team: 'a' } }
+    expect(ruleToYaml(recording)).toContain('record: job:errors:rate5m')
+    expect(ruleFromYaml(ruleToYaml(recording)).rule).toEqual(recording)
+  })
+
+  it('refuses a recording rule carrying what a recording rule cannot have', () => {
+    const { rule, error } = ruleFromYaml('record: r\nexpr: up\nfor: 5m')
+    expect(rule).toBeUndefined()
+    expect(error).toMatch(/for/)
+  })
 })

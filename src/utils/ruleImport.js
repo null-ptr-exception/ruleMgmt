@@ -228,6 +228,7 @@ export function importProblems({ groups }, schema) {
  */
 export function ruleToYaml(rule) {
   const entry = {}
+  if (rule.record !== undefined) entry.record = rule.record
   if (rule.alert) entry.alert = rule.alert
   if (rule.expr) entry.expr = rule.expr
   if (rule.for) entry.for = rule.for
@@ -252,6 +253,13 @@ export function ruleFromYaml(raw) {
 
   const entry = Array.isArray(doc) ? doc[0] : doc
   if (!entry || typeof entry !== 'object') return { error: 'Not a rule entry' }
+
+  // A recording rule has only record, expr and labels (#70).
+  if (entry.record !== undefined) {
+    const unknown = Object.keys(entry).filter(k => !RECORD_FIELDS.includes(k))
+    if (unknown.length) return { error: `a recording rule has no ${unknown.join(', ')}` }
+    return { rule: { record: String(entry.record), expr: String(entry.expr ?? ''), labels: entry.labels || {} } }
+  }
 
   const unknown = Object.keys(entry).filter(k => !RULE_FIELDS.includes(k))
   if (unknown.length) {

@@ -24,7 +24,7 @@ export async function createChart(name) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name })
   })
-  if (!res.ok) return {}
+  if (!res.ok) return { failed: true, ...(await res.json().catch(() => ({}))) }
   return res.json()
 }
 

@@ -467,7 +467,11 @@ export default function TemplateDevEditor() {
   async function handleCreateChart() {
     const name = prompt('New chart name:')?.trim()
     if (!name) return
-    await createChart(name)
+    const created = await createChart(name)
+    if (created.failed) {
+      message.error(created.error || 'The chart was not created')
+      return
+    }
     await loadCharts()
     setActiveChart(name)
   }
@@ -502,11 +506,27 @@ export default function TemplateDevEditor() {
     setActiveGroup(groups[0]?.key || activeGroup)
   }
 
+  // The dialog stays open on a refusal, so the name or the rules can be fixed
+  // and tried again.
   async function createChartFromRules({ groups }, name) {
-    await createChart(name)
+    if (charts.some(c => c.name === name)) {
+      message.error(`A chart named "${name}" already exists`)
+      return
+    }
+    const created = await createChart(name)
+    if (created.failed) {
+      message.error(created.error || 'The chart was not created')
+      return
+    }
     const files = {}
     for (const g of groups) files[`${g.key}.yaml`] = groupFileText(modelGroupFromImport(g))
-    await saveChartRules(name, files, true)
+    const saved = await saveChartRules(name, files, true)
+    if (!saved?.ok) {
+      // No empty chart left behind for the next try to collide with.
+      await deleteChart(name)
+      reportFailedSave(saved)
+      return
+    }
     await loadCharts()
     setActiveChart(name)
     setImportTarget(null)

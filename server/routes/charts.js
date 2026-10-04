@@ -27,6 +27,12 @@ export default function chartsRouter() {
       return res.status(400).json({ error: 'Invalid chart name. Must match ^[a-z0-9][a-z0-9_-]*$' })
     }
     const chartDir = path.join(chartsDir, name)
+    // Creating over an existing chart reset its Chart.yaml, values.yaml and
+    // schema — and New → From rules… then replaced its rules/ outright.
+    try {
+      await fs.access(path.join(chartDir, 'Chart.yaml'))
+      return res.status(409).json({ error: `A chart named "${name}" already exists` })
+    } catch { /* free */ }
     try {
       await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
       const chartYaml = yaml.dump({ apiVersion: 'v2', name, version: '0.1.0', type: 'application', annotations: { app: 'alertforge' } })

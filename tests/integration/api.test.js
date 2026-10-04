@@ -53,6 +53,19 @@ describe('Charts API', () => {
     expect(data.ok).toBe(true)
   })
 
+  // Creating over an existing chart rewrote its Chart.yaml, values.yaml and
+  // schema, and New → From rules… then replaced its rules/ outright.
+  it('refuses a name already taken, and leaves that chart alone', async () => {
+    const chartYaml = path.join(tmpDir, 'charts', 'test-app', 'Chart.yaml')
+    const original = await fs.readFile(chartYaml, 'utf-8')
+    await fs.writeFile(chartYaml, original.replace('version: 0.1.0', 'version: 3.1.4'))
+    const { status, data } = await api('POST', '/api/v2/charts', { name: 'test-app' })
+    expect(status).toBe(409)
+    expect(data.error).toContain('already exists')
+    expect(await fs.readFile(chartYaml, 'utf-8')).toContain('version: 3.1.4')
+    await fs.writeFile(chartYaml, original)
+  })
+
   it('rejects invalid chart name', async () => {
     const { status } = await api('POST', '/api/v2/charts', { name: 'BAD NAME!' })
     expect(status).toBe(400)

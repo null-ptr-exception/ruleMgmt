@@ -278,3 +278,30 @@ describe('GET /:chart drift', () => {
     expect(migrated.data.rulesFiles['_common.yaml']).toBe(COMMON)
   })
 })
+
+// A rules/ file that does not parse marks the chart stale with the reason; it
+// does not 500 the chart out of being opened, or out of the save that fixes it.
+describe('a rules/ file that does not parse', () => {
+  it('opens the chart as stale, and the save that fixes it goes through', async () => {
+    await fs.mkdir(path.join(chartDir, 'rules'), { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'Chart.yaml'), 'apiVersion: v2\nname: demo\nversion: 0.1.0\n')
+    await fs.writeFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'rules: [\n')
+
+    const opened = await api('GET', '/api/v2/templates/demo')
+    expect(opened.status).toBe(200)
+    expect(opened.data.drift.state).toBe('stale')
+    expect(JSON.stringify(opened.data.drift)).toContain('cpu.yaml')
+
+    const fixed = 'columns: {}\nrules:\n  - alert: A\n    expr: up == 0\n'
+    const saved = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': fixed }, confirmBreaking: true })
+    expect(saved.status).toBe(200)
+  })
+})
+
+describe('a group name', () => {
+  it('is refused on save when it cannot be a .Values field name', async () => {
+    const files = { 'cpu-high.yaml': 'columns: {}\nrules:\n  - alert: A\n    expr: up == 0\n' }
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', { files, confirmBreaking: true })
+    expect(status).toBe(400)
+  })
+})

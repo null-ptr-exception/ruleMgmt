@@ -122,7 +122,7 @@ async function checkPrometheusRules(renderedYaml) {
 
     if (results.some(r => r.missing)) {
       const msg = `Promtool is not available: ${promtool}`
-      return { passed: false, errors: [msg], output: msg }
+      return { passed: false, unchecked, errors: [msg], output: withNote(msg) }
     }
 
     const failed = results.filter(r => !r.passed)

@@ -1,8 +1,13 @@
 import { test, expect } from '@playwright/test'
+import { hasBinary } from '../blind/harness.js'
 
 // #67: which cells must be filled is visible before Save — the save itself
 // is refused by the server (#66), the table only points at the cells. And
 // #51's flows from the table to values.yaml, end to end.
+
+// The server runs this same binary; where it is missing (CI), Preview says so
+// instead of passing, and the one test that needs a pass is skipped.
+const HAS_PROMTOOL = hasBinary(process.env.PROMTOOL_BIN || 'promtool')
 
 const CHART = 'e2e-required-markers'
 const FOLDER = `deployments/${CHART}/dev`
@@ -110,6 +115,7 @@ test.describe('required cells (#67)', () => {
   // #51: an optional column left out renders nothing in its place, and a
   // _common value reaches the rule.
   test('Preview renders the _common value and no <no value>, and promtool passes', async ({ page }) => {
+    test.skip(!HAS_PROMTOOL, 'promtool not found')
     await selectDeployment(page)
     await page.getByText('cpu', { exact: true }).first().click()
     await (await cell(page, 0, 'job')).locator('input').fill('')

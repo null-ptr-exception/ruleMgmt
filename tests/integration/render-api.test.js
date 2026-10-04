@@ -651,6 +651,45 @@ spec:
     expect(data.check.output).toContain('Promtool is not available')
   })
 
+  // #65: the not-syntax-checked note is said on every result — a missing
+  // promtool included, or a mixed chart loses it exactly where nothing at all
+  // was checked.
+  it('still marks a vlogs object not syntax-checked when promtool is unavailable', async () => {
+    await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-latency-1-1
+spec:
+  groups:
+    - name: latency
+      rules:
+        - alert: SlowRequests
+          expr: up == 0
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: rel-panics-1-1
+spec:
+  groups:
+    - name: panics
+      type: vlogs
+      rules:
+        - alert: Panics
+          expr: '"panic:" | stats count() as n | filter n:>0'
+`)
+    process.env.PROMTOOL_BIN = path.join(tmpDir, 'missing-promtool')
+
+    const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(status).toBe(200)
+    expect(data.check.passed).toBe(false)
+    expect(data.check.unchecked).toBe(1)
+    expect(data.check.output).toContain('Promtool is not available')
+    expect(data.check.output).toMatch(/1 object\(s\) not syntax-checked/)
+  })
+
   it('returns 400 for invalid chart name', async () => {
     const { status, data } = await api('POST', '/api/v2/render/Invalid_Chart/staging')
     expect(status).toBe(400)

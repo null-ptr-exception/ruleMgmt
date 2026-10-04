@@ -367,8 +367,11 @@ that drops a column is a warning there rather than the breaking-change dialog.
 
 The products are regenerated from `rules/`, so a release that changes how the
 generator writes them makes every migrated chart `stale` at once — the editor
-shows the banner, and a commit is refused — even though no rule changed.
-Version 1.6 is one: `expr` and annotations moved to block scalars.
+shows the banner, and a commit is refused — even though no rule changed
+(moving `expr` and annotations to block scalars was one such change).
+
+Coming from 1.x is a different, one-time upgrade — charts are converted, not
+regenerated: see [upgrade-2.0.md](upgrade-2.0.md).
 
 After upgrading, regenerate every chart once and commit the result on its
 own (see [how-to](how-to.md#regenerate-every-chart-after-an-upgrade)). What

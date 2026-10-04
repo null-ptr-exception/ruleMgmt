@@ -308,9 +308,10 @@ Worth wiring into CI or a pre-commit hook if files are ever committed by hand
 
 ### Regenerate every chart after an upgrade
 
-When a release changes the generated format (1.6 moved `expr` and annotations
-to block scalars), every migrated chart turns `stale` and commits are refused
-until its products are regenerated:
+When a release changes the generated format (moving `expr` and annotations
+to block scalars was one such change), every migrated chart turns `stale` and
+commits are refused until its products are regenerated. Coming from 1.x, see
+[upgrade-2.0.md](upgrade-2.0.md) instead.
 
 ```bash
 for c in charts/*/; do [ -d "$c/rules" ] && node scripts/gen-rules.mjs "$c"; done

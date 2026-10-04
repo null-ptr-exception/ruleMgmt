@@ -72,13 +72,12 @@ test.describe.serial('Template editor — rules source', () => {
     await page.getByRole('button', { name: 'Rename' }).click()
     await page.getByRole('button', { name: 'Save' }).first().click()
 
+    // The save writes the new file before it removes the old one, so a poll
+    // that stopped at the new file could still see both.
     await expect.poll(async () => {
       const info = await (await request.get(`/api/v2/templates/${CHART}`)).json()
-      return Object.keys(info.rulesFiles || {})
-    }, { timeout: 8000 }).toContain('cpu_load.yaml')
-
-    const info = await (await request.get(`/api/v2/templates/${CHART}`)).json()
-    expect(info.rulesFiles['cpu.yaml']).toBeUndefined()
+      return Object.keys(info.rulesFiles || {}).sort()
+    }, { timeout: 8000 }).toEqual(['cpu_load.yaml'])
     // rename it back so the other tests' fixture assumptions hold
     await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES } } })
   })

@@ -362,7 +362,28 @@ export function modelToFiles(model) {
 
 // ── files -> model (the parser) ─────────────────────────────────────────────
 
-class RulesFileError extends Error {}
+const isMapping = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+
+/**
+ * A file's YAML as a mapping, or an error. Never throws: every caller (drift,
+ * save, commit) reads `errors`, and a throw locked a chart with one typo out
+ * of being opened, fixed, or committed around.
+ */
+function loadMapping(text, where, errors) {
+  let doc
+  try {
+    doc = yaml.load(text)
+  } catch (err) {
+    errors.push(`${where}: ${err.message}`)
+    return {}
+  }
+  if (doc === undefined || doc === null) return {}
+  if (!isMapping(doc)) {
+    errors.push(`${where}: must be a mapping`)
+    return {}
+  }
+  return doc
+}
 
 function rejectUnknown(obj, allowed, where, errors) {
   for (const key of Object.keys(obj || {})) {
@@ -407,12 +428,7 @@ function checkRuleKind(rule, where, errors) {
 /** One group file. `filename` is the stem, without `.yaml`. */
 export function parseGroupFile(text, filename) {
   const errors = []
-  let doc
-  try {
-    doc = yaml.load(text) || {}
-  } catch (err) {
-    throw new RulesFileError(`${filename}.yaml: ${err.message}`)
-  }
+  const doc = loadMapping(text, `${filename}.yaml`, errors)
 
   rejectUnknown(doc, GROUP_KEYS, `${filename}.yaml`, errors)
 
@@ -430,11 +446,15 @@ export function parseGroupFile(text, filename) {
     }
   }
 
-  const rules = (Array.isArray(doc.rules) ? doc.rules : []).map((rule, i) => {
+  const rules = (Array.isArray(doc.rules) ? doc.rules : []).flatMap((rule, i) => {
     const where = `${filename}.yaml rules[${i}]`
+    if (!isMapping(rule)) {
+      errors.push(`${where}: a rule must be a mapping`)
+      return []
+    }
     rejectUnknown(rule, RULE_KEYS, where, errors)
     checkRuleKind(rule, where, errors)
-    return canonicalRule(rule)
+    return [canonicalRule(rule)]
   })
   if (!Array.isArray(doc.rules)) errors.push(`${filename}.yaml: rules is required and must be a list`)
 
@@ -481,12 +501,7 @@ export function parseGroupFile(text, filename) {
 
 export function parseCommonFile(text) {
   const errors = []
-  let doc
-  try {
-    doc = yaml.load(text) || {}
-  } catch (err) {
-    throw new RulesFileError(`_common.yaml: ${err.message}`)
-  }
+  const doc = loadMapping(text, '_common.yaml', errors)
   rejectUnknown(doc, ['columns'], '_common.yaml', errors)
   return { columns: parseColumns(doc.columns, '_common.yaml columns', errors), errors }
 }

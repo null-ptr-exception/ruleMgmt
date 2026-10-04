@@ -194,6 +194,30 @@ rules:
     expect(parseGroupFile(ok, 'cpu').errors).toEqual([])
   })
 
+  // A hand-edited typo, or a pull that brings one, has to come back as an
+  // error naming the file: callers (drift, save, commit) expect { model,
+  // errors } and a throw locked the chart out of being opened or fixed.
+  it('reports a file it cannot parse, and goes on to the rest', () => {
+    const { model, errors } = parseRulesDir({
+      'broken.yaml': 'rules: [\n',
+      'cpu.yaml': ok,
+      '_common.yaml': 'columns: {\n',
+    })
+    expect(errors.some(e => e.startsWith('broken.yaml:'))).toBe(true)
+    expect(errors.some(e => e.startsWith('_common.yaml:'))).toBe(true)
+    expect(Object.keys(model.groups)).toContain('cpu')
+  })
+
+  it('refuses a rule that is not a mapping, and a file that is not one', () => {
+    const nullRule = parseGroupFile('rules:\n  -\n  - 3\n', 'cpu')
+    expect(nullRule.errors).toEqual(expect.arrayContaining([
+      'cpu.yaml rules[0]: a rule must be a mapping',
+      'cpu.yaml rules[1]: a rule must be a mapping',
+    ]))
+    expect(nullRule.group.rules).toEqual([])
+    expect(parseGroupFile('- a\n- b\n', 'cpu').errors).toContain('cpu.yaml: must be a mapping')
+  })
+
   // Rule-group fields (#65): type picks an output profile; interval and limit
   // are Prometheus's and used to go unchecked.
   const withFields = fields => ok.replace('group: cpu\n', `group: cpu\n${fields}\n`)

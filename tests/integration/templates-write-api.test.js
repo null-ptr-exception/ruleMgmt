@@ -87,4 +87,23 @@ describe('Templates write API', () => {
     const { status } = await api('GET', '/api/v2/templates/BAD CHART!')
     expect(status).toBe(400)
   })
+
+  // A rules/ file that does not parse marks the chart stale with the reason;
+  // it does not 500 the chart out of being opened, or out of the save that
+  // fixes it.
+  it('opens and saves a chart whose rules/ file does not parse', async () => {
+    const chart = path.join(tmpDir, 'charts', 'broken-chart')
+    await fs.mkdir(path.join(chart, 'rules'), { recursive: true })
+    await fs.writeFile(path.join(chart, 'Chart.yaml'), 'apiVersion: v2\nname: broken-chart\nversion: 0.1.0\n')
+    await fs.writeFile(path.join(chart, 'rules', 'cpu.yaml'), 'rules: [\n')
+
+    const opened = await api('GET', '/api/v2/templates/broken-chart')
+    expect(opened.status).toBe(200)
+    expect(opened.data.drift.state).toBe('stale')
+    expect(JSON.stringify(opened.data.drift)).toContain('cpu.yaml')
+
+    const fixed = 'columns: {}\nrules:\n  - alert: A\n    expr: up == 0\n'
+    const saved = await api('POST', '/api/v2/templates/broken-chart/rules', { files: { 'cpu.yaml': fixed }, confirmBreaking: true })
+    expect(saved.status).toBe(200)
+  })
 })

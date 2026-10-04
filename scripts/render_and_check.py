@@ -163,6 +163,10 @@ def check_rules(target: RenderTarget, rendered_yaml: str, promtool: str) -> int:
         print(f"{target.name}: {skipped_note(skipped)}", file=sys.stderr)
 
     if not groups:
+        # Rules that all opt out of promtool (validate: none, e.g. vlogs) are
+        # fine — the note above says so. Rendering no rules at all is not.
+        if skipped:
+            return 0
         print(f"{target.name}: no PrometheusRule spec.groups found", file=sys.stderr)
         return 1
 

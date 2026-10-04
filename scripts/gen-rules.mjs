@@ -55,11 +55,17 @@ const schemaFile = path.join(chartDir, 'values.schema.json')
 const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
 
 // rules/*.yaml already on disk.
+// Only a missing rules/ means "not migrated yet"; any other failure stops here.
+// Swallowing it read the files before the bad one as the whole of rules/, and
+// pruned the rest's templates.
 const onDisk = {}
+let names = []
 try {
-  const names = (await fs.readdir(rulesDir)).filter(f => f.endsWith('.yaml')).sort()
-  for (const name of names) onDisk[name] = await fs.readFile(path.join(rulesDir, name), 'utf-8')
-} catch { /* no rules/ dir yet */ }
+  names = (await fs.readdir(rulesDir)).filter(f => f.endsWith('.yaml')).sort()
+} catch (err) {
+  if (err.code !== 'ENOENT') throw err
+}
+for (const name of names) onDisk[name] = await fs.readFile(path.join(rulesDir, name), 'utf-8')
 
 // Once rules/ exists it is the source and the schema is a product; before that,
 // the schema is the source and this is the migration, which writes rules/ in
@@ -104,11 +110,12 @@ async function reconcile(relPath, want) {
   results.push([have === null ? 'created' : 'updated', relPath])
 }
 
-// Remove a templates/ file whose group has gone or no longer generates one —
-// but never an x-custom-template group's hand-written file. rules/ is never
-// pruned: it is either being written for the first time or it is the source.
-if (!check) {
-  if (migrating) await fs.mkdir(rulesDir, { recursive: true })
+// A templates/ file whose group has gone or no longer generates one — but
+// never an x-custom-template group's hand-written file — is removed, or under
+// --check reported: Helm still renders it. rules/ is never pruned: it is
+// either being written for the first time or it is the source.
+{
+  if (migrating && !check) await fs.mkdir(rulesDir, { recursive: true })
 
   // From the model during a migration, from the schema on disk after it:
   // a model read from rules/ never has these groups.
@@ -120,6 +127,11 @@ if (!check) {
   try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
   for (const name of existingTemplates) {
     if (name in products.templates || customTemplates.has(name)) continue
+    if (check) {
+      results.push(['ORPHANED', path.join('templates', name)])
+      failed++
+      continue
+    }
     await fs.rm(path.join(tmplDir, name), { force: true })
     results.push(['removed', path.join('templates', name)])
   }

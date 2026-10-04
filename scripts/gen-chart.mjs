@@ -53,20 +53,24 @@ if (!check) await fs.mkdir(tmplDir, { recursive: true })
 // the same groupGenDef/genSchema shim the server uses. A chart with no
 // rules/ dir yet is still schema-only (legacy x-promql) and generates
 // exactly as it always has.
+// Only a missing rules/ means schema-only; any other failure stops here.
 let model = null
+let ruleFiles = []
 try {
-  const ruleFiles = (await fs.readdir(path.join(chartDir, 'rules'))).filter(f => f.endsWith('.yaml'))
-  if (ruleFiles.length) {
-    const files = {}
-    for (const name of ruleFiles) files[name] = await fs.readFile(path.join(chartDir, 'rules', name), 'utf-8')
-    const parsed = parseRulesDir(files)
-    if (parsed.errors.length) {
-      for (const e of parsed.errors) console.error(`ERROR  ${e}`)
-      process.exit(1)
-    }
-    model = parsed.model
+  ruleFiles = (await fs.readdir(path.join(chartDir, 'rules'))).filter(f => f.endsWith('.yaml'))
+} catch (err) {
+  if (err.code !== 'ENOENT') throw err
+}
+if (ruleFiles.length) {
+  const files = {}
+  for (const name of ruleFiles) files[name] = await fs.readFile(path.join(chartDir, 'rules', name), 'utf-8')
+  const parsed = parseRulesDir(files)
+  if (parsed.errors.length) {
+    for (const e of parsed.errors) console.error(`ERROR  ${e}`)
+    process.exit(1)
   }
-} catch { /* no rules/ dir */ }
+  model = parsed.model
+}
 
 const results = []
 let failed = 0

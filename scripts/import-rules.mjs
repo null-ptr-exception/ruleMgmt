@@ -56,12 +56,15 @@ const rulesDir = path.join(chartDir, 'rules')
 const schemaText = await readIfExists(path.join(chartDir, 'values.schema.json'))
 const schema = schemaText ? JSON.parse(schemaText) : null
 
+// Only a missing rules/ means "not migrated yet"; any other failure stops here.
 const onDisk = {}
+let names = []
 try {
-  for (const name of (await fs.readdir(rulesDir)).filter(f => f.endsWith('.yaml'))) {
-    onDisk[name] = await fs.readFile(path.join(rulesDir, name), 'utf-8')
-  }
-} catch { /* no rules/ dir yet */ }
+  names = (await fs.readdir(rulesDir)).filter(f => f.endsWith('.yaml'))
+} catch (err) {
+  if (err.code !== 'ENOENT') throw err
+}
+for (const name of names) onDisk[name] = await fs.readFile(path.join(rulesDir, name), 'utf-8')
 
 const migrating = !Object.keys(onDisk).length
 let model

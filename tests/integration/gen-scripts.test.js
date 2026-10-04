@@ -165,6 +165,55 @@ describe('gen-rules.mjs + gen-chart.mjs', () => {
   })
 })
 
+// --check only compared what would be written, so a template whose group
+// had gone — still rendered by Helm — passed it. The editor's drift check
+// already calls it orphaned.
+describe('gen-rules.mjs --check on a leftover template', () => {
+  it('reports a template no group generates any more', async () => {
+    run(GEN_RULES, [chartDir])
+    await fs.writeFile(path.join(chartDir, 'templates', 'gone.yaml'), '# a removed group\n')
+    const check = run(GEN_RULES, [chartDir, '--check'])
+    expect(check.status, check.stdout).toBe(1)
+    expect(check.stdout).toMatch(/ORPHANED\s+templates\/gone\.yaml/)
+  })
+})
+
+// A rules/ file that cannot be read is an error, not "no rules/ yet" — nor a
+// rules/ without that file: gen-rules read the files before it, dropped the
+// group from the schema, deleted its template, and reported success.
+describe.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('a rules/ file that cannot be read', () => {
+  const importFile = async () => {
+    const file = path.join(tmpDir, 'import.yaml')
+    await fs.writeFile(file, 'groups:\n  - name: disk\n    rules:\n      - alert: DiskFull\n        expr: disk_used > 90\n')
+    return file
+  }
+  for (const [name, argv] of [
+    ['gen-rules', async () => [GEN_RULES, chartDir]],
+    ['gen-chart', async () => [GEN_CHART, chartDir, '--check']],
+    ['import-rules', async () => [IMPORT_RULES, await importFile(), chartDir]],
+  ]) {
+    it(`${name} stops with the error, and deletes nothing`, async () => {
+      run(GEN_RULES, [chartDir])
+      // A second group, sorting after cpu, that will not be readable.
+      const zz = path.join(chartDir, 'rules', 'zz.yaml')
+      await fs.writeFile(zz, (await fs.readFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'utf-8')).replace(/^group: cpu$/m, 'group: zz'))
+      expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+      const templates = await fs.readdir(path.join(chartDir, 'templates'))
+      expect(templates).toContain('zz.yaml')
+
+      await fs.chmod(zz, 0o000)
+      try {
+        const [script, ...args] = await argv()
+        const result = run(script, args)
+        expect(result.status, result.stdout).not.toBe(0)
+      } finally {
+        await fs.chmod(zz, 0o644)
+      }
+      expect(await fs.readdir(path.join(chartDir, 'templates'))).toEqual(templates)
+    })
+  }
+})
+
 describe('gen-rules.mjs on a chart whose rules/ was edited by hand', () => {
   it('regenerates the schema and templates, and leaves the rules files as they are', async () => {
     run(GEN_RULES, [chartDir])

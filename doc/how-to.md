@@ -130,9 +130,10 @@ The only change to what it renders is that columns with a default now fall
 back to it when a row leaves them empty. Check with **Preview** on a
 deployment before committing if that matters.
 
-Nothing converts on its own, but a chart that is not migrated cannot be
-committed — see [Commit](#commit). From the command line, `gen-rules` does the
-same; see [below](#migrate-a-chart).
+Nothing converts on its own, and a chart that is not migrated does not stop a
+commit — it is named after the commit as a reminder, so charts can be
+converted one at a time (see [Commit](#commit)). From the command line,
+`gen-rules` does the same; see [below](#migrate-a-chart).
 
 ### Save
 
@@ -265,7 +266,10 @@ A commit is refused while any chart:
   being turned into a template passes through it
 - has generated files that are behind its rules files — open the chart and
   save, or run `gen-rules`
-- is not migrated yet — see [Move an old chart onto the new model](#move-an-old-chart-onto-the-new-model)
+
+A chart that is not migrated yet does not stop a commit: it renders as it
+always has, so the commit goes through and names it as a reminder — see
+[Move an old chart onto the new model](#move-an-old-chart-onto-the-new-model).
 
 ---
 

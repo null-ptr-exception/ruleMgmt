@@ -42,11 +42,12 @@ the table above). If the GitOps tool syncing your deployments does not prune
 (Argo CD: `syncPolicy.automated.prune`, or a manual prune), the old objects
 stay next to the new ones and **every alert fires twice**.
 
-**3. Plan to convert every chart in one go.** In 2.0.0, a commit is refused
-while any chart in the repository is still in the 1.x format — including a
-commit that only edits a deployment's values. Convert all charts before
-anyone commits on 2.0.0. A later 2.0.x lifts this, so that charts can be
-converted one at a time (#79).
+**3. Convert at your own pace.** A chart still in the 1.x format renders
+exactly as before, and does not stop a commit: the commit goes through and
+names the charts still to convert. Charts can be converted and checked one
+at a time, and a bad conversion reverted on its own. (2.0.0 itself refused
+every commit while any chart was unconverted — upgrade to a later release
+rather than 2.0.0, #79.)
 
 ## Converting
 
@@ -57,7 +58,9 @@ Do this on a copy of your gitops repository first, then for real.
 ```bash
 export RULE_OBJECT_LABELS='{"release":"kube-prometheus-stack"}'   # step 1
 
-for chart in /path/to/gitops/charts/*/; do
+node scripts/gen-rules.mjs /path/to/gitops/charts/<name>     # one chart
+
+for chart in /path/to/gitops/charts/*/; do                    # or all of them
   node scripts/gen-rules.mjs "$chart"
 done
 ```

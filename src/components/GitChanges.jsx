@@ -25,7 +25,30 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
         body: JSON.stringify({ message: commitMessage }),
       })
       if (res.ok) {
-        message.success('Changes committed')
+        const data = await res.json().catch(() => ({}))
+        // A chart still in the 1.x format does not stop a commit (#79), but
+        // the person committing should know it is there to convert.
+        if (data.unconverted?.length) {
+          Modal.warning({
+            title: 'Changes committed',
+            content: (
+              <>
+                <div style={{ marginTop: 8 }}>
+                  {data.unconverted.length === 1 ? '1 chart still uses' : `${data.unconverted.length} charts still use`} the old format:
+                </div>
+                <ul style={{ paddingLeft: 18, margin: '4px 0 8px' }}>
+                  {data.unconverted.map(name => <li key={name}>{name}</li>)}
+                </ul>
+                <Text type="secondary">
+                  Editing, Preview and deploys work as before. Convert one chart at a time when ready: open it in
+                  Templates and save, or run <Text code>gen-rules</Text>.
+                </Text>
+              </>
+            ),
+          })
+        } else {
+          message.success('Changes committed')
+        }
         setCommitMessage('')
         onRefresh()
       } else {

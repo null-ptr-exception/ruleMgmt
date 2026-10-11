@@ -67,8 +67,10 @@ describe('computeDrift', () => {
 })
 
 describe('blocksCommit', () => {
-  it('blocks stale and legacy, allows the rest', () => {
-    expect(['stale', 'legacy'].map(blocksCommit)).toEqual([true, true])
-    expect(['ok', 'empty', 'missing'].map(blocksCommit)).toEqual([false, false, false])
+  it('blocks stale, allows the rest', () => {
+    expect(blocksCommit('stale')).toBe(true)
+    // A legacy chart renders as it did in 1.x, so it is a reminder, not a
+    // blocker (#79): charts can be converted one at a time.
+    expect(['legacy', 'ok', 'empty', 'missing'].map(blocksCommit)).toEqual([false, false, false, false])
   })
 })

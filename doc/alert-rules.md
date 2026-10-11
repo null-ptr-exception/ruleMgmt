@@ -279,7 +279,8 @@ states:
 It shows up in three places. Opening a chart in the editor regenerates
 missing products and says when the rest are stale; Save regenerates them.
 Preview tells the rule owner the output may be behind. And a commit is refused
-while any chart is stale or legacy.
+while any chart is stale; a legacy chart is only named after the commit, as a
+reminder.
 
 ### Charts that are not migrated yet
 
@@ -447,4 +448,5 @@ Four checks, each guarding a different failure:
    from the middle of a string. Enforced in the editor, the CLI and on import;
    the full list is in [rules-format.md](rules-format.md#what-is-rejected-at-save-time).
 4. **Commit-time checks** — the same, plus no rule that reads no column, and
-   no chart that is stale or not migrated.
+   no chart that is stale. A chart that is not migrated is named after the
+   commit, not refused.

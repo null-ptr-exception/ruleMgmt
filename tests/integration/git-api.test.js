@@ -212,6 +212,30 @@ describe('Git API', () => {
     await fs.rm(path.join(tmpDir, 'charts'), { recursive: true, force: true })
   })
 
+  it('POST /commit goes through with a chart still in the 1.x format, and names it (#79)', async () => {
+    const chartDir = path.join(tmpDir, 'charts', 'old-format')
+    await fs.mkdir(chartDir, { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify({
+      properties: {
+        cpu: {
+          type: 'array',
+          'x-rules': [{ alert: 'A', expr: 'cpu{n="${ns}"} > 1' }],
+          items: { type: 'object', required: ['ns'], properties: { ns: { type: 'string' } } }
+        }
+      }
+    }))
+
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'commit with an old-format chart' })
+    expect(status).toBe(200)
+    expect(data.unconverted).toEqual(['old-format'])
+
+    const log = await api('GET', '/api/v2/git/log?limit=1')
+    expect(log.data[0].message).toBe('commit with an old-format chart')
+
+    await git(tmpDir, 'reset', '--hard', 'HEAD~1')
+    await fs.rm(path.join(tmpDir, 'charts'), { recursive: true, force: true })
+  })
+
   it('POST /commit is refused when a chart\'s products are stale', async () => {
     const { generateProducts } = await import('../../src/utils/drift.js')
     const { parseRulesDir } = await import('../../src/utils/rulesFile.js')

@@ -280,6 +280,31 @@ rules:
   })
 })
 
+// #79: a chart still in the 1.x format renders as it always did, so it no
+// longer stops a commit — the commit goes through and names it. The server
+// side is in tests/integration/git-api.test.js; here the commit is stubbed,
+// so this test never commits into the gitops repo the other specs share.
+test.describe('A commit names the charts still in the old format', () => {
+  test('the reminder lists them', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({
+      json: { branch: 'main', changes: { modified: ['deployments/shop/prod/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false },
+    }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({
+      json: { sha: 'abc1234', message: 'e2e', unconverted: ['old-format'] },
+    }))
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: commit with an old-format chart')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.locator('.ant-modal-confirm-title')).toHaveText('Changes committed', { timeout: 8000 })
+    await expect(dialog.getByText(/still uses? the old format/)).toBeVisible()
+    await expect(dialog.getByText('old-format', { exact: true })).toBeVisible()
+  })
+})
+
 // #51 Phase 2: Add instance backfills a required column with "", and Helm's
 // `required` passes "" — it rendered `namespace=""`, valid PromQL that
 // matches nothing. A save now names the cell instead.

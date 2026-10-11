@@ -15,8 +15,9 @@ import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
  * A hand-edited file that never passed through the editor still has to clear
  * the rule checks (reference integrity, the ${}/{{ }} split, "a rule reads no
  * column"). And the products must be current: `stale` (rules/ edited without
- * regenerating) or `legacy` (never migrated) both block. Silent when there is
- * no charts directory.
+ * regenerating) blocks. A `legacy` chart (never migrated) does not — it is
+ * returned in `unconverted`, for the commit to name (#79). Silent when there
+ * is no charts directory.
  */
 async function chartCommitBlockers(gitopsDir) {
   const chartsDir = path.join(gitopsDir, process.env.CHARTS_DIR || 'charts')
@@ -24,10 +25,11 @@ async function chartCommitBlockers(gitopsDir) {
   try {
     entries = await fs.readdir(chartsDir, { withFileTypes: true })
   } catch {
-    return []
+    return { findings: [], unconverted: [] }
   }
 
   const findings = []
+  const unconverted = []
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
     const chartDir = path.join(chartsDir, entry.name)
@@ -53,13 +55,13 @@ async function chartCommitBlockers(gitopsDir) {
 
     const drift = await chartDrift(chartDir)
     if (blocksCommit(drift.state)) {
-      const detail = drift.state === 'legacy'
-        ? 'chart still uses the old schema-only format — run gen-rules to migrate it'
-        : `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
+      const detail = `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
       findings.push({ severity: 'commit', kind: `drift-${drift.state}`, chart: entry.name, description: `${entry.name}: ${detail}` })
+    } else if (drift.state === 'legacy') {
+      unconverted.push(entry.name)
     }
   }
-  return findings
+  return { findings, unconverted }
 }
 
 function parseStatus(raw) {
@@ -123,14 +125,14 @@ export default function gitRouter() {
         return res.status(400).json({ error: 'no changes to commit' })
       }
 
-      const findings = await chartCommitBlockers(cwd)
+      const { findings, unconverted } = await chartCommitBlockers(cwd)
       if (findings.length) {
         return res.status(409).json({ error: 'Rule checks failed', findings })
       }
 
       await git(cwd, 'commit', '-m', message)
       const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
-      res.json({ sha, message })
+      res.json({ sha, message, unconverted })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

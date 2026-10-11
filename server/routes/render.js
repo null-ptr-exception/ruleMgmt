@@ -48,6 +48,10 @@ function objectsForPromtool(renderedYaml) {
   return { objects, unchecked }
 }
 
+// promtool reports lint problems (duplicate rules, for one) under "FAILED:"
+// and still exits 0 — they are warnings, not errors (#80).
+const LINT_FAILED = /^\s*FAILED:/m
+
 function sanitizeFilename(name) {
   return name.replace(/[^a-zA-Z0-9_.-]/g, '_')
 }
@@ -112,7 +116,8 @@ async function checkPrometheusRules(renderedYaml) {
       await fs.writeFile(file, yaml.dump({ groups: obj.spec.groups }, { lineWidth: -1 }), 'utf-8')
       try {
         const { stdout, stderr } = await runCommand(promtool, ['check', 'rules', file], { timeout: 120000, maxBuffer: MAX_BUFFER })
-        return { objName, passed: true, output: cleanPromtoolOutput(`${stdout || ''}${stderr || ''}`, file) }
+        const output = cleanPromtoolOutput(`${stdout || ''}${stderr || ''}`, file)
+        return { objName, passed: true, warned: LINT_FAILED.test(output), output }
       } catch (err) {
         if (err.code === 'ENOENT') return { objName, missing: true }
         const output = cleanPromtoolOutput(`${err.stdout || ''}${err.stderr || ''}${err.message || ''}`, file)
@@ -127,12 +132,19 @@ async function checkPrometheusRules(renderedYaml) {
 
     const failed = results.filter(r => !r.passed)
     if (failed.length === 0) {
+      // A lint warning still passes, but is said first: with a dozen objects,
+      // one at the end of a list of SUCCESS lines is never read.
+      const warned = results.filter(r => r.warned)
+      const rest = results.filter(r => !r.warned)
       // A single object keeps the bare promtool output; name objects only once
       // there is more than one, so the reader can tell which shard is which.
       const output = objects.length === 1
         ? results[0].output
-        : results.map(r => `${r.objName}: ${r.output || 'SUCCESS'}`).join('\n')
-      return { passed: true, unchecked, errors: [], output: withNote(output) }
+        : [
+            ...warned.map(r => `${r.objName}:\n${r.output}`),
+            rest.map(r => `${r.objName}: ${r.output || 'SUCCESS'}`).join('\n'),
+          ].filter(Boolean).join('\n\n')
+      return { passed: true, warned: warned.length > 0, unchecked, errors: [], output: withNote(output) }
     }
     const output = failed.map(r => `${r.objName}:\n${r.output}`).join('\n\n')
     return { passed: false, unchecked, errors: [output], output: withNote(output) }

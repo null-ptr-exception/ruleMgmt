@@ -18,9 +18,11 @@ export default function PreviewModal({ open, onClose, yaml, check, selfCheck, su
       {check && (
         <Alert
           style={{ marginBottom: 12 }}
-          type={check.skipped ? 'info' : check.passed ? 'success' : 'error'}
+          type={check.skipped ? 'info' : !check.passed ? 'error' : check.warned ? 'warning' : 'success'}
           showIcon
-          message={check.skipped ? 'Promtool check skipped' : check.passed ? 'Promtool check passed' : 'Promtool check failed'}
+          message={check.skipped ? 'Promtool check skipped'
+            : !check.passed ? 'Promtool check failed'
+              : check.warned ? 'Promtool check passed with warnings' : 'Promtool check passed'}
           description={check.output
             ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto' }}>{check.output}</div>
             : null}

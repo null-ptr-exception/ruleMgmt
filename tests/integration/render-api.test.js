@@ -56,6 +56,14 @@ if [ "$PROMTOOL_FAIL" = "1" ]; then
   echo "bad promql" >&2
   exit 1
 fi
+# promtool reports a lint problem (here: duplicate rules) and still exits 0.
+if [ -n "$PROMTOOL_LINT" ] && grep -q "$PROMTOOL_LINT" "$3"; then
+  echo "Checking $3"
+  echo "  FAILED:"
+  echo "lint error 1 duplicate rule(s) found."
+  echo "Metric: DupAlert"
+  exit 0
+fi
 echo "Checking rules"
 `, { mode: 0o755 })
   process.env.PROMTOOL_BIN = fakePromtool
@@ -81,6 +89,7 @@ echo "Checking rules"
 
 beforeEach(async () => {
   delete process.env.PROMTOOL_FAIL
+  delete process.env.PROMTOOL_LINT
   process.env.PROMTOOL_BIN = fakePromtool
   await fs.writeFile(helmOutputFile, '---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: rendered\n')
   await fs.rm(promtoolCaptureFile, { force: true })
@@ -95,6 +104,7 @@ afterAll(async () => {
   delete process.env.PROMTOOL_CAPTURE_FILE
   delete process.env.PROMTOOL_CAPTURE_DIR
   delete process.env.PROMTOOL_FAIL
+  delete process.env.PROMTOOL_LINT
   if (server) await new Promise(resolve => server.close(resolve))
   if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true })
 })
@@ -145,6 +155,7 @@ spec:
     expect(status).toBe(200)
     expect(data.ok).toBe(true)
     expect(data.check.passed).toBe(true)
+    expect(data.check.warned).toBeFalsy()
     expect(data.check.errors).toEqual([])
     // More than one object, so the aggregated output names each one.
     expect(data.check.output).toContain('first:')
@@ -156,6 +167,48 @@ spec:
       ['first.rules'],
       ['second.rules'],
     ])
+  })
+
+  // #80: promtool exits 0 on a lint problem. The check still passes (lint
+  // does not block), but is marked warned, and the object with the problem
+  // comes first — not buried after a dozen SUCCESS lines.
+  it('marks a lint problem as a warning, and lists that object first', async () => {
+    await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: first
+spec:
+  groups:
+    - name: first.rules
+      rules:
+        - alert: FirstAlert
+          expr: up == 0
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: second
+spec:
+  groups:
+    - name: second.rules
+      rules:
+        - alert: DupAlert
+          expr: up == 1
+        - alert: DupAlert
+          expr: up == 1
+`)
+    process.env.PROMTOOL_LINT = 'second.rules'
+
+    const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(status).toBe(200)
+    expect(data.check.passed).toBe(true)
+    expect(data.check.warned).toBe(true)
+    expect(data.check.errors).toEqual([])
+    expect(data.check.output.startsWith('second:')).toBe(true)
+    expect(data.check.output).toContain('lint error 1 duplicate rule(s) found.')
+    expect(data.check.output.indexOf('first:')).toBeGreaterThan(data.check.output.indexOf('lint error'))
   })
 
   // #65: a mixed chart. promtool checks only what the output profiles mark

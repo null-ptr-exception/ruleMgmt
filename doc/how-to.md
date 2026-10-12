@@ -230,6 +230,14 @@ group produced, by alert name and severity. It also points out:
 Preview saves for you.
 
 If `promtool` is installed it also checks the rules and reports what it finds.
+A lint problem — most often two rows producing an alert with the same name and
+the same labels — shows as **passed with warnings**, in yellow, with the object
+listed first. It does not stop a save or a commit. promtool compares only the
+name and labels, not the expression; the effect shows up after deployment, when
+those rows also query the same series (only a threshold differs) and
+Alertmanager receives their alerts as one. Usually a rule's labels are missing
+a column that differs per row, or one of the rows is redundant.
+
 Two things promtool accepts but are still wrong are flagged on top: a
 `<no value>` in the output (a field that had no value and no default), and a
 `{{ … }}` from the template's rules that did not come through verbatim. Either

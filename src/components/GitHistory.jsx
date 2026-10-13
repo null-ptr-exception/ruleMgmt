@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
-import { Tag, Typography, Spin } from 'antd'
+import { Tag, Typography, Spin, Button, message } from 'antd'
 import { RightOutlined, DownOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
@@ -16,16 +16,45 @@ function relativeTime(dateStr) {
   return `${days}d ago`
 }
 
+// One page of history. Each request asks for one more than it shows: that
+// extra commit is how the list knows there is more to load (#81). null means
+// the request failed — not the same as no more commits.
+const PAGE = 20
+
+function fetchPage(skip) {
+  return apiFetch(`/api/v2/git/log?skip=${skip}&limit=${PAGE + 1}`)
+    .then(res => res.ok ? res.json() : null)
+    .catch(() => null)
+}
+
 export default function GitHistory({ onSelectFile }) {
   const [commits, setCommits] = useState(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [expandedSha, setExpandedSha] = useState(null)
 
   useEffect(() => {
-    apiFetch('/api/v2/git/log?limit=20')
-      .then(res => res.ok ? res.json() : [])
-      .then(setCommits)
-      .catch(() => setCommits([]))
+    fetchPage(0).then(page => {
+      setCommits((page || []).slice(0, PAGE))
+      setHasMore((page || []).length > PAGE)
+    })
   }, [])
+
+  function loadMore() {
+    if (loadingMore) return
+    setLoadingMore(true)
+    fetchPage(commits.length).then(page => {
+      setLoadingMore(false)
+      // Failed: keep the button so it can be tried again.
+      if (!page) return message.error('Failed to load more commits')
+      // A pull between pages shifts the offsets; never list a commit twice.
+      setCommits(prev => {
+        const seen = new Set(prev.map(c => c.sha))
+        return [...prev, ...page.slice(0, PAGE).filter(c => !seen.has(c.sha))]
+      })
+      setHasMore(page.length > PAGE)
+    })
+  }
 
   if (commits === null) {
     return <div style={{ padding: 20, textAlign: 'center' }}><Spin size="small" /></div>
@@ -79,6 +108,11 @@ export default function GitHistory({ onSelectFile }) {
           )}
         </div>
       ))}
+      <div style={{ padding: '8px 12px' }}>
+        {hasMore
+          ? <Button block size="small" type="dashed" loading={loadingMore} onClick={loadMore}>Load more</Button>
+          : <Text type="secondary" style={{ fontSize: 12, display: 'block', textAlign: 'center' }}>No more commits</Text>}
+      </div>
     </div>
   )
 }

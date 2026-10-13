@@ -183,12 +183,15 @@ export default function gitRouter() {
 
   router.get('/log', async (req, res) => {
     const cwd = req.gitopsDir
-    const limit = parseInt(req.query.limit, 10) || 20
+    // git log -n with a negative number lists everything; keep it to a page.
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20))
+    // skip pages back through history (#81): skip=20&limit=20 is commits 21–40.
+    const skip = Math.max(0, parseInt(req.query.skip, 10) || 0)
 
     try {
       const SEP = '---GIT-LOG-SEP---'
       const format = `%H${SEP}%h${SEP}%s${SEP}%an${SEP}%aI`
-      const raw = await git(cwd, 'log', `--format=${format}`, `-n`, `${limit}`)
+      const raw = await git(cwd, 'log', `--format=${format}`, `--skip=${skip}`, `-n`, `${limit}`)
       const commits = []
 
       for (const line of raw.trim().split('\n')) {

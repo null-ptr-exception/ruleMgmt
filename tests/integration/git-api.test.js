@@ -139,6 +139,21 @@ describe('Git API', () => {
     expect(past.data).toEqual([])
   })
 
+  it('GET /log returns an empty list for a repository with no commits yet', async () => {
+    const saved = tmpDir
+    const empty = await fs.mkdtemp(path.join(os.tmpdir(), 'git-api-empty-'))
+    try {
+      await git(empty, 'init')
+      tmpDir = empty
+      const { status, data } = await api('GET', '/api/v2/git/log')
+      expect(status).toBe(200)
+      expect(data).toEqual([])
+    } finally {
+      tmpDir = saved
+      await fs.rm(empty, { recursive: true, force: true })
+    }
+  })
+
   it('GET /log includes file changes per commit', async () => {
     const { data } = await api('GET', '/api/v2/git/log?limit=1')
     const latest = data[0]

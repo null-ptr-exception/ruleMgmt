@@ -189,6 +189,9 @@ export default function gitRouter() {
     const skip = Math.max(0, parseInt(req.query.skip, 10) || 0)
 
     try {
+      // A repository with no commits yet has no history, not a broken one.
+      try { await git(cwd, 'rev-parse', '--verify', '-q', 'HEAD') } catch { return res.json([]) }
+
       const SEP = '---GIT-LOG-SEP---'
       const format = `%H${SEP}%h${SEP}%s${SEP}%an${SEP}%aI`
       const raw = await git(cwd, 'log', `--format=${format}`, `--skip=${skip}`, `-n`, `${limit}`)

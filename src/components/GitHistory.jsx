@@ -29,24 +29,35 @@ function fetchPage(skip) {
 
 export default function GitHistory({ onSelectFile }) {
   const [commits, setCommits] = useState(null)
+  const [failed, setFailed] = useState(false)
+  // Where the next page starts in the server's history. Not commits.length:
+  // a pull between pages shifts the history, and the commits it shifts into
+  // the next page are already listed and dropped below.
+  const [nextSkip, setNextSkip] = useState(PAGE)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [expandedSha, setExpandedSha] = useState(null)
 
-  useEffect(() => {
+  function loadFirst() {
+    setFailed(false)
     fetchPage(0).then(page => {
-      setCommits((page || []).slice(0, PAGE))
-      setHasMore((page || []).length > PAGE)
+      // Failed is not the same as an empty history: say so, and offer a retry.
+      if (!page) return setFailed(true)
+      setCommits(page.slice(0, PAGE))
+      setHasMore(page.length > PAGE)
     })
-  }, [])
+  }
+
+  useEffect(loadFirst, [])
 
   function loadMore() {
     if (loadingMore) return
     setLoadingMore(true)
-    fetchPage(commits.length).then(page => {
+    fetchPage(nextSkip).then(page => {
       setLoadingMore(false)
       // Failed: keep the button so it can be tried again.
       if (!page) return message.error('Failed to load more commits')
+      setNextSkip(prev => prev + PAGE)
       // A pull between pages shifts the offsets; never list a commit twice.
       setCommits(prev => {
         const seen = new Set(prev.map(c => c.sha))
@@ -54,6 +65,15 @@ export default function GitHistory({ onSelectFile }) {
       })
       setHasMore(page.length > PAGE)
     })
+  }
+
+  if (failed) {
+    return (
+      <div style={{ padding: '12px 12px' }}>
+        <Text type="secondary">Failed to load commits</Text>{' '}
+        <Button size="small" type="link" onClick={loadFirst}>Retry</Button>
+      </div>
+    )
   }
 
   if (commits === null) {

@@ -160,6 +160,10 @@ describe('values for one output profile', () => {
     expect(byProfile).toEqual({})
   })
 
+  it('is an error to name an inherited property, not a profile', () => {
+    expect(parseObjectMeta({ labelsByProfile: '{"constructor":{"a":"1"}}' }).errors[0]).toMatch(/"constructor" is not an output profile/)
+  })
+
   it('is an error when the variable is not JSON, or not profile → pairs', () => {
     expect(parseObjectMeta({ labelsByProfile: '{oops' }).errors[0]).toMatch(/not valid JSON/)
     expect(parseObjectMeta({ labelsByProfile: '["vlogs"]' }).errors[0]).toMatch(/profile name/)

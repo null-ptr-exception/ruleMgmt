@@ -93,7 +93,8 @@ function parseByProfile(json, source, warnings, errors) {
   }
   const out = {}
   for (const [profile, pairs] of Object.entries(parsed)) {
-    if (!PROFILES[profile]) {
+    // An own key: a name such as "constructor" is not a profile.
+    if (!Object.hasOwn(PROFILES, profile)) {
       errors.push(`${source}: "${profile}" is not an output profile (${Object.keys(PROFILES).join(', ')})`)
     } else if (!isMap(pairs)) {
       errors.push(`${source}: "${profile}" must be a JSON object of key/value pairs`)

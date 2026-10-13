@@ -13,6 +13,10 @@
  *   values.yaml              input — the rows
  *   expected/templates/      (1) the chart templates, compared byte for byte
  *   expected/rendered.yaml   (2) what Helm renders, compared as data
+ *   expected/meta.yaml       (2) optional — each rendered object's labels
+ *                                and annotations
+ *   object-meta.json         optional input — the site's RULE_OBJECT_* for
+ *                                this case, as {labels, labelsByProfile, …}
  *   promtool-tests.yaml      (3) optional — `promtool test rules` against the
  *                                rendered rules
  *
@@ -54,14 +58,28 @@ function readDir(dir) {
 
 /**
  * The generator's products for a case. Object labels and annotations are a
- * site's setting (RULE_OBJECT_*), pinned to the built-ins here so the
- * expectation does not depend on whoever runs the test.
+ * site's setting (RULE_OBJECT_*), pinned here — to the case's object-meta.json,
+ * or else to the built-ins — so the expectation does not depend on whoever
+ * runs the test.
  */
 export function generateCase(name) {
   const dir = path.join(CASES_DIR, name)
   const { model, errors } = parseRulesDir(readDir(path.join(dir, 'rules')))
   if (errors.length) throw new Error(`${name}: rules/ does not parse:\n  ${errors.join('\n  ')}`)
-  return generateProducts(model, null, parseObjectMeta({}))
+  return generateProducts(model, null, caseObjectMeta(dir))
+}
+
+function caseObjectMeta(dir) {
+  const file = path.join(dir, 'object-meta.json')
+  if (!fs.existsSync(file)) return parseObjectMeta({})
+  const site = JSON.parse(fs.readFileSync(file, 'utf-8'))
+  const known = ['labels', 'annotations', 'labelsByProfile', 'annotationsByProfile']
+  const unknown = Object.keys(site).filter(k => !known.includes(k))
+  if (unknown.length) throw new Error(`${file}: unknown key(s) ${unknown.join(', ')} — expected ${known.join(', ')}`)
+  const asEnv = Object.fromEntries(Object.entries(site).map(([k, v]) => [k, JSON.stringify(v)]))
+  const meta = parseObjectMeta(asEnv)
+  if (meta.errors.length || meta.warnings.length) throw new Error(`${file}:\n  ${[...meta.errors, ...meta.warnings].join('\n  ')}`)
+  return meta
 }
 
 export function readExpectedTemplates(name) {
@@ -77,6 +95,12 @@ export function writeExpectedTemplates(name, templates) {
 
 export function readExpectedRendered(name) {
   return yaml.load(fs.readFileSync(path.join(CASES_DIR, name, 'expected', 'rendered.yaml'), 'utf-8'))
+}
+
+/** The case's hand-written object labels and annotations, or null when it has none. */
+export function readExpectedMeta(name) {
+  const file = path.join(CASES_DIR, name, 'expected', 'meta.yaml')
+  return fs.existsSync(file) ? yaml.load(fs.readFileSync(file, 'utf-8')) : null
 }
 
 export function hasBinary(bin, args = ['--version']) {
@@ -124,6 +148,18 @@ export function renderedGroups(renderedYaml) {
     if (!profileOfObject(doc)) continue
     const key = doc.kind === defaultKind ? doc.metadata.name : `${doc.kind} ${doc.metadata.name}`
     out[key] = doc.spec.groups
+  }
+  return out
+}
+
+/** The same keys as renderedGroups → each object's labels and annotations. */
+export function renderedMeta(renderedYaml) {
+  const out = {}
+  const defaultKind = profileFor(undefined).kind
+  for (const doc of yaml.loadAll(renderedYaml)) {
+    if (!profileOfObject(doc)) continue
+    const key = doc.kind === defaultKind ? doc.metadata.name : `${doc.kind} ${doc.metadata.name}`
+    out[key] = { labels: doc.metadata.labels || {}, annotations: doc.metadata.annotations || {} }
   }
   return out
 }

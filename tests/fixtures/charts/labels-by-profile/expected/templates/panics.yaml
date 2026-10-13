@@ -1,0 +1,26 @@
+{{- $chunks := chunk 100 ($.Values.panics | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: {{ $.Release.Name }}-panics-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    release: vm-logs
+    team: shop
+  annotations:
+    example.com/source: logs
+spec:
+  groups:
+    - name: panics
+      type: vlogs
+      rules:
+        {{- range $rows }}
+        - alert: Panics
+          expr: |-
+            _time:10m app:"{{ .app }}" "panic:" | stats count() as panics | filter panics:>0
+          labels:
+            severity: critical
+        {{- end }}
+{{- end }}

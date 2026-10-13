@@ -41,6 +41,10 @@ async function readIfExists(file) {
 // of the labels.
 const objectMeta = objectMetaFromEnv()
 for (const warning of objectMeta.warnings) console.log(`warn   ${warning}`)
+if (objectMeta.errors.length) {
+  for (const error of objectMeta.errors) console.log(`error  ${error}`)
+  process.exit(1)
+}
 
 const schemaFile = path.join(chartDir, 'values.schema.json')
 const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))

@@ -37,6 +37,12 @@ and in the shell that runs `gen-rules` below:
 RULE_OBJECT_LABELS='{"release":"kube-prometheus-stack"}'
 ```
 
+If Prometheus and VMAlert select on the same key with different values, give
+the log objects their own with `RULE_OBJECT_LABELS_BY_PROFILE`, set in the
+same places (see
+[alert-rules.md](alert-rules.md#different-values-per-output-profile); not in
+2.0.0, #86).
+
 **2. Check that old objects are pruned.** Every rule object is renamed (see
 the table above). If the GitOps tool syncing your deployments does not prune
 (Argo CD: `syncPolicy.automated.prune`, or a manual prune), the old objects
@@ -92,6 +98,6 @@ old ones are gone.
 
 ## Afterwards
 
-Changing `RULE_OBJECT_LABELS` later marks every converted chart stale, and
+Changing any `RULE_OBJECT_*` variable later marks every converted chart stale, and
 commits are refused until they are regenerated — run `gen-rules` on each again
 and commit the result on its own.

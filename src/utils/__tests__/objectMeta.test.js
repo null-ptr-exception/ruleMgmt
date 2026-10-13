@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parseObjectMeta, objectMetaFromEnv, renderMetaMap, BUILT_IN_LABELS } from '../objectMeta'
+import { parseObjectMeta, objectMetaFromEnv, renderMetaMap, metaForProfile, BUILT_IN_LABELS } from '../objectMeta'
+import { profileFor } from '../outputs'
 import { emitRuleObjects } from '../crConverter'
 
 const parts = objectMeta => [{
@@ -103,5 +104,72 @@ describe('what reaches the resource', () => {
     const out = emitRuleObjects(...parts(undefined))
     expect(out).toContain('    app.kubernetes.io/managed-by: Helm')
     expect(out).not.toContain('annotations:')
+  })
+})
+
+// #86: a PrometheusRule and a VMRule are loaded by different evaluators, each
+// with its own ruleSelector.
+describe('values for one output profile', () => {
+  const vlogs = profileFor('vlogs')
+
+  it('puts a profile\'s own value on top of the site-wide one, for that profile only', () => {
+    const meta = parseObjectMeta({
+      labels: '{"release":"kps","team":"core"}',
+      labelsByProfile: '{"vlogs":{"release":"vm-logs"}}',
+      annotationsByProfile: '{"vlogs":{"note":"logs"}}'
+    })
+    expect(meta.errors).toEqual([])
+    expect(metaForProfile(meta, 'vlogs')).toEqual({
+      labels: { ...BUILT_IN_LABELS, release: 'vm-logs', team: 'core' },
+      annotations: { note: 'logs' }
+    })
+    expect(metaForProfile(meta, 'prometheus').labels).toEqual({ ...BUILT_IN_LABELS, release: 'kps', team: 'core' })
+  })
+
+  it('reaches the objects of that profile', () => {
+    const meta = parseObjectMeta({ labels: '{"release":"kps"}', labelsByProfile: '{"vlogs":{"release":"vm-logs"}}' })
+    const [p, opts] = parts(meta)
+    expect(emitRuleObjects(p, opts)).toContain('    release: kps')
+    expect(emitRuleObjects({ ...p, profile: vlogs }, opts)).toContain('    release: vm-logs')
+  })
+
+  it('leaves a site that sets only the site-wide variables as it was', () => {
+    const before = parseObjectMeta({ labels: '{"release":"kps"}' })
+    expect(before.byProfile).toEqual({})
+    expect(metaForProfile(before, 'vlogs').labels).toEqual(before.labels)
+  })
+
+  it('reads both from the environment', () => {
+    const meta = objectMetaFromEnv({
+      RULE_OBJECT_LABELS_BY_PROFILE: '{"vlogs":{"a":"1"}}',
+      RULE_OBJECT_ANNOTATIONS_BY_PROFILE: '{"vlogs":{"b":"2"}}'
+    })
+    expect(meta.byProfile.vlogs).toEqual({ labels: { a: '1' }, annotations: { b: '2' } })
+  })
+
+  it('removes a site-wide key from a profile that sets it empty', () => {
+    const meta = parseObjectMeta({ labels: '{"release":"kps","owner":"platform"}', labelsByProfile: '{"vlogs":{"owner":""}}' })
+    expect(meta.warnings).toEqual([])
+    expect(metaForProfile(meta, 'vlogs').labels).toEqual({ ...BUILT_IN_LABELS, release: 'kps' })
+    expect(metaForProfile(meta, 'prometheus').labels.owner).toBe('platform')
+  })
+
+  it('is an error to name a profile that does not exist', () => {
+    const { errors, byProfile } = parseObjectMeta({ labelsByProfile: '{"vlog":{"release":"vm-logs"}}' })
+    expect(errors[0]).toMatch(/RULE_OBJECT_LABELS_BY_PROFILE: "vlog" is not an output profile/)
+    expect(byProfile).toEqual({})
+  })
+
+  it('is an error when the variable is not JSON, or not profile → pairs', () => {
+    expect(parseObjectMeta({ labelsByProfile: '{oops' }).errors[0]).toMatch(/not valid JSON/)
+    expect(parseObjectMeta({ labelsByProfile: '["vlogs"]' }).errors[0]).toMatch(/profile name/)
+    expect(parseObjectMeta({ annotationsByProfile: '{"vlogs":"x"}' }).errors[0]).toMatch(/RULE_OBJECT_ANNOTATIONS_BY_PROFILE: "vlogs"/)
+  })
+
+  it('checks the values inside like any other, naming the profile', () => {
+    const { byProfile, warnings, errors } = parseObjectMeta({ labelsByProfile: '{"vlogs":{"n":3}}' })
+    expect(errors).toEqual([])
+    expect(byProfile.vlogs.labels).toEqual({})
+    expect(warnings[0]).toMatch(/RULE_OBJECT_LABELS_BY_PROFILE\.vlogs: "n"/)
   })
 })

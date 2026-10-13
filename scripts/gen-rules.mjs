@@ -88,6 +88,10 @@ if (!migrating) {
 const files = migrating ? modelToFiles(model) : {}
 const objectMeta = objectMetaFromEnv()
 for (const w of objectMeta.warnings) console.log(`note   ${w}`)
+if (objectMeta.errors.length) {
+  for (const e of objectMeta.errors) console.log(`error  ${e}`)
+  process.exit(1)
+}
 const products = generateProducts(model, schema, objectMeta)
 const tmplDir = path.join(chartDir, 'templates')
 

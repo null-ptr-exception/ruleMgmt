@@ -1,0 +1,5 @@
+{
+  "labels": { "release": "kps", "team": "shop", "owner": "platform" },
+  "labelsByProfile": { "vlogs": { "release": "vm-logs", "owner": "" } },
+  "annotationsByProfile": { "vlogs": { "example.com/source": "logs" } }
+}

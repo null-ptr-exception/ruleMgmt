@@ -362,6 +362,11 @@ RULE_OBJECT_LABELS='{"release":"kube-prometheus-stack"}'
 RULE_OBJECT_ANNOTATIONS='{"alertforge.io/source":"generated"}'
 ```
 
+When log alerts need a different value for the same key, add it for their
+profile: `RULE_OBJECT_LABELS_BY_PROFILE='{"vlogs":{"release":"vm-logs"}}'`
+(and `RULE_OBJECT_ANNOTATIONS_BY_PROFILE`). See
+[alert-rules.md](alert-rules.md#different-values-per-output-profile).
+
 Values are literal; one containing `{{ }}` is dropped with a warning. Existing
 templates are not rewritten — they turn stale, and commits are refused until
 they are regenerated. Opening and saving each chart does it, or
@@ -369,15 +374,18 @@ they are regenerated. Opening and saving each chart does it, or
 
 ### If rules deploy but never fire
 
-Check whether the cluster's Prometheus filters by label:
+Check whether the evaluator filters by label — Prometheus for metrics alerts
+(PrometheusRule), VMAlert for log alerts (VMRule):
 
 ```bash
 kubectl get prometheus -A -o custom-columns='NAME:.metadata.name,SELECTOR:.spec.ruleSelector'
+kubectl get vmalert -A -o custom-columns='NAME:.metadata.name,SELECTOR:.spec.ruleSelector'
 ```
 
 A `ruleSelector` that your resources do not match means they are ignored
-silently — they exist in the cluster, and `/rules` in Prometheus shows nothing.
-Put the matching labels in `RULE_OBJECT_LABELS` and regenerate.
+silently — they exist in the cluster, and the evaluator's rules page shows
+nothing. Put the matching labels in `RULE_OBJECT_LABELS` — or, for one kind
+of alert only, `RULE_OBJECT_LABELS_BY_PROFILE` — and regenerate.
 
 ### Run it locally
 

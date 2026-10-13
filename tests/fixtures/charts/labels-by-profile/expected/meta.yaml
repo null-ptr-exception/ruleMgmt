@@ -1,0 +1,19 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# #86: one key, a different value per output profile. The site-wide team is
+# on both; release is the profile's own on the VMRule, and so is the
+# annotation. The VMRule's empty owner removes the site-wide one.
+blind-latency-1-1:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    release: kps
+    team: shop
+    owner: platform
+  annotations: {}
+
+VMRule blind-panics-1-1:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    release: vm-logs
+    team: shop
+  annotations:
+    example.com/source: logs

@@ -18,7 +18,7 @@
  * rows in the template itself, by the chunk the loop is written around.
  */
 
-import { BUILT_IN_LABELS, renderMetaMap } from './objectMeta.js'
+import { metaForProfile, renderMetaMap } from './objectMeta.js'
 
 /** Budget per object. etcd's default limit is ~1.5MB; leave headroom. */
 export const MAX_OBJECT_BYTES = 1_000_000
@@ -104,14 +104,15 @@ function renderGroupFields({ interval, limit } = {}, profile) {
 }
 
 function objectHead({ profile, name, objectMeta, groupName, groupFields }) {
+  const meta = metaForProfile(objectMeta, profile.name)
   return (
     `---\n` +
     `apiVersion: ${profile.apiVersion}\n` +
     `kind: ${profile.kind}\n` +
     `metadata:\n` +
     `  name: ${name}\n` +
-    renderMetaMap('labels', objectMeta?.labels || BUILT_IN_LABELS) +
-    renderMetaMap('annotations', objectMeta?.annotations) +
+    renderMetaMap('labels', meta.labels) +
+    renderMetaMap('annotations', meta.annotations) +
     `spec:\n` +
     `  groups:\n` +
     `    - name: ${groupName}\n` +

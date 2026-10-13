@@ -1,0 +1,5 @@
+latency:
+  - job: checkout
+
+panics:
+  - app: checkout

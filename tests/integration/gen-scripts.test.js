@@ -41,9 +41,9 @@ const SCHEMA = {
   },
 }
 
-function run(script, args) {
+function run(script, args, env = {}) {
   try {
-    const stdout = execFileSync('node', [script, ...args], { encoding: 'utf-8' })
+    const stdout = execFileSync('node', [script, ...args], { encoding: 'utf-8', env: { ...process.env, ...env } })
     return { status: 0, stdout }
   } catch (err) {
     return { status: err.status ?? 1, stdout: err.stdout || '' }
@@ -295,6 +295,13 @@ describe('import-rules.mjs', () => {
     const dry = run(IMPORT_RULES, [rulesFile, chartDir, '--dry-run'])
     expect(dry.status, dry.stdout).toBe(0)
     expect(await fs.readdir(path.join(chartDir, 'rules'))).not.toContain('disk.yaml')
+  })
+
+  it('reports an unknown output profile in RULE_OBJECT_* on --dry-run too', async () => {
+    run(GEN_RULES, [chartDir])
+    const dry = run(IMPORT_RULES, [rulesFile, chartDir, '--dry-run'], { RULE_OBJECT_LABELS_BY_PROFILE: '{"nope":{"a":"b"}}' })
+    expect(dry.status, dry.stdout).toBe(1)
+    expect(dry.stdout).toContain('"nope" is not an output profile')
   })
 })
 

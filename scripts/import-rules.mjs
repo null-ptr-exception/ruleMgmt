@@ -37,6 +37,15 @@ if (!rulesFile || !chartDir) {
   process.exit(2)
 }
 
+// The site's object labels and annotations (RULE_OBJECT_*), checked before
+// anything else so a --dry-run reports a mistake in them too (#86).
+const objectMeta = objectMetaFromEnv()
+for (const w of objectMeta.warnings) console.log(`note   ${w}`)
+if (objectMeta.errors.length) {
+  for (const e of objectMeta.errors) console.log(`error  ${e}`)
+  process.exit(1)
+}
+
 async function readIfExists(file) {
   try { return await fs.readFile(file, 'utf-8') } catch { return null }
 }
@@ -126,12 +135,6 @@ if (problems.length) {
 const rulesOut = migrating
   ? modelToFiles(model)
   : Object.fromEntries(result.groups.map(g => [`${g.key}.yaml`, groupFileText({ ...model.groups[g.key], group: g.key })]))
-const objectMeta = objectMetaFromEnv()
-for (const w of objectMeta.warnings) console.log(`note   ${w}`)
-if (objectMeta.errors.length) {
-  for (const e of objectMeta.errors) console.log(`error  ${e}`)
-  process.exit(1)
-}
 const products = generateProducts(model, schema, objectMeta)
 
 const entries = [

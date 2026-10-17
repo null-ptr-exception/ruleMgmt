@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
-import { Tag, Typography, Spin } from 'antd'
+import { Tag, Typography, Spin, Button, message } from 'antd'
 import { RightOutlined, DownOutlined } from '@ant-design/icons'
 
 const { Text } = Typography
@@ -16,16 +16,65 @@ function relativeTime(dateStr) {
   return `${days}d ago`
 }
 
+// One page of history. Each request asks for one more than it shows: that
+// extra commit is how the list knows there is more to load (#81). null means
+// the request failed — not the same as no more commits.
+const PAGE = 20
+
+function fetchPage(skip) {
+  return apiFetch(`/api/v2/git/log?skip=${skip}&limit=${PAGE + 1}`)
+    .then(res => res.ok ? res.json() : null)
+    .catch(() => null)
+}
+
 export default function GitHistory({ onSelectFile }) {
   const [commits, setCommits] = useState(null)
+  const [failed, setFailed] = useState(false)
+  // Where the next page starts in the server's history. Not commits.length:
+  // a pull between pages shifts the history, and the commits it shifts into
+  // the next page are already listed and dropped below.
+  const [nextSkip, setNextSkip] = useState(PAGE)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [expandedSha, setExpandedSha] = useState(null)
 
-  useEffect(() => {
-    apiFetch('/api/v2/git/log?limit=20')
-      .then(res => res.ok ? res.json() : [])
-      .then(setCommits)
-      .catch(() => setCommits([]))
-  }, [])
+  function loadFirst() {
+    setFailed(false)
+    fetchPage(0).then(page => {
+      // Failed is not the same as an empty history: say so, and offer a retry.
+      if (!page) return setFailed(true)
+      setCommits(page.slice(0, PAGE))
+      setHasMore(page.length > PAGE)
+    })
+  }
+
+  useEffect(loadFirst, [])
+
+  function loadMore() {
+    if (loadingMore) return
+    setLoadingMore(true)
+    fetchPage(nextSkip).then(page => {
+      setLoadingMore(false)
+      // Failed: keep the button so it can be tried again.
+      if (!page) return message.error('Failed to load more commits')
+      setNextSkip(prev => prev + PAGE)
+      // A pull between pages shifts the offsets; never list a commit twice.
+      setCommits(prev => {
+        const seen = new Set(prev.map(c => c.sha))
+        return [...prev, ...page.slice(0, PAGE).filter(c => !seen.has(c.sha))]
+      })
+      setHasMore(page.length > PAGE)
+    })
+  }
+
+  if (failed) {
+    return (
+      <div style={{ padding: '12px 12px' }}>
+        <Text type="secondary">Failed to load commits</Text>{' '}
+        <Button size="small" type="link" onClick={loadFirst}>Retry</Button>
+      </div>
+    )
+  }
 
   if (commits === null) {
     return <div style={{ padding: 20, textAlign: 'center' }}><Spin size="small" /></div>
@@ -79,6 +128,11 @@ export default function GitHistory({ onSelectFile }) {
           )}
         </div>
       ))}
+      <div style={{ padding: '8px 12px' }}>
+        {hasMore
+          ? <Button block size="small" type="dashed" loading={loadingMore} onClick={loadMore}>Load more</Button>
+          : <Text type="secondary" style={{ fontSize: 12, display: 'block', textAlign: 'center' }}>No more commits</Text>}
+      </div>
     </div>
   )
 }

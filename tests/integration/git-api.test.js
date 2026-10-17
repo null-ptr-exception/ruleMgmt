@@ -126,6 +126,34 @@ describe('Git API', () => {
     expect(data.length).toBe(1)
   })
 
+  // #81: skip picks up where the previous page ended — no gaps, no repeats.
+  it('GET /log pages back through history with skip', async () => {
+    const all = (await api('GET', '/api/v2/git/log?limit=100')).data.map(c => c.sha)
+    expect(all.length).toBeGreaterThan(1)
+    const first = (await api('GET', '/api/v2/git/log?limit=1')).data.map(c => c.sha)
+    const rest = (await api('GET', `/api/v2/git/log?skip=1&limit=${all.length}`)).data.map(c => c.sha)
+    expect([...first, ...rest]).toEqual(all)
+
+    const past = await api('GET', `/api/v2/git/log?skip=${all.length}&limit=20`)
+    expect(past.status).toBe(200)
+    expect(past.data).toEqual([])
+  })
+
+  it('GET /log returns an empty list for a repository with no commits yet', async () => {
+    const saved = tmpDir
+    const empty = await fs.mkdtemp(path.join(os.tmpdir(), 'git-api-empty-'))
+    try {
+      await git(empty, 'init')
+      tmpDir = empty
+      const { status, data } = await api('GET', '/api/v2/git/log')
+      expect(status).toBe(200)
+      expect(data).toEqual([])
+    } finally {
+      tmpDir = saved
+      await fs.rm(empty, { recursive: true, force: true })
+    }
+  })
+
   it('GET /log includes file changes per commit', async () => {
     const { data } = await api('GET', '/api/v2/git/log?limit=1')
     const latest = data[0]

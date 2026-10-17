@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import {
   CASES_DIR, listCases, generateCase, readExpectedTemplates, readExpectedRendered,
-  renderCase, renderedGroups, promtoolGroups, promtoolTest, hasBinary,
+  readExpectedMeta, renderCase, renderedGroups, renderedMeta, promtoolGroups, promtoolTest, hasBinary,
 } from '../blind/harness.js'
 
 /**
@@ -37,6 +37,13 @@ describe.each(cases)('%s', name => {
   it.skipIf(!HAS_HELM)('(2) renders the expected rules', () => {
     expect(renderedGroups(renderCase(name, products))).toEqual(readExpectedRendered(name))
   })
+
+  const expectedMeta = readExpectedMeta(name)
+  if (expectedMeta) {
+    it.skipIf(!HAS_HELM)('(2) renders the expected object labels and annotations', () => {
+      expect(renderedMeta(renderCase(name, products))).toEqual(expectedMeta)
+    })
+  }
 
   const hasTests = fs.existsSync(path.join(CASES_DIR, name, 'promtool-tests.yaml'))
   it.skipIf(!HAS_HELM || !HAS_PROMTOOL || !hasTests)('(3) promtool test rules passes', () => {

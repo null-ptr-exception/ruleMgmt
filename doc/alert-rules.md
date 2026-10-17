@@ -320,6 +320,37 @@ that never appears. An empty value omits its key.
 > kubectl get prometheus -A -o custom-columns='NAME:.metadata.name,SELECTOR:.spec.ruleSelector'
 > ```
 
+### Different values per output profile
+
+A chart's objects are not all loaded by the same evaluator: a group with no
+`type` becomes a PrometheusRule, loaded by Prometheus; a `type: vlogs` group a
+VMRule, loaded by the VMAlert that reads VictoriaLogs. Each selects on its own
+`ruleSelector`:
+
+```bash
+kubectl get prometheus -A -o custom-columns='NAME:.metadata.name,SELECTOR:.spec.ruleSelector'
+kubectl get vmalert -A -o custom-columns='NAME:.metadata.name,SELECTOR:.spec.ruleSelector'
+```
+
+When they want different keys, both can go in `RULE_OBJECT_LABELS`, or each in
+its own profile so an object carries only what its evaluator needs. When they
+want **different values for the same key**, set one profile's own on top:
+
+```bash
+RULE_OBJECT_LABELS='{"release":"kube-prometheus-stack"}'
+RULE_OBJECT_LABELS_BY_PROFILE='{"vlogs":{"release":"vm-logs"}}'
+RULE_OBJECT_ANNOTATIONS_BY_PROFILE='{"vlogs":{"alertforge.io/source":"logs"}}'
+```
+
+The keys are profile names — what a group's `type` says (see
+[output profiles](rules-format.md#output-profiles)), not a resource kind. A
+profile's value replaces the site-wide one for the same key, an empty value
+removes the site-wide key from that profile's objects, and its other keys are
+added. A name that is not a profile, or a value that is not JSON of profile →
+pairs, stops the server at startup, and the scripts that generate with it: a
+mistyped name would leave that profile's objects unloaded, with nothing to say
+so.
+
 Changing the configuration does not rewrite templates that already exist. They
 are a product and turn stale; regenerate them, and `gen-rules --check` reports
 the drift until you do.

@@ -13,8 +13,21 @@ import foldersRouter from './server/routes/folders.js'
 import syncRouter from './server/routes/sync.js'
 import { getChartsDir, getDeploymentsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
 import { logger, httpLogger } from './server/lib/logger.js'
+import { objectMetaFromEnv } from './src/utils/objectMeta.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+// The site's object labels and annotations (RULE_OBJECT_*) are read on every
+// generation; check them once here, so a mistake stops the server instead of
+// leaving rules no evaluator loads (#86).
+{
+  const { warnings, errors } = objectMetaFromEnv()
+  for (const warning of warnings) logger.warn(warning)
+  if (errors.length) {
+    for (const error of errors) logger.error(error)
+    process.exit(1)
+  }
+}
 const app = express()
 app.use(express.json())
 app.use(httpLogger)

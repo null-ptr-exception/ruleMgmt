@@ -9,7 +9,7 @@
       "apiVersion": "operator.victoriametrics.com/v1beta1",
       "kind": "VMRule",
       "groupFields": { "type": "vlogs" },
-      "validate": "none"
+      "validate": "vmalert"
     }
   }
 }

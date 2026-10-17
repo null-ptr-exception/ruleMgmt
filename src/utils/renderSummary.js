@@ -163,9 +163,9 @@ export function summarizeGroups({ rendered, possible, groupRows, schema, types =
     // A once group (#70) takes no rows, so it is never "empty".
     if (rowCount === 0 && !once.has(valuesKey)) state = 'empty'
     else if (renderedCount === 0 && records === 0) state = 'no-alerts'
-    // A group whose profile promtool cannot read (#65) says so on its own row:
-    // one "promtool passed" for a mixed chart must not read as all of it.
-    const checked = (profileFor(types[valuesKey])?.validate ?? 'promtool') === 'promtool'
+    // A group whose profile is not syntax-checked (`validate: none`, #65, #76)
+    // says so on its own row: one "passed" must not read as all of the chart.
+    const checked = (profileFor(types[valuesKey])?.validate ?? 'promtool') !== 'none'
     return { name, valuesKey, rowCount, state, alerts, missing, checked, records, once: once.has(valuesKey) }
   }).sort((a, b) => a.valuesKey.localeCompare(b.valuesKey))
 

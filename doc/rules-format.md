@@ -439,7 +439,7 @@ rule evaluator selects objects by, come from the environment (see
   "outputs": {
     "prometheus": { "apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule", "validate": "promtool" },
     "vlogs": { "apiVersion": "operator.victoriametrics.com/v1beta1", "kind": "VMRule",
-               "groupFields": { "type": "vlogs" }, "validate": "none" }
+               "groupFields": { "type": "vlogs" }, "validate": "vmalert" }
   }
 }
 ```
@@ -449,7 +449,7 @@ rule evaluator selects objects by, come from the environment (see
 | `outputs.<name>` | — | A profile; `<name>` is what a group's `type` says. Lower-case letters, digits, `_`, `-`. `prometheus` must exist: it is the profile of a group with no `type` |
 | `apiVersion`, `kind` | yes | The resource the group's objects are |
 | `groupFields` | no | Fields written as they are onto every `spec.groups[]` entry of the profile's objects — strings, numbers or booleans. Not `name` or `rules` (the generator's) nor `interval` or `limit` (the template owner's) |
-| `validate` | yes | `promtool`, to check the rendered rules with promtool; or `none`, for rules promtool cannot read — Preview then marks the group as not syntax-checked. There is no default |
+| `validate` | yes | How Preview checks the rendered rules: `promtool` (`promtool check rules`, for PromQL); `vmalert` (`vmalert -dryRun`, for LogsQL, which promtool cannot read); or `none` — Preview then marks the group as not syntax-checked. There is no default |
 
 Any other key is an error. The file is checked when the server starts and
 when the frontend is built, and a mistake stops both. Changing a profile's

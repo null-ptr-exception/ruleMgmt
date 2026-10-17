@@ -1,4 +1,6 @@
 ARG PROMETHEUS_VERSION=v2.54.1
+# vmalert -dryRun checks LogsQL (vlogs groups) offline, which promtool cannot read (#76).
+ARG VMALERT_VERSION=v1.152.0
 
 FROM node:22-alpine AS builder
 
@@ -11,6 +13,7 @@ COPY . .
 RUN npm run build
 
 FROM prom/prometheus:${PROMETHEUS_VERSION} AS prometheus
+FROM victoriametrics/vmalert:${VMALERT_VERSION} AS vmalert
 
 FROM node:22-alpine
 
@@ -23,6 +26,7 @@ RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=prometheus /bin/promtool /usr/local/bin/promtool
+COPY --from=vmalert /vmalert-prod /usr/local/bin/vmalert
 COPY server.js ./
 COPY server/ ./server/
 # The generator, checks and drift are shared with the editor and live in

@@ -229,7 +229,12 @@ group produced, by alert name and severity. It also points out:
 **Raw YAML** switches to the rendered resources themselves. Save first;
 Preview saves for you.
 
-If `promtool` is installed it also checks the rules and reports what it finds.
+It also checks the rules' syntax and reports what it finds: `promtool` for
+metrics alerts, `vmalert -dryRun` for log alerts (LogsQL). The title says which
+ran — **Promtool + vmalert check passed** for a deployment with both. A LogsQL
+mistake is a failed check that names the group and the rule; vmalert stops at
+the first bad rule of each group, so check again after fixing it.
+
 A lint problem — most often two rows producing an alert with the same name and
 the same labels — shows as **passed with warnings**, in yellow, with the object
 listed first. It does not stop a save or a commit. promtool compares only the

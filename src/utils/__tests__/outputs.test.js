@@ -39,9 +39,11 @@ describe('parseOutputs', () => {
 
   it('requires validate, with no default', () => {
     const d = good(); delete d.outputs.prometheus.validate
-    expect(problems(d)).toMatch(/"outputs.prometheus.validate" must be one of promtool, none/)
+    expect(problems(d)).toMatch(/"outputs.prometheus.validate" must be one of promtool, vmalert, none/)
+    d.outputs.prometheus.validate = 'kubeconform'
+    expect(problems(d)).toMatch(/must be one of promtool, vmalert, none/)
     d.outputs.prometheus.validate = 'vmalert'
-    expect(problems(d)).toMatch(/must be one of promtool, none/)
+    expect(problems(d)).toBe('')
   })
 
   it('refuses groupFields a profile does not own, and non-scalar values', () => {

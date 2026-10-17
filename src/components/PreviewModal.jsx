@@ -3,6 +3,15 @@ import { Modal, Alert, Switch, Typography, Empty } from 'antd'
 
 const { Text } = Typography
 
+// "Promtool check passed", "Promtool + vmalert check failed": which checkers
+// ran is the output profiles' call (#76). A server older than `tools` checked
+// with promtool alone.
+function checkLabel(check) {
+  const tools = check.tools?.length ? check.tools : ['promtool']
+  const names = tools.map(t => (t === 'promtool' ? 'Promtool' : t))
+  return `${names.join(' + ')} check`
+}
+
 // The rule owner is looking at products, not authoring them. The default view
 // is a summary: how many alerts each group produced, by name and severity, and
 // — the cell that matters most — which of a group's alerts produced nothing,
@@ -20,9 +29,9 @@ export default function PreviewModal({ open, onClose, yaml, check, selfCheck, su
           style={{ marginBottom: 12 }}
           type={check.skipped ? 'info' : !check.passed ? 'error' : check.warned ? 'warning' : 'success'}
           showIcon
-          message={check.skipped ? 'Promtool check skipped'
-            : !check.passed ? 'Promtool check failed'
-              : check.warned ? 'Promtool check passed with warnings' : 'Promtool check passed'}
+          message={`${checkLabel(check)} ${check.skipped ? 'skipped'
+            : !check.passed ? 'failed'
+              : check.warned ? 'passed with warnings' : 'passed'}`}
           description={check.output
             ? <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflow: 'auto' }}>{check.output}</div>
             : null}
@@ -34,7 +43,7 @@ export default function PreviewModal({ open, onClose, yaml, check, selfCheck, su
           style={{ marginBottom: 12 }}
           type="warning"
           showIcon
-          message="Rendered output has problems promtool can't see"
+          message="Rendered output has problems the syntax check can't see"
           description={<ul style={{ margin: 0, paddingLeft: 18 }}>{selfCheck.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>}
         />
       )}

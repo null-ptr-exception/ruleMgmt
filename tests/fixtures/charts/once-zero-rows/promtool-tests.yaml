@@ -1,0 +1,13 @@
+# rule_files is filled in by the harness: one file per rendered object.
+# vector(1) needs no input series.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    alert_rule_test:
+      # no `for`: firing on the first evaluation
+      - eval_time: 0m
+        alertname: Watchdog
+        exp_alerts:
+          - exp_labels: { severity: none }
+            exp_annotations: { summary: always firing — proves the pipeline delivers }

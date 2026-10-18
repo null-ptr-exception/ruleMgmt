@@ -19,6 +19,7 @@ jobs:
       - run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest
       - run: git config --global user.email "ci@test.com"
       - run: git config --global user.name "CI"
+      - run: sudo scripts/install-checkers.sh
       - run: npm ci
       - run: npm run lint
       - run: npm test
@@ -34,6 +35,7 @@ jobs:
           cache: npm
       - run: git config --global user.email "ci@test.com"
       - run: git config --global user.name "CI"
+      - run: sudo scripts/install-checkers.sh
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium

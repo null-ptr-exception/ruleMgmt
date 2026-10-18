@@ -1,0 +1,21 @@
+# Written by hand from #92 — not generated.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    receiver: _drop
+    # never stop other AlertmanagerConfigs from seeing the alert
+    continue: true
+    routes:
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+        receiver: oncall
+  receivers:
+    - name: _drop
+    - name: oncall
+      emailConfigs:
+        - to: "{{ x }}@example.com"

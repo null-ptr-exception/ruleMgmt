@@ -1,0 +1,39 @@
+# Written by hand from #92 — not generated.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    release: kps
+spec:
+  route:
+    receiver: _drop
+    # never stop other AlertmanagerConfigs from seeing the alert
+    continue: true
+    routes:
+      # critical/db: both configs, so one child route each
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+          - { name: team, value: db, matchType: "=" }
+        groupWait: 30s
+        repeatInterval: 1h
+        routes:
+          - { receiver: db-email, continue: true }
+          - { receiver: ops-webhook }
+      # warning/db: one config, on the route itself; repeatInterval from defaults
+      - matchers:
+          - { name: severity, value: warning, matchType: "=" }
+          - { name: team, value: db, matchType: "=" }
+        groupWait: 30s
+        repeatInterval: 4h
+        receiver: db-email
+  receivers:
+    - name: _drop
+    - name: db-email
+      emailConfigs:
+        - to: db@example.com
+    - name: ops-webhook
+      webhookConfigs:
+        - urlSecret: { name: ops, key: url }
+    # relay is used by no cell, so it has no receiver

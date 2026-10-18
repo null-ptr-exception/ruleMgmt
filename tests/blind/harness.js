@@ -27,6 +27,16 @@
  * Layer (1) may be (re)written with `node tests/blind/update.mjs`, and then
  * has to be reviewed like any golden. Layer (2) has no such tool on purpose:
  * it is only ever edited by hand, which is what makes it blind.
+ *
+ * Notification routing (#92) has its own cases, under
+ * tests/fixtures/routing/<case>/:
+ *
+ *   routing.yaml                    input — a deployment's routing table
+ *   object-meta.json                optional input — as above
+ *   expected/alertmanagerconfig.yaml  (2) what Helm renders, compared as data
+ *   amtool-tests.yaml               (3) optional — alert labels → the
+ *                                       receivers `amtool config routes test`
+ *                                       must route them to
  */
 
 import fs from 'fs'
@@ -36,7 +46,8 @@ import { execFileSync } from 'child_process'
 import yaml from 'js-yaml'
 import { parseRulesDir } from '../../src/utils/rulesFile.js'
 import { generateProducts } from '../../src/utils/drift.js'
-import { parseObjectMeta } from '../../src/utils/objectMeta.js'
+import { parseObjectMeta, metaForProfile } from '../../src/utils/objectMeta.js'
+import { generateRouting } from '../../src/utils/routingGenerator.js'
 import { profileOfObject, profileFor } from '../../src/utils/outputs.js'
 
 export const CASES_DIR = path.resolve('tests/fixtures/charts')
@@ -234,6 +245,100 @@ export function promtoolTest(name, groupsByObject) {
     } catch (err) {
       return { passed: false, output: `${err.stdout || ''}${err.stderr || ''}` }
     }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+// --- Notification routing (#92) ---------------------------------------------
+
+export const ROUTING_CASES_DIR = path.resolve('tests/fixtures/routing')
+
+export function listRoutingCases() {
+  return fs.readdirSync(ROUTING_CASES_DIR, { withFileTypes: true })
+    .filter(d => d.isDirectory() && fs.existsSync(path.join(ROUTING_CASES_DIR, d.name, 'routing.yaml')))
+    .map(d => d.name)
+    .sort()
+}
+
+/** The generated templates/alertmanagerconfig.yaml for a routing case. */
+export function generateRoutingCase(name) {
+  const dir = path.join(ROUTING_CASES_DIR, name)
+  const routing = yaml.load(fs.readFileSync(path.join(dir, 'routing.yaml'), 'utf-8'))
+  const { text, errors } = generateRouting(routing, { meta: metaForProfile(caseObjectMeta(dir), 'routing') })
+  if (errors) throw new Error(`${name}: routing.yaml does not pass the checks:\n  ${errors.join('\n  ')}`)
+  return text
+}
+
+/** Render the file the way a deployment chart does, and return the resource. */
+export function renderRoutingCase(name, text) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `blind-routing-${name}-`))
+  try {
+    fs.writeFileSync(path.join(tmp, 'Chart.yaml'), `apiVersion: v2\nname: ${name}\nversion: 0.1.0\n`)
+    fs.mkdirSync(path.join(tmp, 'templates'))
+    fs.writeFileSync(path.join(tmp, 'templates', 'alertmanagerconfig.yaml'), text)
+    const out = execFileSync('helm', ['template', RELEASE, tmp], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+    return yaml.loadAll(out).find(doc => doc?.kind === 'AlertmanagerConfig')
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+export function readExpectedRouting(name) {
+  return yaml.load(fs.readFileSync(path.join(ROUTING_CASES_DIR, name, 'expected', 'alertmanagerconfig.yaml'), 'utf-8'))
+}
+
+export function readAmtoolTests(name) {
+  const file = path.join(ROUTING_CASES_DIR, name, 'amtool-tests.yaml')
+  return fs.existsSync(file) ? yaml.load(fs.readFileSync(file, 'utf-8')) : null
+}
+
+/**
+ * The resource as the operator deploys it, in Alertmanager's own format,
+ * which amtool reads. The operator puts the resource's route under
+ * Alertmanager's root, ahead of every other AlertmanagerConfig; one such
+ * other resource, taking every critical alert to `other-team`, shows that
+ * this one never keeps an alert from the rest. Alertmanager's root itself may
+ * not say `continue`.
+ *
+ * Matcher objects become strings and the field names snake case; receivers
+ * keep only their names, which is all a route test needs. The operator's
+ * prefixing of receiver names is left out: it renames, it does not reroute.
+ */
+export function toAlertmanagerConfig(spec) {
+  const route = r => ({
+    ...(r.receiver ? { receiver: r.receiver } : {}),
+    ...(r.matchers ? { matchers: r.matchers.map(m => `${m.name}${m.matchType}${JSON.stringify(m.value)}`) } : {}),
+    ...(r.groupWait ? { group_wait: r.groupWait } : {}),
+    ...(r.groupInterval ? { group_interval: r.groupInterval } : {}),
+    ...(r.repeatInterval ? { repeat_interval: r.repeatInterval } : {}),
+    ...(r.continue ? { continue: true } : {}),
+    ...(r.routes ? { routes: r.routes.map(route) } : {}),
+  })
+  return {
+    route: {
+      receiver: 'platform-default',
+      routes: [route(spec.route), { receiver: 'other-team', matchers: ['severity="critical"'] }],
+    },
+    receivers: [{ name: 'platform-default' }, { name: 'other-team' }, ...spec.receivers.map(r => ({ name: r.name }))],
+  }
+}
+
+/** `amtool config routes test` for each case: the receivers it reports, or why it failed. */
+export function amtoolRoutes(name, spec, tests) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `blind-amtool-${name}-`))
+  try {
+    const file = path.join(tmp, 'alertmanager.yml')
+    fs.writeFileSync(file, yaml.dump(toAlertmanagerConfig(spec)))
+    return tests.map(({ labels }) => {
+      const args = ['config', 'routes', 'test', `--config.file=${file}`, ...Object.entries(labels).map(([k, v]) => `${k}=${v}`)]
+      try {
+        const out = execFileSync('amtool', args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+        return out.trim().split(',')
+      } catch (err) {
+        return [`amtool failed: ${err.stdout || ''}${err.stderr || ''}`]
+      }
+    })
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }

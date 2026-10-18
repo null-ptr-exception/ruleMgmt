@@ -1,0 +1,11 @@
+# Labels of an alert → the receivers it reaches, in order. The route sits
+# where the operator puts it, ahead of another AlertmanagerConfig that takes
+# every critical alert (other-team) — see toAlertmanagerConfig.
+- labels: { severity: critical, team: db }
+  receivers: [db-email, ops-webhook, other-team]
+- labels: { severity: warning, team: db }
+  receivers: [db-email]
+- labels: { severity: critical, team: web }
+  receivers: [_drop, other-team]
+- labels: { severity: info, team: db }
+  receivers: [_drop]

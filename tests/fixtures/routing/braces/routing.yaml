@@ -1,0 +1,8 @@
+# A value with {{ }} must reach the cluster as written, not be run by Helm.
+labels:
+  severity: [critical]
+configs:
+  oncall: { type: email, to: "{{ x }}@example.com" }
+cells:
+  - match: { severity: critical }
+    configs: [oncall]

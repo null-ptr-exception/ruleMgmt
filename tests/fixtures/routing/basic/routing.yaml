@@ -1,0 +1,14 @@
+labels:
+  severity: [critical, warning]
+  team: [db, web]
+defaults: { groupWait: 30s, repeatInterval: 4h }
+configs:
+  db-email:    { type: email,   to: db@example.com }
+  ops-webhook: { type: webhook, urlSecret: { name: ops, key: url } }
+  relay:       { type: webhook, url: http://alert-relay.monitoring.svc:8080 }
+cells:
+  - match: { severity: critical, team: db }
+    configs: [db-email, ops-webhook]
+    repeatInterval: 1h
+  - match: { severity: warning, team: db }
+    configs: [db-email]

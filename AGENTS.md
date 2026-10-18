@@ -41,6 +41,8 @@ Beyond `npm ci`, a fresh Linux / WSL machine needs:
 - **Chromium's system libraries** for Playwright. When node lives in `~/.local/bin`, `sudo` does not find `npx`:
   `sudo env PATH="$PATH" npx playwright install-deps chromium`, then `npx playwright install chromium`
 - **promtool** at the `Dockerfile`'s `PROMETHEUS_VERSION` (distro packages can be years older). Without it, the tests that run promtool are skipped.
+- **vmalert** at the `Dockerfile`'s `VMALERT_VERSION`: `vmalert-prod` from the release's `vmutils-linux-amd64-<version>.tar.gz`, installed as `vmalert`. Without it, the tests that run `vmalert -dryRun` are skipped.
+- With docker, `sudo scripts/install-checkers.sh` installs both at those versions (CI does the same).
 - **helm-unittest** `--version v0.8.2` (newer ones need a newer helm than 3.15).
 
 ## Testing policy

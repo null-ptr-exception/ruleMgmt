@@ -1,8 +1,15 @@
 import { test, expect } from '@playwright/test'
+import { hasBinary } from '../blind/harness.js'
 
 // Output profiles (#65): a group's type, interval and limit are set in the
 // editor's group settings row, a vlogs group becomes a VMRule, and Preview
-// marks a group whose rules promtool cannot read.
+// checks each object with its profile's checker — promtool for PromQL,
+// vmalert -dryRun for LogsQL (#76).
+
+// The server runs these same binaries; where one is missing (CI), Preview
+// says so instead of passing, and the tests that need a real check skip.
+const HAS_PROMTOOL = hasBinary(process.env.PROMTOOL_BIN || 'promtool')
+const HAS_VMALERT = hasBinary(process.env.VMALERT_BIN || 'vmalert', ['-version'])
 
 const CPU = `group: cpu
 columns:
@@ -22,6 +29,9 @@ rules:
     expr: '_time:10m app:"\${app}" "panic:" | stats count() as n | filter n:>0'
     labels: {severity: critical}
 `
+
+// The #76 example: the stats pipe is missing its closing parenthesis.
+const PANICS_BROKEN = PANICS.replace('stats count() as n', 'stats count( as n')
 
 async function createChart(request, chart, files) {
   await request.delete(`/api/v2/charts/${chart}`)
@@ -98,7 +108,7 @@ test.describe('Preview of a chart mixing output profiles', () => {
     await request.delete(`/api/v2/charts/${CHART}`)
   })
 
-  test('marks the vlogs group not syntax-checked, and says promtool skipped it', async ({ page }) => {
+  test('checks the vlogs group too: no group is marked not syntax-checked', async ({ page }) => {
     await page.goto('/#/alerts')
     await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
     const tree = page.locator('.ant-tree')
@@ -113,10 +123,45 @@ test.describe('Preview of a chart mixing output profiles', () => {
     await page.getByRole('button', { name: 'Preview' }).click()
     const modal = page.getByRole('dialog')
     await expect(modal.getByText('2 alerts total')).toBeVisible({ timeout: 15000 })
-    await expect(modal.getByText(/1 object\(s\) not syntax-checked/)).toBeVisible()
+    await expect(modal.getByText(/not syntax-checked/)).toHaveCount(0)
+    if (HAS_PROMTOOL && HAS_VMALERT) await expect(modal.getByText('Promtool + vmalert check passed')).toBeVisible()
+  })
+})
 
-    const row = name => modal.getByTestId(`summary-group-${name}`)
-    await expect(row('panics').getByText('not syntax-checked', { exact: true })).toBeVisible()
-    await expect(row('cpu').getByText('not syntax-checked', { exact: true })).toHaveCount(0)
+test.describe('Preview of a broken LogsQL rule (#76)', () => {
+  const CHART = 'e2e-profiles-logsql'
+  const FOLDER = 'e2e-profiles-logsql/dev'
+
+  test.beforeAll(async ({ request }) => {
+    await createChart(request, CHART, { 'panics.yaml': PANICS_BROKEN })
+    expect((await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: CHART } })).status()).toBeLessThan(300)
+    const save = await request.post(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`, {
+      data: { values: { panics: [{ app: 'checkout' }] } },
+    })
+    expect(save.status()).toBeLessThan(300)
+  })
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
+    await request.delete(`/api/v2/charts/${CHART}`)
+  })
+
+  test('is a failed vmalert check that names the rule', async ({ page }) => {
+    test.skip(!HAS_VMALERT, 'vmalert not found')
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = page.locator('.ant-tree')
+    const folder = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${CHART}$`) }).first()
+    await expect(folder).toBeVisible({ timeout: 8000 })
+    const switcher = folder.locator('.ant-tree-switcher_close')
+    if (await switcher.count() > 0) await switcher.click()
+    await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
+      .filter({ hasText: CHART }).first().locator('.ant-tree-node-content-wrapper').click()
+
+    await page.getByText('panics', { exact: true }).first().click()
+    await page.getByRole('button', { name: 'Preview' }).click()
+    const alert = page.getByRole('dialog').locator('.ant-alert-error')
+    await expect(alert.getByText('vmalert check failed')).toBeVisible({ timeout: 15000 })
+    await expect(alert.getByText(/invalid expression for rule "Panics"/)).toBeVisible()
+    await expect(alert.getByText(/alertforge-check-/)).toHaveCount(0)
   })
 })

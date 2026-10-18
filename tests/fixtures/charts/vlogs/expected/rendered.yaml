@@ -1,6 +1,6 @@
 # Hand-written — never generated. See tests/blind/harness.js.
 # A key "<kind> <name>" is an object of that kind; a bare name is a PrometheusRule.
-# No promtool-tests.yaml: promtool cannot read LogsQL (validate: none).
+# No promtool-tests.yaml: promtool cannot read LogsQL; layer (3) runs vmalert -dryRun instead (validate: vmalert, #76).
 VMRule blind-app-errors-1-1:
   - name: app-errors
     type: vlogs

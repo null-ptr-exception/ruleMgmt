@@ -4,13 +4,21 @@ import path from 'path'
 import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
+import { execFileSync } from 'child_process'
 
 let server, baseURL, tmpDir, helmOutputFile, helmArgsFile, promtoolCaptureFile, promtoolCaptureDir, fakePromtool
+let vmalertCaptureDir, fakeVmalert
 
-async function readPromtoolInvocations() {
-  const files = (await fs.readdir(promtoolCaptureDir)).sort((a, b) => parseInt(a) - parseInt(b))
-  return Promise.all(files.map(async f => yaml.load(await fs.readFile(path.join(promtoolCaptureDir, f), 'utf-8'))))
+const HAS_VMALERT = (() => {
+  try { execFileSync('vmalert', ['-version'], { stdio: 'ignore' }); return true } catch { return false }
+})()
+
+async function readInvocations(dir) {
+  const files = (await fs.readdir(dir)).sort((a, b) => parseInt(a) - parseInt(b))
+  return Promise.all(files.map(async f => yaml.load(await fs.readFile(path.join(dir, f), 'utf-8'))))
 }
+const readPromtoolInvocations = () => readInvocations(promtoolCaptureDir)
+const readVmalertInvocations = () => readInvocations(vmalertCaptureDir)
 
 beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'render-test-'))
@@ -72,6 +80,24 @@ echo "Checking rules"
   await fs.mkdir(promtoolCaptureDir, { recursive: true })
   process.env.PROMTOOL_CAPTURE_DIR = promtoolCaptureDir
 
+  // vmalert -dryRun -rule=<file> (#76): logs at info level, and on a bad
+  // expression one fatal line naming the file, then the errors.
+  fakeVmalert = path.join(tmpDir, 'fake-vmalert')
+  await fs.writeFile(fakeVmalert, `#!/bin/sh
+f="\${2#-rule=}"
+cp "$f" "$VMALERT_CAPTURE_DIR/$(basename "$f")"
+echo "2026-10-17T00:00:00.000Z	info	lib/logger/flag.go:20	  -rule=\\"$f\\""
+if [ "$VMALERT_FAIL" = "1" ]; then
+  echo "2026-10-17T00:00:00.000Z	fatal	app/vmalert/main.go:110	failed to parse \\"[$f]\\": failed to parse [$f]: errors(1): " >&2
+  echo "invalid group \\"panics\\" in file \\"$f\\": invalid expression for rule \\"Panics\\": bad LogsQL expr" >&2
+  exit 255
+fi
+`, { mode: 0o755 })
+  process.env.VMALERT_BIN = fakeVmalert
+  vmalertCaptureDir = path.join(tmpDir, 'vmalert-invocations')
+  await fs.mkdir(vmalertCaptureDir, { recursive: true })
+  process.env.VMALERT_CAPTURE_DIR = vmalertCaptureDir
+
   const { default: renderRouter } = await import('../../server/routes/render.js')
 
   const app = express()
@@ -90,7 +116,11 @@ echo "Checking rules"
 beforeEach(async () => {
   delete process.env.PROMTOOL_FAIL
   delete process.env.PROMTOOL_LINT
+  delete process.env.VMALERT_FAIL
   process.env.PROMTOOL_BIN = fakePromtool
+  process.env.VMALERT_BIN = fakeVmalert
+  await fs.rm(vmalertCaptureDir, { recursive: true, force: true })
+  await fs.mkdir(vmalertCaptureDir, { recursive: true })
   await fs.writeFile(helmOutputFile, '---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: rendered\n')
   await fs.rm(promtoolCaptureFile, { force: true })
   await fs.rm(promtoolCaptureDir, { recursive: true, force: true })
@@ -105,6 +135,9 @@ afterAll(async () => {
   delete process.env.PROMTOOL_CAPTURE_DIR
   delete process.env.PROMTOOL_FAIL
   delete process.env.PROMTOOL_LINT
+  delete process.env.VMALERT_BIN
+  delete process.env.VMALERT_CAPTURE_DIR
+  delete process.env.VMALERT_FAIL
   if (server) await new Promise(resolve => server.close(resolve))
   if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true })
 })
@@ -211,11 +244,10 @@ spec:
     expect(data.check.output.indexOf('first:')).toBeGreaterThan(data.check.output.indexOf('lint error'))
   })
 
-  // #65: a mixed chart. promtool checks only what the output profiles mark
-  // `validate: promtool`; the vlogs VMRule is counted in the summary, marked
-  // not syntax-checked, and said so in the check's output — one "passed"
-  // must not read as the whole chart.
-  it('checks only promtool profiles in a mixed chart, and marks the rest not syntax-checked', async () => {
+  // #65, #76: a mixed chart. Each object goes to its profile's checker —
+  // promtool for the PrometheusRule, vmalert -dryRun for the vlogs VMRule —
+  // and nothing is left not syntax-checked.
+  it('checks each object of a mixed chart with its profile\'s checker', async () => {
     const rulesDir = path.join(tmpDir, 'charts', 'test-chart', 'rules')
     await fs.mkdir(rulesDir, { recursive: true })
     await fs.writeFile(path.join(rulesDir, 'latency.yaml'), 'columns: {}\nrules:\n  - alert: SlowRequests\n    expr: up == 0\n    labels: {severity: warning}\n')
@@ -253,14 +285,19 @@ spec:
 
       const invocations = await readPromtoolInvocations()
       expect(invocations.map(inv => inv.groups.map(g => g.name))).toEqual([['latency']])
+      const vmalertRuns = await readVmalertInvocations()
+      expect(vmalertRuns.map(inv => inv.groups.map(g => g.name))).toEqual([['panics']])
+      expect(vmalertRuns[0].groups[0].type).toBe('vlogs')
       expect(data.check.passed).toBe(true)
-      expect(data.check.unchecked).toBe(1)
-      expect(data.check.output).toMatch(/1 object\(s\) not syntax-checked/)
+      expect(data.check.tools).toEqual(['promtool', 'vmalert'])
+      expect(data.check.unchecked).toBe(0)
+      expect(data.check.output).not.toMatch(/not syntax-checked/)
+      expect(data.check.output).toContain('rel-panics-1-1: SUCCESS')
 
       const byName = Object.fromEntries(data.summary.groups.map(g => [g.name, g]))
       expect(data.summary.total).toBe(2)
       expect(byName.latency.checked).toBe(true)
-      expect(byName.panics.checked).toBe(false)
+      expect(byName.panics.checked).toBe(true)
       expect(byName.panics.alerts).toEqual([{ alert: 'Panics', severity: 'critical', count: 1 }])
     } finally {
       await fs.rm(rulesDir, { recursive: true, force: true })
@@ -704,10 +741,8 @@ spec:
     expect(data.check.output).toContain('Promtool is not available')
   })
 
-  // #65: the not-syntax-checked note is said on every result — a missing
-  // promtool included, or a mixed chart loses it exactly where nothing at all
-  // was checked.
-  it('still marks a vlogs object not syntax-checked when promtool is unavailable', async () => {
+  // #76: a missing vmalert is said like a missing promtool — never a pass.
+  it('reports vmalert check failure when the binary is unavailable', async () => {
     await fs.writeFile(helmOutputFile, `---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
@@ -732,15 +767,59 @@ spec:
         - alert: Panics
           expr: '"panic:" | stats count() as n | filter n:>0'
 `)
-    process.env.PROMTOOL_BIN = path.join(tmpDir, 'missing-promtool')
+    process.env.VMALERT_BIN = path.join(tmpDir, 'missing-vmalert')
 
     const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
 
     expect(status).toBe(200)
     expect(data.check.passed).toBe(false)
-    expect(data.check.unchecked).toBe(1)
-    expect(data.check.output).toContain('Promtool is not available')
-    expect(data.check.output).toMatch(/1 object\(s\) not syntax-checked/)
+    expect(data.check.output).toContain('vmalert is not available')
+    expect(data.check.output).not.toContain('Promtool is not available')
+  })
+
+  const VLOGS_ONLY = `---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: rel-panics-1-1
+spec:
+  groups:
+    - name: panics
+      type: vlogs
+      rules:
+        - alert: Panics
+          expr: '"panic:" | stats count( as n | filter n:>0'
+`
+
+  it('names the object and rule when vmalert rejects a LogsQL expression, without the temp file', async () => {
+    await fs.writeFile(helmOutputFile, VLOGS_ONLY)
+    process.env.VMALERT_FAIL = '1'
+
+    const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(status).toBe(200)
+    expect(data.ok).toBe(true)
+    expect(data.check.passed).toBe(false)
+    expect(data.check.tools).toEqual(['vmalert'])
+    expect(await readPromtoolInvocations()).toEqual([])
+    expect(data.check.output).toBe('rel-panics-1-1:\ninvalid group "panics": invalid expression for rule "Panics": bad LogsQL expr')
+  })
+
+  // The real binary, for the shape of its output: the cleaning above is only
+  // as good as the fake's imitation of it.
+  it.skipIf(!HAS_VMALERT)('with the real vmalert: a missing parenthesis fails and names the rule', async () => {
+    await fs.writeFile(helmOutputFile, VLOGS_ONLY)
+    process.env.VMALERT_BIN = 'vmalert'
+
+    const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(data.check.passed).toBe(false)
+    expect(data.check.output).toMatch(/^rel-panics-1-1:\ninvalid group "panics": invalid expression for rule "Panics": bad LogsQL expr/)
+    expect(data.check.output).not.toMatch(/alertforge-check-|\binfo\b|fatal/)
+
+    await fs.writeFile(helmOutputFile, VLOGS_ONLY.replace('count( as n', 'count() as n'))
+    const ok = (await api('POST', '/api/v2/render/test-chart/staging')).data
+    expect(ok.check).toMatchObject({ passed: true, output: 'SUCCESS' })
   })
 
   it('returns 400 for invalid chart name', async () => {

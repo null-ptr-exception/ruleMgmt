@@ -1,5 +1,5 @@
 # Hand-written — never generated. See tests/blind/harness.js.
-# No promtool-tests.yaml: promtool cannot read LogsQL (validate: none).
+# No promtool-tests.yaml: promtool cannot read LogsQL; layer (3) runs vmalert -dryRun instead (validate: vmalert, #76).
 VMRule blind-app-panic-1:
   - name: app-panic
     type: vlogs

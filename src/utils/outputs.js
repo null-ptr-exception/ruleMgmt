@@ -20,7 +20,7 @@ import raw from '../../config/outputs.json' with { type: 'json' }
 export const DEFAULT_TYPE = 'prometheus'
 
 const PROFILE_KEYS = ['apiVersion', 'kind', 'groupFields', 'validate']
-const VALIDATE = ['promtool', 'none']
+const VALIDATE = ['promtool', 'vmalert', 'none']
 const NAME_RE = /^[a-z][a-z0-9_-]*$/
 // Written by the generator (name, rules) or by the template owner (interval,
 // limit) — a profile cannot set them too. A rules file's `type` is not one of

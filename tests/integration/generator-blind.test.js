@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import {
   CASES_DIR, listCases, generateCase, readExpectedTemplates, readExpectedRendered,
-  readExpectedMeta, renderCase, renderedGroups, renderedMeta, promtoolGroups, promtoolTest, hasBinary,
+  readExpectedMeta, renderCase, renderedGroups, renderedMeta, promtoolGroups, promtoolTest, vmalertGroups, vmalertDryRun, caseChecksWith, hasBinary,
 } from '../blind/harness.js'
 
 /**
@@ -13,9 +13,11 @@ import {
 
 const HAS_HELM = hasBinary('helm', ['version'])
 const HAS_PROMTOOL = hasBinary('promtool')
+const HAS_VMALERT = hasBinary('vmalert', ['-version'])
 
 if (!HAS_HELM) console.warn('generator-blind: helm not found — layers (2) and (3) are skipped')
 if (!HAS_PROMTOOL) console.warn('generator-blind: promtool not found — layer (3) is skipped')
+if (!HAS_VMALERT) console.warn('generator-blind: vmalert not found — layer (3) for LogsQL is skipped')
 
 const cases = listCases()
 
@@ -50,4 +52,11 @@ describe.each(cases)('%s', name => {
     const result = promtoolTest(name, promtoolGroups(renderCase(name, products)))
     expect(result.passed, result.output).toBe(true)
   })
+
+  if (caseChecksWith(name, 'vmalert')) {
+    it.skipIf(!HAS_HELM || !HAS_VMALERT)('(3) vmalert -dryRun passes for the LogsQL objects', () => {
+      const result = vmalertDryRun(name, vmalertGroups(renderCase(name, products)))
+      expect(result.passed, result.output).toBe(true)
+    })
+  }
 })

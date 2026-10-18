@@ -20,6 +20,10 @@
  *   promtool-tests.yaml      (3) optional — `promtool test rules` against the
  *                                rendered rules
  *
+ * Layer (3) also runs `vmalert -dryRun` on every rendered object whose
+ * profile says `validate: vmalert` (LogsQL, #76) — no file needed: the case's
+ * rules must parse.
+ *
  * Layer (1) may be (re)written with `node tests/blind/update.mjs`, and then
  * has to be reviewed like any golden. Layer (2) has no such tool on purpose:
  * it is only ever edited by hand, which is what makes it blind.
@@ -171,6 +175,41 @@ export function promtoolGroups(renderedYaml) {
     if (profileOfObject(doc)?.validate === 'promtool') out[doc.metadata.name] = doc.spec.groups
   }
   return out
+}
+
+/** Whether any of the case's groups has an output profile checked by `validator`. */
+export function caseChecksWith(name, validator) {
+  const { model } = parseRulesDir(readDir(path.join(CASES_DIR, name, 'rules')))
+  return Object.values(model.groups).some(g => profileFor(g.type)?.validate === validator)
+}
+
+/** Object name → spec.groups, for the objects whose profile vmalert checks (#76). */
+export function vmalertGroups(renderedYaml) {
+  const out = {}
+  for (const doc of yaml.loadAll(renderedYaml)) {
+    if (profileOfObject(doc)?.validate === 'vmalert') out[doc.metadata.name] = doc.spec.groups
+  }
+  return out
+}
+
+/** `vmalert -dryRun` on each object's groups, one file per object as in Preview. */
+export function vmalertDryRun(name, groupsByObject) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `blind-vmalert-${name}-`))
+  try {
+    const failures = []
+    for (const [obj, groups] of Object.entries(groupsByObject)) {
+      const file = path.join(tmp, `${obj}.rules.yaml`)
+      fs.writeFileSync(file, yaml.dump({ groups }))
+      try {
+        execFileSync('vmalert', ['-dryRun', `-rule=${file}`], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
+      } catch (err) {
+        failures.push(`${obj}:\n${err.stdout || ''}${err.stderr || ''}`)
+      }
+    }
+    return { passed: failures.length === 0, output: failures.join('\n\n') }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true })
+  }
 }
 
 /**

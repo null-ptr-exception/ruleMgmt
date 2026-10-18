@@ -127,8 +127,11 @@ export default function AlertUserView() {
 
   useEffect(() => {
     if (!selectedChart || !selectedFolder) return
+    // A slower answer for the folder just left must not land on this one.
+    let stale = false
     setUnusedValuesFile(null)
     getDeployment(selectedChart, folderBasename, selectedFolder).then(data => {
+      if (stale) return
       setUnusedValuesFile(data.unusedFile || null)
       const parsed = data.parsed || {}
       const { _common, ...rest } = parsed
@@ -139,6 +142,7 @@ export default function AlertUserView() {
       }
       setDirty(false)
     })
+    return () => { stale = true }
   }, [selectedChart, selectedFolder])
 
   // Reset UI state when the selected alert type or schema changes

@@ -100,6 +100,19 @@ describe('deployments route with folder param', () => {
       expect(read(dir, 'values.yaml')).toBe('cpu:\n  - threshold: 90\n')
     })
 
+    it('clones the file the editor shows', async () => {
+      const dir = path.join(tmpDir, 'shop', 'prod')
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, 'values.yaml'), 'disk:\n  - threshold: 85\n')
+      fs.writeFileSync(path.join(dir, 'prod-values.yaml'), 'disk:\n  - threshold: 50\n')
+
+      const res = await request(app)
+        .post('/api/v2/deployments/c/prod/clone?folder=shop/prod')
+        .send({ newName: 'copy' })
+      expect(res.status).toBe(200)
+      expect(read(dir, 'copy-values.yaml')).toBe('disk:\n  - threshold: 85\n')
+    })
+
     it('still reads a lone values.yaml, with nothing to report', async () => {
       const dir = path.join(tmpDir, 'shop', 'stg')
       fs.mkdirSync(dir, { recursive: true })

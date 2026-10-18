@@ -44,7 +44,11 @@ async function resolveValuesFile(dir, deployment) {
     try {
       await fs.access(directFile)
       return { file: directFile, direct: true, legacyFile }
-    } catch { /* no values.yaml: a legacy file named after the folder */ }
+    } catch (err) {
+      // Only a missing values.yaml means a legacy file named after the
+      // folder; any other error must not quietly pick the other file.
+      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err
+    }
   }
   return { file: legacyFile, direct: false, legacyFile }
 }
@@ -137,7 +141,7 @@ export default function deploymentsRouter() {
       }
 
       await fs.mkdir(dir, { recursive: true })
-      const { file } = await resolveValuesFile(dir, req.params.deployment)
+      const { file, direct } = await resolveValuesFile(dir, req.params.deployment)
       const depName = await getDepName(dir)
       let values = req.body.values
 
@@ -171,8 +175,9 @@ export default function deploymentsRouter() {
       await fs.writeFile(file, values, 'utf-8')
 
       // Eager sync: only folder-mode deployments participate (sync.yaml
-      // paths are folder-relative, matching the `folder` query param).
-      if (folder) {
+      // paths are folder-relative, matching the `folder` query param). A
+      // legacy sibling saved in a source folder is not what it syncs.
+      if (folder && direct) {
         const targets = getTargetsForSource(registry, folder)
         for (const target of targets) {
           // sync.yaml is a plain file inside the gitops repo — it can be
@@ -204,9 +209,9 @@ export default function deploymentsRouter() {
     if (!req.body.newName || !NAME_RE.test(req.body.newName)) {
       return res.status(400).json({ error: 'Invalid newName' })
     }
-    const srcFile = path.join(dir, `${req.params.deployment}-values.yaml`)
     const dstFile = path.join(dir, `${req.body.newName}-values.yaml`)
     try {
+      const { file: srcFile } = await resolveValuesFile(dir, req.params.deployment)
       await fs.copyFile(srcFile, dstFile)
       res.json({ ok: true })
     } catch (err) {
@@ -221,8 +226,11 @@ export default function deploymentsRouter() {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     try {
+      const { direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
       const folder = req.query.folder
-      if (folder) {
+      // Deleting a legacy sibling leaves the folder's deployment, and so its
+      // sync link, in place.
+      if (folder && direct) {
         await withSyncRegistryLock(req.gitopsDir, async () => {
           const registry = await readSyncRegistry(req.gitopsDir)
           if (isTarget(registry, folder)) {
@@ -232,7 +240,6 @@ export default function deploymentsRouter() {
         })
       }
 
-      const { direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
       if (direct) {
         // Folder-mode deployment: the directory itself is the deployment
         // (Chart.yaml + values.yaml live directly inside it), so removing

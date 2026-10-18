@@ -18,8 +18,9 @@ charts/<chart>/
     <group>.yaml         ← the source: one file per alert group
   values.schema.json     ← generated
   templates/*.yaml       ← generated, one file per alert group
-deployments/<chart>/…    ← or any folder: a deployment's rows
-  <name>-values.yaml
+deployments/<chart>/<name>/  ← or any folder: one deployment
+  Chart.yaml             ← written when the folder is created; depends on <chart>
+  values.yaml            ← the deployment's rows
 ```
 
 Two people work on two different halves:

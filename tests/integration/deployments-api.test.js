@@ -57,7 +57,7 @@ describe('deployments API — subchart wrap/unwrap', () => {
     setupDeploymentDir(folderPath, true)
 
     const res = await request(app)
-      .post(`/api/deployments/my-chart/production${folderQuery(folderPath)}`)
+      .post(`/api/deployments/my-chart/${folderPath}${folderQuery(folderPath)}`)
       .send({ values: BARE_VALUES })
 
     expect(res.status).toBe(200)
@@ -78,7 +78,7 @@ describe('deployments API — subchart wrap/unwrap', () => {
     fs.writeFileSync(path.join(dir, 'values.yaml'), '')
 
     const res = await request(app)
-      .post(`/api/deployments/my-chart/production${folderQuery(folderPath)}`)
+      .post(`/api/deployments/my-chart/${folderPath}${folderQuery(folderPath)}`)
       .send({ values: BARE_VALUES })
 
     expect(res.status).toBe(200)
@@ -95,7 +95,7 @@ describe('deployments API — subchart wrap/unwrap', () => {
     fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump(wrapped))
 
     const res = await request(app)
-      .get(`/api/deployments/my-chart/production${folderQuery(folderPath)}`)
+      .get(`/api/deployments/my-chart/${folderPath}${folderQuery(folderPath)}`)
 
     expect(res.status).toBe(200)
     expect(res.body.parsed).toMatchObject(BARE_VALUES)
@@ -109,7 +109,7 @@ describe('deployments API — subchart wrap/unwrap', () => {
     fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump(BARE_VALUES))
 
     const res = await request(app)
-      .get(`/api/deployments/my-chart/production${folderQuery(folderPath)}`)
+      .get(`/api/deployments/my-chart/${folderPath}${folderQuery(folderPath)}`)
 
     expect(res.status).toBe(200)
     expect(res.body.parsed).toMatchObject(BARE_VALUES)
@@ -120,11 +120,11 @@ describe('deployments API — subchart wrap/unwrap', () => {
     setupDeploymentDir(folderPath, true)
 
     await request(app)
-      .post(`/api/deployments/my-chart/production${folderQuery(folderPath)}`)
+      .post(`/api/deployments/my-chart/${folderPath}${folderQuery(folderPath)}`)
       .send({ values: BARE_VALUES })
 
     const res = await request(app)
-      .get(`/api/deployments/my-chart/production${folderQuery(folderPath)}`)
+      .get(`/api/deployments/my-chart/${folderPath}${folderQuery(folderPath)}`)
 
     expect(res.body.parsed).toMatchObject(BARE_VALUES)
     expect(res.body.parsed).not.toHaveProperty('mariadb-alerts')
@@ -289,7 +289,7 @@ rules:
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  const save = values => request(app).post('/api/deployments/any/prod?folder=dep').send({ values })
+  const save = values => request(app).post('/api/deployments/any/dep?folder=dep').send({ values })
 
   it('refuses a " or \\ in a column a label reads, and writes nothing', async () => {
     const res = await save({ cpu: [{ team: 'ok' }, { team: 'a\\b' }] })
@@ -345,7 +345,7 @@ rules:
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  const save = values => request(app).post('/api/deployments/any/prod?folder=dep').send({ values })
+  const save = values => request(app).post('/api/deployments/any/dep?folder=dep').send({ values })
   const columns = res => res.body.problems.map(p => `${p.group}:${p.column}`).sort()
 
   it('saves a complete deployment', async () => {
@@ -409,7 +409,7 @@ rules:
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  const save = values => request(app).post('/api/deployments/any/prod?folder=dep').send({ values })
+  const save = values => request(app).post('/api/deployments/any/dep?folder=dep').send({ values })
 
   it('saves a well-formed hierarchy', async () => {
     const res = await save({ cpu: [{ namespace: 'prod' }, { namespace: 'prod', workload: 'api', threshold: 95 }] })

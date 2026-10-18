@@ -57,6 +57,82 @@ describe('deployments route with folder param', () => {
     expect(fs.existsSync(path.join(dir, 'myenv-values.yaml'))).toBe(true)
   })
 
+  // #90: GET, POST and DELETE pick the same file, the one Preview and sync use.
+  describe('which values file a deployment uses', () => {
+    const read = (dir, f) => fs.readFileSync(path.join(dir, f), 'utf-8')
+
+    it('reads and saves values.yaml when a leftover <name>-values.yaml sits beside it', async () => {
+      const dir = path.join(tmpDir, 'shop', 'prod')
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, 'values.yaml'), 'disk:\n  - threshold: 85\n')
+      fs.writeFileSync(path.join(dir, 'prod-values.yaml'), 'disk:\n  - threshold: 50\n')
+
+      const before = await request(app).get('/api/v2/deployments/c/prod?folder=shop/prod')
+      expect(before.body.parsed).toEqual({ disk: [{ threshold: 85 }] })
+      expect(before.body.unusedFile).toBe('prod-values.yaml')
+
+      const save = await request(app)
+        .post('/api/v2/deployments/c/prod?folder=shop/prod')
+        .send({ values: { disk: [{ threshold: 70 }] } })
+      expect(save.status).toBe(200)
+
+      const after = await request(app).get('/api/v2/deployments/c/prod?folder=shop/prod')
+      expect(after.body.parsed).toEqual({ disk: [{ threshold: 70 }] })
+      expect(read(dir, 'prod-values.yaml')).toBe('disk:\n  - threshold: 50\n')
+    })
+
+    it('keeps a differently named sibling off the folder deployment\'s values.yaml', async () => {
+      const dir = path.join(tmpDir, 'teams', 'alpha')
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, 'values.yaml'), 'cpu:\n  - threshold: 90\n')
+      fs.writeFileSync(path.join(dir, 'staging-values.yaml'), 'cpu:\n  - threshold: 60\n')
+
+      const save = await request(app)
+        .post('/api/v2/deployments/c/staging?folder=teams/alpha')
+        .send({ values: { cpu: [{ threshold: 65 }] } })
+      expect(save.status).toBe(200)
+      expect(read(dir, 'values.yaml')).toBe('cpu:\n  - threshold: 90\n')
+      expect(read(dir, 'staging-values.yaml')).toContain('threshold: 65')
+
+      const del = await request(app).delete('/api/v2/deployments/c/staging?folder=teams/alpha')
+      expect(del.status).toBe(200)
+      expect(fs.existsSync(path.join(dir, 'staging-values.yaml'))).toBe(false)
+      expect(read(dir, 'values.yaml')).toBe('cpu:\n  - threshold: 90\n')
+    })
+
+    it('clones the file the editor shows', async () => {
+      const dir = path.join(tmpDir, 'shop', 'prod')
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, 'values.yaml'), 'disk:\n  - threshold: 85\n')
+      fs.writeFileSync(path.join(dir, 'prod-values.yaml'), 'disk:\n  - threshold: 50\n')
+
+      const res = await request(app)
+        .post('/api/v2/deployments/c/prod/clone?folder=shop/prod')
+        .send({ newName: 'copy' })
+      expect(res.status).toBe(200)
+      expect(read(dir, 'copy-values.yaml')).toBe('disk:\n  - threshold: 85\n')
+    })
+
+    it('still reads a lone values.yaml, with nothing to report', async () => {
+      const dir = path.join(tmpDir, 'shop', 'stg')
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, 'values.yaml'), 'disk:\n  - threshold: 80\n')
+
+      const res = await request(app).get('/api/v2/deployments/c/stg?folder=shop/stg')
+      expect(res.body.parsed).toEqual({ disk: [{ threshold: 80 }] })
+      expect(res.body.unusedFile).toBeUndefined()
+    })
+
+    it('still reads a lone <name>-values.yaml named after the folder', async () => {
+      const dir = path.join(tmpDir, 'shop', 'dev')
+      fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(path.join(dir, 'dev-values.yaml'), 'disk:\n  - threshold: 75\n')
+
+      const res = await request(app).get('/api/v2/deployments/c/dev?folder=shop/dev')
+      expect(res.body.parsed).toEqual({ disk: [{ threshold: 75 }] })
+    })
+  })
+
   it('rejects folder paths with ..', async () => {
     const res = await request(app).get('/api/v2/deployments/chart?folder=../../../etc')
     expect(res.status).toBe(400)

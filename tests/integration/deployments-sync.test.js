@@ -142,4 +142,36 @@ describe('deployments API — eager sync integration', () => {
     const registry = await readSyncRegistry(tmpDir)
     expect(registry).toEqual({ syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] })
   })
+
+  // #90: a legacy `<name>-values.yaml` beside a folder's values.yaml is its
+  // own deployment, not the folder's — it neither syncs nor unlinks.
+  it('saving a legacy sibling in a source folder does not propagate it', async () => {
+    makeDeploymentDir('cpu/prod')
+    makeDeploymentDir('cpu/staging')
+    await writeSyncRegistry(tmpDir, { syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] })
+
+    const res = await request(app)
+      .post(`/api/deployments/my-chart/old${folderQuery('cpu/prod')}`)
+      .send({ values: { alerts: [{ warn: 7 }] } })
+
+    expect(res.status).toBe(200)
+    expect(fs.readFileSync(path.join(tmpDir, 'cpu/prod/old-values.yaml'), 'utf-8')).toContain('warn: 7')
+    expect(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8')).toBe('')
+  })
+
+  it('deleting a legacy sibling in a synced target keeps the target synced', async () => {
+    makeDeploymentDir('cpu/prod')
+    makeDeploymentDir('cpu/staging')
+    await writeSyncRegistry(tmpDir, { syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] })
+    fs.writeFileSync(path.join(tmpDir, 'cpu/staging', 'old-values.yaml'), '')
+
+    const res = await request(app)
+      .delete(`/api/deployments/my-chart/old${folderQuery('cpu/staging')}`)
+
+    expect(res.status).toBe(200)
+    expect(fs.existsSync(path.join(tmpDir, 'cpu/staging/old-values.yaml'))).toBe(false)
+    expect(fs.existsSync(path.join(tmpDir, 'cpu/staging/values.yaml'))).toBe(true)
+    const registry = await readSyncRegistry(tmpDir)
+    expect(registry).toEqual({ syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] })
+  })
 })

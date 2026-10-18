@@ -304,5 +304,5 @@ export function generateRouting(routing, { meta = {} } = {}) {
     spec: routingSpec(routing),
   }
   const body = escapeBraces(yaml.dump(doc, { lineWidth: -1, noRefs: true }))
-  return { text: GENERATED_HEADER + body.replace(name, '{{ .Release.Name }}-routing') }
+  return { text: GENERATED_HEADER + body.replace(name, () => '{{ .Release.Name }}-routing') }
 }

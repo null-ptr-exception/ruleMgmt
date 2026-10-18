@@ -113,6 +113,8 @@ describe('checks', () => {
 describe('credentials in a webhook address', () => {
   it.each([
     ['https://user:pass@hooks.example.com/alert', /user name or password/],
+    ['https://:pass@hooks.example.com/alert', /user name or password/],
+    ['https://hooks.example.com/alert?password=abc', /"password" looks like a credential/],
     ['https://hooks.example.com/alert?token=abc', /"token" looks like a credential/],
     ['https://hooks.example.com/alert?api_key=abc', /"api_key" looks like a credential/],
     ['https://hooks.example.com/alert?id=a1b2c3d4e5f6g7h8i9j0k1', /"id" looks like a token/],
@@ -125,6 +127,8 @@ describe('credentials in a webhook address', () => {
     'http://alert-relay.monitoring.svc:8080',
     'http://alert-relay.monitoring.svc.cluster.local:8080/hooks/alerts',
     'https://hooks.example.com/alert?channel=ops&retries=3',
+    // Has "key" in its name without being one.
+    'https://hooks.example.com/alert?keyword=disk',
   ])('accepts %s', url => {
     expect(urlCredential(url)).toBeNull()
   })

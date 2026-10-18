@@ -89,10 +89,22 @@ test.describe('Overview with several deployments', () => {
       await expect(parts.nth(0)).toContainText(`${ROOT}/mprod`)
       await expect(parts.nth(1)).toContainText(`${ROOT}/mstg`)
       await expect(parts.nth(2)).toContainText(`${ROOT}/mdev`)
-      await expect(firstCell(parts.nth(1))).toHaveValue('shop-stg')
-      await expect(firstCell(parts.nth(1))).toBeDisabled()
+      // Plain text: no inputs, no add or delete; the header filters stay.
+      const row = parts.nth(1).locator('.ant-table-tbody tr.ant-table-row').first()
+      await expect(row).toContainText('shop-stg')
+      await expect(row.getByRole('textbox')).toHaveCount(0)
+      await expect(parts.nth(1).getByRole('button', { name: 'Add instance' })).toHaveCount(0)
     }
     await expect(page.getByRole('button', { name: 'Save all' })).toBeDisabled()
+
+    // A header filter applies to every part of the card.
+    const cpuParts = card(page, 'cpu').getByTestId('deployment-part')
+    await cpuParts.nth(0).locator('.ant-table-thead').getByPlaceholder('value').first().fill('stg')
+    await expect(cpuParts.nth(0)).toContainText('No rows match current filter')
+    await expect(cpuParts.nth(1)).toContainText('shop-stg')
+    await expect(cpuParts.nth(2)).toContainText('No rows match current filter')
+    await expect(card(page, 'cpu')).toContainText('1 / 3 rows')
+    await card(page, 'cpu').getByRole('button', { name: 'Clear filters' }).click()
 
     // Survives a reload.
     await page.reload()
@@ -126,7 +138,7 @@ test.describe('Overview with several deployments', () => {
     await check(page, 'mstg')
     await page.getByRole('button', { name: 'Discard' }).click()
     await expect(page.getByTestId('multi-deployment-banner')).toContainText('Viewing 2 deployments')
-    await expect(firstCell(card(page, 'cpu').getByTestId('deployment-part').first())).toHaveValue('shop')
+    await expect(card(page, 'cpu').getByTestId('deployment-part').first().locator('.ant-table-tbody tr.ant-table-row').first()).toContainText('shop')
   })
 
   test('a part\'s title opens that deployment alone, editable, with the same groups', async ({ page }) => {

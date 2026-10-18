@@ -123,6 +123,7 @@ function DeploymentPart({ deployment, alertName, vars, sectionFilters, effective
         effectiveFilters={effectiveFilters}
         onFiltersChange={onFiltersChange}
         readOnly
+        plain
         scrollContainer={scrollContainer}
         stickyOffsetHeader={stickyOffsetHeader}
       />

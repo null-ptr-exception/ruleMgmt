@@ -52,6 +52,9 @@ export default function AlertTable({
   effectiveFilters,
   onFiltersChange,
   readOnly = false,
+  // Values as plain text, with no add or delete: a deployment shown beside
+  // others (#91), where nothing can be edited anyway.
+  plain = false,
   scrollContainer = null,
   stickyOffsetHeader = 0,
   // The group's selector hierarchy (#60) and its levels' defaults: adds the
@@ -85,6 +88,10 @@ export default function AlertTable({
     const missing = !readOnly && !v.common && isMissingRequired(v, val)
     const status = missing ? 'error' : undefined
     const hint = input => missing ? <Tooltip title="Required">{input}</Tooltip> : input
+    if (plain) {
+      const text = v.type === 'boolean' ? (val ? '✓' : '') : (val ?? '')
+      return <span style={{ fontSize: 13, padding: '0 7px' }}>{String(text)}</span>
+    }
     if (v.type === 'boolean') {
       return (
         <Checkbox
@@ -192,7 +199,7 @@ export default function AlertTable({
         )
       },
     }] : []),
-    {
+    ...(plain ? [] : [{
       title: '',
       key: 'actions',
       width: scope ? 80 : 50,
@@ -213,7 +220,7 @@ export default function AlertTable({
           </span>
         )
       },
-    }
+    }])
   ]
 
   const hasActiveFilter = Object.values(activeFilters).some(f => f && f.value !== '' && f.value != null)
@@ -230,10 +237,12 @@ export default function AlertTable({
         locale={{ emptyText }}
         sticky={scrollContainer ? { getContainer: () => scrollContainer, offsetHeader: stickyOffsetHeader } : false}
       />
-      <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }}
-        onClick={handleAdd} disabled={readOnly}>
-        Add instance
-      </Button>
+      {!plain && (
+        <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }}
+          onClick={handleAdd} disabled={readOnly}>
+          Add instance
+        </Button>
+      )}
       {exception && (
         <Modal open title={`Exception to ${path(scope.sels[exception.index])}`} okText="Add"
           okButtonProps={{ disabled: !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(exception.value.trim()) }}

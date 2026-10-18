@@ -107,7 +107,30 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
   )
 }
 
-function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer }) {
+// One part of a group's card per deployment, when several are viewed (#91):
+// each is that deployment's own rows, as its own Overview shows them.
+function DeploymentPart({ deployment, alertName, vars, sectionFilters, effectiveFilters, onFiltersChange, onOpen, scrollContainer, stickyOffsetHeader }) {
+  return (
+    <div data-testid="deployment-part" style={{ marginBottom: 12 }}>
+      <Button type="link" size="small" onClick={() => onOpen(deployment.path)} style={{ padding: 0, fontSize: 12, fontWeight: 500 }}>
+        {deployment.path}
+      </Button>
+      <AlertTable
+        vars={vars}
+        rows={deployment.values[alertName] || []}
+        commonValues={deployment.commonValues}
+        filters={sectionFilters}
+        effectiveFilters={effectiveFilters}
+        onFiltersChange={onFiltersChange}
+        readOnly
+        scrollContainer={scrollContainer}
+        stickyOffsetHeader={stickyOffsetHeader}
+      />
+    </div>
+  )
+}
+
+function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer, deployments, onOpenDeployment }) {
   const [collapsed, setCollapsed] = useState(false)
   const [headerHeight, setHeaderHeight] = useState(0)
 
@@ -119,11 +142,15 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
     setHeaderHeight(prev => (prev === h ? prev : h))
   }, [])
 
+  // Counted over every viewed deployment, each against its own common values.
+  const parts = deployments || [{ values: { [alertName]: rows }, commonValues }]
+  const totalRows = parts.reduce((n, d) => n + (d.values[alertName] || []).length, 0)
   const matchCount = useMemo(() => {
     const hasFilters = Object.values(effectiveFilters).some(f => f && f.value !== '' && f.value != null)
-    if (!hasFilters) return rows.length
-    return rows.filter(row => matchesFilter(row, effectiveFilters, vars, commonValues)).length
-  }, [rows, effectiveFilters, vars, commonValues])
+    if (!hasFilters) return totalRows
+    return parts.reduce((n, d) => n + (d.values[alertName] || []).filter(row => matchesFilter(row, effectiveFilters, vars, d.commonValues)).length, 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, deployments, effectiveFilters, vars, commonValues])
 
   const activeSectionFilters = Object.values(sectionFilters).filter(f => f && f.value !== '' && f.value != null)
   const hasSectionFilter = activeSectionFilters.length > 0
@@ -142,7 +169,7 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
           <RightOutlined style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0, transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 0.15s' }} />
           <span style={{ fontSize: 13, fontWeight: 500, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{alertName}</span>
           <span style={{ fontSize: 11, color: '#9ca3af', background: '#f3f4f6', border: '0.5px solid #e5e7eb', borderRadius: 8, padding: '0 6px', flexShrink: 0 }}>
-            {matchCount} / {rows.length} rows
+            {matchCount} / {totalRows} rows
           </span>
         </div>
         {hasAnyFilter && (
@@ -161,7 +188,25 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
           </Button>
         )}
       </div>
-      {!collapsed && (
+      {!collapsed && deployments && (
+        <div style={{ padding: '10px 12px' }}>
+          {deployments.map(d => (
+            <DeploymentPart
+              key={d.path}
+              deployment={d}
+              alertName={alertName}
+              vars={vars}
+              sectionFilters={sectionFilters}
+              effectiveFilters={effectiveFilters}
+              onFiltersChange={onFiltersChange}
+              onOpen={onOpenDeployment}
+              scrollContainer={scrollContainer}
+              stickyOffsetHeader={headerHeight}
+            />
+          ))}
+        </div>
+      )}
+      {!collapsed && !deployments && (
         <div style={{ padding: '10px 12px' }}>
           <AlertTable
             vars={vars}
@@ -195,7 +240,12 @@ export default function AlertOverviewWorkspace({
   saveStatus,
   getVars,
   readOnly = false,
+  // Two or more deployments of the chart, viewed read-only (#91):
+  // [{ path, values, commonValues }] in the order they were checked.
+  deployments = null,
+  onOpenDeployment,
 }) {
+  const multi = deployments && deployments.length > 1
   const [wsFilters, setWsFilters] = useState({})
   const [sectionFilters, setSectionFilters] = useState({})
   // Held in state, not a ref: the sections re-render once the element exists so
@@ -238,6 +288,11 @@ export default function AlertOverviewWorkspace({
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {multi && (
+        <div data-testid="multi-deployment-banner" style={{ padding: '6px 16px', background: '#e6f4ff', borderBottom: '1px solid #bae0ff', fontSize: 12, color: '#0958d9' }}>
+          Viewing {deployments.length} deployments · read-only. Click a deployment&apos;s name to edit it.
+        </div>
+      )}
       <WorkspaceFilterBar
         wsFilters={wsFilters}
         onWsFiltersChange={setWsFilters}
@@ -259,14 +314,16 @@ export default function AlertOverviewWorkspace({
             onUpdate={updated => handleUpdate(alertName, updated)}
             onDelete={realIndex => handleDelete(alertName, realIndex)}
             onAdd={newRow => handleAdd(alertName, newRow)}
-            readOnly={readOnly}
+            readOnly={readOnly || multi}
             scrollContainer={scrollContainer}
+            deployments={multi ? deployments : null}
+            onOpenDeployment={onOpenDeployment}
           />
         ))}
       </div>
       <div style={{ padding: '10px 16px', borderTop: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Button type="primary" icon={<SaveOutlined />} onClick={onSave} disabled={!dirty || readOnly}>Save all</Button>
-        {onPreview && <Button icon={<EyeOutlined />} onClick={onPreview}>Preview</Button>}
+        <Button type="primary" icon={<SaveOutlined />} onClick={onSave} disabled={!dirty || readOnly || multi}>Save all</Button>
+        {onPreview && !multi && <Button icon={<EyeOutlined />} onClick={onPreview}>Preview</Button>}
         <Text style={{ fontSize: 11, color: '#9ca3af' }}>
           {checkedAlerts.length} section{checkedAlerts.length > 1 ? 's' : ''} loaded
           {activeWsFilterCount > 0 ? ` · ${activeWsFilterCount} workspace filter${activeWsFilterCount > 1 ? 's' : ''} active` : ''}

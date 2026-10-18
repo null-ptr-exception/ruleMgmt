@@ -255,6 +255,19 @@ Switch **Single** / **Overview** above the sidebar. Overview stacks every group
 in one page with a filter bar across the top, which is the faster way to answer
 "which of these has no threshold set".
 
+### Compare deployments side by side
+
+In Overview, the deployment tree has a checkbox on each deployment of the
+selected chart. Check a few more — say `shop/stg` and `cart/prod` next to
+`shop/prod` — and every group's card shows one part per deployment, in the
+order you checked them, each exactly as that deployment's own Overview shows
+it. Filters apply to every part.
+
+With two or more checked the view is read-only. Click a deployment's name in a
+card to go back to editing just that one; the groups stay checked. Only one
+chart at a time: other charts' deployments cannot be checked. Nothing marks the
+differences yet — you compare by eye.
+
 ### Copy an existing deployment
 
 **Clone** in the deployment list. It copies the rows, so it is the quick way to

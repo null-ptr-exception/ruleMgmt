@@ -59,6 +59,13 @@ export default function AlertUserView() {
   const [previewSummary, setPreviewSummary] = useState(null)
 
   const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
+  // Deployments of the selected chart viewed together in Overview (#91), in
+  // the order they were checked. The selected deployment is always one of
+  // them; any other list (left from another selection) means just it.
+  const [viewedPaths, setViewedPaths] = useSessionState('alerts:overview:deployments', [])
+  const [viewedValues, setViewedValues] = useState({})
+  // Bumped to re-read the selected deployment after its edits are discarded.
+  const [reloadKey, setReloadKey] = useState(0)
 
   const [frozenSource, setFrozenSource] = useState(null)
 
@@ -143,7 +150,37 @@ export default function AlertUserView() {
       setDirty(false)
     })
     return () => { stale = true }
-  }, [selectedChart, selectedFolder])
+  }, [selectedChart, selectedFolder, reloadKey])
+
+  const viewed = selectedFolder && viewedPaths.includes(selectedFolder) ? viewedPaths : (selectedFolder ? [selectedFolder] : [])
+  const multi = mode === 'overview' && viewed.length > 1
+  const viewedKey = viewed.join('\n')
+
+  // Several deployments are read from disk, the selected one included: they
+  // are only viewed, and its unsaved edits were discarded to get here.
+  useEffect(() => {
+    if (!multi) {
+      setViewedValues({})
+      return
+    }
+    let stale = false
+    const missing = viewed.filter(p => !viewedValues[p])
+    Promise.all(missing.map(p => getDeployment(selectedChart, p.split('/').pop(), p)
+      .then(data => {
+        const { _common, ...rest } = data.parsed || {}
+        return [p, { values: rest, commonValues: _common || {} }]
+      })
+      .catch(() => [p, { values: {}, commonValues: {} }])))
+      .then(entries => {
+        if (!stale && entries.length) setViewedValues(v => ({ ...v, ...Object.fromEntries(entries) }))
+      })
+    return () => { stale = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [multi, viewedKey, selectedChart])
+
+  const viewedDeployments = multi && viewed.every(p => viewedValues[p])
+    ? viewed.map(p => ({ path: p, ...viewedValues[p] }))
+    : null
 
   // Reset UI state when the selected alert type or schema changes
   useEffect(() => {
@@ -261,7 +298,9 @@ export default function AlertUserView() {
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty, frozenSource])
 
-  async function handleFolderSelect(selection) {
+  // `keepGroups`: opening one of the viewed deployments keeps the groups the
+  // Overview shows; picking one in the tree starts afresh, as it always has.
+  async function handleFolderSelect(selection, { keepGroups = false, viewing } = {}) {
     // null = the selected deployment was deleted; reset instead of keeping
     // an editor open on content that no longer exists on disk.
     if (!selection) {
@@ -280,6 +319,7 @@ export default function AlertUserView() {
     }
     if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
     const { path, chart } = selection
+    setViewedPaths(viewing || [path])
     setSelectedFolder(path)
     setSelectedChart(chart)
     setActiveAlert(null)
@@ -287,10 +327,40 @@ export default function AlertUserView() {
     setCommonValues({})
     setRows([])
     setFilters({})
-    setCheckedAlerts([])
+    if (!keepGroups) setCheckedAlerts([])
     setDirty(false)
     setFrozenSource(null)
     await refreshFrozenSource(path)
+  }
+
+  // Checking deployments in the tree. The last one cannot be unchecked; if
+  // the selected one is, the first one left becomes the selected one.
+  async function handleViewedChange(keys) {
+    const next = [...viewed.filter(p => keys.includes(p)), ...keys.filter(k => !viewed.includes(k))]
+    if (next.length === 0) return
+    if (!multi && next.length > 1 && dirty && !frozenSource) {
+      if (!(await confirmDiscardEdits())) return
+      setDirty(false)
+      setReloadKey(k => k + 1)
+    }
+    if (!next.includes(selectedFolder)) {
+      await handleFolderSelect({ path: next[0], chart: selectedChart }, { keepGroups: true, viewing: next })
+      return
+    }
+    setViewedPaths(next)
+  }
+
+  // A part's title in a card: back to that one deployment, editable.
+  function openViewedDeployment(path) {
+    if (path === selectedFolder) {
+      setViewedPaths([path])
+      return
+    }
+    handleFolderSelect({ path, chart: selectedChart }, { keepGroups: true })
+  }
+
+  function handleViewedRemoved(paths) {
+    setViewedPaths(v => v.filter(p => !paths.some(d => p === d || p.startsWith(d + '/'))))
   }
 
   // A proposed row (#60) goes into its group's table; Save is still the
@@ -416,6 +486,11 @@ export default function AlertUserView() {
               if (!selectedFolder) return
               refreshFrozenSource(selectedFolder)
             }}
+            checkable={mode === 'overview' && !!selectedChart}
+            checkedKeys={viewed}
+            checkChart={selectedChart}
+            onCheck={handleViewedChange}
+            onRemoved={handleViewedRemoved}
           />
         </div>
         {selectedChart && (
@@ -483,17 +558,19 @@ export default function AlertUserView() {
       >{sidebarCollapsed ? '›' : '‹'}</div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
-        {frozenSource && selectedFolder && (
+        {frozenSource && selectedFolder && !multi && (
           <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
             Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.
           </div>
         )}
-        {unusedValuesFile && selectedFolder && (
+        {unusedValuesFile && selectedFolder && !multi && (
           <div data-testid="unused-values-file" style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
             This folder also has <b>{unusedValuesFile}</b>, which nothing reads — this deployment uses <b>values.yaml</b>. You can delete it.
           </div>
         )}
-        {mode === 'overview' && selectedFolder && selectedChart ? (
+        {multi && !viewedDeployments ? (
+          <Empty style={{ margin: 'auto' }} description="Loading..." />
+        ) : mode === 'overview' && selectedFolder && selectedChart ? (
           <AlertOverviewWorkspace
             checkedAlerts={checkedAlerts}
             allValues={allValues}
@@ -506,6 +583,8 @@ export default function AlertUserView() {
             saveStatus={saveStatus}
             getVars={getVars}
             readOnly={!!frozenSource}
+            deployments={viewedDeployments}
+            onOpenDeployment={openViewedDeployment}
           />
         ) : showMain ? (
           <>

@@ -46,6 +46,7 @@ export default function AlertUserView() {
 
   const [allValues, setAllValues] = useState({})
   const [commonValues, setCommonValues] = useState({})
+  const [unusedValuesFile, setUnusedValuesFile] = useState(null)
   const [rows, setRows] = useState([])
   const [vars, setVars] = useState([])
   const [filters, setFilters] = useState({})
@@ -126,7 +127,9 @@ export default function AlertUserView() {
 
   useEffect(() => {
     if (!selectedChart || !selectedFolder) return
+    setUnusedValuesFile(null)
     getDeployment(selectedChart, folderBasename, selectedFolder).then(data => {
+      setUnusedValuesFile(data.unusedFile || null)
       const parsed = data.parsed || {}
       const { _common, ...rest } = parsed
       setCommonValues(_common || {})
@@ -479,6 +482,11 @@ export default function AlertUserView() {
         {frozenSource && selectedFolder && (
           <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
             Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.
+          </div>
+        )}
+        {unusedValuesFile && selectedFolder && (
+          <div data-testid="unused-values-file" style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
+            This folder also has <b>{unusedValuesFile}</b>, which nothing reads — this deployment uses <b>values.yaml</b>. You can delete it.
           </div>
         )}
         {mode === 'overview' && selectedFolder && selectedChart ? (

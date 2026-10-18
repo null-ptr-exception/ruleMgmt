@@ -32,6 +32,27 @@ function resolveDeploymentDir(req) {
   return path.join(deploymentsDir, req.params.chart)
 }
 
+// Which file holds a deployment's values. The folder's own deployment —
+// named after the folder, which is how the UI always calls it — is
+// `values.yaml` when that exists, the same file Preview and sync use. Any
+// other name is a legacy `<name>-values.yaml` sibling and never touches
+// `values.yaml`, or saving it would overwrite the folder's deployment (#90).
+async function resolveValuesFile(dir, deployment) {
+  const legacyFile = path.join(dir, `${deployment}-values.yaml`)
+  const directFile = path.join(dir, 'values.yaml')
+  if (deployment === path.basename(dir)) {
+    try {
+      await fs.access(directFile)
+      return { file: directFile, direct: true, legacyFile }
+    } catch { /* no values.yaml: a legacy file named after the folder */ }
+  }
+  return { file: legacyFile, direct: false, legacyFile }
+}
+
+async function exists(file) {
+  try { await fs.access(file); return true } catch { return false }
+}
+
 export default function deploymentsRouter() {
   const router = express.Router()
 
@@ -83,14 +104,14 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
-    const directFile = path.join(dir, 'values.yaml')
     try {
-      let file = legacyFile
-      try { await fs.access(legacyFile) } catch { file = directFile }
+      const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
       const content = await fs.readFile(file, 'utf-8')
       const parsed = unwrapValues(yaml.load(content) || {}, await getDepName(dir))
-      res.json({ content, parsed })
+      // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
+      // anything; say so, or it looks like the file being edited.
+      const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
+      res.json({ content, parsed, unusedFile })
     } catch {
       res.status(404).json({ error: 'Not found' })
     }
@@ -103,8 +124,6 @@ export default function deploymentsRouter() {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     const folder = req.query.folder
-    const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
-    const directFile = path.join(dir, 'values.yaml')
     try {
       // A synced target is read-only server-side, not just in the UI —
       // the frontend's freeze can race (see AlertUserView's getSyncSource
@@ -118,8 +137,7 @@ export default function deploymentsRouter() {
       }
 
       await fs.mkdir(dir, { recursive: true })
-      let file = legacyFile
-      try { await fs.access(directFile); file = directFile } catch { /* use legacy */ }
+      const { file } = await resolveValuesFile(dir, req.params.deployment)
       const depName = await getDepName(dir)
       let values = req.body.values
 
@@ -202,8 +220,6 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const legacyFile = path.join(dir, `${req.params.deployment}-values.yaml`)
-    const directFile = path.join(dir, 'values.yaml')
     try {
       const folder = req.query.folder
       if (folder) {
@@ -216,10 +232,8 @@ export default function deploymentsRouter() {
         })
       }
 
-      let hasDirectFile = false
-      try { await fs.access(directFile); hasDirectFile = true } catch { /* legacy sibling-file mode */ }
-
-      if (hasDirectFile) {
+      const { direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
+      if (direct) {
         // Folder-mode deployment: the directory itself is the deployment
         // (Chart.yaml + values.yaml live directly inside it), so removing
         // just one file would leave an orphaned, half-deleted deployment.

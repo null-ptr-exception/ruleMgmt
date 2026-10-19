@@ -40,7 +40,7 @@ Beyond `npm ci`, a fresh Linux / WSL machine needs:
   `git config --global user.name …` / `user.email …`
 - **Chromium's system libraries** for Playwright. When node lives in `~/.local/bin`, `sudo` does not find `npx`:
   `sudo env PATH="$PATH" npx playwright install-deps chromium`, then `npx playwright install chromium`
-- **promtool** at the `Dockerfile`'s `PROMETHEUS_VERSION` (distro packages can be years older). Without it, the tests that run promtool are skipped.
+- **promtool** at the `Dockerfile`'s `PROMETHEUS_VERSION`, built by its `promtool` stage: that version's source with a newer Go and modules, since the official 2.x images carry critical CVEs (#105). Distro packages can be years older. Without it, the tests that run promtool are skipped.
 - **vmalert** at the `Dockerfile`'s `VMALERT_VERSION`: `vmalert-prod` from the release's `vmutils-linux-amd64-<version>.tar.gz`, installed as `vmalert`. Without it, the tests that run `vmalert -dryRun` are skipped.
 - **amtool** (test only, not in the image) at the `ALERTMANAGER_VERSION` in `scripts/install-checkers.sh`. Without it, the routing route tests (`amtool config routes test`) are skipped.
 - With docker, `sudo scripts/install-checkers.sh` installs all three at those versions (CI does the same).

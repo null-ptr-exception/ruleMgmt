@@ -21,6 +21,9 @@ jobs:
       - run: git config --global user.name "CI"
       - run: sudo scripts/install-checkers.sh
       - run: npm ci
+      # Runtime dependencies only: these ship in the image. Dev-tool advisories
+      # still reach Dependabot but do not block a PR.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm test
 

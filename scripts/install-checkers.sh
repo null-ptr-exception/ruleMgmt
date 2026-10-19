@@ -20,8 +20,10 @@ copy_out() { # image, path in image, installed name
   docker rm "$id" > /dev/null
 }
 
-# The stage copies nothing from the build context, so stdin is enough.
-docker build -q --target promtool -t "alertforge-promtool:$PROMETHEUS_VERSION" - < "$DOCKERFILE" > /dev/null
+# The repository as context: the legacy builder runs the stages before
+# promtool too, and those copy from it.
+docker build -q --target promtool -t "alertforge-promtool:$PROMETHEUS_VERSION" \
+  -f "$DOCKERFILE" "$(dirname "$DOCKERFILE")" > /dev/null
 copy_out "alertforge-promtool:$PROMETHEUS_VERSION" /promtool promtool
 copy_out "victoriametrics/vmalert:$VMALERT_VERSION" /vmalert-prod vmalert
 copy_out "prom/alertmanager:$ALERTMANAGER_VERSION" /bin/amtool amtool

@@ -440,7 +440,8 @@ rule evaluator selects objects by, come from the environment (see
     "prometheus": { "apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule", "validate": "promtool" },
     "vlogs": { "apiVersion": "operator.victoriametrics.com/v1beta1", "kind": "VMRule",
                "groupFields": { "type": "vlogs" }, "validate": "vmalert" }
-  }
+  },
+  "routing": { "apiVersion": "monitoring.coreos.com/v1alpha1", "kind": "AlertmanagerConfig" }
 }
 ```
 
@@ -450,6 +451,7 @@ rule evaluator selects objects by, come from the environment (see
 | `apiVersion`, `kind` | yes | The resource the group's objects are |
 | `groupFields` | no | Fields written as they are onto every `spec.groups[]` entry of the profile's objects — strings, numbers or booleans. Not `name` or `rules` (the generator's) nor `interval` or `limit` (the template owner's) |
 | `validate` | yes | How Preview checks the rendered rules: `promtool` (`promtool check rules`, for PromQL); `vmalert` (`vmalert -dryRun`, for LogsQL, which promtool cannot read); or `none` — Preview then marks the group as not syntax-checked. There is no default |
+| `routing` | yes | Not a profile: the resource a deployment's [notification routing](#notification-routing-routingyaml) is generated as. `apiVersion` and `kind` only. No profile may be named `routing`, so no group can have `type: routing` |
 
 Any other key is an error. The file is checked when the server starts and
 when the frontend is built, and a mistake stops both. Changing a profile's
@@ -541,3 +543,74 @@ offered alongside:
 
 Changing a group's `selectors` — adding, removing or reordering — leaves
 `values.yaml` alone but changes what each row alerts on, so the save says so.
+
+## Notification routing: `routing.yaml`
+
+Who is notified of an alert is a table too: its dimensions are labels the
+alerts carry, and each cell names who gets that combination. A folder
+deployment keeps its table in `routing.yaml`, beside `values.yaml`:
+
+```yaml
+# deployments/asia/prod/routing.yaml
+labels:                                          # the table's dimensions, with their values
+  severity: [critical, warning]
+  team: [db, web]
+defaults: { groupWait: 30s, repeatInterval: 4h } # for a cell that does not set its own
+configs:                                         # who can be notified
+  db-email:    { type: email,   to: db@example.com }
+  ops-webhook: { type: webhook, urlSecret: { name: ops, key: url } }
+  relay:       { type: webhook, url: http://alert-relay.monitoring.svc:8080 }
+cells:                                           # one entry = one filled cell
+  - match: { severity: critical, team: db }
+    configs: [db-email, ops-webhook]
+    repeatInterval: 1h
+  - match: { severity: warning, team: db }
+    configs: [db-email]
+```
+
+| Key | Meaning |
+|---|---|
+| `labels` | Label name → its values, in order. Values are kept even when no cell uses them, so a row that is empty on purpose stays in the table |
+| `defaults` | `groupWait`, `groupInterval`, `repeatInterval`: durations such as `30s`, `5m`, `4h` |
+| `configs` | Name → `{ type: email, to }` or `{ type: webhook, url }` / `{ type: webhook, urlSecret: { name, key } }`. Names are lower-case letters, digits and `-`; a name starting with `_` is reserved |
+| `cells[].match` | Every label of `labels`, each with one of its values |
+| `cells[].configs` | Who is notified, by name from `configs` |
+| `cells[].groupWait` … | Overrides `defaults` for this cell |
+
+A combination with no cell is an empty cell: its alerts notify nobody.
+
+What is refused when it is saved, and reported when it is read back:
+
+| Refused | Why |
+|---|---|
+| A cell whose `match` leaves out a label, names one not in `labels`, or a value not listed | It would cover its neighbours' combinations, or none |
+| Two cells with the same `match` | One of them would never be reached |
+| A cell naming a config that is not in `configs` | Nobody to send to |
+| A webhook `url` with a user name or password, a credential-like query parameter (`token=`, `key=` …) or a token-like path segment | Credentials belong in a Secret: use `urlSecret`. An in-cluster address such as `http://alert-relay.monitoring.svc:8080` is fine |
+| Any other key | Probably a typo |
+
+### What is generated
+
+Saving `routing.yaml` also writes `templates/alertmanagerconfig.yaml` into the
+deployment folder — a complete AlertmanagerConfig (`routing` in
+`config/outputs.json`), which the deployment's chart deploys with its rules.
+The file says it is generated; an edit to it is overwritten.
+
+| `routing.yaml` | AlertmanagerConfig |
+|---|---|
+| a config some cell uses | a receiver of the same name; one no cell uses is left out |
+| a cell | a route under `spec.route.routes`, matching every label with `=`, with its timings |
+| a cell with several configs | one child route per config, all but the last with `continue: true` |
+| an empty cell, or an alert with none of these labels | the root's receiver `_drop`, which notifies nobody |
+
+The root route says `continue: true`, so alerts this resource does not take
+go on to the rest of Alertmanager's routes. There is no `metadata.namespace`:
+the resource is in the release's namespace. `{{` and `}}` in any value are
+escaped, so Helm writes them out as they are.
+
+The object carries the same labels and annotations as the rule objects, plus
+any set for `routing` — see [Different values per output
+profile](alert-rules.md#different-values-per-output-profile).
+
+A synced target gets the source's `routing.yaml` and AlertmanagerConfig with
+its `values.yaml`, and cannot change them.

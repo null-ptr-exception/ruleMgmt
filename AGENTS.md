@@ -63,8 +63,9 @@ Every change is held to this; an issue's acceptance criteria refer to it rather 
    - `npm test`, `npm run test:e2e` and `npm run lint` all pass. There are no known failures to ignore; a red test is either fixed or the change is not done.
    - CI is green.
    - Every CodeRabbit finding is fixed, or answered with a reason. Reviews are triggered by commenting `@coderabbitai review` (about one per hour).
-5. **Anything the server imports must be in the runtime image.** `tests/unit/dockerImage.test.js` fails when a server import is outside what the `Dockerfile` copies.
-6. **A change in behaviour updates the docs in the same PR** (`doc/rules-format.md`, `doc/alert-rules.md`, `doc/how-to.md`).
+5. **No high or critical advisory in a runtime dependency.** CI runs `npm audit --omit=dev --audit-level=high`; a fix is a dependency upgrade, and this check is its failing test. A new advisory turns every CI run after it red until main is fixed.
+6. **Anything the server imports must be in the runtime image.** `tests/unit/dockerImage.test.js` fails when a server import is outside what the `Dockerfile` copies.
+7. **A change in behaviour updates the docs in the same PR** (`doc/rules-format.md`, `doc/alert-rules.md`, `doc/how-to.md`).
 
 ## Test output
 

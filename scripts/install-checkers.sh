@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Installs promtool and vmalert at the versions the Dockerfile pins, copied
-# out of the same images, so CI runs the checker tests instead of skipping
-# them; and amtool, which only the tests use (#92), so its version is pinned
+# Installs promtool and vmalert as the image has them — promtool built by the
+# Dockerfile's promtool stage (#105), vmalert copied out of the same image —
+# so CI runs the checker tests instead of skipping them; and amtool, which only the tests use (#92), so its version is pinned
 # here. Usage: scripts/install-checkers.sh [bin-dir] (default /usr/local/bin)
 set -euo pipefail
 
@@ -20,7 +20,11 @@ copy_out() { # image, path in image, installed name
   docker rm "$id" > /dev/null
 }
 
-copy_out "prom/prometheus:$PROMETHEUS_VERSION" /bin/promtool promtool
+# The repository as context: the legacy builder runs the stages before
+# promtool too, and those copy from it.
+docker build -q --target promtool -t "alertforge-promtool:$PROMETHEUS_VERSION" \
+  -f "$DOCKERFILE" "$(dirname "$DOCKERFILE")" > /dev/null
+copy_out "alertforge-promtool:$PROMETHEUS_VERSION" /promtool promtool
 copy_out "victoriametrics/vmalert:$VMALERT_VERSION" /vmalert-prod vmalert
 copy_out "prom/alertmanager:$ALERTMANAGER_VERSION" /bin/amtool amtool
 

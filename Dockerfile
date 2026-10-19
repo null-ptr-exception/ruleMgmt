@@ -3,7 +3,7 @@ ARG PROMETHEUS_VERSION=v2.54.1
 # modules: the prom/prometheus 2.x images carry critical CVEs (#105).
 ARG GO_VERSION=1.26.9
 # vmalert -dryRun checks LogsQL (vlogs groups) offline, which promtool cannot read (#76).
-ARG VMALERT_VERSION=v1.152.0
+ARG VMALERT_VERSION=v1.154.0
 
 FROM node:22-alpine AS builder
 
@@ -45,7 +45,10 @@ RUN apk add --no-cache git helm
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+# npm is only needed to install; the server never calls it, and its own
+# dependencies carry CVEs (#105).
+RUN npm ci --omit=dev \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=builder /app/dist ./dist
 COPY --from=promtool /promtool /usr/local/bin/promtool

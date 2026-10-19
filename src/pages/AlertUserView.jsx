@@ -64,6 +64,8 @@ export default function AlertUserView() {
   // them; any other list (left from another selection) means just it.
   const [viewedPaths, setViewedPaths] = useSessionState('alerts:overview:deployments', [])
   const [viewedValues, setViewedValues] = useState({})
+  const [viewedFailed, setViewedFailed] = useState([])
+  const [viewedRetry, setViewedRetry] = useState(0)
   // Bumped to re-read the selected deployment after its edits are discarded.
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -161,22 +163,28 @@ export default function AlertUserView() {
   useEffect(() => {
     if (!multi) {
       setViewedValues({})
+      setViewedFailed([])
       return
     }
     let stale = false
     const missing = viewed.filter(p => !viewedValues[p])
+    // A failed read is not cached: it would show as an empty deployment.
     Promise.all(missing.map(p => getDeployment(selectedChart, p.split('/').pop(), p)
       .then(data => {
-        const { _common, ...rest } = data.parsed || {}
+        if (!data.parsed) return [p, null]
+        const { _common, ...rest } = data.parsed
         return [p, { values: rest, commonValues: _common || {} }]
       })
-      .catch(() => [p, { values: {}, commonValues: {} }])))
+      .catch(() => [p, null])))
       .then(entries => {
-        if (!stale && entries.length) setViewedValues(v => ({ ...v, ...Object.fromEntries(entries) }))
+        if (stale) return
+        const loaded = entries.filter(([, v]) => v)
+        if (loaded.length) setViewedValues(v => ({ ...v, ...Object.fromEntries(loaded) }))
+        setViewedFailed(entries.filter(([, v]) => !v).map(([p]) => p))
       })
     return () => { stale = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [multi, viewedKey, selectedChart])
+  }, [multi, viewedKey, selectedChart, viewedRetry])
 
   const viewedDeployments = multi && viewed.every(p => viewedValues[p])
     ? viewed.map(p => ({ path: p, ...viewedValues[p] }))
@@ -359,8 +367,17 @@ export default function AlertUserView() {
     handleFolderSelect({ path, chart: selectedChart }, { keepGroups: true })
   }
 
-  function handleViewedRemoved(paths) {
-    setViewedPaths(v => v.filter(p => !paths.some(d => p === d || p.startsWith(d + '/'))))
+  // Returns true when the selected one was deleted and another checked one
+  // takes its place, so the tree does not clear the selection.
+  function handleViewedRemoved(paths, { deleted = false } = {}) {
+    const gone = p => paths.some(d => p === d || p.startsWith(d + '/'))
+    const left = viewed.filter(p => !gone(p))
+    if (deleted && selectedFolder && gone(selectedFolder) && left.length > 0) {
+      handleFolderSelect({ path: left[0], chart: selectedChart }, { keepGroups: true, viewing: left })
+      return true
+    }
+    setViewedPaths(v => v.filter(p => !gone(p)))
+    return false
   }
 
   // A proposed row (#60) goes into its group's table; Save is still the
@@ -568,7 +585,11 @@ export default function AlertUserView() {
             This folder also has <b>{unusedValuesFile}</b>, which nothing reads — this deployment uses <b>values.yaml</b>. You can delete it.
           </div>
         )}
-        {multi && !viewedDeployments ? (
+        {multi && !viewedDeployments && viewedFailed.length > 0 ? (
+          <Empty style={{ margin: 'auto' }} description={`Could not load ${viewedFailed.join(', ')}`}>
+            <Button onClick={() => { setViewedFailed([]); setViewedRetry(k => k + 1) }}>Retry</Button>
+          </Empty>
+        ) : multi && !viewedDeployments ? (
           <Empty style={{ margin: 'auto' }} description="Loading..." />
         ) : mode === 'overview' && selectedFolder && selectedChart ? (
           <AlertOverviewWorkspace

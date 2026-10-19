@@ -279,8 +279,10 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     }
   }
 
+  // The parent returns true when it has moved the selection itself (to
+  // another checked deployment, #91).
   function removeDeleted(deletedPaths) {
-    onRemovedRef.current?.(deletedPaths)
+    if (onRemovedRef.current?.(deletedPaths, { deleted: true })) return
     clearSelectionIfDeleted(deletedPaths)
   }
 

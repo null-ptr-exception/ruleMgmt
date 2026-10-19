@@ -37,15 +37,15 @@ async function createDeployment(request, name, chart, values) {
 const node = (page, name) => page.locator('.ant-tree .ant-tree-treenode').filter({ hasText: new RegExp(`^${name}`) }).first()
 const groupBox = (page, group) => page.locator(`div:has(> input[type="checkbox"]):has(> span:text-is("${group}"))`).locator('input')
 
-async function openOverview(page) {
+async function openOverview(page, name = 'mprod') {
   await page.goto('/#/alerts')
   await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
   const root = node(page, ROOT)
   await expect(root).toBeVisible({ timeout: 8000 })
   const switcher = root.locator('.ant-tree-switcher_close')
   if (await switcher.count() > 0) await switcher.click()
-  await expect(node(page, 'mprod')).toBeVisible({ timeout: 8000 })
-  await node(page, 'mprod').locator('.ant-tree-node-content-wrapper').click()
+  await expect(node(page, name)).toBeVisible({ timeout: 8000 })
+  await node(page, name).locator('.ant-tree-node-content-wrapper').click()
   await expect(page.getByText('Single', { exact: true })).toBeVisible({ timeout: 8000 })
   await page.getByText('Overview', { exact: true }).click()
   await groupBox(page, 'cpu').check()
@@ -71,7 +71,7 @@ test.describe('Overview with several deployments', () => {
   })
 
   test.afterAll(async ({ request }) => {
-    for (const name of [...Object.keys(DEPLOYMENTS), OTHER]) {
+    for (const name of [...Object.keys(DEPLOYMENTS), OTHER, 'mdel']) {
       await request.delete(`/api/v2/deployments/${CHART}/${name}?folder=${ROOT}/${name}`)
     }
     await request.delete(`/api/v2/charts/${CHART}`)
@@ -151,6 +151,41 @@ test.describe('Overview with several deployments', () => {
     await expect(firstCell(card(page, 'cpu'))).toHaveValue('shop-stg')
     await expect(firstCell(card(page, 'cpu'))).toBeEnabled()
     await expect(card(page, 'disk')).toBeVisible()
+  })
+
+  test('deleting the selected deployment keeps the other checked ones in view', async ({ page, request }) => {
+    await createDeployment(request, 'mdel', CHART, { cpu: [{ namespace: 'shop-del', threshold: 70 }] })
+    await openOverview(page, 'mdel')
+    await check(page, 'mstg')
+    await check(page, 'mdev')
+    await expect(page.getByTestId('multi-deployment-banner')).toContainText('Viewing 3 deployments')
+
+    await node(page, 'mdel').locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+    await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click()
+    await page.getByRole('dialog').filter({ hasText: 'Delete mdel?' }).getByRole('button', { name: 'OK' }).click()
+
+    await expect(page.getByTestId('multi-deployment-banner')).toContainText('Viewing 2 deployments')
+    await expect(node(page, 'mstg')).toHaveClass(/ant-tree-treenode-selected/)
+    const parts = card(page, 'cpu').getByTestId('deployment-part')
+    await expect(parts.nth(0)).toContainText(`${ROOT}/mstg`)
+    await expect(parts.nth(1)).toContainText(`${ROOT}/mdev`)
+  })
+
+  test('a deployment that fails to load offers a retry, not an empty part', async ({ page }) => {
+    let fail = true
+    await page.route(`**/api/v2/deployments/${CHART}/mdev*`, route => {
+      if (fail && route.request().method() === 'GET') return route.fulfill({ status: 500, body: '{}' })
+      return route.continue()
+    })
+    await openOverview(page)
+    await check(page, 'mdev')
+    await expect(page.getByText(`Could not load ${ROOT}/mdev`)).toBeVisible()
+    await expect(page.getByTestId('deployment-part')).toHaveCount(0)
+
+    fail = false
+    await page.getByRole('button', { name: 'Retry' }).click()
+    await expect(page.getByTestId('multi-deployment-banner')).toContainText('Viewing 2 deployments')
+    await expect(card(page, 'cpu').getByTestId('deployment-part').nth(1)).toContainText('shop-dev')
   })
 
   test('Single mode is unchanged: no checkboxes in the tree', async ({ page }) => {

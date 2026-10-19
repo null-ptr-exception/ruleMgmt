@@ -11,6 +11,11 @@
  * environment (objectMeta.js). It is JSON so the browser bundle, the server,
  * the scripts and the tests all import the one file directly.
  *
+ * `routing` is the resource a deployment's notification routing is written
+ * as (#92, routingGenerator.js). It sits beside `outputs`, not in it: every
+ * name in `outputs` is a `type:` a rules file can give a group, and no group
+ * is routing.
+ *
  * It is validated when this module loads: a mistake fails the server at
  * startup and the build, rather than wrapping rules in something wrong.
  */
@@ -19,7 +24,12 @@ import raw from '../../config/outputs.json' with { type: 'json' }
 
 export const DEFAULT_TYPE = 'prometheus'
 
+const TOP_KEYS = ['outputs', 'routing']
 const PROFILE_KEYS = ['apiVersion', 'kind', 'groupFields', 'validate']
+const ROUTING_KEYS = ['apiVersion', 'kind']
+// The name objectMeta.js's _BY_PROFILE variables give the routing resource; a
+// profile of that name would make them ambiguous.
+export const ROUTING_KIND = 'routing'
 const VALIDATE = ['promtool', 'vmalert', 'none']
 const NAME_RE = /^[a-z][a-z0-9_-]*$/
 // Written by the generator (name, rules) or by the template owner (interval,
@@ -37,7 +47,8 @@ const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 export function parseOutputs(doc, source = 'config/outputs.json') {
   const errors = []
   if (!isMap(doc)) throw new Error(`${source}: must be an object with "outputs"`)
-  for (const key of Object.keys(doc)) if (key !== 'outputs') errors.push(`unknown key "${key}"`)
+  for (const key of Object.keys(doc)) if (!TOP_KEYS.includes(key)) errors.push(`unknown key "${key}"`)
+  checkRouting(doc.routing, errors)
 
   const outputs = doc.outputs
   if (!isMap(outputs)) {
@@ -47,6 +58,7 @@ export function parseOutputs(doc, source = 'config/outputs.json') {
     for (const [name, profile] of Object.entries(outputs)) {
       const at = `outputs.${name}`
       if (!NAME_RE.test(name)) errors.push(`"${at}": a profile name is lower-case letters, digits, "_" or "-", starting with a letter`)
+      if (name === ROUTING_KIND) errors.push(`"${at}": "${ROUTING_KIND}" is the name of the routing resource, not a profile`)
       if (!isMap(profile)) { errors.push(`"${at}" must be an object`); continue }
       for (const key of Object.keys(profile)) if (!PROFILE_KEYS.includes(key)) errors.push(`"${at}": unknown key "${key}"`)
       for (const key of ['apiVersion', 'kind']) {
@@ -76,7 +88,18 @@ export function parseOutputs(doc, source = 'config/outputs.json') {
   }]))
 }
 
+function checkRouting(routing, errors) {
+  if (!isMap(routing)) { errors.push('"routing" is required and must be an object'); return }
+  for (const key of Object.keys(routing)) if (!ROUTING_KEYS.includes(key)) errors.push(`"routing": unknown key "${key}"`)
+  for (const key of ROUTING_KEYS) {
+    if (typeof routing[key] !== 'string' || !routing[key]) errors.push(`"routing.${key}" is required and must be a string`)
+  }
+}
+
 export const PROFILES = parseOutputs(raw)
+
+/** apiVersion and kind of the routing resource, checked with the profiles. */
+export const ROUTING = { apiVersion: raw.routing.apiVersion, kind: raw.routing.kind }
 
 /** Every group `type` a rules file may name. */
 export function profileNames() {

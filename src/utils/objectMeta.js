@@ -18,6 +18,12 @@
  *   RULE_OBJECT_LABELS_BY_PROFILE='{"vlogs":{"release":"vm-logs"}}'
  *   RULE_OBJECT_ANNOTATIONS_BY_PROFILE='{"vlogs":{"team":"logs"}}'
  *
+ * They also take `routing`: a deployment's AlertmanagerConfig (#92), which
+ * Alertmanager loads by its alertmanagerConfigSelector — usually a label the
+ * rule objects do not carry:
+ *
+ *   RULE_OBJECT_LABELS_BY_PROFILE='{"routing":{"release":"kps-alertmanager"}}'
+ *
  * A profile that does not exist is an error, not a warning: a mistyped name
  * would otherwise leave that profile's objects unloaded, with nothing to say so.
  *
@@ -28,7 +34,7 @@
  */
 
 import { readsAsNonString } from './yamlScalar.js'
-import { PROFILES } from './outputs.js'
+import { PROFILES, ROUTING_KIND } from './outputs.js'
 
 /** Always present: this is the product's own statement about the resource. */
 export const BUILT_IN_LABELS = { 'app.kubernetes.io/managed-by': 'Helm' }
@@ -94,8 +100,8 @@ function parseByProfile(json, source, warnings, errors) {
   const out = {}
   for (const [profile, pairs] of Object.entries(parsed)) {
     // An own key: a name such as "constructor" is not a profile.
-    if (!Object.hasOwn(PROFILES, profile)) {
-      errors.push(`${source}: "${profile}" is not an output profile (${Object.keys(PROFILES).join(', ')})`)
+    if (!Object.hasOwn(PROFILES, profile) && profile !== ROUTING_KIND) {
+      errors.push(`${source}: "${profile}" is not an output profile (${[...Object.keys(PROFILES), ROUTING_KIND].join(', ')})`)
     } else if (!isMap(pairs)) {
       errors.push(`${source}: "${profile}" must be a JSON object of key/value pairs`)
     } else {

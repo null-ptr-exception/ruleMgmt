@@ -160,6 +160,22 @@ describe('values for one output profile', () => {
     expect(byProfile).toEqual({})
   })
 
+  it('takes routing, the AlertmanagerConfig\'s own values (#92)', () => {
+    const meta = parseObjectMeta({
+      labels: '{"release":"kps","team":"sre"}',
+      labelsByProfile: '{"routing":{"release":"kps-alertmanager","team":""}}',
+    })
+    expect(meta.errors).toEqual([])
+    expect(metaForProfile(meta, 'routing').labels).toEqual({ ...BUILT_IN_LABELS, release: 'kps-alertmanager' })
+    // The rule objects keep the site-wide value.
+    expect(metaForProfile(meta, 'prometheus').labels).toEqual({ ...BUILT_IN_LABELS, release: 'kps', team: 'sre' })
+  })
+
+  it('gives routing the site-wide values when it has none of its own', () => {
+    const meta = parseObjectMeta({ labels: '{"release":"kps"}', annotations: '{"owner":"sre"}' })
+    expect(metaForProfile(meta, 'routing')).toEqual({ labels: { ...BUILT_IN_LABELS, release: 'kps' }, annotations: { owner: 'sre' } })
+  })
+
   it('is an error to name an inherited property, not a profile', () => {
     expect(parseObjectMeta({ labelsByProfile: '{"constructor":{"a":"1"}}' }).errors[0]).toMatch(/"constructor" is not an output profile/)
   })

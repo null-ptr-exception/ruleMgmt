@@ -7,6 +7,7 @@ import { readChartModel } from '../lib/chartFiles.js'
 import { valueProblems } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
+import { buildRouting, writeRouting, removeRouting, copyRouting, routingState } from '../lib/routingFiles.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
@@ -194,6 +195,88 @@ export default function deploymentsRouter() {
         }
       }
 
+      res.json({ ok: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // A deployment's notification routing (#92): routing.yaml and the
+  // AlertmanagerConfig generated from it, always written together. Only the
+  // folder's own deployment has one — see routingFiles.js.
+  async function routingTarget(req, res, { write = true } = {}) {
+    const dir = resolveDeploymentDir(req)
+    if (!dir) { res.status(400).json({ error: 'Invalid folder path' }); return null }
+    if (!isValidDeploymentParam(req)) { res.status(400).json({ error: 'Invalid deployment name' }); return null }
+    const folder = req.query.folder
+    const { direct } = folder ? await resolveValuesFile(dir, req.params.deployment) : { direct: false }
+    if (!direct) {
+      res.status(400).json({ error: 'Only a folder deployment has notification routing' })
+      return null
+    }
+    const registry = await readSyncRegistry(req.gitopsDir)
+    if (write && isTarget(registry, folder)) {
+      res.status(409).json({ error: `${folder} is synced from another deployment and is read-only` })
+      return null
+    }
+    return { dir, folder, registry }
+  }
+
+  // Like the values save: each target gets the source's files. Best-effort —
+  // one failing target doesn't undo the source save.
+  async function syncRouting(req, { dir, folder, registry }) {
+    for (const target of getTargetsForSource(registry, folder)) {
+      if (!isSafeSyncPath(target, chartsDirName())) continue
+      try {
+        await copyRouting(dir, path.join(req.gitopsDir, target))
+      } catch { /* best-effort */ }
+    }
+  }
+
+  // routing.yaml's text, its problems, and whether the AlertmanagerConfig is
+  // out of date (`stale`) — saving the text again regenerates it. A synced
+  // target can be read like any other.
+  router.get('/:chart/:deployment/routing', async (req, res) => {
+    try {
+      const at = await routingTarget(req, res, { write: false })
+      if (!at) return
+      const state = await routingState(at.dir)
+      if (!state) return res.status(404).json({ error: 'This deployment has no routing.yaml' })
+      res.json(state)
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // The body's `routing` is routing.yaml's text, kept as written, or the
+  // parsed table. A routing.yaml that does not pass the checks is refused
+  // and neither file is written.
+  router.put('/:chart/:deployment/routing', async (req, res) => {
+    const input = req.body?.routing
+    if (typeof input !== 'string' && (input === null || typeof input !== 'object')) {
+      return res.status(400).json({ error: 'routing is required: the text of routing.yaml, or its table' })
+    }
+    try {
+      const at = await routingTarget(req, res)
+      if (!at) return
+      const built = buildRouting(input)
+      if (built.errors) {
+        return res.status(400).json({ error: 'routing.yaml has problems', problems: built.errors })
+      }
+      await writeRouting(at.dir, built)
+      await syncRouting(req, at)
+      res.json({ ok: true })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  router.delete('/:chart/:deployment/routing', async (req, res) => {
+    try {
+      const at = await routingTarget(req, res)
+      if (!at) return
+      await removeRouting(at.dir)
+      await syncRouting(req, at)
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

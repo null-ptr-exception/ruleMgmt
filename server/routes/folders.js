@@ -12,6 +12,15 @@ function isExcluded(name) {
   return EXCLUDED_DIRS.has(name) || name.startsWith('.')
 }
 
+// A deployment folder is a Helm chart: its templates/ (the notification
+// routing, #92) and charts/ (what `helm dependency update` fetches for
+// Preview) are the chart's own, not folders of the tree.
+const CHART_DIRS = new Set(['templates', 'charts'])
+
+function isChartDir(name, inDeployment) {
+  return inDeployment && CHART_DIRS.has(name)
+}
+
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
 }
@@ -37,10 +46,11 @@ async function listChildren(baseDir, parentPath) {
   } catch {
     return []
   }
+  const inDeployment = parentPath ? await isDeploymentDir(dir) : false
 
   const folders = []
   for (const e of entries) {
-    if (!e.isDirectory() || isExcluded(e.name)) continue
+    if (!e.isDirectory() || isExcluded(e.name) || isChartDir(e.name, inDeployment)) continue
     const nodePath = parentPath ? `${parentPath}/${e.name}` : e.name
     const absPath = path.join(baseDir, nodePath)
 
@@ -72,7 +82,7 @@ async function listChildren(baseDir, parentPath) {
     // Check if has subdirectories
     try {
       const subEntries = await fs.readdir(absPath, { withFileTypes: true })
-      node.isLeaf = !subEntries.some(s => s.isDirectory() && !isExcluded(s.name))
+      node.isLeaf = !subEntries.some(s => s.isDirectory() && !isExcluded(s.name) && !isChartDir(s.name, node.isDeployment))
     } catch {
       node.isLeaf = true
     }

@@ -1,4 +1,5 @@
-# Written by hand from #92 — not generated.
+# Expected output for #92: written alongside the generator, then checked
+# line by line against the spec in a blind review — not produced by the generator.
 apiVersion: monitoring.coreos.com/v1alpha1
 kind: AlertmanagerConfig
 metadata:

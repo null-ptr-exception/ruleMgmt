@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Tree, Tag, Dropdown, Modal, message } from 'antd'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Tree, Tag, Dropdown, Modal, Tooltip, message } from 'antd'
 import { FolderOutlined, MoreOutlined } from '@ant-design/icons'
 import { getFolderTree, getSyncRegistry, unlinkSync, deleteDeployment } from '../utils/chartApi'
 import SyncToModal from './SyncToModal'
@@ -108,7 +108,25 @@ function toTreeNode(node, registry, handlers) {
   }
 }
 
-export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, onSyncChange }) {
+// In Overview the deployments of the selected chart can be checked to view
+// several at once (#91). Applied at render rather than when the nodes are
+// built: the nodes outlive changes of chart, and only a deployment is ever
+// checkable — the tree loads level by level, so a folder could not stand for
+// its children anyway.
+function withChecks(nodes, chart) {
+  return nodes.map(n => {
+    const children = n.children && withChecks(n.children, chart)
+    if (!n.isDeployment) return { ...n, checkable: false, ...(children ? { children } : {}) }
+    if (n.chart === chart) return n
+    return {
+      ...n,
+      disableCheckbox: true,
+      title: <Tooltip title={`Only deployments of one chart can be viewed together (current: ${chart})`}>{n.title}</Tooltip>,
+    }
+  })
+}
+
+export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, onSyncChange, checkable = false, checkedKeys = [], checkChart = null, onCheck, onRemoved }) {
   const [treeData, setTreeData] = useState([])
   const [expandedKeys, setExpandedKeys] = useState([])
   // Tree node titles embed handlers (e.g. handleUnlink -> refreshAll) that get
@@ -122,6 +140,10 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // render that created the node.
   const selectedFolderRef = useRef(selectedFolder)
   selectedFolderRef.current = selectedFolder
+  // Same again for the parent's callback: a deleted or unlinked deployment
+  // leaves the checked set.
+  const onRemovedRef = useRef(onRemoved)
+  onRemovedRef.current = onRemoved
   const [syncRegistry, setSyncRegistry] = useState({ syncs: [] })
   const [syncToNode, setSyncToNode] = useState(null)
   const [syncFromNode, setSyncFromNode] = useState(null)
@@ -239,6 +261,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     const result = await unlinkSync(node.path)
     if (result.ok) {
       message.success(`Unlinked ${node.name}`)
+      onRemovedRef.current?.([node.path])
       refreshAll()
     } else {
       message.error(result.error || 'Unlink failed')
@@ -256,6 +279,13 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     }
   }
 
+  // The parent returns true when it has moved the selection itself (to
+  // another checked deployment, #91).
+  function removeDeleted(deletedPaths) {
+    if (onRemovedRef.current?.(deletedPaths, { deleted: true })) return
+    clearSelectionIfDeleted(deletedPaths)
+  }
+
   function handleDeleteClick(node, status) {
     if (status.role === 'source') {
       setDeleteSourceInfo({ source: node, targets: status.targets })
@@ -269,7 +299,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
         const result = await deleteDeployment(node.chart, node.name, node.path)
         if (result.ok) {
           message.success(`Deleted ${node.name}`)
-          clearSelectionIfDeleted([node.path])
+          removeDeleted([node.path])
           refreshAll()
         } else {
           message.error('Delete failed')
@@ -278,11 +308,17 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     })
   }
 
+  const shownTree = useMemo(() => (checkable ? withChecks(treeData, checkChart) : treeData), [treeData, checkable, checkChart])
+
   return (
     <div style={{ padding: '4px 8px' }}>
       <Tree
         showIcon
-        treeData={treeData}
+        treeData={shownTree}
+        checkable={checkable}
+        checkStrictly
+        checkedKeys={checkable ? checkedKeys : []}
+        onCheck={keys => onCheck?.(keys.checked)}
         selectedKeys={selectedFolder ? [selectedFolder] : []}
         expandedKeys={expandedKeys}
         onExpand={updateExpandedKeys}
@@ -309,7 +345,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
         targets={deleteSourceInfo?.targets || []}
         onClose={() => setDeleteSourceInfo(null)}
         onSuccess={(deletedPaths = []) => {
-          clearSelectionIfDeleted(deletedPaths)
+          removeDeleted(deletedPaths)
           refreshAll()
         }}
       />

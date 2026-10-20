@@ -38,7 +38,9 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w \
     -o /promtool ./cmd/promtool
 FROM victoriametrics/vmalert:${VMALERT_VERSION} AS vmalert
 
-FROM node:22-alpine
+# CI rebuilds this stage without the build cache (no-cache-filters in ci.yml):
+# a cached `apk add` layer kept shipping a libexpat with a fixed CVE (#105).
+FROM node:22-alpine AS runtime
 
 RUN apk add --no-cache git helm
 

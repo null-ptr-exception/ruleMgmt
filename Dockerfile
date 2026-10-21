@@ -1,7 +1,7 @@
 ARG PROMETHEUS_VERSION=v2.54.1
 # promtool is built from PROMETHEUS_VERSION's source with a newer Go and
 # modules: the prom/prometheus 2.x images carry critical CVEs (#105).
-ARG GO_VERSION=1.26.9
+ARG GO_VERSION=1.26.10
 # vmalert -dryRun checks LogsQL (vlogs groups) offline, which promtool cannot read (#76).
 ARG VMALERT_VERSION=v1.154.0
 

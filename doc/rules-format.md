@@ -455,8 +455,8 @@ rule evaluator selects objects by, come from the environment (see
 
 Any other key is an error. The file is checked when the server starts and
 when the frontend is built, and a mistake stops both. Changing a profile's
-`kind` replaces every object that profile emits — they are deleted and
-created again — so it is a release-level change.
+`kind`, or `routing.kind`, replaces every object it emits — they are deleted
+and created again — so it is a release-level change.
 
 ## Names, one source
 

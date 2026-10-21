@@ -52,10 +52,15 @@ export function buildRouting(input) {
   return errors ? { errors } : { text, cr }
 }
 
+/** Both files, or — when either write fails — both as they were. */
 export async function writeRouting(dir, { text, cr }) {
-  await fs.mkdir(path.join(dir, 'templates'), { recursive: true })
-  await fs.writeFile(path.join(dir, ROUTING_FILE), text, 'utf-8')
-  await fs.writeFile(path.join(dir, ROUTING_CR_FILE), cr, 'utf-8')
+  const before = await readRouting(dir)
+  try {
+    await putRouting(dir, { text, cr })
+  } catch (err) {
+    await putRouting(dir, before).catch(() => {})
+    throw err
+  }
 }
 
 export async function removeRouting(dir) {
@@ -84,6 +89,20 @@ export async function copyRouting(srcDir, dstDir) {
 /** Put back what readRouting read — a rollback. */
 export const restoreRouting = (dir, before) => putRouting(dir, before)
 
+// Temp file + rename, so a crash mid-write can't leave a cut-off file that
+// breaks `helm template` for the deployment. The temp name starts with `_`:
+// Helm renders every other file in templates/.
+async function writeWhole(abs, content) {
+  const tmp = path.join(path.dirname(abs), `_${path.basename(abs)}.tmp`)
+  try {
+    await fs.writeFile(tmp, content, 'utf-8')
+    await fs.rename(tmp, abs)
+  } catch (err) {
+    await fs.rm(tmp, { force: true })
+    throw err
+  }
+}
+
 async function putRouting(dir, { text, cr }) {
   if (text === null && cr === null) return removeRouting(dir)
   for (const [file, content] of [[ROUTING_FILE, text], [ROUTING_CR_FILE, cr]]) {
@@ -92,7 +111,7 @@ async function putRouting(dir, { text, cr }) {
       await fs.rm(abs, { force: true })
     } else {
       await fs.mkdir(path.dirname(abs), { recursive: true })
-      await fs.writeFile(abs, content, 'utf-8')
+      await writeWhole(abs, content)
     }
   }
 }

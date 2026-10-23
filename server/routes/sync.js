@@ -13,6 +13,7 @@ import {
   applySync,
   applyUnlink,
 } from '../lib/sync.js'
+import { readRouting, copyRouting, restoreRouting } from '../lib/routingFiles.js'
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -92,6 +93,7 @@ export default function syncRouter() {
         const content = await fs.readFile(path.join(sourceDir, 'values.yaml'), 'utf-8')
         const targetValuesFile = path.join(targetDir, 'values.yaml')
         const prevTargetValues = await fs.readFile(targetValuesFile, 'utf-8').catch(() => null)
+        const prevTargetRouting = await readRouting(targetDir)
 
         // Registry first: if this write fails, the target hasn't been
         // touched at all. (The reverse order could leave the target
@@ -101,6 +103,9 @@ export default function syncRouter() {
         try {
           await fs.mkdir(targetDir, { recursive: true })
           await fs.writeFile(targetValuesFile, content, 'utf-8')
+          // Notification routing (#92) follows values.yaml: the target gets
+          // the source's, or loses its own when the source has none.
+          await copyRouting(sourceDir, targetDir)
 
           // First-time target: carry over Chart.yaml too, so it renders like
           // a real deployment (mirrors what folders/init would have produced).
@@ -118,6 +123,7 @@ export default function syncRouter() {
           if (prevTargetValues !== null) {
             await fs.writeFile(targetValuesFile, prevTargetValues, 'utf-8').catch(() => {})
           }
+          await restoreRouting(targetDir, prevTargetRouting).catch(() => {})
           applyUnlink(registry, target)
           await writeSyncRegistry(req.gitopsDir, registry).catch(() => {})
           throw copyErr

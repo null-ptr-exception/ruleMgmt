@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseOutputs, PROFILES, profileFor, profileOfObject, profileNames, DEFAULT_TYPE } from '../outputs'
+import { parseOutputs, PROFILES, ROUTING, profileFor, profileOfObject, profileNames, DEFAULT_TYPE } from '../outputs'
 
 // config/outputs.json — the format table in #65.
 const good = () => ({
@@ -7,6 +7,7 @@ const good = () => ({
     prometheus: { apiVersion: 'monitoring.coreos.com/v1', kind: 'PrometheusRule', validate: 'promtool' },
     vlogs: { apiVersion: 'operator.victoriametrics.com/v1beta1', kind: 'VMRule', groupFields: { type: 'vlogs' }, validate: 'none' },
   },
+  routing: { apiVersion: 'monitoring.coreos.com/v1alpha1', kind: 'AlertmanagerConfig' },
 })
 const problems = doc => { try { parseOutputs(doc); return '' } catch (e) { return e.message } }
 
@@ -59,6 +60,21 @@ describe('parseOutputs', () => {
     expect(problems(d)).toMatch(/"outputs.VLogs": a profile name/)
   })
 
+  it('requires the routing resource\'s apiVersion and kind', () => {
+    expect(ROUTING).toEqual({ apiVersion: 'monitoring.coreos.com/v1alpha1', kind: 'AlertmanagerConfig' })
+    const d = good(); delete d.routing
+    expect(problems(d)).toMatch(/"routing" is required/)
+    const e = good(); delete e.routing.kind; e.routing.groupFields = {}
+    expect(problems(e)).toMatch(/"routing.kind" is required/)
+    expect(problems(e)).toMatch(/"routing": unknown key "groupFields"/)
+  })
+
+  it('keeps routing out of the profiles, so no group can be `type: routing`', () => {
+    expect(profileFor('routing')).toBeNull()
+    const d = good(); d.outputs.routing = { apiVersion: 'v1', kind: 'X', validate: 'none' }
+    expect(problems(d)).toMatch(/"outputs.routing": "routing" is the name of the routing resource/)
+  })
+
   it('lists every problem at once', () => {
     const d = good(); delete d.outputs.prometheus.kind; d.outputs.vlogs.validate = 'x'
     expect(problems(d).split('\n').length).toBe(3)
@@ -80,5 +96,7 @@ describe('finding a profile', () => {
     expect(profileOfObject(vl).name).toBe('vlogs')
     expect(profileOfObject(vmNoType)).toBeNull()
     expect(profileOfObject({ kind: 'ConfigMap' })).toBeNull()
+    // Not a rule object: no checker (promtool, vmalert) runs on it.
+    expect(profileOfObject({ ...ROUTING, spec: { route: { receiver: '_drop' } } })).toBeNull()
   })
 })

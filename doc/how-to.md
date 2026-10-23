@@ -249,6 +249,34 @@ Two things promtool accepts but are still wrong are flagged on top: a
 one is a problem in the chart, not in your rows — pass it on to whoever
 maintains the template.
 
+### Hand-write notification routing
+
+Who is notified is set per folder deployment in `routing.yaml`, next to
+`values.yaml` — the format is in
+[rules-format.md](rules-format.md#notification-routing-routingyaml). There is
+no screen for it yet; save and check it through the API:
+
+```bash
+BASE='http://<host>/api/v2/deployments/<chart>/<deployment>/routing?folder=<folder>'
+
+# save: routing.yaml as written (comments kept), and the AlertmanagerConfig from it
+curl -X PUT "$BASE" -H 'Content-Type: application/json' \
+  --data "$(jq -Rs '{routing: .}' routing.yaml)"
+
+# check: { text, errors, stale }
+curl "$BASE"
+
+# remove both files
+curl -X DELETE "$BASE"
+```
+
+A save that does not pass the checks is refused with what is wrong, by cell
+or config, and writes nothing. `stale: true` means the AlertmanagerConfig in
+`templates/` is not what `routing.yaml` says — after a hand edit to the file,
+or after the site's object labels changed. Saving the same text again
+regenerates it. Commit both files. A synced target has its source's routing
+and refuses changes; save on the source.
+
 ### Work across many groups at once
 
 Switch **Single** / **Overview** above the sidebar. Overview stacks every group
@@ -389,6 +417,34 @@ Values are literal; one containing `{{ }}` is dropped with a warning. Existing
 templates are not rewritten — they turn stale, and commits are refused until
 they are regenerated. Opening and saving each chart does it, or
 `gen-rules.mjs` per chart.
+
+### Let Alertmanager load the notification routing
+
+A deployment's AlertmanagerConfig (`v1alpha1`) is loaded by prometheus-operator
+only when the Alertmanager resource selects it. Two settings matter:
+
+```yaml
+# the Alertmanager resource (kube-prometheus-stack: alertmanager.alertmanagerSpec)
+alertmanagerConfigSelector:
+  matchLabels: { release: kps-alertmanager }   # what the routing objects carry
+alertmanagerConfigMatcherStrategy:
+  type: None
+```
+
+- **The selector** must match the labels on the routing objects: set them with
+  `RULE_OBJECT_LABELS`, or for routing only with
+  `RULE_OBJECT_LABELS_BY_PROFILE='{"routing":{…}}'`, then regenerate. One that
+  does not match is ignored silently.
+- **`alertmanagerConfigMatcherStrategy: None`**: otherwise the operator adds a
+  `namespace` matcher for the namespace the AlertmanagerConfig is in, and
+  alerts from anywhere else never reach its routes.
+
+The operator puts each AlertmanagerConfig under Alertmanager's root route with
+`continue: true` — the generated file says so too — so it does not stop other
+routes from seeing an alert. It also means two deployments under one
+Alertmanager whose `routing.yaml` cover the same label combination both notify
+for it: keep each deployment's alerts apart by a label, such as one that names
+the deployment.
 
 ### If rules deploy but never fire
 

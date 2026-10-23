@@ -348,7 +348,16 @@ The keys are profile names — what a group's `type` says (see
 [output profiles](rules-format.md#output-profiles)), not a resource kind. A
 profile's value replaces the site-wide one for the same key, an empty value
 removes the site-wide key from that profile's objects, and its other keys are
-added. A name that is not a profile, or a value that is not JSON of profile →
+added. They also take `routing`, for a deployment's
+[notification routing](rules-format.md#notification-routing-routingyaml): an
+AlertmanagerConfig, which Alertmanager loads by its own
+`alertmanagerConfigSelector`:
+
+```bash
+RULE_OBJECT_LABELS_BY_PROFILE='{"routing":{"release":"kps-alertmanager"}}'
+```
+
+A name that is not a profile, or a value that is not JSON of profile →
 pairs, stops the server at startup, and the scripts that generate with it: a
 mistyped name would leave that profile's objects unloaded, with nothing to say
 so.

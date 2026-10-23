@@ -11,5 +11,9 @@
       "groupFields": { "type": "vlogs" },
       "validate": "vmalert"
     }
+  },
+  "routing": {
+    "apiVersion": "monitoring.coreos.com/v1alpha1",
+    "kind": "AlertmanagerConfig"
   }
 }

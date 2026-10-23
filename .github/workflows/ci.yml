@@ -95,6 +95,10 @@ jobs:
             ${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # the runtime stage always reinstalls its apk packages (Dockerfile),
+          # on the newest base image
+          pull: true
+          no-cache-filters: runtime
 
       - name: Log in to ghcr
         if: steps.check.outputs.exists == 'false'

@@ -1,9 +1,9 @@
 ARG PROMETHEUS_VERSION=v2.54.1
 # promtool is built from PROMETHEUS_VERSION's source with a newer Go and
 # modules: the prom/prometheus 2.x images carry critical CVEs (#105).
-ARG GO_VERSION=1.26.9
+ARG GO_VERSION=1.26.10
 # vmalert -dryRun checks LogsQL (vlogs groups) offline, which promtool cannot read (#76).
-ARG VMALERT_VERSION=v1.152.0
+ARG VMALERT_VERSION=v1.154.0
 
 FROM node:22-alpine AS builder
 
@@ -25,6 +25,7 @@ WORKDIR /src
 RUN go get \
       github.com/docker/docker@v27.1.1+incompatible \
       github.com/golang-jwt/jwt/v5@v5.2.2 \
+      github.com/klauspost/compress@v1.18.7 \
       go.opentelemetry.io/otel@v1.44.0 \
       golang.org/x/crypto@v0.57.0 \
       golang.org/x/net@v0.60.0 \
@@ -38,14 +39,19 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w \
     -o /promtool ./cmd/promtool
 FROM victoriametrics/vmalert:${VMALERT_VERSION} AS vmalert
 
-FROM node:22-alpine
+# CI rebuilds this stage without the build cache (no-cache-filters in ci.yml):
+# a cached `apk add` layer kept shipping a libexpat with a fixed CVE (#105).
+FROM node:22-alpine AS runtime
 
 RUN apk add --no-cache git helm
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+# npm is only needed to install; the server never calls it, and its own
+# dependencies carry CVEs (#105).
+RUN npm ci --omit=dev \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 COPY --from=builder /app/dist ./dist
 COPY --from=promtool /promtool /usr/local/bin/promtool

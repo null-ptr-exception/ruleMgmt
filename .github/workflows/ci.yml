@@ -50,10 +50,11 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  # Builds and scans the image on every run; pushes it, tags and releases
+  # only on main, for a version not yet in ghcr.
   docker:
     runs-on: ubuntu-latest
     needs: e2e
-    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
       packages: write
@@ -100,8 +101,28 @@ jobs:
           pull: true
           no-cache-filters: runtime
 
+      - name: Install trivy
+        env:
+          TRIVY_VERSION: 0.75.0
+          TRIVY_SHA256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+        run: |
+          TARBALL="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$TARBALL" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/$TARBALL"
+          echo "$TRIVY_SHA256  $RUNNER_TEMP/$TARBALL" | sha256sum -c
+          tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$RUNNER_TEMP" trivy
+          sudo mv "$RUNNER_TEMP/trivy" /usr/local/bin/trivy
+
+      # Fails on a critical or high CVE that has a fix; exceptions, each with
+      # its reason, are in .trivyignore (#106).
+      - name: Scan image
+        run: |
+          trivy image --scanners vuln --severity CRITICAL,HIGH --ignore-unfixed \
+            --ignorefile .trivyignore --exit-code 1 \
+            "${{ env.IMAGE }}:${{ steps.version.outputs.version }}"
+
       - name: Log in to ghcr
-        if: steps.check.outputs.exists == 'false'
+        if: github.ref == 'refs/heads/main' && steps.check.outputs.exists == 'false'
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
@@ -109,13 +130,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push image
-        if: steps.check.outputs.exists == 'false'
+        if: github.ref == 'refs/heads/main' && steps.check.outputs.exists == 'false'
         run: |
           docker push ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
           docker push ${{ env.IMAGE }}:latest
 
       - name: Create git tag and GitHub release
-        if: steps.check.outputs.exists == 'false'
+        if: github.ref == 'refs/heads/main' && steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

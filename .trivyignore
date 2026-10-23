@@ -1,0 +1,7 @@
+# CVEs the image scan (CI, #106) lets through. Each needs a reason and an
+# issue; remove it once the reason is gone.
+
+# promtool stays on Prometheus 2.54.1 so its checks match the 2.x Prometheus
+# the rules are deployed to; these are fixed only in 3.x (#105).
+CVE-2026-42151
+CVE-2026-42154

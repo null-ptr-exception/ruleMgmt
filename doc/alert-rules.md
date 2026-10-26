@@ -284,6 +284,34 @@ Preview tells the rule owner the output may be behind. And a commit is refused
 while any chart is stale; a legacy chart is only named after the commit, as a
 reminder.
 
+### Files of your own in templates/
+
+Regenerating removes a template only when it is the generator's own
+leftover: named after a group the schema or `rules/` knows (`network_traffic`
+→ `network-traffic.yaml`) that no longer generates one — removed, renamed, or
+left with no rules. Any other file in `templates/` — a ConfigMap, a resource
+written by hand — is kept, is not drift, and `gen-rules` lists it as
+`kept templates/<file> (not generated)`. A file named exactly like a group's
+template is that group's, and is overwritten.
+
+A whole group can be hand-written too. Define it in `values.schema.json` only,
+with `"x-custom-template": true`, and write its template yourself:
+
+```json
+"spc_custom": {
+  "type": "array",
+  "x-custom-template": true,
+  "items": { "type": "object", "properties": { "namespace": { "type": "string" } } }
+}
+```
+
+Its rows in `values.yaml` are still checked against that schema, and the
+group is carried over on every regeneration, never written to `rules/`.
+Everything else is yours: the resource and its name, the row loop, the site
+labels (`RULE_OBJECT_LABELS` and the rest are not applied), splitting at 100
+rows, and its Helm tests. Name the file after the group key, with either `_`
+or `-`.
+
 ### Charts that are not migrated yet
 
 A chart from before `rules/` keeps everything in `values.schema.json`, with an

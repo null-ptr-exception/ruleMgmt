@@ -175,6 +175,23 @@ If existing deployments should not change yet, use **Clone to a new chart** on
 the first step instead. The copy gets your edits and the mapping; the original
 keeps working, and each rule owner moves over when they are ready.
 
+### Remove a group
+
+In the editor, pick the group → **Remove** → **Save**. Its rules file and its
+template go in the same save; if deployments have rows for it, Save opens the
+dialog above first.
+
+From the command line, delete `rules/<group>.yaml` and run
+[`gen-rules`](#edit-the-rules-files-directly): the group's template is removed
+with it (`removed templates/<group>.yaml`). A once group is the exception
+here — it is not in `values.schema.json`, so `gen-rules` cannot tell its
+template from a file of your own and keeps it (`kept … (not generated)`);
+delete that template too, or remove the group in the editor.
+
+Only files the generator wrote are ever removed. Anything else in
+`templates/` is left alone — see
+[Files of your own in templates/](alert-rules.md#files-of-your-own-in-templates).
+
 ---
 
 ## Rule owner

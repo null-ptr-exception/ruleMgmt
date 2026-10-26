@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Tree, Tag, Dropdown, Modal, Tooltip, message } from 'antd'
-import { FolderOutlined, MoreOutlined } from '@ant-design/icons'
+import { FolderOutlined, MoreOutlined, WarningOutlined } from '@ant-design/icons'
+import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
 import { getFolderTree, getSyncRegistry, unlinkSync, deleteDeployment } from '../utils/chartApi'
 import SyncToModal from './SyncToModal'
 import SyncFromModal from './SyncFromModal'
@@ -39,6 +40,13 @@ function toTreeNode(node, registry, handlers) {
         </Tag>
       )}
       {badge}
+      {isReservedName(node.name) && (
+        // An existing folder with a reserved name (#99): flagged, still
+        // usable. An icon, not a Tag: a Tag in a node marks a deployment.
+        <Tooltip title={`${RESERVED_HINT} — rename this folder`}>
+          <WarningOutlined aria-label="reserved name" style={{ color: '#d97706' }} />
+        </Tooltip>
+      )}
     </span>
   )
 

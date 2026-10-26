@@ -245,7 +245,10 @@ export async function initDeploymentFolder(folder, chart) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ folder, chart })
   })
-  if (!res.ok) return {}
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    return { error: body.error || `Could not create the deployment (HTTP ${res.status})` }
+  }
   return res.json()
 }
 

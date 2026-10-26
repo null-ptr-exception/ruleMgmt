@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Modal, Checkbox, Tag, Input, List, message, Alert } from 'antd'
 import { listAllDeployments, getSyncRegistry, createSync } from '../utils/chartApi'
+import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
 
 const STATUS_COLOR = { 'green-locked': 'green', new: 'green', red: 'red', orange: 'orange', disabled: 'default' }
 
@@ -75,6 +76,9 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
       return { status: 'disabled', reason: 'cannot sync a deployment to itself' }
     }
     if (!candidates.some(c => c.path === newPathTrimmed)) {
+      if (isReservedName(newPathTrimmed.split('/').filter(Boolean).pop())) {
+        return { status: 'disabled', reason: RESERVED_HINT }
+      }
       return { status: 'new', reason: 'will be created as a new deployment' }
     }
     return classify(registry, source?.path, newPathTrimmed)

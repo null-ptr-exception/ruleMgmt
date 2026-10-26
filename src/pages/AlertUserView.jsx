@@ -12,6 +12,7 @@ import PreviewModal from '../components/PreviewModal'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
 import { pruneAllValues } from '../utils/valueUtils'
 import { parseRulesDir } from '../utils/rulesFile'
+import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -229,12 +230,20 @@ export default function AlertUserView() {
     setNewDeployOpen(true)
   }
 
+  // The deployment being created is the last segment; a reserved one is
+  // refused (#99). An existing folder higher up is the server's to judge.
+  const newDeployReserved = isReservedName(newDeployPath.split('/').filter(Boolean).pop())
+
   async function handleNewDeployCreate() {
     if (!newDeployPath || !newDeployChart) return
     // Creating a deployment jumps the workspace to it — same silent-discard
     // hazard as switching folders in the tree.
     if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
     const result = await initDeploymentFolder(newDeployPath, newDeployChart)
+    if (result.error) {
+      message.error(result.error)
+      return
+    }
     setNewDeployOpen(false)
     if (result.status === 'created' || result.status === 'existing') {
       const chart = result.chart || newDeployChart
@@ -711,12 +720,14 @@ export default function AlertUserView() {
 
       <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}
         onOk={handleNewDeployCreate} okText="Create"
-        okButtonProps={{ disabled: !newDeployPath || !newDeployChart }}>
+        okButtonProps={{ disabled: !newDeployPath || !newDeployChart || newDeployReserved }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
           <div>
             <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Folder Path</Text>
             <Input placeholder="deployments/my-app/production" value={newDeployPath}
+              status={newDeployReserved ? 'error' : undefined}
               onChange={e => setNewDeployPath(e.target.value)} />
+            {newDeployReserved && <Text type="danger" style={{ fontSize: 12 }}>{RESERVED_HINT}</Text>}
           </div>
           <div>
             <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Chart</Text>

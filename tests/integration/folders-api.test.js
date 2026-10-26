@@ -239,4 +239,46 @@ describe('folders API', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  // #99: `_` is reserved — a folder's `_common/` is what its deployments will
+  // inherit (#75), and a name someone picked must not be read as one.
+  describe('reserved names', () => {
+    function makeChart() {
+      const chartDir = path.join(tmpDir, 'charts', 'my-alerts')
+      fs.mkdirSync(chartDir, { recursive: true })
+      fs.writeFileSync(path.join(chartDir, 'Chart.yaml'), 'apiVersion: v2\nname: my-alerts\nversion: 0.1.0\n')
+    }
+
+    for (const folderPath of ['shop/_common', '_x', '_x/prod']) {
+      it(`POST / refuses ${folderPath}, saying why, and creates nothing`, async () => {
+        const res = await request(app).post('/api/v2/folders').send({ path: folderPath })
+        expect(res.status).toBe(400)
+        expect(res.body.error).toMatch(/^"_\w+": Names starting with _ are reserved for AlertForge$/)
+        expect(fs.existsSync(path.join(tmpDir, folderPath))).toBe(false)
+      })
+    }
+
+    it('POST /init refuses a new deployment with a reserved name', async () => {
+      makeChart()
+      const res = await request(app).post('/api/v2/folders/init').send({ folder: 'shop/_common', chart: 'my-alerts' })
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain('"_common"')
+      expect(fs.existsSync(path.join(tmpDir, 'shop'))).toBe(false)
+    })
+
+    it('takes a name with _ elsewhere in it', async () => {
+      makeChart()
+      expect((await request(app).post('/api/v2/folders').send({ path: 'shop/my_team' })).status).toBe(200)
+      expect((await request(app).post('/api/v2/folders/init').send({ folder: 'shop/prod_1', chart: 'my-alerts' })).status).toBe(200)
+    })
+
+    // An existing folder is flagged in the tree, not locked out.
+    it('still creates under a folder that already has a reserved name', async () => {
+      makeChart()
+      fs.mkdirSync(path.join(tmpDir, '_legacy'), { recursive: true })
+      const res = await request(app).post('/api/v2/folders/init').send({ folder: '_legacy/prod', chart: 'my-alerts' })
+      expect(res.status).toBe(200)
+      expect(fs.existsSync(path.join(tmpDir, '_legacy', 'prod', 'values.yaml'))).toBe(true)
+    })
+  })
 })

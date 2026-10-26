@@ -13,6 +13,7 @@ import {
   applySync,
   applyUnlink,
 } from '../lib/sync.js'
+import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { readRouting, copyRouting, restoreRouting } from '../lib/routingFiles.js'
 
 function chartsDirName() {
@@ -74,6 +75,9 @@ export default function syncRouter() {
     // Unlike source, target is allowed not to exist yet (it gets created as
     // a copy of source) — but if something is already there, it must be a
     // real deployment, not an arbitrary folder we'd otherwise overwrite.
+    // A new target is a new deployment, so a reserved name is refused (#99).
+    const reserved = await newReservedSegment(req.gitopsDir, target)
+    if (reserved) return res.status(400).json({ error: reservedError(reserved) })
     const targetDir = path.join(req.gitopsDir, target)
     const targetExists = await fs.access(targetDir).then(() => true).catch(() => false)
     if (targetExists && !(await isDeploymentDir(targetDir))) {

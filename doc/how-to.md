@@ -194,6 +194,15 @@ Only files the generator wrote are ever removed. Anything else in
 
 ## Rule owner
 
+### Create a deployment
+
+**Alerts** → **+** → type the folder path (e.g. `shop/prod`) and pick the
+chart → **Create**.
+
+A folder or deployment name cannot start with `_`: those are reserved for
+AlertForge's own folders. A folder that already has such a name is marked with
+a warning in the tree and keeps working — rename it when you can.
+
 ### Fill in a deployment
 
 1. **Alerts** → pick a deployment in the tree

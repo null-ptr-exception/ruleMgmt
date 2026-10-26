@@ -5,6 +5,7 @@ import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { wrapValues, countAlerts } from '../lib/subchart.js'
 import { isDeploymentDir, isSafeSyncPath } from '../lib/sync.js'
+import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
 
@@ -175,6 +176,8 @@ export default function foldersRouter() {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
     try {
+      const reserved = await newReservedSegment(req.gitopsDir, folderPath)
+      if (reserved) return res.status(400).json({ error: reservedError(reserved) })
       await fs.mkdir(path.join(req.gitopsDir, folderPath), { recursive: true })
       res.json({ ok: true })
     } catch (err) {
@@ -195,6 +198,8 @@ export default function foldersRouter() {
     const deployDir = path.join(req.gitopsDir, folder)
 
     try {
+      const reserved = await newReservedSegment(req.gitopsDir, folder)
+      if (reserved) return res.status(400).json({ error: reservedError(reserved) })
       await fs.mkdir(deployDir, { recursive: true })
 
       try {

@@ -294,4 +294,23 @@ describe('sync API', () => {
       expect(JSON.stringify(res.body)).not.toContain(tmpDir)
     })
   })
+
+  // #99: a new target is a new deployment, so a reserved name is refused.
+  describe('reserved names', () => {
+    it('refuses a new target named _common, and records nothing', async () => {
+      makeDeployment('cpu/prod')
+      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/_common' })
+      expect(res.status).toBe(400)
+      expect(res.body.error).toContain('reserved for AlertForge')
+      expect(fs.existsSync(path.join(tmpDir, 'cpu', '_common'))).toBe(false)
+      expect((await request(app).get('/api/v2/sync')).body).toEqual({ syncs: [] })
+    })
+
+    it('still syncs to an existing deployment under a reserved folder', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('_legacy/prod')
+      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: '_legacy/prod' })
+      expect(res.status).toBe(200)
+    })
+  })
 })

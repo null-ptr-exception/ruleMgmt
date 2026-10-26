@@ -371,13 +371,19 @@ On a chart that already has `rules/`, this regenerates `values.schema.json`
 and every template and leaves the rules files exactly as you wrote them,
 comments included.
 
+It first runs the checks a save in the editor makes. Rules the editor would
+refuse — an optional column with no default read mid-string, say — are listed
+as `ERROR` with the group and rule, and nothing is written. What only a commit
+refuses is listed as `warn` and does not stop it.
+
 ### Check a chart's generated files still agree
 
 ```bash
 node scripts/gen-rules.mjs charts/<name> --check
 ```
 
-Regenerates and compares instead of writing; non-zero exit on any difference.
+Runs the same checks, then regenerates and compares instead of writing;
+non-zero exit on a refused rule or any difference.
 Worth wiring into CI or a pre-commit hook if files are ever committed by hand
 — it is what enforces that `rules/` is the source.
 

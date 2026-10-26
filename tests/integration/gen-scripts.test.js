@@ -50,6 +50,13 @@ function run(script, args, env = {}) {
   }
 }
 
+// A second group, copied from cpu's rules file, regenerated into the chart.
+async function addGroup(name) {
+  const cpu = await fs.readFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'utf-8')
+  await fs.writeFile(path.join(chartDir, 'rules', `${name}.yaml`), cpu.replace(/^group: cpu$/m, `group: ${name}`))
+  expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+}
+
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'gen-scripts-'))
   chartDir = path.join(tmpDir, 'chart')
@@ -150,18 +157,17 @@ describe('gen-rules.mjs + gen-chart.mjs', () => {
     expect(second.stdout).not.toMatch(/MISSING|DIFFERS/)
   })
 
-  it('removes a stale template when its group is dropped from a re-migration', async () => {
+  it('removes the template of a group whose rules file is gone', async () => {
     run(GEN_RULES, [chartDir])
+    await addGroup('zz')
+    expect(await fs.readdir(path.join(chartDir, 'templates'))).toContain('zz.yaml')
+
+    await fs.rm(path.join(chartDir, 'rules', 'zz.yaml'))
+    const regen = run(GEN_RULES, [chartDir])
+    expect(regen.status, regen.stdout).toBe(0)
+    expect(regen.stdout).toMatch(/removed\s+templates\/zz\.yaml/)
+    expect(await fs.readdir(path.join(chartDir, 'templates'))).not.toContain('zz.yaml')
     expect(await fs.readdir(path.join(chartDir, 'templates'))).toContain('cpu.yaml')
-
-    // Re-migrate from a schema with the group removed — as if rules/cpu.yaml
-    // had been deleted by hand and gen-rules run again to reconcile.
-    await fs.rm(path.join(chartDir, 'rules', 'cpu.yaml'))
-    await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify({ type: 'object', properties: {} }, null, 2))
-
-    const migrate = run(GEN_RULES, [chartDir])
-    expect(migrate.status, migrate.stdout).toBe(0)
-    expect(await fs.readdir(path.join(chartDir, 'templates'))).not.toContain('cpu.yaml')
   })
 })
 
@@ -171,10 +177,37 @@ describe('gen-rules.mjs + gen-chart.mjs', () => {
 describe('gen-rules.mjs --check on a leftover template', () => {
   it('reports a template no group generates any more', async () => {
     run(GEN_RULES, [chartDir])
-    await fs.writeFile(path.join(chartDir, 'templates', 'gone.yaml'), '# a removed group\n')
+    await addGroup('zz')
+    await fs.rm(path.join(chartDir, 'rules', 'zz.yaml'))
     const check = run(GEN_RULES, [chartDir, '--check'])
     expect(check.status, check.stdout).toBe(1)
-    expect(check.stdout).toMatch(/ORPHANED\s+templates\/gone\.yaml/)
+    expect(check.stdout).toMatch(/ORPHANED\s+templates\/zz\.yaml/)
+  })
+})
+
+// #114: gen-rules deleted every templates/ file it had not generated, bar an
+// x-custom-template group's under its hyphenated name — a hand-written
+// ConfigMap, or that group's file named like its rules/ and values key.
+describe('gen-rules.mjs on hand-written files in templates/', () => {
+  it('keeps them, says so, and --check and the drift check stay clean', async () => {
+    const schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
+    schema.properties.spc_custom = { type: 'array', 'x-custom-template': true, items: { type: 'object', properties: {} } }
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify(schema, null, 2))
+    await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
+    for (const f of ['spc_custom.yaml', 'configmap.yaml']) await fs.writeFile(path.join(chartDir, 'templates', f), '# hand-written\n')
+
+    const migrate = run(GEN_RULES, [chartDir])
+    expect(migrate.status, migrate.stdout).toBe(0)
+    const again = run(GEN_RULES, [chartDir])
+    expect(again.stdout).toMatch(/kept\s+templates\/configmap\.yaml \(not generated\)/)
+    for (const f of ['spc_custom.yaml', 'configmap.yaml']) {
+      expect(await fs.readFile(path.join(chartDir, 'templates', f), 'utf-8')).toBe('# hand-written\n')
+    }
+
+    const check = run(GEN_RULES, [chartDir, '--check'])
+    expect(check.status, check.stdout).toBe(0)
+    const { chartDrift } = await import('../../server/lib/chartFiles.js')
+    expect((await chartDrift(chartDir)).state).toBe('ok')
   })
 })
 

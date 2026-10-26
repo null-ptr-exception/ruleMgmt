@@ -40,6 +40,33 @@ export function generateProducts(model, originalSchema, objectMeta) {
 }
 
 /**
+ * The templates/ files that are this generator's own leftovers (#114): named
+ * for a group the given schemas or models know — removed, renamed, or no
+ * longer generating a template — and not generated now. Anything else in
+ * templates/ is hand-written (an x-custom-template group's file, under either
+ * spelling; a ConfigMap) and is never removed or called drift.
+ *
+ * A once group is not in the schema, so a caller that has the model from
+ * before the change (Save) passes it too.
+ *
+ * @param names      the .yaml file names in templates/
+ * @param generated  { '<name>.yaml': text } — what this run generates
+ * @returns the names to remove
+ */
+export function staleTemplates(names, generated, { schemas = [], models = [] } = {}) {
+  const custom = new Set([
+    ...schemas.flatMap(s => customTemplateGroups(s)),
+    ...models.flatMap(m => Object.entries(m?.groups || {}).filter(([, g]) => g.custom).map(([k]) => k)),
+  ])
+  const groups = [
+    ...schemas.flatMap(s => Object.keys(s?.properties || {}).filter(isAlertGroup)),
+    ...models.flatMap(m => Object.keys(m?.groups || {})),
+  ]
+  const ours = new Set(groups.filter(g => !custom.has(g)).map(templateFileName))
+  return names.filter(n => !(n in generated) && ours.has(n))
+}
+
+/**
  * @param rulesFiles  { '<name>.yaml': text } from rules/, or null when there is no rules/ dir
  * @param schema      parsed values.schema.json, or null when absent
  * @param templateFiles { '<name>.yaml': text } from templates/
@@ -76,11 +103,10 @@ export function computeDrift({ rulesFiles, schema, templateFiles = {}, objectMet
   for (const [name, content] of Object.entries(want.templates)) {
     if (templateFiles[name] !== content) differing.push(`templates/${name}`)
   }
-  // A template file with no matching group any more is also drift — except
-  // an x-custom-template group's, which is hand-written and never generated.
-  const custom = new Set(customTemplateGroups(schema).map(templateFileName))
-  for (const name of Object.keys(templateFiles)) {
-    if (!(name in want.templates) && !custom.has(name)) differing.push(`templates/${name} (orphaned)`)
+  // A generated template whose group has gone is also drift: Helm still
+  // renders it. A hand-written file is not (#114).
+  for (const name of staleTemplates(Object.keys(templateFiles), want.templates, { schemas: [schema], models: [model] })) {
+    differing.push(`templates/${name} (orphaned)`)
   }
   if (differing.length) return { state: 'stale', files: differing }
 

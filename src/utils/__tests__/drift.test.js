@@ -54,10 +54,17 @@ describe('computeDrift', () => {
     expect(out.files).toContain('values.schema.json')
   })
 
-  it('reports stale for an orphaned template with no matching group', () => {
-    const out = drift({ templateFiles: { ...templates, 'ghost.yaml': 'name: ghost\n' } })
+  it('reports stale for the template of a group whose rules file is gone', () => {
+    // The schema still lists the group: rules/ghost.yaml was deleted by hand.
+    const withGhost = { ...schema, properties: { ...schema.properties, ghost: { type: 'array', items: { type: 'object', properties: {} } } } }
+    const out = drift({ schema: withGhost, templateFiles: { ...templates, 'ghost.yaml': 'name: ghost\n' } })
     expect(out.state).toBe('stale')
-    expect(out.files.some(f => f.includes('ghost.yaml'))).toBe(true)
+    expect(out.files).toContain('templates/ghost.yaml (orphaned)')
+  })
+
+  // #114: a file no group could have generated is hand-written, not drift.
+  it('is ok with a hand-written file next to the generated ones', () => {
+    expect(drift({ templateFiles: { ...templates, 'configmap.yaml': 'kind: ConfigMap\n' } })).toEqual({ state: 'ok' })
   })
 
   it('reports stale when the rules/ files do not parse', () => {

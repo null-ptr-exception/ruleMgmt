@@ -420,6 +420,35 @@ this cannot see which deployments set it. For a brand-new chart, create it in
 the UI first, or run `gen-rules.mjs --init` afterwards, so it has a
 `Chart.yaml`.
 
+### Run them from the image
+
+The AlertForge image carries both tools, so no checkout or Node install is
+needed — only the same image version that will run the editor. Mount the
+gitops repo and run as yourself, so the files it writes stay yours:
+
+```bash
+IMAGE=ghcr.io/null-ptr-exception/rulemgmt:<version>
+
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
+  node scripts/gen-rules.mjs /work/charts/<name> --check
+
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
+  node scripts/import-rules.mjs /work/rules.yaml /work/charts/<name> --dry-run
+```
+
+Site policy for the generated resources goes in with `-e`, the same variables
+the editor reads (see [below](#put-your-own-labels-on-every-generated-resource)):
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" \
+  -e RULE_OBJECT_LABELS='{"release":"kube-prometheus-stack"}' "$IMAGE" \
+  node scripts/gen-rules.mjs /work/charts/<name>
+```
+
+Pass the same values the editor runs with: otherwise the templates are
+generated without the site's labels, and `--check` reports every one as
+different.
+
 ---
 
 ## Platform

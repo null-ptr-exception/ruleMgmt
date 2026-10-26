@@ -63,6 +63,9 @@ COPY server/ ./server/
 COPY src/utils/ ./src/utils/
 # Output profiles (#65), imported by src/utils/outputs.js.
 COPY config/outputs.json ./config/outputs.json
+# The command-line tools a template owner runs (#119); the rest of scripts/
+# is for development.
+COPY scripts/gen-rules.mjs scripts/import-rules.mjs ./scripts/
 COPY sample/ ./sample/
 COPY index.html ./
 

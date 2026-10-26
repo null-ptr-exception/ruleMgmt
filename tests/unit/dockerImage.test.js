@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import path from 'path'
+import { builtinModules } from 'module'
 
 /**
  * The runtime image copies only some of the repository (the final stage of
@@ -32,8 +33,11 @@ function runtimeStage() {
   return lines.slice(lastFrom).join('\n')
 }
 
-function serverImportGraph(entry) {
+// Every file reachable from `entry` through relative imports, and the
+// packages any of them import by name.
+function importGraph(entry) {
   const seen = new Set()
+  const packages = new Set()
   const stack = [path.join(ROOT, entry)]
   while (stack.length) {
     const file = stack.pop()
@@ -43,13 +47,24 @@ function serverImportGraph(entry) {
     for (const [, spec] of text.matchAll(/(?:from|import)\s*\(?\s*'(\.{1,2}\/[^']+)'/g)) {
       stack.push(path.resolve(path.dirname(file), spec))
     }
+    // A package import is a statement of its own: `import x from 'pkg'`, or
+    // the `} from 'pkg'` closing a multi-line one — not the word "from" in a
+    // comment or a string.
+    for (const [, spec] of text.matchAll(/^\s*(?:import\b[^'\n]*?\bfrom\s*|import\s*|\}\s*from\s*)'([^'.][^']*)'/gm)) {
+      if (spec.startsWith('node:') || BUILTINS.has(spec.split('/')[0])) continue
+      packages.add(spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0])
+    }
   }
-  return [...seen].map(f => path.relative(ROOT, f))
+  return { files: [...seen].map(f => path.relative(ROOT, f)), packages: [...packages] }
 }
+
+const BUILTINS = new Set(builtinModules)
+// The image installs only `dependencies` (npm ci --omit=dev).
+const RUNTIME_PACKAGES = new Set(Object.keys(JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).dependencies))
 
 describe('runtime Docker image', () => {
   const copied = copiedPaths()
-  const files = serverImportGraph('server.js')
+  const { files } = importGraph('server.js')
 
   it('finds the server and what it imports', () => {
     expect(copied).toContain('server.js')
@@ -72,4 +87,14 @@ describe('runtime Docker image', () => {
     expect(stage).toMatch(/^RUN apk add [^\n]*\btini\b/m)
     expect(stage).toMatch(/^ENTRYPOINT \["\/sbin\/tini", "--"\]$/m)
   })
+  // #119: the command-line tools run from the image too, with no checkout
+  // mounted next to it.
+  for (const script of ['scripts/gen-rules.mjs', 'scripts/import-rules.mjs']) {
+    it(`copies ${script} and every file it loads, and installs the packages it needs`, () => {
+      const graph = importGraph(script)
+      const missing = graph.files.filter(f => !copied.some(c => f === c || f.startsWith(c + '/')))
+      expect(missing, 'add these to the final stage of the Dockerfile').toEqual([])
+      expect(graph.packages.filter(p => !RUNTIME_PACKAGES.has(p)), 'a devDependency is not in the image').toEqual([])
+    })
+  }
 })

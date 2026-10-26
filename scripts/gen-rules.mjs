@@ -53,8 +53,6 @@ async function readIfExists(file) {
 const rulesDir = path.join(chartDir, 'rules')
 const schemaFile = path.join(chartDir, 'values.schema.json')
 
-const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
-
 // rules/*.yaml already on disk.
 // Only a missing rules/ means "not migrated yet"; any other failure stops here.
 // Swallowing it read the files before the bad one as the whole of rules/, and
@@ -72,6 +70,16 @@ for (const name of names) onDisk[name] = await fs.readFile(path.join(rulesDir, n
 // the schema is the source and this is the migration, which writes rules/ in
 // its canonical layout. Either way the schema is regenerated from the model.
 const migrating = !Object.keys(onDisk).length
+
+// Once rules/ exists the schema is a product, read only for the
+// x-custom-template groups it carries: a chart started from rules/ alone has
+// none yet (#116). Before that it is the only source.
+const schemaText = await readIfExists(schemaFile)
+if (schemaText === null && migrating) {
+  console.error(`ERROR  ${chartDir} has neither rules/ nor values.schema.json — nothing to generate from`)
+  process.exit(1)
+}
+const schema = schemaText === null ? { type: 'object', properties: {} } : JSON.parse(schemaText)
 let model, warnings
 if (!migrating) {
   const parsed = parseRulesDir(onDisk)

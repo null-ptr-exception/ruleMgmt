@@ -9,6 +9,7 @@ import { getDepName, unwrapValues } from '../lib/subchart.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
 import { logger } from '../lib/logger.js'
+import { createLimit } from '../lib/limit.js'
 import yaml from 'js-yaml'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -101,6 +102,12 @@ const VALIDATORS = {
   },
 }
 
+// promtool and vmalert together: each check is a process, and a big
+// deployment, or several people previewing at once, would otherwise start
+// one per object all at the same time.
+const CHECKER_CONCURRENCY = 4
+const checkerLimit = createLimit(CHECKER_CONCURRENCY)
+
 // One temp file per rendered CR, checked separately, results aggregated.
 // prometheus-operator writes one CR per file, so the same group name appearing
 // in two CRs is legal — and it always does once a group is sharded across
@@ -143,15 +150,16 @@ async function checkRules(renderedYaml) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'alertforge-check-'))
 
   try {
-    // One checker invocation per rendered CR, run concurrently — they are
-    // independent (each its own temp file).
+    // One checker invocation per rendered CR — they are independent (each its
+    // own temp file) — at most CHECKER_CONCURRENCY at a time across every
+    // Preview in progress (#96). Promise.all keeps the objects' order.
     const results = await Promise.all(objects.map(async ({ doc, validator }, i) => {
       const v = VALIDATORS[validator]
       const objName = doc?.metadata?.name || `object-${i + 1}`
       const file = path.join(tmpDir, `${String(i).padStart(4, '0')}-${sanitizeFilename(objName)}.yaml`)
       await fs.writeFile(file, yaml.dump({ groups: doc.spec.groups }, { lineWidth: -1 }), 'utf-8')
       try {
-        const { stdout, stderr } = await runCommand(v.bin(), v.args(file), { timeout: 120000, maxBuffer: MAX_BUFFER })
+        const { stdout, stderr } = await checkerLimit(() => runCommand(v.bin(), v.args(file), { timeout: 120000, maxBuffer: MAX_BUFFER }))
         const output = v.clean(`${stdout || ''}${stderr || ''}`, file)
         return { objName, passed: true, warned: validator === 'promtool' && LINT_FAILED.test(output), output }
       } catch (err) {

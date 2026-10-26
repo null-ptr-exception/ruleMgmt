@@ -397,6 +397,54 @@ spec:
     }
   })
 
+  // #96: one checker process per object, but at most 4 at a time; the
+  // results still come back in the objects' order.
+  it('runs at most 4 checkers at once, and reports the objects in order', async () => {
+    const objects = Array.from({ length: 10 }, (_, i) => `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-big-1-${i + 1}
+spec:
+  groups:
+    - name: big
+      rules:
+        - alert: Big${i + 1}
+          expr: up == ${i}
+`)
+    await fs.writeFile(helmOutputFile, objects.join(''))
+
+    // Each run leaves a marker while it works and logs how many it saw; the
+    // later objects sleep less, so they would finish first if unordered.
+    const runningDir = path.join(tmpDir, 'running')
+    const peakLog = path.join(tmpDir, 'peak.log')
+    await fs.rm(runningDir, { recursive: true, force: true })
+    await fs.mkdir(runningDir)
+    await fs.rm(peakLog, { force: true })
+    const counting = path.join(tmpDir, 'counting-promtool')
+    await fs.writeFile(counting, `#!/bin/sh
+me="${runningDir}/$$"
+touch "$me"
+ls "${runningDir}" | wc -l >> "${peakLog}"
+n=$(basename "$3" | cut -c1-4 | sed 's/^0*//')
+n=\${n:-0}
+sleep "0.$((30 - n * 3))"
+rm -f "$me"
+echo "Checking rules"
+`, { mode: 0o755 })
+    process.env.PROMTOOL_BIN = counting
+
+    const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+
+    expect(status).toBe(200)
+    expect(data.check.passed).toBe(true)
+    const seen = (await fs.readFile(peakLog, 'utf-8')).trim().split('\n').map(Number)
+    expect(seen).toHaveLength(10)
+    expect(Math.max(...seen)).toBeLessThanOrEqual(4)
+    const names = [...data.check.output.matchAll(/^(rel-big-1-\d+):/gm)].map(m => m[1])
+    expect(names).toEqual(Array.from({ length: 10 }, (_, i) => `rel-big-1-${i + 1}`))
+  })
+
   it('names the offending object when one CR fails promtool', async () => {
     await fs.writeFile(helmOutputFile, `---
 apiVersion: monitoring.coreos.com/v1

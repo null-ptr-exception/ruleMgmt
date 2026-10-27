@@ -150,6 +150,13 @@ function checkConfig(name, config, errors) {
   }
 }
 
+/** One config's problems — what the Routing page checks before adding it. */
+export function configProblems(name, config) {
+  const errors = []
+  checkConfig(name, config, errors)
+  return errors
+}
+
 /**
  * Every problem with a parsed routing.yaml, as messages naming where it is.
  * An empty list means it can be generated.

@@ -289,3 +289,63 @@ cells:
   expect(saved.text).toBe(text)
   expect(await fs.readFile(cr, 'utf8')).not.toContain('edited by hand')
 })
+
+const TABLE = {
+  labels: { severity: ['critical', 'warning'], team: ['db', 'web'] },
+  defaults: { repeatInterval: '4h' },
+  configs: { 'db-email': { type: 'email', to: 'db@example.com' }, ops: { type: 'webhook', url: 'http://relay.monitoring.svc:8080' } },
+  cells: [{ match: { severity: 'warning', team: 'db' }, configs: ['db-email'] }],
+}
+
+test('a whole row or column is filled at once, and written cell by cell', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+
+  await page.getByLabel('Fill severity=critical').click()
+  await page.getByLabel('Fill config for severity=critical').click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^ops$/ }).click()
+  await page.getByRole('button', { name: 'Add to all' }).click()
+  await expect(page.getByTestId('cell-critical-db')).toContainText('ops')
+  await expect(page.getByTestId('cell-critical-web')).toContainText('ops')
+
+  await page.getByLabel('Fill team=db').click()
+  await page.getByLabel('Fill config for team=db').click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^db-email$/ }).click()
+  await page.getByRole('button', { name: 'Remove from all' }).click()
+  await expect(page.getByTestId('cell-warning-db')).toContainText('drop')
+
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  const { text } = await (await request.get(routingUrl(FOLDER))).json()
+  expect(text).toContain('cells:\n  - match:\n      severity: critical\n      team: db\n    configs:\n      - ops\n  - match:\n      severity: critical\n      team: web\n    configs:\n      - ops\n')
+  expect(text.split('cells:')[1]).not.toContain('warning')
+})
+
+test('a cell overrides a default timing, is marked, and its route carries it', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  const timing = page.getByLabel('Timing for severity=warning, team=db')
+  await expect(timing).not.toHaveAttribute('data-overridden')
+  await timing.click()
+  const field = page.getByLabel('severity=warning, team=db repeatInterval')
+  await expect(field).toHaveAttribute('placeholder', '4h')
+  await field.fill('1h')
+  await expect(timing).toHaveAttribute('data-overridden', 'true')
+
+  await page.getByRole('button', { name: 'Preview' }).click()
+  const preview = page.locator('.ant-modal').filter({ hasText: 'AlertmanagerConfig' })
+  await expect(preview).toBeVisible({ timeout: 15000 })
+  await expect(preview).toContainText('repeatInterval: 1h')
+  await expect(preview).not.toContainText('repeatInterval: 4h')
+  expect((await (await request.get(routingUrl(FOLDER))).json()).text).toContain('repeatInterval: 1h')
+})
+
+test('three labels show as a list, and can be switched to the grid', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, labels: { env: ['prod'], ...TABLE.labels }, cells: [] } } })
+  await openRouting(page)
+  await expect(page.getByTestId('routes-list').locator('.ant-table-row')).toHaveCount(4)
+  await expect(page.getByTestId('cell-prod-critical-db')).toBeVisible()
+  await page.getByText('Grid', { exact: true }).click()
+  await expect(page.getByTestId('routes-matrix').locator('.ant-table-tbody .ant-table-row')).toHaveCount(2)
+  await expect(page.getByTestId('cell-prod-critical-db')).toBeVisible()
+})

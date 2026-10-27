@@ -58,6 +58,9 @@ const LABEL_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 const CONFIG_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 const DURATION_RE = /^([0-9]+(ms|s|m|h|d|w|y))+$/
 
+/** A duration Alertmanager reads: 30s, 5m, 1h30m. */
+export const isDuration = text => typeof text === 'string' && DURATION_RE.test(text)
+
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isText = v => typeof v === 'string' && v.trim() !== ''
 

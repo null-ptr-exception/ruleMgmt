@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 // Routing page (#93): routing.yaml (#92) edited as a table — labels, the
 // configs a cell can notify, and the cells — saved through #92's endpoints
@@ -21,7 +23,10 @@ rules:
 const routingUrl = folder => `/api/v2/deployments/${CHART}/${folder.split('/').pop()}/routing?folder=${encodeURIComponent(folder)}`
 const valuesUrl = folder => `/api/v2/deployments/${CHART}/${folder.split('/').pop()}?folder=${encodeURIComponent(folder)}`
 
+const unlink = request => request.delete('/api/v2/sync', { data: { target: OTHER } })
+
 test.beforeEach(async ({ request }) => {
+  await unlink(request)
   await request.delete(`/api/v2/charts/${CHART}`)
   expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
   expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
@@ -33,6 +38,7 @@ test.beforeEach(async ({ request }) => {
 })
 
 test.afterAll(async ({ request }) => {
+  await unlink(request)
   for (const folder of [FOLDER, OTHER]) await request.delete(valuesUrl(folder))
   await request.delete(`/api/v2/charts/${CHART}`)
 })
@@ -187,4 +193,49 @@ test('Remove routing deletes it, after asking', async ({ page, request }) => {
   await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
   await expect(page.getByRole('button', { name: 'Set up routing' })).toBeVisible({ timeout: 8000 })
   expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
+})
+
+test('a synced target is read-only', async ({ page, request }) => {
+  const routing = { labels: { severity: ['critical'] }, configs: { oncall: { type: 'email', to: 'oncall@example.com' } }, cells: [] }
+  for (const folder of [FOLDER, OTHER]) {
+    expect((await request.put(routingUrl(folder), { data: { routing } })).ok()).toBeTruthy()
+  }
+  expect((await request.post('/api/v2/sync', { data: { source: FOLDER, target: OTHER } })).ok()).toBeTruthy()
+
+  await openRouting(page, OTHER)
+  await expect(page.getByText(`Synced from ${FOLDER}`)).toBeVisible({ timeout: 8000 })
+  await expect(page.getByRole('button', { name: 'Add config' })).toBeDisabled()
+  await expect(page.getByLabel('Edit oncall')).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Labels' })).toBeDisabled()
+  await expect(page.getByTestId('routes-matrix').locator('.ant-select-disabled')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Remove routing' })).toBeDisabled()
+})
+
+test('an out-of-date AlertmanagerConfig is saved again from routing.yaml as written, comments kept', async ({ page, request }) => {
+  const text = `# Paged by ops — ask #oncall before changing
+labels:
+  severity: [critical]
+configs:
+  oncall: {type: email, to: oncall@example.com}  # the rota's inbox
+cells:
+  - match: {severity: critical}
+    configs: [oncall]
+`
+  expect((await request.put(routingUrl(FOLDER), { data: { routing: text } })).ok()).toBeTruthy()
+  // A hand edit to the generated file leaves it out of date.
+  const cr = path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'templates', 'alertmanagerconfig.yaml')
+  await fs.appendFile(cr, '# edited by hand\n')
+  expect((await (await request.get(routingUrl(FOLDER))).json()).stale).toBe(true)
+
+  await openRouting(page)
+  await expect(page.getByTestId('routing-stale')).toBeVisible({ timeout: 8000 })
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  await expect(page.getByTestId('routing-stale')).toHaveCount(0)
+
+  const saved = await (await request.get(routingUrl(FOLDER))).json()
+  expect(saved.stale).toBe(false)
+  expect(saved.text).toBe(text)
+  expect(await fs.readFile(cr, 'utf8')).not.toContain('edited by hand')
 })

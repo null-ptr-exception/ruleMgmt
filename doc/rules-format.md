@@ -274,6 +274,8 @@ with no escaping. So a save is refused — naming the row and column — and
 
 `expr` and annotations take anything else, which is where a regex like
 `web-\\d+` usually goes. A `raw` entry is quoted by hand and is not checked.
+A selector column has rules of its own, see
+[Selectors](#selectors-a-default-with-exceptions).
 
 ## Empty cells
 
@@ -507,10 +509,11 @@ one that matches it. A row that is `.*` in a level gives up the rows one step
 more specific in that level, with one negative matcher; add a more specific
 row and the one above makes way. Nobody maintains an exclusion list.
 
-- A selector cell is `.*` or a plain name (letters, digits, `_`, `.`, `-`) —
-  never a regex. Which of two regexes is more specific cannot be decided;
-  which of `.*` and `api` is, can. A literal becomes an equality matcher; an
-  excluded name is escaped (`my.app` → `` `my\.app` ``).
+- A selector cell is `.*` or a value matched exactly — never a regex. Which
+  of two regexes is more specific cannot be decided; which of `.*` and `api`
+  is, can. A value becomes an equality matcher; an excluded value is escaped
+  (`my.app` → `` `my\.app` ``). See [what a selector cell can
+  hold](#what-a-selector-cell-can-hold).
 - `${selector}` stands for the matchers, in `expr` only, right after a metric
   name's `{` or a `,` inside it: with every level `.*` it expands to nothing,
   and `cpu{}` is valid where `{}` is not.
@@ -519,6 +522,35 @@ row and the one above makes way. Nobody maintains an exclusion list.
   compared, so an exception in another chunk of 100 rows still counts.
 - Each group declares its own hierarchy; groups in one chart may use different
   columns and depths. A group without `selectors` behaves exactly as before.
+
+### What a selector cell can hold
+
+`.*`, or any value — `/data`, `/dev/sda1`, `registry.example.com/app:1.2`.
+With `mountpoint` as the selector, rows `.*` (80) and `/data/test.yml` (90):
+
+```
+mountpoint      threshold   renders
+.*              80          disk{mountpoint!~`/data/test\.yml`} > 80
+/data/test.yml  90          disk{mountpoint="/data/test.yml"} > 90
+```
+
+The equality is quoted (`"` and `\` escaped) and the exclusion is escaped as
+a regex, so `/data/testXyml` is not excluded by the `.` in it.
+
+| Value | Saved? | Why |
+|---|---|---|
+| `.*` | yes | Any — the only value with a meaning of its own |
+| `prod`, `/data`, `app:1.2`, `a b`, `.` | yes | Matched exactly |
+| `api-.*`, `a\|b` | yes, with a hint | Matched exactly too: `api-.*` matches only the value `api-.*`. For a regex, use a column that is not a selector, in the `expr` (`pod=~"${pod_regex}"`) |
+| `""` | no | `label=""` means the label is absent |
+| A backtick | no | The exclusion is a backtick-quoted regex |
+| A line break | no | Values are one line |
+| A space at either end | no | Matched as written, so almost always a typo |
+
+A selector column that a label also reads keeps that rule too: no `"` or
+`\` (see [what a row's value can hold](#what-a-rows-value-can-hold)).
+
+### What is refused
 
 What is refused when the template is saved:
 
@@ -536,7 +568,7 @@ offered alongside:
 
 | Refused | Offered |
 |---|---|
-| A selector cell that is a regex | — |
+| A selector cell that is empty, has a backtick or a line break, or starts or ends with a space | — |
 | Two rows selecting the same thing | — |
 | **Crossing**: `prod/.*/noisy` and `prod/api/.*` overlap on `prod/api/noisy`, and neither contains the other | The overlap as a row, thresholds left for you to fill |
 | **Skipping**: `prod/api/noisy` under `prod/.*/.*` with no `prod/api/.*` between them — PromQL cannot exclude `NOT(workload=api AND pod=noisy)` | The middle row, with the parent's values: nothing changes |

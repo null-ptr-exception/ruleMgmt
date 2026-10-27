@@ -17,7 +17,7 @@ function checkLabel(check) {
 // — the cell that matters most — which of a group's alerts produced nothing,
 // because the rendered YAML never contains an alert that wasn't produced. Raw
 // YAML is one toggle away for when the summary isn't enough.
-export default function PreviewModal({ open, onClose, yaml, check, selfCheck, summary }) {
+export default function PreviewModal({ open, onClose, yaml, check, selfCheck, summary, heading = 'Rendered rules' }) {
   const [raw, setRaw] = useState(false)
 
   const failed = yaml && yaml.startsWith('Error:')
@@ -51,11 +51,13 @@ export default function PreviewModal({ open, onClose, yaml, check, selfCheck, su
       {!failed && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <Text strong style={{ fontSize: 15 }}>
-            {summary ? `${summary.total} alert${summary.total === 1 ? '' : 's'} total` : 'Rendered rules'}
+            {summary ? `${summary.total} alert${summary.total === 1 ? '' : 's'} total` : heading}
           </Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            Raw YAML <Switch size="small" checked={raw} onChange={setRaw} style={{ marginLeft: 6 }} />
-          </Text>
+          {summary && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Raw YAML <Switch size="small" checked={raw} onChange={setRaw} style={{ marginLeft: 6 }} />
+            </Text>
+          )}
         </div>
       )}
 

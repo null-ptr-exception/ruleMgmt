@@ -6,15 +6,17 @@ import {
   UserOutlined,
   LogoutOutlined,
   GitlabOutlined,
+  NotificationOutlined,
 } from '@ant-design/icons'
 import { getUserInfo } from './utils/chartApi'
 import TemplateDevEditor from './pages/TemplateDevEditor'
 import AlertUserView from './pages/AlertUserView'
+import RoutingView from './pages/RoutingView'
 import GitPanel from './components/GitPanel'
 import { useGitStatus } from './hooks/useGitStatus'
 import './App.css'
 
-const HASH_TO_PAGE = { '#/templates': 'template-dev', '#/alerts': 'alert-user', '#/git': 'git' }
+const HASH_TO_PAGE = { '#/templates': 'template-dev', '#/alerts': 'alert-user', '#/routing': 'routing', '#/git': 'git' }
 const PAGE_TO_HASH = Object.fromEntries(Object.entries(HASH_TO_PAGE).map(([k, v]) => [v, k]))
 
 function getPageFromHash() {
@@ -48,6 +50,7 @@ export default function App() {
   const menuItems = [
     { key: 'template-dev', label: 'Templates', icon: <ToolOutlined /> },
     { key: 'alert-user', label: 'Alerts', icon: <BellOutlined /> },
+    { key: 'routing', label: 'Routing', icon: <NotificationOutlined /> },
     {
       key: 'git',
       label: gitStatus.changeCount > 0
@@ -115,6 +118,7 @@ export default function App() {
       <Content style={{ overflow: 'auto', display: 'flex', flexDirection: 'column', flex: 1 }}>
         {page === 'template-dev' && <TemplateDevEditor />}
         {page === 'alert-user' && <AlertUserView />}
+        {page === 'routing' && <RoutingView />}
         {page === 'git' && <GitPanel gitStatus={gitStatus} onRefresh={gitStatus.refresh} />}
       </Content>
     </Layout>

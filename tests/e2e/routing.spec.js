@@ -1,0 +1,190 @@
+import { test, expect } from '@playwright/test'
+
+// Routing page (#93): routing.yaml (#92) edited as a table — labels, the
+// configs a cell can notify, and the cells — saved through #92's endpoints
+// and previewed with the AlertmanagerConfig rendered by Helm.
+
+const CHART = 'e2e-routing'
+const FOLDER = 'e2e-routing/prod'
+const OTHER = 'e2e-routing/dev'
+
+const CPU = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  threshold: {type: number, default: 80}
+rules:
+  - alert: CpuHigh
+    expr: cpu_usage{namespace="\${namespace}"} > \${threshold}
+    labels: {severity: warning}
+`
+
+const routingUrl = folder => `/api/v2/deployments/${CHART}/${folder.split('/').pop()}/routing?folder=${encodeURIComponent(folder)}`
+const valuesUrl = folder => `/api/v2/deployments/${CHART}/${folder.split('/').pop()}?folder=${encodeURIComponent(folder)}`
+
+test.beforeEach(async ({ request }) => {
+  await request.delete(`/api/v2/charts/${CHART}`)
+  expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
+  expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
+  for (const folder of [FOLDER, OTHER]) {
+    await request.delete(routingUrl(folder))
+    expect((await request.post('/api/v2/folders/init', { data: { folder, chart: CHART } })).status()).toBeLessThan(300)
+    expect((await request.post(valuesUrl(folder), { data: { values: { cpu: [{ namespace: 'shop', threshold: 90 }] } } })).ok()).toBeTruthy()
+  }
+})
+
+test.afterAll(async ({ request }) => {
+  for (const folder of [FOLDER, OTHER]) await request.delete(valuesUrl(folder))
+  await request.delete(`/api/v2/charts/${CHART}`)
+})
+
+async function openRouting(page, folder = FOLDER) {
+  await page.goto('/#/routing')
+  await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+  const tree = page.locator('.ant-tree')
+  const top = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${CHART}$`) }).first()
+  await expect(top).toBeVisible({ timeout: 8000 })
+  const switcher = top.locator('.ant-tree-switcher_close')
+  if (await switcher.count() > 0) await switcher.click()
+  await selectInTree(page, folder)
+}
+
+async function selectInTree(page, folder) {
+  await page.locator('.ant-tree .ant-tree-treenode').filter({ has: page.locator('.ant-tag') })
+    .filter({ hasText: folder.split('/').pop() }).first().locator('.ant-tree-node-content-wrapper').click()
+}
+
+async function addTag(page, label, values) {
+  const select = page.getByLabel(label)
+  for (const v of values) {
+    await select.fill(v)
+    await select.press('Enter')
+  }
+}
+
+async function setUp(page) {
+  await page.getByRole('button', { name: 'Set up routing' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Label 1 name').fill('severity')
+  await addTag(page, 'Label 1 values', ['critical', 'warning'])
+  await dialog.getByRole('button', { name: 'Add label' }).click()
+  await dialog.getByLabel('Label 2 name').fill('team')
+  await addTag(page, 'Label 2 values', ['db', 'web'])
+  await dialog.getByRole('button', { name: 'Apply' }).click()
+}
+
+async function addConfig(page, name, fill) {
+  await page.getByRole('button', { name: 'Add config' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Config name').fill(name)
+  await fill(dialog)
+}
+
+async function pick(page, cell, configs) {
+  const select = page.getByTestId(cell).locator('.ant-select')
+  await select.click()
+  for (const c of configs) await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: new RegExp(`^${c}$`) }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0)
+}
+
+test('set up a 2×2 table, fill it, save, and see the AlertmanagerConfig in Preview', async ({ page, request }) => {
+  await openRouting(page)
+  await expect(page.getByText('No notification routing for this deployment.')).toBeVisible()
+  await setUp(page)
+
+  const matrix = page.getByTestId('routes-matrix')
+  await expect(matrix.locator('.ant-table-tbody tr.ant-table-row')).toHaveCount(2)
+  await expect(matrix.getByText('team=')).toHaveCount(2)
+  await expect(page.getByTestId('routes-fallthrough')).toHaveText('All other alerts: drop')
+
+  // An in-cluster address is an address; a token in a URL is not saved.
+  await addConfig(page, 'ops-webhook', async dialog => {
+    await dialog.getByLabel('Webhook URL').fill('https://hooks.example.com/notify?token=abc123def456ghi789jkl')
+    await expect(dialog.getByTestId('config-problems')).toContainText('put it in a Secret')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Webhook URL').fill('http://alert-relay.monitoring.svc:8080')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await addConfig(page, 'db-email', async dialog => {
+    await dialog.getByLabel('Config type').click()
+    await page.locator('.ant-select-item-option').filter({ hasText: /^email$/ }).click()
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await expect(page.getByTestId('notification-configs').locator('.ant-table-row')).toHaveCount(2)
+
+  await pick(page, 'cell-critical-db', ['db-email', 'ops-webhook'])
+  await pick(page, 'cell-warning-web', ['ops-webhook'])
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+
+  const saved = await (await request.get(routingUrl(FOLDER))).json()
+  expect(saved.errors).toEqual([])
+  expect(saved.text).toContain('match:\n      severity: critical\n      team: db\n    configs:\n      - db-email\n      - ops-webhook')
+
+  // Rendered by Helm with the deployment: one route per filled cell, the rest dropped.
+  await page.getByRole('button', { name: 'Preview' }).click()
+  const preview = page.locator('.ant-modal').filter({ hasText: 'AlertmanagerConfig' })
+  await expect(preview).toBeVisible({ timeout: 15000 })
+  await expect(preview).toContainText('receiver: _drop')
+  await expect(preview).toContainText('to: db@example.com')
+  await expect(preview).toContainText('url: http://alert-relay.monitoring.svc:8080')
+
+  // The deployment's alert values are not touched.
+  const values = await (await request.get(valuesUrl(FOLDER))).json()
+  expect(values.parsed.cpu).toEqual([{ namespace: 'shop', threshold: 90 }])
+})
+
+test('a config a cell still uses is not deleted; the cells are listed', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: {
+    labels: { severity: ['critical', 'warning'] },
+    configs: { oncall: { type: 'email', to: 'oncall@example.com' }, spare: { type: 'email', to: 'spare@example.com' } },
+    cells: [{ match: { severity: 'critical' }, configs: ['oncall'] }],
+  } } })
+  await openRouting(page)
+  await page.getByLabel('Delete oncall').click()
+  const refusal = page.locator('.ant-modal').filter({ hasText: 'oncall is still notified by 1 cell' })
+  await expect(refusal).toContainText('severity=critical')
+  await refusal.getByRole('button', { name: 'OK' }).click()
+
+  await page.getByLabel('Delete spare').click()
+  await expect(page.getByTestId('notification-configs').locator('.ant-table-row')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled()
+})
+
+test('a webhook URL can live in a Secret, with a reminder that it must exist', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'pager', async dialog => {
+    await dialog.getByText('URL in a Secret').click()
+    await expect(dialog.getByText(/Make sure the Secret exists in this deployment's namespace/)).toBeVisible()
+    await dialog.getByLabel('Secret name').fill('pager')
+    await dialog.getByLabel('Secret key').fill('url')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await expect(page.getByTestId('notification-configs')).toContainText('Secret pager / url')
+})
+
+test('unsaved changes are confirmed before switching deployments', async ({ page }) => {
+  await openRouting(page)
+  await setUp(page)
+  await selectInTree(page, OTHER)
+  const ask = page.locator('.ant-modal-confirm').filter({ hasText: 'Discard unsaved changes?' })
+  await expect(ask).toBeVisible()
+  await ask.getByRole('button', { name: 'Keep editing' }).click()
+  await expect(page.getByTestId('routes-matrix')).toBeVisible()
+
+  await selectInTree(page, OTHER)
+  await ask.getByRole('button', { name: 'Discard' }).click()
+  await expect(page.getByRole('heading', { name: `${OTHER} / Routing` })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Set up routing' })).toBeVisible()
+})
+
+test('Remove routing deletes it, after asking', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await page.getByRole('button', { name: 'Remove routing' }).click()
+  await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
+  await expect(page.getByRole('button', { name: 'Set up routing' })).toBeVisible({ timeout: 8000 })
+  expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
+})

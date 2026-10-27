@@ -208,6 +208,8 @@ test('a synced target is read-only', async ({ page, request }) => {
   await expect(page.getByLabel('Edit oncall')).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Labels' })).toBeDisabled()
   await expect(page.getByTestId('routes-matrix').locator('.ant-select-disabled')).toHaveCount(1)
+  await expect(page.getByLabel('Fill severity=critical')).toBeDisabled()
+  await expect(page.getByLabel('default repeatInterval')).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Remove routing' })).toBeDisabled()
 })

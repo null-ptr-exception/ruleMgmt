@@ -273,12 +273,34 @@ Two things promtool accepts but are still wrong are flagged on top: a
 one is a problem in the chart, not in your rows — pass it on to whoever
 maintains the template.
 
-### Hand-write notification routing
+### Set who is notified
 
-Who is notified is set per folder deployment in `routing.yaml`, next to
-`values.yaml` — the format is in
-[rules-format.md](rules-format.md#notification-routing-routingyaml). There is
-no screen for it yet; save and check it through the API:
+Open **Routing** and pick a folder deployment. Routing is per deployment,
+kept in its `routing.yaml` next to `values.yaml` (the format is in
+[rules-format.md](rules-format.md#notification-routing-routingyaml)).
+
+1. **Set up routing** — name the alert labels to route by and their values,
+   e.g. `severity: critical, warning` and `team: db, web`. Every combination
+   is a cell of the table.
+2. **Notify** — add who a cell can notify: an email address, or a webhook. A
+   webhook URL with a token or password in it is refused; put the URL in a
+   Secret in the deployment's namespace and give its name and key instead
+   (AlertForge cannot see the cluster, so check the Secret exists). These
+   configs belong to this deployment; another deployment has its own.
+3. **Routes** — pick one or more configs in each cell. An empty cell says
+   *drop*: its alerts notify no one, and so does every alert no cell
+   matches (*All other alerts: drop*).
+4. **Save** writes `routing.yaml` and generates the AlertmanagerConfig into
+   the deployment's `templates/`. **Preview** shows that resource as Helm
+   renders it. Commit both files.
+
+A config a cell still uses cannot be deleted — the cells are listed. Changing
+the labels asks before it drops the cells no longer in the table. A synced
+target shows its source's routing, read-only; edit the source. **Remove
+routing** deletes both files.
+
+The page rewrites `routing.yaml` when it saves, so comments in a hand-written
+one are not kept. To keep editing by hand, save through the API instead:
 
 ```bash
 BASE='http://<host>/api/v2/deployments/<chart>/<deployment>/routing?folder=<folder>'
@@ -289,17 +311,14 @@ curl -X PUT "$BASE" -H 'Content-Type: application/json' \
 
 # check: { text, errors, stale }
 curl "$BASE"
-
-# remove both files
-curl -X DELETE "$BASE"
 ```
 
 A save that does not pass the checks is refused with what is wrong, by cell
-or config, and writes nothing. `stale: true` means the AlertmanagerConfig in
-`templates/` is not what `routing.yaml` says — after a hand edit to the file,
-or after the site's object labels changed. Saving the same text again
-regenerates it. Commit both files. A synced target has its source's routing
-and refuses changes; save on the source.
+or config, and writes nothing. `stale: true` — shown on the page too — means
+the AlertmanagerConfig is not what `routing.yaml` says: after a hand edit to
+the file, or after the site's object labels changed. Saving again
+regenerates it; with nothing edited, the page saves the file as it is,
+comments and all.
 
 ### Work across many groups at once
 

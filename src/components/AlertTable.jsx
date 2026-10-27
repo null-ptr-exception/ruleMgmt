@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Table, Button, Input, InputNumber, Select, Checkbox, Tooltip, Modal, Typography } from 'antd'
 import { DeleteOutlined, PlusOutlined, FilterOutlined, BranchesOutlined } from '@ant-design/icons'
-import { selectorCells, directChildren, parentOf, ANY } from '../utils/selectorContract'
+import { selectorCells, directChildren, parentOf, selectorPath, selectorCellProblem, looksLikeRegex, ANY } from '../utils/selectorContract'
 import { matchesFilter, getFilterOperators } from '../utils/filterUtils'
 import { buildNewRow, isMissingRequired } from '../utils/valueUtils'
+
+const REGEX_HINT = 'Matched exactly, not as a regex. For a regex, use a column that is not a selector, in the expr'
 
 export const RequiredMark = () => (
   <span data-testid="required-mark" aria-label="required" style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>
@@ -86,8 +88,13 @@ export default function AlertTable({
     // Only a hint: the server is what refuses the save (#66), so the two
     // cannot disagree about what "required" means.
     const missing = !readOnly && !v.common && isMissingRequired(v, val)
-    const status = missing ? 'error' : undefined
-    const hint = input => missing ? <Tooltip title="Required">{input}</Tooltip> : input
+    // A selector cell that reads like a regex is still saved, but matched
+    // exactly (#120) — said here, not refused.
+    const literal = !missing && !readOnly && selectors?.includes(v.name) && looksLikeRegex(val)
+    const status = missing ? 'error' : literal ? 'warning' : undefined
+    const hint = input => missing ? <Tooltip title="Required">{input}</Tooltip>
+      : literal ? <Tooltip title={REGEX_HINT}>{input}</Tooltip>
+        : input
     if (plain) {
       const text = v.type === 'boolean' ? (val ? '✓' : '') : (val ?? '')
       return <span style={{ fontSize: 13, padding: '0 7px' }}>{String(text)}</span>
@@ -147,11 +154,15 @@ export default function AlertTable({
     const sels = rows.map(r => selectorCells(r, commonValues, selectorDefaults, selectors))
     return { sels, children: directChildren(sels, selectors), parent: parentOf(sels, selectors) }
   }, [rows, commonValues, selectorDefaults, selectors])
-  const path = sel => selectors.map(l => sel[l]).join(' / ')
+  const path = sel => selectorPath(sel, selectors)
 
   // An exception is one step more specific than its row, in one level the
   // row leaves at .* — the only way to add one here, so a crossing or a
   // skipped level cannot be made from it.
+  // The value is used as typed, trimmed: any literal but .* itself.
+  const exceptionValue = exception?.value.trim()
+  const exceptionOk = !!exception && exceptionValue !== ANY && !selectorCellProblem(exceptionValue)
+
   function addException() {
     const { index, level, value } = exception
     const next = { ...rows[index], [level]: value.trim() }
@@ -245,7 +256,7 @@ export default function AlertTable({
       )}
       {exception && (
         <Modal open title={`Exception to ${path(scope.sels[exception.index])}`} okText="Add"
-          okButtonProps={{ disabled: !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(exception.value.trim()) }}
+          okButtonProps={{ disabled: !exceptionOk }}
           onOk={addException} onCancel={() => setException(null)}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             A copy of this row, more specific in one level. It takes over that part from this row,
@@ -255,10 +266,13 @@ export default function AlertTable({
             <Select size="small" aria-label="Exception level" style={{ width: 140 }} value={exception.level}
               options={selectors.filter(l => scope.sels[exception.index][l] === ANY).map(l => ({ value: l, label: l }))}
               onChange={level => setException(e => ({ ...e, level }))} />
-            <Input size="small" aria-label="Exception value" placeholder="a name, e.g. api" autoFocus
+            <Input size="small" aria-label="Exception value" placeholder="a value, e.g. api or /data" autoFocus
               value={exception.value} onChange={e => setException(x => ({ ...x, value: e.target.value }))}
-              onPressEnter={() => /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(exception.value.trim()) && addException()} />
+              onPressEnter={() => exceptionOk && addException()} />
           </div>
+          {looksLikeRegex(exception.value.trim()) && (
+            <Typography.Text type="warning" style={{ fontSize: 12 }}>{REGEX_HINT}</Typography.Text>
+          )}
         </Modal>
       )}
     </div>

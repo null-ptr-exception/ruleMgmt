@@ -1,0 +1,13 @@
+# Any literal is a selector value (#120): `/`, `"`, and a `*` that is not a
+# regex. Equal by %q, excluded by regexQuoteMeta.
+selectors: [mountpoint]
+
+columns:
+  mountpoint: { type: string, default: ".*" }
+  threshold:  { type: number, default: 80 }
+
+rules:
+  - alert: DiskFull
+    expr: disk_used_percent{${selector}} > ${threshold}
+    for: 1m
+    labels: { severity: warning }

@@ -1,0 +1,8 @@
+disk:
+  - {}
+  - mountpoint: /data/test.yml
+    threshold: 90
+  - mountpoint: '/srv/a"b'
+    threshold: 95
+  - mountpoint: /var/log/*.log
+    threshold: 70

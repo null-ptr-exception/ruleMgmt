@@ -426,9 +426,21 @@ rules:
     expect(fs.readFileSync(path.join(tmpDir, 'dep', 'values.yaml'), 'utf-8')).toBe('')
   })
 
-  it('refuses a regex in a selector cell, naming it', async () => {
-    const res = await save({ cpu: [{ namespace: 'prod', workload: 'api|web' }] })
+  it('refuses a cell that cannot be matched on, naming it', async () => {
+    const res = await save({ cpu: [{ namespace: 'prod', workload: 'api ' }] })
     expect(res.status).toBe(400)
+    expect(res.body.error).toBe('Some selector cells cannot be used')
     expect(res.body.problems).toEqual([expect.objectContaining({ group: 'cpu', row: 0, column: 'workload' })])
+  })
+
+  // #120: any literal, `/` included, matched exactly.
+  it('saves a value with / in it, and one that reads like a regex', async () => {
+    const res = await save({ cpu: [{ namespace: 'prod' }, { namespace: 'prod', workload: '/data/test.yml' }, { namespace: 'prod', workload: 'api|web' }] })
+    expect(res.status).toBe(200)
+  })
+
+  it('says an overlap is an overlap', async () => {
+    const res = await save({ cpu: [{ namespace: 'prod' }, { namespace: 'prod', workload: '.*' }] })
+    expect(res.body.error).toBe('Some rows overlap')
   })
 })

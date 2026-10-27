@@ -109,6 +109,24 @@ test.describe('Alerts page', () => {
     await expect(page.locator('.ant-table-tbody tr.ant-table-row').nth(1).locator('input').nth(1)).toHaveValue('web')
   })
 
+  // #120: any literal saves; one that reads like a regex is hinted at, not refused.
+  test('a value with / saves as typed, and api-.* is hinted at as a literal', async ({ page, request }) => {
+    await openCpu(page)
+    const workload = page.locator('.ant-table-tbody tr.ant-table-row').nth(1).locator('input').nth(1)
+    await workload.fill('api-.*')
+    await expect(workload).toHaveClass(/ant-input-status-warning/)
+    await workload.hover()
+    await expect(page.getByRole('tooltip')).toContainText('Matched exactly, not as a regex')
+    await workload.fill('/srv/api')
+    await expect(workload).not.toHaveClass(/ant-input-status-warning/)
+
+    await page.getByRole('button', { name: 'Save' }).click()
+    await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+    const values = await (await request.get(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)).json()
+    expect(JSON.stringify(values)).toContain('/srv/api')
+    await expect(page.getByTestId('scope-1')).toHaveText('exception to ↑ prod / .* / .*')
+  })
+
   test('a refused save offers the missing row, and saves with it', async ({ page, request }) => {
     await openCpu(page)
     // prod / api / noisy under prod / .* / .*: api / .* is skipped

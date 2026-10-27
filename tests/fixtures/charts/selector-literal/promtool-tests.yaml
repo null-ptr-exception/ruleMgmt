@@ -1,0 +1,26 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'disk_used_percent{mountpoint="/data/test.yml"}'
+        values: '85x10'
+      # would be excluded by an unescaped . in /data/test.yml
+      - series: 'disk_used_percent{mountpoint="/data/testXyml"}'
+        values: '85x10'
+      - series: 'disk_used_percent{mountpoint="/srv/a\"b"}'
+        values: '96x10'
+      # the * is a literal: /var/log/app.log is the default row's
+      - series: 'disk_used_percent{mountpoint="/var/log/app.log"}'
+        values: '85x10'
+      - series: 'disk_used_percent{mountpoint="/var/log/*.log"}'
+        values: '75x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DiskFull
+        exp_alerts:
+          - exp_labels: { severity: warning, mountpoint: /data/testXyml }
+          - exp_labels: { severity: warning, mountpoint: '/srv/a"b' }
+          - exp_labels: { severity: warning, mountpoint: /var/log/app.log }
+          - exp_labels: { severity: warning, mountpoint: /var/log/*.log }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   intersects, strictlyContains, directChildColumn, meet, exclusions, directChildren, parentOf,
   rowProblems, selectorValueProblems, misplacedSelectorRefs, selectorTemplateProblems, selectorCells,
+  SELECTOR_PATTERN, selectorCellProblem, looksLikeRegex, selectorPath,
 } from '../selectorContract.js'
 import { parseGroupFile, parseRulesDir, groupFileText, modelToSchema, genSchema } from '../rulesFile.js'
 import { checkRules } from '../ruleChecks.js'
@@ -60,10 +61,17 @@ describe('rowProblems', () => {
       .toEqual({ problems: [], proposals: [] })
   })
 
-  it('refuses a regex in a selector cell', () => {
-    const { problems } = rowProblems([{ ...s('prod/api|web/.*') }], {}, {}, L)
-    expect(problems[0]).toMatchObject({ row: 0, column: 'workload' })
-    expect(problems[0].message).toMatch(/neither \.\* nor a plain name/)
+  it('refuses a cell that cannot be matched on, naming it', () => {
+    const { problems } = rowProblems([{ namespace: 'prod', workload: 'a`b', pod: '.*' }], {}, {}, L)
+    expect(problems[0]).toMatchObject({ row: 0, column: 'workload', cell: true })
+    expect(problems[0].message).toMatch(/row 1, "workload": "a`b" has a backtick/)
+  })
+
+  // #120: `/` in a value no longer joins two rows into one.
+  it('tells a/b + c from a + b/c', () => {
+    const two = ['namespace', 'workload']
+    const r = [{ namespace: '.*', workload: '.*' }, { namespace: 'a/b', workload: 'c' }, { namespace: 'a', workload: 'b/c' }]
+    expect(rowProblems(r, {}, {}, two).problems.map(p => p.message)).not.toContainEqual(expect.stringMatching(/select the same thing/))
   })
 
   it('refuses two rows selecting the same thing', () => {
@@ -173,7 +181,7 @@ describe('in the rules format', () => {
       'cpu.yaml': src.replace('[namespace, workload]', '[cluster, namespace, workload]'),
     })
     const schema = modelToSchema(model)
-    expect(schema.properties.cpu.items.properties.workload.pattern).toBe('^\\.\\*$|^[A-Za-z0-9][A-Za-z0-9_.-]*$')
+    expect(schema.properties.cpu.items.properties.workload.pattern).toBe(SELECTOR_PATTERN)
     expect(schema.properties._common.properties.cluster.pattern).toBeDefined()
     expect(schema.properties._common.properties.owner.pattern).toBeUndefined()
   })
@@ -192,5 +200,33 @@ describe('in the rules format', () => {
     const { model } = parseRulesDir({ 'cpu.yaml': src.replace('cpu{${selector}} > 1', 'cpu > 1') })
     const save = checkRules(genSchema(model)).filter(f => f.severity === 'save')
     expect(save).toEqual([expect.objectContaining({ group: 'cpu', kind: 'selectors-unused' })])
+  })
+})
+
+// #120: a selector cell is `.*` or any literal; the schema's pattern (what
+// Helm checks) and the save's check (what the table is told) must agree.
+describe('what a selector cell can hold', () => {
+  const allowed = ['.*', 'prod', 'my_app.1', '/data', '/data/test.yml', '/dev/sda1', 'registry.example.com/app:1.2',
+    'a"b', 'a\\b', 'a b', '.', '-x', '_x', 'api-.*', 'a|b', '*', 'x', 'a\tb']
+  const refused = ['', 'a`b', '`', 'a\nb', 'a\rb', ' prod', 'prod ', ' .*', ' ', '\tx']
+
+  it.each(allowed)('allows %j', v => {
+    expect(selectorCellProblem(v)).toBeNull()
+    expect(new RegExp(SELECTOR_PATTERN).test(v)).toBe(true)
+  })
+
+  it.each(refused)('refuses %j', v => {
+    expect(selectorCellProblem(v)).toEqual(expect.any(String))
+    expect(new RegExp(SELECTOR_PATTERN).test(v)).toBe(false)
+  })
+
+  it('hints at a value that reads like a regex, but not at .* or a dot', () => {
+    expect(['api-.*', 'a|b', '(x)', 'a+', 'web-\\d'].every(looksLikeRegex)).toBe(true)
+    expect(['.*', 'my.app', '/data', 'app:1.2'].some(looksLikeRegex)).toBe(false)
+  })
+
+  it('names a row for a person, quoting what is not a plain name', () => {
+    expect(selectorPath({ namespace: 'prod', mount: '/data' }, ['namespace', 'mount'])).toBe('prod / "/data"')
+    expect(selectorPath(s('prod/.*/api'), L)).toBe('prod / .* / api')
   })
 })

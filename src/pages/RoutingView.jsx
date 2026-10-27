@@ -1,19 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Alert, Button, Empty, Modal, Typography, message } from 'antd'
-import { SaveOutlined, EyeOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import { Alert, Button, Empty, Modal, Segmented, Typography, message } from 'antd'
+import { SaveOutlined, EyeOutlined, DeleteOutlined, EditOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import NotificationConfigs from '../components/NotificationConfigs'
-import RoutesMatrix from '../components/RoutesMatrix'
+import RoutesMatrix, { describeMatch } from '../components/RoutesMatrix'
+import RoutesList from '../components/RoutesList'
+import { TimingFields } from '../components/RoutingTiming'
 import RoutingLabelsModal from '../components/RoutingLabelsModal'
 import PreviewModal from '../components/PreviewModal'
-import { parseRouting, emptyRouting, setLabels, toSave } from '../utils/routingModel'
+import { parseRouting, emptyRouting, setLabels, setDefaultTiming, toSave } from '../utils/routingModel'
 import { getRouting, saveRouting, removeRouting, renderDeployment, getSyncSource } from '../utils/chartApi'
 import { ROUTING } from '../utils/outputs'
 
 const { Title, Text } = Typography
-
-const describeMatch = match => Object.entries(match).map(([k, v]) => `${k}=${v}`).join(', ')
 
 // Of everything the deployment renders, the routing resource: the rules have
 // their own Preview on Alerts.
@@ -41,6 +41,8 @@ export default function RoutingView() {
   const [labelsOpen, setLabelsOpen] = useState(false)
   const [frozenSource, setFrozenSource] = useState(null)
   const [preview, setPreview] = useState(null)
+  // Grid or list; unset follows the labels — a list from three on.
+  const [view, setView] = useState(null)
 
   const deployment = selectedFolder ? selectedFolder.split('/').pop() : null
   const readOnly = !!frozenSource
@@ -132,6 +134,7 @@ export default function RoutingView() {
       setLoaded(null)
       setRouting(null)
       setSaveStatus('')
+      setView(null)
     }
     setDirty(false)
     setSelectedFolder(selection.path)
@@ -214,6 +217,7 @@ export default function RoutingView() {
   const broken = !routing && !!loaded?.errors?.length
   const hasTable = routing && Object.keys(routing.labels).length > 0
   const canSave = !readOnly && hasTable && (dirty || loaded?.stale)
+  const shownView = view || (routing && Object.keys(routing.labels).length >= 3 ? 'list' : 'grid')
 
   function main() {
     if (!selectedFolder) return <Empty style={{ margin: 'auto' }} description="Select a deployment from the folder tree" />
@@ -254,10 +258,28 @@ export default function RoutingView() {
             <Title level={5} style={{ margin: 0 }}>Routes</Title>
             <Text type="secondary" style={{ fontSize: 12 }}>by {Object.keys(routing.labels).join(', ') || '—'}</Text>
             <Button size="small" type="text" icon={<EditOutlined />} disabled={readOnly} onClick={() => setLabelsOpen(true)}>Labels</Button>
+            <span style={{ flex: 1 }} />
+            {hasTable && (
+              <Segmented size="small" value={shownView} onChange={setView} aria-label="Routes view"
+                options={[
+                  { label: 'Grid', value: 'grid', icon: <AppstoreOutlined /> },
+                  { label: 'List', value: 'list', icon: <UnorderedListOutlined /> },
+                ]} />
+            )}
           </div>
-          {hasTable
-            ? <RoutesMatrix routing={routing} onChange={edit} readOnly={readOnly} />
-            : <Text type="secondary">Name the labels to route by first.</Text>}
+          {!hasTable
+            ? <Text type="secondary">Name the labels to route by first.</Text>
+            : shownView === 'list'
+              ? <RoutesList routing={routing} onChange={edit} readOnly={readOnly} />
+              : <RoutesMatrix routing={routing} onChange={edit} readOnly={readOnly} />}
+        </section>
+        <section data-testid="routing-defaults">
+          <Title level={5} style={{ marginTop: 0 }}>Timing</Title>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+            For every cell, unless the cell overrides it (the clock in a cell; a filled clock overrides).
+          </Text>
+          <TimingFields values={routing.defaults || {}} readOnly={readOnly} prefix="default "
+            onChange={(key, value) => edit(setDefaultTiming(routing, key, value))} />
         </section>
       </div>
     )

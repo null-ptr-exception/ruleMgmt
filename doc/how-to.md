@@ -296,8 +296,15 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    configs belong to this deployment; another deployment has its own.
 3. **Routes** — pick one or more configs in each cell. An empty cell says
    *drop*: its alerts notify no one, and so does every alert no cell
-   matches (*All other alerts: drop*).
-4. **Save** writes `routing.yaml` and generates the AlertmanagerConfig into
+   matches (*All other alerts: drop*). The brush on a row or column header
+   adds a config to — or removes it from — every cell in it; what is saved
+   is still one cell per combination. With three or more labels the table
+   is a list, one combination per row; **Grid** / **List** switches.
+4. **Timing** — `groupWait`, `groupInterval` and `repeatInterval` for every
+   cell. The clock in a cell overrides them for that cell alone; a filled
+   clock marks a cell that does. Empty means the default (or Alertmanager's
+   own).
+5. **Save** writes `routing.yaml` and generates the AlertmanagerConfig into
    the deployment's `templates/`. **Preview** shows that resource as Helm
    renders it. Commit both files.
 

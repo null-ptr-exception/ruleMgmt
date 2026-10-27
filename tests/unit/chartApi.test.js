@@ -25,4 +25,21 @@ describe('chartApi fetch-failure fallbacks', () => {
     const { createSync } = await import('../../src/utils/chartApi.js')
     await expect(createSync('a', 'b')).resolves.toEqual({ ok: false, error: 'network down' })
   })
+
+  it('getRouting and saveRouting say what failed instead of throwing', async () => {
+    const { getRouting, saveRouting } = await import('../../src/utils/chartApi.js')
+    await expect(getRouting('c', 'd', 'f')).resolves.toEqual({ error: 'network down' })
+    await expect(saveRouting('c', 'd', 'f', 'labels: {}')).resolves.toEqual({ ok: false, error: 'network down' })
+  })
+})
+
+describe('chartApi routing', () => {
+  afterEach(() => { vi.restoreAllMocks() })
+
+  it('getRouting is null for a deployment with no routing.yaml', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, json: async () => ({ error: 'none' }) })
+    const { getRouting } = await import('../../src/utils/chartApi.js')
+    await expect(getRouting('c', 'dev', 'team/dev')).resolves.toBeNull()
+    expect(globalThis.fetch.mock.calls[0][0]).toBe('/api/v2/deployments/c/dev/routing?folder=team%2Fdev')
+  })
 })

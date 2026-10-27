@@ -193,6 +193,38 @@ export async function deleteDeployment(chart, deployment, folder) {
   return res.json()
 }
 
+// ─── Routing (#92, #93) ─────────────────────────────────────────────────────
+
+const routingUrl = (chart, deployment, folder) =>
+  `${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}/routing?folder=${encodeURIComponent(folder)}`
+
+// { text, errors, stale }; null when the deployment has no routing.yaml;
+// { error } when it could not be read.
+export async function getRouting(chart, deployment, folder) {
+  const res = await apiFetch(routingUrl(chart, deployment, folder))
+  if (res.status === 404) return null
+  if (!res.ok) return { error: (await res.json().catch(() => ({}))).error || 'Could not read routing' }
+  return res.json()
+}
+
+// `routing` is routing.yaml's text or its table. A refusal carries
+// { error, problems }, as saveDeployment's does.
+export async function saveRouting(chart, deployment, folder, routing) {
+  const res = await apiFetch(routingUrl(chart, deployment, folder), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ routing })
+  })
+  if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({}))) }
+  return res.json()
+}
+
+export async function removeRouting(chart, deployment, folder) {
+  const res = await apiFetch(routingUrl(chart, deployment, folder), { method: 'DELETE' })
+  if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({}))) }
+  return res.json()
+}
+
 // ─── Render ──────────────────────────────────────────────────────────────────
 
 export async function renderDeployment(chart, deployment, folder) {

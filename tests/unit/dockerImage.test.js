@@ -26,6 +26,12 @@ function copiedPaths() {
     .map(p => path.normalize(p).replace(/\/$/, ''))
 }
 
+function runtimeStage() {
+  const lines = fs.readFileSync(path.join(ROOT, 'Dockerfile'), 'utf-8').split('\n')
+  const lastFrom = lines.map((l, i) => (/^FROM\s/i.test(l) ? i : -1)).filter(i => i >= 0).pop()
+  return lines.slice(lastFrom).join('\n')
+}
+
 function serverImportGraph(entry) {
   const seen = new Set()
   const stack = [path.join(ROOT, entry)]
@@ -57,5 +63,13 @@ describe('runtime Docker image', () => {
 
   it('every file server.js loads exists, extension included (Node ESM does not guess)', () => {
     expect(files.filter(f => !fs.existsSync(path.join(ROOT, f)))).toEqual([])
+  })
+
+  // node as PID 1 never reaps orphans, so git's detached auto-gc (and the
+  // children of a git killed by execFile's timeout) piled up as zombies.
+  it('runs the server under an init that reaps zombies', () => {
+    const stage = runtimeStage()
+    expect(stage).toMatch(/^RUN apk add [^\n]*\btini\b/m)
+    expect(stage).toMatch(/^ENTRYPOINT \["\/sbin\/tini", "--"\]$/m)
   })
 })

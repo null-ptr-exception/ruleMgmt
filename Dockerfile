@@ -43,7 +43,7 @@ FROM victoriametrics/vmalert:${VMALERT_VERSION} AS vmalert
 # a cached `apk add` layer kept shipping a libexpat with a fixed CVE (#105).
 FROM node:22-alpine AS runtime
 
-RUN apk add --no-cache git helm
+RUN apk add --no-cache git helm tini
 
 WORKDIR /app
 
@@ -72,4 +72,8 @@ USER node
 
 EXPOSE 8080
 ENV PORT=8080
+# node does not reap orphans as PID 1: git's detached auto-gc, and the
+# children of a git that execFile's timeout killed, are left as zombies.
+# tini reaps them. JupyterHub's singleuser.cmd replaces CMD, not ENTRYPOINT.
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "server.js"]

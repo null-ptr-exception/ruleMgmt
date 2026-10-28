@@ -449,6 +449,10 @@ Pass the same values the editor runs with: otherwise the templates are
 generated without the site's labels, and `--check` reports every one as
 different.
 
+To check the rules' syntax, use **Preview** in the editor: it renders the
+deployment with Helm and runs `promtool` (or `vmalert`) on each rule object.
+The image has no single command for that yet.
+
 ---
 
 ## Platform

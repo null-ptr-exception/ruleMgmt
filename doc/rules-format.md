@@ -32,6 +32,12 @@ key, so it uses the same underscore form: `mariadb_traffic.yaml` gives
 emits, and are derived from it — nothing is ever derived in the other
 direction.
 
+The same rule — lower-case letters, digits and `_`, starting with a letter —
+holds for every group key in `values.schema.json`, an `x-custom-template` group
+included, and saving a schema through the API checks it. A key such as
+`foo-bar` would map to the same `templates/foo-bar.yaml` as `foo_bar`; rename it
+to `foo_bar`.
+
 ## A group file
 
 ```yaml

@@ -266,6 +266,33 @@ describe('gen-rules.mjs on a chart whose rules/ was edited by hand', () => {
   })
 })
 
+// #115: gen-rules generated, and passed --check on, rules the editor refuses
+// to save — an optional column with no default read mid-string.
+describe('gen-rules.mjs on rules a save would refuse', () => {
+  const breakIt = async () => {
+    run(GEN_RULES, [chartDir])
+    const file = path.join(chartDir, 'rules', 'cpu.yaml')
+    const text = (await fs.readFile(file, 'utf-8')).replace(/^columns:$/m, 'columns:\n  pct: {type: number}')
+      .replace(/^(\s+summary: ).*$/m, '$1"CPU above ${pct}"')
+    await fs.writeFile(file, text)
+    return text
+  }
+
+  for (const args of [[], ['--check']]) {
+    it(`${['gen-rules', ...args].join(' ')} names the group and rule, writes nothing, and fails`, async () => {
+      await breakIt()
+      const before = await fs.readFile(path.join(chartDir, 'templates', 'cpu.yaml'), 'utf-8')
+      const schemaBefore = await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8')
+
+      const result = run(GEN_RULES, [chartDir, ...args])
+      expect(result.status, result.stdout).toBe(1)
+      expect(result.stdout).toMatch(/ERROR\s+cpu: rule "\w+": "summary" reads \$\{pct\} mid-string/)
+      expect(await fs.readFile(path.join(chartDir, 'templates', 'cpu.yaml'), 'utf-8')).toBe(before)
+      expect(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8')).toBe(schemaBefore)
+    })
+  }
+})
+
 describe('import-rules.mjs', () => {
   const RULES = `groups:
   - name: disk

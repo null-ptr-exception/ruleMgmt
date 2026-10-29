@@ -1,0 +1,34 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # api at 60%: under the base row's 90, over its own 50 — nothing fires
+      - series: 'kube_deployment_status_replicas_available{namespace="prod", deployment="api"}'
+        values: '6x10'
+      - series: 'kube_deployment_spec_replicas{namespace="prod", deployment="api"}'
+        values: '10x10'
+      - series: 'kube_deployment_status_replicas_available{namespace="prod", deployment="web"}'
+        values: '8x10'
+      - series: 'kube_deployment_spec_replicas{namespace="prod", deployment="web"}'
+        values: '10x10'
+      # The statefulset rule reads `statefulset`, not `deployment`
+      - series: 'kube_statefulset_status_replicas_ready{namespace="prod", statefulset="api"}'
+        values: '4x10'
+      - series: 'kube_statefulset_replicas{namespace="prod", statefulset="api"}'
+        values: '10x10'
+      - series: 'kube_statefulset_status_replicas_ready{namespace="prod", statefulset="db"}'
+        values: '8x10'
+      - series: 'kube_statefulset_replicas{namespace="prod", statefulset="db"}'
+        values: '10x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: DeploymentReplicasLow
+        exp_alerts:
+          - exp_labels: { namespace: prod, deployment: web }
+      - eval_time: 5m
+        alertname: StatefulSetReplicasLow
+        exp_alerts:
+          - exp_labels: { namespace: prod, statefulset: api }
+          - exp_labels: { namespace: prod, statefulset: db }

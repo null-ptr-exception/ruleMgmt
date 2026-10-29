@@ -1,0 +1,18 @@
+# selectorLabels (#121): one `workload` column, matched as `deployment` by
+# default and as `statefulset` by the rule that says so. The exception row is
+# excluded from the base row on each rule's own label.
+group: replicas
+selectors: [namespace, workload]
+selectorLabels: {workload: deployment}
+
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, default: ".*" }
+  threshold: { type: number, default: 90 }
+
+rules:
+  - alert: DeploymentReplicasLow
+    expr: kube_deployment_status_replicas_available{${selector}} / kube_deployment_spec_replicas{${selector}} * 100 < ${threshold}
+  - alert: StatefulSetReplicasLow
+    selectorLabels: {workload: statefulset}
+    expr: kube_statefulset_status_replicas_ready{${selector}} / kube_statefulset_replicas{${selector}} * 100 < ${threshold}

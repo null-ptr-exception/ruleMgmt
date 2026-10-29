@@ -30,6 +30,7 @@ import { groupGenDef } from './rulesFile.js'
 import { normalizeRules } from './templateGenerator.js'
 import { profileFor } from './outputs.js'
 import { needsQuote } from './yamlScalar.js'
+import { selectorLabelsFor } from './selectorContract.js'
 
 const VAR_RE = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 
@@ -60,10 +61,12 @@ function defaultText(value) {
 
 /**
  * What ${selector} renders as for a lone row (#60): nothing to exclude, so an
- * equality matcher per level that is not `.*`.
+ * equality matcher per level that is not `.*`, on the label the rule's
+ * selectorLabels give that level (#121).
  */
-function selectorText(levels, text) {
-  return levels.filter(l => text[l] !== '.*').map(l => `${l}="${text[l]}"`).join(', ')
+function selectorText(group, rule, text) {
+  const labels = selectorLabelsFor(group, rule)
+  return group.selectors.filter(l => text[l] !== '.*').map(l => `${labels[l]}="${text[l]}"`).join(', ')
 }
 
 function substitute(str, text) {
@@ -102,10 +105,11 @@ function labelValue(entry, text) {
  */
 const blockValue = (value, text) => substitute(String(value ?? '').trim(), text)
 
-function ruleAsserts(rules, text) {
+function ruleAsserts(group, rules, groupText) {
   const asserts = []
   rules.forEach((rule, i) => {
     if (rule.raw) return
+    const text = group.selectors?.length ? { ...groupText, selector: selectorText(group, rule, groupText) } : groupText
     const path = `spec.groups[0].rules[${i}]`
     if (rule.record !== undefined) {
       asserts.push({ equal: { path: `${path}.record`, value: rule.record } })
@@ -168,7 +172,6 @@ export function generateHelmUnittestSuite(model) {
       Object.entries({ ...commonValues, ...ownValues })
         .map(([name, v]) => [name, typeof v === 'number' ? goFloat(v) : String(v)])
     )
-    if (group.selectors?.length) text.selector = selectorText(group.selectors, text)
 
     // The resource is the group's output profile (#65): a vlogs group is a
     // VMRule with `type: vlogs`, and a suite expecting PrometheusRule would
@@ -185,7 +188,7 @@ export function generateHelmUnittestSuite(model) {
         { equal: { path: 'spec.groups[0].name', value: key.replace(/_/g, '-') } },
         ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
         { lengthEqual: { path: 'spec.groups[0].rules', count: rules.length } },
-        ...ruleAsserts(rules, text),
+        ...ruleAsserts(group, rules, text),
       ],
     })
 
@@ -195,12 +198,11 @@ export function generateHelmUnittestSuite(model) {
 
     const withDefaults = { ...text }
     for (const name of defaulted) withDefaults[name] = defaultText(allColumns[name].default)
-    if (group.selectors?.length) withDefaults.selector = selectorText(group.selectors, withDefaults)
     tests.push({
       it: `renders ${key} with defaults for ${defaulted.join(', ')}`,
       template,
       set: setFor(key, omitDefaults(commonValues, commonColumns), omitDefaults(ownValues, ownColumns), group.once),
-      asserts: ruleAsserts(rules, withDefaults),
+      asserts: ruleAsserts(group, rules, withDefaults),
     })
   }
 

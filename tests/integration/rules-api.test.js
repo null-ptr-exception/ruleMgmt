@@ -250,6 +250,21 @@ rules:
     expect(status).toBe(400)
     expect(data.findings).toEqual([expect.objectContaining({ kind: 'selectors-unused' })])
   })
+
+  // #121
+  it('says the selectorLabels changed, and renders the label', async () => {
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL } })
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL.replace('[namespace]\n', '[namespace]\nselectorLabels: {namespace: kube_namespace}\n') } })
+    expect(status).toBe(200)
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-selector-labels-changed', group: 'cpu', rules: ['CpuHigh'] })])
+    expect(await read('templates/cpu.yaml')).toContain('"labels" (dict "namespace" "kube_namespace")')
+  })
+
+  it('refuses a selectorLabels label that is not a label name', async () => {
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SEL.replace('[namespace]\n', '[namespace]\nselectorLabels: {namespace: kube-namespace}\n') } })
+    expect(status).toBe(400)
+    expect(data.findings).toEqual([expect.objectContaining({ kind: 'selector-labels-name' })])
+  })
 })
 
 describe('GET /:chart drift', () => {

@@ -4,7 +4,7 @@ import { findDeploymentsUsing } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget } from '../lib/sync.js'
-import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
+import { parseRulesDir, modelToSchema, genSchema, GROUP_KEY_RE } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates } from '../../src/utils/drift.js'
 import { isAlertGroup } from '../../src/utils/schemaUtils.js'
@@ -146,6 +146,16 @@ export default function templatesRouter() {
   router.post('/:chart/schema', async (req, res) => {
     const { schemaFile } = chartPaths(req, req.params.chart)
     const { schema, confirmBreaking } = req.body
+    // Group keys follow the rules/ filename rule, x-custom-template groups
+    // included: two keys must never map to the same templates/ file (#129).
+    const badKeys = Object.keys(schema?.properties || {})
+      .filter(key => isAlertGroup(key) && !GROUP_KEY_RE.test(key))
+    if (badKeys.length) {
+      return res.status(400).json({
+        error: 'Invalid group keys',
+        errors: badKeys.map(key => `${key}: a group name is lower-case letters, digits and _, starting with a letter`)
+      })
+    }
     try {
       const before = await readSchema(schemaFile)
       const { breaking, isBreaking, notices } = diffSchema(before, schema)

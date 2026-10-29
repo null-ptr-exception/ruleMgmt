@@ -163,6 +163,41 @@ describe('Templates API', () => {
     expect(disk.items.properties.warn_pct['x-severity']).toBe('warning')
   })
 
+  // `foo-bar` and `foo_bar` both map to templates/foo-bar.yaml (#129).
+  it('refuses a group key outside the rules/ filename rule, and leaves the schema alone', async () => {
+    const schemaFile = path.join(tmpDir, 'charts', 'test-app', 'values.schema.json')
+    const before = await fs.readFile(schemaFile, 'utf-8')
+    const schema = {
+      $schema: 'https://json-schema.org/draft-07/schema#',
+      type: 'object',
+      properties: {
+        _common: { type: 'object' },
+        ok_group: { type: 'array' },
+        'foo-bar': { type: 'array' },
+        Foo: { type: 'array' },
+        '1abc': { type: 'array' },
+      }
+    }
+    const { status, data } = await api('POST', '/api/v2/templates/test-app/schema', { schema })
+    expect(status).toBe(400)
+    expect(data.errors).toEqual([
+      'foo-bar: a group name is lower-case letters, digits and _, starting with a letter',
+      'Foo: a group name is lower-case letters, digits and _, starting with a letter',
+      '1abc: a group name is lower-case letters, digits and _, starting with a letter',
+    ])
+    expect(await fs.readFile(schemaFile, 'utf-8')).toBe(before)
+  })
+
+  it('refuses a hyphenated x-custom-template group too', async () => {
+    const schema = {
+      type: 'object',
+      properties: { 'my-custom': { type: 'array', 'x-custom-template': true } }
+    }
+    const { status, data } = await api('POST', '/api/v2/templates/test-app/schema', { schema })
+    expect(status).toBe(400)
+    expect(data.errors).toEqual(['my-custom: a group name is lower-case letters, digits and _, starting with a letter'])
+  })
+
   it('renames a template file', async () => {
     await api('POST', '/api/v2/templates/test-app/cpu-alert/rename', { newName: 'cpu-sat' })
     const { data } = await api('GET', '/api/v2/templates/test-app')

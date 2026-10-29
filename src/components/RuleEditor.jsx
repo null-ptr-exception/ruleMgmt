@@ -48,14 +48,15 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
   const name = isRecord ? rule.record : rule.alert
   const update = patch => onChange({ ...rule, ...patch })
 
-  // Switching keeps what both kinds have — the name, expr, labels and note —
-  // and drops what the other kind cannot carry.
+  // Switching keeps what both kinds have — the name, expr, labels, note and
+  // selectorLabels — and drops what the other kind cannot carry.
   function setKind(kind) {
     if ((kind === 'record') === isRecord) return
     const kept = {
       expr: rule.expr,
       ...(rule.labels ? { labels: rule.labels } : {}),
       ...(rule.note ? { note: rule.note } : {}),
+      ...(rule.selectorLabels ? { selectorLabels: rule.selectorLabels } : {}),
     }
     onChange(kind === 'record'
       ? { record: rule.alert || '', ...kept }
@@ -94,10 +95,13 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
   // Switching either way carries the rule across: to YAML on the way in, and
   // back to fields on the way out. A hand-written entry the model cannot hold
   // stays raw and says why, rather than being emptied out.
-  // `note` is ours, not Prometheus's, so it is never part of the YAML — it is
-  // carried alongside in both directions.
+  // `note` and `selectorLabels` (#121) are ours, not Prometheus's, so they are
+  // never part of the YAML — they are carried alongside in both directions.
   function toggleRaw(on) {
-    const note = rule.note ? { note: rule.note } : {}
+    const note = {
+      ...(rule.note ? { note: rule.note } : {}),
+      ...(rule.selectorLabels ? { selectorLabels: rule.selectorLabels } : {}),
+    }
     if (on) {
       onChange({ raw: ruleToYaml(rule), ...note })
       return

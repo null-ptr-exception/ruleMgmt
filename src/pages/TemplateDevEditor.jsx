@@ -51,8 +51,19 @@ function SelectorsEditor({ group, commonColumns, onChange }) {
   const candidates = Object.entries({ ...commonColumns, ...(group.columns || {}) })
     .filter(([name, col]) => (col.type || 'string') === 'string' && !levels.includes(name))
     .map(([name]) => name)
+  // selectorLabels (#121) is not edited here, so a level taken out is taken
+  // out of it too — or the save would refuse a rename nothing here can undo.
+  const keep = (map, next) => {
+    const kept = Object.fromEntries(Object.entries(map || {}).filter(([l]) => next.includes(l)))
+    return Object.keys(kept).length ? kept : undefined
+  }
+  const withLabels = (obj, next) => {
+    const { selectorLabels, ...rest } = obj
+    const kept = keep(selectorLabels, next)
+    return kept ? { ...rest, selectorLabels: kept } : rest
+  }
   const set = next => onChange(g => {
-    const out = { ...g }
+    const out = withLabels({ ...g, ...(g.rules ? { rules: g.rules.map(r => (r.selectorLabels ? withLabels(r, next) : r)) } : {}) }, next)
     if (next.length) out.selectors = next
     else delete out.selectors
     return out

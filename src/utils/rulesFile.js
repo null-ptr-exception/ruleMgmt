@@ -15,6 +15,7 @@
  *     groups: {
  *       <key>: {                                          // key = filename = values key
  *         group: <key>, once?, type?, interval?, limit?, selectors?,
+ *         selectorLabels?: { <column>: <label> },
  *         vars?: { <name>: <text> },
  *         columns: { <name>: <column> },
  *         rules: [ <rule> ],
@@ -25,9 +26,9 @@
  *   }
  *
  *   <column> = { type, required?, default?, enum?, description? }
- *   <rule>   = { alert, expr, for?, keep_firing_for?, labels?, annotations?, note? }
- *            | { record, expr, labels?, note? }
- *            | { raw, note? }
+ *   <rule>   = { alert, selectorLabels?, expr, for?, keep_firing_for?, labels?, annotations?, note? }
+ *            | { record, selectorLabels?, expr, labels?, note? }
+ *            | { raw, selectorLabels?, note? }
  *
  * A group with `once: true` (#70) renders its rules once per deployment,
  * outside the row loop: it has no columns and takes no rows.
@@ -39,11 +40,11 @@ import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { SELECTOR_PATTERN } from './selectorContract.js'
 
-const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'vars', 'columns', 'rules']
-const RULE_KEYS = ['alert', 'record', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
+const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'selectorLabels', 'vars', 'columns', 'rules']
+const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
 // A recording rule has no `for`, `keep_firing_for` or annotations in
 // Prometheus — only these.
-const RECORD_KEYS = ['record', 'expr', 'labels', 'note']
+const RECORD_KEYS = ['record', 'selectorLabels', 'expr', 'labels', 'note']
 const COLUMN_KEYS = ['type', 'required', 'default', 'enum', 'description']
 const RESERVED = new Set(['selector'])
 // A Prometheus duration: one or more <number><unit>, e.g. 30s, 1m, 1h30m.
@@ -104,13 +105,16 @@ const entriesToMap = list =>
 /** One rule, keys in canonical order so the writer is deterministic. */
 function canonicalRule(rule) {
   const out = {}
+  const selectorLabels = normalizeMap(rule.selectorLabels)
   if (rule.raw !== undefined) {
     out.raw = String(rule.raw).replace(/\n+$/, '')
+    if (selectorLabels) out.selectorLabels = selectorLabels
     if (rule.note) out.note = rule.note
     return out
   }
   if (rule.record !== undefined) {
     out.record = rule.record
+    if (selectorLabels) out.selectorLabels = selectorLabels
     out.expr = rule.expr
     const labels = normalizeMap(rule.labels)
     if (labels) out.labels = labels
@@ -118,6 +122,7 @@ function canonicalRule(rule) {
     return out
   }
   out.alert = rule.alert
+  if (selectorLabels) out.selectorLabels = selectorLabels
   out.expr = rule.expr
   if (rule.for !== undefined && rule.for !== '') out.for = rule.for
   if (rule.keep_firing_for !== undefined) out.keep_firing_for = rule.keep_firing_for
@@ -286,6 +291,7 @@ export function groupGenDef(group) {
   if (group.vars && Object.keys(group.vars).length) def.vars = { ...group.vars }
   if (group.once) def.once = true
   if (group.selectors?.length) def.selectors = [...group.selectors]
+  if (group.selectorLabels) def.selectorLabels = { ...group.selectorLabels }
   // `type` is JSON Schema's here (`array`), so the group's output type rides
   // as groupType — in memory only, never written.
   if (group.type !== undefined) def.groupType = group.type
@@ -331,6 +337,7 @@ export function groupFileText(group) {
   if (group.interval !== undefined) lines.push(`interval: ${scalar(group.interval)}`)
   if (group.limit !== undefined) lines.push(`limit: ${scalar(group.limit)}`)
   if (group.selectors?.length) lines.push(`selectors: [${group.selectors.join(', ')}]`)
+  if (group.selectorLabels) lines.push(`selectorLabels: ${yaml.dump(group.selectorLabels, { ...DUMP, flowLevel: 0 }).trimEnd()}`)
 
   if (group.vars && Object.keys(group.vars).length) {
     lines.push('', 'vars:')
@@ -438,6 +445,18 @@ function checkRuleKind(rule, where, errors) {
   }
 }
 
+/**
+ * selectorLabels (#121), on a group or a rule: selector column → label name.
+ * Which columns and names it may use are save-time checks
+ * (selectorContract.js); here only its shape.
+ */
+function checkSelectorLabelsShape(value, where, errors) {
+  if (value === undefined) return
+  if (!isMapping(value) || !Object.values(value).every(v => typeof v === 'string')) {
+    errors.push(`${where}: selectorLabels must map selector columns to label names, e.g. { workload: deployment }`)
+  }
+}
+
 /** One group file. `filename` is the stem, without `.yaml`. */
 export function parseGroupFile(text, filename) {
   const errors = []
@@ -467,6 +486,7 @@ export function parseGroupFile(text, filename) {
     }
     rejectUnknown(rule, RULE_KEYS, where, errors)
     checkRuleKind(rule, where, errors)
+    checkSelectorLabelsShape(rule.selectorLabels, where, errors)
     return [canonicalRule(rule)]
   })
   if (!Array.isArray(doc.rules)) errors.push(`${filename}.yaml: rules is required and must be a list`)
@@ -501,9 +521,13 @@ export function parseGroupFile(text, filename) {
     errors.push(`${filename}.yaml: selectors must be a list of column names, coarsest first`)
   }
 
+  checkSelectorLabelsShape(doc.selectorLabels, `${filename}.yaml`, errors)
+
   const group = { group: filename, columns, rules }
   if (doc.once === true) group.once = true
   if (Array.isArray(doc.selectors) && doc.selectors.length) group.selectors = doc.selectors.map(String)
+  const selectorLabels = isMapping(doc.selectorLabels) ? normalizeMap(doc.selectorLabels) : undefined
+  if (selectorLabels) group.selectorLabels = selectorLabels
   if (doc.type !== undefined) group.type = doc.type
   if (doc.interval !== undefined) group.interval = doc.interval
   if (doc.limit !== undefined) group.limit = doc.limit

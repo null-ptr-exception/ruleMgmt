@@ -43,6 +43,7 @@ function modelGroupOf(alertDef) {
   const required = new Set(alertDef?.items?.required || [])
   return {
     selectors: alertDef.selectors,
+    selectorLabels: alertDef.selectorLabels,
     once: alertDef.once,
     type: alertDef.groupType,
     vars: alertDef.vars,

@@ -117,6 +117,21 @@ export function renameSelectorColumn(group, oldName, newName) {
   })
 }
 
+/**
+ * The selector columns some rule matches under another label (#121), each
+ * with every rule's label, for the table to show (#133). A column every rule
+ * matches by its own name is left out.
+ */
+export function renamedSelectorLabels(group) {
+  const rules = group?.rules || []
+  const out = {}
+  for (const col of group?.selectors || []) {
+    const pairs = rules.map(rule => [rule.alert || rule.record || 'a raw rule', selectorLabelsFor(group, rule)[col]])
+    if (pairs.some(([, label]) => label !== col)) out[col] = pairs
+  }
+  return out
+}
+
 // ── predicates ──────────────────────────────────────────────────────────────
 
 /** Some object could match both: in every column they are equal, or one is `.*`. */

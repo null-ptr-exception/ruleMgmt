@@ -10,6 +10,8 @@ import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_RE } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
+import { renamedSelectorLabels } from '../utils/selectorContract'
+import SelectorLabelsList from '../components/SelectorLabelsList'
 import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
 import { renameSelectorColumn } from '../utils/selectorContract'
 import {
@@ -146,7 +148,7 @@ function GroupSettings({ group, commonColumns = {}, onChange }) {
   )
 }
 
-function ColumnRow({ name, col, usage, onRename, onPatch, onRemove, selectorLevel }) {
+function ColumnRow({ name, col, usage, onRename, onPatch, onRemove, selectorLevel, selectorLabels }) {
   const uiType = col.enum ? 'enum' : (col.type || 'string')
   const [draft, setDraft] = useState(name)
   useEffect(() => { setDraft(name) }, [name])
@@ -163,8 +165,11 @@ function ColumnRow({ name, col, usage, onRename, onPatch, onRemove, selectorLeve
           onBlur={commit} onPressEnter={commit}
           style={{ width: 150, fontWeight: 600 }} />
         {selectorLevel !== undefined && (
-          <Tooltip title="A selector: its cells are .* or a value matched exactly, never a regex">
-            <Tag color="blue" style={{ marginInlineEnd: 0 }}>selector {selectorLevel + 1}</Tag>
+          <Tooltip title={<>
+            <div>A selector: its cells are .* or a value matched exactly, never a regex</div>
+            {selectorLabels && <SelectorLabelsList column={name} pairs={selectorLabels} />}
+          </>} styles={{ root: { maxWidth: 480 } }}>
+            <Tag color="blue" data-testid={`selector-tag-${name}`} style={{ marginInlineEnd: 0 }}>selector {selectorLevel + 1}</Tag>
           </Tooltip>
         )}
         <Select size="small" value={uiType} options={TYPE_OPTIONS} style={{ width: 90 }}
@@ -821,6 +826,7 @@ export default function TemplateDevEditor() {
                       {Object.entries(group.columns).map(([name, col]) => (
                         <ColumnRow key={name} name={name} col={col}
                           selectorLevel={group.selectors?.includes(name) ? group.selectors.indexOf(name) : undefined}
+                          selectorLabels={renamedSelectorLabels(group)[name]}
                           usage={(usedByColumn[name] || []).join(', ')}
                           onRename={val => renameColumn(activeGroup, name, val)}
                           onPatch={patch => patchColumn(activeGroup, name, name, patch)}

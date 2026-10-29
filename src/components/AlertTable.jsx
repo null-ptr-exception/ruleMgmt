@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Table, Button, Input, InputNumber, Select, Checkbox, Tooltip, Modal, Typography } from 'antd'
-import { DeleteOutlined, PlusOutlined, FilterOutlined, BranchesOutlined } from '@ant-design/icons'
+import { DeleteOutlined, PlusOutlined, FilterOutlined, BranchesOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { selectorCells, directChildren, parentOf, selectorPath, selectorCellProblem, looksLikeRegex, ANY } from '../utils/selectorContract'
 import { matchesFilter, getFilterOperators } from '../utils/filterUtils'
+import SelectorLabelsList from './SelectorLabelsList'
 import { buildNewRow, isMissingRequired } from '../utils/valueUtils'
 
 const REGEX_HINT = 'Matched exactly, not as a regex. For a regex, use a column that is not a selector, in the expr'
@@ -11,7 +12,7 @@ export const RequiredMark = () => (
   <span data-testid="required-mark" aria-label="required" style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>
 )
 
-function FilterHeader({ varName, varDef, filter, onChange }) {
+function FilterHeader({ varName, varDef, filter, onChange, hint = null }) {
   const ops = getFilterOperators(varDef)
   const isNumeric = varDef && (varDef.type === 'number' || varDef.type === 'integer')
   const isNumericEnum = varDef?.type === 'enum' && typeof varDef.enum?.[0] === 'number'
@@ -21,6 +22,7 @@ function FilterHeader({ varName, varDef, filter, onChange }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <span>{varName}{varDef?.required && !varDef.common && <RequiredMark />}</span>
+        {hint}
         {active && <FilterOutlined style={{ fontSize: 10, color: '#1677ff' }} />}
       </div>
       <div style={{ display: 'flex', gap: 2 }}>
@@ -63,6 +65,9 @@ export default function AlertTable({
   // derived Scope column and "Add exception".
   selectors = null,
   selectorDefaults = {},
+  // Selector columns some rule matches under another label (#121, #133):
+  // { column: [[rule, label], …] }, from renamedSelectorLabels.
+  selectorLabels = {},
 }) {
   const [exception, setException] = useState(null)
   const activeFilters = effectiveFilters ?? filters
@@ -171,6 +176,12 @@ export default function AlertTable({
     setException(null)
   }
 
+  const labelsHint = name => selectorLabels[name] && (
+    <Tooltip title={<SelectorLabelsList column={name} pairs={selectorLabels[name]} />} styles={{ root: { maxWidth: 480 } }}>
+      <InfoCircleOutlined data-testid={`selector-labels-${name}`} style={{ fontSize: 12, color: '#8c8c8c' }} />
+    </Tooltip>
+  )
+
   const columns = [
     ...vars.map(v => {
       const isCommon = v.name in commonValues
@@ -181,8 +192,9 @@ export default function AlertTable({
               varDef={v}
               filter={filters[v.name]}
               onChange={f => onFiltersChange({ ...filters, [v.name]: f })}
+              hint={labelsHint(v.name)}
             />
-          : <span>{v.name}{v.required && !v.common && <RequiredMark />}</span>,
+          : <span>{v.name}{v.required && !v.common && <RequiredMark />} {labelsHint(v.name)}</span>,
         dataIndex: v.name,
         key: v.name,
         render: (_, row) => isCommon

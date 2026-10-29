@@ -13,6 +13,7 @@ import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUt
 import { pruneAllValues } from '../utils/valueUtils'
 import { parseRulesDir } from '../utils/rulesFile'
 import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
+import { renamedSelectorLabels } from '../utils/selectorContract'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -677,6 +678,7 @@ export default function AlertUserView() {
                   rows={rows}
                   selectors={rulesModel?.groups?.[activeAlert]?.selectors || null}
                   selectorDefaults={selectorDefaultsOf(rulesModel, activeAlert)}
+                  selectorLabels={renamedSelectorLabels(rulesModel?.groups?.[activeAlert])}
                   commonValues={commonValues}
                   filters={filters}
                   onFiltersChange={setFilters}

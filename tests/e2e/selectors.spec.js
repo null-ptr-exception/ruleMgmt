@@ -214,3 +214,74 @@ test.describe('Alerts page', () => {
     expect(JSON.stringify(values)).toContain('noisy')
   })
 })
+
+// #133: a column some rule matches under another label (#121) says so, in
+// the Alerts table and on its selector tag in the editor.
+test.describe('selectorLabels', () => {
+  const CHART = 'e2e-selector-labels'
+  const FOLDER = 'e2e-selector-labels/dev'
+  const REPLICAS = `group: replicas
+selectors: [namespace, workload]
+selectorLabels: {workload: deployment}
+columns:
+  namespace: {type: string, required: true}
+  workload: {type: string, default: ".*"}
+  threshold: {type: number, default: 90}
+rules:
+  - alert: DeploymentReplicasLow
+    expr: kube_deployment_status_replicas_available{\${selector}} < \${threshold}
+  - alert: StatefulSetReplicasLow
+    selectorLabels: {workload: statefulset}
+    expr: kube_statefulset_status_replicas_ready{\${selector}} < \${threshold}
+`
+
+  test.beforeEach(async ({ request }) => {
+    await createChart(request, CHART, { 'replicas.yaml': REPLICAS })
+    expect((await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: CHART } })).status()).toBeLessThan(300)
+    const save = await request.post(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`, {
+      data: { values: { replicas: [{ namespace: 'prod' }] } },
+    })
+    expect(save.status()).toBeLessThan(300)
+  })
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
+    await request.delete(`/api/v2/charts/${CHART}`)
+  })
+
+  test('the Alerts table shows each rule\'s label beside a renamed column, and nothing beside the others', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = page.locator('.ant-tree')
+    const folder = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${CHART}$`) }).first()
+    await expect(folder).toBeVisible({ timeout: 8000 })
+    const switcher = folder.locator('.ant-tree-switcher_close')
+    if (await switcher.count() > 0) await switcher.click()
+    await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
+      .filter({ hasText: CHART }).first().locator('.ant-tree-node-content-wrapper').click()
+    await page.getByText('replicas', { exact: true }).first().click()
+    // antd's sticky table repeats the header in a hidden measure row
+    const header = page.locator('.ant-table-thead')
+    await expect(header.getByTestId('selector-labels-workload')).toBeVisible({ timeout: 5000 })
+
+    await expect(header.getByTestId('selector-labels-namespace')).toHaveCount(0)
+    await header.getByTestId('selector-labels-workload').hover()
+    const list = page.getByTestId('selector-labels-list-workload')
+    await expect(list).toContainText('DeploymentReplicasLow: deployment')
+    await expect(list).toContainText('StatefulSetReplicasLow: statefulset')
+  })
+
+  test('the editor\'s selector tag lists the labels too', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
+    await page.locator('.ant-select').first().click()
+    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
+    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await page.getByText('replicas', { exact: true }).first().click()
+
+    await page.getByTestId('selector-tag-workload').hover()
+    await expect(page.getByTestId('selector-labels-list-workload')).toContainText('StatefulSetReplicasLow: statefulset')
+    await page.getByTestId('selector-tag-namespace').hover()
+    await expect(page.getByRole('tooltip').filter({ hasText: /^A selector:/ })).toBeVisible()
+    await expect(page.getByTestId('selector-labels-list-namespace')).toHaveCount(0)
+  })
+})

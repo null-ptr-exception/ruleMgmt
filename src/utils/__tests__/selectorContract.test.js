@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   intersects, strictlyContains, directChildColumn, meet, exclusions, directChildren, parentOf,
   rowProblems, selectorValueProblems, misplacedSelectorRefs, selectorTemplateProblems, selectorCells,
-  SELECTOR_PATTERN, selectorCellProblem, looksLikeRegex, selectorPath, selectorLabelsFor, renameSelectorColumn,
+  SELECTOR_PATTERN, selectorCellProblem, looksLikeRegex, selectorPath, selectorLabelsFor, renameSelectorColumn, renamedSelectorLabels,
 } from '../selectorContract.js'
 import { parseGroupFile, parseRulesDir, groupFileText, modelToSchema, genSchema } from '../rulesFile.js'
 import { checkRules } from '../ruleChecks.js'
@@ -218,6 +218,17 @@ describe('selectorLabels', () => {
 
   it('passes a well-formed group', () => {
     expect(selectorTemplateProblems(group())).toEqual([])
+  })
+
+  // #133: what the table shows beside a column's name.
+  it('lists each rule\'s label for a renamed column only', () => {
+    const g = group()
+    g.rules.push({ raw: 'alert: R\nexpr: up{${selector}}' })
+    expect(renamedSelectorLabels(g)).toEqual({
+      workload: [['DeploymentLow', 'deployment'], ['StatefulSetLow', 'statefulset'], ['a raw rule', 'deployment']],
+    })
+    expect(renamedSelectorLabels(group({ selectorLabels: undefined, rules: [{ alert: 'A', expr: 'up{${selector}}' }] }))).toEqual({})
+    expect(renamedSelectorLabels(undefined)).toEqual({})
   })
 
   it('refuses a label that is not a label name', () => {

@@ -82,6 +82,8 @@ the query lives in `vars` so there is only ever one copy of it.
 | `type` | no | Which kind of rules these are, and so what they are wrapped in: `prometheus` (the default — `expr` is PromQL, emitted as a `PrometheusRule`) or `vlogs` (`expr` is LogsQL, evaluated against VictoriaLogs, emitted as a `VMRule`). The choices are the profiles in `config/outputs.json` — see [output profiles](#output-profiles) |
 | `interval` | no | How often the group is evaluated — a duration such as `30s`, `1m`, `1h30m`. Left out, the evaluator's own default applies |
 | `limit` | no | Maximum series the group may produce — a whole number, `0` or more. Left out, there is no limit |
+| `selectors` | no | The selector columns, coarsest first — see [selectors](#selectors-a-default-with-exceptions) |
+| `selectorLabels` | no | Selector column → the label it matches, when the two names differ — see [matching a label of another name](#matching-a-label-of-another-name) |
 | `vars` | no | Edit-time text substitutions |
 | `columns` | no | The table's columns |
 | `rules` | yes | The rules |
@@ -115,12 +117,13 @@ Different groups in one chart may have different types.
 | `labels` | A map. Values may be literal, a placeholder, or a Prometheus template |
 | `annotations` | Same as labels |
 | `raw` | A hand-written `rules[]` entry — see [the escape hatch](#the-escape-hatch) |
+| `selectorLabels` | This rule's own selector column → label names, over the group's — see [matching a label of another name](#matching-a-label-of-another-name). Never reaches the alert |
 | `note` | Why this rule is the way it is. Never reaches the alert |
 
 Any other key is rejected. A rule that needs a field the list does not cover
 goes through `raw`.
 
-A recording rule (`record`) has only `record`, `expr`, `labels` and `note` —
+A recording rule (`record`) has only `record`, `expr`, `labels`, `selectorLabels` and `note` —
 Prometheus gives it no `for`, `keep_firing_for` or annotations, and each of
 those is rejected on one.
 
@@ -552,6 +555,42 @@ a regex, so `/data/testXyml` is not excluded by the `.` in it.
 A selector column that a label also reads keeps that rule too: no `"` or
 `\` (see [what a row's value can hold](#what-a-rows-value-can-hold)).
 
+### Matching a label of another name
+
+A selector column's name is the label it matches, unless `selectorLabels`
+says otherwise — for the group, or for one rule over the group's. One
+`workload` column can then pick a Deployment in one rule and a StatefulSet in
+the next, though kube-state-metrics labels them `deployment` and
+`statefulset`:
+
+```yaml
+# rules/replicas.yaml
+selectors: [namespace, workload]
+selectorLabels: {workload: deployment}
+
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, default: ".*" }
+  threshold: { type: number, default: 90 }
+
+rules:
+  - alert: DeploymentReplicasLow
+    expr: kube_deployment_status_replicas_available{${selector}} / kube_deployment_spec_replicas{${selector}} * 100 < ${threshold}
+  - alert: StatefulSetReplicasLow
+    selectorLabels: {workload: statefulset}
+    expr: kube_statefulset_status_replicas_ready{${selector}} / kube_statefulset_replicas{${selector}} * 100 < ${threshold}
+```
+
+```
+namespace  workload  threshold   DeploymentReplicasLow                       StatefulSetReplicasLow
+prod       .*        90          {namespace="prod", deployment!~`api`}  {namespace="prod", statefulset!~`api`}
+prod       api       50          {namespace="prod", deployment="api"}   {namespace="prod", statefulset="api"}
+```
+
+Only the label in the rendered matcher changes. Which row gives up which is
+decided on the columns, and the table's columns keep their names. Whether
+each metric has the label is the template owner's to know: it is not checked.
+
 ### What is refused
 
 What is refused when the template is saved:
@@ -564,6 +603,9 @@ What is refused when the template is saved:
 | A rule whose `expr` does not use `${selector}`, or `${selector}` anywhere else | The rows would overlap in what that rule watches |
 | `${selector}` not right after `metric{` or a `,` inside it | It can expand to nothing |
 | `selectors` on a once group, or on a group whose `expr` is not PromQL | No rows; no label matchers |
+| `selectorLabels` naming a column that is not in `selectors`, or on a group without `selectors` | Nothing to rename |
+| A `selectorLabels` label that is not a label name: letters, digits and `_`, not starting with a digit or `__` | Prometheus would refuse the matcher; `__` names are its own |
+| Two selector columns matching the same label in one rule — `selectorLabels` included | Both matchers would land on one label |
 
 What is refused when a deployment is saved, with the row that would fix it
 offered alongside:
@@ -575,8 +617,9 @@ offered alongside:
 | **Crossing**: `prod/.*/noisy` and `prod/api/.*` overlap on `prod/api/noisy`, and neither contains the other | The overlap as a row, thresholds left for you to fill |
 | **Skipping**: `prod/api/noisy` under `prod/.*/.*` with no `prod/api/.*` between them — PromQL cannot exclude `NOT(workload=api AND pod=noisy)` | The middle row, with the parent's values: nothing changes |
 
-Changing a group's `selectors` — adding, removing or reordering — leaves
-`values.yaml` alone but changes what each row alerts on, so the save says so.
+Changing a group's `selectors` — adding, removing or reordering — or which
+label a column matches in a rule (`selectorLabels`) leaves `values.yaml` alone
+but changes what each row alerts on, so the save says so.
 
 ## Notification routing: `routing.yaml`
 

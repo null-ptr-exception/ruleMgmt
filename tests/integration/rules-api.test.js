@@ -146,6 +146,36 @@ rules:
     expect(await exists('templates/mem.yaml')).toBe(false)
     expect(await exists('rules/cpu.yaml')).toBe(true)
   })
+
+  // #114: only a generated file is a leftover. Save deleted anything in
+  // templates/ it had not just written, bar an x-custom-template group's
+  // file under its hyphenated name.
+  it('keeps hand-written files in templates/, and the chart is not drift', async () => {
+    await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify({
+      type: 'object',
+      properties: { spc_custom: { type: 'array', 'x-custom-template': true, items: { type: 'object', properties: {} } } },
+    }))
+    await fs.writeFile(path.join(chartDir, 'templates', 'spc_custom.yaml'), '# hand-written\n')
+    await fs.writeFile(path.join(chartDir, 'templates', 'configmap.yaml'), '# hand-written\n')
+
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    expect(status).toBe(200)
+    expect(await read('templates/spc_custom.yaml')).toBe('# hand-written\n')
+    expect(await read('templates/configmap.yaml')).toBe('# hand-written\n')
+
+    const { data } = await api('GET', '/api/v2/templates/demo')
+    expect(data.drift.state).toBe('ok')
+  })
+
+  it('deletes the template of a once group that is gone, which the schema never listed', async () => {
+    const ONCE = 'group: up\nonce: true\nrules:\n  - alert: Down\n    expr: up == 0\n'
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU, 'up.yaml': ONCE } })
+    expect(await exists('templates/up.yaml')).toBe(true)
+
+    await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+    expect(await exists('templates/up.yaml')).toBe(false)
+  })
 })
 
 // #65: changing a group's type replaces its objects — not breaking, but

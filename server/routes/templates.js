@@ -6,7 +6,7 @@ import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
-import { generateProducts } from '../../src/utils/drift.js'
+import { generateProducts, staleTemplates } from '../../src/utils/drift.js'
 import { isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { ensureChartYaml } from '../../src/utils/chartYaml.js'
 import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
@@ -271,24 +271,17 @@ export default function templatesRouter() {
       if (created) entries.push([chartYamlFile, chartYamlText])
 
       // Files on disk with no counterpart any more: a removed group, or a
-      // _common.yaml for a chart that no longer has common columns. A
-      // hand-written x-custom-template's file is left alone.
-      const customTemplates = new Set(
-        Object.entries(newSchema.properties || {})
-          .filter(([k, d]) => isAlertGroup(k) && d['x-custom-template'])
-          .map(([k]) => `${k.replace(/_/g, '-')}.yaml`)
-      )
-      const keep = { rules: new Set(Object.keys(files)), templates: new Set(Object.keys(products.templates)) }
-      const removed = []
-      for (const [dir, kind] of [[rulesDir, 'rules'], [tmplDir, 'templates']]) {
-        let onDisk = []
-        try { onDisk = (await fs.readdir(dir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
-        for (const f of onDisk) {
-          if (keep[kind].has(f)) continue
-          if (kind === 'templates' && customTemplates.has(f)) continue
-          removed.push(path.join(dir, f))
-        }
+      // _common.yaml for a chart that no longer has common columns. In
+      // templates/ only a generated file is: one a hand-written file sits
+      // next to is left alone (#114).
+      const listYaml = async dir => {
+        try { return (await fs.readdir(dir)).filter(f => f.endsWith('.yaml')) } catch { return [] }
       }
+      const removed = [
+        ...(await listYaml(rulesDir)).filter(f => !(f in files)).map(f => path.join(rulesDir, f)),
+        ...staleTemplates(await listYaml(tmplDir), products.templates, { schemas: [before], models: [beforeModel, model] })
+          .map(f => path.join(tmplDir, f)),
+      ]
 
       const wrote = await writeChanged(entries)
       for (const abs of removed) await fs.rm(abs, { force: true })

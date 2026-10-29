@@ -28,9 +28,9 @@
 import fs from 'fs/promises'
 import path from 'path'
 import {
-  schemaToModel, modelToFiles, parseRulesDir, validateValues, customTemplateGroups,
+  schemaToModel, modelToFiles, parseRulesDir, validateValues,
 } from '../src/utils/rulesFile.js'
-import { generateProducts } from '../src/utils/drift.js'
+import { generateProducts, staleTemplates } from '../src/utils/drift.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { ensureChartYaml } from '../src/utils/chartYaml.js'
 import yaml from 'js-yaml'
@@ -114,23 +114,22 @@ async function reconcile(relPath, want) {
   results.push([have === null ? 'created' : 'updated', relPath])
 }
 
-// A templates/ file whose group has gone or no longer generates one — but
-// never an x-custom-template group's hand-written file — is removed, or under
-// --check reported: Helm still renders it. rules/ is never pruned: it is
-// either being written for the first time or it is the source.
+// A templates/ file whose group has gone or no longer generates one is
+// removed, or under --check reported: Helm still renders it. Any other file
+// there is hand-written and kept (#114). rules/ is never pruned: it is either
+// being written for the first time or it is the source.
 {
   if (migrating && !check) await fs.mkdir(rulesDir, { recursive: true })
 
-  // From the model during a migration, from the schema on disk after it:
-  // a model read from rules/ never has these groups.
-  const customTemplates = new Set(
-    [...Object.entries(model.groups).filter(([, g]) => g.custom).map(([k]) => k), ...customTemplateGroups(schema)]
-      .map(k => `${k.replace(/_/g, '-')}.yaml`)
-  )
   let existingTemplates = []
   try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
+  const stale = new Set(staleTemplates(existingTemplates, products.templates, { schemas: [schema], models: [model] }))
   for (const name of existingTemplates) {
-    if (name in products.templates || customTemplates.has(name)) continue
+    if (name in products.templates) continue
+    if (!stale.has(name)) {
+      results.push(['kept', `${path.join('templates', name)} (not generated)`])
+      continue
+    }
     if (check) {
       results.push(['ORPHANED', path.join('templates', name)])
       failed++

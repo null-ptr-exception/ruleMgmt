@@ -183,10 +183,8 @@ dialog above first.
 
 From the command line, delete `rules/<group>.yaml` and run
 [`gen-rules`](#edit-the-rules-files-directly): the group's template is removed
-with it (`removed templates/<group>.yaml`). A once group is the exception
-here — it is not in `values.schema.json`, so `gen-rules` cannot tell its
-template from a file of your own and keeps it (`kept … (not generated)`);
-delete that template too, or remove the group in the editor.
+with it (`removed templates/<group>.yaml`). A once group's goes too: the
+schema lists it under `x-once-groups`.
 
 Only files the generator wrote are ever removed. Anything else in
 `templates/` is left alone — see

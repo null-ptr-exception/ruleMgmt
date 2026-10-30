@@ -218,6 +218,11 @@ export function modelToSchema(model, originalSchema = null) {
     type: originalSchema?.type || 'object',
     properties: {},
   }
+  // A once group has no entry in properties, so this list is what tells
+  // gen-rules its template is generated, not hand-written, once the group is
+  // gone from rules/ (#122). Absent when there is none.
+  const onceGroups = sortedGroups(model.groups).filter(([, g]) => g.once && !g.custom).map(([k]) => k)
+  if (onceGroups.length) schema['x-once-groups'] = onceGroups
   // A clone's record of where it came from (server/routes/charts.js) — not
   // derived from rules/, so a regenerated schema has to carry it over or the
   // clone reads as stale and its first save drops the record.

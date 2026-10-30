@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
-import { computeDrift, generateProducts, blocksCommit } from '../drift.js'
+import { computeDrift, generateProducts, blocksCommit, staleTemplates } from '../drift.js'
 import { schemaToModel, modelToSchema, modelToFiles } from '../rulesFile.js'
 import { objectMetaFromEnv } from '../objectMeta.js'
 
@@ -70,6 +70,17 @@ describe('computeDrift', () => {
   it('reports stale when the rules/ files do not parse', () => {
     expect(computeDrift({ rulesFiles: { 'cpu.yaml': 'group: cpu\nbogus: 1\nrules: []\n' }, schema, templateFiles: templates, objectMeta }).state)
       .toBe('stale')
+  })
+})
+
+// #122: a once group is not in the schema's properties, so without its list a
+// gone once group's template read as hand-written and stayed.
+describe('staleTemplates', () => {
+  it('counts the once groups a schema lists as its own', () => {
+    const schema = { properties: {}, 'x-once-groups': ['up', 42] }
+    expect(staleTemplates(['up.yaml', 'configmap.yaml'], {}, { schemas: [schema] })).toEqual(['up.yaml'])
+    expect(staleTemplates(['up.yaml'], { 'up.yaml': '' }, { schemas: [schema] })).toEqual([])
+    expect(staleTemplates(['up.yaml'], {}, { schemas: [{ properties: {} }] })).toEqual([])
   })
 })
 

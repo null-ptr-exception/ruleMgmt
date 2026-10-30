@@ -364,6 +364,14 @@ rules:
     expect(groupGenDef(model.groups.api_recording).once).toBe(true)
   })
 
+  // #122: the list is how gen-rules knows a once group's template is its own
+  // once the group is gone from rules/.
+  it('lists the once groups in x-once-groups, sorted, and writes no key without one', () => {
+    const { model } = parseRulesDir({ 'api_recording.yaml': onceSrc, 'up.yaml': onceSrc.replace('api_recording', 'up') })
+    expect(modelToSchema(model)['x-once-groups']).toEqual(['api_recording', 'up'])
+    expect(modelToSchema(schemaToModel(sampleSchema).model)).not.toHaveProperty('x-once-groups')
+  })
+
   it('flags rows given to a once group', () => {
     const { model } = parseRulesDir({ 'api_recording.yaml': onceSrc })
     expect(validateValues({ api_recording: [] }, model)).toEqual([])

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
 import { computeDrift, generateProducts, blocksCommit, staleTemplates } from '../drift.js'
-import { schemaToModel, modelToSchema, modelToFiles } from '../rulesFile.js'
+import { schemaToModel, modelToSchema, modelToFiles, parseRulesDir } from '../rulesFile.js'
 import { objectMetaFromEnv } from '../objectMeta.js'
 
 const legacySchema = JSON.parse(
@@ -60,6 +60,20 @@ describe('computeDrift', () => {
     const out = drift({ schema: withGhost, templateFiles: { ...templates, 'ghost.yaml': 'name: ghost\n' } })
     expect(out.state).toBe('stale')
     expect(out.files).toContain('templates/ghost.yaml (orphaned)')
+  })
+
+  // #122: a chart saved before x-once-groups existed is not blocked on upgrade.
+  it('is ok when a schema saved before x-once-groups lacks the key, stale when the key is wrong', () => {
+    const onceFiles = { ...rulesFiles, 'up.yaml': 'group: up\nonce: true\nrules:\n  - alert: Down\n    expr: up == 0\n' }
+    const products = generateProducts(parseRulesDir(onceFiles).model, schema, objectMeta)
+    const current = JSON.parse(products.schemaText)
+    expect(current['x-once-groups']).toEqual(['up'])
+    const { 'x-once-groups': _added, ...beforeUpgrade } = current
+    const at = s => computeDrift({ rulesFiles: onceFiles, schema: s, templateFiles: products.templates, objectMeta })
+
+    expect(at(current)).toEqual({ state: 'ok' })
+    expect(at(beforeUpgrade)).toEqual({ state: 'ok' })
+    expect(at({ ...current, 'x-once-groups': [] }).state).toBe('stale')
   })
 
   // #114: a file no group could have generated is hand-written, not drift.

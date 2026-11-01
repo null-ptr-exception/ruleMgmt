@@ -106,8 +106,16 @@ export function computeDrift({ rulesFiles, schema, templateFiles = {}, objectMet
   }
   if (missing.length) return { state: 'missing', files: missing }
 
+  // A schema saved before #122 has no x-once-groups. That alone is not drift:
+  // the user changed nothing, and the next save or gen-rules writes the key.
+  let wantSchemaText = want.schemaText
+  if (!('x-once-groups' in schema)) {
+    const { 'x-once-groups': _added, ...rest } = JSON.parse(want.schemaText)
+    wantSchemaText = JSON.stringify(rest, null, 2) + '\n'
+  }
+
   const differing = []
-  if (JSON.stringify(schema, null, 2) + '\n' !== want.schemaText) differing.push('values.schema.json')
+  if (JSON.stringify(schema, null, 2) + '\n' !== wantSchemaText) differing.push('values.schema.json')
   for (const [name, content] of Object.entries(want.templates)) {
     if (templateFiles[name] !== content) differing.push(`templates/${name}`)
   }

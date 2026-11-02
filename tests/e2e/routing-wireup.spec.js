@@ -91,7 +91,10 @@ test('Preview renders the AlertmanagerConfig with the rules, through helm', asyn
 test('a deployment with templates/ and charts/ stays a leaf in the tree', async ({ page, request }) => {
   // charts/ is what Preview's `helm dependency update` fetches: render once,
   // so it is there however this test is run.
-  expect((await request.post(`/api/v2/render/${CHART}/prod?${q}`)).ok()).toBeTruthy()
+  // A failed helm run is still HTTP 200, with { ok: false } and the error.
+  const render = await request.post(`/api/v2/render/${CHART}/prod?${q}`)
+  expect(render.ok()).toBeTruthy()
+  expect(await render.json()).toMatchObject({ ok: true })
   expect(await fs.readdir(path.join(DEPLOYMENT_DIR, 'charts'))).toContainEqual(expect.stringMatching(/\.tgz$/))
   expect(await fs.readdir(path.join(DEPLOYMENT_DIR, 'templates'))).toContain('alertmanagerconfig.yaml')
 

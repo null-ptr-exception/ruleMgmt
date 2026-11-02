@@ -24,9 +24,8 @@ test.describe('Template Editor', () => {
     // spec's chart, deleted after the list loaded, and picking it clears the
     // selection again.
     const option = page.locator('.ant-select-item-option').filter({ hasText: 'mariadb-alerts' })
-    if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await option.click()
-      await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
-    }
+    await expect(option).toBeVisible({ timeout: 5000 })
+    await option.click()
+    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
   })
 })

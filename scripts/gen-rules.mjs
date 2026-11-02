@@ -28,8 +28,9 @@
 import fs from 'fs/promises'
 import path from 'path'
 import {
-  schemaToModel, modelToFiles, parseRulesDir, validateValues,
+  schemaToModel, modelToFiles, parseRulesDir, validateValues, customTemplateGroups, genSchema,
 } from '../src/utils/rulesFile.js'
+import { checkRules } from '../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates } from '../src/utils/drift.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { ensureChartYaml } from '../src/utils/chartYaml.js'
@@ -82,6 +83,16 @@ if (!migrating) {
   warnings = ['rules/ already present — treating it as the source, regenerating values.schema.json and templates/ from it']
 } else {
   ;({ model, warnings } = schemaToModel(schema))
+}
+
+// The checks a save makes (#115): the editor refuses these rules, so this
+// does not generate from them either — nor pass them under --check. A
+// 'commit' finding is printed and left for the commit, as a save does.
+const findings = checkRules(genSchema(model, schema))
+for (const f of findings) console.log(`${f.severity === 'save' ? 'ERROR ' : 'warn  '} ${f.group ? `${f.group}: ` : ''}${f.message}`)
+if (findings.some(f => f.severity === 'save')) {
+  console.log('\nRefusing to write: the rules would not pass the checks a save makes.')
+  process.exit(1)
 }
 
 // Only a migration writes rules files; an existing rules/ is left as it is.

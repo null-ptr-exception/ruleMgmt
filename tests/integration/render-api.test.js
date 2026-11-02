@@ -397,10 +397,12 @@ spec:
     }
   })
 
-  // #96: one checker process per object, but at most 4 at a time; the
-  // results still come back in the objects' order.
-  it('runs at most 4 checkers at once, and reports the objects in order', async () => {
-    const objects = Array.from({ length: 10 }, (_, i) => `---
+  // #96: one checker process per object, but at most 4 at a time — promtool
+  // and vmalert together, not 4 each — and the results still come back in
+  // the objects' order.
+  it('runs at most 4 checkers at once across promtool and vmalert, and reports the objects in order', async () => {
+    // Even objects go to promtool, odd ones (vlogs VMRules) to vmalert.
+    const objects = Array.from({ length: 10 }, (_, i) => i % 2 === 0 ? `---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -411,33 +413,57 @@ spec:
       rules:
         - alert: Big${i + 1}
           expr: up == ${i}
+` : `---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: rel-big-1-${i + 1}
+spec:
+  groups:
+    - name: big
+      type: vlogs
+      rules:
+        - alert: Big${i + 1}
+          expr: '"panic:" | stats count() as n | filter n:>${i}'
 `)
     await fs.writeFile(helmOutputFile, objects.join(''))
 
-    // Each run leaves a marker while it works and logs how many it saw; the
-    // later objects sleep less, so they would finish first if unordered.
+    // Each run, of either checker, leaves a marker in the same directory
+    // while it works and logs how many it saw; the later objects sleep less,
+    // so they would finish first if unordered.
     const runningDir = path.join(tmpDir, 'running')
     const peakLog = path.join(tmpDir, 'peak.log')
+    const ranLog = path.join(tmpDir, 'ran.log')
     await fs.rm(runningDir, { recursive: true, force: true })
     await fs.mkdir(runningDir)
     await fs.rm(peakLog, { force: true })
-    const counting = path.join(tmpDir, 'counting-promtool')
-    await fs.writeFile(counting, `#!/bin/sh
+    await fs.rm(ranLog, { force: true })
+    // promtool check rules <file>; vmalert -dryRun -rule=<file>
+    const counting = (tool, fileExpr) => `#!/bin/sh
 me="${runningDir}/$$"
 touch "$me"
 ls "${runningDir}" | wc -l >> "${peakLog}"
-n=$(basename "$3" | cut -c1-4 | sed 's/^0*//')
+f=${fileExpr}
+echo ${tool} >> "${ranLog}"
+n=$(basename "$f" | cut -c1-4 | sed 's/^0*//')
 n=\${n:-0}
 sleep "0.$((30 - n * 3))"
 rm -f "$me"
-echo "Checking rules"
-`, { mode: 0o755 })
-    process.env.PROMTOOL_BIN = counting
+`
+    const countingPromtool = path.join(tmpDir, 'counting-promtool')
+    const countingVmalert = path.join(tmpDir, 'counting-vmalert')
+    await fs.writeFile(countingPromtool, counting('promtool', '"$3"') + 'echo "Checking rules"\n', { mode: 0o755 })
+    await fs.writeFile(countingVmalert, counting('vmalert', '"\${2#-rule=}"'), { mode: 0o755 })
+    process.env.PROMTOOL_BIN = countingPromtool
+    process.env.VMALERT_BIN = countingVmalert
 
     const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
 
     expect(status).toBe(200)
     expect(data.check.passed).toBe(true)
+    expect(data.check.tools).toEqual(['promtool', 'vmalert'])
+    const ran = (await fs.readFile(ranLog, 'utf-8')).trim().split('\n').sort()
+    expect(ran).toEqual([...Array(5).fill('promtool'), ...Array(5).fill('vmalert')])
     const seen = (await fs.readFile(peakLog, 'utf-8')).trim().split('\n').map(Number)
     expect(seen).toHaveLength(10)
     expect(Math.max(...seen)).toBeLessThanOrEqual(4)

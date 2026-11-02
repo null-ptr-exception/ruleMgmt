@@ -208,7 +208,8 @@ describe('in the rules format', () => {
 describe('what a selector cell can hold', () => {
   const allowed = ['.*', 'prod', 'my_app.1', '/data', '/data/test.yml', '/dev/sda1', 'registry.example.com/app:1.2',
     'a"b', 'a\\b', 'a b', '.', '-x', '_x', 'api-.*', 'a|b', '*', 'x', 'a\tb']
-  const refused = ['', 'a`b', '`', 'a\nb', 'a\rb', ' prod', 'prod ', ' .*', ' ', '\tx']
+  const refused = ['', 'a`b', '`', 'a\nb', 'a\rb', ' prod', 'prod ', ' .*', ' ', '\tx',
+    ' prod', 'prod　', '﻿x', ' x']
 
   it.each(allowed)('allows %j', v => {
     expect(selectorCellProblem(v)).toBeNull()

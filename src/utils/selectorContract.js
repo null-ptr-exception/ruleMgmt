@@ -40,8 +40,13 @@ export const ANY = '.*'
  * absent), a backtick (the exclusion is a backtick-quoted regex), a line
  * break, and a space at either end (compared as written, so almost always a
  * typo). No lookbehind: Helm checks values.schema.json with Go's regexp.
+ *
+ * The space at either end is JavaScript's \s, spelled out: Go's \s is ASCII
+ * only, so a cell starting with a no-break space would pass Helm and fail the
+ * save. The non-ASCII ones are the characters themselves — Go has no \u.
  */
-export const SELECTOR_PATTERN = '^[^\\s`]([^`\\r\\n]*[^\\s`])?$'
+const EDGE_SPACE = '\\t\\n\\v\\f\\r    -     　﻿'
+export const SELECTOR_PATTERN = `^[^${EDGE_SPACE}\`]([^\`\\r\\n]*[^${EDGE_SPACE}\`])?$`
 const SELECTOR_RE = new RegExp(SELECTOR_PATTERN)
 
 /** Why a selector cell cannot be used, or null. Agrees with SELECTOR_PATTERN. */

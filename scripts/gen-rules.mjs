@@ -28,7 +28,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import {
-  schemaToModel, modelToFiles, parseRulesDir, validateValues, customTemplateGroups, genSchema,
+  schemaToModel, modelToFiles, parseRulesDir, validateValues, genSchema,
 } from '../src/utils/rulesFile.js'
 import { checkRules } from '../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates } from '../src/utils/drift.js'

@@ -11,7 +11,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "lint": "eslint 'src/**/*.{js,jsx}' 'server.js' 'server/**/*.js' --no-error-on-unmatched-pattern"
+    "lint": "eslint 'src/**/*.{js,jsx}' 'server.js' 'server/**/*.js' 'scripts/**/*.mjs' --no-error-on-unmatched-pattern"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.3",

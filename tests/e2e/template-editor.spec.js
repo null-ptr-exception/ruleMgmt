@@ -20,7 +20,10 @@ test.describe('Template Editor', () => {
     await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
     const select = page.locator('.ant-select').first()
     await select.click()
-    const option = page.locator('.ant-select-item-option').first()
+    // The sample chart, which no spec deletes: the first option can be another
+    // spec's chart, deleted after the list loaded, and picking it clears the
+    // selection again.
+    const option = page.locator('.ant-select-item-option').filter({ hasText: 'mariadb-alerts' })
     if (await option.isVisible({ timeout: 3000 }).catch(() => false)) {
       await option.click()
       await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })

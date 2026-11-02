@@ -30,8 +30,8 @@ cells:
 `
 
 const q = `folder=${encodeURIComponent(FOLDER)}`
-// Same default as server.js — the E2E server runs without GITOPS_DIR.
-const DEPLOYMENT_DIR = path.resolve('gitops', FOLDER)
+// Where server.js keeps the workspace: GITOPS_DIR, or gitops/ beside it.
+const DEPLOYMENT_DIR = path.resolve(process.env.GITOPS_DIR || 'gitops', FOLDER)
 
 test.beforeEach(async ({ request }) => {
   await request.delete(`/api/v2/charts/${CHART}`)

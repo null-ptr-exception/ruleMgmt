@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
-import { computeDrift, generateProducts, blocksCommit } from '../drift.js'
-import { schemaToModel, modelToSchema, modelToFiles } from '../rulesFile.js'
+import { computeDrift, generateProducts, blocksCommit, staleTemplates } from '../drift.js'
+import { schemaToModel, modelToSchema, modelToFiles, parseRulesDir } from '../rulesFile.js'
 import { objectMetaFromEnv } from '../objectMeta.js'
 
 const legacySchema = JSON.parse(
@@ -62,6 +62,20 @@ describe('computeDrift', () => {
     expect(out.files).toContain('templates/ghost.yaml (orphaned)')
   })
 
+  // #122: a chart saved before x-once-groups existed is not blocked on upgrade.
+  it('is ok when a schema saved before x-once-groups lacks the key, stale when the key is wrong', () => {
+    const onceFiles = { ...rulesFiles, 'up.yaml': 'group: up\nonce: true\nrules:\n  - alert: Down\n    expr: up == 0\n' }
+    const products = generateProducts(parseRulesDir(onceFiles).model, schema, objectMeta)
+    const current = JSON.parse(products.schemaText)
+    expect(current['x-once-groups']).toEqual(['up'])
+    const { 'x-once-groups': _added, ...beforeUpgrade } = current
+    const at = s => computeDrift({ rulesFiles: onceFiles, schema: s, templateFiles: products.templates, objectMeta })
+
+    expect(at(current)).toEqual({ state: 'ok' })
+    expect(at(beforeUpgrade)).toEqual({ state: 'ok' })
+    expect(at({ ...current, 'x-once-groups': [] }).state).toBe('stale')
+  })
+
   // #114: a file no group could have generated is hand-written, not drift.
   it('is ok with a hand-written file next to the generated ones', () => {
     expect(drift({ templateFiles: { ...templates, 'configmap.yaml': 'kind: ConfigMap\n' } })).toEqual({ state: 'ok' })
@@ -70,6 +84,17 @@ describe('computeDrift', () => {
   it('reports stale when the rules/ files do not parse', () => {
     expect(computeDrift({ rulesFiles: { 'cpu.yaml': 'group: cpu\nbogus: 1\nrules: []\n' }, schema, templateFiles: templates, objectMeta }).state)
       .toBe('stale')
+  })
+})
+
+// #122: a once group is not in the schema's properties, so without its list a
+// gone once group's template read as hand-written and stayed.
+describe('staleTemplates', () => {
+  it('counts the once groups a schema lists as its own', () => {
+    const schema = { properties: {}, 'x-once-groups': ['up', 42] }
+    expect(staleTemplates(['up.yaml', 'configmap.yaml'], {}, { schemas: [schema] })).toEqual(['up.yaml'])
+    expect(staleTemplates(['up.yaml'], { 'up.yaml': '' }, { schemas: [schema] })).toEqual([])
+    expect(staleTemplates(['up.yaml'], {}, { schemas: [{ properties: {} }] })).toEqual([])
   })
 })
 

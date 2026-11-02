@@ -46,8 +46,9 @@ export function generateProducts(model, originalSchema, objectMeta) {
  * templates/ is hand-written (an x-custom-template group's file, under either
  * spelling; a ConfigMap) and is never removed or called drift.
  *
- * A once group is not in the schema, so a caller that has the model from
- * before the change (Save) passes it too.
+ * A once group is not in the schema's properties: the schema lists it in
+ * x-once-groups (#122), and a caller that has the model from before the
+ * change (Save) passes that too.
  *
  * @param names      the .yaml file names in templates/
  * @param generated  { '<name>.yaml': text } — what this run generates
@@ -60,10 +61,17 @@ export function staleTemplates(names, generated, { schemas = [], models = [] } =
   ])
   const groups = [
     ...schemas.flatMap(s => Object.keys(s?.properties || {}).filter(isAlertGroup)),
+    ...schemas.flatMap(s => onceGroupsOf(s)),
     ...models.flatMap(m => Object.keys(m?.groups || {})),
   ]
   const ours = new Set(groups.filter(g => !custom.has(g)).map(templateFileName))
   return names.filter(n => !(n in generated) && ours.has(n))
+}
+
+/** The once groups a schema lists (x-once-groups); anything but a name is ignored. */
+function onceGroupsOf(schema) {
+  const list = schema?.['x-once-groups']
+  return Array.isArray(list) ? list.filter(g => typeof g === 'string' && isAlertGroup(g)) : []
 }
 
 /**
@@ -98,8 +106,16 @@ export function computeDrift({ rulesFiles, schema, templateFiles = {}, objectMet
   }
   if (missing.length) return { state: 'missing', files: missing }
 
+  // A schema saved before #122 has no x-once-groups. That alone is not drift:
+  // the user changed nothing, and the next save or gen-rules writes the key.
+  let wantSchemaText = want.schemaText
+  if (!('x-once-groups' in schema)) {
+    const { 'x-once-groups': _added, ...rest } = JSON.parse(want.schemaText)
+    wantSchemaText = JSON.stringify(rest, null, 2) + '\n'
+  }
+
   const differing = []
-  if (JSON.stringify(schema, null, 2) + '\n' !== want.schemaText) differing.push('values.schema.json')
+  if (JSON.stringify(schema, null, 2) + '\n' !== wantSchemaText) differing.push('values.schema.json')
   for (const [name, content] of Object.entries(want.templates)) {
     if (templateFiles[name] !== content) differing.push(`templates/${name}`)
   }

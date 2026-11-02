@@ -111,6 +111,28 @@ describe('a chart with a once group', () => {
   })
 })
 
+// #122: removing a once group's rules/ file left its template behind — the
+// schema never listed the group, so gen-rules took the file for hand-written.
+describe('gen-rules.mjs after a once group is removed from rules/', () => {
+  it('deletes its template, and drops it from x-once-groups', async () => {
+    expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+    await fs.writeFile(path.join(chartDir, 'rules', 'up.yaml'), 'group: up\nonce: true\nrules:\n  - alert: Down\n    expr: up == 0\n')
+    expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+    const before = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
+    expect(before['x-once-groups']).toEqual(['up'])
+    await fs.access(path.join(chartDir, 'templates', 'up.yaml'))
+
+    await fs.rm(path.join(chartDir, 'rules', 'up.yaml'))
+    const again = run(GEN_RULES, [chartDir])
+    expect(again.status, again.stdout).toBe(0)
+    await expect(fs.access(path.join(chartDir, 'templates', 'up.yaml'))).rejects.toThrow()
+    const after = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
+    expect(after).not.toHaveProperty('x-once-groups')
+    const { chartDrift } = await import('../../server/lib/chartFiles.js')
+    expect((await chartDrift(chartDir)).state).toBe('ok')
+  })
+})
+
 describe('an x-custom-template group across gen-rules runs', () => {
   it('keeps its hand-written template and its schema entry, and stays clean', async () => {
     const schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))

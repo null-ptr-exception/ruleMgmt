@@ -143,8 +143,10 @@ rules:
 - A once group has **no `columns`** — it has no rows to read them from. Its
   rules may read `_common`.
 - It renders whatever `values.yaml` holds, zero rows included, and it has no
-  entry in `values.schema.json`: the rule owner has nothing to fill in, and
-  the Alerts page says so.
+  entry in the `properties` of `values.schema.json`: the rule owner has
+  nothing to fill in, and the Alerts page says so. The schema names it in a
+  top-level `"x-once-groups": ["up"]` instead, so that regenerating removes
+  its template once its rules file is gone; Helm skips the key.
 - A group cannot mix the two. A per-row rule and a once rule sit in separate
   Prometheus groups either way, and are evaluated separately — keeping them
   in separate files says so. A rule in a per-row group that reads none of its

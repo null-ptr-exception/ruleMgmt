@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test'
+import fs from 'fs/promises'
+import path from 'path'
+import yaml from 'js-yaml'
 
 // #92 / #111: a deployment's routing.yaml, end to end with the real binaries
 // — the integration tests use a fake helm. Its AlertmanagerConfig is part of
@@ -27,6 +30,8 @@ cells:
 `
 
 const q = `folder=${encodeURIComponent(FOLDER)}`
+// Same default as server.js — the E2E server runs without GITOPS_DIR.
+const DEPLOYMENT_DIR = path.resolve('gitops', FOLDER)
 
 test.beforeEach(async ({ request }) => {
   await request.delete(`/api/v2/charts/${CHART}`)
@@ -51,7 +56,11 @@ async function openTree(page) {
   await expect(top).toBeVisible({ timeout: 8000 })
   const switcher = top.locator('.ant-tree-switcher_close')
   if (await switcher.count() > 0) await switcher.click()
-  return tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'prod' }).first()
+  // The node named exactly `prod` whose chart tag is this chart: a substring
+  // match would also take another deployment, such as a root `a-prod`.
+  return tree.locator('.ant-tree-treenode')
+    .filter({ has: page.getByText('prod', { exact: true }) })
+    .filter({ has: page.locator('.ant-tag').getByText(CHART, { exact: true }) })
 }
 
 test('Preview renders the AlertmanagerConfig with the rules, through helm', async ({ page }) => {
@@ -65,15 +74,27 @@ test('Preview renders the AlertmanagerConfig with the rules, through helm', asyn
   await modal.getByText('Raw YAML').locator('..').getByRole('switch').click()
   const rendered = await modal.locator('pre').innerText()
   expect(rendered).toContain('# Source: prod/templates/alertmanagerconfig.yaml')
-  expect(rendered).toContain('kind: AlertmanagerConfig')
-  expect(rendered).toContain(`name: ${CHART}-prod-routing`)
-  expect(rendered).toMatch(/receiver: _drop[\s\S]*value: critical[\s\S]*receiver: oncall/)
-  expect(rendered).toContain('to: oncall@example.com')
+  // routing.yaml's one cell, as helm rendered it: unmatched alerts drop,
+  // severity=critical goes to oncall, and oncall is the one with the address.
+  const alertmanager = yaml.loadAll(rendered).find(doc => doc?.kind === 'AlertmanagerConfig')
+  expect(alertmanager?.metadata.name).toBe(`${CHART}-prod-routing`)
+  expect(alertmanager.spec.route.receiver).toBe('_drop')
+  expect(alertmanager.spec.route.routes).toEqual([{
+    matchers: [{ name: 'severity', value: 'critical', matchType: '=' }],
+    receiver: 'oncall',
+  }])
+  expect(alertmanager.spec.receivers).toContainEqual({ name: 'oncall', emailConfigs: [{ to: 'oncall@example.com' }] })
   expect(rendered).toContain('kind: PrometheusRule')
   expect(rendered).toContain('cpu_usage{namespace="shop"} > 90')
 })
 
-test('a deployment with templates/ and charts/ stays a leaf in the tree', async ({ page }) => {
+test('a deployment with templates/ and charts/ stays a leaf in the tree', async ({ page, request }) => {
+  // charts/ is what Preview's `helm dependency update` fetches: render once,
+  // so it is there however this test is run.
+  expect((await request.post(`/api/v2/render/${CHART}/prod?${q}`)).ok()).toBeTruthy()
+  expect(await fs.readdir(path.join(DEPLOYMENT_DIR, 'charts'))).toContainEqual(expect.stringMatching(/\.tgz$/))
+  expect(await fs.readdir(path.join(DEPLOYMENT_DIR, 'templates'))).toContain('alertmanagerconfig.yaml')
+
   const node = await openTree(page)
   await expect(node).toBeVisible()
   // A leaf has no expander: templates/ and charts/ are not listed under it.

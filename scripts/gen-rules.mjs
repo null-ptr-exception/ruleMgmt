@@ -46,8 +46,15 @@ if (!chartDir) {
   process.exit(2)
 }
 
+// Only a missing file is null: an unreadable schema read as absent would be
+// regenerated from nothing, dropping its x-custom-template groups.
 async function readIfExists(file) {
-  try { return await fs.readFile(file, 'utf-8') } catch { return null }
+  try {
+    return await fs.readFile(file, 'utf-8')
+  } catch (err) {
+    if (err.code === 'ENOENT') return null
+    throw err
+  }
 }
 
 const rulesDir = path.join(chartDir, 'rules')

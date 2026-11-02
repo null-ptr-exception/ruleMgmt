@@ -38,15 +38,22 @@ export const ANY = '.*'
  * What a selector cell may hold: `.*`, or any literal (#60, #120) — `/data`,
  * `app:1.2` — matched exactly. Refused: empty (`label=""` means the label is
  * absent), a backtick (the exclusion is a backtick-quoted regex), a line
- * break, and a space at either end (compared as written, so almost always a
- * typo). No lookbehind: Helm checks values.schema.json with Go's regexp.
+ * break or another control character, and a space at either end (compared
+ * as written, so almost always a typo). No lookbehind: Helm checks values.schema.json with Go's regexp.
  *
  * The space at either end is JavaScript's \s, spelled out: Go's \s is ASCII
  * only, so a cell starting with a no-break space would pass Helm and fail the
  * save. The non-ASCII ones are the characters themselves — Go has no \u.
  */
 const EDGE_SPACE = '\\t\\n\\v\\f\\r    -     　﻿'
-export const SELECTOR_PATTERN = `^[^${EDGE_SPACE}\`]([^\`\\r\\n]*[^${EDGE_SPACE}\`])?$`
+/**
+ * Control characters (a tab is fine) and Unicode line breaks: the cell is
+ * written into a block scalar in the template, and YAML refuses the first
+ * and ends the line at the second, so Helm cannot parse what it rendered.
+ */
+const CONTROL = '\\x00-\\x08\\x0A-\\x1F\\x7F-\\x9F\u2028\u2029\uFFFE\uFFFF'
+const CONTROL_RE = new RegExp(`[${CONTROL}]`)
+export const SELECTOR_PATTERN = `^[^${EDGE_SPACE}${CONTROL}\`]([^\`${CONTROL}]*[^${EDGE_SPACE}${CONTROL}\`])?$`
 const SELECTOR_RE = new RegExp(SELECTOR_PATTERN)
 
 /** Why a selector cell cannot be used, or null. Agrees with SELECTOR_PATTERN. */
@@ -54,6 +61,7 @@ export function selectorCellProblem(v) {
   if (v === '') return 'is empty — label="" would mean the label is absent; use .* for any'
   if (v.includes('`')) return 'has a backtick, which the generated exclusion cannot quote'
   if (/[\r\n]/.test(v)) return 'has a line break'
+  if (CONTROL_RE.test(v)) return 'has a control character or a line separator'
   if (/^\s|\s$/.test(v)) return 'starts or ends with a space — it would be matched exactly as written'
   return SELECTOR_RE.test(v) ? null : 'cannot be used'
 }

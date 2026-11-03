@@ -55,6 +55,9 @@ const CONTROL = '\\x00-\\x08\\x0A-\\x1F\\x7F-\\x9F\u2028\u2029\uFFFE\uFFFF'
 const CONTROL_RE = new RegExp(`[${CONTROL}]`)
 export const SELECTOR_PATTERN = `^[^${EDGE_SPACE}${CONTROL}\`]([^\`${CONTROL}]*[^${EDGE_SPACE}${CONTROL}\`])?$`
 const SELECTOR_RE = new RegExp(SELECTOR_PATTERN)
+// Not String#isWellFormed, nor a lookbehind: the build targets browsers that
+// predate both. Take out the valid pairs; any surrogate left is a lone one.
+const hasLoneSurrogate = v => /[\uD800-\uDFFF]/.test(v.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''))
 
 /** Why a selector cell cannot be used, or null. Agrees with SELECTOR_PATTERN. */
 export function selectorCellProblem(v) {
@@ -65,7 +68,7 @@ export function selectorCellProblem(v) {
   // A lone surrogate is dumped as a \uD800 escape, which Helm refuses to read.
   // The pattern cannot say this (Go has no lookaround), and Helm never gets as
   // far as checking it, so only the save does.
-  if (!v.isWellFormed()) return 'has a broken character (a lone UTF-16 surrogate)'
+  if (hasLoneSurrogate(v)) return 'has a broken character (a lone UTF-16 surrogate)'
   if (/^\s|\s$/.test(v)) return 'starts or ends with a space — it would be matched exactly as written'
   return SELECTOR_RE.test(v) ? null : 'cannot be used'
 }

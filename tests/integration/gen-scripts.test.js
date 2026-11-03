@@ -436,8 +436,9 @@ describe('gen-rules.mjs without values.schema.json', () => {
     expect(result.output).not.toMatch(/ENOENT|at .*\.mjs:\d+/)
   })
 
-  // Root reads a file whatever its mode, so there is nothing to test as root.
-  it.skipIf(process.getuid?.() === 0)('stops on a schema it cannot read, and leaves it alone', async () => {
+  // Root reads a file whatever its mode, and chmod cannot take read access
+  // away on Windows, so there is nothing to test on either.
+  it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('stops on a schema it cannot read, and leaves it alone', async () => {
     run(GEN_RULES, [chartDir])
     const schemaFile = path.join(chartDir, 'values.schema.json')
     const before = await fs.readFile(schemaFile, 'utf-8')

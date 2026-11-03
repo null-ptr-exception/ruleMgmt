@@ -447,7 +447,7 @@ f=${fileExpr}
 echo ${tool} >> "${ranLog}"
 n=$(basename "$f" | cut -c1-4 | sed 's/^0*//')
 n=\${n:-0}
-sleep "0.$((30 - n * 3))"
+sleep "$(printf '0.%02d' $((30 - n * 3)))"
 rm -f "$me"
 `
     const countingPromtool = path.join(tmpDir, 'counting-promtool')

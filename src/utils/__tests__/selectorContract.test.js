@@ -207,7 +207,7 @@ describe('in the rules format', () => {
 // Helm checks) and the save's check (what the table is told) must agree.
 describe('what a selector cell can hold', () => {
   const allowed = ['.*', 'prod', 'my_app.1', '/data', '/data/test.yml', '/dev/sda1', 'registry.example.com/app:1.2',
-    'a"b', 'a\\b', 'a b', '.', '-x', '_x', 'api-.*', 'a|b', '*', 'x', 'a\tb']
+    'a"b', 'a\\b', 'a b', '.', '-x', '_x', 'api-.*', 'a|b', '*', 'x', 'a\tb', 'a\u{1F600}b']
   const refused = ['', 'a`b', '`', 'a\nb', 'a\rb', ' prod', 'prod ', ' .*', ' ', '\tx',
     ' prod', 'prod　', '﻿x', ' x', 'a\u0001b', 'a\u001fb', 'a\u007fb',
     'a\u0085b', 'a\u009fb', 'a\u2028b', 'a\u2029b', 'a\ufffeb']
@@ -220,6 +220,11 @@ describe('what a selector cell can hold', () => {
   it.each(refused)('refuses %j', v => {
     expect(selectorCellProblem(v)).toEqual(expect.any(String))
     expect(new RegExp(SELECTOR_PATTERN).test(v)).toBe(false)
+  })
+
+  // Helm cannot even read the values file, so only the save's check matters.
+  it.each(['a\uD800b', 'a\uDC00b', 'a\uDE00\uD83Db'])('refuses a lone surrogate %j', v => {
+    expect(selectorCellProblem(v)).toEqual(expect.any(String))
   })
 
   it('hints at a value that reads like a regex, but not at .* or a dot', () => {

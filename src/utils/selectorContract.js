@@ -62,6 +62,10 @@ export function selectorCellProblem(v) {
   if (v.includes('`')) return 'has a backtick, which the generated exclusion cannot quote'
   if (/[\r\n]/.test(v)) return 'has a line break'
   if (CONTROL_RE.test(v)) return 'has a control character or a line separator'
+  // A lone surrogate is dumped as a \uD800 escape, which Helm refuses to read.
+  // The pattern cannot say this (Go has no lookaround), and Helm never gets as
+  // far as checking it, so only the save does.
+  if (!v.isWellFormed()) return 'has a broken character (a lone UTF-16 surrogate)'
   if (/^\s|\s$/.test(v)) return 'starts or ends with a space — it would be matched exactly as written'
   return SELECTOR_RE.test(v) ? null : 'cannot be used'
 }

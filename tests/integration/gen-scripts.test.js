@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
@@ -403,5 +403,51 @@ describe('sample chart golden (sample/charts/mariadb-alerts)', () => {
     const check = run(GEN_CHART, [SAMPLE, '--check'])
     expect(check.status, check.stdout).toBe(0)
     expect(check.stdout).toContain('13 groups, 0 problem(s)')
+  })
+})
+
+// #116: once rules/ exists the schema is a product, but gen-rules read it
+// first and stopped with a stack trace on a chart started from rules/ alone.
+describe('gen-rules.mjs without values.schema.json', () => {
+  // stdout and stderr together — the error goes to stderr.
+  const runAll = (script, args) => {
+    const r = spawnSync('node', [script, ...args], { encoding: 'utf-8' })
+    return { status: r.status, output: r.stdout + r.stderr }
+  }
+
+  it('generates the schema, templates and Chart.yaml from rules/ alone', async () => {
+    run(GEN_RULES, [chartDir])
+    for (const f of ['values.schema.json', 'templates']) await fs.rm(path.join(chartDir, f), { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'values.yaml'), 'cpu:\n  - namespace: prod\n    warn: 80\n')
+
+    const result = run(GEN_RULES, [chartDir, '--init'])
+    expect(result.status, result.stdout).toBe(0)
+    expect(result.stdout).toMatch(/created\s+values\.schema\.json/)
+    expect(result.stdout).toMatch(/created\s+templates\/cpu\.yaml/)
+    expect(result.stdout).toMatch(/created\s+Chart\.yaml/)
+    expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
+  })
+
+  it('says there is nothing to generate from when rules/ is missing too', async () => {
+    await fs.rm(path.join(chartDir, 'values.schema.json'))
+    const result = runAll(GEN_RULES, [chartDir])
+    expect(result.status).toBe(1)
+    expect(result.output).toContain('has neither rules/ nor values.schema.json — nothing to generate from')
+    expect(result.output).not.toMatch(/ENOENT|at .*\.mjs:\d+/)
+  })
+
+  // Root reads a file whatever its mode, and chmod cannot take read access
+  // away on Windows, so there is nothing to test on either.
+  it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('stops on a schema it cannot read, and leaves it alone', async () => {
+    run(GEN_RULES, [chartDir])
+    const schemaFile = path.join(chartDir, 'values.schema.json')
+    const before = await fs.readFile(schemaFile, 'utf-8')
+    await fs.chmod(schemaFile, 0o200)
+    try {
+      expect(runAll(GEN_RULES, [chartDir]).status).not.toBe(0)
+    } finally {
+      await fs.chmod(schemaFile, 0o644)
+    }
+    expect(await fs.readFile(schemaFile, 'utf-8')).toBe(before)
   })
 })

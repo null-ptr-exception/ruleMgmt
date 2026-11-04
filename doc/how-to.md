@@ -357,6 +357,10 @@ template from those, in one pass. Warnings about `values.yaml` — a key no
 column defines, a required column left out — are worth fixing before Helm sees
 them.
 
+A new chart can start from `rules/` alone: write `rules/*.yaml` in an empty
+folder and run it with `--init`. It creates `values.schema.json`, the
+templates and `Chart.yaml`.
+
 ### Edit the rules files directly
 
 Edit `rules/*.yaml`, then regenerate:

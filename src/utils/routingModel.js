@@ -13,6 +13,9 @@
  *   - filling a whole row or column is only a shortcut: it is written as one
  *     cell per combination
  *   - a timing override is kept on its cell; the defaults are not copied in
+ *   - an entry of `cells` that isn't a cell (hand-edited, say) is not in the
+ *     table: it stays as written, and is saved after the cells, for the
+ *     server's checks to list
  *
  * What is saved is `toSave()`: cells in table order, keys in a fixed order,
  * so a save from the table gives the same file for the same table.
@@ -23,6 +26,8 @@ import yaml from 'js-yaml'
 export const TIMING_KEYS = ['groupWait', 'groupInterval', 'repeatInterval']
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+const isCell = v => isMap(v) && isMap(v.match) && Array.isArray(v.configs)
+const valuesOf = values => (Array.isArray(values) ? values : [])
 
 export const emptyRouting = () => ({ labels: {}, configs: {}, cells: [] })
 
@@ -49,7 +54,7 @@ export const matchKey = (routing, match) => JSON.stringify(labelNames(routing).m
 /** Every combination of the labels' values, the first label outermost. */
 export function combinations(labels) {
   return Object.entries(labels).reduce(
-    (acc, [name, values]) => acc.flatMap(match => (values || []).map(value => ({ ...match, [name]: value }))),
+    (acc, [name, values]) => acc.flatMap(match => valuesOf(values).map(value => ({ ...match, [name]: value }))),
     [{}],
   )
 }
@@ -60,12 +65,12 @@ const within = (match, partial) => Object.entries(partial).every(([name, value])
 /** The cell for a combination, or null — an empty cell. */
 export function cellAt(routing, match) {
   const key = matchKey(routing, match)
-  return routing.cells.find(cell => matchKey(routing, cell.match) === key) || null
+  return routing.cells.find(cell => isCell(cell) && matchKey(routing, cell.match) === key) || null
 }
 
 function withCell(routing, match, change) {
   const key = matchKey(routing, match)
-  const at = routing.cells.findIndex(cell => matchKey(routing, cell.match) === key)
+  const at = routing.cells.findIndex(cell => isCell(cell) && matchKey(routing, cell.match) === key)
   const before = at >= 0 ? routing.cells[at] : { match: { ...match }, configs: [] }
   const after = change(before)
   const cells = [...routing.cells]
@@ -137,8 +142,10 @@ export function setDefaultTiming(routing, key, value) {
  */
 export function setLabels(routing, labels) {
   const next = { ...routing, labels }
-  const fits = cell => Object.keys(labels).every(name => (labels[name] || []).includes(cell.match?.[name]))
-    && Object.keys(cell.match || {}).every(name => Object.hasOwn(labels, name))
+  const fits = cell => !isCell(cell) || (
+    Object.keys(labels).every(name => valuesOf(labels[name]).includes(cell.match[name]))
+    && Object.keys(cell.match).every(name => Object.hasOwn(labels, name))
+  )
   return {
     routing: { ...next, cells: routing.cells.filter(fits) },
     dropped: routing.cells.filter(cell => !fits(cell)),
@@ -147,17 +154,19 @@ export function setLabels(routing, labels) {
 
 /** The combinations whose cell notifies `name`. */
 export const configUsage = (routing, name) =>
-  routing.cells.filter(cell => cell.configs.includes(name)).map(cell => cell.match)
+  routing.cells.filter(cell => isCell(cell) && cell.configs.includes(name)).map(cell => cell.match)
 
 /**
  * Add or change a config. Renaming one renames it in every cell, so the
- * table is unchanged.
+ * table is unchanged. A name another config has is refused: the two would
+ * become one, and its cells would notify the other's address.
  */
 export function putConfig(routing, name, config, { was = name } = {}) {
+  if (name !== was && Object.hasOwn(routing.configs, name)) throw new Error(`${name} is already a config`)
   const configs = Object.fromEntries(Object.entries(routing.configs).map(([n, c]) => (n === was ? [name, config] : [n, c])))
   if (!Object.hasOwn(configs, name)) configs[name] = config
   const cells = was === name ? routing.cells
-    : routing.cells.map(cell => ({ ...cell, configs: cell.configs.map(c => (c === was ? name : c)) }))
+    : routing.cells.map(cell => (isCell(cell) ? { ...cell, configs: cell.configs.map(c => (c === was ? name : c)) } : cell))
   return { ...routing, configs, cells }
 }
 
@@ -186,7 +195,7 @@ export function gridOf(routing) {
     rowLabels,
     columnLabel,
     rows: combinations(Object.fromEntries(rowLabels.map(n => [n, routing.labels[n]]))),
-    columns: [...(routing.labels[columnLabel] || [])],
+    columns: [...valuesOf(routing.labels[columnLabel])],
   }
 }
 
@@ -195,19 +204,20 @@ export const gridMatch = (grid, row, column) => ({ ...row, [grid.columnLabel]: c
 /**
  * routing.yaml as the table writes it: cells with no configs left out,
  * cells in table order, match keys in label order, timing after configs.
- * Anything else the file holds is kept, after the known keys.
+ * Anything else the file holds is kept, after the known keys, and entries
+ * that aren't cells after the cells.
  */
 export function toSave(routing) {
   const order = new Map(combinations(routing.labels).map((match, i) => [matchKey(routing, match), i]))
   const rank = cell => order.get(matchKey(routing, cell.match)) ?? Infinity
   const cells = routing.cells
-    .filter(cell => cell.configs?.length)
+    .filter(cell => isCell(cell) && cell.configs.length)
     .map((cell, i) => ({ cell, i }))
     .sort((a, b) => rank(a.cell) - rank(b.cell) || a.i - b.i)
     .map(({ cell }) => {
       const { match, configs, ...rest } = cell
-      const ordered = Object.fromEntries(labelNames(routing).filter(n => match?.[n] !== undefined).map(n => [n, match[n]]))
-      for (const [n, v] of Object.entries(match || {})) if (!(n in ordered)) ordered[n] = v
+      const ordered = Object.fromEntries(labelNames(routing).filter(n => match[n] !== undefined).map(n => [n, match[n]]))
+      for (const [n, v] of Object.entries(match)) if (!(n in ordered)) ordered[n] = v
       const out = { match: ordered, configs }
       for (const key of TIMING_KEYS) if (rest[key] !== undefined) out[key] = rest[key]
       for (const [k, v] of Object.entries(rest)) if (!TIMING_KEYS.includes(k)) out[k] = v
@@ -218,7 +228,7 @@ export function toSave(routing) {
     labels,
     ...(defaults && Object.keys(defaults).length ? { defaults } : {}),
     configs,
-    cells,
+    cells: [...cells, ...routing.cells.filter(cell => !isCell(cell))],
     ...rest,
   }
 }

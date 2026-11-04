@@ -124,6 +124,48 @@ describe('labels', () => {
   })
 })
 
+describe('entries of cells that are not cells', () => {
+  const MATCH = { severity: 'critical', team: 'db' }
+  const broken = [null, 'text', { match: MATCH }, { configs: ['ops'] }, { match: 'db', configs: ['ops'] }]
+  const withBroken = () => ({ ...table(), cells: [...broken, { match: MATCH, configs: ['ops'] }] })
+
+  it('are not in the table', () => {
+    const r = withBroken()
+    expect(cellAt(r, MATCH).configs).toEqual(['ops'])
+    expect(cellAt(r, { severity: 'warning', team: 'web' })).toBeNull()
+    expect(cellTiming(r, { severity: 'warning', team: 'web' }).groupWait.overridden).toBe(false)
+    expect(configUsage(r, 'ops')).toEqual([MATCH])
+  })
+
+  it('stay as written through the table\'s edits, and are saved after the cells', () => {
+    let r = setCellConfigs(withBroken(), { severity: 'warning', team: 'web' }, ['ops'])
+    r = fillConfig(r, { team: 'db' }, 'db-email')
+    r = putConfig(r, 'pager', { type: 'webhook', url: 'http://pager' }, { was: 'ops' })
+    const { routing, dropped } = setLabels(r, r.labels)
+    expect(dropped).toEqual([])
+    const { cells } = toSave(routing)
+    expect(cells.slice(0, -broken.length).every(c => c.match.team && c.configs.length)).toBe(true)
+    expect(cells.slice(-broken.length)).toEqual(broken)
+  })
+
+  it('are still there for the server\'s checks to list', () => {
+    const errors = checkRouting(toSave(withBroken()))
+    expect(errors).toContain('cells[1]: must be a map with match and configs')
+    expect(errors.length).toBeGreaterThanOrEqual(broken.length)
+  })
+
+  it('a config can be removed past them', () => {
+    expect(Object.keys(removeConfig(withBroken(), 'db-email').routing.configs)).toEqual(['ops'])
+  })
+
+  it('a label whose values are not a list has none', () => {
+    const labels = { severity: 'critical', team: ['db'] }
+    expect(combinations(labels)).toEqual([])
+    expect(gridOf({ ...table(), labels: { team: ['db'], severity: 'critical' } }).columns).toEqual([])
+    expect(setLabels(withBroken(), labels).dropped).toEqual([{ match: MATCH, configs: ['ops'] }])
+  })
+})
+
 describe('configs', () => {
   it('one in use is not removed, and says where it is used', () => {
     const r = fillConfig(table(), { team: 'db' }, 'db-email')
@@ -137,6 +179,14 @@ describe('configs', () => {
     r = putConfig(r, 'dba', { type: 'email', to: 'dba@example.com' }, { was: 'db-email' })
     expect(Object.keys(r.configs)).toEqual(['dba', 'ops'])
     expect(r.cells.every(c => c.configs.includes('dba'))).toBe(true)
+  })
+
+  it('a rename onto another config\'s name is refused', () => {
+    const r = fillConfig(table(), { team: 'db' }, 'db-email')
+    expect(() => putConfig(r, 'ops', { type: 'email', to: 'x@example.com' }, { was: 'db-email' }))
+      .toThrow('ops is already a config')
+    expect(Object.keys(r.configs)).toEqual(['db-email', 'ops'])
+    expect(putConfig(r, 'ops', { type: 'webhook', url: 'http://other' }).configs.ops.url).toBe('http://other')
   })
 
   it('a new one goes last', () => {

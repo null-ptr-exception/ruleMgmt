@@ -35,6 +35,19 @@ test.describe('Template editor', () => {
   test.beforeEach(async ({ request }) => { await createChart(request, CHART, { 'cpu.yaml': CPU }) })
   test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
 
+  test('a selector column used only through ${selector} is shown as used', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
+    await page.locator('.ant-select').first().click()
+    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
+    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await page.getByText('cpu', { exact: true }).first().click()
+
+    // namespace (the selector) and threshold; workload and pod are in no rule.
+    await expect(page.getByText('Used by CpuHigh')).toHaveCount(2, { timeout: 5000 })
+    await expect(page.getByText('Not used by any rule')).toHaveCount(2)
+  })
+
   test('selectors are picked and ordered in the group settings row, and saved in that order', async ({ page, request }) => {
     await page.goto('/')
     await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()

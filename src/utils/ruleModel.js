@@ -139,6 +139,16 @@ export function ruleVars(rule) {
 }
 
 /**
+ * Columns a rule reads: its variables, and, since `${selector}` stands for
+ * them, its group's selector columns.
+ */
+export function ruleColumns(rule, selectors) {
+  const names = ruleVars(rule)
+  if (names.has('selector')) for (const name of selectors || []) names.add(name)
+  return names
+}
+
+/**
  * Labels and annotations are a map in the schema and an ordered entry list
  * once normalized. Both shapes reach here — the editor reads a rule straight
  * out of the schema.

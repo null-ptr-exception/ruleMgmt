@@ -212,6 +212,25 @@ test('a synced target is read-only', async ({ page, request }) => {
   await expect(page.getByRole('button', { name: 'Remove routing' })).toBeDisabled()
 })
 
+test('a routing.yaml that is not valid YAML shows the error, draws no table, and stays as written', async ({ page, request }) => {
+  const routing = { labels: { severity: ['critical'] }, configs: {}, cells: [] }
+  expect((await request.put(routingUrl(OTHER), { data: { routing } })).ok()).toBeTruthy()
+  const file = path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml')
+  const broken = 'labels: [critical\n'
+  await fs.writeFile(file, broken)
+
+  // Coming from a deployment with a table: that table must not stay on screen.
+  await openRouting(page, OTHER)
+  await expect(page.getByTestId('routes-matrix')).toBeVisible({ timeout: 8000 })
+  await selectInTree(page, FOLDER)
+
+  await expect(page.getByTestId('routing-problems')).toContainText('not valid YAML', { timeout: 8000 })
+  await expect(page.getByTestId('routes-matrix')).toHaveCount(0)
+  await expect(page.getByTestId('notification-configs')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0)
+  expect(await fs.readFile(file, 'utf8')).toBe(broken)
+})
+
 test('an out-of-date AlertmanagerConfig is saved again from routing.yaml as written, comments kept', async ({ page, request }) => {
   const text = `# Paged by ops — ask #oncall before changing
 labels:

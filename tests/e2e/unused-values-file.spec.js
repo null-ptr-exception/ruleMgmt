@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
+import { WORKSPACE } from './workspace.js'
 
 // #90: a leftover `<name>-values.yaml` beside a folder deployment's
 // values.yaml used to be what the editor opened, while Save, Preview and the
@@ -9,8 +10,7 @@ import path from 'path'
 const CHART = 'mariadb-alerts'
 const FOLDER = 'deployments/e2e-unused-values/dev'
 const BASENAME = 'dev'
-// Same default as server.js — the E2E server runs without GITOPS_DIR.
-const LEFTOVER = path.resolve('gitops', FOLDER, `${BASENAME}-values.yaml`)
+const LEFTOVER = path.join(WORKSPACE, FOLDER, `${BASENAME}-values.yaml`)
 
 const SEED = {
   _common: { owner: 'team-a', namespace: 'monitoring' },

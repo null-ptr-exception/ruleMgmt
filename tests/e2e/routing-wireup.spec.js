@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
+import { WORKSPACE } from './workspace.js'
 
 // #92 / #111: a deployment's routing.yaml, end to end with the real binaries
 // — the integration tests use a fake helm. Its AlertmanagerConfig is part of
@@ -30,8 +31,7 @@ cells:
 `
 
 const q = `folder=${encodeURIComponent(FOLDER)}`
-// Where server.js keeps the workspace: GITOPS_DIR, or gitops/ beside it.
-const DEPLOYMENT_DIR = path.resolve(process.env.GITOPS_DIR || 'gitops', FOLDER)
+const DEPLOYMENT_DIR = path.join(WORKSPACE, FOLDER)
 
 test.beforeEach(async ({ request }) => {
   await request.delete(`/api/v2/charts/${CHART}`)

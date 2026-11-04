@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
+import { WORKSPACE } from './workspace.js'
 
 // The safeguards around a chart's rules/ source that only had backend or unit
 // coverage (issue #57): a save that would overwrite someone else's change, a
@@ -8,8 +9,7 @@ import path from 'path'
 // refused because the products are behind the source or a rule reads no
 // column. Each describe block owns its chart.
 
-// Same default as server.js — the E2E server runs without GITOPS_DIR.
-const CHARTS_DIR = path.resolve('gitops/charts')
+const CHARTS_DIR = path.join(WORKSPACE, 'charts')
 
 const CPU_RULES = `group: cpu
 columns:

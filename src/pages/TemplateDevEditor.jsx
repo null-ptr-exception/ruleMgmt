@@ -9,7 +9,7 @@ import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_RE } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
-import { ruleVars } from '../utils/ruleModel'
+import { ruleColumns } from '../utils/ruleModel'
 import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
 import {
   listCharts, createChart, deleteChart, cloneChart,
@@ -556,7 +556,7 @@ export default function TemplateDevEditor() {
   const usedByColumn = {}
   if (group && !group.custom) {
     for (const r of group.rules) {
-      for (const n of ruleVars(r)) (usedByColumn[n] ||= []).push(r.alert || r.record || '(unnamed)')
+      for (const n of ruleColumns(r, group.selectors)) (usedByColumn[n] ||= []).push(r.alert || r.record || '(unnamed)')
     }
   }
   // A common column's usage spans every group.
@@ -564,7 +564,7 @@ export default function TemplateDevEditor() {
   for (const g of Object.values(model.groups)) {
     if (g.custom) continue
     for (const r of (g.rules || [])) {
-      for (const n of ruleVars(r)) if (n in model.common.columns) (commonUsage[n] ||= new Set()).add(g.group)
+      for (const n of ruleColumns(r, g.selectors)) if (n in model.common.columns) (commonUsage[n] ||= new Set()).add(g.group)
     }
   }
 

@@ -9,7 +9,7 @@ import { WORKSPACE } from './workspace.js'
 // refused because the products are behind the source or a rule reads no
 // column. Each describe block owns its chart.
 
-const CHARTS_DIR = path.join(WORKSPACE, 'charts')
+const CHARTS_DIR = path.join(WORKSPACE, process.env.CHARTS_DIR || 'charts')
 
 const CPU_RULES = `group: cpu
 columns:

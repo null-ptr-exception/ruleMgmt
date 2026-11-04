@@ -267,7 +267,11 @@ test.describe.serial('deployment sync', () => {
     await node.locator('.ant-tree-node-content-wrapper').click()
     await expect(page.getByText('Alert Templates')).toBeVisible({ timeout: 5000 })
 
-    await rightClickMenuItem(page, node, 'Delete')
+    // The Actions button, not a right-click: the sidebar scrolls once the
+    // chart's templates arrive, and antd closes a context menu on scroll —
+    // one opened just before is gone by the time Delete is clicked (#144).
+    await node.getByRole('button', { name: 'Actions for del-selected' }).click()
+    await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click()
     const confirm = page.getByRole('dialog').filter({ hasText: 'Delete del-selected?' })
     await expect(confirm).toBeVisible({ timeout: 3000 })
     await confirm.getByRole('button', { name: 'OK' }).click()

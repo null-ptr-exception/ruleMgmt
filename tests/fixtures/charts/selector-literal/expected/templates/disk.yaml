@@ -1,0 +1,42 @@
+{{- define "alertforge.selector.disk" -}}
+{{- $common := .common | default dict -}}
+{{- $self := merge (dict) .self $common -}}
+{{- $rows := list -}}
+{{- range .rows }}{{ $rows = append $rows (merge (dict) . $common) }}{{ end -}}
+{{- $parts := list -}}
+{{- $m0 := (toString (dig "mountpoint" ".*" $self)) -}}
+{{- if ne $m0 ".*" -}}
+{{- $parts = append $parts (printf "%s=%q" "mountpoint" $m0) -}}
+{{- else -}}
+{{- $ex := list -}}
+{{- range $r := $rows -}}
+{{- if and (ne (toString (dig "mountpoint" ".*" $r)) ".*") -}}
+{{- $ex = append $ex (regexQuoteMeta (toString (dig "mountpoint" ".*" $r))) -}}
+{{- end -}}
+{{- end -}}
+{{- if $ex -}}{{- $parts = append $parts (printf "%s!~`%s`" "mountpoint" (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}
+{{- end -}}
+{{- join ", " $parts -}}
+{{- end }}
+{{- $chunks := chunk 100 ($.Values.disk | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-disk-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: disk
+      rules:
+        {{- range $rows }}
+        - alert: DiskFull
+          expr: |-
+            disk_used_percent{ {{- include "alertforge.selector.disk" (dict "self" . "rows" ($.Values.disk | default list) "common" ($.Values._common | default dict)) -}} } > {{ dig "threshold" 80 . }}
+          for: 1m
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

@@ -182,7 +182,7 @@ once group — so they are deleted and created again. Saving says so.
 A group that says `selectors: [namespace, workload]` makes its rows a
 hierarchy: a row that is `.*` in a level gives up the rows one step more
 specific in it, so "the namespace at 80%, api at 95%" is two rows and no
-exclusion list. Its selector cells are `.*` or a plain name, and its rules
+exclusion list. Its selector cells are `.*` or a value matched exactly, and its rules
 write `cpu{${selector}}` where the matchers go. The whole contract — what it
 renders, and what is refused on either side — is in
 [rules-format.md](rules-format.md#selectors-a-default-with-exceptions).

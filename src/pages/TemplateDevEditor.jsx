@@ -151,7 +151,7 @@ function ColumnRow({ name, col, usage, onRename, onPatch, onRemove, selectorLeve
           onBlur={commit} onPressEnter={commit}
           style={{ width: 150, fontWeight: 600 }} />
         {selectorLevel !== undefined && (
-          <Tooltip title="A selector: its cells are .* or a plain name, never a regex">
+          <Tooltip title="A selector: its cells are .* or a value matched exactly, never a regex">
             <Tag color="blue" style={{ marginInlineEnd: 0 }}>selector {selectorLevel + 1}</Tag>
           </Tooltip>
         )}

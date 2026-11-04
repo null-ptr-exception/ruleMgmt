@@ -1,0 +1,20 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-disk-1-1:
+  - name: disk
+    rules:
+      - alert: DiskFull
+        expr: 'disk_used_percent{mountpoint!~`/data/test\.yml|/srv/a"b|/var/log/\*\.log`} > 80'
+        for: 1m
+        labels: { severity: warning }
+      - alert: DiskFull
+        expr: 'disk_used_percent{mountpoint="/data/test.yml"} > 90'
+        for: 1m
+        labels: { severity: warning }
+      - alert: DiskFull
+        expr: 'disk_used_percent{mountpoint="/srv/a\"b"} > 95'
+        for: 1m
+        labels: { severity: warning }
+      - alert: DiskFull
+        expr: 'disk_used_percent{mountpoint="/var/log/*.log"} > 70'
+        for: 1m
+        labels: { severity: warning }

@@ -6,7 +6,7 @@
  *
  *   selectors: [namespace, workload, pod]
  *
- * Each of those cells is then either `.*` (any) or a literal name, and a row
+ * Each of those cells is then either `.*` (any) or a literal value, and a row
  * that is `.*` in a column automatically excludes the rows one step more
  * specific than it in that column. "Most things at 80%, a few at 95%" is then
  * two rows, and nobody maintains an exclusion list.
@@ -34,9 +34,53 @@ import { profileFor } from './outputs.js'
 
 export const ANY = '.*'
 
-/** What a selector cell may hold: `.*`, or a literal name (#60). */
-export const SELECTOR_PATTERN = '^\\.\\*$|^[A-Za-z0-9][A-Za-z0-9_.-]*$'
+/**
+ * What a selector cell may hold: `.*`, or any literal (#60, #120) — `/data`,
+ * `app:1.2` — matched exactly. Refused: empty (`label=""` means the label is
+ * absent), a backtick (the exclusion is a backtick-quoted regex), a line
+ * break or another control character, and a space at either end (compared
+ * as written, so almost always a typo). No lookbehind: Helm checks values.schema.json with Go's regexp.
+ *
+ * The space at either end is JavaScript's \s, spelled out: Go's \s is ASCII
+ * only, so a cell starting with a no-break space would pass Helm and fail the
+ * save. The non-ASCII ones are the characters themselves — Go has no \u.
+ */
+const EDGE_SPACE = '\\t\\n\\v\\f\\r    -     　﻿'
+/**
+ * Control characters (a tab is fine) and Unicode line breaks: the cell is
+ * written into a block scalar in the template, and YAML refuses the first
+ * and ends the line at the second, so Helm cannot parse what it rendered.
+ */
+const CONTROL = '\\x00-\\x08\\x0A-\\x1F\\x7F-\\x9F\u2028\u2029\uFFFE\uFFFF'
+const CONTROL_RE = new RegExp(`[${CONTROL}]`)
+export const SELECTOR_PATTERN = `^[^${EDGE_SPACE}${CONTROL}\`]([^\`${CONTROL}]*[^${EDGE_SPACE}${CONTROL}\`])?$`
 const SELECTOR_RE = new RegExp(SELECTOR_PATTERN)
+// Not String#isWellFormed, nor a lookbehind: the build targets browsers that
+// predate both. Take out the valid pairs; any surrogate left is a lone one.
+const hasLoneSurrogate = v => /[\uD800-\uDFFF]/.test(v.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''))
+
+/** Why a selector cell cannot be used, or null. Agrees with SELECTOR_PATTERN. */
+export function selectorCellProblem(v) {
+  if (v === '') return 'is empty — label="" would mean the label is absent; use .* for any'
+  if (v.includes('`')) return 'has a backtick, which the generated exclusion cannot quote'
+  if (/[\r\n]/.test(v)) return 'has a line break'
+  if (CONTROL_RE.test(v)) return 'has a control character or a line separator'
+  // A lone surrogate is dumped as a \uD800 escape, which Helm refuses to read.
+  // The pattern cannot say this (Go has no lookaround), and Helm never gets as
+  // far as checking it, so only the save does.
+  if (hasLoneSurrogate(v)) return 'has a broken character (a lone UTF-16 surrogate)'
+  if (/^\s|\s$/.test(v)) return 'starts or ends with a space — it would be matched exactly as written'
+  return SELECTOR_RE.test(v) ? null : 'cannot be used'
+}
+
+/**
+ * A literal that reads like a regex — `api-.*`, `a|b`. Allowed, since label
+ * values can hold these, but matched exactly: only a hint. `.` alone is too
+ * common in names (`my.app`) to count.
+ */
+export function looksLikeRegex(v) {
+  return v !== ANY && /[*+?|()[\]{}^$\\]/.test(String(v ?? ''))
+}
 
 const SELECTOR_REF_RE = /\$\{\s*selector\s*\}/g
 
@@ -68,7 +112,13 @@ export function meet(a, b, levels) {
   return Object.fromEntries(levels.map(l => [l, a[l] === ANY ? b[l] : a[l]]))
 }
 
-const key = (sel, levels) => levels.map(l => sel[l]).join('/')
+// Values may hold `/` (#120), so a row's identity is not its cells joined.
+const key = (sel, levels) => JSON.stringify(levels.map(l => sel[l]))
+
+/** A row's selector cells for a person: `prod / api`, quoting `"/data"`. */
+export function selectorPath(sel, levels) {
+  return levels.map(l => (/^[A-Za-z0-9_.*-]+$/.test(sel[l] ?? '') ? sel[l] : JSON.stringify(sel[l]))).join(' / ')
+}
 
 // ── rows ────────────────────────────────────────────────────────────────────
 
@@ -137,16 +187,17 @@ export function rowProblems(rows, common, defaults, levels, otherColumns = []) {
   const proposals = []
   const sels = rows.map(r => selectorCells(r, common, defaults, levels))
 
-  // Cell format first: the comparisons below are only meaningful between `.*`
-  // and literals.
+  // Cell format first: the comparisons below need every cell `.*` or a
+  // literal that renders.
   let formatOk = true
   sels.forEach((sel, i) => {
     for (const l of levels) {
       const v = sel[l]
       if (v === undefined) continue // a missing required cell is Helm's (and #66's) to report
-      if (!SELECTOR_RE.test(v)) {
+      const why = selectorCellProblem(v)
+      if (why) {
         formatOk = false
-        problems.push({ row: i, column: l, message: `row ${i + 1}, "${l}": "${v}" is neither .* nor a plain name — a selector cell cannot be a regex` })
+        problems.push({ row: i, column: l, cell: true, message: `row ${i + 1}, "${l}": ${JSON.stringify(v)} ${why}` })
       }
     }
   })
@@ -155,7 +206,7 @@ export function rowProblems(rows, common, defaults, levels, otherColumns = []) {
   const seen = new Map()
   sels.forEach((sel, i) => {
     const k = key(sel, levels)
-    if (seen.has(k)) problems.push({ row: i, message: `rows ${seen.get(k) + 1} and ${i + 1} select the same thing (${k.replace(/\//g, ' / ')}) — which threshold applies has no answer` })
+    if (seen.has(k)) problems.push({ row: i, message: `rows ${seen.get(k) + 1} and ${i + 1} select the same thing (${selectorPath(sel, levels)}) — which threshold applies has no answer` })
     else seen.set(k, i)
   })
   if (problems.length) return { problems, proposals }
@@ -186,14 +237,14 @@ export function rowProblems(rows, common, defaults, levels, otherColumns = []) {
         if (!covered) {
           const l = levels.find(x => a[x] === ANY && b[x] !== ANY)
           const mid = { ...a, [l]: b[l] }
-          problems.push({ row: j, message: `row ${j + 1} (${key(b, levels).replace(/\//g, ' / ')}) is more than one step inside row ${i + 1} (${key(a, levels).replace(/\//g, ' / ')}) — add ${key(mid, levels).replace(/\//g, ' / ')} between them` })
+          problems.push({ row: j, message: `row ${j + 1} (${selectorPath(b, levels)}) is more than one step inside row ${i + 1} (${selectorPath(a, levels)}) — add ${selectorPath(mid, levels)} between them` })
           propose(mid, rows[i], `between rows ${i + 1} and ${j + 1}; values copied from row ${i + 1}, so nothing changes`)
         }
       } else if (i < j && !strictlyContains(b, a, levels)) {
         // Crossing: their overlap needs a row of its own.
         const m = meet(a, b, levels)
         if (!seen.has(key(m, levels))) {
-          problems.push({ row: j, message: `rows ${i + 1} and ${j + 1} overlap on ${key(m, levels).replace(/\//g, ' / ')} and neither contains the other — which threshold applies there has no answer` })
+          problems.push({ row: j, message: `rows ${i + 1} and ${j + 1} overlap on ${selectorPath(m, levels)} and neither contains the other — which threshold applies there has no answer` })
           propose(m, null, `the overlap of rows ${i + 1} and ${j + 1}; its thresholds are yours to fill`)
         }
       }

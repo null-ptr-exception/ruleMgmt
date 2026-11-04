@@ -161,12 +161,15 @@ export default function deploymentsRouter() {
         if (problems.length) {
           return res.status(400).json({ error: 'Some values cannot be rendered', problems })
         }
-        // A group with selectors (#60): rows that overlap without one being a
-        // step inside the other have no answer for which threshold applies.
-        // The rows that would fix it go back with the refusal.
+        // A group with selectors (#60): a cell that cannot be matched on, or
+        // rows that overlap without one being a step inside the other. The
+        // rows that would fix an overlap go back with the refusal.
         const selectors = bare ? selectorValueProblems(bare, model) : { problems: [] }
         if (selectors.problems.length) {
-          return res.status(400).json({ error: 'Some rows overlap', problems: selectors.problems, proposals: selectors.proposals })
+          const cells = selectors.problems.filter(p => p.cell).length
+          const error = cells === selectors.problems.length ? 'Some selector cells cannot be used'
+            : cells ? 'Some selector cells cannot be used, and some rows overlap' : 'Some rows overlap'
+          return res.status(400).json({ error, problems: selectors.problems, proposals: selectors.proposals })
         }
       }
 

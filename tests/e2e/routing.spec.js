@@ -309,6 +309,7 @@ test('a whole row or column is filled at once, and written cell by cell', async 
   await page.getByRole('button', { name: 'Add to all' }).click()
   await expect(page.getByTestId('cell-critical-db')).toContainText('ops')
   await expect(page.getByTestId('cell-critical-web')).toContainText('ops')
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0)
 
   await page.getByLabel('Fill team=db').click()
   await page.getByLabel('Fill config for team=db').click()

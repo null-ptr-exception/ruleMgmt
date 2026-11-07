@@ -112,90 +112,19 @@ describe('Templates API', () => {
     expect(data.content).toContain('groups:')
   })
 
-  it('saves and reads schema', async () => {
-    const schema = {
-      $schema: 'https://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        instances: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              threshold: { type: 'number', description: 'Alert threshold' }
-            }
-          }
-        }
-      }
-    }
-    const { data: saveResult } = await api('POST', '/api/v2/templates/test-app/schema', { schema })
-    expect(saveResult.ok).toBe(true)
-    const { data: info } = await api('GET', '/api/v2/templates/test-app')
-    expect(info.schema.properties.instances.items.properties.threshold.type).toBe('number')
-  })
-
-  it('preserves x- extensions in schema', async () => {
-    const schema = {
-      $schema: 'https://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        disk_alert: {
-          type: 'array',
-          'x-promql': 'disk_usage{ns="{{ .namespace }}"} > {{ THRESHOLD }}',
-          'x-for': '10m',
-          items: {
-            type: 'object',
-            properties: {
-              namespace: { type: 'string', 'x-var-type': 'selector' },
-              warn_pct: { type: 'number', 'x-var-type': 'threshold', 'x-severity': 'warning' }
-            }
-          }
-        }
-      }
-    }
-    await api('POST', '/api/v2/templates/test-app/schema', { schema })
-    const { data: info } = await api('GET', '/api/v2/templates/test-app')
-    const disk = info.schema.properties.disk_alert
-    expect(disk['x-promql']).toContain('{{ THRESHOLD }}')
-    expect(disk['x-for']).toBe('10m')
-    expect(disk.items.properties.namespace['x-var-type']).toBe('selector')
-    expect(disk.items.properties.warn_pct['x-var-type']).toBe('threshold')
-    expect(disk.items.properties.warn_pct['x-severity']).toBe('warning')
-  })
-
-  // `foo-bar` and `foo_bar` both map to templates/foo-bar.yaml (#129).
-  it('refuses a group key outside the rules/ filename rule, and leaves the schema alone', async () => {
+  // values.schema.json is generated from rules/; nothing writes it directly
+  // any more (#129). The path now reaches the template-file route, which
+  // needs `content`.
+  it('does not write values.schema.json from a posted schema', async () => {
     const schemaFile = path.join(tmpDir, 'charts', 'test-app', 'values.schema.json')
     const before = await fs.readFile(schemaFile, 'utf-8')
-    const schema = {
-      $schema: 'https://json-schema.org/draft-07/schema#',
-      type: 'object',
-      properties: {
-        _common: { type: 'object' },
-        ok_group: { type: 'array' },
-        'foo-bar': { type: 'array' },
-        Foo: { type: 'array' },
-        '1abc': { type: 'array' },
-      }
-    }
-    const { status, data } = await api('POST', '/api/v2/templates/test-app/schema', { schema })
-    expect(status).toBe(400)
-    expect(data.errors).toEqual([
-      'foo-bar: a group name is lower-case letters, digits and _, starting with a letter',
-      'Foo: a group name is lower-case letters, digits and _, starting with a letter',
-      '1abc: a group name is lower-case letters, digits and _, starting with a letter',
-    ])
+    const res = await fetch(`${baseURL}/api/v2/templates/test-app/schema`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schema: { type: 'object', properties: { disk: { type: 'array' } } } })
+    })
+    expect(res.ok).toBe(false)
     expect(await fs.readFile(schemaFile, 'utf-8')).toBe(before)
-  })
-
-  it('refuses a hyphenated x-custom-template group too', async () => {
-    const schema = {
-      type: 'object',
-      properties: { 'my-custom': { type: 'array', 'x-custom-template': true } }
-    }
-    const { status, data } = await api('POST', '/api/v2/templates/test-app/schema', { schema })
-    expect(status).toBe(400)
-    expect(data.errors).toEqual(['my-custom: a group name is lower-case letters, digits and _, starting with a letter'])
   })
 
   it('renames a template file', async () => {

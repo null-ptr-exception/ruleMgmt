@@ -174,8 +174,9 @@ test.describe('A legacy chart migrates on its first save', () => {
     await request.delete(`/api/v2/charts/${CHART}`)
     let res = await request.post('/api/v2/charts', { data: { name: CHART } })
     expect(res.ok()).toBeTruthy()
-    res = await request.post(`/api/v2/templates/${CHART}/schema`, { data: { schema: LEGACY_SCHEMA } })
-    expect(res.ok()).toBeTruthy()
+    // No endpoint writes a schema directly; an old chart is one whose
+    // values.schema.json was written by hand or by an older version.
+    await fs.writeFile(path.join(CHARTS_DIR, CHART, 'values.schema.json'), JSON.stringify(LEGACY_SCHEMA, null, 2))
     expect((await chartInfo(request, CHART)).drift.state).toBe('legacy')
   })
   test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })

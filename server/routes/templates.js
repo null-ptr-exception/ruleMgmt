@@ -4,7 +4,7 @@ import { findDeploymentsUsing } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget } from '../lib/sync.js'
-import { parseRulesDir, modelToSchema, genSchema, GROUP_KEY_RE } from '../../src/utils/rulesFile.js'
+import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates } from '../../src/utils/drift.js'
 import { isAlertGroup } from '../../src/utils/schemaUtils.js'
@@ -133,46 +133,6 @@ export default function templatesRouter() {
   router.get('/:chart/deployments', async (req, res) => {
     try {
       res.json({ deployments: await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR) })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // Save chart-level schema.
-  //
-  // A change that would orphan data a rule owner already entered is refused
-  // rather than written silently — the caller gets what breaks and who is
-  // affected, and decides: clone the chart, or confirm and overwrite.
-  router.post('/:chart/schema', async (req, res) => {
-    const { schemaFile } = chartPaths(req, req.params.chart)
-    const { schema, confirmBreaking } = req.body
-    // Group keys follow the rules/ filename rule, x-custom-template groups
-    // included: two keys must never map to the same templates/ file (#129).
-    const badKeys = Object.keys(schema?.properties || {})
-      .filter(key => isAlertGroup(key) && !GROUP_KEY_RE.test(key))
-    if (badKeys.length) {
-      return res.status(400).json({
-        error: 'Invalid group keys',
-        errors: badKeys.map(key => `${key}: a group name is lower-case letters, digits and _, starting with a letter`)
-      })
-    }
-    try {
-      const before = await readSchema(schemaFile)
-      const { breaking, isBreaking, notices } = diffSchema(before, schema)
-      const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
-      if (!confirmBreaking && isBreaking) {
-        const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
-        if (deployments.length > 0) {
-          return res.status(409).json({
-            error: 'Breaking schema change',
-            breaking: withDesc(breaking),
-            notices: withDesc(notices),
-            deployments
-          })
-        }
-      }
-      await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
-      res.json({ ok: true, notices: withDesc(notices) })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

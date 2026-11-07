@@ -226,14 +226,12 @@ export function groupSelectorChanges(beforeModel, afterModel) {
  */
 export function groupSelectorLabelChanges(beforeModel, afterModel) {
   const changes = []
-  const rawName = text => {
-    try {
-      const rule = yaml.load(text)
-      const name = rule?.alert ?? rule?.record
-      return typeof name === 'string' ? `${rule.alert !== undefined ? 'alert' : 'record'}:${name}` : undefined
-    } catch { return undefined }
-  }
-  const keyOf = rule => rule.alert ?? rule.record ?? rawName(rule.raw) ?? rule.raw
+  // One key for both forms, so a rule turned raw (or back) in the same save
+  // is still found.
+  const named = rule => (typeof rule?.alert === 'string' ? `alert:${rule.alert}`
+    : typeof rule?.record === 'string' ? `record:${rule.record}` : undefined)
+  const parsed = text => { try { return yaml.load(text) } catch { return undefined } }
+  const keyOf = rule => named(rule) ?? (rule.raw !== undefined ? named(parsed(rule.raw)) ?? rule.raw : undefined)
   const nameOf = rule => rule.alert ?? rule.record ?? 'a raw rule'
   for (const [group, after] of Object.entries(afterModel?.groups || {})) {
     const before = beforeModel?.groups?.[group]

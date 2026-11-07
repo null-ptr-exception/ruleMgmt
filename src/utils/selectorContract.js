@@ -94,8 +94,27 @@ const LABEL_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
  * columns.
  */
 export function selectorLabelsFor(group, rule) {
+  // Own keys only: a column may be named toString.
+  const mapped = (map, l) => (map && Object.hasOwn(map, l) ? map[l] : undefined)
   return Object.fromEntries((group.selectors || [])
-    .map(l => [l, rule?.selectorLabels?.[l] ?? group.selectorLabels?.[l] ?? l]))
+    .map(l => [l, mapped(rule?.selectorLabels, l) ?? mapped(group.selectorLabels, l) ?? l]))
+}
+
+/**
+ * A column's rename, carried into a group that has it as a selector: its
+ * place in `selectors`, and its key in every selectorLabels, so the label it
+ * matches stays the same when it had one.
+ */
+export function renameSelectorColumn(group, oldName, newName) {
+  if (!group.selectors?.includes(oldName)) return group
+  const withKey = obj => (obj.selectorLabels
+    ? { ...obj, selectorLabels: Object.fromEntries(Object.entries(obj.selectorLabels).map(([k, v]) => [k === oldName ? newName : k, v])) }
+    : obj)
+  return withKey({
+    ...group,
+    selectors: group.selectors.map(l => (l === oldName ? newName : l)),
+    ...(group.rules ? { rules: group.rules.map(withKey) } : {}),
+  })
 }
 
 // ── predicates ──────────────────────────────────────────────────────────────
@@ -368,9 +387,9 @@ export function selectorTemplateProblems(group, commonCols = {}) {
     }
   }
   for (const rule of group.rules || []) {
-    const byLabel = {}
-    for (const [col, label] of Object.entries(selectorLabelsFor(group, rule))) (byLabel[label] ||= []).push(col)
-    for (const [label, sameCols] of Object.entries(byLabel)) {
+    const byLabel = new Map()
+    for (const [col, label] of Object.entries(selectorLabelsFor(group, rule))) byLabel.set(label, [...(byLabel.get(label) || []), col])
+    for (const [label, sameCols] of byLabel) {
       if (sameCols.length < 2) continue
       out.push({ kind: 'selector-labels-duplicate', alert: rule.alert || rule.record, message: `${ruleWhere(rule)}: ${sameCols.join(' and ')} both match the label "${label}"` })
     }

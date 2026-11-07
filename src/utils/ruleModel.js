@@ -139,13 +139,46 @@ export function ruleVars(rule) {
 }
 
 /**
- * Columns a rule reads: its variables, and, since `${selector}` stands for
- * them, its group's selector columns.
+ * Columns a rule reads: its variables with the group's `vars` expanded, as
+ * expandVars does, and, since `${selector}` stands for them, its group's
+ * selector columns.
  */
-export function ruleColumns(rule, selectors) {
-  const names = ruleVars(rule)
+export function ruleColumns(rule, selectors, vars) {
+  const names = new Set()
+  for (const name of ruleVars(rule)) {
+    if (vars && Object.prototype.hasOwnProperty.call(vars, name)) {
+      for (const inner of varsIn(vars[name])) names.add(inner)
+    } else {
+      names.add(name)
+    }
+  }
   if (names.has('selector')) for (const name of selectors || []) names.add(name)
   return names
+}
+
+// Both usage maps have no prototype: a column can be called `constructor`.
+
+/** Which rules read each column of a group: { column: [rule name, …] }. */
+export function columnUsage(group) {
+  const usage = Object.create(null)
+  for (const r of group.rules || []) {
+    for (const n of ruleColumns(r, group.selectors, group.vars)) (usage[n] ||= []).push(r.alert || r.record || '(unnamed)')
+  }
+  return usage
+}
+
+/** Which groups read each common column: { column: Set of group names }. */
+export function commonColumnUsage(groups, commonColumns) {
+  const usage = Object.create(null)
+  for (const g of Object.values(groups)) {
+    if (g.custom) continue
+    for (const r of g.rules || []) {
+      for (const n of ruleColumns(r, g.selectors, g.vars)) {
+        if (Object.prototype.hasOwnProperty.call(commonColumns, n)) (usage[n] ||= new Set()).add(g.group)
+      }
+    }
+  }
+  return usage
 }
 
 /**

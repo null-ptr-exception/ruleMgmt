@@ -48,6 +48,34 @@ test.describe('Template editor', () => {
     await expect(page.getByText('Not used by any rule')).toHaveCount(2)
   })
 
+  test('a selector column named constructor, used through a group var, opens and is shown as used', async ({ page, request }) => {
+    const chart = 'e2e-selectors-constructor'
+    await createChart(request, chart, { 'cpu.yaml': `group: cpu
+selectors: [constructor]
+vars:
+  query: cpu_usage{\${selector}}
+columns:
+  constructor: {type: string, required: true}
+rules:
+  - alert: CpuHigh
+    expr: \${query} > 80
+    labels: {severity: warning}
+` })
+    try {
+      await page.goto('/')
+      await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
+      await page.locator('.ant-select').first().click()
+      await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
+      await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+      await page.getByText('cpu', { exact: true }).first().click()
+
+      await expect(page.getByText('Used by CpuHigh')).toHaveCount(1, { timeout: 5000 })
+      await expect(page.getByText('Not used by any rule')).toHaveCount(0)
+    } finally {
+      await request.delete(`/api/v2/charts/${chart}`)
+    }
+  })
+
   test('selectors are picked and ordered in the group settings row, and saved in that order', async ({ page, request }) => {
     await page.goto('/')
     await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()

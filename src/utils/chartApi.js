@@ -68,21 +68,6 @@ export async function deleteChartTemplate(chart, template) {
   return res.json()
 }
 
-/**
- * A schema change that would orphan a rule owner's rows comes back as 409 with
- * what breaks and who is affected. Pass confirmBreaking once the person making
- * the change has seen that and said to go ahead.
- */
-export async function saveChartSchema(chart, schema, confirmBreaking = false) {
-  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/schema`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ schema, confirmBreaking })
-  })
-  if (res.status === 409) return { blocked: true, ...(await res.json()) }
-  if (!res.ok) return {}
-  return res.json()
-}
 
 /**
  * Save a chart's whole rules/*.yaml source in one request; the server

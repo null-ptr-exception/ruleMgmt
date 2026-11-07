@@ -8,5 +8,5 @@ CVE-2026-42154
 
 # golang.org/x/net in vmalert: no vmalert release has 0.62.0 yet (v1.155.0
 # has 0.60.0). promtool is rebuilt with 0.62.0. Remove once vmalert ships it
-# (#N).
+# (#152).
 CVE-2026-78661

@@ -114,11 +114,11 @@ jobs:
           sudo mv "$RUNNER_TEMP/trivy" /usr/local/bin/trivy
 
       # Fails on a critical or high CVE that has a fix; exceptions, each with
-      # its reason, are in .trivyignore (#106).
+      # its reason and the binary it is in, are in .trivyignore.yaml (#106).
       - name: Scan image
         run: |
           trivy image --scanners vuln --severity CRITICAL,HIGH --ignore-unfixed \
-            --ignorefile .trivyignore --exit-code 1 \
+            --ignorefile .trivyignore.yaml --exit-code 1 \
             "${{ env.IMAGE }}:${{ steps.version.outputs.version }}"
 
       - name: Log in to ghcr

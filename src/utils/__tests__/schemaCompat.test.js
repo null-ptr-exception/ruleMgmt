@@ -239,6 +239,16 @@ describe('groupSelectorLabelChanges', () => {
     expect(groupSelectorLabelChanges(model(null, null), model(null, { workload: 'statefulset' }))[0].rules).toEqual(['B'])
   })
 
+  it('tells apart rules that share an alert name, by their order', () => {
+    // Same alert at two severities; only the first drops its own mapping.
+    const twoRules = firstLabels => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], rules: [
+      { alert: 'R', expr: 'up{${selector}} < 1', ...(firstLabels ? { selectorLabels: firstLabels } : {}), labels: { severity: 'critical' } },
+      { alert: 'R', expr: 'up{${selector}} < 2', labels: { severity: 'warning' } },
+    ] } } })
+    expect(groupSelectorLabelChanges(twoRules({ workload: 'deployment' }), twoRules(null))[0].rules).toEqual(['R'])
+    expect(groupSelectorLabelChanges(twoRules(null), twoRules(null))).toEqual([])
+  })
+
   it('names a raw rule as one, matched by its text', () => {
     const raw = labels => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], ...(labels ? { selectorLabels: labels } : {}), rules: [{ raw: 'alert: R\nexpr: up{${selector}}' }] } } })
     expect(groupSelectorLabelChanges(raw(null), raw({ workload: 'deployment' }))[0].rules).toEqual(['a raw rule'])

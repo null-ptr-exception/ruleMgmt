@@ -11,6 +11,7 @@ import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { ruleVars } from '../utils/ruleModel'
 import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
+import { renameSelectorColumn } from '../utils/selectorContract'
 import {
   listCharts, createChart, deleteChart, cloneChart,
   getChartInfo, saveChartRules, saveChartMeta,
@@ -608,6 +609,11 @@ export default function TemplateDevEditor() {
     }
     if (target === COMMON) updateCommonColumns(apply)
     else updateGroup(target, g => ({ ...g, columns: apply(g.columns) }))
+    if (newName === oldName) return
+    // A selector keeps its place, and the label it matches (#121).
+    for (const key of target === COMMON ? Object.keys(model.groups) : [target]) {
+      if (model.groups[key].selectors?.includes(oldName)) updateGroup(key, g => renameSelectorColumn(g, oldName, newName))
+    }
   }
   function removeColumn(target, name) {
     const apply = cols => { const { [name]: _, ...rest } = cols; return rest }

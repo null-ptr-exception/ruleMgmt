@@ -9,7 +9,7 @@ import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_RE } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
-import { ruleColumns } from '../utils/ruleModel'
+import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
 import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
 import {
   listCharts, createChart, deleteChart, cloneChart,
@@ -553,20 +553,9 @@ export default function TemplateDevEditor() {
 
   // Which rules reference each column — the "Used by" annotation, and the flag
   // for a column no rule uses.
-  const usedByColumn = {}
-  if (group && !group.custom) {
-    for (const r of group.rules) {
-      for (const n of ruleColumns(r, group.selectors)) (usedByColumn[n] ||= []).push(r.alert || r.record || '(unnamed)')
-    }
-  }
+  const usedByColumn = columnUsage(group && !group.custom ? group : {})
   // A common column's usage spans every group.
-  const commonUsage = {}
-  for (const g of Object.values(model.groups)) {
-    if (g.custom) continue
-    for (const r of (g.rules || [])) {
-      for (const n of ruleColumns(r, g.selectors)) if (n in model.common.columns) (commonUsage[n] ||= new Set()).add(g.group)
-    }
-  }
+  const commonUsage = commonColumnUsage(model.groups, model.common.columns)
 
   const missingDescriptions = cols => Object.values(cols).filter(c => !c.description).length
 

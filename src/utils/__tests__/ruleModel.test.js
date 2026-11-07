@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ruleColumns } from '../ruleModel'
+import { ruleColumns, columnUsage, commonColumnUsage } from '../ruleModel'
 
 describe('ruleColumns', () => {
   const selectors = ['namespace', 'workload']
@@ -21,5 +21,42 @@ describe('ruleColumns', () => {
 
   it('is just the variables in a group without selectors', () => {
     expect([...ruleColumns({ expr: 'up < ${threshold}' })]).toEqual(['threshold'])
+  })
+
+  it('counts the selector columns when ${selector} comes from a group var', () => {
+    const rule = { expr: '${query} > 1' }
+    const names = ruleColumns(rule, selectors, { query: 'cpu{${selector}}' })
+    expect([...names].sort()).toEqual(['namespace', 'selector', 'workload'])
+  })
+
+  it('counts a column read through a group var, and not the var itself', () => {
+    const rule = { expr: '${query} > ${threshold}' }
+    expect([...ruleColumns(rule, selectors, { query: 'cpu{ns="${namespace}"}' })].sort()).toEqual(['namespace', 'threshold'])
+  })
+})
+
+describe('column usage', () => {
+  const group = (name, expr) => ({ group: name, selectors: ['constructor'], rules: [{ alert: `${name}_alert`, expr }] })
+
+  it('handles a column named after an Object.prototype property', () => {
+    const usage = columnUsage(group('cpu', 'cpu{${selector}} > 1'))
+    expect(usage.constructor).toEqual(['cpu_alert'])
+    expect(usage.toString).toBeUndefined()
+  })
+
+  it('counts a common column named after an Object.prototype property', () => {
+    const usage = commonColumnUsage({ cpu: group('cpu', 'cpu{${selector}} > 1') }, { constructor: {} })
+    expect([...usage.constructor]).toEqual(['cpu'])
+  })
+
+  it('does not take a group column for a common one because of its name', () => {
+    const usage = commonColumnUsage({ cpu: group('cpu', 'cpu{${selector}} > 1') }, { namespace: {} })
+    expect(usage.constructor).toBeUndefined()
+  })
+
+  it('reads the group vars', () => {
+    const g = { group: 'cpu', selectors: ['namespace'], vars: { query: 'cpu{${selector}}' }, rules: [{ alert: 'A', expr: '${query} > 1' }] }
+    expect(columnUsage(g).namespace).toEqual(['A'])
+    expect([...commonColumnUsage({ cpu: g }, { namespace: {} }).namespace]).toEqual(['cpu'])
   })
 })

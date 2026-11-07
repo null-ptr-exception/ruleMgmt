@@ -133,6 +133,43 @@ describe('deployments route with folder param', () => {
     })
   })
 
+  // #99: reading or saving a deployment must not create a reserved folder.
+  describe('reserved names', () => {
+    it('GET / refuses a new reserved folder and creates nothing', async () => {
+      const res = await request(app).get('/api/v2/deployments/c?folder=deployments/_b')
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('"_b": Names starting with _ are reserved for AlertForge')
+      expect(fs.existsSync(path.join(tmpDir, 'deployments'))).toBe(false)
+    })
+
+    it('POST /:deployment refuses a new reserved folder and writes nothing', async () => {
+      const res = await request(app)
+        .post('/api/v2/deployments/c/x?folder=deployments/_c')
+        .send({ values: { test: [{ a: 1 }] } })
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('"_c": Names starting with _ are reserved for AlertForge')
+      expect(fs.existsSync(path.join(tmpDir, 'deployments'))).toBe(false)
+    })
+
+    it('still reads and saves in a folder that already has a reserved name', async () => {
+      const dir = path.join(tmpDir, '_legacy', 'prod')
+      fs.mkdirSync(dir, { recursive: true })
+
+      expect((await request(app).get('/api/v2/deployments/c?folder=_legacy/prod')).status).toBe(200)
+      const res = await request(app)
+        .post('/api/v2/deployments/c/x?folder=_legacy/prod')
+        .send({ values: { test: [{ a: 1 }] } })
+      expect(res.status).toBe(200)
+      expect(fs.existsSync(path.join(dir, 'x-values.yaml'))).toBe(true)
+    })
+
+    it('still creates a folder with _ elsewhere in its name', async () => {
+      const res = await request(app).get('/api/v2/deployments/c?folder=deployments/my_team')
+      expect(res.status).toBe(200)
+      expect(fs.existsSync(path.join(tmpDir, 'deployments', 'my_team'))).toBe(true)
+    })
+  })
+
   it('rejects folder paths with ..', async () => {
     const res = await request(app).get('/api/v2/deployments/chart?folder=../../../etc')
     expect(res.status).toBe(400)

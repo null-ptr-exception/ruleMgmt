@@ -221,7 +221,8 @@ export function groupSelectorChanges(beforeModel, afterModel) {
  * Like a selectors change, values.yaml is untouched but what a row watches
  * moves. Rules are matched by name, a raw rule by the alert or record name in
  * its text, so a save that edits the text too still finds it, else by the
- * text; one added or removed is said elsewhere, and a group whose selectors
+ * text; rules that share a name (one alert at two severities) are matched in
+ * order. One added or removed is said elsewhere, and a group whose selectors
  * changed is already said by groupSelectorChanges.
  */
 export function groupSelectorLabelChanges(beforeModel, afterModel) {
@@ -233,15 +234,25 @@ export function groupSelectorLabelChanges(beforeModel, afterModel) {
   const parsed = text => { try { return yaml.load(text) } catch { return undefined } }
   const keyOf = rule => named(rule) ?? (rule.raw !== undefined ? named(parsed(rule.raw)) ?? rule.raw : undefined)
   const nameOf = rule => rule.alert ?? rule.record ?? 'a raw rule'
+  // The nth rule with a key pairs with the nth one before.
+  const keyed = rules => {
+    const seen = new Map()
+    return rules.map(r => {
+      const key = keyOf(r)
+      const n = seen.get(key) ?? 0
+      seen.set(key, n + 1)
+      return [`${key}\u0000${n}`, r]
+    })
+  }
   for (const [group, after] of Object.entries(afterModel?.groups || {})) {
     const before = beforeModel?.groups?.[group]
     if (!before || before.custom || after.custom || !after.selectors?.length) continue
     if ((before.selectors || []).join('\u0000') !== after.selectors.join('\u0000')) continue
-    const beforeRules = new Map((before.rules || []).map(r => [keyOf(r), r]))
-    const rules = (after.rules || []).filter(r => {
-      const was = beforeRules.get(keyOf(r))
+    const beforeRules = new Map(keyed(before.rules || []))
+    const rules = keyed(after.rules || []).filter(([key, r]) => {
+      const was = beforeRules.get(key)
       return was && JSON.stringify(selectorLabelsFor(before, was)) !== JSON.stringify(selectorLabelsFor(after, r))
-    }).map(nameOf)
+    }).map(([, r]) => nameOf(r))
     if (rules.length) changes.push({ kind: 'group-selector-labels-changed', group, rules })
   }
   return changes

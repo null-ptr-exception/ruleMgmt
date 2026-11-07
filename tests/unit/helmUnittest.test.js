@@ -104,7 +104,7 @@ describe('helm-unittest via generated tests', () => {
 // mixed chart has both; once groups and recording rules (#70); a rule with no
 // `for`, asserted absent rather than equal. The suite generated for each has
 // to pass.
-describe.each(['multiline', 'vlogs', 'mixed', 'recording-once', 'threshold-as-metric', 'once-zero-rows', 'vlogs-once', 'selector-basic', 'selector-common', 'for-omitted'])('helm-unittest for the %s blind case', name => {
+describe.each(['multiline', 'vlogs', 'mixed', 'recording-once', 'threshold-as-metric', 'once-zero-rows', 'vlogs-once', 'selector-basic', 'selector-common', 'selector-labels', 'for-omitted'])('helm-unittest for the %s blind case', name => {
   let dir
 
   beforeAll(async () => {

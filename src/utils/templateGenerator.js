@@ -21,6 +21,7 @@ import { emitRuleObjects } from './crConverter.js'
 import { needsQuote } from './yamlScalar.js'
 import { profileFor } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
+import { selectorLabelsFor } from './selectorContract.js'
 
 function toPascalCase(str) {
   return str.split(/[_\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
@@ -246,7 +247,10 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
     const expand = s => expandVars(s || '', vars)
     const expandEntries = entries => entries.map(e => ({ ...e, value: expand(e.value) }))
 
-    return alertDef['x-rules'].map(rule => (rule.raw ? { raw: expand(rule.raw) } : rule.record !== undefined ? {
+    // selectorLabels (#121) rides along for the selector call; it is not
+    // rule text, so nothing is expanded in it.
+    const labelsOf = rule => (rule.selectorLabels ? { selectorLabels: rule.selectorLabels } : {})
+    return alertDef['x-rules'].map(rule => ({ ...(rule.raw ? { raw: expand(rule.raw) } : rule.record !== undefined ? {
       record: rule.record,
       expr: expand(rule.expr),
       labels: expandEntries(toEntries(rule.labels)),
@@ -260,7 +264,7 @@ export function normalizeRules(alertGroup, alertDef, allSelectors = [], required
       ...(rule.keep_firing_for ? { keep_firing_for: expand(String(rule.keep_firing_for)) } : {}),
       labels: expandEntries(toEntries(rule.labels)),
       annotations: expandEntries(toEntries(rule.annotations))
-    }))
+    }), ...labelsOf(rule) }))
   }
   if (!alertDef?.['x-promql']) return []
   return legacyRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
@@ -344,8 +348,12 @@ function attachGuards(rules, mayBeAbsent) {
  *
  * It is defined per group, not in a shared _helpers.tpl: the levels and
  * defaults are the group's, and the group's template stays its one file.
+ *
+ * With `withLabels` (#121) the label each level matches is not the column's
+ * name but read from the call's `labels`, so each rule can pass its own.
+ * Without it the helper is exactly what it was before selectorLabels.
  */
-export function selectorHelper(alertGroup, levels, defaults) {
+export function selectorHelper(alertGroup, levels, defaults, withLabels = false) {
   const name = `alertforge.selector.${alertGroup}`
   const lit = l => (defaults[l] === undefined ? '""' : JSON.stringify(String(defaults[l])))
   const cell = (l, v) => `(toString (dig "${l}" ${lit(l)} ${v}))`
@@ -357,12 +365,14 @@ export function selectorHelper(alertGroup, levels, defaults) {
     `{{- range .rows }}{{ $rows = append $rows (merge (dict) . $common) }}{{ end -}}`,
     `{{- $parts := list -}}`,
     ...levels.map((l, i) => `{{- $m${i} := ${cell(l, '$self')} -}}`),
+    ...(withLabels ? levels.map((l, i) => `{{- $n${i} := index .labels "${l}" -}}`) : []),
   ]
+  const label = (l, i) => (withLabels ? `$n${i}` : `"${l}"`)
   levels.forEach((l, i) => {
     const same = levels.map((m, j) => (j === i ? null : `(eq ${cell(m, '$r')} $m${j})`)).filter(Boolean)
     lines.push(
       `{{- if ne $m${i} ".*" -}}`,
-      `{{- $parts = append $parts (printf "%s=%q" "${l}" $m${i}) -}}`,
+      `{{- $parts = append $parts (printf "%s=%q" ${label(l, i)} $m${i}) -}}`,
       `{{- else -}}`,
       `{{- $ex := list -}}`,
       `{{- range $r := $rows -}}`,
@@ -370,7 +380,7 @@ export function selectorHelper(alertGroup, levels, defaults) {
       `{{- $ex = append $ex (regexQuoteMeta ${cell(l, '$r')}) -}}`,
       `{{- end -}}`,
       `{{- end -}}`,
-      `{{- if $ex -}}{{- $parts = append $parts (printf "%s!~\`%s\`" "${l}" (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}`,
+      `{{- if $ex -}}{{- $parts = append $parts (printf "%s!~\`%s\`" ${label(l, i)} (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}`,
       `{{- end -}}`,
     )
   })
@@ -409,19 +419,26 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
 
   // Selector contract (#60): the helper, and the call ${selector} becomes.
   let preamble = ''
-  let selectorCall = null
+  let selectorCall = () => null
   const levels = alertDef.selectors || []
+  const rules = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
   if (levels.length && !legacy && !once) {
     const cols = { ...commonProps, ...(alertDef?.items?.properties || {}) }
     const levelDefaults = Object.fromEntries(levels.filter(l => cols[l]?.default !== undefined).map(l => [l, cols[l].default]))
-    const helper = selectorHelper(alertGroup, levels, levelDefaults)
+    // Only a group that renames a column (#121) passes labels; any other
+    // renders as it did before selectorLabels.
+    const labelsFor = rule => selectorLabelsFor(alertDef, rule)
+    const withLabels = rules.some(rule => Object.entries(labelsFor(rule)).some(([l, n]) => l !== n))
+    const helper = selectorHelper(alertGroup, levels, levelDefaults, withLabels)
     preamble = helper.text
-    selectorCall = `include "${helper.name}" (dict "self" ${refVar} "rows" ($.Values.${alertGroup} | default list) "common" ($.Values._common | default dict))`
+    const args = `"self" ${refVar} "rows" ($.Values.${alertGroup} | default list) "common" ($.Values._common | default dict)`
+    selectorCall = rule => (withLabels
+      ? `include "${helper.name}" (dict ${args} "labels" (dict ${Object.entries(labelsFor(rule)).map(([l, n]) => `"${l}" "${n}"`).join(' ')}))`
+      : `include "${helper.name}" (dict ${args})`)
   }
 
-  const rules = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
   const ruleTexts = attachGuards(rules, mayBeAbsent)
-    .map(rule => renderRule(rule, ref, refVar, defaults, selectorCall))
+    .map(rule => renderRule(rule, ref, refVar, defaults, selectorCall(rule)))
 
   if (ruleTexts.length === 0) return null
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffSchema, describeChange, groupTypeChanges, groupOnceChanges, groupSelectorChanges, modelAlerts } from '../schemaCompat'
+import { diffSchema, describeChange, groupTypeChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges, modelAlerts } from '../schemaCompat'
 
 const chart = (columns, extra = {}) => ({
   properties: {
@@ -214,5 +214,50 @@ describe('groupSelectorChanges', () => {
   it('says nothing when they are the same, or for a new group', () => {
     expect(groupSelectorChanges(model(['a', 'b']), model(['a', 'b']))).toEqual([])
     expect(groupSelectorChanges({ groups: {} }, model(['a']))).toEqual([])
+  })
+})
+
+// #121: selectorLabels changing moves what a row watches, like selectors.
+describe('groupSelectorLabelChanges', () => {
+  const model = (groupLabels, ruleLabels, selectors = ['namespace', 'workload']) => ({
+    groups: {
+      replicas: {
+        group: 'replicas', columns: {}, selectors,
+        ...(groupLabels ? { selectorLabels: groupLabels } : {}),
+        rules: [
+          { alert: 'A', expr: 'up{${selector}}' },
+          { alert: 'B', expr: 'up{${selector}}', ...(ruleLabels ? { selectorLabels: ruleLabels } : {}) },
+        ],
+      },
+    },
+  })
+
+  it('names the rules whose labels changed — a group change reaches every rule that does not override it', () => {
+    const [c] = groupSelectorLabelChanges(model(null, { workload: 'statefulset' }), model({ workload: 'deployment' }, { workload: 'statefulset' }))
+    expect(c).toEqual({ kind: 'group-selector-labels-changed', group: 'replicas', rules: ['A'] })
+    expect(describeChange(c)).toBe('replicas: selectorLabels changed for A — a selector column matches a different label, so what each row alerts on changes')
+    expect(groupSelectorLabelChanges(model(null, null), model(null, { workload: 'statefulset' }))[0].rules).toEqual(['B'])
+  })
+
+  it('names a raw rule as one, matched by its text', () => {
+    const raw = labels => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], ...(labels ? { selectorLabels: labels } : {}), rules: [{ raw: 'alert: R\nexpr: up{${selector}}' }] } } })
+    expect(groupSelectorLabelChanges(raw(null), raw({ workload: 'deployment' }))[0].rules).toEqual(['a raw rule'])
+  })
+
+  it('still finds a raw rule whose text changed in the same save, by its alert or record name', () => {
+    const raw = (labels, text) => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], ...(labels ? { selectorLabels: labels } : {}), rules: [{ raw: text }] } } })
+    expect(groupSelectorLabelChanges(raw(null, 'alert: R\nexpr: up{${selector}}'), raw({ workload: 'deployment' }, 'alert: R\nexpr: up{${selector}} > 0'))[0].rules).toEqual(['a raw rule'])
+    expect(groupSelectorLabelChanges(raw(null, 'record: r:up\nexpr: up{${selector}}'), raw({ workload: 'deployment' }, 'record: r:up\nexpr: sum(up{${selector}})'))[0].rules).toEqual(['a raw rule'])
+    // A rule turned raw, or back, in the same save is still the same rule.
+    const structured = labels => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], ...(labels ? { selectorLabels: labels } : {}), rules: [{ alert: 'R', expr: 'up{${selector}}' }] } } })
+    expect(groupSelectorLabelChanges(structured(null), raw({ workload: 'deployment' }, 'alert: R\nexpr: up{${selector}}'))[0].rules).toEqual(['a raw rule'])
+    expect(groupSelectorLabelChanges(raw(null, 'alert: R\nexpr: up{${selector}}'), structured({ workload: 'deployment' }))[0].rules).toEqual(['R'])
+    // Text that is not a rule with a name still falls back to the text itself.
+    expect(groupSelectorLabelChanges(raw(null, 'not: [yaml'), raw({ workload: 'deployment' }, 'not: [yaml'))[0].rules).toEqual(['a raw rule'])
+  })
+
+  it('says nothing when the labels end up the same, or when selectors changed (said already)', () => {
+    expect(groupSelectorLabelChanges(model(null, null), model({ workload: 'workload' }, null))).toEqual([])
+    expect(groupSelectorLabelChanges(model(null, null), model({ workload: 'deployment' }, null, ['workload']))).toEqual([])
   })
 })

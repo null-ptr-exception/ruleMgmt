@@ -1,0 +1,56 @@
+{{- define "alertforge.selector.replicas" -}}
+{{- $common := .common | default dict -}}
+{{- $self := merge (dict) .self $common -}}
+{{- $rows := list -}}
+{{- range .rows }}{{ $rows = append $rows (merge (dict) . $common) }}{{ end -}}
+{{- $parts := list -}}
+{{- $m0 := (toString (dig "namespace" "" $self)) -}}
+{{- $m1 := (toString (dig "workload" ".*" $self)) -}}
+{{- $n0 := index .labels "namespace" -}}
+{{- $n1 := index .labels "workload" -}}
+{{- if ne $m0 ".*" -}}
+{{- $parts = append $parts (printf "%s=%q" $n0 $m0) -}}
+{{- else -}}
+{{- $ex := list -}}
+{{- range $r := $rows -}}
+{{- if and (ne (toString (dig "namespace" "" $r)) ".*") (eq (toString (dig "workload" ".*" $r)) $m1) -}}
+{{- $ex = append $ex (regexQuoteMeta (toString (dig "namespace" "" $r))) -}}
+{{- end -}}
+{{- end -}}
+{{- if $ex -}}{{- $parts = append $parts (printf "%s!~`%s`" $n0 (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}
+{{- end -}}
+{{- if ne $m1 ".*" -}}
+{{- $parts = append $parts (printf "%s=%q" $n1 $m1) -}}
+{{- else -}}
+{{- $ex := list -}}
+{{- range $r := $rows -}}
+{{- if and (ne (toString (dig "workload" ".*" $r)) ".*") (eq (toString (dig "namespace" "" $r)) $m0) -}}
+{{- $ex = append $ex (regexQuoteMeta (toString (dig "workload" ".*" $r))) -}}
+{{- end -}}
+{{- end -}}
+{{- if $ex -}}{{- $parts = append $parts (printf "%s!~`%s`" $n1 (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}
+{{- end -}}
+{{- join ", " $parts -}}
+{{- end }}
+{{- $chunks := chunk 100 ($.Values.replicas | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-replicas-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: replicas
+      rules:
+        {{- range $rows }}
+        - alert: DeploymentReplicasLow
+          expr: |-
+            kube_deployment_status_replicas_available{ {{- include "alertforge.selector.replicas" (dict "self" . "rows" ($.Values.replicas | default list) "common" ($.Values._common | default dict) "labels" (dict "namespace" "namespace" "workload" "deployment")) -}} } / kube_deployment_spec_replicas{ {{- include "alertforge.selector.replicas" (dict "self" . "rows" ($.Values.replicas | default list) "common" ($.Values._common | default dict) "labels" (dict "namespace" "namespace" "workload" "deployment")) -}} } * 100 < {{ dig "threshold" 90 . }}
+        - alert: StatefulSetReplicasLow
+          expr: |-
+            kube_statefulset_status_replicas_ready{ {{- include "alertforge.selector.replicas" (dict "self" . "rows" ($.Values.replicas | default list) "common" ($.Values._common | default dict) "labels" (dict "namespace" "namespace" "workload" "statefulset")) -}} } / kube_statefulset_replicas{ {{- include "alertforge.selector.replicas" (dict "self" . "rows" ($.Values.replicas | default list) "common" ($.Values._common | default dict) "labels" (dict "namespace" "namespace" "workload" "statefulset")) -}} } * 100 < {{ dig "threshold" 90 . }}
+        {{- end }}
+{{- end }}

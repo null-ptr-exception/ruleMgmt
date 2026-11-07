@@ -11,6 +11,7 @@ import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { ruleVars } from '../utils/ruleModel'
 import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
+import { renameSelectorColumn } from '../utils/selectorContract'
 import {
   listCharts, createChart, deleteChart, cloneChart,
   getChartInfo, saveChartRules, saveChartMeta,
@@ -51,8 +52,19 @@ function SelectorsEditor({ group, commonColumns, onChange }) {
   const candidates = Object.entries({ ...commonColumns, ...(group.columns || {}) })
     .filter(([name, col]) => (col.type || 'string') === 'string' && !levels.includes(name))
     .map(([name]) => name)
+  // selectorLabels (#121) is not edited here, so a level taken out is taken
+  // out of it too — or the save would refuse a rename nothing here can undo.
+  const keep = (map, next) => {
+    const kept = Object.fromEntries(Object.entries(map || {}).filter(([l]) => next.includes(l)))
+    return Object.keys(kept).length ? kept : undefined
+  }
+  const withLabels = (obj, next) => {
+    const { selectorLabels, ...rest } = obj
+    const kept = keep(selectorLabels, next)
+    return kept ? { ...rest, selectorLabels: kept } : rest
+  }
   const set = next => onChange(g => {
-    const out = { ...g }
+    const out = withLabels({ ...g, ...(g.rules ? { rules: g.rules.map(r => (r.selectorLabels ? withLabels(r, next) : r)) } : {}) }, next)
     if (next.length) out.selectors = next
     else delete out.selectors
     return out
@@ -597,6 +609,11 @@ export default function TemplateDevEditor() {
     }
     if (target === COMMON) updateCommonColumns(apply)
     else updateGroup(target, g => ({ ...g, columns: apply(g.columns) }))
+    if (newName === oldName) return
+    // A selector keeps its place, and the label it matches (#121).
+    for (const key of target === COMMON ? Object.keys(model.groups) : [target]) {
+      if (model.groups[key].selectors?.includes(oldName)) updateGroup(key, g => renameSelectorColumn(g, oldName, newName))
+    }
   }
   function removeColumn(target, name) {
     const apply = cols => { const { [name]: _, ...rest } = cols; return rest }

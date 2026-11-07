@@ -59,6 +59,30 @@ test.describe('Template editor', () => {
     await expect(notice.getByText(/selectors changed from \[namespace\] to \[namespace, pod, workload\]/)).toBeVisible()
     expect(await rulesFile(request, CHART, 'cpu.yaml')).toContain('selectors: [namespace, pod, workload]')
   })
+
+  test('renaming a selector column keeps its place and the label it matches', async ({ page, request }) => {
+    const MAPPED = CPU.replace('selectors: [namespace]', 'selectors: [namespace]\nselectorLabels: {namespace: kube_ns}')
+    await createChart(request, CHART, { 'cpu.yaml': MAPPED })
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
+    await page.locator('.ant-select').first().click()
+    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
+    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await page.getByText('cpu', { exact: true }).first().click()
+
+    const name = page.locator('input[value="namespace"]')
+    await name.click()
+    await name.press('ControlOrMeta+A')
+    await page.keyboard.type('ns')
+    await page.keyboard.press('Enter')
+    await expect(page.getByTestId('selectors-editor').getByTestId('selector-level-ns')).toBeVisible({ timeout: 5000 })
+
+    await page.getByRole('button', { name: 'Save' }).first().click()
+    await expect(page.locator('.ant-modal').filter({ hasText: 'Saved — worth knowing' })).toBeVisible({ timeout: 8000 })
+    const saved = await rulesFile(request, CHART, 'cpu.yaml')
+    expect(saved).toContain('selectors: [ns]')
+    expect(saved).toMatch(/selectorLabels:[\s{]+ns: kube_ns/)
+  })
 })
 
 test.describe('Alerts page', () => {

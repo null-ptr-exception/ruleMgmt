@@ -8,8 +8,10 @@
  * diff is enough, and what it feeds is a decision, not a rewrite.
  */
 
+import yaml from 'js-yaml'
 import { profileFor } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
+import { selectorLabelsFor } from './selectorContract.js'
 
 const columnsOf = group => group?.items?.properties || {}
 const requiredOf = group => new Set(group?.items?.required || [])
@@ -153,6 +155,7 @@ const DESCRIPTIONS = {
   'group-selectors-changed': c => c.to.length
     ? `${c.group}: selectors ${c.from.length ? `changed from [${c.from.join(', ')}] to` : 'set to'} [${c.to.join(', ')}] — which rows exclude which is worked out again; no row is lost, but what each row alerts on can change`
     : `${c.group}: selectors removed — rows no longer exclude each other, so an object can be alerted on by more than one row`,
+  'group-selector-labels-changed': c => `${c.group}: selectorLabels changed for ${c.rules.join(', ')} — a selector column matches a different label, so what each row alerts on changes`,
   'group-once-changed': c => c.to === 'once'
     ? `${c.group}: now renders once per deployment — its objects are renamed (no chunk index): the old ones are deleted and new ones created, and its rows are no longer read`
     : `${c.group}: now renders once per row — its objects are renamed (with a chunk index): the old ones are deleted and new ones created`,
@@ -209,6 +212,37 @@ export function groupSelectorChanges(beforeModel, afterModel) {
     const to = after.selectors || []
     if (from.join('\u0000') === to.join('\u0000')) continue
     changes.push({ kind: 'group-selectors-changed', group, from, to })
+  }
+  return changes
+}
+
+/**
+ * Rules whose selector columns match different labels than before (#121).
+ * Like a selectors change, values.yaml is untouched but what a row watches
+ * moves. Rules are matched by name, a raw rule by the alert or record name in
+ * its text, so a save that edits the text too still finds it, else by the
+ * text; one added or removed is said elsewhere, and a group whose selectors
+ * changed is already said by groupSelectorChanges.
+ */
+export function groupSelectorLabelChanges(beforeModel, afterModel) {
+  const changes = []
+  // One key for both forms, so a rule turned raw (or back) in the same save
+  // is still found.
+  const named = rule => (typeof rule?.alert === 'string' ? `alert:${rule.alert}`
+    : typeof rule?.record === 'string' ? `record:${rule.record}` : undefined)
+  const parsed = text => { try { return yaml.load(text) } catch { return undefined } }
+  const keyOf = rule => named(rule) ?? (rule.raw !== undefined ? named(parsed(rule.raw)) ?? rule.raw : undefined)
+  const nameOf = rule => rule.alert ?? rule.record ?? 'a raw rule'
+  for (const [group, after] of Object.entries(afterModel?.groups || {})) {
+    const before = beforeModel?.groups?.[group]
+    if (!before || before.custom || after.custom || !after.selectors?.length) continue
+    if ((before.selectors || []).join('\u0000') !== after.selectors.join('\u0000')) continue
+    const beforeRules = new Map((before.rules || []).map(r => [keyOf(r), r]))
+    const rules = (after.rules || []).filter(r => {
+      const was = beforeRules.get(keyOf(r))
+      return was && JSON.stringify(selectorLabelsFor(before, was)) !== JSON.stringify(selectorLabelsFor(after, r))
+    }).map(nameOf)
+    if (rules.length) changes.push({ kind: 'group-selector-labels-changed', group, rules })
   }
   return changes
 }

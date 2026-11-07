@@ -1,0 +1,12 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-replicas-1-1:
+  - name: replicas
+    rules:
+      - alert: DeploymentReplicasLow
+        expr: 'kube_deployment_status_replicas_available{namespace="prod", deployment!~`api`} / kube_deployment_spec_replicas{namespace="prod", deployment!~`api`} * 100 < 90'
+      - alert: StatefulSetReplicasLow
+        expr: 'kube_statefulset_status_replicas_ready{namespace="prod", statefulset!~`api`} / kube_statefulset_replicas{namespace="prod", statefulset!~`api`} * 100 < 90'
+      - alert: DeploymentReplicasLow
+        expr: 'kube_deployment_status_replicas_available{namespace="prod", deployment="api"} / kube_deployment_spec_replicas{namespace="prod", deployment="api"} * 100 < 50'
+      - alert: StatefulSetReplicasLow
+        expr: 'kube_statefulset_status_replicas_ready{namespace="prod", statefulset="api"} / kube_statefulset_replicas{namespace="prod", statefulset="api"} * 100 < 50'

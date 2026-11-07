@@ -84,6 +84,39 @@ export function looksLikeRegex(v) {
 
 const SELECTOR_REF_RE = /\$\{\s*selector\s*\}/g
 
+/** A Prometheus label name; `__` names are Prometheus's own. */
+const LABEL_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+/**
+ * The label each selector column matches in one rule (#121): the rule's
+ * selectorLabels, else the group's, else the column's own name. Only the
+ * rendered matchers use it — which row excludes which is decided on the
+ * columns.
+ */
+export function selectorLabelsFor(group, rule) {
+  // Own keys only: a column may be named toString.
+  const mapped = (map, l) => (map && Object.hasOwn(map, l) ? map[l] : undefined)
+  return Object.fromEntries((group.selectors || [])
+    .map(l => [l, mapped(rule?.selectorLabels, l) ?? mapped(group.selectorLabels, l) ?? l]))
+}
+
+/**
+ * A column's rename, carried into a group that has it as a selector: its
+ * place in `selectors`, and its key in every selectorLabels, so the label it
+ * matches stays the same when it had one.
+ */
+export function renameSelectorColumn(group, oldName, newName) {
+  if (!group.selectors?.includes(oldName)) return group
+  const withKey = obj => (obj.selectorLabels
+    ? { ...obj, selectorLabels: Object.fromEntries(Object.entries(obj.selectorLabels).map(([k, v]) => [k === oldName ? newName : k, v])) }
+    : obj)
+  return withKey({
+    ...group,
+    selectors: group.selectors.map(l => (l === oldName ? newName : l)),
+    ...(group.rules ? { rules: group.rules.map(withKey) } : {}),
+  })
+}
+
 // ── predicates ──────────────────────────────────────────────────────────────
 
 /** Some object could match both: in every column they are equal, or one is `.*`. */
@@ -308,8 +341,13 @@ const WHOLE_RULE_FIELDS = ['expr', 'for']
 export function selectorTemplateProblems(group, commonCols = {}) {
   const levels = group.selectors
   const out = []
+  const ruleWhere = rule => (rule.alert ? `rule "${rule.alert}"` : rule.record ? `recording rule "${rule.record}"` : 'a raw rule')
   if (group.selectors === undefined) {
-    // Without a hierarchy there is nothing ${selector} could expand to.
+    // Without a hierarchy there is nothing ${selector} could expand to, and
+    // no column for selectorLabels to rename.
+    if (group.selectorLabels || (group.rules || []).some(r => r.selectorLabels)) {
+      out.push({ kind: 'selector-labels-unknown', message: 'selectorLabels renames selector columns, but this group has no selectors' })
+    }
     return out
   }
   if (!Array.isArray(levels) || levels.some(l => typeof l !== 'string')) {
@@ -332,11 +370,36 @@ export function selectorTemplateProblems(group, commonCols = {}) {
     }
   }
 
+  // selectorLabels (#121): a column may match a label of another name, for
+  // the group or for one rule.
+  const labelMaps = [[null, group.selectorLabels], ...(group.rules || []).map(r => [r, r.selectorLabels])]
+  for (const [rule, map] of labelMaps) {
+    if (!map) continue
+    const where = rule ? `${ruleWhere(rule)}: selectorLabels` : 'selectorLabels'
+    const alert = rule ? { alert: rule.alert || rule.record } : {}
+    for (const [col, label] of Object.entries(map)) {
+      if (!levels.includes(col)) {
+        out.push({ kind: 'selector-labels-unknown', ...alert, message: `${where} names "${col}", which is not in selectors` })
+      }
+      if (!LABEL_NAME_RE.test(label) || label.startsWith('__')) {
+        out.push({ kind: 'selector-labels-name', ...alert, message: `${where} maps "${col}" to "${label}", which is not a label name — letters, digits and _, not starting with a digit or __` })
+      }
+    }
+  }
+  for (const rule of group.rules || []) {
+    const byLabel = new Map()
+    for (const [col, label] of Object.entries(selectorLabelsFor(group, rule))) byLabel.set(label, [...(byLabel.get(label) || []), col])
+    for (const [label, sameCols] of byLabel) {
+      if (sameCols.length < 2) continue
+      out.push({ kind: 'selector-labels-duplicate', alert: rule.alert || rule.record, message: `${ruleWhere(rule)}: ${sameCols.join(' and ')} both match the label "${label}"` })
+    }
+  }
+
   // Columns whose absence drops a whole rule: under a contract a row that
   // loses its rule leaves the objects its parent gave up unwatched.
   const mayBeAbsent = name => cols[name] && !cols[name].required && cols[name].default === undefined
   for (const rule of group.rules || []) {
-    const where = rule.alert ? `rule "${rule.alert}"` : rule.record ? `recording rule "${rule.record}"` : 'a raw rule'
+    const where = ruleWhere(rule)
     const name = rule.alert || rule.record
     const expand = s => expandVars(String(s ?? ''), group.vars)
     const exprText = expand(rule.raw ?? rule.expr)

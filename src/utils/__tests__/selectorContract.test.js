@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   intersects, strictlyContains, directChildColumn, meet, exclusions, directChildren, parentOf,
   rowProblems, selectorValueProblems, misplacedSelectorRefs, selectorTemplateProblems, selectorCells,
-  SELECTOR_PATTERN, selectorCellProblem, looksLikeRegex, selectorPath,
+  SELECTOR_PATTERN, selectorCellProblem, looksLikeRegex, selectorPath, selectorLabelsFor, renameSelectorColumn,
 } from '../selectorContract.js'
 import { parseGroupFile, parseRulesDir, groupFileText, modelToSchema, genSchema } from '../rulesFile.js'
 import { checkRules } from '../ruleChecks.js'
@@ -157,6 +157,129 @@ describe('the template owner\'s checks', () => {
   it('refuses selectors on a once group and on a non-PromQL group', () => {
     expect(kinds(group({ once: true }))).toContain('selectors-once')
     expect(kinds(group({ type: 'vlogs' }))).toContain('selectors-type')
+  })
+})
+
+// #121: a selector column may match a label of another name.
+describe('selectorLabels', () => {
+  const group = (extra = {}) => ({
+    selectors: ['namespace', 'workload'],
+    selectorLabels: { workload: 'deployment' },
+    columns: { namespace: { type: 'string', required: true }, workload: { type: 'string', default: '.*' } },
+    rules: [
+      { alert: 'DeploymentLow', expr: 'up{${selector}} < 1' },
+      { alert: 'StatefulSetLow', selectorLabels: { workload: 'statefulset' }, expr: 'up{${selector}} < 1' },
+    ],
+    ...extra,
+  })
+  const problems = g => selectorTemplateProblems(g).map(p => [p.kind, p.message])
+
+  it('the rule\'s label, else the group\'s, else the column\'s own name', () => {
+    const g = group()
+    expect(selectorLabelsFor(g, g.rules[0])).toEqual({ namespace: 'namespace', workload: 'deployment' })
+    expect(selectorLabelsFor(g, g.rules[1])).toEqual({ namespace: 'namespace', workload: 'statefulset' })
+    expect(selectorLabelsFor({ selectors: ['namespace'] }, {})).toEqual({ namespace: 'namespace' })
+  })
+
+  it('a column named like an Object method is still its own label', () => {
+    const g = { selectors: ['toString', 'workload'], selectorLabels: { workload: 'deployment' } }
+    expect(selectorLabelsFor(g, { selectorLabels: { workload: 'pod' } })).toEqual({ toString: 'toString', workload: 'pod' })
+    expect(selectorLabelsFor(g, {})).toEqual({ toString: 'toString', workload: 'deployment' })
+  })
+
+  it('a label named like an Object method is reported, not thrown on', () => {
+    const g = group({ selectorLabels: { namespace: 'toString', workload: 'toString' }, rules: [{ alert: 'A', expr: 'up{${selector}} < 1' }] })
+    expect(selectorTemplateProblems(g).map(p => p.kind)).toEqual(['selector-labels-duplicate'])
+  })
+
+  describe('renaming a selector column', () => {
+    it('renames it in selectors and in every selectorLabels', () => {
+      const out = renameSelectorColumn(group(), 'workload', 'app')
+      expect(out.selectors).toEqual(['namespace', 'app'])
+      expect(out.selectorLabels).toEqual({ app: 'deployment' })
+      expect(out.rules[1].selectorLabels).toEqual({ app: 'statefulset' })
+      expect(selectorLabelsFor(out, out.rules[0])).toEqual({ namespace: 'namespace', app: 'deployment' })
+      expect(selectorLabelsFor(out, out.rules[1])).toEqual({ namespace: 'namespace', app: 'statefulset' })
+    })
+
+    it('keeps the place in selectors, and leaves the other columns', () => {
+      const out = renameSelectorColumn(group(), 'namespace', 'ns')
+      expect(out.selectors).toEqual(['ns', 'workload'])
+      expect(out.selectorLabels).toEqual({ workload: 'deployment' })
+    })
+
+    it('leaves a group that does not have it as a selector', () => {
+      const g = group()
+      expect(renameSelectorColumn(g, 'threshold', 'limit')).toBe(g)
+      const none = { columns: {}, rules: [] }
+      expect(renameSelectorColumn(none, 'workload', 'app')).toBe(none)
+    })
+  })
+
+  it('passes a well-formed group', () => {
+    expect(selectorTemplateProblems(group())).toEqual([])
+  })
+
+  it('refuses a label that is not a label name', () => {
+    for (const bad of ['1abc', 'a-b', '__name__', '']) {
+      expect(problems(group({ selectorLabels: { workload: bad } }))).toEqual([
+        ['selector-labels-name', `selectorLabels maps "workload" to "${bad}", which is not a label name — letters, digits and _, not starting with a digit or __`],
+      ])
+    }
+    expect(problems(group({ selectorLabels: { workload: '_deployment' } }))).toEqual([])
+  })
+
+  it('refuses a column that is not in selectors, on the group or a rule', () => {
+    expect(problems(group({ selectorLabels: { pod: 'pod_name' } }))).toEqual([
+      ['selector-labels-unknown', 'selectorLabels names "pod", which is not in selectors'],
+    ])
+    const g = group()
+    g.rules[1].selectorLabels = { threshold: 'x' }
+    expect(problems(g)).toEqual([
+      ['selector-labels-unknown', 'rule "StatefulSetLow": selectorLabels names "threshold", which is not in selectors'],
+    ])
+  })
+
+  it('refuses selectorLabels on a group without selectors', () => {
+    expect(problems(group({ selectors: undefined }))).toEqual([
+      ['selector-labels-unknown', 'selectorLabels renames selector columns, but this group has no selectors'],
+    ])
+  })
+
+  it('refuses two columns matching one label in a rule, defaults included', () => {
+    const g = group()
+    g.rules[1].selectorLabels = { workload: 'namespace' }
+    expect(problems(g)).toEqual([
+      ['selector-labels-duplicate', 'rule "StatefulSetLow": namespace and workload both match the label "namespace"'],
+    ])
+  })
+
+  it('round-trips through the rules format, and leaves a file without it alone', () => {
+    const src = 'group: replicas\nselectors: [namespace, workload]\nselectorLabels: {workload: deployment}\ncolumns:\n  namespace: {type: string, required: true}\n  workload: {type: string, default: ".*"}\nrules:\n  - alert: A\n    expr: up{${selector}} < 1\n  - alert: B\n    selectorLabels: {workload: statefulset}\n    expr: up{${selector}} < 1\n  - record: c\n    selectorLabels: {workload: daemonset}\n    expr: up{${selector}}\n'
+    const { group: parsed, errors } = parseGroupFile(src, 'replicas')
+    expect(errors).toEqual([])
+    expect(parsed.selectorLabels).toEqual({ workload: 'deployment' })
+    expect(parsed.rules.map(r => r.selectorLabels)).toEqual([undefined, { workload: 'statefulset' }, { workload: 'daemonset' }])
+    const text = groupFileText(parsed)
+    expect(text).toContain('\nselectorLabels: {workload: deployment}\n')
+    expect(parseGroupFile(text, 'replicas').group).toEqual(parsed)
+    const { model } = parseRulesDir({ 'replicas.yaml': src })
+    expect(checkRules(genSchema(model))).toEqual([])
+    expect(groupFileText(parseGroupFile(src.replace(/ *selectorLabels: .*\n/g, ''), 'replicas').group)).not.toContain('selectorLabels')
+  })
+
+  it('refuses selectorLabels that is not a map of names', () => {
+    const src = 'group: cpu\nselectors: [namespace]\nselectorLabels: [namespace]\ncolumns:\n  namespace: {type: string, required: true}\nrules:\n  - alert: A\n    selectorLabels: {namespace: {a: b}}\n    expr: cpu{${selector}} > 1\n'
+    expect(parseGroupFile(src, 'cpu').errors).toEqual([
+      'cpu.yaml rules[0]: selectorLabels must map selector columns to label names, e.g. { workload: deployment }',
+      'cpu.yaml: selectorLabels must map selector columns to label names, e.g. { workload: deployment }',
+    ])
+  })
+
+  it('reports its checks as save blockers', () => {
+    const src = 'group: cpu\nselectors: [namespace]\nselectorLabels: {namespace: 1ns}\ncolumns:\n  namespace: {type: string, required: true}\nrules:\n  - alert: A\n    expr: cpu{${selector}} > 1\n'
+    const { model } = parseRulesDir({ 'cpu.yaml': src })
+    expect(checkRules(genSchema(model))).toEqual([expect.objectContaining({ severity: 'save', group: 'cpu', kind: 'selector-labels-name' })])
   })
 })
 

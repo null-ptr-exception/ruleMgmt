@@ -248,6 +248,10 @@ describe('groupSelectorLabelChanges', () => {
     const raw = (labels, text) => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], ...(labels ? { selectorLabels: labels } : {}), rules: [{ raw: text }] } } })
     expect(groupSelectorLabelChanges(raw(null, 'alert: R\nexpr: up{${selector}}'), raw({ workload: 'deployment' }, 'alert: R\nexpr: up{${selector}} > 0'))[0].rules).toEqual(['a raw rule'])
     expect(groupSelectorLabelChanges(raw(null, 'record: r:up\nexpr: up{${selector}}'), raw({ workload: 'deployment' }, 'record: r:up\nexpr: sum(up{${selector}})'))[0].rules).toEqual(['a raw rule'])
+    // A rule turned raw, or back, in the same save is still the same rule.
+    const structured = labels => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], ...(labels ? { selectorLabels: labels } : {}), rules: [{ alert: 'R', expr: 'up{${selector}}' }] } } })
+    expect(groupSelectorLabelChanges(structured(null), raw({ workload: 'deployment' }, 'alert: R\nexpr: up{${selector}}'))[0].rules).toEqual(['a raw rule'])
+    expect(groupSelectorLabelChanges(raw(null, 'alert: R\nexpr: up{${selector}}'), structured({ workload: 'deployment' }))[0].rules).toEqual(['R'])
     // Text that is not a rule with a name still falls back to the text itself.
     expect(groupSelectorLabelChanges(raw(null, 'not: [yaml'), raw({ workload: 'deployment' }, 'not: [yaml'))[0].rules).toEqual(['a raw rule'])
   })

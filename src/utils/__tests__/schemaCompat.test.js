@@ -244,6 +244,14 @@ describe('groupSelectorLabelChanges', () => {
     expect(groupSelectorLabelChanges(raw(null), raw({ workload: 'deployment' }))[0].rules).toEqual(['a raw rule'])
   })
 
+  it('still finds a raw rule whose text changed in the same save, by its alert or record name', () => {
+    const raw = (labels, text) => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], ...(labels ? { selectorLabels: labels } : {}), rules: [{ raw: text }] } } })
+    expect(groupSelectorLabelChanges(raw(null, 'alert: R\nexpr: up{${selector}}'), raw({ workload: 'deployment' }, 'alert: R\nexpr: up{${selector}} > 0'))[0].rules).toEqual(['a raw rule'])
+    expect(groupSelectorLabelChanges(raw(null, 'record: r:up\nexpr: up{${selector}}'), raw({ workload: 'deployment' }, 'record: r:up\nexpr: sum(up{${selector}})'))[0].rules).toEqual(['a raw rule'])
+    // Text that is not a rule with a name still falls back to the text itself.
+    expect(groupSelectorLabelChanges(raw(null, 'not: [yaml'), raw({ workload: 'deployment' }, 'not: [yaml'))[0].rules).toEqual(['a raw rule'])
+  })
+
   it('says nothing when the labels end up the same, or when selectors changed (said already)', () => {
     expect(groupSelectorLabelChanges(model(null, null), model({ workload: 'workload' }, null))).toEqual([])
     expect(groupSelectorLabelChanges(model(null, null), model({ workload: 'deployment' }, null, ['workload']))).toEqual([])

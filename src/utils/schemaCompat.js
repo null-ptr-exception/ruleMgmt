@@ -8,6 +8,7 @@
  * diff is enough, and what it feeds is a decision, not a rewrite.
  */
 
+import yaml from 'js-yaml'
 import { profileFor } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { selectorLabelsFor } from './selectorContract.js'
@@ -218,13 +219,21 @@ export function groupSelectorChanges(beforeModel, afterModel) {
 /**
  * Rules whose selector columns match different labels than before (#121).
  * Like a selectors change, values.yaml is untouched but what a row watches
- * moves. Rules are matched by name, a raw rule by its text; one added or
- * removed is said elsewhere, and a group whose selectors changed is already
- * said by groupSelectorChanges.
+ * moves. Rules are matched by name, a raw rule by the alert or record name in
+ * its text, so a save that edits the text too still finds it, else by the
+ * text; one added or removed is said elsewhere, and a group whose selectors
+ * changed is already said by groupSelectorChanges.
  */
 export function groupSelectorLabelChanges(beforeModel, afterModel) {
   const changes = []
-  const keyOf = rule => rule.alert ?? rule.record ?? rule.raw
+  const rawName = text => {
+    try {
+      const rule = yaml.load(text)
+      const name = rule?.alert ?? rule?.record
+      return typeof name === 'string' ? `${rule.alert !== undefined ? 'alert' : 'record'}:${name}` : undefined
+    } catch { return undefined }
+  }
+  const keyOf = rule => rule.alert ?? rule.record ?? rawName(rule.raw) ?? rule.raw
   const nameOf = rule => rule.alert ?? rule.record ?? 'a raw rule'
   for (const [group, after] of Object.entries(afterModel?.groups || {})) {
     const before = beforeModel?.groups?.[group]

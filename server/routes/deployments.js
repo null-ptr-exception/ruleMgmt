@@ -8,6 +8,7 @@ import { valueProblems } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
 import { buildRouting, writeRouting, removeRouting, copyRouting, routingState } from '../lib/routingFiles.js'
+import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
@@ -72,6 +73,10 @@ export default function deploymentsRouter() {
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     try {
+      if (req.query.folder) {
+        const reserved = await newReservedSegment(req.gitopsDir, req.query.folder)
+        if (reserved) return res.status(400).json({ error: reservedError(reserved) })
+      }
       await fs.mkdir(dir, { recursive: true })
       const files = await fs.readdir(dir)
       const deployments = []
@@ -139,6 +144,8 @@ export default function deploymentsRouter() {
         if (isTarget(registry, folder)) {
           return res.status(409).json({ error: `${folder} is synced from another deployment and is read-only` })
         }
+        const reserved = await newReservedSegment(req.gitopsDir, folder)
+        if (reserved) return res.status(400).json({ error: reservedError(reserved) })
       }
 
       await fs.mkdir(dir, { recursive: true })

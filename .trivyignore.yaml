@@ -1,0 +1,16 @@
+# CVEs the image scan (CI, #106) lets through. Each needs a reason and an
+# issue, and is scoped to the binary it is in, so the same CVE elsewhere
+# still fails the scan. Remove an entry once its reason is gone.
+vulnerabilities:
+  # promtool stays on Prometheus 2.54.1 so its checks match the 2.x Prometheus
+  # the rules are deployed to; these are fixed only in 3.x (#105).
+  - id: CVE-2026-42151
+    paths: [usr/local/bin/promtool]
+  - id: CVE-2026-42154
+    paths: [usr/local/bin/promtool]
+
+  # golang.org/x/net in vmalert: no vmalert release has 0.62.0 yet (v1.155.0
+  # has 0.60.0). promtool is rebuilt with 0.62.0. Remove once vmalert ships
+  # it (#152).
+  - id: CVE-2026-78661
+    paths: [usr/local/bin/vmalert]

@@ -27,9 +27,9 @@ RUN go get \
       github.com/golang-jwt/jwt/v5@v5.2.2 \
       github.com/klauspost/compress@v1.18.7 \
       go.opentelemetry.io/otel@v1.44.0 \
-      golang.org/x/crypto@v0.57.0 \
-      golang.org/x/net@v0.60.0 \
-      golang.org/x/text@v0.42.0 \
+      golang.org/x/crypto@v0.58.0 \
+      golang.org/x/net@v0.62.0 \
+      golang.org/x/text@v0.43.0 \
       google.golang.org/grpc@v1.83.2 \
  && go mod tidy
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w \

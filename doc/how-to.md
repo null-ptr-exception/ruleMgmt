@@ -171,6 +171,13 @@ already exist. Save opens a dialog instead of saving:
 Deployments that follow another through sync are not rewritten; they follow
 their source.
 
+A removed rule is found by counting the rules of each name, raw rules
+included (a raw rule is read for the `alert:` or `record:` in it, and one
+holding a list counts each entry). Removing one of two rules of the same name
+— one alert at two severities — is listed as "1 of the 2 rules … is gone".
+Rules have no other identity, so removing one rule and adding a different one
+of the same name in the same save is not listed.
+
 If existing deployments should not change yet, use **Clone to a new chart** on
 the first step instead. The copy gets your edits and the mapping; the original
 keeps working, and each rule owner moves over when they are ready.

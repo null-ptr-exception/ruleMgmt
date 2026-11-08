@@ -184,14 +184,57 @@ describe('groupOnceChanges', () => {
 
 describe('modelAlerts', () => {
   it('names a recording rule by its record, so removing one is seen', () => {
+    // A raw rule counts too (#156): by its name, or as one with no name.
     const model = { groups: { g: { rules: [{ alert: 'A' }, { record: 'job:up' }, { raw: 'x' }] } } }
-    expect(modelAlerts(model)).toEqual({ g: ['A', 'job:up'] })
+    expect(modelAlerts(model)).toEqual({ g: ['A', 'job:up', '(a raw rule with no name)'] })
     const { breaking } = diffSchema(
       { properties: { g: { type: 'array', items: { properties: {} } } } },
       { properties: { g: { type: 'array', items: { properties: {} } } } },
-      { before: modelAlerts(model), after: { g: ['A'] } }
+      { before: modelAlerts(model), after: { g: ['A', '(a raw rule with no name)'] } }
     )
-    expect(breaking).toEqual([{ kind: 'rule-removed', group: 'g', alert: 'job:up' }])
+    expect(breaking).toEqual([{ kind: 'rule-removed', group: 'g', alert: 'job:up', count: 1, left: 0 }])
+    expect(describeChange(breaking[0])).toBe('g: rule "job:up" is gone')
+  })
+})
+
+// #156: rules have no identity, so removals are counted per name, raw rules
+// included, rather than looked up by name.
+describe('rule-removed counts each name', () => {
+  const schema = { properties: { g: { type: 'array', items: { properties: {} } } } }
+  const removed = (before, after) => diffSchema(schema, schema, {
+    before: modelAlerts({ groups: { g: { rules: before } } }),
+    after: modelAlerts({ groups: { g: { rules: after } } }),
+  }).breaking.filter(c => c.kind === 'rule-removed')
+  const crit = { alert: 'CpuHigh', expr: 'cpu > 90', labels: { severity: 'critical' } }
+  const warn = { alert: 'CpuHigh', expr: 'cpu > 80', labels: { severity: 'warning' } }
+
+  it('flags one of two rules with the same name', () => {
+    const [c] = removed([crit, warn], [crit])
+    expect(c).toMatchObject({ group: 'g', alert: 'CpuHigh', count: 1, left: 1 })
+    expect(describeChange(c)).toBe('g: 1 of the 2 rules "CpuHigh" is gone')
+  })
+
+  it('says it once when every rule of a name is gone', () => {
+    const changes = removed([crit, warn], [])
+    expect(changes).toHaveLength(1)
+    expect(describeChange(changes[0])).toBe('g: the 2 rules "CpuHigh" are gone')
+  })
+
+  it('flags a raw rule, in either form, and each rule of a raw list', () => {
+    expect(removed([crit, { raw: 'alert: RawOne\nexpr: up == 0' }], [crit]).map(c => c.alert)).toEqual(['RawOne'])
+    const list = '- alert: R1\n  expr: up == 0\n- alert: R2\n  expr: up == 1\n'
+    expect(removed([{ raw: list }], [{ raw: '- alert: R1\n  expr: up == 0\n' }]).map(c => c.alert)).toEqual(['R2'])
+  })
+
+  it('counts a raw rule with no name, too', () => {
+    const [c] = removed([crit, { raw: 'not: [yaml' }], [crit])
+    expect(c.alert).toBe('(a raw rule with no name)')
+  })
+
+  it('does not flag a reorder, an edit, or a raw rule turned structured', () => {
+    expect(removed([crit, warn], [warn, crit])).toEqual([])
+    expect(removed([crit], [{ ...crit, expr: 'cpu > 95' }])).toEqual([])
+    expect(removed([{ raw: 'alert: CpuHigh\nexpr: cpu > 90' }], [crit])).toEqual([])
   })
 })
 
@@ -269,5 +312,40 @@ describe('groupSelectorLabelChanges', () => {
   it('says nothing when the labels end up the same, or when selectors changed (said already)', () => {
     expect(groupSelectorLabelChanges(model(null, null), model({ workload: 'workload' }, null))).toEqual([])
     expect(groupSelectorLabelChanges(model(null, null), model({ workload: 'deployment' }, null, ['workload']))).toEqual([])
+  })
+
+  // #156: no pairing by name — the group's rules, each with its labels, are
+  // compared as a whole, so nothing is missed.
+  const group = rules => ({ groups: { replicas: { group: 'replicas', columns: {}, selectors: ['workload'], rules } } })
+  const r = (severity, labels) => ({ alert: 'R', expr: `up{\${selector}} < ${severity === 'critical' ? 1 : 2}`, labels: { severity }, ...(labels ? { selectorLabels: labels } : {}) })
+
+  it('sees two same-name rules swapped along with their mappings', () => {
+    const before = group([r('critical', { workload: 'deployment' }), r('warning')])
+    const after = group([r('warning', { workload: 'deployment' }), r('critical')])
+    expect(groupSelectorLabelChanges(before, after)).toHaveLength(1)
+  })
+
+  it('sees a raw rule in list form turned structured, with its label changed', () => {
+    const before = group([{ raw: '- alert: R\n  expr: up{${selector}}\n' }])
+    const after = { groups: { replicas: { ...group([{ alert: 'R', expr: 'up{${selector}}' }]).groups.replicas, selectorLabels: { workload: 'deployment' } } } }
+    expect(groupSelectorLabelChanges(before, after)).toHaveLength(1)
+  })
+
+  it('sees a rule-level mapping added or taken away', () => {
+    expect(groupSelectorLabelChanges(group([r('critical')]), group([r('critical', { workload: 'deployment' })]))).toHaveLength(1)
+    expect(groupSelectorLabelChanges(group([r('critical', { workload: 'deployment' })]), group([r('critical')]))).toHaveLength(1)
+  })
+
+  it('says how many rules from before are not there any more', () => {
+    // critical drops its mapping; warning is deleted.
+    const [c] = groupSelectorLabelChanges(group([r('critical', { workload: 'deployment' }), r('warning')]), group([r('critical')]))
+    expect(c.rules).toEqual(['R'])
+    expect(c.gone).toBe(1)
+    expect(describeChange(c)).toMatch(/selectorLabels changed for R; 1 rule from before no longer there/)
+  })
+
+  it('says nothing for a pure reorder, or a group that never maps a label', () => {
+    expect(groupSelectorLabelChanges(group([r('critical', { workload: 'deployment' }), r('warning')]), group([r('warning'), r('critical', { workload: 'deployment' })]))).toEqual([])
+    expect(groupSelectorLabelChanges(group([r('critical')]), group([{ ...r('critical'), expr: 'changed{${selector}}' }]))).toEqual([])
   })
 })

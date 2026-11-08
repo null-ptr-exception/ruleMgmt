@@ -21,12 +21,35 @@ const commonOf = schema => getCommonSchema(schema)?.properties || {}
 // `alertMaps` — falling back to the schema's own (legacy, x-promql-era)
 // `x-rules`/`x-promql`-derived shape only when it doesn't.
 const alertsOf = group => (group?.['x-rules'] || []).map(r => r.alert).filter(Boolean)
-/** { [group]: [alert, ...] } from a rules/*.yaml model — see rulesFile.js. */
+
+const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+const UNNAMED = '(a raw rule with no name)'
+const nameIn = rule => (isMap(rule) && typeof (rule.alert ?? rule.record) === 'string' ? rule.alert ?? rule.record : UNNAMED)
+
+/**
+ * The names one model rule alerts or records under. A raw rule is read for
+ * them: its text can hold one rule or a list of several, and one with no
+ * readable name still counts, as UNNAMED.
+ */
+function namesOf(rule) {
+  if (rule.raw === undefined) return [rule.alert || rule.record].filter(Boolean)
+  let doc
+  try { doc = yaml.load(rule.raw) } catch { return [UNNAMED] }
+  return (Array.isArray(doc) ? doc : [doc]).map(nameIn)
+}
+
+/**
+ * { [group]: [name, ...] } from a rules/*.yaml model — see rulesFile.js. A
+ * name is listed once per rule, raw rules included: rules have no identity
+ * (#156), so removals are found by counting each name, not by looking it up.
+ */
 export function modelAlerts(model) {
   return Object.fromEntries(
-    Object.entries(model?.groups || {}).map(([g, e]) => [g, (e.rules || []).map(r => r.alert || r.record).filter(Boolean)])
+    Object.entries(model?.groups || {}).map(([g, e]) => [g, (e.rules || []).flatMap(namesOf)])
   )
 }
+
+const countOf = names => names.reduce((m, n) => m.set(n, (m.get(n) || 0) + 1), new Map())
 
 /** before -> after transitions that still accept every value already stored. */
 const WIDENING = { integer: ['number'] }
@@ -127,10 +150,12 @@ export function diffSchema(before, after, alertMaps = null) {
       }
     }
 
-    const beforeAlerts = beforeAlertsOf(group)
-    const afterAlerts = afterAlertsOf(group)
-    for (const alert of beforeAlerts) {
-      if (!afterAlerts.includes(alert)) breaking.push({ kind: 'rule-removed', group, alert })
+    // Fewer rules of a name than before: one of them is gone, even if
+    // another of the same name is still there.
+    const afterCount = countOf(afterAlertsOf(group))
+    for (const [alert, before] of countOf(beforeAlertsOf(group))) {
+      const left = afterCount.get(alert) || 0
+      if (left < before) breaking.push({ kind: 'rule-removed', group, alert, count: before - left, left })
     }
   }
 
@@ -143,7 +168,9 @@ const DESCRIPTIONS = {
   'column-moved-to-common': c => `${c.group}: "${c.column}" moved to chart level — rows that disagree cannot all be kept`,
   'type-narrowed': c => `${c.group}: "${c.column}" no longer accepts the values it used to`,
   'newly-required': c => `${c.group}: "${c.column}" is now required — rows that left it empty become invalid`,
-  'rule-removed': c => `${c.group}: rule "${c.alert}" is gone`,
+  'rule-removed': c => (!c.left
+    ? (c.count > 1 ? `${c.group}: the ${c.count} rules "${c.alert}" are gone` : `${c.group}: rule "${c.alert}" is gone`)
+    : `${c.group}: ${c.count} of the ${c.count + c.left} rules "${c.alert}" ${c.count > 1 ? 'are' : 'is'} gone`),
   'default-removed': c => `${c.group}: "${c.column}" lost its default — every row that left it blank now produces no alert instead of using that value`,
   'default-changed': c => `${c.group}: "${c.column}" has a different default — every row that left it blank changes value`,
   'default-added': c => `${c.group}: "${c.column}" gained a default — rows that leave it blank will use it`,
@@ -155,7 +182,11 @@ const DESCRIPTIONS = {
   'group-selectors-changed': c => c.to.length
     ? `${c.group}: selectors ${c.from.length ? `changed from [${c.from.join(', ')}] to` : 'set to'} [${c.to.join(', ')}] — which rows exclude which is worked out again; no row is lost, but what each row alerts on can change`
     : `${c.group}: selectors removed — rows no longer exclude each other, so an object can be alerted on by more than one row`,
-  'group-selector-labels-changed': c => `${c.group}: selectorLabels changed for ${c.rules.join(', ')} — a selector column matches a different label, so what each row alerts on changes`,
+  'group-selector-labels-changed': c => {
+    const gone = c.gone ? `${c.gone} rule${c.gone > 1 ? 's' : ''} from before no longer there` : ''
+    const which = [c.rules.join(', '), gone].filter(Boolean).join('; ')
+    return `${c.group}: selectorLabels changed for ${which} — a selector column matches a different label, so what each row alerts on changes`
+  },
   'group-once-changed': c => c.to === 'once'
     ? `${c.group}: now renders once per deployment — its objects are renamed (no chunk index): the old ones are deleted and new ones created, and its rows are no longer read`
     : `${c.group}: now renders once per row — its objects are renamed (with a chunk index): the old ones are deleted and new ones created`,
@@ -219,43 +250,50 @@ export function groupSelectorChanges(beforeModel, afterModel) {
 /**
  * Rules whose selector columns match different labels than before (#121).
  * Like a selectors change, values.yaml is untouched but what a row watches
- * moves. Rules are matched by name, a raw rule by the alert or record name in
- * its text, so a save that edits the text too still finds it, else by the
- * text; rules that share a name (one alert at two severities) are matched in
- * order. One added or removed is said elsewhere, and a group whose selectors
- * changed is already said by groupSelectorChanges.
+ * moves. A group whose selectors changed is already said by
+ * groupSelectorChanges.
+ *
+ * Rules have no identity (#156): pairing them by name, text or order always
+ * has a counterexample. So the group is compared as a whole: each rule's
+ * content together with the labels it ends up matching, as a multiset.
+ * Any rule whose labels changed no longer finds its pair, so nothing is
+ * missed; an edit to a rule in a group that maps labels is reported too.
+ * Only a group that maps a label somewhere, before or after, can change.
  */
 export function groupSelectorLabelChanges(beforeModel, afterModel) {
   const changes = []
-  // One key for both forms, so a rule turned raw (or back) in the same save
-  // is still found.
-  const named = rule => (typeof rule?.alert === 'string' ? `alert:${rule.alert}`
-    : typeof rule?.record === 'string' ? `record:${rule.record}` : undefined)
-  const parsed = text => { try { return yaml.load(text) } catch { return undefined } }
-  const keyOf = rule => named(rule) ?? (rule.raw !== undefined ? named(parsed(rule.raw)) ?? rule.raw : undefined)
+  const maps = g => !!g.selectorLabels || (g.rules || []).some(r => r.selectorLabels)
   const nameOf = rule => rule.alert ?? rule.record ?? 'a raw rule'
-  // The nth rule with a key pairs with the nth one before.
-  const keyed = rules => {
-    const seen = new Map()
-    return rules.map(r => {
-      const key = keyOf(r)
-      const n = seen.get(key) ?? 0
-      seen.set(key, n + 1)
-      return [`${key}\u0000${n}`, r]
-    })
+  const signature = (group, rule) => {
+    const { selectorLabels: _, ...content } = rule
+    return stableJson([content, selectorLabelsFor(group, rule)])
   }
   for (const [group, after] of Object.entries(afterModel?.groups || {})) {
     const before = beforeModel?.groups?.[group]
     if (!before || before.custom || after.custom || !after.selectors?.length) continue
     if ((before.selectors || []).join('\u0000') !== after.selectors.join('\u0000')) continue
-    const beforeRules = new Map(keyed(before.rules || []))
-    const rules = keyed(after.rules || []).filter(([key, r]) => {
-      const was = beforeRules.get(key)
-      return was && JSON.stringify(selectorLabelsFor(before, was)) !== JSON.stringify(selectorLabelsFor(after, r))
-    }).map(([, r]) => nameOf(r))
-    if (rules.length) changes.push({ kind: 'group-selector-labels-changed', group, rules })
+    if (!maps(before) && !maps(after)) continue
+    const left = countOf((before.rules || []).map(r => signature(before, r)))
+    const unmatched = []
+    for (const rule of after.rules || []) {
+      const sig = signature(after, rule)
+      if (left.get(sig)) left.set(sig, left.get(sig) - 1)
+      else unmatched.push(nameOf(rule))
+    }
+    const notFound = [...left.values()].reduce((n, c) => n + c, 0)
+    const gone = Math.max(0, notFound - unmatched.length)
+    if (unmatched.length || notFound) {
+      changes.push({ kind: 'group-selector-labels-changed', group, rules: unmatched, ...(gone ? { gone } : {}) })
+    }
   }
   return changes
+}
+
+// JSON with object keys sorted, so two equal rules give the same text.
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (isMap(value)) return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(',')}}`
+  return JSON.stringify(value)
 }
 
 export function describeChange(change) {

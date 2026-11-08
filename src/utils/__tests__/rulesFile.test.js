@@ -108,6 +108,35 @@ describe('deterministic writer', () => {
     expect(modelToFiles(back.model)).toEqual(files)
   })
 
+  // #155: a name YAML reads as something else (null, true, a number) is
+  // quoted, so the file reads back as written.
+  it('saves selector columns and a group named like YAML keywords so they read back', () => {
+    const cases = [['cpu', 'null'], ['cpu', 'true'], ['cpu', 'false'], ['cpu', '1'], ['null', 'ns'], ['true', 'ns']]
+    for (const [key, column] of cases) {
+      const written = [
+        `group: "${key}"`,
+        `selectors: ["${column}", workload]`,
+        'columns:',
+        `  "${column}": {type: string, required: true}`,
+        '  workload: {type: string, default: ".*"}',
+        'rules:',
+        '  - alert: A',
+        '    expr: up{${selector}}',
+        '',
+      ].join('\n')
+      const first = parseGroupFile(written, key)
+      expect(first.errors).toEqual([])
+      const again = parseGroupFile(groupFileText(first.group), key)
+      expect(again.errors).toEqual([])
+      expect(again.group.selectors).toEqual([column, 'workload'])
+    }
+  })
+
+  it('writes ordinary selectors and group names exactly as before', () => {
+    const text = groupFileText({ group: 'cpu', selectors: ['namespace', 'workload'], columns: {}, rules: [] })
+    expect(text.split('\n').slice(0, 2)).toEqual(['group: cpu', 'selectors: [namespace, workload]'])
+  })
+
   it('is byte-stable: dumping a model twice is identical and does not mutate it', () => {
     const { model } = schemaToModel(xRulesSchema)
     const snapshot = JSON.stringify(model)

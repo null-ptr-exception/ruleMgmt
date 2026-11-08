@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Table, Button, Input, InputNumber, Select, Checkbox, Tooltip, Modal, Typography } from 'antd'
-import { DeleteOutlined, PlusOutlined, FilterOutlined, BranchesOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { DeleteOutlined, PlusOutlined, FilterOutlined, BranchesOutlined } from '@ant-design/icons'
 import { selectorCells, directChildren, parentOf, selectorPath, selectorCellProblem, looksLikeRegex, ANY } from '../utils/selectorContract'
 import { matchesFilter, getFilterOperators } from '../utils/filterUtils'
-import SelectorLabelsList from './SelectorLabelsList'
+import { SelectorLabelsHint } from './SelectorLabelsList'
 import { buildNewRow, isMissingRequired } from '../utils/valueUtils'
 
 const REGEX_HINT = 'Matched exactly, not as a regex. For a regex, use a column that is not a selector, in the expr'
@@ -176,10 +176,8 @@ export default function AlertTable({
     setException(null)
   }
 
-  const labelsHint = name => selectorLabels[name] && (
-    <Tooltip title={<SelectorLabelsList column={name} pairs={selectorLabels[name]} />} styles={{ root: { maxWidth: 480 } }}>
-      <InfoCircleOutlined data-testid={`selector-labels-${name}`} style={{ fontSize: 12, color: '#8c8c8c' }} />
-    </Tooltip>
+  const labelsHint = name => Object.hasOwn(selectorLabels, name) && (
+    <SelectorLabelsHint column={name} pairs={selectorLabels[name]} />
   )
 
   const columns = [

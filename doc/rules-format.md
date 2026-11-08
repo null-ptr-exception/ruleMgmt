@@ -91,6 +91,11 @@ the query lives in `vars` so there is only ever one copy of it.
 Any other key is rejected. Unknown keys are never ignored silently: a typo
 (`intervel:`) is caught at save time, and widening the list later stays safe.
 
+A name YAML would read as something else — `null`, `true`, `false`, a number —
+has to be quoted when written by hand: `group: "null"`, `selectors: ["true",
+workload]`. The editor quotes such names when it saves, and leaves ordinary
+names bare.
+
 `type`, `interval` and `limit` belong to the whole group and are the
 template owner's, set per group (in the editor, the group's settings row).
 Different groups in one chart may have different types.

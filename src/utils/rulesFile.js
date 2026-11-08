@@ -331,12 +331,14 @@ function flowColumn(col) {
 /** One group's rules/<key>.yaml text. The editor re-dumps only the groups it
  *  actually touched and passes every other file through verbatim. */
 export function groupFileText(group) {
-  const lines = [`group: ${group.group}`]
+  // Names go through js-yaml, which quotes one YAML reads as something else
+  // (`null`, `true`, `1`) and leaves an ordinary name bare (#155).
+  const lines = [`group: ${scalar(group.group)}`]
   if (group.once) lines.push('once: true')
   if (group.type !== undefined) lines.push(`type: ${scalar(group.type)}`)
   if (group.interval !== undefined) lines.push(`interval: ${scalar(group.interval)}`)
   if (group.limit !== undefined) lines.push(`limit: ${scalar(group.limit)}`)
-  if (group.selectors?.length) lines.push(`selectors: [${group.selectors.join(', ')}]`)
+  if (group.selectors?.length) lines.push(`selectors: ${yaml.dump(group.selectors, { ...DUMP, flowLevel: 0 }).trimEnd()}`)
   if (group.selectorLabels) lines.push(`selectorLabels: ${yaml.dump(group.selectorLabels, { ...DUMP, flowLevel: 0 }).trimEnd()}`)
 
   if (group.vars && Object.keys(group.vars).length) {

@@ -45,9 +45,74 @@ describe('reading and saving', () => {
     expect(checkRouting(toSave(r))).toEqual([])
   })
 
-  it('an empty or unreadable file is an empty table', () => {
+  it('an empty file is an empty table; one whose top level is not a map cannot be read', () => {
     expect(parseRouting('')).toEqual(emptyRouting())
-    expect(parseRouting('just text')).toEqual(emptyRouting())
+    for (const text of ['just text', '- a\n- b\n', '5\n']) expect(() => parseRouting(text)).toThrow(/top level/)
+  })
+})
+
+// #157: a hand-edited routing.yaml that is valid YAML of the wrong shape.
+describe('a hand-edited routing.yaml', () => {
+  const doc = obj => yaml.dump(obj)
+  const strings = v => Array.isArray(v) && v.every(x => typeof x === 'string')
+
+  it('gives the page label values that are text, and saves an untouched label as written', () => {
+    const raw = { labels: { severity: ['critical'], team: [{ a: 1 }, 'db', 5], env: null, zone: 7 }, configs: {}, cells: [] }
+    const r = parseRouting(doc(raw))
+    for (const values of Object.values(r.labels)) expect(strings(values)).toBe(true)
+    expect(r.labels).toEqual({ severity: ['critical'], team: ['db'], env: [], zone: [] })
+    expect(toSave(r).labels).toEqual(raw.labels)
+  })
+
+  it('saves a label the page replaced as the page has it', () => {
+    const r = parseRouting(doc({ labels: { team: [{ a: 1 }, 'db'] }, configs: {}, cells: [] }))
+    const { routing } = setLabels(r, { team: ['db', 'web'] })
+    expect(toSave(routing).labels).toEqual({ team: ['db', 'web'] })
+  })
+
+  it('gives the page configs whose fields are text, and saves an untouched config as written', () => {
+    const raw = { labels: { severity: ['critical'] }, configs: {
+      oncall: null, list: ['x'], text: 'x', mail: { type: 'email', to: { a: 1 } },
+      hook: { type: 'webhook', url: 5 }, secret: { type: 'webhook', urlSecret: { name: 5, key: true } },
+      odd: { type: { a: 1 } }, plain: { type: 'webhook', url: 'http://ok' },
+    }, cells: [] }
+    const r = parseRouting(doc(raw))
+    for (const c of Object.values(r.configs)) {
+      expect(c !== null && typeof c === 'object' && !Array.isArray(c)).toBe(true)
+      for (const k of ['type', 'to', 'url']) if (k in c) expect(typeof c[k]).toBe('string')
+      if (c.urlSecret) expect([typeof c.urlSecret.name, typeof c.urlSecret.key]).toEqual(['string', 'string'])
+    }
+    expect(r.configs.plain).toEqual(raw.configs.plain)
+    expect(toSave(r).configs).toEqual(raw.configs)
+  })
+
+  it('saves a config the page rewrote as the page has it', () => {
+    const r = parseRouting(doc({ labels: { severity: ['critical'] }, configs: { oncall: null }, cells: [] }))
+    const next = putConfig(r, 'oncall', { type: 'email', to: 'ops@example.com' })
+    expect(toSave(next).configs.oncall).toEqual({ type: 'email', to: 'ops@example.com' })
+  })
+
+  for (const [what, raw] of [
+    ['defaults that is a number', { defaults: 5 }],
+    ['defaults that is empty', { defaults: null }],
+    ['cells that is a map', { cells: { old: { match: { severity: 'critical' }, configs: ['x'] } } }],
+    ['configs that is a list', { configs: ['x'] }],
+    ['labels that is a list', { labels: ['a', 'b'] }],
+  ]) {
+    it(`keeps ${what} as written on save, even after an edit elsewhere`, () => {
+      const file = { labels: { severity: ['critical'] }, configs: { x: { type: 'email', to: 'a@b' } }, cells: [], ...raw }
+      const r = parseRouting(doc(file))
+      const edited = Object.keys(r.labels).length ? setCellConfigs(r, { severity: 'critical' }, ['x']) : r
+      const saved = toSave(edited)
+      const key = Object.keys(raw)[0]
+      expect(key in saved).toBe(true)
+      expect(saved[key]).toEqual(raw[key])
+      expect(JSON.stringify(saved)).not.toContain('$kept')
+    })
+  }
+
+  it('saves a well-formed file the same as before', () => {
+    expect(toSave(parseRouting(BASIC))).toEqual(yaml.load(BASIC))
   })
 })
 

@@ -591,6 +591,11 @@ Only the label in the rendered matcher changes. Which row gives up which is
 decided on the columns, and the table's columns keep their names. Whether
 each metric has the label is the template owner's to know: it is not checked.
 
+A save that changes which label a rule matches says so, naming the group and
+the rules that no longer match as before. Rules have no identity of their
+own, so the group's rules are compared as a whole: in a group that maps a
+label anywhere, editing a rule in the same save is reported too.
+
 ### What is refused
 
 What is refused when the template is saved:

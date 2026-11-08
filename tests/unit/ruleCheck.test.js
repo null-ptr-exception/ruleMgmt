@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { objectsByValidator, cleanVmalertOutput } from '../../server/lib/ruleCheck.js'
+import { objectsByValidator, cleanVmalertOutput, cleanPromtoolOutput } from '../../server/lib/ruleCheck.js'
 
 // #76: which checker reads a rendered object is its output profile's call.
 
@@ -51,5 +51,23 @@ describe('cleanVmalertOutput', () => {
 
   it('is empty on success, when vmalert only logs', () => {
     expect(cleanVmalertOutput(real.split('\n')[0], file)).toBe('')
+  })
+})
+
+describe('cleanPromtoolOutput', () => {
+  const file = '/tmp/alertforge-check-Ab12/0000-tiny-prod-tiny.yaml'
+  const failed = `  FAILED:
+${file}: 5:15: group "tiny", rule 1, "TinyDown": could not parse expression: 1:6: parse error: unexpected end of input
+`
+  // What a failed check hands over: stdout, stderr, then the error message,
+  // which repeats stderr after the command line.
+  const real = `${failed}Command failed: promtool check rules ${file}\n${failed}`
+
+  it('keeps the error once, without the temp file or the appended error message', () => {
+    expect(cleanPromtoolOutput(real, file)).toBe('FAILED:\ngroup "tiny", rule 1, "TinyDown": could not parse expression: 1:6: parse error: unexpected end of input')
+  })
+
+  it('drops the "Checking" line on success', () => {
+    expect(cleanPromtoolOutput(`Checking ${file}\n  SUCCESS: 1 rules found\n`, file)).toBe('SUCCESS: 1 rules found')
   })
 })

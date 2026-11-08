@@ -55,13 +55,17 @@ function sanitizeFilename(name) {
   return name.replace(/[^a-zA-Z0-9_.-]/g, '_')
 }
 
-// promtool echoes the temp file path it was handed ("Checking /tmp/...").
-// That path is an internal detail the rule owner should never see, and it
-// makes the aggregated multi-object output noisy — drop the whole line.
-function cleanPromtoolOutput(text, file) {
-  return text
+// promtool names the temp file it was handed: "Checking <file>" on success,
+// "<file>: 5:15: group …" before each error. That path, and the position in
+// it, are internal details the rule owner should never see. A failed check
+// also carries the error message, which repeats stderr after "Command
+// failed: <command>" — keep only what promtool said.
+export function cleanPromtoolOutput(text, file) {
+  return text.split(/^Command failed:/m)[0]
     .split('\n')
     .filter(line => !line.startsWith(`Checking ${file}`))
+    .map(line => line.split(`${file}: `).join('').replace(/^\d+:\d+: (?=group )/, ''))
+    .map(line => line.trim())
     .join('\n')
     .trim()
 }

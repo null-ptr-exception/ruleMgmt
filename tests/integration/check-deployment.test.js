@@ -95,6 +95,10 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
     const { code, out } = check()
     expect(out).toContain('Rules: failed (promtool)')
     expect(out).toContain('TinyDown')
+    // Once, and without the temp file it was checked in.
+    expect(out.match(/could not parse expression/g)).toHaveLength(1)
+    expect(out).not.toContain('alertforge-check-')
+    expect(out).not.toContain('Command failed')
     expect(code).toBe(1)
   })
 
@@ -144,9 +148,7 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
       const res = await fetch(`http://127.0.0.1:${server.address().port}/render/tiny/prod?folder=deployments/tiny/prod`, { method: 'POST' })
       const { check: preview } = await res.json()
       expect(preview.passed).toBe(false)
-      // Each run checks in its own temp folder, which promtool names.
-      const tmp = text => text.replace(/alertforge-check-[^/]+/g, 'alertforge-check-X')
-      expect(tmp(check().out)).toContain(tmp(preview.output))
+      expect(check().out).toContain(preview.output)
     } finally {
       server.close()
     }

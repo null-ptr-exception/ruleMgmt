@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "labels": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+      },
+      "additionalProperties": {
+        "minItems": 1,
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "\\S"
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "groupWait": {
+          "type": "string",
+          "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+          "minLength": 1
+        },
+        "groupInterval": {
+          "type": "string",
+          "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+          "minLength": 1
+        },
+        "repeatInterval": {
+          "type": "string",
+          "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "configs": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "email"
+              },
+              "to": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            },
+            "required": [
+              "type",
+              "to"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "webhook"
+              },
+              "url": {
+                "type": "string"
+              },
+              "urlSecret": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "key": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                },
+                "required": [
+                  "name",
+                  "key"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "cells": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "match": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "configs": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "groupWait": {
+            "type": "string",
+            "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+            "minLength": 1
+          },
+          "groupInterval": {
+            "type": "string",
+            "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+            "minLength": 1
+          },
+          "repeatInterval": {
+            "type": "string",
+            "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "match",
+          "configs"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "labels"
+  ],
+  "additionalProperties": false
+}

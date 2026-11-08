@@ -63,7 +63,10 @@ export default function RoutingView() {
           setRouting(parseRouting(state.text))
         } catch (err) {
           setRouting(null)
-          setLoaded({ ...state, errors: [`routing.yaml is not valid YAML: ${err.reason || err.message}`] })
+          const why = err.name === 'YAMLException'
+            ? `routing.yaml is not valid YAML: ${err.reason || err.message}`
+            : `routing.yaml: ${err.message}`
+          setLoaded({ ...state, errors: [why] })
         }
       }
     })
@@ -222,7 +225,8 @@ export default function RoutingView() {
         </Empty>
       )
     }
-    // Not valid YAML: there is no table to show, or to save over the file.
+    // Not valid YAML, or a top level that is not a map: there is no table to
+    // show, or to save over the file.
     if (!routing) {
       return (
         <Alert type="error" showIcon data-testid="routing-problems" message="routing.yaml cannot be read — fix it by hand"

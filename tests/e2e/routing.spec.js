@@ -231,6 +231,62 @@ test('a routing.yaml that is not valid YAML shows the error, draws no table, and
   expect(await fs.readFile(file, 'utf8')).toBe(broken)
 })
 
+test('a hand-edited routing.yaml with an empty config or a label that is not a list still opens both editors', async ({ page }) => {
+  const file = path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml')
+  await fs.writeFile(file, 'labels:\n  severity: [critical]\n  team:\nconfigs:\n  oncall:\ncells: []\n')
+  await openRouting(page, FOLDER)
+  await expect(page.getByTestId('routing-problems')).toContainText('fix them here', { timeout: 8000 })
+
+  // The config's edit dialog opens, blank but usable.
+  await page.getByRole('button', { name: 'Edit oncall' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  // The Labels dialog opens, and says what to fix rather than taking the page down.
+  await page.getByRole('button', { name: 'Labels' }).click()
+  await expect(page.getByRole('dialog').filter({ hasText: 'Route by labels' })).toBeVisible()
+  await expect(page.getByTestId('routing-problems')).toBeVisible()
+})
+
+// #157: values that are not text reach the page as text.
+test('a label value or a config address that is not text does not take the page down', async ({ page }) => {
+  const file = path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml')
+  await fs.writeFile(file, 'labels:\n  severity: [critical, {a: 1}]\nconfigs:\n  mail: {type: email, to: {a: 1}}\n  hook: {type: webhook, url: 5}\ncells: []\n')
+  await openRouting(page, FOLDER)
+  await expect(page.getByTestId('routing-problems')).toContainText('fix them here', { timeout: 8000 })
+  await expect(page.getByTestId('routes-matrix')).toBeVisible()
+  await expect(page.getByTestId('cell-critical')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Edit hook' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click()
+})
+
+// #157: a save never drops a section the page could not show.
+test('a save keeps defaults and cells of the wrong shape as written, and is refused for them', async ({ page }) => {
+  const file = path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml')
+  const text = 'labels:\n  severity: [critical]\ndefaults: 5\nconfigs:\n  mail: {type: email, to: a@example.com}\ncells:\n  old: {match: {severity: critical}, configs: [mail]}\n'
+  await fs.writeFile(file, text)
+  await openRouting(page, FOLDER)
+  await expect(page.getByTestId('routing-problems')).toContainText('fix them here', { timeout: 8000 })
+
+  await pick(page, 'cell-critical', ['mail'])
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByRole('dialog').filter({ hasText: /defaults|cells/ })).toBeVisible()
+  expect(await fs.readFile(file, 'utf8')).toBe(text)
+})
+
+test('a routing.yaml whose top level is not a map cannot be read, and stays as written', async ({ page }) => {
+  const file = path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml')
+  await fs.writeFile(file, '- severity\n- team\n')
+  await openRouting(page, FOLDER)
+  await expect(page.getByTestId('routing-problems')).toContainText('cannot be read', { timeout: 8000 })
+  await expect(page.getByTestId('routes-matrix')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0)
+  expect(await fs.readFile(file, 'utf8')).toBe('- severity\n- team\n')
+})
+
 test('an out-of-date AlertmanagerConfig is saved again from routing.yaml as written, comments kept', async ({ page, request }) => {
   const text = `# Paged by ops — ask #oncall before changing
 labels:

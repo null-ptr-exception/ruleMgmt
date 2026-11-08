@@ -15,12 +15,11 @@ export function configTarget(config) {
 
 const blank = { name: '', type: 'webhook', where: 'url', to: '', url: '', secretName: '', secretKey: '' }
 
-// The config comes from parseRouting, so its fields are text.
 function toForm(name, config) {
   return {
     ...blank,
     name,
-    type: config.type === 'email' ? 'email' : 'webhook',
+    type: config.type,
     where: config.urlSecret ? 'secret' : 'url',
     to: config.to || '',
     url: config.url || '',

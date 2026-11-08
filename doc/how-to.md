@@ -489,9 +489,38 @@ Pass the same values the editor runs with: otherwise the templates are
 generated without the site's labels, and `--check` reports every one as
 different.
 
-To check the rules' syntax, use **Preview** in the editor: it renders the
-deployment with Helm and runs `promtool` (or `vmalert`) on each rule object.
-The image has no single command for that yet.
+### Check a deployment from the image
+
+`check-deployment.mjs` checks one deployment the way the editor does: it
+renders it with Helm and runs `promtool` (or `vmalert`) on each rule object,
+as **Preview** does, and checks its `routing.yaml` as the **Routing** page
+reads it — including whether `templates/alertmanagerconfig.yaml` is still what
+`routing.yaml` generates. It prints what is wrong and exits 1, or exits 0:
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
+  node scripts/check-deployment.mjs /work/deployments/<chart>/<env>
+```
+
+Run it with the gitops repo mounted whole: the deployment finds its chart
+through `file://../../../charts/<chart>`. Like Preview, Helm writes
+`Chart.lock` and `charts/` into the deployment folder, which the gitops repo
+ignores. Only a folder deployment (its own `Chart.yaml` and `values.yaml`)
+can be checked. Pass the site's labels with `-e` as for `gen-rules --check`,
+or every AlertmanagerConfig is reported as out of date.
+
+In the gitops repo's CI, check every deployment folder a change touches, for
+example (a change to a chart under `charts/` affects every deployment of it:
+check them all then):
+
+```bash
+for dir in $(git diff --name-only origin/main... | xargs -n1 dirname | sort -u); do
+  [ -f "$dir/Chart.yaml" ] && [ -f "$dir/values.yaml" ] || continue
+  docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
+    node scripts/check-deployment.mjs "/work/$dir" || failed=1
+done
+exit "${failed:-0}"
+```
 
 ---
 

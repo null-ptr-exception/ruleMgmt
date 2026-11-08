@@ -87,9 +87,9 @@ describe('runtime Docker image', () => {
     expect(stage).toMatch(/^RUN apk add [^\n]*\btini\b/m)
     expect(stage).toMatch(/^ENTRYPOINT \["\/sbin\/tini", "--"\]$/m)
   })
-  // #119: the command-line tools run from the image too, with no checkout
+  // #119, #127: the command-line tools run from the image too, with no checkout
   // mounted next to it.
-  for (const script of ['scripts/gen-rules.mjs', 'scripts/import-rules.mjs']) {
+  for (const script of ['scripts/gen-rules.mjs', 'scripts/import-rules.mjs', 'scripts/check-deployment.mjs']) {
     it(`copies ${script} and every file it loads, and installs the packages it needs`, () => {
       const graph = importGraph(script)
       const missing = graph.files.filter(f => !copied.some(c => f === c || f.startsWith(c + '/')))

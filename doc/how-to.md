@@ -306,6 +306,11 @@ the labels asks before it drops the cells no longer in the table. A synced
 target shows its source's routing, read-only; edit the source. **Remove
 routing** deletes both files.
 
+The page only edits a `routing.yaml` that passes the checks below. One that
+does not — after a hand edit, a merge, or a sync from a source that fails
+them — is not drawn as a table: the page lists what is wrong, and the file is
+fixed by hand (or removed with **Remove routing** and set up again).
+
 The page rewrites `routing.yaml` when it saves, so comments in a hand-written
 one are not kept. To keep editing by hand, save through the API instead:
 

@@ -31,70 +31,19 @@ const valuesOf = values => (Array.isArray(values) ? values : [])
 
 export const emptyRouting = () => ({ labels: {}, configs: {}, cells: [] })
 
-// What parseRouting could not give the page as it is written (#157), so that
-// toSave writes it back unchanged: { sections: { <key>: value }, labels:
-// { <name>: { view, original } }, configs: { <name>: { view, original } } }.
-// It travels on the routing through every edit and is never saved.
-const KEPT = '$kept'
-
-const asText = v => (typeof v === 'string' ? v : '')
-
-// A config as the page can show and edit it: a map whose fields are text.
-function configView(config) {
-  if (!isMap(config)) return {}
-  const view = { ...config }
-  if (!['email', 'webhook'].includes(view.type)) delete view.type
-  for (const key of ['to', 'url']) if (key in view) view[key] = asText(view[key])
-  if ('urlSecret' in view) {
-    const s = isMap(view.urlSecret) ? view.urlSecret : {}
-    view.urlSecret = { ...s, name: asText(s.name), key: asText(s.key) }
-  }
-  return view
-}
-
 /**
- * routing.yaml's text as a routing the page can always render. Missing parts
- * are filled in empty. A hand-edited file can be valid YAML of the wrong
- * shape (#157): a label's values that are not all text, a config whose fields
- * are not text, or a section of the wrong type. The page gets a usable view
- * of those, and the file's own value is kept for toSave, so a save never
- * drops what the page could not show; the server's checks, which read the
- * file, still list the problem. A top level that is not a map has nothing to
- * keep apart, and cannot be read.
+ * routing.yaml's text as a routing. Missing parts are filled in empty;
+ * anything else is kept as written, so the server's checks still see it.
  */
 export function parseRouting(text) {
   const doc = yaml.load(text || '')
-  if (doc === null || doc === undefined) return emptyRouting()
-  if (!isMap(doc)) throw new Error('the top level has to be a map of labels, configs and cells')
-  const kept = { sections: {}, labels: {}, configs: {} }
-  const view = { ...doc }
-
-  for (const key of ['labels', 'configs']) {
-    if (key in doc && !isMap(doc[key])) kept.sections[key] = doc[key]
-    view[key] = isMap(doc[key]) ? { ...doc[key] } : {}
+  if (!isMap(doc)) return emptyRouting()
+  return {
+    ...doc,
+    labels: isMap(doc.labels) ? doc.labels : {},
+    configs: isMap(doc.configs) ? doc.configs : {},
+    cells: Array.isArray(doc.cells) ? doc.cells : [],
   }
-  if ('cells' in doc && !Array.isArray(doc.cells)) kept.sections.cells = doc.cells
-  view.cells = Array.isArray(doc.cells) ? doc.cells : []
-  if ('defaults' in doc && !isMap(doc.defaults)) {
-    kept.sections.defaults = doc.defaults
-    delete view.defaults
-  }
-
-  for (const [name, values] of Object.entries(view.labels)) {
-    if (Array.isArray(values) && values.every(v => typeof v === 'string')) continue
-    const shown = Array.isArray(values) ? [...new Set(values.filter(v => typeof v === 'string'))] : []
-    kept.labels[name] = { view: shown, original: values }
-    view.labels[name] = shown
-  }
-  for (const [name, config] of Object.entries(view.configs)) {
-    const shown = configView(config)
-    if (JSON.stringify(shown) === JSON.stringify(config)) continue
-    kept.configs[name] = { view: shown, original: config }
-    view.configs[name] = shown
-  }
-
-  const any = Object.keys(kept.sections).length || Object.keys(kept.labels).length || Object.keys(kept.configs).length
-  return any ? { ...view, [KEPT]: kept } : view
 }
 
 const labelNames = routing => Object.keys(routing.labels)
@@ -256,29 +205,9 @@ export const gridMatch = (grid, row, column) => ({ ...row, [grid.columnLabel]: c
  * routing.yaml as the table writes it: cells with no configs left out,
  * cells in table order, match keys in label order, timing after configs.
  * Anything else the file holds is kept, after the known keys, and entries
- * that aren't cells after the cells. What parseRouting could not show is
- * written back as the file had it: a section of the wrong type always, a
- * label or config unless the page replaced it.
+ * that aren't cells after the cells.
  */
 export function toSave(routing) {
-  const { [KEPT]: kept, ...plain } = routing
-  const out = writeTable(plain)
-  if (!kept) return out
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
-  for (const [name, { view, original }] of Object.entries(kept.labels)) {
-    if (Object.hasOwn(out.labels, name) && same(out.labels[name], view)) out.labels[name] = original
-  }
-  for (const [name, { view, original }] of Object.entries(kept.configs)) {
-    if (Object.hasOwn(out.configs, name) && same(out.configs[name], view)) out.configs[name] = original
-  }
-  const sections = { ...out, ...kept.sections }
-  // Same key order as writeTable: labels, defaults, configs, cells, the rest.
-  return Object.fromEntries(['labels', 'defaults', 'configs', 'cells', ...Object.keys(sections)]
-    .filter((key, i, keys) => Object.hasOwn(sections, key) && keys.indexOf(key) === i)
-    .map(key => [key, sections[key]]))
-}
-
-function writeTable(routing) {
   const order = new Map(combinations(routing.labels).map((match, i) => [matchKey(routing, match), i]))
   const rank = cell => order.get(matchKey(routing, cell.match)) ?? Infinity
   const cells = routing.cells

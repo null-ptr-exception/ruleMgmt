@@ -59,14 +59,18 @@ export default function RoutingView() {
       } else {
         setLoaded(state)
         setDirty(false)
-        try {
-          setRouting(parseRouting(state.text))
-        } catch (err) {
+        // Only a file that passes the server's checks is edited here (#158):
+        // the page never writes one that fails, so a failing file came from
+        // elsewhere (a hand edit, a merge, a sync) and is fixed by hand.
+        if (state.errors?.length) {
           setRouting(null)
-          const why = err.name === 'YAMLException'
-            ? `routing.yaml is not valid YAML: ${err.reason || err.message}`
-            : `routing.yaml: ${err.message}`
-          setLoaded({ ...state, errors: [why] })
+        } else {
+          try {
+            setRouting(parseRouting(state.text))
+          } catch (err) {
+            setRouting(null)
+            setLoaded({ ...state, errors: [`routing.yaml is not valid YAML: ${err.reason || err.message}`] })
+          }
         }
       }
     })
@@ -206,6 +210,8 @@ export default function RoutingView() {
   }
 
   const isNew = loaded?.none && routing
+  // A routing.yaml on disk that fails the checks: only Remove is offered.
+  const broken = !routing && !!loaded?.errors?.length
   const hasTable = routing && Object.keys(routing.labels).length > 0
   const canSave = !readOnly && hasTable && (dirty || loaded?.stale)
 
@@ -225,20 +231,16 @@ export default function RoutingView() {
         </Empty>
       )
     }
-    // Not valid YAML, or a top level that is not a map: there is no table to
-    // show, or to save over the file.
+    // routing.yaml fails the checks: no table to show, or to save over the
+    // file. Remove routing stays, in the footer.
     if (!routing) {
       return (
-        <Alert type="error" showIcon data-testid="routing-problems" message="routing.yaml cannot be read — fix it by hand"
-          description={loaded.errors?.join('; ')} />
+        <Alert type="error" showIcon data-testid="routing-problems" message="routing.yaml has problems — fix it by hand"
+          description={<ul style={{ paddingLeft: 18, margin: 0 }}>{(loaded.errors || []).map((e, i) => <li key={i}>{e}</li>)}</ul>} />
       )
     }
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100 }}>
-        {loaded.errors?.length > 0 && (
-          <Alert type="error" showIcon data-testid="routing-problems" message="routing.yaml has problems — fix them here, or by hand"
-            description={<ul style={{ paddingLeft: 18, margin: 0 }}>{loaded.errors.map((e, i) => <li key={i}>{e}</li>)}</ul>} />
-        )}
         {loaded.stale && !dirty && (
           <Alert type="warning" showIcon data-testid="routing-stale"
             message="The AlertmanagerConfig is not what routing.yaml says — Save to generate it again." />
@@ -298,6 +300,12 @@ export default function RoutingView() {
             {isNew
               ? <Button onClick={() => { setRouting(null); setDirty(false) }}>Cancel</Button>
               : <Button danger icon={<DeleteOutlined />} disabled={readOnly} onClick={handleRemove}>Remove routing</Button>}
+          </div>
+        )}
+        {broken && (
+          <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
+            <span style={{ flex: 1 }} />
+            <Button danger icon={<DeleteOutlined />} disabled={readOnly} onClick={handleRemove}>Remove routing</Button>
           </div>
         )}
       </div>

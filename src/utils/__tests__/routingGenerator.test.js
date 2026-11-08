@@ -99,6 +99,14 @@ describe('checks', () => {
     expect(errorsWith(r => { delete r.configs['ops-webhook'].urlSecret }).join()).toMatch(/either url or urlSecret/)
   })
 
+  // A list or an inherited name looked up in the type table used to pass:
+  // `type: [email]` went through the check and came out as a webhook.
+  it('refuses a type that is not one of the names as text', () => {
+    for (const type of [['email'], ['webhook'], 'constructor', 'toString', 5]) {
+      expect(errorsWith(r => { r.configs['db-email'].type = type }).join()).toMatch(/type must be one of email, webhook/)
+    }
+  })
+
   it('refuses a duration it cannot read', () => {
     expect(errorsWith(r => { r.cells[0].groupWait = 'soon' }).join()).toMatch(/groupWait must be a duration/)
   })

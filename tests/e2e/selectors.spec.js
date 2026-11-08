@@ -287,6 +287,7 @@ rules:
     await page.getByText('replicas', { exact: true }).first().click()
 
     await page.getByTestId('selector-tag-workload').hover()
+    await expect(page.getByTestId('selector-labels-list-workload')).toContainText('DeploymentReplicasLow: deployment')
     await expect(page.getByTestId('selector-labels-list-workload')).toContainText('StatefulSetReplicasLow: statefulset')
     await page.getByTestId('selector-tag-namespace').hover()
     await expect(page.getByRole('tooltip').filter({ hasText: /^A selector:/ })).toBeVisible()

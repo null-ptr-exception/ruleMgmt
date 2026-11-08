@@ -673,8 +673,10 @@ What is refused when it is saved, and reported when it is read back:
 | A cell whose `match` leaves out a label, names one not in `labels`, or a value not listed | It would cover its neighbours' combinations, or none |
 | Two cells with the same `match` | One of them would never be reached |
 | A cell naming a config that is not in `configs` | Nobody to send to |
+| A cell's `configs` entry that is not a name — a number, `~`, a list | It would name a receiver that is not there |
+| A webhook `url` that is not an `http://` or `https://` address, or has spaces around it — `relay:8080` without a scheme | Alertmanager cannot send to it, and the credential check below cannot read it |
 | A webhook `url` with a user name or password, a credential-like query parameter (`token=`, `key=` …) or a token-like path segment | Credentials belong in a Secret: use `urlSecret`. An in-cluster address such as `http://alert-relay.monitoring.svc:8080` is fine |
-| Any other key | Probably a typo |
+| Any other key — under `urlSecret` too, which takes only `name` and `key` | Probably a typo; it would be left out of the AlertmanagerConfig |
 
 ### What is generated
 

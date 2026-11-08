@@ -107,6 +107,45 @@ describe('checks', () => {
     }
   })
 
+  // The same kind of hole, from YAML so the types are YAML's: a value used as
+  // a key or compared before its type is checked.
+  const fromYaml = text => checkRouting(yaml.load(text))
+  const table = (configsLine, cellConfigs) => `labels: {severity: [critical]}
+configs: {${configsLine}}
+cells: [{match: {severity: critical}, configs: ${cellConfigs}}]
+`
+
+  it('refuses a cell config that is not a name as text', () => {
+    for (const [key, entry] of [['1', '[1]'], ['null', '[~]'], ['true', '[true]'], ['db-email', '[[db-email]]']]) {
+      expect(fromYaml(table(`"${key}": {type: email, to: a@example.com}`, entry)).join(), entry).toMatch(/config must be a name/)
+    }
+    expect(fromYaml(table('db-email: {type: email, to: a@example.com}', '[db-email, [db-email]]')).join()).toMatch(/config must be a name/)
+  })
+
+  it('refuses a cell that leaves out a label named like an inherited property, without throwing', () => {
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      const text = `labels: {severity: [critical], ${name}: [a]}\nconfigs: {m: {type: email, to: a@example.com}}\ncells: [{match: {severity: critical}, configs: [m]}]\n`
+      expect(fromYaml(text).join(), name).toMatch(new RegExp(`match has no ${name.replace(/_/g, '_')}`))
+      expect(() => generateRouting(yaml.load(text))).not.toThrow()
+    }
+  })
+
+  it('still takes a label named like an inherited property when every cell names it', () => {
+    const text = 'labels: {severity: [critical], __proto__: [a]}\nconfigs: {m: {type: email, to: a@example.com}}\ncells: [{match: {severity: critical, __proto__: a}, configs: [m]}]\n'
+    expect(fromYaml(text)).toEqual([])
+  })
+
+  it('refuses a webhook url that is not an http(s) address as written', () => {
+    for (const url of ['hooks.example.com/services/T0123ABCD/xoxb1234567890abcdefghij', 'alert-relay.monitoring.svc:8080', 'ftp://relay/x', ' http://relay:8080/x ']) {
+      expect(fromYaml(table(`w: {type: webhook, url: "${url}"}`, '[w]')).join(), url).toMatch(/url must be an http:\/\/ or https:\/\/ address/)
+    }
+    expect(fromYaml(table('w: {type: webhook, url: "http://alert-relay.monitoring.svc:8080"}', '[w]'))).toEqual([])
+  })
+
+  it('refuses keys under urlSecret other than name and key', () => {
+    expect(fromYaml(table('w: {type: webhook, urlSecret: {name: n, key: k, optional: true}}', '[w]')).join()).toMatch(/urlSecret.*unknown key "optional"/)
+  })
+
   it('refuses a duration it cannot read', () => {
     expect(errorsWith(r => { r.cells[0].groupWait = 'soon' }).join()).toMatch(/groupWait must be a duration/)
   })

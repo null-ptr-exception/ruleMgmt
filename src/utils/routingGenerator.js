@@ -109,6 +109,15 @@ function unknownKeys(where, entry, known, errors) {
   }
 }
 
+function isHttpUrl(url) {
+  if (url !== url.trim()) return false
+  try {
+    return ['http:', 'https:'].includes(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
+
 function checkConfig(name, config, errors) {
   const where = `configs.${name}`
   if (name.startsWith('_')) {
@@ -143,12 +152,18 @@ function checkConfig(name, config, errors) {
     } else if (hasUrl) {
       if (!isText(config.url)) {
         errors.push(`${where}: url must be text`)
+      } else if (!isHttpUrl(config.url)) {
+        // An address that does not parse also skipped the credential check.
+        errors.push(`${where}: url must be an http:// or https:// address, with no spaces around it`)
       } else {
         const why = urlCredential(config.url)
         if (why) errors.push(`${where}: url is refused because ${why}; put it in a Secret and use urlSecret`)
       }
     } else if (!isMap(config.urlSecret) || !isText(config.urlSecret.name) || !isText(config.urlSecret.key)) {
       errors.push(`${where}: urlSecret needs a Secret's name and key`)
+    } else {
+      // Anything else here would be dropped from the AlertmanagerConfig.
+      unknownKeys(`${where}.urlSecret`, config.urlSecret, ['name', 'key'], errors)
     }
   }
 }
@@ -217,8 +232,9 @@ export function checkRouting(routing) {
     } else if (labels) {
       // A cell that leaves a label out would match every value of it and
       // cover its neighbours' combinations.
+      // Own keys only: a label may be named constructor or __proto__.
       for (const name of Object.keys(labels)) {
-        if (cell.match[name] === undefined) errors.push(`${where}: match has no ${name} — a cell names every label`)
+        if (!Object.hasOwn(cell.match, name)) errors.push(`${where}: match has no ${name} — a cell names every label`)
       }
       for (const [name, value] of Object.entries(cell.match)) {
         if (!Object.hasOwn(labels, name)) {
@@ -235,8 +251,12 @@ export function checkRouting(routing) {
     if (!Array.isArray(cell.configs) || cell.configs.length === 0) {
       errors.push(`${where}: configs lists who is notified`)
     } else {
+      // A name as text first: a number or a list would still find its key
+      // in configs, while the generator then names a receiver that is not
+      // there.
       for (const name of cell.configs) {
-        if (!Object.hasOwn(configs, name)) errors.push(`${where}: config "${name}" is not in configs`)
+        if (typeof name !== 'string') errors.push(`${where}: config must be a name (text), not ${JSON.stringify(name)}`)
+        else if (!Object.hasOwn(configs, name)) errors.push(`${where}: config "${name}" is not in configs`)
       }
       if (new Set(cell.configs).size !== cell.configs.length) errors.push(`${where}: a config is listed twice`)
     }

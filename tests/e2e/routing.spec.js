@@ -222,6 +222,7 @@ const failing = [
   ['a label value listed twice', 'labels:\n  team: [a, a, b]\nconfigs: {}\ncells: []\n'],
   ['defaults and cells of the wrong shape', 'labels:\n  severity: [critical]\ndefaults: 5\nconfigs:\n  mail: {type: email, to: a@example.com}\ncells:\n  old: {match: {severity: critical}, configs: [mail]}\n'],
   ['a timing value that is not a duration', 'labels:\n  severity: [critical]\ndefaults: {groupWait: {a: 1}}\nconfigs: {}\ncells: []\n'],
+  ['a config type written as a list', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: [email], to: a@example.com}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n'],
   ['a cell that names a label the table does not have', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com}\ncells:\n  - {match: {severity: critical, extra: z}, configs: [mail]}\n'],
 ]
 for (const [what, text] of failing) {

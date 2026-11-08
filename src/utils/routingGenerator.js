@@ -123,7 +123,10 @@ function checkConfig(name, config, errors) {
     errors.push(`${where}: must be a map with a "type"`)
     return
   }
-  const fields = CONFIG_FIELDS[config.type]
+  // Only a name as text, and one of the table's own: a list such as [email]
+  // or an inherited name such as "constructor" would find an entry too.
+  const fields = typeof config.type === 'string' && Object.hasOwn(CONFIG_FIELDS, config.type)
+    ? CONFIG_FIELDS[config.type] : undefined
   if (!fields) {
     errors.push(`${where}: type must be one of ${Object.keys(CONFIG_FIELDS).join(', ')}`)
     return

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { objectsByValidator, cleanVmalertOutput } from '../../server/routes/render.js'
+import { objectsByValidator, cleanVmalertOutput } from '../../server/lib/ruleCheck.js'
 
 // #76: which checker reads a rendered object is its output profile's call.
 

@@ -11,7 +11,7 @@ import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
-import SelectorLabelsList from '../components/SelectorLabelsList'
+import SelectorLabelsList, { SelectorLabelsHint } from '../components/SelectorLabelsList'
 import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
 import { renameSelectorColumn } from '../utils/selectorContract'
 import {
@@ -168,8 +168,8 @@ function ColumnRow({ name, col, usage, onRename, onPatch, onRemove, selectorLeve
           <Tooltip title={<>
             <div>A selector: its cells are .* or a value matched exactly, never a regex</div>
             {selectorLabels && <SelectorLabelsList column={name} pairs={selectorLabels} />}
-          </>} styles={{ root: { maxWidth: 480 } }}>
-            <Tag color="blue" data-testid={`selector-tag-${name}`} style={{ marginInlineEnd: 0 }}>selector {selectorLevel + 1}</Tag>
+          </>} trigger={['hover', 'focus']} styles={{ root: { maxWidth: 480 } }}>
+            <Tag color="blue" tabIndex={0} data-testid={`selector-tag-${name}`} style={{ marginInlineEnd: 0 }}>selector {selectorLevel + 1}</Tag>
           </Tooltip>
         )}
         <Select size="small" value={uiType} options={TYPE_OPTIONS} style={{ width: 90 }}
@@ -559,6 +559,8 @@ export default function TemplateDevEditor() {
   const isCommon = activeGroup === COMMON
   const group = (!isCommon && activeGroup) ? model.groups[activeGroup] : null
   const commonNames = Object.keys(model.common.columns)
+  // A column some rule matches under another label (#133) — common ones too.
+  const renamedLabels = renamedSelectorLabels(group)
   const groupColumns = group && !group.custom
     // ${selector} is the group's selector matchers when it has selectors (#60)
     ? [...Object.keys(group.columns), ...commonNames, ...(group.selectors?.length ? ['selector'] : [])]
@@ -826,7 +828,7 @@ export default function TemplateDevEditor() {
                       {Object.entries(group.columns).map(([name, col]) => (
                         <ColumnRow key={name} name={name} col={col}
                           selectorLevel={group.selectors?.includes(name) ? group.selectors.indexOf(name) : undefined}
-                          selectorLabels={renamedSelectorLabels(group)[name]}
+                          selectorLabels={renamedLabels[name]}
                           usage={(usedByColumn[name] || []).join(', ')}
                           onRename={val => renameColumn(activeGroup, name, val)}
                           onPatch={patch => patchColumn(activeGroup, name, name, patch)}
@@ -834,7 +836,12 @@ export default function TemplateDevEditor() {
                       ))}
                       {commonNames.length > 0 && (
                         <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 8 }}>
-                          Also available: {commonNames.join(', ')} (common)
+                          Also available: {commonNames.map((n, i) => (
+                            <span key={n}>
+                              {i > 0 && ', '}{n}
+                              {renamedLabels[n] && <> <SelectorLabelsHint column={n} pairs={renamedLabels[n]} /></>}
+                            </span>
+                          ))} (common)
                         </Text>
                       )}
                     </div>

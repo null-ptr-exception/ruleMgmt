@@ -124,7 +124,8 @@ export function renameSelectorColumn(group, oldName, newName) {
  */
 export function renamedSelectorLabels(group) {
   const rules = group?.rules || []
-  const out = {}
+  // Looked up by column name, which may be toString: no inherited keys.
+  const out = Object.create(null)
   for (const col of group?.selectors || []) {
     const pairs = rules.map(rule => [rule.alert || rule.record || 'a raw rule', selectorLabelsFor(group, rule)[col]])
     if (pairs.some(([, label]) => label !== col)) out[col] = pairs

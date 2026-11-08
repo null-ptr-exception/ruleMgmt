@@ -248,7 +248,7 @@ rules:
     await request.delete(`/api/v2/charts/${CHART}`)
   })
 
-  test('the Alerts table shows each rule\'s label beside a renamed column, and nothing beside the others', async ({ page }) => {
+  async function openReplicas(page) {
     await page.goto('/#/alerts')
     await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
     const tree = page.locator('.ant-tree')
@@ -259,6 +259,18 @@ rules:
     await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
       .filter({ hasText: CHART }).first().locator('.ant-tree-node-content-wrapper').click()
     await page.getByText('replicas', { exact: true }).first().click()
+  }
+
+  async function openEditor(page, chart) {
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
+    await page.locator('.ant-select').first().click()
+    await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
+    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+  }
+
+  test('the Alerts table shows each rule\'s label beside a renamed column, and nothing beside the others', async ({ page }) => {
+    await openReplicas(page)
     // antd's sticky table repeats the header in a hidden measure row
     const header = page.locator('.ant-table-thead')
     await expect(header.getByTestId('selector-labels-workload')).toBeVisible({ timeout: 5000 })
@@ -271,11 +283,7 @@ rules:
   })
 
   test('the editor\'s selector tag lists the labels too', async ({ page }) => {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-    await page.locator('.ant-select').first().click()
-    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
-    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await openEditor(page, CHART)
     await page.getByText('replicas', { exact: true }).first().click()
 
     await page.getByTestId('selector-tag-workload').hover()
@@ -283,5 +291,41 @@ rules:
     await page.getByTestId('selector-tag-namespace').hover()
     await expect(page.getByRole('tooltip').filter({ hasText: /^A selector:/ })).toBeVisible()
     await expect(page.getByTestId('selector-labels-list-namespace')).toHaveCount(0)
+  })
+
+  test('the hints open from the keyboard too', async ({ page }) => {
+    await openReplicas(page)
+    const header = page.locator('.ant-table-thead')
+    await header.getByTestId('selector-labels-workload').focus()
+    await expect(page.getByTestId('selector-labels-list-workload')).toContainText('StatefulSetReplicasLow: statefulset')
+
+    await openEditor(page, CHART)
+    await page.getByText('replicas', { exact: true }).first().click()
+    await page.getByTestId('selector-tag-workload').focus()
+    await expect(page.getByTestId('selector-labels-list-workload')).toContainText('StatefulSetReplicasLow: statefulset')
+  })
+
+  test('the editor shows the labels of a common column a group arranges by', async ({ page, request }) => {
+    const chart = 'e2e-selector-labels-common'
+    await createChart(request, chart, {
+      '_common.yaml': 'columns:\n  cluster: {type: string, default: ".*"}\n',
+      'up.yaml': `group: up
+selectors: [cluster]
+selectorLabels: {cluster: k8s_cluster}
+columns: {}
+rules:
+  - alert: TargetDown
+    expr: up{\${selector}} == 0
+`,
+    })
+    try {
+      await openEditor(page, chart)
+      await page.getByText('up', { exact: true }).first().click()
+      await expect(page.getByTestId('selector-labels-cluster')).toBeVisible({ timeout: 5000 })
+      await page.getByTestId('selector-labels-cluster').hover()
+      await expect(page.getByTestId('selector-labels-list-cluster')).toContainText('TargetDown: k8s_cluster')
+    } finally {
+      await request.delete(`/api/v2/charts/${chart}`)
+    }
   })
 })

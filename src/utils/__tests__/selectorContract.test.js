@@ -231,6 +231,15 @@ describe('selectorLabels', () => {
     expect(renamedSelectorLabels(undefined)).toEqual({})
   })
 
+  // Looked up by column name: a column named like an inherited property is
+  // not renamed unless some rule renames it.
+  it('has nothing for a column named like an inherited property that no rule renames', () => {
+    const g = group({ selectors: ['toString', 'constructor'], selectorLabels: undefined, rules: [{ alert: 'A', expr: 'up{${selector}}' }] })
+    const hints = renamedSelectorLabels(g)
+    expect(hints.toString).toBeUndefined()
+    expect(hints.constructor).toBeUndefined()
+  })
+
   it('refuses a label that is not a label name', () => {
     for (const bad of ['1abc', 'a-b', '__name__', '']) {
       expect(problems(group({ selectorLabels: { workload: bad } }))).toEqual([

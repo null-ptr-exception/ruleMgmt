@@ -13,18 +13,21 @@ export default function FillButton({ routing, partial, describe, onChange, readO
   const [config, setConfig] = useState(null)
   const [open, setOpen] = useState(false)
   const names = Object.keys(routing.configs || {})
+  // The pick from last time, while that config still exists: one deleted or
+  // renamed since would be written into every cell.
+  const chosen = names.includes(config) ? config : null
   const apply = add => {
-    onChange(fillConfig(routing, partial, config, { add }))
+    onChange(fillConfig(routing, partial, chosen, { add }))
     setOpen(false)
   }
   const content = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 240 }}>
       <Text type="secondary" style={{ fontSize: 12 }}>Every cell where {describe}</Text>
-      <Select size="small" aria-label={`Fill config for ${describe}`} placeholder="config" value={config}
+      <Select size="small" aria-label={`Fill config for ${describe}`} placeholder="config" value={chosen}
         options={names.map(n => ({ value: n, label: n }))} onChange={setConfig} />
       <div style={{ display: 'flex', gap: 8 }}>
-        <Button size="small" type="primary" disabled={!config} onClick={() => apply(true)}>Add to all</Button>
-        <Button size="small" disabled={!config} onClick={() => apply(false)}>Remove from all</Button>
+        <Button size="small" type="primary" disabled={!chosen} onClick={() => apply(true)}>Add to all</Button>
+        <Button size="small" disabled={!chosen} onClick={() => apply(false)}>Remove from all</Button>
       </div>
     </div>
   )

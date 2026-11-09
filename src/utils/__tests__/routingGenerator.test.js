@@ -150,6 +150,17 @@ cells: [{match: {severity: critical}, configs: ${cellConfigs}}]
     expect(errorsWith(r => { r.cells[0].groupWait = 'soon' }).join()).toMatch(/groupWait must be a duration/)
   })
 
+  // Alertmanager reads units from the largest down, each once: 1h30m, not
+  // 30m1h or 1h1h. One it cannot read fails the whole AlertmanagerConfig.
+  it('refuses units out of order or repeated, as Alertmanager does', () => {
+    for (const bad of ['1m1h', '1h1h', '30s5m', '1s1s', '5ms1s', '']) {
+      expect(errorsWith(r => { r.cells[0].groupWait = bad }).join(), bad).toMatch(/groupWait must be a duration/)
+    }
+    for (const good of ['1h30m', '0s', '0', '90s', '1d12h', '1y2w3d4h5m6s7ms']) {
+      expect(errorsWith(r => { r.cells[0].groupWait = good }), good).toEqual([])
+    }
+  })
+
   it('names nothing and generates nothing when a check fails', () => {
     const routing = base()
     routing.cells[0].configs = ['nobody']

@@ -56,7 +56,10 @@ const CONFIG_FIELDS = {
 
 const LABEL_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 const CONFIG_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
-const DURATION_RE = /^([0-9]+(ms|s|m|h|d|w|y))+$/
+// Alertmanager's own duration format (and the AlertmanagerConfig CRD's):
+// units from the largest down, each at most once — 1h30m, not 30m1h or 1h1h —
+// or a bare 0. One it cannot read fails the whole AlertmanagerConfig.
+const DURATION_RE = /^(0|(?=\d)(\d+y)?(\d+w)?(\d+d)?(\d+h)?(\d+m)?(\d+s)?(\d+ms)?)$/
 
 /** A duration Alertmanager reads: 30s, 5m, 1h30m. */
 export const isDuration = text => typeof text === 'string' && DURATION_RE.test(text)

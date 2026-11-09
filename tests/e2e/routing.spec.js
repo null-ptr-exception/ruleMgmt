@@ -196,7 +196,11 @@ test('Remove routing deletes it, after asking', async ({ page, request }) => {
 })
 
 test('a synced target is read-only', async ({ page, request }) => {
-  const routing = { labels: { severity: ['critical'] }, configs: { oncall: { type: 'email', to: 'oncall@example.com' } }, cells: [] }
+  const routing = {
+    labels: { severity: ['critical', 'warning'] },
+    configs: { oncall: { type: 'email', to: 'oncall@example.com' } },
+    cells: [{ match: { severity: 'critical' }, configs: ['oncall'], repeatInterval: '1h' }],
+  }
   for (const folder of [FOLDER, OTHER]) {
     expect((await request.put(routingUrl(folder), { data: { routing } })).ok()).toBeTruthy()
   }
@@ -207,9 +211,11 @@ test('a synced target is read-only', async ({ page, request }) => {
   await expect(page.getByRole('button', { name: 'Add config' })).toBeDisabled()
   await expect(page.getByLabel('Edit oncall')).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Labels' })).toBeDisabled()
-  await expect(page.getByTestId('routes-matrix').locator('.ant-select-disabled')).toHaveCount(1)
+  await expect(page.getByTestId('routes-matrix').locator('.ant-select-disabled')).toHaveCount(2)
   await expect(page.getByLabel('Fill severity=critical')).toBeDisabled()
   await expect(page.getByLabel('default repeatInterval')).toBeDisabled()
+  await page.getByLabel('Timing for severity=critical').click()
+  await expect(page.getByLabel('severity=critical repeatInterval')).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Remove routing' })).toBeDisabled()
 })
@@ -343,6 +349,61 @@ test('a cell overrides a default timing, is marked, and its route carries it', a
   expect((await (await request.get(routingUrl(FOLDER))).json()).text).toContain('repeatInterval: 1h')
 })
 
+test('a cell without an override follows the default, and clearing an override goes back to it', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, cells: [
+    { match: { severity: 'warning', team: 'db' }, configs: ['db-email'], repeatInterval: '1h' },
+    { match: { severity: 'critical', team: 'db' }, configs: ['db-email'] },
+  ] } } })
+  await openRouting(page)
+  await page.getByLabel('default repeatInterval').fill('2h')
+  await page.getByLabel('Timing for severity=critical, team=db').click()
+  await expect(page.getByLabel('severity=critical, team=db repeatInterval')).toHaveAttribute('placeholder', '2h')
+  await page.keyboard.press('Escape')
+
+  const timing = page.getByLabel('Timing for severity=warning, team=db')
+  await expect(timing).toHaveAttribute('data-overridden', 'true')
+  await timing.click()
+  await page.getByLabel('severity=warning, team=db repeatInterval').fill('')
+  await expect(timing).not.toHaveAttribute('data-overridden')
+
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  const { text } = await (await request.get(routingUrl(FOLDER))).json()
+  expect(text).toContain('defaults:\n  repeatInterval: 2h\n')
+  expect(text.split('cells:')[1]).not.toContain('repeatInterval')
+})
+
+test('a duration Alertmanager cannot read is marked, and the save refused', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  const field = page.getByLabel('default groupWait')
+  // Units from the largest down, each once: 1h30m, not 30m1h.
+  await field.fill('30m1h')
+  await expect(field).toHaveClass(/ant-input-status-error/)
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.locator('.ant-modal').filter({ hasText: 'groupWait must be a duration' })).toBeVisible({ timeout: 8000 })
+  await page.locator('.ant-modal').getByRole('button', { name: 'OK' }).click()
+  await field.fill('1h30m')
+  await expect(field).not.toHaveClass(/ant-input-status-error/)
+})
+
+test('a fill offers only configs that still exist', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  await page.getByLabel('Fill team=db').click()
+  await page.getByLabel('Fill config for team=db').click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^db-email$/ }).click()
+  await page.getByRole('button', { name: 'Remove from all' }).click()
+
+  // No cell uses it any more, so it can go.
+  await page.getByLabel('Delete db-email').click()
+  await expect(page.getByTestId('notification-configs').locator('.ant-table-row')).toHaveCount(1)
+
+  await page.getByLabel('Fill team=db').click()
+  await expect(page.getByRole('button', { name: 'Add to all' })).toBeDisabled()
+  await expect(page.locator('.ant-popover').filter({ hasText: 'Every cell where team=db' })).not.toContainText('db-email')
+})
+
 test('three labels show as a list, and can be switched to the grid', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, labels: { env: ['prod'], ...TABLE.labels }, cells: [] } } })
   await openRouting(page)
@@ -351,4 +412,14 @@ test('three labels show as a list, and can be switched to the grid', async ({ pa
   await page.getByText('Grid', { exact: true }).click()
   await expect(page.getByTestId('routes-matrix').locator('.ant-table-tbody .ant-table-row')).toHaveCount(2)
   await expect(page.getByTestId('cell-prod-critical-db')).toBeVisible()
+
+  // A row of the grid is a combination of the first two labels.
+  await page.getByLabel('Fill env=prod, severity=critical').click()
+  await page.getByLabel('Fill config for env=prod, severity=critical').click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^ops$/ }).click()
+  await page.getByRole('button', { name: 'Add to all' }).click()
+  await expect(page.getByTestId('cell-prod-critical-db')).toContainText('ops')
+  await expect(page.getByTestId('cell-prod-critical-web')).toContainText('ops')
+  await expect(page.getByTestId('cell-prod-warning-db')).toContainText('drop')
+  await expect(page.getByTestId('cell-prod-warning-web')).toContainText('drop')
 })

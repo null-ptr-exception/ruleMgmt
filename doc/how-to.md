@@ -303,7 +303,7 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
 4. **Timing** — `groupWait`, `groupInterval` and `repeatInterval` for every
    cell. The clock in a cell overrides them for that cell alone; a filled
    clock marks a cell that does; a red clock holds a value Alertmanager
-   cannot read. Empty means the default, and with no default either, what
+   refuses (hover it for why). Empty means the default, and with no default either, what
    the platform's Alertmanager sets. A duration is written largest unit
    first, each unit once: `1h30m`, not `30m1h`; `groupInterval` and
    `repeatInterval` cannot be zero. A cell emptied of configs — by hand or with the brush — is

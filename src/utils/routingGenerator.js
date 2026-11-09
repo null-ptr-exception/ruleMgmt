@@ -65,12 +65,12 @@ const NS = { y: 31536000n * 10n ** 9n, w: 604800n * 10n ** 9n, d: 86400n * 10n *
 // Alertmanager holds a duration in an int64 of nanoseconds: about 292 years.
 const MAX_NS = 2n ** 63n - 1n
 
-/** A duration Alertmanager reads, in nanoseconds, or null: 30s, 5m, 1h30m. */
+/** A duration in nanoseconds — 30s, 5m, 1h30m — or null when it is not one. */
 function durationNs(text) {
   if (typeof text !== 'string' || !DURATION_RE.test(text)) return null
   let ns = 0n
   for (const [, n, unit] of text.matchAll(/(\d+)(ms|y|w|d|h|m|s)/g)) ns += BigInt(n) * NS[unit]
-  return ns > MAX_NS ? null : ns
+  return ns
 }
 
 // Alertmanager refuses these at zero; a zero groupWait sends at once.
@@ -78,8 +78,11 @@ const NONZERO_TIMING = new Set(['groupInterval', 'repeatInterval'])
 
 /** Why a timing key's value is refused, or null — the page marks what the save refuses. */
 export function timingProblem(key, value) {
+  // YAML reads a bare 0 or 30 as a number; the resource's field is text.
+  if (typeof value === 'number') return `${key} must be text: quote it, e.g. '0' or '30s'`
   const ns = durationNs(value)
   if (ns === null) return `${key} must be a duration such as 30s, 5m or 4h`
+  if (ns > MAX_NS) return `${key} is longer than Alertmanager allows (about 292 years)`
   if (ns === 0n && NONZERO_TIMING.has(key)) return `${key} cannot be zero`
   return null
 }

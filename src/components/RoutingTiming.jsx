@@ -46,7 +46,8 @@ export function CellTiming({ routing, match, describe, onChange, readOnly }) {
   const overridden = TIMING_KEYS.filter(key => timing[key].overridden)
   const own = Object.fromEntries(overridden.map(key => [key, timing[key].value]))
   // A closed popover hides a bad value until Save: mark it on the clock.
-  const invalid = overridden.some(key => timingProblem(key, timing[key].value))
+  const problem = overridden.map(key => timingProblem(key, timing[key].value)).find(Boolean)
+  const invalid = Boolean(problem)
   const content = (
     <div style={{ width: 260 }}>
       <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
@@ -58,7 +59,7 @@ export function CellTiming({ routing, match, describe, onChange, readOnly }) {
   )
   return (
     <Popover trigger="click" content={content} title="Timing" afterOpenChange={open => open && first.current?.focus()}>
-      <Tooltip title={invalid ? 'An override is not a duration Alertmanager reads'
+      <Tooltip title={invalid ? problem
         : overridden.length ? `Overrides ${overridden.join(', ')}` : 'Timing: the defaults'}>
         <Button type="text" size="small" aria-label={`Timing for ${describe}`}
           data-overridden={overridden.length > 0 || undefined} data-invalid={invalid || undefined}

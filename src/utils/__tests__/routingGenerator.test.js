@@ -170,9 +170,14 @@ cells: [{match: {severity: critical}, configs: ${cellConfigs}}]
     }
     expect(errorsWith(r => { r.cells[0].groupWait = '0s' })).toEqual([])
     for (const long of ['293y', '1000y', '99999999999999999999s']) {
-      expect(errorsWith(r => { r.cells[0].groupWait = long }).join(), long).toMatch(/groupWait must be a duration/)
+      expect(errorsWith(r => { r.cells[0].groupWait = long }).join(), long).toMatch(/groupWait is longer than Alertmanager allows/)
     }
     expect(errorsWith(r => { r.cells[0].groupWait = '292y' })).toEqual([])
+  })
+
+  // YAML reads a bare 0 or 30 as a number; the resource wants text.
+  it('asks for quotes around a duration written as a number', () => {
+    expect(errorsWith(r => { r.cells[0].groupWait = 0 }).join()).toMatch(/groupWait must be text: quote it, e.g. '0'/)
   })
 
   it('names nothing and generates nothing when a check fails', () => {

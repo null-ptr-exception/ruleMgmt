@@ -409,6 +409,14 @@ test('a cell whose override cannot be read shows it on its clock', async ({ page
   await page.getByLabel('severity=warning, team=db repeatInterval').fill('30m1h')
   await page.keyboard.press('Escape')
   await expect(timing).toHaveAttribute('data-invalid', 'true')
+
+  // A zero interval is a duration, but one Alertmanager refuses: the clock says which.
+  await timing.click()
+  await page.getByLabel('severity=warning, team=db repeatInterval').fill('0')
+  await page.keyboard.press('Escape')
+  await expect(timing).toHaveAttribute('data-invalid', 'true')
+  await timing.hover()
+  await expect(page.getByRole('tooltip').filter({ hasText: 'repeatInterval cannot be zero' })).toBeVisible()
 })
 
 test('the brush and the clock put the keyboard in their first field', async ({ page, request }) => {

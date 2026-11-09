@@ -658,7 +658,7 @@ cells:                                           # one entry = one filled cell
 | Key | Meaning |
 |---|---|
 | `labels` | Label name → its values, in order. Values are kept even when no cell uses them, so a row that is empty on purpose stays in the table |
-| `defaults` | `groupWait`, `groupInterval`, `repeatInterval`: durations such as `30s`, `5m`, `4h` |
+| `defaults` | `groupWait`, `groupInterval`, `repeatInterval`: durations such as `30s`, `5m`, `1h30m` — largest unit first, each unit once, as Alertmanager reads them (`30m1h` is refused) |
 | `configs` | Name → `{ type: email, to }` or `{ type: webhook, url }` / `{ type: webhook, urlSecret: { name, key } }`. Names are lower-case letters, digits and `-`; a name starting with `_` is reserved |
 | `cells[].match` | Every label of `labels`, each with one of its values |
 | `cells[].configs` | Who is notified, by name from `configs` |

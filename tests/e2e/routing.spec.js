@@ -419,6 +419,9 @@ test('a cell whose override cannot be read shows it on its clock', async ({ page
   await page.getByLabel('severity=warning, team=db repeatInterval').fill('0')
   await page.keyboard.press('Escape')
   await expect(timing).toHaveAttribute('data-invalid', 'true')
+  // The pointer is still on the clock from the click: leave it first, so
+  // hovering it again opens the tooltip.
+  await page.mouse.move(0, 0)
   await timing.hover()
   await expect(page.getByRole('tooltip', { name: 'repeatInterval cannot be zero', exact: true })).toBeVisible()
 })

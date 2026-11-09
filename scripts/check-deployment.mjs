@@ -129,9 +129,15 @@ async function main() {
   if (meta.errors.length) throw new CannotCheck(meta.errors.join('\n'))
   const cleanup = await helmHome()
   try {
-    const results = [await checkRuleObjects(dir), await checkRouting(dir)]
-    console.log(results.flatMap(r => r.lines).join('\n'))
-    return results.every(r => r.ok) ? 0 : 1
+    // Each said as soon as it is known: a later one that cannot be made
+    // (an unreadable routing.yaml) does not hide what was checked before it.
+    let ok = true
+    for (const step of [checkRuleObjects, checkRouting]) {
+      const result = await step(dir)
+      console.log(result.lines.join('\n'))
+      ok &&= result.ok
+    }
+    return ok ? 0 : 1
   } finally {
     await cleanup()
   }

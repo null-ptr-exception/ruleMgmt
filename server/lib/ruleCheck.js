@@ -64,8 +64,13 @@ export function cleanPromtoolOutput(text, file) {
   return text.split(/^Command failed:/m)[0]
     .split('\n')
     .filter(line => !line.startsWith(`Checking ${file}`))
-    // "<file>: 6:3: …" or "<file>: 5:13: 4:12: …": positions in the temp file.
-    .map(line => line.split(`${file}: `).join('').replace(/^\s*(\d+:\d+: )+/, ''))
+    // "<file>: 6:3: …" or "<file>: 5:13: 4:12: …": positions in the temp
+    // file, only right after its name — another line may be the rule's own
+    // text, which can start with digits and a colon.
+    .map(line => {
+      const at = line.indexOf(`${file}: `)
+      return at === -1 ? line : line.slice(at + file.length + 2).replace(/^(\d+:\d+: )+/, '')
+    })
     .map(line => line.trim())
     .join('\n')
     .trim()

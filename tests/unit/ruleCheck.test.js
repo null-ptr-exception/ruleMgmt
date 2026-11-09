@@ -85,4 +85,11 @@ ${file}: 9:15: group "b", rule 1, "S": invalid label name "a-b"
       'group "b", rule 1, "S": invalid label name "a-b"',
     ].join('\n'))
   })
+
+  // Only the position after the temp file is promtool's: a line of the
+  // rule's own text that happens to start with digits:digits stays.
+  it('keeps a continuation line that only looks like a position', () => {
+    const text = `  FAILED:\n${file}: 9:15: group "b", rule 1, "S": invalid label name: bad\n12:30: name\n`
+    expect(cleanPromtoolOutput(text, file)).toBe('FAILED:\ngroup "b", rule 1, "S": invalid label name: bad\n12:30: name')
+  })
 })

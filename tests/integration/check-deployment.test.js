@@ -206,6 +206,36 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
 
 // Exit 2: the check could not be made, as opposed to 1, a problem found.
 describe.skipIf(!CAN_RUN)('check-deployment when it cannot check', () => {
+  it('only warns on site labels that are not JSON, as gen-rules does', () => {
+    const { code, out } = check(dir, { RULE_OBJECT_LABELS: '{team:a}' })
+    expect(out).toContain('note:')
+    expect(code).toBe(0)
+  })
+
+  // helm reads every file of the folder too, so it says so first.
+  it.skipIf(process.getuid?.() === 0)('says which file it cannot read, in a line, after what it did check', async () => {
+    await writeRouting(dir, buildRouting(ROUTING))
+    const file = path.join(dir, 'routing.yaml')
+    await fs.chmod(file, 0o000)
+    try {
+      const { code, out } = check()
+      expect(out).toContain('helm could not render the deployment')
+      expect(out).toMatch(/could not check: EACCES/)
+      expect(out).not.toContain('    at ')
+      expect(code).toBe(2)
+    } finally {
+      await fs.chmod(file, 0o644)
+    }
+  })
+
+  it('says how a checker ended when it printed nothing', async () => {
+    const silent = path.join(gitops, 'silent-promtool')
+    await fs.writeFile(silent, '#!/bin/sh\nexit 3\n', { mode: 0o755 })
+    const { code, out } = check(dir, { PROMTOOL_BIN: silent })
+    expect(out).toContain('Promtool check failed (exit code 3).')
+    expect(code).toBe(1)
+  })
+
   it('stops on site label settings it cannot read, as gen-rules does', () => {
     const { code, out } = check(dir, { RULE_OBJECT_LABELS_BY_PROFILE: '{"nope":{}}' })
     expect(out).toMatch(/nope/)
@@ -213,7 +243,9 @@ describe.skipIf(!CAN_RUN)('check-deployment when it cannot check', () => {
   })
 
   it('says a missing helm or promtool is missing', () => {
-    expect(check(dir, { HELM_BIN: '/nope/helm' })).toMatchObject({ code: 2 })
+    const helm = check(dir, { HELM_BIN: '/nope/helm' })
+    expect(helm.out).toContain('helm is not available: /nope/helm')
+    expect(helm.code).toBe(2)
     const { code, out } = check(dir, { PROMTOOL_BIN: '/nope/promtool' })
     expect(out).toContain('not available')
     expect(code).toBe(2)
@@ -242,6 +274,12 @@ describe('check-deployment on a folder it cannot check', () => {
     const none = spawnSync('node', [SCRIPT], { encoding: 'utf-8' })
     expect(none.stderr).toContain('usage:')
     expect(none.status).toBe(2)
+  })
+
+  it('says a folder does not exist', () => {
+    const { code, out } = check(path.join(gitops, 'nowhere'))
+    expect(out).toContain('does not exist')
+    expect(code).toBe(2)
   })
 
   it('says a folder is not a deployment', async () => {

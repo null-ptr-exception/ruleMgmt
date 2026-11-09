@@ -106,7 +106,8 @@ describe('names the user chose', () => {
   it('checks a config named __proto__ like any other', () => {
     expect(fromYaml('labels: {s: [x]}\nconfigs: {__proto__: 5}\ncells: [{match: {s: x}, configs: [__proto__]}]\n').join())
       .toMatch(/configs\.__proto__: names starting with "_" are reserved/)
-    expect(fromYaml('labels: {s: [x]}\nconfigs: {__proto__: {type: sms}}\ncells: []\n')).not.toEqual([])
+    // Its value is checked too, not only its name.
+    expect(fromYaml('labels: {s: [x]}\nconfigs: {__proto__: {type: sms}}\ncells: []\n')).toContain('configs.__proto__: type must be one of email, webhook')
   })
 
   it('checks a label named __proto__, and does not throw', () => {
@@ -126,6 +127,10 @@ describe('names the user chose', () => {
     expect(fromYaml('labels: {s: [x]}\nconfigs: {must: 5}\ncells: []\n')).toContain('configs.must: must be a map with a "type"')
     expect(fromYaml('labels: {s: [x], must: [a]}\nconfigs: {m: {type: email, to: a@example.com}}\ncells: [{match: {s: x, must: 5}, configs: [m]}]\n').join())
       .toMatch(/cells\[0\]\.match\.must: /)
+  })
+
+  it('says which part of urlSecret is missing, once', () => {
+    expect(fromYaml('labels: {s: [x]}\nconfigs: {a: {type: webhook, urlSecret: {name: n, key: ""}}}\ncells: []\n')).toEqual(['configs.a.urlSecret: key is required'])
   })
 
   it('names an unknown key as written, whatever it contains', () => {

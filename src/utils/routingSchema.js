@@ -136,8 +136,8 @@ function isHttpUrl(url) {
 const URL_MESSAGE = 'url must be an http:// or https:// address, with no spaces around it'
 
 const secretRef = strictMap({
-  name: text('urlSecret needs a Secret\'s name and key'),
-  key: text('urlSecret needs a Secret\'s name and key'),
+  name: text('name is required'),
+  key: text('key is required'),
 }, 'urlSecret needs a Secret\'s name and key')
 
 const email = strictMap({

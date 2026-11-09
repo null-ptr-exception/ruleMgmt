@@ -399,6 +399,10 @@ test('a duration Alertmanager cannot read is marked, and the save refused', asyn
   await expect(field).not.toHaveClass(/ant-input-status-error/)
   await page.getByLabel('default repeatInterval').fill('0s')
   await expect(page.getByLabel('default repeatInterval')).toHaveClass(/ant-input-status-error/)
+  // Said to a screen reader too, not only by colour and a hover tooltip.
+  await expect(page.getByLabel('default repeatInterval')).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByLabel('default repeatInterval')).toHaveAccessibleDescription('repeatInterval cannot be zero')
+  await expect(field).not.toHaveAttribute('aria-invalid', 'true')
 })
 
 test('a cell whose override cannot be read shows it on its clock', async ({ page, request }) => {
@@ -416,7 +420,7 @@ test('a cell whose override cannot be read shows it on its clock', async ({ page
   await page.keyboard.press('Escape')
   await expect(timing).toHaveAttribute('data-invalid', 'true')
   await timing.hover()
-  await expect(page.getByRole('tooltip').filter({ hasText: 'repeatInterval cannot be zero' })).toBeVisible()
+  await expect(page.getByRole('tooltip', { name: 'repeatInterval cannot be zero', exact: true })).toBeVisible()
 })
 
 test('the brush and the clock put the keyboard in their first field', async ({ page, request }) => {

@@ -506,33 +506,50 @@ different.
 renders it with Helm and runs `promtool` (or `vmalert`) on each rule object,
 as **Preview** does, and checks its `routing.yaml` as the **Routing** page
 reads it — including whether `templates/alertmanagerconfig.yaml` is still what
-`routing.yaml` generates. It prints what is wrong and exits 1, or exits 0:
+`routing.yaml` generates:
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
   node scripts/check-deployment.mjs /work/deployments/<chart>/<env>
 ```
 
-Run it with the gitops repo mounted whole: the deployment finds its chart
-through `file://../../../charts/<chart>`. Like Preview, Helm writes
-`Chart.lock` and `charts/` into the deployment folder, which the gitops repo
-ignores. Only a folder deployment (its own `Chart.yaml` and `values.yaml`)
-can be checked. Pass the site's labels with `-e` as for `gen-rules --check`,
-or every AlertmanagerConfig is reported as out of date.
+It exits 0 when both pass, 1 when the deployment has a problem (printed),
+and 2 when it could not check: wrong arguments, a folder that is not a
+folder deployment (its own `Chart.yaml` and `values.yaml`), site settings it
+cannot read, or helm or a checker missing.
 
-In the gitops repo's CI, check every deployment folder a change touches, for
-example (a change to a chart under `charts/` affects every deployment of it:
-check them all then):
+- Mount the gitops repo whole: the deployment finds its chart through
+  `file://../../../charts/<chart>`.
+- Mount it writable (no `:ro`) for the uid you run as: like Preview, Helm
+  writes `Chart.lock` and `charts/` into the deployment folder, which the
+  gitops repo ignores.
+- Pass the site's labels with `-e` as for `gen-rules --check`, or every
+  AlertmanagerConfig is reported as out of date.
+
+In the gitops repo's CI, check every deployment a change touches. A changed
+file belongs to the nearest folder above it with both `Chart.yaml` and
+`values.yaml`; a change under `charts/` changes a chart, not a deployment, and
+every deployment of that chart should be checked then. For example:
 
 ```bash
-for dir in $(git diff --name-only origin/main... | xargs -n1 dirname | sort -u); do
-  [ -f "$dir/Chart.yaml" ] && [ -f "$dir/values.yaml" ] || continue
+git diff -z --name-only origin/main... -- . ':!charts' |
+  while IFS= read -r -d '' file; do
+    dir=$(dirname "$file")
+    while [ "$dir" != . ] && ! { [ -f "$dir/Chart.yaml" ] && [ -f "$dir/values.yaml" ]; }; do
+      dir=$(dirname "$dir")
+    done
+    [ "$dir" != . ] && printf '%s\0' "$dir"
+  done | sort -zu > /tmp/deployments
+
+status=0
+while IFS= read -r -d '' dir; do
   docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
-    node scripts/check-deployment.mjs "/work/$dir" || failed=1
-done
-exit "${failed:-0}"
+    node scripts/check-deployment.mjs "/work/$dir" || status=1
+done < /tmp/deployments
+exit "$status"
 ```
 
+---
 ---
 
 ## Platform

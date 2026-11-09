@@ -64,7 +64,8 @@ export function cleanPromtoolOutput(text, file) {
   return text.split(/^Command failed:/m)[0]
     .split('\n')
     .filter(line => !line.startsWith(`Checking ${file}`))
-    .map(line => line.split(`${file}: `).join('').replace(/^\d+:\d+: (?=group )/, ''))
+    // "<file>: 6:3: …" or "<file>: 5:13: 4:12: …": positions in the temp file.
+    .map(line => line.split(`${file}: `).join('').replace(/^\s*(\d+:\d+: )+/, ''))
     .map(line => line.trim())
     .join('\n')
     .trim()
@@ -166,13 +167,15 @@ export async function checkRules(renderedYaml) {
       } catch (err) {
         if (err.code === 'ENOENT') return { objName, missing: `${v.label} is not available: ${v.bin()}` }
         const output = v.clean(`${err.stdout || ''}${err.stderr || ''}${err.message || ''}`, file)
-        return { objName, passed: false, output: output || `${v.label} check failed.` }
+        // Nothing said, e.g. killed at the timeout: say how it ended.
+        const how = err.signal ? `killed by ${err.signal}` : `exit code ${err.code}`
+        return { objName, passed: false, output: output || `${v.label} check failed (${how}).` }
       }
     }))
 
     const missing = [...new Set(results.filter(r => r.missing).map(r => r.missing))]
     if (missing.length) {
-      return { passed: false, tools, unchecked, errors: missing, output: withNote(missing.join('\n')) }
+      return { passed: false, missing: true, tools, unchecked, errors: missing, output: withNote(missing.join('\n')) }
     }
 
     const failed = results.filter(r => !r.passed)

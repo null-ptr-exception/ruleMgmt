@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import yaml from 'js-yaml'
 import { z } from 'zod'
 import { checkRouting, generateRouting, configProblems } from '../routingGenerator'
 import { routingSchema } from '../routingSchema'
@@ -92,6 +93,49 @@ describe('the shape of routing.yaml', () => {
     expect(configProblems('Ops', { type: 'email', to: 'a@example.com' }).join()).toMatch(/lower-case/)
     expect(configProblems('w', { type: 'webhook', url: 'https://hooks.example.com/a?token=abc' }).join()).toMatch(/use urlSecret/)
     expect(configProblems('w', { type: 'webhook', url: 'http://relay:8080' })).toEqual([])
+  })
+})
+
+// Names are the user's: one may be __proto__ (YAML keeps it as an own key)
+// or a word a message starts with. Every map of names is checked by its own
+// keys, and its messages keep the name.
+describe('names the user chose', () => {
+  const fromYaml = text => checkRouting(yaml.load(text))
+  const table = (extra = '') => `labels: {s: [x]${extra}}\nconfigs: {m: {type: email, to: a@example.com}}\ncells: [{match: {s: x}, configs: [m]}]\n`
+
+  it('checks a config named __proto__ like any other', () => {
+    expect(fromYaml('labels: {s: [x]}\nconfigs: {__proto__: 5}\ncells: [{match: {s: x}, configs: [__proto__]}]\n').join())
+      .toMatch(/configs\.__proto__: names starting with "_" are reserved/)
+    expect(fromYaml('labels: {s: [x]}\nconfigs: {__proto__: {type: sms}}\ncells: []\n')).not.toEqual([])
+  })
+
+  it('checks a label named __proto__, and does not throw', () => {
+    expect(() => fromYaml(table(', __proto__: 5'))).not.toThrow()
+    expect(fromYaml(table(', __proto__: 5'))).toContain('labels.__proto__: list its values')
+    expect(fromYaml(table(', __proto__: [1]')).join()).toMatch(/labels\.__proto__\[0\]: values must be text/)
+  })
+
+  it('checks a match value under __proto__', () => {
+    const text = 'labels: {s: [x], __proto__: [a]}\nconfigs: {m: {type: email, to: a@example.com}}\ncells: [{match: {s: x, __proto__: 1}, configs: [m]}]\n'
+    expect(fromYaml(text).join()).toMatch(/cells\[0\]\.match\.__proto__: /)
+  })
+
+  it('keeps a name that is the first word of its message', () => {
+    expect(fromYaml(table(', list: []'))).toContain('labels.list: list its values')
+    expect(fromYaml('labels: {s: [x]}\nconfigs: {a: {type: webhook}}\ncells: []\n')).toContain('configs.a: a webhook has either url or urlSecret')
+    expect(fromYaml('labels: {s: [x]}\nconfigs: {must: 5}\ncells: []\n')).toContain('configs.must: must be a map with a "type"')
+    expect(fromYaml('labels: {s: [x], must: [a]}\nconfigs: {m: {type: email, to: a@example.com}}\ncells: [{match: {s: x, must: 5}, configs: [m]}]\n').join())
+      .toMatch(/cells\[0\]\.match\.must: /)
+  })
+
+  it('names an unknown key as written, whatever it contains', () => {
+    expect(checkRouting({ ...full(), 'a; b': 1 })).toContain('routing.yaml: unknown key "a; b" (expected labels, defaults, configs, cells)')
+  })
+
+  it('reports a bad label name and its bad values together', () => {
+    const errors = fromYaml(table(', Bad-Name: x'))
+    expect(errors).toContain('labels.Bad-Name: not a valid label name')
+    expect(errors).toContain('labels.Bad-Name: list its values')
   })
 })
 

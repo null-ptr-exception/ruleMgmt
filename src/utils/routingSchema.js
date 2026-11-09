@@ -67,14 +67,50 @@ const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 /** Text that is not blank, with one message for any other value. */
 const text = message => z.string({ error: message }).regex(TEXT_RE, { error: message })
 
-/** A map with only these keys; any other is named with what is expected. */
+/**
+ * A map with only these keys. An unknown key's issue carries what is
+ * expected; schemaProblems names each key from the issue's own list.
+ */
 function strictMap(shape, notAMap) {
   const known = Object.keys(shape)
   return z.strictObject(shape, {
-    error: iss => (iss.code === 'unrecognized_keys'
-      ? iss.keys.map(k => `unknown key "${k}" (expected ${known.join(', ')})`).join('; ')
-      : notAMap),
+    error: iss => (iss.code === 'unrecognized_keys' ? `expected ${known.join(', ')}` : notAMap),
   })
+}
+
+// JSON Schema for one part, to describe a map of names for editors.
+const jsonOf = schema => {
+  const { $schema: _schema, ...rest } = z.toJSONSchema(schema)
+  return rest
+}
+
+/**
+ * A map whose keys the user names: labels, configs, a cell's match. Checked
+ * over its own keys, one by one — zod's record skips a key named __proto__,
+ * which YAML keeps as an own key — and a bad name does not hide what is
+ * wrong with its value.
+ */
+function names({ nameProblem, value, notAMap, nonEmpty, json }) {
+  // z.unknown hands over the object as written: a parsed copy would turn
+  // an own __proto__ key into a prototype and lose it.
+  return z.unknown()
+    .superRefine((map, ctx) => {
+      if (!isMap(map)) {
+        ctx.addIssue({ code: 'custom', message: notAMap })
+        return
+      }
+      const keys = Object.keys(map)
+      if (nonEmpty && keys.length === 0) ctx.addIssue({ code: 'custom', message: notAMap })
+      for (const key of keys) {
+        const why = nameProblem?.(key)
+        if (why) ctx.addIssue({ code: 'custom', message: why, path: [key] })
+        const result = value.safeParse(map[key])
+        if (!result.success) {
+          for (const issue of result.error.issues) ctx.addIssue({ ...issue, path: [key, ...issue.path] })
+        }
+      }
+    })
+    .meta({ type: 'object', ...json, additionalProperties: jsonOf(value) })
 }
 
 // One check for the save and the page: timingProblem. The JSON Schema for
@@ -134,28 +170,34 @@ export function configNameProblem(name) {
   return null
 }
 
-const configName = z.string().superRefine((name, ctx) => {
-  const why = configNameProblem(name)
-  if (why) ctx.addIssue({ code: 'custom', message: why })
-})
-
 const labelValues = z.array(text('values must be text — quote one that YAML reads otherwise (e.g. "true", "1")'), { error: 'list its values' })
   .min(1, { error: 'list its values' })
 
-const labelName = z.string().regex(LABEL_NAME_RE, { error: 'not a valid label name' })
-
 const cell = strictMap({
-  match: z.record(z.string(), z.string({ error: 'must be one of the label\'s values, as text' }), { error: 'match is required' }),
+  match: names({
+    value: z.string({ error: 'must be one of the label\'s values, as text' }),
+    notAMap: 'match is required',
+  }),
   configs: z.array(z.string({ error: iss => `config must be a name (text), not ${JSON.stringify(iss.input)}` }), { error: 'configs lists who is notified' })
     .min(1, { error: 'configs lists who is notified' }),
   ...timing,
 }, 'must be a map with match and configs')
 
 export const routingSchema = strictMap({
-  labels: z.record(labelName, labelValues, { error: 'name at least one label, with its values' })
-    .refine(labels => Object.keys(labels).length > 0, { error: 'name at least one label, with its values' }),
+  labels: names({
+    nameProblem: name => (LABEL_NAME_RE.test(name) ? null : 'not a valid label name'),
+    value: labelValues,
+    notAMap: 'name at least one label, with its values',
+    nonEmpty: true,
+    json: { minProperties: 1, propertyNames: { pattern: LABEL_NAME_RE.source } },
+  }),
   defaults: strictMap(timing, 'must be a map').optional(),
-  configs: z.record(configName, configSchema, { error: 'must be a map of name → config' }).optional(),
+  configs: names({
+    nameProblem: configNameProblem,
+    value: configSchema,
+    notAMap: 'must be a map of name → config',
+    json: { propertyNames: { pattern: CONFIG_NAME_RE.source } },
+  }).optional(),
   cells: z.array(cell, { error: 'must be a list' }).optional(),
 }, 'routing.yaml must be a map with labels, configs and cells')
 
@@ -165,15 +207,19 @@ const pathText = path => path.reduce((out, key) => (
   typeof key === 'number' ? `${out}[${key}]` : out ? `${out}.${String(key)}` : String(key)
 ), '')
 
+// Whether path[i] is a name the user chose (a label, a config, a match key)
+// rather than one of the format's own keys.
+const isName = (path, i) => (
+  (i === 1 && (path[0] === 'labels' || path[0] === 'configs')) ||
+  (i === 3 && path[0] === 'cells' && path[2] === 'match')
+)
+
 /** One issue as the message shown: where it is, then what is wrong. */
 function message(issue, path = issue.path) {
-  // A key the record refused: the reason is the key's own.
-  if (issue.code === 'invalid_key') {
-    const why = issue.issues?.[0]?.message
-    return `${pathText(path)}: ${why || 'not a valid name'}`
-  }
   const last = path.at(-1)
-  if (typeof last === 'string' && issue.message.startsWith(`${last} `)) {
+  // "groupWait must be …" is said of the map holding groupWait — unless the
+  // key is a name the user chose that happens to be the message's first word.
+  if (typeof last === 'string' && !isName(path, path.length - 1) && issue.message.startsWith(`${last} `)) {
     const where = pathText(path.slice(0, -1))
     return where ? `${where}: ${issue.message}` : issue.message
   }
@@ -192,9 +238,9 @@ export function schemaProblems(schema, value, basePath = []) {
   const out = []
   for (const issue of result.error.issues) {
     const path = [...basePath, ...issue.path]
-    // Several unknown keys come as one issue, joined.
+    // Several unknown keys come as one issue: one message for each, by name.
     if (issue.code === 'unrecognized_keys') {
-      for (const part of issue.message.split('; ')) out.push(message({ ...issue, message: part }, path))
+      for (const key of issue.keys) out.push(message({ ...issue, message: `unknown key "${key}" (${issue.message})` }, path))
     } else {
       out.push(message(issue, path))
     }

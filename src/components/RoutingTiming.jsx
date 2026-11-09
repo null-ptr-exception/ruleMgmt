@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 import { Button, Input, Popover, Tooltip, Typography } from 'antd'
 import { ClockCircleOutlined, ClockCircleFilled } from '@ant-design/icons'
 import { TIMING_KEYS, cellTiming, setCellTiming } from '../utils/routingModel'
@@ -17,19 +17,26 @@ const HINTS = {
  * the placeholder says what applies instead.
  */
 export function TimingFields({ values, placeholders = {}, onChange, readOnly, prefix = '', firstRef }) {
+  const id = useId()
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '120px 120px', gap: '6px 10px', alignItems: 'center' }}>
       {TIMING_KEYS.map((key, i) => {
         const value = values[key] ?? ''
         const problem = value !== '' ? timingProblem(key, value) : null
+        // The red mark and the tooltip are visual; the reason is also the
+        // field's description, for a screen reader.
+        const errorId = `${id}-${key}-error`
         return [
           <Tooltip key={`l-${key}`} title={HINTS[key]}><Text style={{ fontSize: 12 }}>{key}</Text></Tooltip>,
-          <Tooltip key={key} title={problem}>
+          // On a wrapper: the tooltip sets its own aria-describedby on its child.
+          <Tooltip key={key} title={problem}><span>
             <Input size="small" aria-label={`${prefix}${key}`} value={value} disabled={readOnly}
+              aria-invalid={problem ? true : undefined} aria-describedby={problem ? errorId : undefined}
               ref={i === 0 ? firstRef : undefined}
               placeholder={placeholders[key] || 'Alertmanager default'} status={problem ? 'error' : undefined}
               onChange={e => onChange(key, e.target.value.trim() || undefined)} />
-          </Tooltip>,
+          </span></Tooltip>,
+          problem && <span key={`e-${key}`} id={errorId} hidden>{problem}</span>,
         ]
       })}
     </div>

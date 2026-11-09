@@ -302,9 +302,11 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    is a list, one combination per row; **Grid** / **List** switches.
 4. **Timing** — `groupWait`, `groupInterval` and `repeatInterval` for every
    cell. The clock in a cell overrides them for that cell alone; a filled
-   clock marks a cell that does. Empty means the default (or Alertmanager's
-   own). A duration is written largest unit first, each unit once: `1h30m`,
-   not `30m1h`. A cell emptied of configs — by hand or with the brush — is
+   clock marks a cell that does; a red clock holds a value Alertmanager
+   cannot read. Empty means the default, and with no default either, what
+   the platform's Alertmanager sets. A duration is written largest unit
+   first, each unit once: `1h30m`, not `30m1h`; `groupInterval` and
+   `repeatInterval` cannot be zero. A cell emptied of configs — by hand or with the brush — is
    removed, its timing override with it.
 5. **Save** writes `routing.yaml` and generates the AlertmanagerConfig into
    the deployment's `templates/`. **Preview** shows that resource as Helm

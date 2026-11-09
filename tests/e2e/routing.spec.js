@@ -328,6 +328,12 @@ test('a whole row or column is filled at once, and written cell by cell', async 
   const { text } = await (await request.get(routingUrl(FOLDER))).json()
   expect(text).toContain('cells:\n  - match:\n      severity: critical\n      team: db\n    configs:\n      - ops\n  - match:\n      severity: critical\n      team: web\n    configs:\n      - ops\n')
   expect(text.split('cells:')[1]).not.toContain('warning')
+
+  await page.getByRole('button', { name: 'Preview' }).click()
+  const preview = page.locator('.ant-modal').filter({ hasText: 'AlertmanagerConfig' })
+  await expect(preview).toBeVisible({ timeout: 15000 })
+  await expect(preview).toContainText('receiver: ops')
+  await expect(preview).not.toContainText('receiver: db-email')
 })
 
 test('a cell overrides a default timing, is marked, and its route carries it', async ({ page, request }) => {
@@ -375,6 +381,7 @@ test('a cell without an override follows the default, and clearing an override g
 
 test('a duration Alertmanager cannot read is marked, and the save refused', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  const before = (await (await request.get(routingUrl(FOLDER))).json()).text
   await openRouting(page)
   const field = page.getByLabel('default groupWait')
   // Units from the largest down, each once: 1h30m, not 30m1h.
@@ -383,8 +390,38 @@ test('a duration Alertmanager cannot read is marked, and the save refused', asyn
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.locator('.ant-modal').filter({ hasText: 'groupWait must be a duration' })).toBeVisible({ timeout: 8000 })
   await page.locator('.ant-modal').getByRole('button', { name: 'OK' }).click()
+  expect((await (await request.get(routingUrl(FOLDER))).json()).text).toBe(before)
   await field.fill('1h30m')
   await expect(field).not.toHaveClass(/ant-input-status-error/)
+
+  // A zero wait is fine; a zero repeat interval Alertmanager refuses.
+  await field.fill('0')
+  await expect(field).not.toHaveClass(/ant-input-status-error/)
+  await page.getByLabel('default repeatInterval').fill('0s')
+  await expect(page.getByLabel('default repeatInterval')).toHaveClass(/ant-input-status-error/)
+})
+
+test('a cell whose override cannot be read shows it on its clock', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  const timing = page.getByLabel('Timing for severity=warning, team=db')
+  await timing.click()
+  await page.getByLabel('severity=warning, team=db repeatInterval').fill('30m1h')
+  await page.keyboard.press('Escape')
+  await expect(timing).toHaveAttribute('data-invalid', 'true')
+})
+
+test('the brush and the clock put the keyboard in their first field', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  await page.getByLabel('Timing for severity=warning, team=db').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByLabel('severity=warning, team=db groupWait')).toBeFocused()
+  await page.keyboard.press('Escape')
+
+  await page.getByLabel('Fill team=db').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByLabel('Fill config for team=db')).toBeFocused()
 })
 
 test('a fill offers only configs that still exist', async ({ page, request }) => {
@@ -402,6 +439,22 @@ test('a fill offers only configs that still exist', async ({ page, request }) =>
   await page.getByLabel('Fill team=db').click()
   await expect(page.getByRole('button', { name: 'Add to all' })).toBeDisabled()
   await expect(page.locator('.ant-popover').filter({ hasText: 'Every cell where team=db' })).not.toContainText('db-email')
+})
+
+test('a cell\'s timing is set in the list view too', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, labels: { env: ['prod'], ...TABLE.labels }, cells: [
+    { match: { env: 'prod', severity: 'warning', team: 'db' }, configs: ['db-email'], repeatInterval: '1h' },
+  ] } } })
+  await openRouting(page)
+  await expect(page.getByTestId('routes-list')).toBeVisible()
+  const timing = page.getByLabel('Timing for env=prod, severity=warning, team=db')
+  await expect(timing).toHaveAttribute('data-overridden', 'true')
+  await timing.click()
+  await expect(page.getByLabel('env=prod, severity=warning, team=db repeatInterval')).toHaveValue('1h')
+  await page.getByLabel('env=prod, severity=warning, team=db repeatInterval').fill('2h')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect((await (await request.get(routingUrl(FOLDER))).json()).text).toContain('repeatInterval: 2h')
 })
 
 test('three labels show as a list, and can be switched to the grid', async ({ page, request }) => {

@@ -161,6 +161,20 @@ cells: [{match: {severity: critical}, configs: ${cellConfigs}}]
     }
   })
 
+  // Alertmanager refuses a zero group or repeat interval, and any duration
+  // past what it can hold (about 292 years).
+  it('refuses a zero groupInterval or repeatInterval, and a duration too long', () => {
+    for (const zero of ['0', '0s', '0ms', '0h0m']) {
+      expect(errorsWith(r => { r.cells[0].groupInterval = zero }).join(), zero).toMatch(/groupInterval cannot be zero/)
+      expect(errorsWith(r => { r.defaults = { repeatInterval: zero } }).join(), zero).toMatch(/repeatInterval cannot be zero/)
+    }
+    expect(errorsWith(r => { r.cells[0].groupWait = '0s' })).toEqual([])
+    for (const long of ['293y', '1000y', '99999999999999999999s']) {
+      expect(errorsWith(r => { r.cells[0].groupWait = long }).join(), long).toMatch(/groupWait must be a duration/)
+    }
+    expect(errorsWith(r => { r.cells[0].groupWait = '292y' })).toEqual([])
+  })
+
   it('names nothing and generates nothing when a check fails', () => {
     const routing = base()
     routing.cells[0].configs = ['nobody']

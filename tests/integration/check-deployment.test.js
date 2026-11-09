@@ -60,6 +60,20 @@ async function deployment(values) {
   await fs.writeFile(path.join(dir, 'values.yaml'), `tiny:\n${values}`)
 }
 
+// Preview's check of the same deployment, through its server route.
+async function previewCheck() {
+  const app = express()
+  app.use((req, _res, next) => { req.gitopsDir = gitops; next() })
+  app.use('/render', renderRouter())
+  const server = app.listen(0)
+  try {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/render/tiny/prod?folder=deployments/tiny/prod`, { method: 'POST' })
+    return (await res.json()).check
+  } finally {
+    server.close()
+  }
+}
+
 function check(target = dir, env = {}) {
   const r = spawnSync('node', [SCRIPT, target], { encoding: 'utf-8', env: { ...process.env, ...env } })
   return { code: r.status, out: `${r.stdout}${r.stderr}` }
@@ -140,27 +154,69 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
 
   it('says the same about the rules as Preview', async () => {
     await deployment('  expr: "up =="\n')
-    const app = express()
-    app.use((req, _res, next) => { req.gitopsDir = gitops; next() })
-    app.use('/render', renderRouter())
-    const server = app.listen(0)
+    const preview = await previewCheck()
+    expect(preview.passed).toBe(false)
+    expect(check().out).toContain(preview.output)
+  })
+
+  it('runs with no writable home, as any uid in a container does, and leaves no temp folder behind', async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'check-deployment-tmpdir-'))
     try {
-      const res = await fetch(`http://127.0.0.1:${server.address().port}/render/tiny/prod?folder=deployments/tiny/prod`, { method: 'POST' })
-      const { check: preview } = await res.json()
-      expect(preview.passed).toBe(false)
-      expect(check().out).toContain(preview.output)
+      const r = spawnSync('node', [SCRIPT, dir], {
+        encoding: 'utf-8',
+        env: Object.fromEntries(Object.entries({ ...process.env, HOME: '/nonexistent', TMPDIR: tmp }).filter(([k]) => !k.startsWith('HELM_') || k === 'HELM_BIN')),
+      })
+      expect(`${r.stdout}${r.stderr}`).toContain('Rules: passed')
+      expect(r.status).toBe(0)
+      expect(await fs.readdir(tmp)).toEqual([])
     } finally {
-      server.close()
+      await fs.rm(tmp, { recursive: true, force: true })
     }
   })
 
-  it('runs with no writable home, as any uid in a container does', () => {
-    const r = spawnSync('node', [SCRIPT, dir], {
-      encoding: 'utf-8',
-      env: Object.fromEntries(Object.entries({ ...process.env, HOME: '/nonexistent' }).filter(([k]) => !k.startsWith('HELM_') || k === 'HELM_BIN')),
-    })
-    expect(`${r.stdout}${r.stderr}`).toContain('Rules: passed')
-    expect(r.status).toBe(0)
+  it('checks a deployment whose folder name has a space', async () => {
+    const spaced = path.join(gitops, 'deployments', 'tiny', 'my env')
+    await fs.cp(dir, spaced, { recursive: true })
+    const { code, out } = check(spaced)
+    expect(out).toContain('Rules: passed')
+    expect(code).toBe(0)
+  })
+
+  it('reads the site\'s object labels: a CR generated with them is current only when they are passed', async () => {
+    const labels = '{"release":"kps"}'
+    process.env.RULE_OBJECT_LABELS = labels
+    try {
+      await writeRouting(dir, buildRouting(ROUTING))
+    } finally {
+      delete process.env.RULE_OBJECT_LABELS
+    }
+    expect(check(dir, { RULE_OBJECT_LABELS: '' })).toMatchObject({ code: 1 })
+    const { code, out } = check(dir, { RULE_OBJECT_LABELS: labels })
+    expect(out).toContain('Routing: passed')
+    expect(code).toBe(0)
+  })
+
+  it.skipIf(!HAS_VMALERT)('says the same as Preview for a deployment that passes, with two objects', async () => {
+    await deployment('  expr: up == 0\n  logs: "error | stats count() as errors | filter errors:>10"\n')
+    const preview = await previewCheck()
+    expect(preview.passed).toBe(true)
+    expect(check().out).toContain(preview.output)
+  })
+})
+
+// Exit 2: the check could not be made, as opposed to 1, a problem found.
+describe.skipIf(!CAN_RUN)('check-deployment when it cannot check', () => {
+  it('stops on site label settings it cannot read, as gen-rules does', () => {
+    const { code, out } = check(dir, { RULE_OBJECT_LABELS_BY_PROFILE: '{"nope":{}}' })
+    expect(out).toMatch(/nope/)
+    expect(code).toBe(2)
+  })
+
+  it('says a missing helm or promtool is missing', () => {
+    expect(check(dir, { HELM_BIN: '/nope/helm' })).toMatchObject({ code: 2 })
+    const { code, out } = check(dir, { PROMTOOL_BIN: '/nope/promtool' })
+    expect(out).toContain('not available')
+    expect(code).toBe(2)
   })
 })
 
@@ -171,7 +227,21 @@ describe('check-deployment on a folder it cannot check', () => {
     await fs.writeFile(path.join(legacy, 'staging-values.yaml'), 'a: 1\n')
     const { code, out } = check(legacy)
     expect(out).toContain('Only a folder deployment')
+    expect(out).not.toContain('open it in AlertForge')
     expect(code).toBe(2)
+  })
+
+  it('refuses a file, extra arguments, or none, without a stack trace', () => {
+    const file = check(path.join(dir, 'values.yaml'))
+    expect(file.out).toContain('is not a folder')
+    expect(file.out).not.toContain('    at ')
+    expect(file.code).toBe(2)
+    const r = spawnSync('node', [SCRIPT, dir, 'extra'], { encoding: 'utf-8' })
+    expect(r.stderr).toContain('usage:')
+    expect(r.status).toBe(2)
+    const none = spawnSync('node', [SCRIPT], { encoding: 'utf-8' })
+    expect(none.stderr).toContain('usage:')
+    expect(none.status).toBe(2)
   })
 
   it('says a folder is not a deployment', async () => {

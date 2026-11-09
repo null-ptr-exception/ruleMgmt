@@ -70,4 +70,19 @@ ${file}: 5:15: group "tiny", rule 1, "TinyDown": could not parse expression: 1:6
   it('drops the "Checking" line on success', () => {
     expect(cleanPromtoolOutput(`Checking ${file}\n  SUCCESS: 1 rules found\n`, file)).toBe('SUCCESS: 1 rules found')
   })
+
+  // Every position promtool gives points into the temp file, whatever follows it.
+  it('drops every position in the temp file, on every kind of error', () => {
+    const several = `  FAILED:
+${file}: 6:3: groupname: "a" is repeated in the same file
+${file}: 5:13: 4:12: group "a", rule 1, "R": could not parse expression: 1:6: parse error
+${file}: 9:15: group "b", rule 1, "S": invalid label name "a-b"
+`
+    expect(cleanPromtoolOutput(`${several}Command failed: promtool check rules ${file}\n${several}`, file)).toBe([
+      'FAILED:',
+      'groupname: "a" is repeated in the same file',
+      'group "a", rule 1, "R": could not parse expression: 1:6: parse error',
+      'group "b", rule 1, "S": invalid label name "a-b"',
+    ].join('\n'))
+  })
 })

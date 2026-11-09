@@ -18,6 +18,10 @@
  * Whether the AlertmanagerConfig is current depends on the site's object
  * labels (RULE_OBJECT_LABELS and friends): pass them with -e, as for
  * `gen-rules --check`.
+ *
+ * Exit 0: both pass. 1: a problem in the deployment. 2: it could not be
+ * checked — wrong arguments, not a folder deployment, site settings it cannot
+ * read, helm or a checker missing, a file it cannot read.
  */
 
 import fs from 'fs/promises'
@@ -26,17 +30,25 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { checkRules, renderChart } from '../server/lib/ruleCheck.js'
 import { routingState, ROUTING_FILE, ROUTING_CR_FILE } from '../server/lib/routingFiles.js'
+import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
+
+const USAGE = 'usage: node scripts/check-deployment.mjs <deployment folder>'
+
+/** A reason the deployment could not be checked at all: exit 2. */
+class CannotCheck extends Error {}
 
 const exists = file => fs.access(file).then(() => true, () => false)
 
 /** Why this folder cannot be checked, or null for a folder deployment. */
 async function notADeployment(dir) {
-  if (!(await exists(dir))) return `${dir} does not exist`
+  const stat = await fs.stat(dir).catch(() => null)
+  if (!stat) return `${dir} does not exist`
+  if (!stat.isDirectory()) return `${dir} is not a folder: give the deployment's folder`
   if (await exists(path.join(dir, 'Chart.yaml')) && await exists(path.join(dir, 'values.yaml'))) return null
   const legacy = (await fs.readdir(dir)).filter(f => f.endsWith('-values.yaml'))
   if (legacy.length) {
     return `${dir} keeps several deployments as <name>-values.yaml files (${legacy.join(', ')}). ` +
-      'Only a folder deployment — its own Chart.yaml and values.yaml — can be checked; open it in AlertForge to move it to one.'
+      'Only a folder deployment — its own Chart.yaml and values.yaml — can be checked.'
   }
   return `${dir} is not a deployment: it has no Chart.yaml and values.yaml`
 }
@@ -65,9 +77,13 @@ async function checkRuleObjects(dir) {
   try {
     rendered = await renderChart(dir, ['template', await releaseName(dir), dir])
   } catch (err) {
+    if (err.code === 'ENOENT') throw new CannotCheck(`helm is not available: ${process.env.HELM_BIN || 'helm'}`)
+    // A template error, or helm unable to write Chart.lock and charts/ into
+    // the folder: the mount must be writable by the uid it runs as.
     return { ok: false, lines: ['helm could not render the deployment:', (err.stderr || err.message).trim()] }
   }
   const check = await checkRules(rendered)
+  if (check.missing) throw new CannotCheck(check.output)
   const tools = check.tools?.length ? ` (${check.tools.join(', ')})` : ''
   const title = check.passed ? `passed${tools}` : `failed${tools}`
   return { ok: check.passed, lines: [`Rules: ${title}`, check.output].filter(Boolean) }
@@ -93,17 +109,24 @@ async function checkRouting(dir) {
 }
 
 async function main() {
-  const arg = process.argv[2]
-  if (!arg || arg === '-h' || arg === '--help') {
-    console.log('usage: node scripts/check-deployment.mjs <deployment folder>')
-    return arg ? 0 : 2
+  const args = process.argv.slice(2)
+  if (args.length === 1 && (args[0] === '-h' || args[0] === '--help')) {
+    console.log(USAGE)
+    return 0
   }
-  const dir = path.resolve(arg)
-  const why = await notADeployment(dir)
-  if (why) {
-    console.error(why)
+  if (args.length !== 1) {
+    console.error(USAGE)
     return 2
   }
+  const dir = path.resolve(args[0])
+  const why = await notADeployment(dir)
+  if (why) throw new CannotCheck(why)
+  // The site's labels decide whether the AlertmanagerConfig is current: a
+  // setting that cannot be read would give the wrong answer, so stop, as
+  // gen-rules does.
+  const meta = objectMetaFromEnv()
+  for (const w of meta.warnings) console.error(`note: ${w}`)
+  if (meta.errors.length) throw new CannotCheck(meta.errors.join('\n'))
   const cleanup = await helmHome()
   try {
     const results = [await checkRuleObjects(dir), await checkRouting(dir)]
@@ -114,4 +137,11 @@ async function main() {
   }
 }
 
-process.exitCode = await main()
+try {
+  process.exitCode = await main()
+} catch (err) {
+  // Anything it could not do — a file it cannot read included — is said in
+  // a line, not a stack trace.
+  console.error(err instanceof CannotCheck ? err.message : `could not check: ${err.message}`)
+  process.exitCode = 2
+}

@@ -8,8 +8,12 @@ Helm dependency build artifacts:
 ```gitignore
 # Helm dependency build artifacts — generated at render time, never committed
 Chart.lock
-charts/*.tgz
+**/charts/*.tgz
 ```
+
+`**/` matters: a pattern with a `/` in it is matched from the repo's root, so
+`charts/*.tgz` alone would miss `deployments/<chart>/<env>/charts/*.tgz`, the
+one every render writes.
 
 These files are written by `helm dependency build` during render preview and
 carry no source-of-truth value — they are always re-generated from `Chart.yaml`.

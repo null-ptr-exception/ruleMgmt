@@ -510,15 +510,16 @@ cannot read, helm or a checker missing, or a file it cannot read.
 - Mount the gitops repo whole: the deployment finds its chart through
   `file://../../../charts/<chart>`.
 - Mount it writable (no `:ro`) for the uid you run as: like Preview, Helm
-  writes `Chart.lock` and `charts/` into the deployment folder, which the
-  gitops repo ignores.
+  writes `Chart.lock` and `charts/` into the deployment folder; the gitops
+  repo's `.gitignore` keeps them out ([setup](gitops-repo-setup.md)).
 - Pass the site's labels with `-e` as for `gen-rules --check`, or every
   AlertmanagerConfig is reported as out of date.
 
 In the gitops repo's CI, check every deployment a change touches. A changed
 file belongs to the nearest folder above it with both `Chart.yaml` and
 `values.yaml`. A change under `charts/` changes a chart that deployments
-render, so then every deployment is checked. For example, run from the repo's
+render, so then every deployment is checked (if the site sets `CHARTS_DIR`,
+use that folder instead of `charts`). For example, run from the repo's
 root, with the base branch fetched (`actions/checkout` with `fetch-depth: 0`):
 
 ```bash

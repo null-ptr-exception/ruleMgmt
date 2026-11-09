@@ -29,6 +29,10 @@ spec:
       rules:
         - alert: TinyDown
           expr: {{ .Values.expr | quote }}
+{{- if .Values.twice }}
+        - alert: TinyDown
+          expr: {{ .Values.expr | quote }}
+{{- end }}
 {{- if .Values.logs }}
 ---
 apiVersion: operator.victoriametrics.com/v1beta1
@@ -101,6 +105,15 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
     const { code, out } = check()
     expect(out).toContain('Rules: passed (promtool)')
     expect(out).toContain('Routing: no routing.yaml — not checked')
+    expect(code).toBe(0)
+  })
+
+  // promtool's lint (a duplicate rule) passes, as in Preview, but says so.
+  it('passes with warnings on a lint finding, and says it', async () => {
+    await deployment('  expr: up == 0\n  twice: true\n')
+    const { code, out } = check()
+    expect(out).toContain('Rules: passed with warnings (promtool)')
+    expect(out).toContain('duplicate rule')
     expect(code).toBe(0)
   })
 
@@ -240,6 +253,16 @@ describe.skipIf(!CAN_RUN)('check-deployment when it cannot check', () => {
     const { code, out } = check(dir, { RULE_OBJECT_LABELS_BY_PROFILE: '{"nope":{}}' })
     expect(out).toMatch(/nope/)
     expect(code).toBe(2)
+  })
+
+  // Results on stdout, why it could not check on stderr.
+  it('writes results to stdout and reasons it could not check to stderr', () => {
+    const ok = spawnSync('node', [SCRIPT, dir], { encoding: 'utf-8' })
+    expect(ok.stdout).toContain('Rules: passed')
+    expect(ok.stdout).toContain('Routing:')
+    const bad = spawnSync('node', [SCRIPT, dir], { encoding: 'utf-8', env: { ...process.env, PROMTOOL_BIN: '/nope/promtool' } })
+    expect(bad.stderr).toContain('not available')
+    expect(bad.stdout).not.toContain('not available')
   })
 
   it('says a missing helm or promtool is missing', () => {

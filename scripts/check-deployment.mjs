@@ -13,7 +13,8 @@
  *     node scripts/check-deployment.mjs /work/deployments/<chart>/<env>
  *
  * Like Preview, helm resolves the dependency in place: it writes Chart.lock
- * and charts/ into the deployment folder, which the gitops repo ignores.
+ * and charts/ into the deployment folder; the gitops repo's .gitignore keeps
+ * them out (doc/gitops-repo-setup.md).
  *
  * Whether the AlertmanagerConfig is current depends on the site's object
  * labels (RULE_OBJECT_LABELS and friends): pass them with -e, as for
@@ -85,7 +86,8 @@ async function checkRuleObjects(dir) {
   const check = await checkRules(rendered)
   if (check.missing) throw new CannotCheck(check.output)
   const tools = check.tools?.length ? ` (${check.tools.join(', ')})` : ''
-  const title = check.passed ? `passed${tools}` : `failed${tools}`
+  // A lint finding passes, as in Preview, but is not a clean pass.
+  const title = !check.passed ? `failed${tools}` : check.warned ? `passed with warnings${tools}` : `passed${tools}`
   return { ok: check.passed, lines: [`Rules: ${title}`, check.output].filter(Boolean) }
 }
 

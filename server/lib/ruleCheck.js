@@ -71,7 +71,10 @@ export function cleanPromtoolOutput(text, file) {
       const at = line.indexOf(`${file}: `)
       return at === -1 ? line : line.slice(at + file.length + 2).replace(/^(\d+:\d+: )+/, '')
     })
-    .map(line => line.trim())
+    // Indentation stays: it is promtool's structure (a field under "unmarshal
+    // errors", a lint finding's labels). Only the status lines are indented
+    // for no reason.
+    .map(line => line.replace(/^\s+(?=(FAILED|SUCCESS):)/, '').trimEnd())
     .join('\n')
     .trim()
 }
@@ -216,7 +219,8 @@ export async function renderChart(templateDir, templateArgs) {
   const helm = process.env.HELM_BIN || 'helm'
   // Renders run in place, per the decision in #29/#30/#31: the artifacts
   // helm writes here (Chart.lock, charts/*.tgz) are kept out of version
-  // control by the gitops repo's own .gitignore (doc/gitops-repo-setup.md),
+  // control by the gitops repo's own .gitignore (doc/gitops-repo-setup.md:
+  // `Chart.lock`, `**/charts/*.tgz`),
   // not by app-level temp-dir isolation.
   //
   // `dependency update` rather than `build`: build hard-errors on a stale

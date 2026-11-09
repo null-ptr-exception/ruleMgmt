@@ -88,6 +88,12 @@ ${file}: 9:15: group "b", rule 1, "S": invalid label name "a-b"
 
   // Only the position after the temp file is promtool's: a line of the
   // rule's own text that happens to start with digits:digits stays.
+  // Indentation is promtool's structure: a field under "unmarshal errors".
+  it('keeps the indentation of promtool\'s own lines', () => {
+    const text = `  FAILED:\n${file}: yaml: unmarshal errors:\n  line 6: field foo not found in type rulefmt.RuleNode\n`
+    expect(cleanPromtoolOutput(text, file)).toBe('FAILED:\nyaml: unmarshal errors:\n  line 6: field foo not found in type rulefmt.RuleNode')
+  })
+
   it('keeps a continuation line that only looks like a position', () => {
     const text = `  FAILED:\n${file}: 9:15: group "b", rule 1, "S": invalid label name: bad\n12:30: name\n`
     expect(cleanPromtoolOutput(text, file)).toBe('FAILED:\ngroup "b", rule 1, "S": invalid label name: bad\n12:30: name')

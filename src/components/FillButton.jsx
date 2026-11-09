@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button, Popover, Select, Typography } from 'antd'
 import { FormatPainterOutlined } from '@ant-design/icons'
 import { fillConfig } from '../utils/routingModel'
@@ -12,6 +12,7 @@ const { Text } = Typography
 export default function FillButton({ routing, partial, describe, onChange, readOnly }) {
   const [config, setConfig] = useState(null)
   const [open, setOpen] = useState(false)
+  const select = useRef(null)
   const names = Object.keys(routing.configs || {})
   // The pick from last time, while that config still exists: one deleted or
   // renamed since would be written into every cell.
@@ -23,7 +24,7 @@ export default function FillButton({ routing, partial, describe, onChange, readO
   const content = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 240 }}>
       <Text type="secondary" style={{ fontSize: 12 }}>Every cell where {describe}</Text>
-      <Select size="small" aria-label={`Fill config for ${describe}`} placeholder="config" value={chosen}
+      <Select ref={select} size="small" aria-label={`Fill config for ${describe}`} placeholder="config" value={chosen}
         options={names.map(n => ({ value: n, label: n }))} onChange={setConfig} />
       <div style={{ display: 'flex', gap: 8 }}>
         <Button size="small" type="primary" disabled={!chosen} onClick={() => apply(true)}>Add to all</Button>
@@ -32,7 +33,8 @@ export default function FillButton({ routing, partial, describe, onChange, readO
     </div>
   )
   return (
-    <Popover trigger="click" open={open} onOpenChange={setOpen} content={content} title="Fill">
+    <Popover trigger="click" open={open} onOpenChange={setOpen} content={content} title="Fill"
+      afterOpenChange={visible => visible && select.current?.focus()}>
       <Button type="text" size="small" icon={<FormatPainterOutlined />} aria-label={`Fill ${describe}`}
         disabled={readOnly || names.length === 0} />
     </Popover>

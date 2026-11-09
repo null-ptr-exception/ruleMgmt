@@ -61,8 +61,28 @@ const CONFIG_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 // or a bare 0. One it cannot read fails the whole AlertmanagerConfig.
 const DURATION_RE = /^(0|(?=\d)(\d+y)?(\d+w)?(\d+d)?(\d+h)?(\d+m)?(\d+s)?(\d+ms)?)$/
 
-/** A duration Alertmanager reads: 30s, 5m, 1h30m. */
-export const isDuration = text => typeof text === 'string' && DURATION_RE.test(text)
+const NS = { y: 31536000n * 10n ** 9n, w: 604800n * 10n ** 9n, d: 86400n * 10n ** 9n, h: 3600n * 10n ** 9n, m: 60n * 10n ** 9n, s: 10n ** 9n, ms: 10n ** 6n }
+// Alertmanager holds a duration in an int64 of nanoseconds: about 292 years.
+const MAX_NS = 2n ** 63n - 1n
+
+/** A duration Alertmanager reads, in nanoseconds, or null: 30s, 5m, 1h30m. */
+function durationNs(text) {
+  if (typeof text !== 'string' || !DURATION_RE.test(text)) return null
+  let ns = 0n
+  for (const [, n, unit] of text.matchAll(/(\d+)(ms|y|w|d|h|m|s)/g)) ns += BigInt(n) * NS[unit]
+  return ns > MAX_NS ? null : ns
+}
+
+// Alertmanager refuses these at zero; a zero groupWait sends at once.
+const NONZERO_TIMING = new Set(['groupInterval', 'repeatInterval'])
+
+/** Why a timing key's value is refused, or null — the page marks what the save refuses. */
+export function timingProblem(key, value) {
+  const ns = durationNs(value)
+  if (ns === null) return `${key} must be a duration such as 30s, 5m or 4h`
+  if (ns === 0n && NONZERO_TIMING.has(key)) return `${key} cannot be zero`
+  return null
+}
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isText = v => typeof v === 'string' && v.trim() !== ''
@@ -103,9 +123,8 @@ export function urlCredential(url) {
 function checkTiming(where, entry, errors) {
   for (const key of TIMING_KEYS) {
     if (entry[key] === undefined) continue
-    if (typeof entry[key] !== 'string' || !DURATION_RE.test(entry[key])) {
-      errors.push(`${where}: ${key} must be a duration such as 30s, 5m or 4h`)
-    }
+    const why = timingProblem(key, entry[key])
+    if (why) errors.push(`${where}: ${why}`)
   }
 }
 

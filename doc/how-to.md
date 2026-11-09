@@ -505,7 +505,7 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
 It exits 0 when both pass, 1 when the deployment has a problem (printed),
 and 2 when it could not check: wrong arguments, a folder that is not a
 folder deployment (its own `Chart.yaml` and `values.yaml`), site settings it
-cannot read, or helm or a checker missing.
+cannot read, helm or a checker missing, or a file it cannot read.
 
 - Mount the gitops repo whole: the deployment finds its chart through
   `file://../../../charts/<chart>`.
@@ -517,28 +517,42 @@ cannot read, or helm or a checker missing.
 
 In the gitops repo's CI, check every deployment a change touches. A changed
 file belongs to the nearest folder above it with both `Chart.yaml` and
-`values.yaml`; a change under `charts/` changes a chart, not a deployment, and
-every deployment of that chart should be checked then. For example:
+`values.yaml`. A change under `charts/` changes a chart that deployments
+render, so then every deployment is checked. For example, run from the repo's
+root, with the base branch fetched (`actions/checkout` with `fetch-depth: 0`):
 
 ```bash
-git diff -z --name-only origin/main... -- . ':!charts' |
-  while IFS= read -r -d '' file; do
-    dir=$(dirname "$file")
-    while [ "$dir" != . ] && ! { [ -f "$dir/Chart.yaml" ] && [ -f "$dir/values.yaml" ]; }; do
-      dir=$(dirname "$dir")
-    done
-    [ "$dir" != . ] && printf '%s\0' "$dir"
-  done | sort -zu > /tmp/deployments
+set -euo pipefail
+base=origin/main
+git rev-parse --verify --quiet "$base^{commit}" >/dev/null || { echo "fetch $base first" >&2; exit 2; }
+list=$(mktemp)
+
+# The deployment folder a file is in, if any.
+deployment_of() {
+  local dir
+  dir=$(dirname -- "$1")
+  while [ "$dir" != . ]; do
+    if [ -f "$dir/Chart.yaml" ] && [ -f "$dir/values.yaml" ]; then printf '%s\0' "$dir"; return 0; fi
+    dir=$(dirname -- "$dir")
+  done
+}
+
+if git diff --quiet "$base"... -- charts; then
+  git diff -z --name-only "$base"... -- . ':!charts' |
+    while IFS= read -r -d '' file; do deployment_of "$file"; done | sort -zu > "$list"
+else
+  git ls-files -z -- '*Chart.yaml' ':!charts' |
+    while IFS= read -r -d '' file; do deployment_of "$file"; done | sort -zu > "$list"
+fi
 
 status=0
 while IFS= read -r -d '' dir; do
   docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
     node scripts/check-deployment.mjs "/work/$dir" || status=1
-done < /tmp/deployments
+done < "$list"
 exit "$status"
 ```
 
----
 ---
 
 ## Platform

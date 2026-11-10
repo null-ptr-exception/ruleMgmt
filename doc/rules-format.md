@@ -678,6 +678,20 @@ What is refused when it is saved, and reported when it is read back:
 | A webhook `url` with a user name or password, a credential-like query parameter (`token=`, `key=` …) or a token-like path segment | Credentials belong in a Secret: use `urlSecret`. An in-cluster address such as `http://alert-relay.monitoring.svc:8080` is fine |
 | Any other key — under `urlSecret` too, which takes only `name` and `key` | Probably a typo; it would be left out of the AlertmanagerConfig |
 
+The shape and types are checked first: every key, its type, and what is
+required. A value of the wrong type — a list where a name goes, a number where
+text goes — is refused where it is. Only a file of the right shape is checked
+for the rest of the table above (cells against `labels` and `configs`,
+credentials in a `url`), so fixing the first problems can show new ones.
+
+`schema/routing.schema.json` describes the shape for editors. In VS Code with
+the YAML extension, a first line naming it gives hints and marks wrong keys
+as you type (a save from the Routing page writes the file anew, without it):
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/null-ptr-exception/ruleMgmt/main/schema/routing.schema.json
+```
+
 ### What is generated
 
 Saving `routing.yaml` also writes `templates/alertmanagerconfig.yaml` into the

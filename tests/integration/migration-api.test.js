@@ -85,7 +85,7 @@ describe('breaking change + migration', () => {
     expect(flat.losses).toEqual([{ group: 'cpu', columns: ['warn'] }])
   })
 
-  it('a confirmed change with a mapping renames the column in every writable deployment', async () => {
+  it('a confirmed change with a mapping renames the column in every deployment, sync followers included', async () => {
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', {
       files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { cpu: { warn: 'threshold' } } },
     })
@@ -96,9 +96,26 @@ describe('breaking change + migration', () => {
     expect(flat).toContain('threshold: 90')
     expect(flat).not.toContain('warn:')
 
-    // The sync follower is left for its source to update.
+    // The follower's source is not a deployment here, so there is nothing to
+    // copy: it is migrated on its own rather than left with the old column.
     const follower = await fs.readFile(path.join(tmpDir, 'deployments', 'e2e', 'follower', 'values.yaml'), 'utf-8')
-    expect(follower).toContain('warn: 80')
+    expect(follower).toContain('threshold: 80')
+    expect(follower).not.toContain('warn:')
+    expect(data.migrated.find(d => d.path.includes('follower'))).toMatchObject({ readonly: true, copiedFrom: null })
+  })
+
+  it('a follower whose source has no values.yaml is migrated on its own, not emptied', async () => {
+    // The source is a deployment of this chart but keeps no values.yaml.
+    const leader = path.join(tmpDir, 'deployments', 'e2e', 'leader')
+    await fs.mkdir(leader, { recursive: true })
+    await fs.writeFile(path.join(leader, 'Chart.yaml'), 'apiVersion: v2\nname: leader\ndependencies:\n  - name: demo\n    version: 0.1.0\n')
+
+    const { data } = await api('POST', '/api/v2/templates/demo/rules', {
+      files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { cpu: { warn: 'threshold' } } },
+    })
+    expect(data.migrated.find(d => d.path.includes('follower'))).toMatchObject({ copiedFrom: null })
+    const follower = await fs.readFile(path.join(tmpDir, 'deployments', 'e2e', 'follower', 'values.yaml'), 'utf-8')
+    expect(follower).toContain('threshold: 80')
   })
 
   it('drops the value when a removed column is mapped to Delete', async () => {

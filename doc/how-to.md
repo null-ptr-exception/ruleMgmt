@@ -168,8 +168,9 @@ already exist. Save opens a dialog instead of saving:
 4. **Change in place** rewrites the chart and every affected deployment in one
    step
 
-Deployments that follow another through sync are not rewritten; they follow
-their source.
+A deployment that follows another through sync gets its source's new file in
+the same step, so the two stay identical; the preview says *copied from* the
+source. One whose source does not use this chart is rewritten on its own.
 
 A removed rule is found by counting the rules of each name, raw rules
 included (a raw rule is read for the `alert:` or `record:` in it, and one

@@ -30,6 +30,21 @@ function rowsChanged(before, after) {
   return n
 }
 
+// Rows that differ between two whole value sets, in either direction: a
+// follower that gets its source's file can gain rows and groups it never
+// had, as well as lose or change its own.
+function rowsReplaced(before, after) {
+  let n = 0
+  for (const group of new Set([...Object.keys(before || {}), ...Object.keys(after || {})])) {
+    const a = Array.isArray(before?.[group]) ? before[group] : []
+    const b = Array.isArray(after?.[group]) ? after[group] : []
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) n++
+    }
+  }
+  return n
+}
+
 /** Where a deployment's values live, and whether it is a subchart wrap. */
 async function locate(gitopsDir, relPath) {
   const abs = path.join(gitopsDir, relPath)
@@ -110,7 +125,7 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     entry.copiedFrom = source && texts.has(source) && !missing.has(source) && !isTarget(registry, source) ? source : null
     if (entry.copiedFrom) {
       const src = deployments.find(d => d.path === entry.copiedFrom)
-      entry.rowsChanged = rowsChanged(befores.get(entry.path), afters.get(entry.copiedFrom))
+      entry.rowsChanged = rowsReplaced(befores.get(entry.path), afters.get(entry.copiedFrom))
       entry.losses = src.losses
       entry.orphaned = src.orphaned
     }

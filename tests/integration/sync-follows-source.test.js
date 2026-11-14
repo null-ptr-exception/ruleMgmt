@@ -111,6 +111,20 @@ describe('a sync target stays a copy of its source', () => {
     expect(data.deployments.find(d => d.path === TGT)).toMatchObject({ copiedFrom: SRC, rowsChanged: 1 })
   })
 
+  it.each([
+    ['empty', 'demo:\n  cpu: []\n', 1],
+    ['with fewer rows than its source', 'demo:\n  cpu:\n    - namespace: p\n      warn: 90\n', 2],
+  ])('the preview counts the rows a target gains when it is %s', async (_, target, expected) => {
+    if (expected === 2) {
+      await api('POST', `/api/v2/deployments/demo/src${q(SRC)}`, { values: { cpu: [{ namespace: 'p', warn: 90 }, { namespace: 'r', warn: 70 }] } })
+    }
+    await fs.writeFile(path.join(tmpDir, TGT, 'values.yaml'), target)
+    const { data } = await api('POST', '/api/v2/templates/demo/migration-preview', {
+      files: { 'cpu.yaml': withThreshold }, migration: { columns: { cpu: { warn: 'threshold' } } },
+    })
+    expect(data.deployments.find(d => d.path === TGT)).toMatchObject({ copiedFrom: SRC, rowsChanged: expected })
+  })
+
   // What gets deployed: the target renders the alert the source does.
   it.skipIf(!HAS_HELM)('after a breaking change the target renders the same alerts as the source', async () => {
     await writePaths[2][1]()

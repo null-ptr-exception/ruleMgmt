@@ -263,7 +263,7 @@ export default function templatesRouter() {
           ...removed.map(p => `- ${path.relative(chartDir, p)}`),
         ],
         notices: withDesc(notices),
-        migrated: migratedDeployments.map(d => ({ deployment: d.deployment, path: d.path, readonly: d.readonly, rowsChanged: d.rowsChanged })),
+        migrated: migratedDeployments.map(d => ({ deployment: d.deployment, path: d.path, readonly: d.readonly, copiedFrom: d.copiedFrom, rowsChanged: d.rowsChanged })),
       })
     } catch (err) {
       res.status(500).json({ error: err.message })

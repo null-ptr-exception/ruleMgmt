@@ -130,6 +130,50 @@ rules:
     await request.delete(`/api/v2/deployments/${CHART}/prod`)
   })
 
+  test('a breaking change copies the source\'s new values to its sync target (#175)', async ({ page, request }) => {
+    const SRC = `${CHART}/src`
+    const TGT = `${CHART}/tgt`
+    const valuesUrl = folder => `/api/v2/deployments/${CHART}/${folder.split('/').pop()}?folder=${encodeURIComponent(folder)}`
+    const orphanWarn = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number}
+rules:
+  - alert: A
+    expr: cpu{ns="\${namespace}"} > 1
+`
+    await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': orphanWarn }, confirmBreaking: true } })
+    for (const folder of [SRC, TGT]) {
+      expect((await request.post('/api/v2/folders/init', { data: { folder, chart: CHART } })).status()).toBeLessThan(300)
+    }
+    expect((await request.post(valuesUrl(SRC), { data: { values: { cpu: [{ namespace: 'p', warn: 90 }] } } })).ok()).toBeTruthy()
+    expect((await request.post('/api/v2/sync', { data: { source: SRC, target: TGT } })).ok()).toBeTruthy()
+
+    try {
+      await openChart(page)
+      await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
+      await page.getByRole('button', { name: 'Save' }).first().click()
+
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      await expect(dialog.getByText('synced', { exact: true })).toBeVisible()
+      await dialog.getByRole('button', { name: 'Continue' }).click()
+      await dialog.getByRole('button', { name: 'Continue' }).click()
+      await expect(dialog.getByText(`copied from ${SRC}`)).toBeVisible({ timeout: 5000 })
+      await dialog.getByRole('button', { name: 'Change in place' }).click()
+
+      // The target ends up with the source's file, not its old column.
+      await expect.poll(async () => {
+        const [src, tgt] = await Promise.all([SRC, TGT].map(async f => (await (await request.get(valuesUrl(f))).json()).content || ''))
+        return { same: src === tgt, warn: tgt.includes('warn'), namespace: tgt.includes('namespace: p') }
+      }, { timeout: 8000 }).toEqual({ same: true, warn: false, namespace: true })
+    } finally {
+      await request.delete('/api/v2/sync', { data: { target: TGT } })
+      for (const folder of [SRC, TGT]) await request.delete(valuesUrl(folder))
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+    }
+  })
+
   test('a reference to a missing column is refused on save', async ({ page }) => {
     await openChart(page)
 

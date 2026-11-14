@@ -471,8 +471,8 @@ lists every affected deployment and walks through the change:
    lost
 
 **Change in place** then rewrites the chart and every affected deployment's
-values in one step. Deployments that follow another through sync are left for
-their source and follow it.
+values in one step. A deployment that follows another through sync gets its
+source's new file in the same step, so the two stay identical.
 
 Nothing is guessed: `warn_pct → warn_ratio` could be a rename or a delete plus
 an add, and only the person making the change knows which, so every mapping

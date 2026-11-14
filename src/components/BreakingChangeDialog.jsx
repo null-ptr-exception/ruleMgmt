@@ -79,12 +79,12 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
 
       <Text strong style={{ display: 'block', marginTop: 12 }}>
         Affects {deployments.length} deployment{deployments.length === 1 ? '' : 's'}
-        {readonlyCount > 0 && ` (${readonlyCount} follow a source automatically)`}
+        {readonlyCount > 0 && ` (${readonlyCount} synced from another deployment)`}
       </Text>
       <ul style={{ marginTop: 4 }}>
         {deployments.map(d => (
           <li key={d.path}>
-            {d.path}{d.readonly && <Tag color="default" style={{ marginLeft: 6 }}>follows automatically</Tag>}
+            {d.path}{d.readonly && <Tag color="default" style={{ marginLeft: 6 }}>synced</Tag>}
           </li>
         ))}
       </ul>
@@ -127,7 +127,7 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
       <Table
         size="small" pagination={false} rowKey="path" dataSource={preview.deployments || []}
         columns={[
-          { title: 'Deployment', dataIndex: 'path', render: (p, d) => <>{p}{d.readonly && <Tag style={{ marginLeft: 6 }}>follows automatically</Tag>}</> },
+          { title: 'Deployment', dataIndex: 'path', render: (p, d) => <>{p}{d.readonly && <Tag style={{ marginLeft: 6 }}>{d.copiedFrom ? `copied from ${d.copiedFrom}` : 'synced — migrated on its own'}</Tag>}</> },
           { title: 'Rows changed', dataIndex: 'rowsChanged', width: 110 },
           {
             title: 'Values lost', render: (_, d) => (d.losses || []).length

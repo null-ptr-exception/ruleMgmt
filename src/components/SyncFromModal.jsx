@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Modal, Select, Checkbox, Alert, message } from 'antd'
 import { listAllDeployments, getSyncRegistry, createSync } from '../utils/chartApi'
+import SyncProblems from './SyncProblems'
 
 function classifySource(registry, candidatePath) {
   const isTargetOfOther = registry.syncs.some(s => s.targets.includes(candidatePath))
@@ -16,11 +17,14 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
   const [selectedSource, setSelectedSource] = useState(null)
   const [acked, setAcked] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // A refused sync: the source has values a save would refuse (#180).
+  const [refusal, setRefusal] = useState(null)
 
   useEffect(() => {
     if (!open || !target) return
     setSelectedSource(null)
     setAcked(false)
+    setRefusal(null)
     ;(async () => {
       const [all, reg] = await Promise.all([listAllDeployments(), getSyncRegistry()])
       setCandidates(all.filter(d => d.path !== target.path))
@@ -47,9 +51,12 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
 
   async function handleConfirm() {
     setSubmitting(true)
+    setRefusal(null)
     const result = await createSync(selectedSource, target.path)
     setSubmitting(false)
-    if (result.ok) {
+    if (result.problems?.length) {
+      setRefusal(result)
+    } else if (result.ok) {
       message.success(`${target.name} now syncs from ${selectedSource}`)
       onSuccess?.()
       onClose()
@@ -72,7 +79,7 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
         style={{ width: '100%' }}
         placeholder="Follow source"
         value={selectedSource}
-        onChange={setSelectedSource}
+        onChange={v => { setSelectedSource(v); setRefusal(null) }}
         options={rows.map(r => ({
           value: r.path,
           label: r.status === 'disabled' ? `${r.path} (${r.reason})` : r.path,
@@ -99,6 +106,15 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
         <Checkbox style={{ marginTop: 12 }} checked={acked} onChange={e => setAcked(e.target.checked)}>
           I understand, overwrite {target?.name}
         </Checkbox>
+      )}
+
+      {refusal && (
+        <Alert
+          style={{ marginTop: 12 }}
+          type="error"
+          message={refusal.error}
+          description={<SyncProblems problems={refusal.problems} />}
+        />
       )}
     </Modal>
   )

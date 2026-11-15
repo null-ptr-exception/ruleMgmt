@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Modal, Checkbox, Tag, Input, List, message, Alert } from 'antd'
 import { listAllDeployments, getSyncRegistry, createSync } from '../utils/chartApi'
+import SyncProblems from './SyncProblems'
 import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
 
 const STATUS_COLOR = { 'green-locked': 'green', new: 'green', red: 'red', orange: 'orange', disabled: 'default' }
@@ -103,7 +104,7 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
     const outcomes = []
     for (const target of targets) {
       const result = await createSync(source.path, target)
-      outcomes.push({ target, ok: result.ok, error: result.error })
+      outcomes.push({ target, ok: result.ok, error: result.error, problems: result.problems })
     }
     setSubmitting(false)
     setResults(outcomes)
@@ -188,6 +189,8 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
           style={{ marginTop: 12 }}
           type={results.every(r => r.ok) ? 'success' : 'warning'}
           message={results.map(r => `${r.target}: ${r.ok ? 'OK' : r.error}`).join('; ')}
+          // Every target is refused for the same source, so its problems once.
+          description={<SyncProblems problems={results.find(r => r.problems?.length)?.problems} />}
         />
       )}
     </Modal>

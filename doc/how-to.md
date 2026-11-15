@@ -377,6 +377,21 @@ differences yet — you compare by eye.
 **Clone** in the deployment list. It copies the rows, so it is the quick way to
 stand up staging from production and change what differs.
 
+### Keep a deployment identical to another
+
+**Sync to...** on the source (or **Sync from...** on the target) makes the
+target a copy of the source: its `values.yaml` and its routing. From then on
+the target is read-only, and every save of the source's values or routing is
+copied to it.
+
+- A source with values a save would refuse — a required value left empty, a
+  value that cannot go in a label, a `values.yaml` that is not YAML — cannot
+  be synced. The dialog lists what to fix in the source first.
+- When a save cannot write a target (a permission error, or a `sync.yaml`
+  entry that is not a deployment on disk), the source is still saved and the
+  page names the target, which may not match the source. Fix the cause and
+  save the source again.
+
 ---
 
 ## Both

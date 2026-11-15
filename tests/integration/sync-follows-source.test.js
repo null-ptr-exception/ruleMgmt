@@ -1,7 +1,8 @@
 // A sync target is a copy of its source (#175): after every action that
 // writes the source, the target's files are the same bytes, and the target
-// renders the same alerts. The write paths are one table: values save,
-// routing save and a breaking change; a new path is checked by adding a row.
+// renders the same alerts. The write paths are one table — values save,
+// routing save and delete, a breaking change, POST /sync — and a new path is
+// checked by adding a row.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs/promises'
 import path from 'path'
@@ -59,6 +60,7 @@ const withThreshold = withWarn.replace(/warn/g, 'threshold')
 
 const SRC = 'deployments/team/src'
 const TGT = 'deployments/team/tgt'
+const OTHER = 'deployments/team/other'
 
 beforeEach(async () => {
   expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': withWarn } })).status).toBe(200)
@@ -77,6 +79,25 @@ const writePaths = [
   ['a breaking change with a mapping', () => api('POST', '/api/v2/templates/demo/rules', {
     files: { 'cpu.yaml': withThreshold }, confirmBreaking: true, migration: { columns: { cpu: { warn: 'threshold' } } },
   })],
+  ['deleting the routing', async () => {
+    const routing = await fs.readFile(path.resolve('tests/fixtures/routing/basic/routing.yaml'), 'utf-8')
+    expect((await api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing })).status).toBe(200)
+    return api('DELETE', `/api/v2/deployments/demo/src/routing${q(SRC)}`)
+  }],
+  ['syncing to a deployment that already has its own values', async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: OTHER, chart: 'demo' })).status).toBe(200)
+    expect((await api('POST', `/api/v2/deployments/demo/other${q(OTHER)}`, { values: { cpu: [{ namespace: 'o', warn: 1 }] } })).status).toBe(200)
+    return api('POST', '/api/v2/sync', { source: SRC, target: OTHER })
+  }, [SRC, OTHER]],
+  ['syncing the same pair again after the target was edited by hand', async () => {
+    await fs.writeFile(path.join(tmpDir, TGT, 'values.yaml'), 'demo:\n  cpu:\n    - namespace: hand\n')
+    return api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+  }],
+  ['moving the target to another source', async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: OTHER, chart: 'demo' })).status).toBe(200)
+    expect((await api('POST', `/api/v2/deployments/demo/other${q(OTHER)}`, { values: { cpu: [{ namespace: 'o', warn: 1 }] } })).status).toBe(200)
+    return api('POST', '/api/v2/sync', { source: OTHER, target: TGT })
+  }, [OTHER, TGT]],
 ]
 
 async function filesOf(dir) {
@@ -88,10 +109,10 @@ async function filesOf(dir) {
 }
 
 describe('a sync target stays a copy of its source', () => {
-  it.each(writePaths)('after %s', async (_, write) => {
+  it.each(writePaths)('after %s', async (_, write, [source, target] = [SRC, TGT]) => {
     const { status } = await write()
     expect(status).toBe(200)
-    expect(await filesOf(TGT)).toEqual(await filesOf(SRC))
+    expect(await filesOf(target)).toEqual(await filesOf(source))
   })
 
   it('a breaking change says the target was copied from its source', async () => {

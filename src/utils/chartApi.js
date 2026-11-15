@@ -300,7 +300,8 @@ export async function createSync(source, target) {
     body: JSON.stringify({ source, target })
   })
   const body = await res.json().catch(() => ({}))
-  if (!res.ok) return { ok: false, error: body.error || 'Sync failed' }
+  // A source a values save would refuse is refused here too, with its cells.
+  if (!res.ok) return { ok: false, error: body.error || 'Sync failed', problems: body.problems }
   return body
 }
 

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { removeChart } from './charts.js'
 
 // Coverage for things that only ever had backend/unit tests (see issue
 // #57's P7 pending list): landing on Common Values when a chart has a
@@ -47,7 +48,7 @@ rules:
 `
 
 async function createChart(request) {
-  await request.delete(`/api/v2/charts/${CHART}`)
+  await removeChart(request, CHART)
   let res = await request.post('/api/v2/charts', { data: { name: CHART } })
   expect(res.ok()).toBeTruthy()
   res = await request.post(`/api/v2/templates/${CHART}/rules`, {
@@ -100,7 +101,7 @@ test.describe('Preview summary — empty / no-alerts / orphan', () => {
   })
 
   test.afterAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('shows empty, no-alerts and orphan-field states, each distinct from a normal group', async ({ page }) => {
@@ -134,7 +135,7 @@ test.describe('Common Values landing (7-d)', () => {
   })
 
   test.afterAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('a new deployment lands on Common Values when a required common variable has no default', async ({ page }) => {
@@ -184,7 +185,7 @@ rules:
 `
 
   test.beforeAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${MCHART}`)
+    await removeChart(request, MCHART)
     let res = await request.post('/api/v2/charts', { data: { name: MCHART } })
     expect(res.ok()).toBeTruthy()
     res = await request.post(`/api/v2/templates/${MCHART}/rules`, { data: { files: { 'cpu.yaml': CPU } } })
@@ -198,7 +199,7 @@ rules:
   })
 
   test.afterAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${MCHART}`)
+    await removeChart(request, MCHART)
   })
 
   test('lists the critical band with a 0, and the total counts only what rendered', async ({ page }) => {

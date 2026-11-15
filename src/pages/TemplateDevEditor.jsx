@@ -512,7 +512,26 @@ export default function TemplateDevEditor() {
 
   async function handleDelete() {
     if (!activeChart || !confirm(`Delete chart "${activeChart}"?`)) return
-    await deleteChart(activeChart)
+    const res = await deleteChart(activeChart)
+    if (res?.failed) {
+      Modal.error({
+        title: 'Chart not deleted',
+        content: (
+          <div data-testid="chart-delete-refused">
+            <div>{res.error || 'The chart could not be deleted.'}</div>
+            {res.deployments?.length > 0 && (
+              <>
+                <ul style={{ margin: '8px 0', paddingLeft: 20 }}>
+                  {res.deployments.map(d => <li key={d.path}>{d.path}</li>)}
+                </ul>
+                <div>Delete these deployments first.</div>
+              </>
+            )}
+          </div>
+        ),
+      })
+      return
+    }
     setActiveChart(null)
     await loadCharts()
   }

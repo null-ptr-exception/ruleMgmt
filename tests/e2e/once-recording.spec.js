@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { removeChart } from './charts.js'
 
 // Once groups and recording rules (#70): the editor's once switch and
 // Alert / Record switch write the rules file, the Alerts page says a once
@@ -29,7 +30,7 @@ rules:
 `
 
 async function createChart(request, chart, files) {
-  await request.delete(`/api/v2/charts/${chart}`)
+  await removeChart(request, chart)
   expect((await request.post('/api/v2/charts', { data: { name: chart } })).ok()).toBeTruthy()
   expect((await request.post(`/api/v2/templates/${chart}/rules`, { data: { files } })).ok()).toBeTruthy()
 }
@@ -53,7 +54,7 @@ test.describe('Template editor', () => {
   const CHART = 'e2e-once-editor'
 
   test.beforeEach(async ({ request }) => { await createChart(request, CHART, { 'watchdog.yaml': WATCHDOG, 'cpu.yaml': CPU }) })
-  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
+  test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
 
   test('turning a group once replaces the columns section, and the save writes once: true', async ({ page, request }) => {
     await openGroup(page, CHART, 'watchdog')
@@ -109,7 +110,7 @@ test.describe('Alerts page and Preview', () => {
   })
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('lists the once group as needing no values, and Preview marks it and counts its recording rule apart', async ({ page }) => {

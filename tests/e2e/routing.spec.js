@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { removeChart } from './charts.js'
 
 // Routing page (#93): routing.yaml (#92) edited as a table — labels, the
 // configs a cell can notify, and the cells — saved through #92's endpoints
@@ -27,7 +28,7 @@ const unlink = request => request.delete('/api/v2/sync', { data: { target: OTHER
 
 test.beforeEach(async ({ request }) => {
   await unlink(request)
-  await request.delete(`/api/v2/charts/${CHART}`)
+  await removeChart(request, CHART)
   expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
   expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
   for (const folder of [FOLDER, OTHER]) {
@@ -40,7 +41,7 @@ test.beforeEach(async ({ request }) => {
 test.afterAll(async ({ request }) => {
   await unlink(request)
   for (const folder of [FOLDER, OTHER]) await request.delete(valuesUrl(folder))
-  await request.delete(`/api/v2/charts/${CHART}`)
+  await removeChart(request, CHART)
 })
 
 async function openRouting(page, folder = FOLDER) {

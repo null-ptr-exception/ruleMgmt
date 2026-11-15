@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
+import { removeChart } from './charts.js'
 
 // The safeguards around a chart's rules/ source that only had backend or unit
 // coverage (issue #57): a save that would overwrite someone else's change, a
@@ -23,7 +24,7 @@ rules:
 `
 
 async function createRulesChart(request, chart, files = { 'cpu.yaml': CPU_RULES }) {
-  await request.delete(`/api/v2/charts/${chart}`)
+  await removeChart(request, chart)
   let res = await request.post('/api/v2/charts', { data: { name: chart } })
   expect(res.ok()).toBeTruthy()
   res = await request.post(`/api/v2/templates/${chart}/rules`, { data: { files } })
@@ -48,7 +49,7 @@ test.describe('Save over a change made elsewhere', () => {
   const CHART = 'e2e-safeguard-conflict'
 
   test.beforeEach(async ({ request }) => { await createRulesChart(request, CHART) })
-  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
+  test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
 
   // Another tab, a terminal or a `git checkout` rewrote rules/ after this
   // editor loaded it — here, a second save through the API.
@@ -121,7 +122,7 @@ test.describe('Renaming a column', () => {
   const CHART = 'e2e-safeguard-rename'
 
   test.beforeEach(async ({ request }) => { await createRulesChart(request, CHART) })
-  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
+  test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
 
   // It used to rename on every keystroke, remounting the row: focus went
   // after the first character, and a half-typed name could overwrite
@@ -171,7 +172,7 @@ test.describe('A legacy chart migrates on its first save', () => {
   }
 
   test.beforeAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
     let res = await request.post('/api/v2/charts', { data: { name: CHART } })
     expect(res.ok()).toBeTruthy()
     // No endpoint writes a schema directly; an old chart is one whose
@@ -179,7 +180,7 @@ test.describe('A legacy chart migrates on its first save', () => {
     await fs.writeFile(path.join(CHARTS_DIR, CHART, 'values.schema.json'), JSON.stringify(LEGACY_SCHEMA, null, 2))
     expect((await chartInfo(request, CHART)).drift.state).toBe('legacy')
   })
-  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
+  test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
 
   test('opening it shows the banner, and Save writes rules/ with nothing else edited', async ({ page, request }) => {
     await openChart(page, CHART)
@@ -204,12 +205,12 @@ test.describe('New ▾ From existing chart…', () => {
   const COPY = 'e2e-safeguard-clone-copy'
 
   test.beforeAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${COPY}`)
+    await removeChart(request, COPY)
     await createRulesChart(request, SOURCE)
   })
   test.afterAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${SOURCE}`)
-    await request.delete(`/api/v2/charts/${COPY}`)
+    await removeChart(request, SOURCE)
+    await removeChart(request, COPY)
   })
 
   test('copies the rules into a new chart, opens it, and leaves the source alone', async ({ page, request }) => {
@@ -263,8 +264,8 @@ rules:
     expect((await chartInfo(request, STALE)).drift.state).toBe('stale')
   })
   test.afterAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${STALE}`)
-    await request.delete(`/api/v2/charts/${NOREF}`)
+    await removeChart(request, STALE)
+    await removeChart(request, NOREF)
   })
 
   test('the Git panel says which chart and why', async ({ page }) => {
@@ -320,7 +321,7 @@ test.describe('A required cell left empty', () => {
   })
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('is refused on Save, naming the row and column', async ({ page }) => {
@@ -396,12 +397,12 @@ test.describe('New → From rules…', () => {
     (await (await request.get(`/api/v2/templates/${chart}`)).json()).rulesFiles
 
   test.beforeEach(async ({ request }) => {
-    for (const c of [EXISTING, FRESH]) await request.delete(`/api/v2/charts/${c}`)
+    for (const c of [EXISTING, FRESH]) await removeChart(request, c)
     expect((await request.post('/api/v2/charts', { data: { name: EXISTING } })).ok()).toBeTruthy()
     expect((await request.post(`/api/v2/templates/${EXISTING}/rules`, { data: { files: { 'keep.yaml': EXISTING_RULES } } })).ok()).toBeTruthy()
   })
   test.afterAll(async ({ request }) => {
-    for (const c of [EXISTING, FRESH]) await request.delete(`/api/v2/charts/${c}`)
+    for (const c of [EXISTING, FRESH]) await removeChart(request, c)
   })
 
   async function importAs(page, name) {

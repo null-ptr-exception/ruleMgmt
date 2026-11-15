@@ -32,7 +32,9 @@ export async function deleteChart(name) {
   const res = await apiFetch(`${BASE}/charts/${encodeURIComponent(name)}`, {
     method: 'DELETE'
   })
-  if (!res.ok) return {}
+  // A refusal comes back as it is: a chart still in use is a 409 that lists
+  // the deployments (#177).
+  if (!res.ok) return { failed: true, ...(await res.json().catch(() => ({}))) }
   return res.json()
 }
 

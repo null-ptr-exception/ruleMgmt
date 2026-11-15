@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { removeChart } from './charts.js'
 
 // #91: Overview can show several deployments of one chart at once, each
 // read-only, in its own part of every group's card.
@@ -20,7 +21,7 @@ rules:
 const DISK = CPU.replace('group: cpu', 'group: disk').replace('CpuHigh', 'DiskFull').replaceAll('cpu_usage', 'disk_usage')
 
 async function createChart(request) {
-  await request.delete(`/api/v2/charts/${CHART}`)
+  await removeChart(request, CHART)
   expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
   expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU, 'disk.yaml': DISK } } })).ok()).toBeTruthy()
 }
@@ -74,7 +75,7 @@ test.describe('Overview with several deployments', () => {
     for (const name of [...Object.keys(DEPLOYMENTS), OTHER, 'mdel']) {
       await request.delete(`/api/v2/deployments/${CHART}/${name}?folder=${ROOT}/${name}`)
     }
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('shows one read-only part per deployment in each card, in the order checked', async ({ page }) => {

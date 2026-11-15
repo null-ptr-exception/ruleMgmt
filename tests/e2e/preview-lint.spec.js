@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { removeChart } from './charts.js'
 
 // #80: promtool exits 0 on a lint problem (duplicate rules, for one), so
 // Preview showed a green "passed" with a FAILED buried in its output. The
@@ -26,7 +27,7 @@ e2e-preview-lint-dev-mem-1-1: SUCCESS: 1 rules found`
 
 test.describe('Preview with a promtool lint warning', () => {
   test.beforeAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
     expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
     expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
     expect((await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: CHART } })).status()).toBeLessThan(300)
@@ -37,7 +38,7 @@ test.describe('Preview with a promtool lint warning', () => {
   })
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('is yellow, says "with warnings", and shows the problem first', async ({ page }) => {

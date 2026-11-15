@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { WORKSPACE } from './workspace.js'
+import { removeChart } from './charts.js'
 
 // #92 / #111: a deployment's routing.yaml, end to end with the real binaries
 // — the integration tests use a fake helm. Its AlertmanagerConfig is part of
@@ -34,7 +35,7 @@ const q = `folder=${encodeURIComponent(FOLDER)}`
 const DEPLOYMENT_DIR = path.join(WORKSPACE, FOLDER)
 
 test.beforeEach(async ({ request }) => {
-  await request.delete(`/api/v2/charts/${CHART}`)
+  await removeChart(request, CHART)
   expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
   expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
   expect((await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: CHART } })).status()).toBeLessThan(300)
@@ -45,7 +46,7 @@ test.beforeEach(async ({ request }) => {
 test.afterAll(async ({ request }) => {
   await request.delete(`/api/v2/deployments/${CHART}/prod/routing?${q}`)
   await request.delete(`/api/v2/deployments/${CHART}/prod?${q}`)
-  await request.delete(`/api/v2/charts/${CHART}`)
+  await removeChart(request, CHART)
 })
 
 async function openTree(page) {

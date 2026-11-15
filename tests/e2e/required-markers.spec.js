@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { hasBinary } from '../blind/harness.js'
+import { removeChart } from './charts.js'
 
 // #67: which cells must be filled is visible before Save — the save itself
 // is refused by the server (#66), the table only points at the cells. And
@@ -53,7 +54,7 @@ const saved = async request =>
 
 test.describe('required cells (#67)', () => {
   test.beforeEach(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
     expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
     const rules = await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { '_common.yaml': COMMON, 'cpu.yaml': CPU } } })
     expect(rules.ok()).toBeTruthy()
@@ -66,7 +67,7 @@ test.describe('required cells (#67)', () => {
   })
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${FOLDER}`)
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('a required column is marked, and its empty cell shows until it is filled', async ({ page }) => {

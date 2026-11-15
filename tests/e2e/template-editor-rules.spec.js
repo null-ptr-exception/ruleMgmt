@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import yaml from 'js-yaml'
+import { removeChart } from './charts.js'
 
 // The editor now loads a chart's rules/*.yaml (or adapts a schema-only chart),
 // and Save goes through the one atomic POST /:chart/rules. This drives that
@@ -20,7 +21,7 @@ rules:
 
 test.describe.serial('Template editor — rules source', () => {
   test.beforeAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
     let res = await request.post('/api/v2/charts', { data: { name: CHART } })
     expect(res.ok()).toBeTruthy()
     res = await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES } } })
@@ -28,7 +29,7 @@ test.describe.serial('Template editor — rules source', () => {
   })
 
   test.afterAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   async function openChart(page) {
@@ -174,6 +175,26 @@ rules:
     }
   })
 
+  test('deleting a chart a deployment still uses is refused, naming the deployment (#177)', async ({ page, request }) => {
+    const FOLDER = `${CHART}/in-use`
+    const valuesUrl = `/api/v2/deployments/${CHART}/in-use?folder=${encodeURIComponent(FOLDER)}`
+    expect((await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: CHART } })).status()).toBeLessThan(300)
+    try {
+      await openChart(page)
+      page.once('dialog', d => d.accept())
+      await page.getByRole('button', { name: 'delete Delete' }).click()
+
+      const refusal = page.getByTestId('chart-delete-refused')
+      await expect(refusal).toBeVisible({ timeout: 5000 })
+      await expect(refusal).toContainText(FOLDER)
+      // The chart is still there.
+      const charts = await (await request.get('/api/v2/charts')).json()
+      expect(charts.some(c => c.name === CHART)).toBe(true)
+    } finally {
+      await request.delete(valuesUrl)
+    }
+  })
+
   test('a reference to a missing column is refused on save', async ({ page }) => {
     await openChart(page)
 
@@ -195,14 +216,14 @@ test.describe('Set as variable', () => {
   const MARK = 'e2e-set-as-variable'
 
   test.beforeEach(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${MARK}`)
+    await removeChart(request, MARK)
     expect((await request.post('/api/v2/charts', { data: { name: MARK } })).ok()).toBeTruthy()
     const res = await request.post(`/api/v2/templates/${MARK}/rules`, {
       data: { files: { 'cpu.yaml': 'group: cpu\nrules:\n  - alert: CpuHigh\n    expr: cpu{ns="shop"} > 0.8\n' } },
     })
     expect(res.ok()).toBeTruthy()
   })
-  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${MARK}`) })
+  test.afterAll(async ({ request }) => { await removeChart(request, MARK) })
 
   test('stores the literal it replaced as the default', async ({ page, request }) => {
     await page.goto('/')

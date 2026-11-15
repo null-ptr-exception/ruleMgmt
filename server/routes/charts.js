@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
+import { findDeploymentsUsing } from '../lib/chartUsage.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -107,6 +108,15 @@ export default function chartsRouter() {
     }
     const chartDir = path.join(chartsDir, req.params.name)
     try {
+      // A deployment still bound to the chart would fail to render the moment
+      // it is gone (#177), so the delete is refused and names them.
+      const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.name, process.env.DEPLOYMENTS_DIR)
+      if (deployments.length) {
+        return res.status(409).json({
+          error: `${req.params.name} is still used by ${deployments.length} deployment${deployments.length === 1 ? '' : 's'}`,
+          deployments: deployments.map(d => ({ deployment: d.deployment, path: d.path })),
+        })
+      }
       await fs.rm(chartDir, { recursive: true, force: true })
       res.json({ ok: true })
     } catch (err) {

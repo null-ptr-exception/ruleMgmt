@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { hasBinary } from '../blind/harness.js'
+import { removeChart } from './charts.js'
 
 // Output profiles (#65): a group's type, interval and limit are set in the
 // editor's group settings row, a vlogs group becomes a VMRule, and Preview
@@ -34,7 +35,7 @@ rules:
 const PANICS_BROKEN = PANICS.replace('stats count() as n', 'stats count( as n')
 
 async function createChart(request, chart, files) {
-  await request.delete(`/api/v2/charts/${chart}`)
+  await removeChart(request, chart)
   expect((await request.post('/api/v2/charts', { data: { name: chart } })).ok()).toBeTruthy()
   expect((await request.post(`/api/v2/templates/${chart}/rules`, { data: { files } })).ok()).toBeTruthy()
 }
@@ -58,7 +59,7 @@ test.describe('Group settings', () => {
   const CHART = 'e2e-profiles-settings'
 
   test.beforeEach(async ({ request }) => { await createChart(request, CHART, { 'cpu.yaml': CPU }) })
-  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
+  test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
 
   test('switching the type to vlogs makes the group a VMRule, and the save says the objects are replaced', async ({ page, request }) => {
     await openGroup(page, CHART, 'cpu')
@@ -105,7 +106,7 @@ test.describe('Preview of a chart mixing output profiles', () => {
   })
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('checks the vlogs group too: no group is marked not syntax-checked', async ({ page }) => {
@@ -142,7 +143,7 @@ test.describe('Preview of a broken LogsQL rule (#76)', () => {
   })
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   test('is a failed vmalert check that names the rule', async ({ page }) => {

@@ -198,6 +198,15 @@ Only files the generator wrote are ever removed. Anything else in
 `templates/` is left alone — see
 [Files of your own in templates/](alert-rules.md#files-of-your-own-in-templates).
 
+### Delete a chart
+
+In the editor, pick the chart → **Delete**. A chart a deployment still uses is
+not deleted: the deployment would fail to render without it. The refusal lists
+those deployments — delete them, then delete the chart again.
+
+This covers the editor and its API. A chart removed by hand or through git is
+not checked.
+
 ---
 
 ## Rule owner

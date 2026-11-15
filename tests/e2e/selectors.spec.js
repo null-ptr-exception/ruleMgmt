@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { removeChart } from './charts.js'
 
 // Selector contract (#60): the template owner arranges the hierarchy in the
 // group settings row; the rule owner sees which row gives up what, adds an
@@ -21,7 +22,7 @@ rules:
 const CPU3 = CPU.replace('selectors: [namespace]', 'selectors: [namespace, workload, pod]')
 
 async function createChart(request, chart, files) {
-  await request.delete(`/api/v2/charts/${chart}`)
+  await removeChart(request, chart)
   expect((await request.post('/api/v2/charts', { data: { name: chart } })).ok()).toBeTruthy()
   expect((await request.post(`/api/v2/templates/${chart}/rules`, { data: { files } })).ok()).toBeTruthy()
 }
@@ -33,7 +34,7 @@ test.describe('Template editor', () => {
   const CHART = 'e2e-selectors-editor'
 
   test.beforeEach(async ({ request }) => { await createChart(request, CHART, { 'cpu.yaml': CPU }) })
-  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
+  test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
 
   test('a selector column used only through ${selector} is shown as used', async ({ page }) => {
     await page.goto('/')
@@ -72,7 +73,7 @@ rules:
       await expect(page.getByText('Used by CpuHigh')).toHaveCount(1, { timeout: 5000 })
       await expect(page.getByText('Not used by any rule')).toHaveCount(0)
     } finally {
-      await request.delete(`/api/v2/charts/${chart}`)
+      await removeChart(request, chart)
     }
   })
 
@@ -140,7 +141,7 @@ test.describe('Alerts page', () => {
   })
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   async function openCpu(page) {
@@ -245,7 +246,7 @@ rules:
   })
   test.afterAll(async ({ request }) => {
     await request.delete(`/api/v2/deployments/${CHART}/dev?folder=${encodeURIComponent(FOLDER)}`)
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
   })
 
   async function openReplicas(page) {
@@ -326,7 +327,7 @@ rules:
       await page.getByTestId('selector-labels-cluster').hover()
       await expect(page.getByTestId('selector-labels-list-cluster')).toContainText('TargetDown: k8s_cluster')
     } finally {
-      await request.delete(`/api/v2/charts/${chart}`)
+      await removeChart(request, chart)
     }
   })
 })

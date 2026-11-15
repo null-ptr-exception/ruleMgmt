@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { removeChart } from './charts.js'
 
 // The expr editor's colours and font (#72). They are read back from the page:
 // the dark palette was defined but never applied — the editor used
@@ -58,12 +59,12 @@ const colourOf = (page, text) => page.evaluate(t => {
 
 test.describe('expr editor highlighting', () => {
   test.beforeAll(async ({ request }) => {
-    await request.delete(`/api/v2/charts/${CHART}`)
+    await removeChart(request, CHART)
     expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
     const save = await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU, 'logs.yaml': LOGS, 'mem.yaml': MEM } } })
     expect(save.ok()).toBeTruthy()
   })
-  test.afterAll(async ({ request }) => { await request.delete(`/api/v2/charts/${CHART}`) })
+  test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
 
   test('PromQL tokens use the dark palette, in a monospace font from the list', async ({ page }) => {
     await openGroup(page, 'cpu')

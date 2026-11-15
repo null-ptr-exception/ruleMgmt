@@ -6,7 +6,8 @@ import fs from 'fs/promises'
 import path from 'path'
 
 const CHART = 'mariadb-alerts'
-// Under deployments/: Sync from... only offers sources found there.
+// Under deployments/, so its deployments sort among the first options of
+// Sync from...: the Select's dropdown only renders the options in view.
 const ROOT = 'deployments/e2e-sync-write'
 const SRC = `${ROOT}/src`
 const TGT = `${ROOT}/tgt`

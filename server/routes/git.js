@@ -55,7 +55,11 @@ async function chartCommitBlockers(gitopsDir) {
 
     const drift = await chartDrift(chartDir)
     if (blocksCommit(drift.state)) {
-      const detail = `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
+      // rules/ that cannot be read has nothing to regenerate from: say what
+      // is wrong with it, not that the products are behind (#172).
+      const detail = drift.errors?.length
+        ? `rules/ cannot be read (${drift.errors.slice(0, 3).join('; ')}${drift.errors.length > 3 ? `; and ${drift.errors.length - 3} more` : ''}) — fix it before committing`
+        : `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
       findings.push({ severity: 'commit', kind: `drift-${drift.state}`, chart: entry.name, description: `${entry.name}: ${detail}` })
     } else if (drift.state === 'legacy') {
       unconverted.push(entry.name)

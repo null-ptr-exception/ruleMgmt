@@ -39,6 +39,7 @@ import { normalizeRules, columnsInQuotedValues } from './templateGenerator.js'
 import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { SELECTOR_PATTERN } from './selectorContract.js'
+import { durationFault } from './duration.js'
 
 const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'selectorLabels', 'vars', 'columns', 'rules']
 const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
@@ -47,8 +48,27 @@ const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_fir
 const RECORD_KEYS = ['record', 'selectorLabels', 'expr', 'labels', 'note']
 const COLUMN_KEYS = ['type', 'required', 'default', 'enum', 'description']
 const RESERVED = new Set(['selector'])
-// A Prometheus duration: one or more <number><unit>, e.g. 30s, 1m, 1h30m.
-const DURATION_RE = /^(\d+(ms|s|m|h|d|w|y))+$/
+// What a column may hold (#172): JSON Schema's own names, the ones the table
+// has a cell for. Anything else — a typo — is not a type Helm knows, and it
+// refuses every deployment of the chart.
+export const COLUMN_TYPES = ['string', 'number', 'integer', 'boolean']
+
+/**
+ * Why a duration written in a rules file is refused, or null (#172). One
+ * format for both evaluators: vmalert reads more (30m1h, 1.5h, a bare 21),
+ * but everything Prometheus reads it reads the same way.
+ */
+export function ruleDurationProblem(key, value) {
+  const { reason } = durationFault(value)
+  if (reason === 'number') {
+    return value === 0
+      ? `${key} 0 is a number — a duration is text: write '0' or 0s`
+      : `${key} ${value} is a number — a duration is text with a unit, e.g. ${Number.isInteger(value) && value > 0 ? value : 30}s`
+  }
+  if (reason === 'format') return `${key} ${JSON.stringify(value)} is not a duration — units from the largest down, each once, e.g. 30s, 5m, 1h30m`
+  if (reason === 'too-long') return `${key} "${value}" is longer than a duration can be (about 292 years)`
+  return null
+}
 
 const DUMP = { lineWidth: -1, noRefs: true }
 
@@ -421,6 +441,14 @@ function parseColumns(columns, where, errors) {
     const clean = {}
     for (const k of COLUMN_KEYS) if (col?.[k] !== undefined) clean[k] = col[k]
     if (!clean.type) clean.type = 'string'
+    else if (!COLUMN_TYPES.includes(clean.type)) {
+      errors.push(`${where}.${name}: type ${JSON.stringify(clean.type)} is not a column type — one of ${COLUMN_TYPES.join(', ')}`)
+    }
+    // The description goes into values.schema.json as it is, where Helm
+    // accepts only text.
+    if (clean.description !== undefined && typeof clean.description !== 'string') {
+      errors.push(`${where}.${name}: description must be text, not ${JSON.stringify(clean.description)}`)
+    }
     out[name] = clean
   }
   return out
@@ -489,6 +517,19 @@ export function parseGroupFile(text, filename) {
     rejectUnknown(rule, RULE_KEYS, where, errors)
     checkRuleKind(rule, where, errors)
     checkSelectorLabelsShape(rule.selectorLabels, where, errors)
+    // A duration written out is checked here; one read from a column
+    // (`${window}`) is the row's, and Preview's (#117).
+    if (rule.raw === undefined && rule.record === undefined) {
+      for (const key of ['for', 'keep_firing_for']) {
+        const value = rule[key]
+        // Not written, or written empty or as a bare 0, is no `for` at all,
+        // as it has always been read.
+        if (value === undefined || value === null || value === '' || value === 0) continue
+        if (typeof value === 'string' && value.includes('${')) continue
+        const why = ruleDurationProblem(key, value)
+        if (why) errors.push(`${where}: ${why}`)
+      }
+    }
     return [canonicalRule(rule)]
   })
   if (!Array.isArray(doc.rules)) errors.push(`${filename}.yaml: rules is required and must be a list`)
@@ -500,8 +541,9 @@ export function parseGroupFile(text, filename) {
   if (doc.type !== undefined && !profileNames().includes(doc.type)) {
     errors.push(`${filename}.yaml: type "${doc.type}" is not an output profile — one of ${profileNames().join(', ')}`)
   }
-  if (doc.interval !== undefined && !(typeof doc.interval === 'string' && DURATION_RE.test(doc.interval))) {
-    errors.push(`${filename}.yaml: interval "${doc.interval}" is not a duration (e.g. 30s, 1m, 1h30m)`)
+  if (doc.interval !== undefined) {
+    const why = ruleDurationProblem('interval', doc.interval)
+    if (why) errors.push(`${filename}.yaml: ${why}`)
   }
   if (doc.limit !== undefined && !(Number.isInteger(doc.limit) && doc.limit >= 0)) {
     errors.push(`${filename}.yaml: limit "${doc.limit}" must be a whole number, 0 or more`)

@@ -1,0 +1,21 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# A key "<kind> <name>" is an object of that kind; a bare name is a PrometheusRule.
+blind-zero-1-1:
+  - name: zero
+    interval: "0"
+    rules:
+      - alert: DiskGone
+        expr: disk_free_bytes{device="sda"} == 0
+        for: "0"
+        keep_firing_for: "0"
+        labels: { severity: critical }
+VMRule blind-zero-logs-1-1:
+  - name: zero-logs
+    type: vlogs
+    interval: "0"
+    rules:
+      - alert: LogErrors
+        expr: '_time:5m service:"checkout" level:error | stats count() as errors | filter errors:>0'
+        for: "0"
+        keep_firing_for: "0"
+        labels: { severity: warning }

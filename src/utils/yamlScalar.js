@@ -16,3 +16,12 @@ export function needsQuote(value) {
   const v = String(value)
   return v === '' || /[^A-Za-z0-9_.-]/.test(v) || readsAsNonString(v)
 }
+
+/**
+ * A duration as generated YAML has it: bare, as a hand-written rule does
+ * (`for: 5m`), except one that is only digits — `0` — which YAML would read
+ * as a number where the resource's field is text (#172).
+ */
+export function durationScalar(value) {
+  return /^[0-9]+$/.test(String(value)) ? `'${value}'` : value
+}

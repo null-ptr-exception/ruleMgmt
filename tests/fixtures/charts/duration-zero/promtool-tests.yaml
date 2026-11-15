@@ -1,0 +1,14 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'disk_free_bytes{device="sda"}'
+        values: '0x5'
+    alert_rule_test:
+      # `for: '0'`: firing on the first evaluation
+      - eval_time: 0m
+        alertname: DiskGone
+        exp_alerts:
+          - exp_labels: { severity: critical, device: sda }

@@ -1,0 +1,12 @@
+# A lone zero is a duration too, and the resource's fields are text: written
+# bare, YAML would read `0` as a number (#172).
+interval: '0'
+columns:
+  device: { type: string, required: true }
+
+rules:
+  - alert: DiskGone
+    expr: disk_free_bytes{device="${device}"} == 0
+    for: '0'
+    keep_firing_for: '0'
+    labels: { severity: critical }

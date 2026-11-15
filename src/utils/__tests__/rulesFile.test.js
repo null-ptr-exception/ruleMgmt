@@ -277,12 +277,98 @@ rules:
   })
 
   it('refuses an interval that is not a duration, and a limit that is not a whole number', () => {
-    for (const bad of ['interval: 30', 'interval: 1 m', 'interval: soon']) {
+    for (const bad of ['interval: 1 m', 'interval: soon']) {
       expect(parseGroupFile(withFields(bad), 'cpu').errors.join(), bad).toMatch(/is not a duration/)
     }
+    expect(parseGroupFile(withFields('interval: 30'), 'cpu').errors.join()).toMatch(/interval 30 is a number .* e\.g\. 30s/)
     for (const bad of ['limit: -1', 'limit: 1.5', 'limit: ten']) {
       expect(parseGroupFile(withFields(bad), 'cpu').errors.join(), bad).toMatch(/must be a whole number/)
     }
+  })
+
+  // #172: one duration format for both evaluators — what Prometheus and the
+  // operators' CRDs read. vmalert alone would take 30m1h or a bare 21.
+  describe('durations', () => {
+    const rule = extra => `group: cpu\nrules:\n  - alert: A\n    expr: up == 0\n${extra}`
+    const errorsOf = text => parseGroupFile(text, 'cpu').errors
+
+    it.each(['prometheus', 'vlogs'])('refuses an interval %s could not load, for either kind of group', type => {
+      for (const bad of ['30m1h', '1h1h', '30s5m', '293y', '1.5h', '1H', "''"]) {
+        expect(errorsOf(withFields(`type: ${type}\ninterval: ${bad}`)).join(), bad).toMatch(/interval .* (is not a duration|is longer than)/)
+      }
+    })
+
+    it('reads an interval written largest unit first, and a quoted zero', () => {
+      for (const ok of ['1h30m', '0s', "'0'", '1d12h', '292y', '500ms']) {
+        expect(errorsOf(withFields(`interval: ${ok}`)), ok).toEqual([])
+      }
+    })
+
+    it('suggests a unit only for a number that would be a duration with one', () => {
+      expect(errorsOf(withFields('interval: 45')).join()).toMatch(/interval 45 is a number .* e\.g\. 45s/)
+      expect(errorsOf(withFields('interval: 0.5')).join()).toMatch(/interval 0\.5 is a number .* e\.g\. 30s/)
+      expect(errorsOf(withFields('interval: -1')).join()).toMatch(/interval -1 is a number .* e\.g\. 30s/)
+    })
+
+    it('says how to write a zero interval that YAML read as a number', () => {
+      expect(errorsOf(withFields('interval: 0')).join()).toMatch(/interval 0 is a number .* write '0' or 0s/)
+    })
+
+    it('refuses a for and a keep_firing_for written out wrong, naming the rule', () => {
+      for (const key of ['for', 'keep_firing_for']) {
+        for (const bad of ['30m1h', '21', '1h1h', '-5m', '293y', '1.5h', "'5 m'"]) {
+          const errors = errorsOf(rule(`    ${key}: ${bad}\n`))
+          expect(errors.join(), `${key}: ${bad}`).toMatch(new RegExp(`cpu\\.yaml rules\\[0\\]: ${key} `))
+        }
+      }
+    })
+
+    it('leaves a duration read from a column to the row', () => {
+      expect(errorsOf(rule('    for: ${window}\n'))).toEqual([])
+      expect(errorsOf(rule('    for: ${n}m\n'))).toEqual([])
+    })
+
+    it('reads no for, an empty one and a bare 0 as no for at all', () => {
+      for (const none of ['', '    for:\n', "    for: ''\n", '    for: 0\n']) {
+        const { group, errors } = parseGroupFile(rule(none), 'cpu')
+        expect(errors, JSON.stringify(none)).toEqual([])
+        expect(group.rules[0].for || undefined, JSON.stringify(none)).toBeUndefined()
+      }
+    })
+
+    it('keeps a quoted zero as a duration', () => {
+      const { group, errors } = parseGroupFile(rule("    for: '0'\n    keep_firing_for: '0'\n"), 'cpu')
+      expect(errors).toEqual([])
+      expect(group.rules[0]).toMatchObject({ for: '0', keep_firing_for: '0' })
+    })
+  })
+
+  // #172: a column type Helm does not know fails every deployment's render.
+  describe('column types', () => {
+    const col = body => `group: cpu\ncolumns:\n  c: ${body}\nrules:\n  - alert: A\n    expr: up == 0\n`
+
+    it('refuses a type that is not one the table has a cell for', () => {
+      for (const bad of ['strng', 'String', 'duration', 'array', 'object', '1']) {
+        expect(parseGroupFile(col(`{type: ${bad}}`), 'cpu').errors.join(), bad)
+          .toMatch(/cpu\.yaml columns\.c: type .* is not a column type — one of string, number, integer, boolean/)
+      }
+    })
+
+    it('reads the four types, and no type as string', () => {
+      for (const ok of ['{type: string}', '{type: number}', '{type: integer}', '{type: boolean}', '{}']) {
+        expect(parseGroupFile(col(ok), 'cpu').errors, ok).toEqual([])
+      }
+    })
+
+    it('refuses a description that is not text', () => {
+      expect(parseGroupFile(col('{type: string, description: 5}'), 'cpu').errors.join())
+        .toMatch(/columns\.c: description must be text/)
+    })
+
+    it('checks _common.yaml the same way', () => {
+      const { errors } = parseRulesDir({ '_common.yaml': 'columns:\n  cluster: {type: strng}\n', 'cpu.yaml': col('{type: string}') })
+      expect(errors.join()).toMatch(/cluster: type "strng" is not a column type/)
+    })
   })
 
   it('writes type, interval and limit back, right under group:', () => {

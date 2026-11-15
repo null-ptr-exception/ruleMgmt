@@ -364,7 +364,8 @@ export default function TemplateDevEditor() {
   // ── save ──────────────────────────────────────────────────────────────────
   // The banner for a legacy or stale chart says Save fixes it, so Save has to
   // be available before anything has been edited.
-  const needsSave = drift?.state === 'legacy' || drift?.state === 'stale'
+  // rules/ that cannot be read has nothing a save would regenerate.
+  const needsSave = (drift?.state === 'legacy' || drift?.state === 'stale') && !drift?.errors?.length
 
   function buildFiles() {
     const files = {}
@@ -697,7 +698,8 @@ export default function TemplateDevEditor() {
         )}
       </div>
 
-      {activeChart && drift && (drift.state === 'legacy' || drift.state === 'stale') && (
+      {/* rules/ that cannot be read is listed below; saving regenerates nothing. */}
+      {activeChart && drift && (drift.state === 'legacy' || drift.state === 'stale') && !drift.errors?.length && (
         <Alert
           type="warning" banner showIcon
           message={drift.state === 'legacy'

@@ -21,6 +21,8 @@ rules:
 
 test.describe.serial('Template editor — rules source', () => {
   test.beforeAll(async ({ request }) => {
+    // A deployment left by an interrupted run would turn edits into breaking ones.
+    await request.delete(`/api/v2/deployments/${CHART}/prod`)
     await removeChart(request, CHART)
     let res = await request.post('/api/v2/charts', { data: { name: CHART } })
     expect(res.ok()).toBeTruthy()
@@ -129,6 +131,73 @@ rules:
     // reset the fixture for the tests after this one
     await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
     await request.delete(`/api/v2/deployments/${CHART}/prod`)
+  })
+
+  // #185: "Save anyway" answers "the files changed on disk", not "this breaks
+  // deployments" — the breaking dialog still has to come up.
+  test('Save anyway over files changed on disk still asks about a breaking change', async ({ page, request }) => {
+    const orphanWarn = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number}
+rules:
+  - alert: A
+    expr: cpu{ns="\${namespace}"} > 1
+`
+    expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': orphanWarn }, confirmBreaking: true } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p', warn: 90 }] } } })).ok()).toBeTruthy()
+    const deployment = async () => (await (await request.get(`/api/v2/deployments/${CHART}/prod`)).json()).content || ''
+    try {
+      await openChart(page)
+      // Someone else touches the file (a comment: nothing breaking).
+      expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': '# touched\n' + orphanWarn } } })).ok()).toBeTruthy()
+
+      await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
+      await page.getByRole('button', { name: 'Save' }).first().click()
+      const changed = page.locator('.ant-modal').filter({ hasText: 'changed on disk' })
+      await expect(changed).toBeVisible({ timeout: 5000 })
+      await changed.getByRole('button', { name: 'Save anyway' }).click()
+
+      // The breaking dialog comes up, and nothing is written until it is answered.
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      const onDisk = (await (await request.get(`/api/v2/templates/${CHART}`)).json()).rulesFiles['cpu.yaml']
+      expect(onDisk).toContain('warn:')
+
+      await dialog.getByRole('button', { name: 'Continue' }).click()
+      await dialog.getByRole('button', { name: 'Continue' }).click()
+      await dialog.getByRole('button', { name: 'Change in place' }).click()
+      // Answered: the deployment is rewritten with the chart.
+      await expect.poll(deployment, { timeout: 8000 }).not.toContain('warn')
+      expect(await deployment()).toContain('namespace: p')
+      expect((await (await request.get(`/api/v2/templates/${CHART}`)).json()).rulesFiles['cpu.yaml']).not.toContain('warn:')
+    } finally {
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+      await request.delete(`/api/v2/deployments/${CHART}/prod`)
+    }
+  })
+
+  test('Save anyway over files changed on disk saves a change that breaks nothing', async ({ page, request }) => {
+    // A deployment uses the chart, so a breaking change would be asked about;
+    // changing `for` is not one.
+    expect((await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p' }] } } })).ok()).toBeTruthy()
+    try {
+      await openChart(page)
+      expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': '# touched\n' + CPU_RULES } } })).ok()).toBeTruthy()
+
+      await page.getByPlaceholder('5m').first().fill('10m')
+      await page.getByRole('button', { name: 'Save' }).first().click()
+      const changed = page.locator('.ant-modal').filter({ hasText: 'changed on disk' })
+      await expect(changed).toBeVisible({ timeout: 5000 })
+      await changed.getByRole('button', { name: 'Save anyway' }).click()
+
+      await expect.poll(async () => (await (await request.get(`/api/v2/templates/${CHART}`)).json()).rulesFiles['cpu.yaml'], { timeout: 8000 })
+        .toContain('for: 10m')
+      await expect(page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })).toHaveCount(0)
+    } finally {
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+      await request.delete(`/api/v2/deployments/${CHART}/prod`)
+    }
   })
 
   test('a breaking change copies the source\'s new values to its sync target (#175)', async ({ page, request }) => {

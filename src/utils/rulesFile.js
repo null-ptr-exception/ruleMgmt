@@ -40,6 +40,7 @@ import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { SELECTOR_PATTERN } from './selectorContract.js'
 import { durationFault } from './duration.js'
+import { varsIn } from './ruleModel.js'
 
 const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'selectorLabels', 'vars', 'columns', 'rules']
 const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
@@ -440,7 +441,9 @@ function parseColumns(columns, where, errors) {
     rejectUnknown(col, COLUMN_KEYS, `${where}.${name}`, errors)
     const clean = {}
     for (const k of COLUMN_KEYS) if (col?.[k] !== undefined) clean[k] = col[k]
-    if (!clean.type) clean.type = 'string'
+    // No type, or `type:` with nothing after it, is a string column. One
+    // that is written has to be a type, whatever it is: `type: false` too.
+    if (clean.type === undefined || clean.type === null) clean.type = 'string'
     else if (!COLUMN_TYPES.includes(clean.type)) {
       errors.push(`${where}.${name}: type ${JSON.stringify(clean.type)} is not a column type — one of ${COLUMN_TYPES.join(', ')}`)
     }
@@ -525,7 +528,7 @@ export function parseGroupFile(text, filename) {
         // Not written, or written empty or as a bare 0, is no `for` at all,
         // as it has always been read.
         if (value === undefined || value === null || value === '' || value === 0) continue
-        if (typeof value === 'string' && value.includes('${')) continue
+        if (typeof value === 'string' && varsIn(value).length) continue
         const why = ruleDurationProblem(key, value)
         if (why) errors.push(`${where}: ${why}`)
       }

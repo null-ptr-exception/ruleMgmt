@@ -328,6 +328,10 @@ rules:
       expect(errorsOf(rule('    for: ${n}m\n'))).toEqual([])
     })
 
+    it('checks a value that only looks like it has a placeholder', () => {
+      expect(errorsOf(rule("    for: '30m${'\n")).join()).toMatch(/for .* is not a duration/)
+    })
+
     it('reads no for, an empty one and a bare 0 as no for at all', () => {
       for (const none of ['', '    for:\n', "    for: ''\n", '    for: 0\n']) {
         const { group, errors } = parseGroupFile(rule(none), 'cpu')
@@ -358,6 +362,14 @@ rules:
       for (const ok of ['{type: string}', '{type: number}', '{type: integer}', '{type: boolean}', '{}']) {
         expect(parseGroupFile(col(ok), 'cpu').errors, ok).toEqual([])
       }
+    })
+
+    it('refuses a type written as something that is not a type at all', () => {
+      for (const bad of ['false', '0', "''"]) {
+        expect(parseGroupFile(col(`{type: ${bad}}`), 'cpu').errors.join(), bad).toMatch(/is not a column type/)
+      }
+      // `type:` with nothing after it is no type: a string column.
+      expect(parseGroupFile('group: cpu\ncolumns:\n  c:\n    type:\nrules:\n  - alert: A\n    expr: up == 0\n', 'cpu').errors).toEqual([])
     })
 
     it('refuses a description that is not text', () => {

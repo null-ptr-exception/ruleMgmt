@@ -457,6 +457,20 @@ Commit that on its own, with nothing else in it. The rendered rules are the
 same; review it with `dyff` rather than a text diff. See
 [alert-rules.md](alert-rules.md#when-an-upgrade-changes-the-output-format).
 
+A release can also refuse a value it used to accept — a rules file with
+`interval: 30m1h`, or a column with `type: strng`
+([durations](rules-format.md#durations)). Such a chart cannot be regenerated
+until the file is corrected, and commits are refused meanwhile, naming the
+file and the value. Find them before upgrading, with the new release's script:
+
+```bash
+for c in charts/*/; do [ -d "$c/rules" ] && node scripts/gen-rules.mjs "$c" --check; done
+```
+
+A chart still in the old schema-only format is checked when it is converted:
+a column of a type other than `string`, `number`, `integer` or `boolean`
+stops the conversion until the schema is corrected.
+
 ### Import rules into a chart
 
 ```bash

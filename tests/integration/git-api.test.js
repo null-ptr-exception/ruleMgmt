@@ -264,6 +264,21 @@ describe('Git API', () => {
     await fs.rm(path.join(tmpDir, 'charts'), { recursive: true, force: true })
   })
 
+  it('POST /commit says what is wrong with a rules file it cannot read (#172)', async () => {
+    const chartDir = path.join(tmpDir, 'charts', 'unreadable')
+    await fs.mkdir(path.join(chartDir, 'rules'), { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'group: cpu\ninterval: 30m1h\nrules:\n  - alert: A\n    expr: up == 0\n')
+
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'commit unreadable rules' })
+    expect(status).toBe(409)
+    const finding = data.findings.find(f => f.chart === 'unreadable')
+    // Which file and which value — not "regenerate", which cannot help.
+    expect(finding.description).toMatch(/cpu\.yaml: interval "30m1h" is not a duration/)
+    expect(finding.description).not.toMatch(/regenerate/)
+
+    await fs.rm(path.join(tmpDir, 'charts', 'unreadable'), { recursive: true, force: true })
+  })
+
   it('POST /commit is refused when a chart\'s products are stale', async () => {
     const { generateProducts } = await import('../../src/utils/drift.js')
     const { parseRulesDir } = await import('../../src/utils/rulesFile.js')

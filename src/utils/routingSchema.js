@@ -18,6 +18,7 @@
  */
 
 import { z } from 'zod'
+import { durationFault, DURATION_PATTERN } from './duration.js'
 
 export const DROP_RECEIVER = '_drop'
 export const TIMING_KEYS = ['groupWait', 'groupInterval', 'repeatInterval']
@@ -25,38 +26,17 @@ export const CONFIG_TYPES = ['email', 'webhook']
 
 const LABEL_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 const CONFIG_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
-// Alertmanager's own duration format (the operator parses it the same way):
-// units from the largest down, each at most once — 1h30m, not 30m1h or 1h1h —
-// or a bare 0. One it cannot read fails the whole AlertmanagerConfig.
-const DURATION_RE = /^(0|(?=\d)(\d+y)?(\d+w)?(\d+d)?(\d+h)?(\d+m)?(\d+s)?(\d+ms)?)$/
-// The same, for routing.schema.json: what editors can check from a pattern
-// alone (no order-free lookahead needed; the length limit and zero rule are
-// the save's).
-const DURATION_PATTERN = '^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$'
-
-const NS = { y: 31536000n * 10n ** 9n, w: 604800n * 10n ** 9n, d: 86400n * 10n ** 9n, h: 3600n * 10n ** 9n, m: 60n * 10n ** 9n, s: 10n ** 9n, ms: 10n ** 6n }
-// Alertmanager holds a duration in an int64 of nanoseconds: about 292 years.
-const MAX_NS = 2n ** 63n - 1n
-
-/** A duration in nanoseconds — 30s, 5m, 1h30m — or null when it is not one. */
-function durationNs(text) {
-  if (typeof text !== 'string' || !DURATION_RE.test(text)) return null
-  let ns = 0n
-  for (const [, n, unit] of text.matchAll(/(\d+)(ms|y|w|d|h|m|s)/g)) ns += BigInt(n) * NS[unit]
-  return ns
-}
-
 // Alertmanager refuses these at zero; a zero groupWait sends at once.
 const NONZERO_TIMING = new Set(['groupInterval', 'repeatInterval'])
 
 /** Why a timing key's value is refused, or null — the page marks what the save refuses. */
 export function timingProblem(key, value) {
+  const { reason, zero } = durationFault(value)
   // YAML reads a bare 0 or 30 as a number; the resource's field is text.
-  if (typeof value === 'number') return `${key} must be text: quote it, e.g. '0' or '30s'`
-  const ns = durationNs(value)
-  if (ns === null) return `${key} must be a duration such as 30s, 5m or 4h`
-  if (ns > MAX_NS) return `${key} is longer than Alertmanager allows (about 292 years)`
-  if (ns === 0n && NONZERO_TIMING.has(key)) return `${key} cannot be zero`
+  if (reason === 'number') return `${key} must be text: quote it, e.g. '0' or '30s'`
+  if (reason === 'format') return `${key} must be a duration such as 30s, 5m or 4h`
+  if (reason === 'too-long') return `${key} is longer than Alertmanager allows (about 292 years)`
+  if (zero && NONZERO_TIMING.has(key)) return `${key} cannot be zero`
   return null
 }
 // Text with something besides spaces in it.

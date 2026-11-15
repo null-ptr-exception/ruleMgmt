@@ -112,6 +112,16 @@ if (findings.some(f => f.severity === 'save')) {
 
 // Only a migration writes rules files; an existing rules/ is left as it is.
 const files = migrating ? modelToFiles(model) : {}
+// What a migration writes has to read back: a value the old format let
+// through (a duration, a column type) is refused here, not on the next run.
+if (migrating) {
+  const written = parseRulesDir(files)
+  if (written.errors.length) {
+    for (const e of written.errors) console.log(`ERROR  ${e}`)
+    console.log('\nRefusing to write: the converted rules would not be read back.')
+    process.exit(1)
+  }
+}
 const objectMeta = objectMetaFromEnv()
 for (const w of objectMeta.warnings) console.log(`note   ${w}`)
 if (objectMeta.errors.length) {

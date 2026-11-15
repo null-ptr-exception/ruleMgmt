@@ -80,7 +80,7 @@ the query lives in `vars` so there is only ever one copy of it.
 | `group` | no | Must equal the filename if present |
 | `once` | no | `true`: the rules render **once per deployment** instead of once per row — see [once groups](#once-groups). A once group has no `columns` |
 | `type` | no | Which kind of rules these are, and so what they are wrapped in: `prometheus` (the default — `expr` is PromQL, emitted as a `PrometheusRule`) or `vlogs` (`expr` is LogsQL, evaluated against VictoriaLogs, emitted as a `VMRule`). The choices are the profiles in `config/outputs.json` — see [output profiles](#output-profiles) |
-| `interval` | no | How often the group is evaluated — a duration such as `30s`, `1m`, `1h30m`. Left out, the evaluator's own default applies |
+| `interval` | no | How often the group is evaluated — a [duration](#durations) such as `30s`, `1m`, `1h30m`. Left out, the evaluator's own default applies |
 | `limit` | no | Maximum series the group may produce — a whole number, `0` or more. Left out, there is no limit |
 | `selectors` | no | The selector columns, coarsest first — see [selectors](#selectors-a-default-with-exceptions) |
 | `selectorLabels` | no | Selector column → the label it matches, when the two names differ — see [matching a label of another name](#matching-a-label-of-another-name) |
@@ -104,11 +104,11 @@ Different groups in one chart may have different types.
 
 | Field | Meaning |
 |---|---|
-| `type` | `string` or `number` — decides the field the rule owner gets, and what Helm accepts |
+| `type` | `string`, `number`, `integer` or `boolean` — decides the field the rule owner gets, and what Helm accepts. Left out, it is `string`; anything else is refused |
 | `required` | Helm refuses values that leave it out |
 | `default` | Used when a row leaves the cell empty. See [empty cells](#empty-cells) |
 | `enum` | A fixed set of choices — the rule owner gets a dropdown instead of a free text field |
-| `description` | Shown to the person filling the table in |
+| `description` | Text, shown to the person filling the table in |
 
 ### `rules`
 
@@ -117,8 +117,8 @@ Different groups in one chart may have different types.
 | `alert` | The alert name. Written by you; the generator never composes one |
 | `record` | Instead of `alert`: the name of the series a recording rule records, e.g. `job:errors:rate5m`. A rule has exactly one of the two |
 | `expr` | PromQL, with `${…}` placeholders |
-| `for` | A duration, or a placeholder. Left out, there is none: the alert fires on the first evaluation, as in Prometheus |
-| `keep_firing_for` | Passed through |
+| `for` | A [duration](#durations), or a placeholder. Left out — or empty, or a bare `0` — there is none: the alert fires on the first evaluation, as in Prometheus |
+| `keep_firing_for` | A [duration](#durations), or a placeholder |
 | `labels` | A map. Values may be literal, a placeholder, or a Prometheus template |
 | `annotations` | Same as labels |
 | `raw` | A hand-written `rules[]` entry — see [the escape hatch](#the-escape-hatch) |
@@ -131,6 +131,21 @@ goes through `raw`.
 A recording rule (`record`) has only `record`, `expr`, `labels`, `selectorLabels` and `note` —
 Prometheus gives it no `for`, `keep_firing_for` or annotations, and each of
 those is rejected on one.
+
+### Durations
+
+`interval`, `for` and `keep_firing_for` are written the way Prometheus and
+the operators' resources read a duration: units from the largest down, each at
+most once — `30s`, `5m`, `1h30m`, `1d12h` — and no longer than about 292
+years. `30m1h`, `1h1h`, `1.5h` and a bare number such as `30` are refused when
+the file is saved, for either kind of group: vmalert alone would read some of
+them, Prometheus none.
+
+A zero is `0s`, or a quoted `'0'`. Written bare, YAML reads `0` as a number:
+an `interval: 0` is refused, and a `for: 0` is read as no `for`.
+
+A value with a placeholder in it (`for: ${window}`) is the row's and is not
+checked here; nor is anything inside a `raw` entry.
 
 ### Once groups
 

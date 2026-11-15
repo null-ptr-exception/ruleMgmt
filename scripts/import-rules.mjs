@@ -120,21 +120,29 @@ for (const group of result.groups) {
 const problems = checkRules(genSchema(model, schema)).filter(f => f.severity === 'save')
 for (const p of problems) console.log(`ERROR  ${p.group ? `${p.group}: ` : ''}${p.message}`)
 
-if (dryRun) {
-  console.log('\nDry run — nothing written.')
-  process.exit(problems.length ? 1 : 0)
-}
-
-if (problems.length) {
-  console.error('\nRefusing to write: the chart would not pass the checks a save makes.')
-  process.exit(1)
-}
-
 // A migration writes every rules file; otherwise only the imported groups'
 // files, so the rest keep whatever comments and formatting they had.
 const rulesOut = migrating
   ? modelToFiles(model)
   : Object.fromEntries(result.groups.map(g => [`${g.key}.yaml`, groupFileText({ ...model.groups[g.key], group: g.key })]))
+// What is written has to read back: an imported value the rules format
+// refuses (a duration, a column type) stops here, not on the next run.
+const readBack = parseRulesDir({ ...onDisk, ...rulesOut })
+for (const e of readBack.errors) console.log(`ERROR  ${e}`)
+
+// A dry run reports everything a real run would stop on.
+if (dryRun) {
+  console.log('\nDry run — nothing written.')
+  process.exit(problems.length || readBack.errors.length ? 1 : 0)
+}
+if (problems.length) {
+  console.error('\nRefusing to write: the chart would not pass the checks a save makes.')
+  process.exit(1)
+}
+if (readBack.errors.length) {
+  console.error('\nRefusing to write: the chart\'s rules would not be read back.')
+  process.exit(1)
+}
 const products = generateProducts(model, schema, objectMeta)
 
 const entries = [

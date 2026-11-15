@@ -1,0 +1,12 @@
+# The same for a VMRule: its interval, for and keep_firing_for are text too.
+type: vlogs
+interval: '0'
+columns:
+  service: { type: string, required: true }
+
+rules:
+  - alert: LogErrors
+    expr: '_time:5m service:"${service}" level:error | stats count() as errors | filter errors:>0'
+    for: '0'
+    keep_firing_for: '0'
+    labels: { severity: warning }

@@ -1,0 +1,4 @@
+zero:
+  - device: sda
+zero_logs:
+  - service: checkout

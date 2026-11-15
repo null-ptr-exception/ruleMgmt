@@ -31,6 +31,7 @@ export const MAX_ROWS_PER_OBJECT = 100
 // Anything inspecting the output reads the same profiles (outputs.js), so it
 // cannot drift from what is emitted.
 import { profileFor } from './outputs.js'
+import { durationScalar } from './yamlScalar.js'
 
 // The generator runs in the browser as well as in scripts, so size is measured
 // with TextEncoder rather than Buffer.
@@ -98,7 +99,9 @@ function renderGroupFields({ interval, limit } = {}, profile) {
   // The profile's own group fields first (e.g. `type: vlogs`), then the
   // template owner's.
   for (const [key, value] of Object.entries(profile?.groupFields || {})) out += `      ${key}: ${value}\n`
-  if (interval !== undefined && interval !== '') out += `      interval: ${interval}\n`
+  // '0' is a duration; written bare YAML reads it as a number, and the
+  // resource's field is text (#172).
+  if (interval !== undefined && interval !== '') out += `      interval: ${durationScalar(interval)}\n`
   if (limit !== undefined && limit !== '') out += `      limit: ${limit}\n`
   return out
 }

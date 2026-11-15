@@ -18,7 +18,7 @@
 
 import { renderValue, expandVars, varsIn } from './ruleModel.js'
 import { emitRuleObjects } from './crConverter.js'
-import { needsQuote } from './yamlScalar.js'
+import { needsQuote, durationScalar } from './yamlScalar.js'
 import { profileFor } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { selectorLabelsFor } from './selectorContract.js'
@@ -182,10 +182,10 @@ function renderRule(rule, ref, refVar, defaults, selectorCall = null) {
     `        - alert: ${rule.alert}\n` +
     renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10), '', selectorCall) +
     // A duration or a single reference — plain, as a hand-written rule has it.
-    (rule.for ? `\n          for: ${renderValue(rule.for, ref, defaults)}` : '')
+    (rule.for ? `\n          for: ${durationScalar(renderValue(rule.for, ref, defaults))}` : '')
   ]
   if (rule.keep_firing_for) {
-    const line = `          keep_firing_for: ${renderValue(rule.keep_firing_for, ref, defaults)}`
+    const line = `          keep_firing_for: ${durationScalar(renderValue(rule.keep_firing_for, ref, defaults))}`
     parts[0] += '\n' + (rule.keepFiringGuard
       ? `          {{- if hasKey ${refVar} "${rule.keepFiringGuard}" }}\n${line}\n          {{- end }}`
       : line)

@@ -451,3 +451,43 @@ describe('gen-rules.mjs without values.schema.json', () => {
     expect(await fs.readFile(schemaFile, 'utf-8')).toBe(before)
   })
 })
+
+// #172: what a script writes into rules/ has to read back. A duration the
+// old schema or an imported rule file carries, in a form the rules format
+// refuses, used to be written (exit 0) and only refused on the next run.
+describe('a value the rules format refuses', () => {
+  for (const [what, change, message] of [
+    ['for is not a duration', s => { s.properties.cpu['x-for'] = '1.5h' }, /for "1\.5h" is not a duration/],
+    ['column has a type the table has no cell for', s => { s.properties.cpu.items.properties.namespace.type = 'array' }, /type "array" is not a column type/],
+  ]) {
+    it(`gen-rules does not migrate a schema whose ${what}`, async () => {
+      const schema = structuredClone(SCHEMA)
+      change(schema)
+      await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify(schema, null, 2))
+
+      const res = run(GEN_RULES, [chartDir])
+      expect(res.status, res.stdout).not.toBe(0)
+      expect(res.stdout).toMatch(message)
+      await expect(fs.readdir(path.join(chartDir, 'rules'))).rejects.toThrow()
+    })
+  }
+
+  it('import-rules does not write a rule whose for is not a duration', async () => {
+    expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+    const before = await fs.readdir(path.join(chartDir, 'rules'))
+    const file = path.join(tmpDir, 'import.yaml')
+    await fs.writeFile(file, 'groups:\n  - name: disk\n    rules:\n      - alert: DiskFull\n        expr: disk_used > 90\n        for: 1.5h\n')
+
+    // A dry run says so too, rather than promising a write that will not happen.
+    const dry = spawnSync('node', [IMPORT_RULES, file, chartDir, '--dry-run'], { encoding: 'utf-8' })
+    expect(dry.status, dry.stdout + dry.stderr).not.toBe(0)
+    expect(dry.stdout + dry.stderr).toMatch(/for "1\.5h" is not a duration/)
+
+    const res = spawnSync('node', [IMPORT_RULES, file, chartDir], { encoding: 'utf-8' })
+    expect(res.status, res.stdout + res.stderr).not.toBe(0)
+    expect(res.stdout + res.stderr).toMatch(/for "1\.5h" is not a duration/)
+    expect(await fs.readdir(path.join(chartDir, 'rules'))).toEqual(before)
+    // The chart is still clean.
+    expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
+  })
+})

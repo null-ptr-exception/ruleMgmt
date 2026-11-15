@@ -384,10 +384,13 @@ export default function TemplateDevEditor() {
     return files
   }
 
-  async function handleSave(confirmBreaking = false) {
+  // `overwrite` is the answer to "the files changed on disk": it lets the
+  // save go ahead over them and nothing more. A breaking change still gets
+  // its own dialog — the server is never told it was confirmed here (#185).
+  async function handleSave(overwrite = false) {
     if (!activeChart) return
 
-    if (!confirmBreaking && Object.keys(originalRef.current).length) {
+    if (!overwrite && Object.keys(originalRef.current).length) {
       const fresh = await getChartInfo(activeChart)
       if (JSON.stringify(fresh.rulesFiles || {}) !== JSON.stringify(originalRef.current)) {
         Modal.confirm({
@@ -400,7 +403,7 @@ export default function TemplateDevEditor() {
       }
     }
 
-    const result = await saveChartRules(activeChart, buildFiles(), confirmBreaking)
+    const result = await saveChartRules(activeChart, buildFiles(), false)
 
     if (result?.invalid) {
       const findings = result.findings || []

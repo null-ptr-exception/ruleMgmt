@@ -31,7 +31,15 @@ export async function readSyncRegistry(gitopsDir) {
     throw err
   }
   const data = yaml.load(raw) || {}
-  return { syncs: Array.isArray(data.syncs) ? data.syncs : [] }
+  // An entry without a source or a targets list (a hand edit) is skipped
+  // with a warning, or every deployment save fails on it (#180). The next
+  // change to sync.yaml writes the registry without it.
+  const syncs = (Array.isArray(data.syncs) ? data.syncs : []).filter(s => {
+    const ok = s && typeof s.source === 'string' && Array.isArray(s.targets)
+    if (!ok) console.warn(`${SYNC_FILE}: skipping an entry that is not { source, targets: [...] } (the next sync change drops it):`, JSON.stringify(s))
+    return ok
+  })
+  return { syncs }
 }
 
 export async function writeSyncRegistry(gitopsDir, registry) {

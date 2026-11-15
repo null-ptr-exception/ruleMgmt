@@ -12,6 +12,7 @@ import PreviewModal from '../components/PreviewModal'
 import { parseRouting, emptyRouting, setLabels, setDefaultTiming, toSave } from '../utils/routingModel'
 import { getRouting, saveRouting, removeRouting, renderDeployment, getSyncSource } from '../utils/chartApi'
 import { ROUTING } from '../utils/outputs'
+import { syncFailedNotice } from '../utils/syncNotice'
 
 const { Title, Text } = Typography
 
@@ -176,6 +177,14 @@ export default function RoutingView() {
     })
   }
 
+  // The source was written; a sync target that was not is named. True when
+  // there was one.
+  function warnSyncFailed(result) {
+    const notice = syncFailedNotice(result.syncFailed)
+    if (notice) message.warning({ content: notice, duration: 10 })
+    return !!notice
+  }
+
   async function handleSave() {
     // Nothing edited but the resource is out of date: send the file as it
     // is, so its comments stay.
@@ -186,6 +195,7 @@ export default function RoutingView() {
       return false
     }
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
+    warnSyncFailed(result)
     setReloadKey(k => k + 1)
     return true
   }
@@ -202,7 +212,7 @@ export default function RoutingView() {
       reportSaveFailure(result)
       return
     }
-    message.success('Routing removed')
+    if (!warnSyncFailed(result)) message.success('Routing removed')
     setReloadKey(k => k + 1)
   }
 

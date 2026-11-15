@@ -14,6 +14,7 @@ import { pruneAllValues } from '../utils/valueUtils'
 import { parseRulesDir } from '../utils/rulesFile'
 import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
 import { renamedSelectorLabels } from '../utils/selectorContract'
+import { syncFailedNotice } from '../utils/syncNotice'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -428,6 +429,12 @@ export default function AlertUserView() {
     })
   }
 
+  // The deployment was saved; a sync target that was not is named.
+  function warnSyncFailed(result) {
+    const notice = syncFailedNotice(result.syncFailed)
+    if (notice) message.warning({ content: notice, duration: 10 })
+  }
+
   async function handleSave() {
     if (!selectedChart || !selectedFolder) return
     const isCommon = activeAlert === '__common_vars__'
@@ -443,6 +450,7 @@ export default function AlertUserView() {
     if (!isCommon) setAllValues(merged)
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
+    warnSyncFailed(result)
     return true
   }
 
@@ -458,6 +466,7 @@ export default function AlertUserView() {
     }
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
+    warnSyncFailed(result)
     return true
   }
 

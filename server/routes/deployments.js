@@ -3,19 +3,13 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
-import { readChartModel } from '../lib/chartFiles.js'
-import { valueProblems } from '../../src/utils/rulesFile.js'
-import { selectorValueProblems } from '../../src/utils/selectorContract.js'
-import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, getTargetsForSource, isTarget, isSafeSyncPath, applyUnlink } from '../lib/sync.js'
-import { buildRouting, writeRouting, removeRouting, copyRouting, routingState } from '../lib/routingFiles.js'
+import { valuesRefusal, saveValues, copyToTargets, okWith } from '../lib/deploymentWrite.js'
+import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink } from '../lib/sync.js'
+import { buildRouting, writeRouting, removeRouting, routingState } from '../lib/routingFiles.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
-
-function chartsDirName() {
-  return process.env.CHARTS_DIR || 'charts'
-}
 
 function isValidDeploymentParam(req) {
   const deployment = req.params.deployment
@@ -135,14 +129,15 @@ export default function deploymentsRouter() {
     }
     const folder = req.query.folder
     try {
-      // A synced target is read-only server-side, not just in the UI —
-      // the frontend's freeze can race (see AlertUserView's getSyncSource
-      // call), so this must be enforced here too, not only by disabling Save.
-      let registry = null
+      const readOnly = () => ({ status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } })
       if (folder) {
-        registry = await readSyncRegistry(req.gitopsDir)
-        if (isTarget(registry, folder)) {
-          return res.status(409).json({ error: `${folder} is synced from another deployment and is read-only` })
+        // A synced target is read-only server-side, not just in the UI —
+        // the frontend's freeze can race (see AlertUserView's getSyncSource
+        // call), so this must be enforced here too, not only by disabling
+        // Save. Checked again under the lock below.
+        if (isTarget(await readSyncRegistry(req.gitopsDir), folder)) {
+          const { status, body } = readOnly()
+          return res.status(status).json(body)
         }
         const reserved = await newReservedSegment(req.gitopsDir, folder)
         if (reserved) return res.status(400).json({ error: reservedError(reserved) })
@@ -150,60 +145,28 @@ export default function deploymentsRouter() {
 
       await fs.mkdir(dir, { recursive: true })
       const { file, direct } = await resolveValuesFile(dir, req.params.deployment)
-      const depName = await getDepName(dir)
-      let values = req.body.values
 
-      // A value Helm cannot render inside a quoted label is refused here,
-      // naming the cell, rather than surfacing later as a YAML parse error
-      // in Preview — see valueProblems. Only a chart with a model to
-      // check against; an unparseable values string is left to Helm.
-      const chartName = depName || req.params.chart
-      const { model } = await readChartModel(path.join(req.gitopsDir, chartsDirName(), chartName))
-      if (model) {
-        let bare = values
-        if (typeof values === 'string') {
-          try { bare = unwrapValues(yaml.load(values) || {}, depName) } catch { bare = null }
-        }
-        const problems = bare ? valueProblems(bare, model) : []
-        if (problems.length) {
-          return res.status(400).json({ error: 'Some values cannot be rendered', problems })
-        }
-        // A group with selectors (#60): a cell that cannot be matched on, or
-        // rows that overlap without one being a step inside the other. The
-        // rows that would fix an overlap go back with the refusal.
-        const selectors = bare ? selectorValueProblems(bare, model) : { problems: [] }
-        if (selectors.problems.length) {
-          const cells = selectors.problems.filter(p => p.cell).length
-          const error = cells === selectors.problems.length ? 'Some selector cells cannot be used'
-            : cells ? 'Some selector cells cannot be used, and some rows overlap' : 'Some rows overlap'
-          return res.status(400).json({ error, problems: selectors.problems, proposals: selectors.proposals })
-        }
+      // The folder's own deployment: check, write, copy to its sync targets
+      // and report the ones that could not be written (#180), all under the
+      // registry lock.
+      if (folder && direct) {
+        const outcome = await withSyncRegistryLock(req.gitopsDir, async () => {
+          const registry = await readSyncRegistry(req.gitopsDir)
+          if (isTarget(registry, folder)) return readOnly()
+          return saveValues(req.gitopsDir, registry, folder, req.body.values, { chartName: req.params.chart })
+        })
+        return res.status(outcome.status).json(outcome.body)
       }
 
+      // A legacy `<name>-values.yaml`: the same checks, and no sync.
+      const depName = await getDepName(dir)
+      let values = req.body.values
+      const refusal = await valuesRefusal(req.gitopsDir, depName || req.params.chart, depName, values)
+      if (refusal) return res.status(400).json(refusal)
       if (typeof values !== 'string') {
         values = yaml.dump(wrapValues(values, depName), { lineWidth: -1 })
       }
       await fs.writeFile(file, values, 'utf-8')
-
-      // Eager sync: only folder-mode deployments participate (sync.yaml
-      // paths are folder-relative, matching the `folder` query param). A
-      // legacy sibling saved in a source folder is not what it syncs.
-      if (folder && direct) {
-        const targets = getTargetsForSource(registry, folder)
-        for (const target of targets) {
-          // sync.yaml is a plain file inside the gitops repo — it can be
-          // hand-edited or arrive via `git pull` outside the app, so a
-          // registry entry isn't automatically trustworthy just because
-          // it's in the registry. Re-run the same check used at write time
-          // (POST /sync) before ever joining it into a filesystem path.
-          if (!isSafeSyncPath(target, chartsDirName())) continue
-          try {
-            const targetDir = path.join(req.gitopsDir, target)
-            await fs.mkdir(targetDir, { recursive: true })
-            await fs.writeFile(path.join(targetDir, 'values.yaml'), values, 'utf-8')
-          } catch { /* best-effort — one failing target doesn't undo the source save */ }
-        }
-      }
 
       res.json({ ok: true })
     } catch (err) {
@@ -224,23 +187,29 @@ export default function deploymentsRouter() {
       res.status(400).json({ error: 'Only a folder deployment has notification routing' })
       return null
     }
-    const registry = await readSyncRegistry(req.gitopsDir)
-    if (write && isTarget(registry, folder)) {
+    // A synced target is read-only: refused before its routing is checked,
+    // and checked again under the lock when it is written.
+    if (write && isTarget(await readSyncRegistry(req.gitopsDir), folder)) {
       res.status(409).json({ error: `${folder} is synced from another deployment and is read-only` })
       return null
     }
-    return { dir, folder, registry }
+    return { dir, folder }
   }
 
-  // Like the values save: each target gets the source's files. Best-effort —
-  // one failing target doesn't undo the source save.
-  async function syncRouting(req, { dir, folder, registry }) {
-    for (const target of getTargetsForSource(registry, folder)) {
-      if (!isSafeSyncPath(target, chartsDirName())) continue
-      try {
-        await copyRouting(dir, path.join(req.gitopsDir, target))
-      } catch { /* best-effort */ }
-    }
+  // Save or delete routing for the folder's own deployment, then give each
+  // sync target the source's files and report the ones that could not be
+  // written — under the registry lock, like the values save. A synced target
+  // is read-only.
+  function writeRoutingAndSync(req, { dir, folder }, write) {
+    return withSyncRegistryLock(req.gitopsDir, async () => {
+      const registry = await readSyncRegistry(req.gitopsDir)
+      if (isTarget(registry, folder)) {
+        return { status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } }
+      }
+      await write(dir)
+      const syncFailed = await copyToTargets(req.gitopsDir, registry, folder, { values: false, routing: true })
+      return { status: 200, body: okWith(syncFailed) }
+    })
   }
 
   // routing.yaml's text, its problems, and whether the AlertmanagerConfig is
@@ -273,9 +242,8 @@ export default function deploymentsRouter() {
       if (built.errors) {
         return res.status(400).json({ error: 'routing.yaml has problems', problems: built.errors })
       }
-      await writeRouting(at.dir, built)
-      await syncRouting(req, at)
-      res.json({ ok: true })
+      const { status, body } = await writeRoutingAndSync(req, at, dir => writeRouting(dir, built))
+      res.status(status).json(body)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -285,9 +253,8 @@ export default function deploymentsRouter() {
     try {
       const at = await routingTarget(req, res)
       if (!at) return
-      await removeRouting(at.dir)
-      await syncRouting(req, at)
-      res.json({ ok: true })
+      const { status, body } = await writeRoutingAndSync(req, at, removeRouting)
+      res.status(status).json(body)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

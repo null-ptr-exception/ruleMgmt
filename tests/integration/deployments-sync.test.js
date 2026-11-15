@@ -33,6 +33,12 @@ describe('deployments API — eager sync integration', () => {
   function makeDeploymentDir(folderPath) {
     const dir = path.join(tmpDir, folderPath)
     fs.mkdirSync(dir, { recursive: true })
+    // A deployment on disk is a Chart.yaml with a dependency plus values.yaml;
+    // a sync target that is not one is not written to (#180).
+    fs.writeFileSync(path.join(dir, 'Chart.yaml'), yaml.dump({
+      apiVersion: 'v2', name: path.basename(dir), version: '0.1.0',
+      dependencies: [{ name: 'my-chart', version: '0.1.0', repository: 'file://../../charts/my-chart' }],
+    }))
     fs.writeFileSync(path.join(dir, 'values.yaml'), '')
     return dir
   }
@@ -51,8 +57,9 @@ describe('deployments API — eager sync integration', () => {
     expect(res.status).toBe(200)
     const staging = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))
     const dev = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/dev/values.yaml'), 'utf-8'))
-    expect(staging).toMatchObject(newValues)
-    expect(dev).toMatchObject(newValues)
+    // Saved under the Template's name, as Chart.yaml's dependency is named.
+    expect(staging).toEqual({ 'my-chart': newValues })
+    expect(dev).toEqual({ 'my-chart': newValues })
   })
 
   it('skips a registry target with an unsafe path instead of writing outside the gitops dir', async () => {
@@ -70,8 +77,9 @@ describe('deployments API — eager sync integration', () => {
       .send({ values: { alerts: [{ warn: 1 }] } })
 
     expect(res.status).toBe(200)
+    expect(res.body.syncFailed).toEqual([{ target: '../../etc/evil', error: 'not a path sync may write to' }])
     const staging = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))
-    expect(staging).toMatchObject({ alerts: [{ warn: 1 }] })
+    expect(staging).toEqual({ 'my-chart': { alerts: [{ warn: 1 }] } })
     const escapedPath = path.join(tmpDir, '../../etc/evil')
     expect(fs.existsSync(escapedPath)).toBe(false)
   })

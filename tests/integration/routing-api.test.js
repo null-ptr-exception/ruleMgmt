@@ -184,6 +184,8 @@ describe('sync', () => {
     await writeSyncRegistry(tmpDir, { syncs: [{ source: 'asia/prod', targets: ['eu/prod'] }] })
     expect((await putRouting('eu/prod', ROUTING)).status).toBe(409)
     expect((await request(app).delete(routingUrl('eu/prod'))).status).toBe(409)
+    // Read-only comes first: a target is not told how to fix its routing.
+    expect((await putRouting('eu/prod', 'labels: [critical\n')).status).toBe(409)
     expect(has(target, 'routing.yaml')).toBe(false)
   })
 

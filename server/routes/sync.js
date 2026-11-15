@@ -14,7 +14,9 @@ import {
   applyUnlink,
 } from '../lib/sync.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
-import { readRouting, copyRouting, restoreRouting } from '../lib/routingFiles.js'
+import { readRouting, restoreRouting } from '../lib/routingFiles.js'
+import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
+import { getDepName } from '../lib/subchart.js'
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -94,7 +96,14 @@ export default function syncRouter() {
         // the target — *before* mutating anything, so any failure past this
         // point can be rolled back instead of orphaning overwritten content.
         const sourceDir = path.join(req.gitopsDir, source)
+        // What a values save would refuse is not copied either: the target
+        // is read-only and could not fix it (#180).
         const content = await fs.readFile(path.join(sourceDir, 'values.yaml'), 'utf-8')
+        const depName = await getDepName(sourceDir)
+        const refusal = await valuesRefusal(req.gitopsDir, depName, depName, content)
+        if (refusal) {
+          return { status: 400, body: { ...refusal, error: `${source} cannot be synced: ${refusal.error}` } }
+        }
         const targetValuesFile = path.join(targetDir, 'values.yaml')
         const prevTargetValues = await fs.readFile(targetValuesFile, 'utf-8').catch(() => null)
         const prevTargetRouting = await readRouting(targetDir)
@@ -105,11 +114,7 @@ export default function syncRouter() {
         await writeSyncRegistry(req.gitopsDir, registry)
 
         try {
-          await fs.mkdir(targetDir, { recursive: true })
-          await fs.writeFile(targetValuesFile, content, 'utf-8')
-          // Notification routing (#92) follows values.yaml: the target gets
-          // the source's, or loses its own when the source has none.
-          await copyRouting(sourceDir, targetDir)
+          await copyToTarget(sourceDir, targetDir)
 
           // First-time target: carry over Chart.yaml too, so it renders like
           // a real deployment (mirrors what folders/init would have produced).

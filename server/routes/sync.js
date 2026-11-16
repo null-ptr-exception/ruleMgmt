@@ -114,7 +114,8 @@ export default function syncRouter() {
         await writeSyncRegistry(req.gitopsDir, registry)
 
         try {
-          await copyToTarget(sourceDir, targetDir)
+          // The bytes checked above, not a second read a `git pull` could change.
+          await copyToTarget(sourceDir, targetDir, { valuesContent: content })
 
           // First-time target: carry over Chart.yaml too, so it renders like
           // a real deployment (mirrors what folders/init would have produced).

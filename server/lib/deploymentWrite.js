@@ -63,11 +63,16 @@ export async function valuesRefusal(gitopsDir, chartName, depName, values) {
   return problemsOf(bare, model)
 }
 
-/** Throws when a file cannot be written. `values` and `routing` pick the files. */
-export async function copyToTarget(srcDir, dstDir, { values = true, routing = true } = {}) {
+/**
+ * Throws when a file cannot be written. `values` and `routing` pick the files;
+ * `valuesContent` is what to write as values.yaml, when the caller has already
+ * read and checked it.
+ */
+export async function copyToTarget(srcDir, dstDir, { values = true, routing = true, valuesContent } = {}) {
   await fs.mkdir(dstDir, { recursive: true })
   if (values) {
-    await fs.writeFile(path.join(dstDir, 'values.yaml'), await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8'), 'utf-8')
+    const content = valuesContent ?? await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8')
+    await fs.writeFile(path.join(dstDir, 'values.yaml'), content, 'utf-8')
   }
   // Notification routing (#92) follows values.yaml: the target gets the
   // source's, or loses its own when the source has none.

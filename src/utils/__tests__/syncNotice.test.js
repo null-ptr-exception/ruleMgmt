@@ -12,6 +12,11 @@ describe('syncFailedNotice', () => {
       .toBe('Saved, but this sync target could not be updated and may not match the source: team/dr (EACCES)')
   })
 
+  it('says what was done, when it was not a save', () => {
+    expect(syncFailedNotice([{ target: 'team/dr', error: 'EACCES' }], 'Routing removed'))
+      .toBe('Routing removed, but this sync target could not be updated and may not match the source: team/dr (EACCES)')
+  })
+
   it('names every target', () => {
     expect(syncFailedNotice([{ target: 'a', error: 'EACCES' }, { target: 'b', error: 'not a deployment on disk' }]))
       .toBe('Saved, but these sync targets could not be updated and may not match the source: a (EACCES), b (not a deployment on disk)')

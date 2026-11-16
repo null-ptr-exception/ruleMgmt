@@ -98,6 +98,23 @@ describe('POST /sync refuses a source a values save would refuse', () => {
     expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
   })
 
+  // A source nobody has filled in yet: a required Common Value is empty.
+  it('when a required Common Value is not filled in', async () => {
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: {
+      '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n',
+      'cpu.yaml': CPU,
+      'watchdog.yaml': 'once: true\nrules:\n  - alert: Watchdog\n    expr: vector(1)\n    labels: {owner: "${owner}"}\n',
+    } })).status).toBe(200)
+    expect((await api('POST', '/api/v2/folders/init', { folder: SRC, chart: 'demo' })).status).toBe(200)
+
+    const { status, data } = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+
+    expect(status).toBe(400)
+    expect(data.error).toBe(`${SRC} cannot be synced: Some values cannot be rendered`)
+    expect(data.problems.map(p => p.message).join(' ')).toContain('owner')
+    expect(await exists(TGT)).toBe(false)
+  })
+
   it('says which cell, for a required value', async () => {
     await setup([])
     await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo:\n  cpu:\n    - warn: 90\n')
@@ -162,6 +179,7 @@ describe.skipIf(IS_ROOT)('a target that cannot be written is reported, and the s
     expect(data).toEqual({ ok: true, syncFailed: [{ target: TGT, error: 'EACCES' }] })
     expect(await read(`${SRC}/routing.yaml`).catch(() => null)).not.toBe(before)
     expect(await read(`${TGT}/routing.yaml`)).toBe(before)
+    expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not be copied to ${TGT}`), expect.anything())
   })
 })
 
@@ -169,7 +187,38 @@ describe('a hand-edited sync.yaml', () => {
   it('an entry without a targets list does not stop saves', async () => {
     await setup([])
     await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [{ source: 'deployments/team/other' }] }))
-    expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping an entry'), expect.anything())
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('a folder without a Chart.yaml is reported, and nothing is written into it', async () => {
+    await setup([])
+    const bare = 'deployments/team/bare'
+    await fs.mkdir(path.join(tmpDir, bare), { recursive: true })
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [{ source: SRC, targets: [bare] }] }))
+    expect((await api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: await routingFixture() })).status).toBe(200)
+
+    const saved = await saveSrc(60)
+    const removed = await api('DELETE', `/api/v2/deployments/demo/src/routing${q(SRC)}`)
+
+    for (const { status, data } of [saved, removed]) {
+      expect(status).toBe(200)
+      expect(data.syncFailed).toEqual([{ target: bare, error: 'not a deployment on disk' }])
+    }
+    expect(await fs.readdir(path.join(tmpDir, bare))).toEqual([])
+  })
+
+  it('a source hand-listed as its own target stays read-only, as before', async () => {
+    await setup()
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [{ source: SRC, targets: [TGT, TGT, SRC] }] }))
+    // Hand-edited so that the source is also a target: its own save is refused
+    // as read-only before any copy, as it was before this change.
+    expect((await saveSrc(60)).status).toBe(409)
   })
 
   it('a target that is not a deployment on disk is reported, not created', async () => {
@@ -202,23 +251,42 @@ describe('saves racing sync changes leave the target a copy of its source', () =
     expect(behind).toBe(0)
   })
 
-  it('two routing saves of the same source at once', async () => {
+  // What the lock is for once every write has its own temp file: a save
+  // writes routing.yaml, then the AlertmanagerConfig made from it. If a
+  // second save runs between the two, the source ends up with one save's
+  // routing.yaml and the other's resource. The first save is held at its
+  // second file to make that order certain.
+  it('a routing save that starts during another waits for it', async () => {
     await setup()
     const routing = await routingFixture()
-    let differs = 0
-    for (let i = 0; i < 20; i++) {
-      const saves = await Promise.all([
-        api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: routing.replace('4h', `${i + 1}h`) }),
-        api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: routing.replace('4h', `${i + 30}h`) }),
-      ])
-      // Unlocked, both writes share one temp file: one fails, and its
-      // rollback can remove the source's routing.yaml altogether.
-      expect(saves.map(s => s.status)).toEqual([200, 200])
-      expect(await exists(`${SRC}/routing.yaml`)).toBe(true)
-      for (const rel of ['routing.yaml', 'templates/alertmanagerconfig.yaml']) {
-        if ((await read(`${TGT}/${rel}`).catch(() => null)) !== (await read(`${SRC}/${rel}`))) { differs++; break }
+    const save = h => api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: routing.replace('4h', `${h}h`) })
+    expect((await save(2)).status).toBe(200)
+
+    const rename = fs.rename.bind(fs)
+    let held = false
+    const spy = vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
+      if (!held && String(to).endsWith(path.join(SRC, 'templates', 'alertmanagerconfig.yaml'))) {
+        held = true
+        await new Promise(r => setTimeout(r, 300))
       }
+      return rename(from, to)
+    })
+    try {
+      const first = save(5)
+      await new Promise(r => setTimeout(r, 100))
+      const results = await Promise.all([first, save(7)])
+      expect(results.map(r => r.status)).toEqual([200, 200])
+    } finally {
+      spy.mockRestore()
     }
-    expect(differs).toBe(0)
+    expect(held).toBe(true)
+
+    // The resource on disk is the one its routing.yaml generates, and the
+    // target has the same two files.
+    const state = (await api('GET', `/api/v2/deployments/demo/src/routing${q(SRC)}`)).data
+    expect(state.stale).toBe(false)
+    for (const rel of ['routing.yaml', 'templates/alertmanagerconfig.yaml']) {
+      expect(await read(`${TGT}/${rel}`)).toBe(await read(`${SRC}/${rel}`))
+    }
   })
 })

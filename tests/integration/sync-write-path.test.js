@@ -115,6 +115,26 @@ describe('POST /sync refuses a source a values save would refuse', () => {
     expect(await exists(TGT)).toBe(false)
   })
 
+  // A `git pull` between the check and the copy must not reach the target
+  // with text that was never checked.
+  it('copies the values.yaml it checked, not a later read of it', async () => {
+    await setup([])
+    expect((await api('POST', '/api/v2/folders/init', { folder: TGT, chart: 'demo' })).status).toBe(200)
+    const checked = await read(`${SRC}/values.yaml`)
+    const readFile = fs.readFile.bind(fs)
+    let reads = 0
+    const spy = vi.spyOn(fs, 'readFile').mockImplementation(async (file, ...rest) => {
+      if (String(file) === path.join(tmpDir, SRC, 'values.yaml') && reads++ > 0) return 'demo:\n  cpu:\n    - warn: 1\n'
+      return readFile(file, ...rest)
+    })
+    try {
+      expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(await read(`${TGT}/values.yaml`)).toBe(checked)
+  })
+
   it('says which cell, for a required value', async () => {
     await setup([])
     await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo:\n  cpu:\n    - warn: 90\n')
@@ -196,6 +216,43 @@ describe('a hand-edited sync.yaml', () => {
     }
   })
 
+  // js-yaml keeps an alias that refers to its own anchor, so the rejected
+  // entry cannot be turned into JSON.
+  it('an entry that refers to itself does not stop saves or the sync list', async () => {
+    await setup()
+    const registry = await read('sync.yaml')
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), `${registry}  - &bad {unexpected: *bad}\n`)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+      expect(await read(`${TGT}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
+      expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT] }] })
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('a target that is not a path is skipped, and the others are still copied to', async () => {
+    await setup([TGT, T2])
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), `syncs:
+  - source: ${SRC}
+    targets:
+      - {toString: null}
+      - &self {self: *self}
+      - ${TGT}
+      - ${T2}
+`)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+      for (const t of [TGT, T2]) expect(await read(`${t}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
+      expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT, T2] }] })
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping 2 target(s) that are not a path'))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('a folder without a Chart.yaml is reported, and nothing is written into it', async () => {
     await setup([])
     const bare = 'deployments/team/bare'
@@ -262,21 +319,31 @@ describe('saves racing sync changes leave the target a copy of its source', () =
     const save = h => api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: routing.replace('4h', `${h}h`) })
     expect((await save(2)).status).toBe(200)
 
+    // The second save starts only once the first is held. The first is let
+    // go when the second finishes (it got past the lock: the bug) or after
+    // 500 ms (it is waiting on the lock), whichever comes first.
     const rename = fs.rename.bind(fs)
-    let held = false
+    let held = false, reached, release
+    const atHold = new Promise(r => { reached = r })
+    const gate = new Promise(r => { release = r })
     const spy = vi.spyOn(fs, 'rename').mockImplementation(async (from, to) => {
       if (!held && String(to).endsWith(path.join(SRC, 'templates', 'alertmanagerconfig.yaml'))) {
         held = true
-        await new Promise(r => setTimeout(r, 300))
+        reached()
+        await gate
       }
       return rename(from, to)
     })
     try {
       const first = save(5)
-      await new Promise(r => setTimeout(r, 100))
-      const results = await Promise.all([first, save(7)])
+      await atHold
+      const second = save(7)
+      await Promise.race([second, new Promise(r => setTimeout(r, 500))])
+      release()
+      const results = await Promise.all([first, second])
       expect(results.map(r => r.status)).toEqual([200, 200])
     } finally {
+      release()
       spy.mockRestore()
     }
     expect(held).toBe(true)

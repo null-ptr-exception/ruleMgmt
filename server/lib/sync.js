@@ -34,11 +34,22 @@ export async function readSyncRegistry(gitopsDir) {
   // An entry without a source or a targets list (a hand edit) is skipped
   // with a warning, or every deployment save fails on it (#180). The next
   // change to sync.yaml writes the registry without it.
-  const syncs = (Array.isArray(data.syncs) ? data.syncs : []).filter(s => {
-    const ok = s && typeof s.source === 'string' && Array.isArray(s.targets)
-    if (!ok) console.warn(`${SYNC_FILE}: skipping an entry that is not { source, targets: [...] } (the next sync change drops it):`, JSON.stringify(s))
-    return ok
-  })
+  // Only the source and its string targets are kept: the rest of a hand
+  // edit (a target that is not a path, an extra key, a YAML alias that
+  // refers to itself) would otherwise break whatever logs, copies or
+  // returns the entry. The entry itself is logged as is, never serialized.
+  const syncs = []
+  for (const s of Array.isArray(data.syncs) ? data.syncs : []) {
+    if (!(s && typeof s.source === 'string' && Array.isArray(s.targets))) {
+      console.warn(`${SYNC_FILE}: skipping an entry that is not { source, targets: [...] } (the next sync change drops it):`, s)
+      continue
+    }
+    const targets = s.targets.filter(t => typeof t === 'string')
+    if (targets.length < s.targets.length) {
+      console.warn(`${SYNC_FILE}: ${s.source}: skipping ${s.targets.length - targets.length} target(s) that are not a path (the next sync change drops them)`)
+    }
+    syncs.push({ source: s.source, targets })
+  }
   return { syncs }
 }
 

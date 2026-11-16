@@ -190,7 +190,9 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
           type={results.every(r => r.ok) ? 'success' : 'warning'}
           message={results.map(r => `${r.target}: ${r.ok ? 'OK' : r.error}`).join('; ')}
           // Every target is refused for the same source, so its problems once.
-          description={<SyncProblems problems={results.find(r => r.problems?.length)?.problems} />}
+          description={results.some(r => r.problems?.length)
+            ? <SyncProblems problems={results.find(r => r.problems?.length).problems} />
+            : undefined}
         />
       )}
     </Modal>

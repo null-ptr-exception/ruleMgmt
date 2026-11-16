@@ -63,7 +63,7 @@ export async function valuesRefusal(gitopsDir, chartName, depName, values) {
   return problemsOf(bare, model)
 }
 
-/** Throws when a file cannot be written. `what` picks the files. */
+/** Throws when a file cannot be written. `values` and `routing` pick the files. */
 export async function copyToTarget(srcDir, dstDir, { values = true, routing = true } = {}) {
   await fs.mkdir(dstDir, { recursive: true })
   if (values) {

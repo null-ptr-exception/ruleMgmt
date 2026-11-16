@@ -196,6 +196,31 @@ test('Remove routing deletes it, after asking', async ({ page, request }) => {
   expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
 })
 
+// #180: the source's routing is removed even when a target cannot be
+// updated, and the page says which target was left behind.
+test('Remove routing names a sync target it could not update', async ({ page, request }) => {
+  test.skip(typeof process.getuid === 'function' && process.getuid() === 0, 'chmod does not stop root')
+  const routing = { labels: { severity: ['critical'] }, configs: {}, cells: [] }
+  expect((await request.put(routingUrl(FOLDER), { data: { routing } })).ok()).toBeTruthy()
+  expect((await request.post('/api/v2/sync', { data: { source: FOLDER, target: OTHER } })).ok()).toBeTruthy()
+  const target = path.join(process.env.GITOPS_DIR || 'gitops', OTHER)
+  await fs.chmod(path.join(target, 'templates'), 0o555)
+  await fs.chmod(target, 0o555)
+  try {
+    await openRouting(page)
+    await page.getByRole('button', { name: 'Remove routing' }).click()
+    await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
+
+    await expect(page.getByText(`Routing removed, but this sync target could not be updated and may not match the source: ${OTHER} (EACCES)`)).toBeVisible({ timeout: 8000 })
+    await expect(page.getByText('Routing removed', { exact: true })).toHaveCount(0)
+    expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
+    expect((await request.get(routingUrl(OTHER))).status()).toBe(200)
+  } finally {
+    await fs.chmod(target, 0o755)
+    await fs.chmod(path.join(target, 'templates'), 0o755)
+  }
+})
+
 test('a synced target is read-only', async ({ page, request }) => {
   const routing = {
     labels: { severity: ['critical', 'warning'] },

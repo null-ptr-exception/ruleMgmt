@@ -179,8 +179,8 @@ export default function RoutingView() {
 
   // The source was written; a sync target that was not is named. True when
   // there was one.
-  function warnSyncFailed(result) {
-    const notice = syncFailedNotice(result.syncFailed)
+  function warnSyncFailed(result, done) {
+    const notice = syncFailedNotice(result.syncFailed, done)
     if (notice) message.warning({ content: notice, duration: 10 })
     return !!notice
   }
@@ -212,7 +212,7 @@ export default function RoutingView() {
       reportSaveFailure(result)
       return
     }
-    if (!warnSyncFailed(result)) message.success('Routing removed')
+    if (!warnSyncFailed(result, 'Routing removed')) message.success('Routing removed')
     setReloadKey(k => k + 1)
   }
 

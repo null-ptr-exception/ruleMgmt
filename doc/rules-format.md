@@ -340,6 +340,90 @@ A default only ever applies to a column that is not `required`: a required
 column left out fails Helm's schema validation before the template is reached,
 so its default is never used.
 
+## Bands of thresholds
+
+One metric, several severities, each a band of its own: critical between 40
+and 50, warning between 30 and 40, and so on. A rule owner fills in the
+thresholds they want; one left empty should not leave a hole, the band below
+it simply reaches up to the next one that is set.
+
+Give every threshold that caps a lower band a very large default, and write
+each band's upper edge as "below every higher threshold":
+
+```yaml
+# rules/disk_latency.yaml
+vars:
+  m:    disk_latency_ms{namespace="${namespace}"}
+  cap1: "< ${upper}"
+  cap2: "< ${t1} < ${upper}"
+  cap3: "< ${t2} < ${t1} < ${upper}"
+
+columns:
+  namespace: { type: string, required: true }
+  upper: { type: number, default: 9e15, description: "Above this nothing fires. Empty: no upper limit" }
+  t1:    { type: number, default: 9e15, description: "Critical from here. Empty: no critical band" }
+  t2:    { type: number, default: 9e15, description: "Warning from here. Empty: no warning band" }
+  t3:    { type: number,                description: "Info from here. Empty: no info band" }
+
+rules:
+  - alert: DiskLatencyCritical
+    expr: (${m} >= ${t1}) ${cap1}
+    labels: { severity: critical }
+  - alert: DiskLatencyWarning
+    expr: (${m} >= ${t2}) ${cap2}
+    labels: { severity: warning }
+  - alert: DiskLatencyInfo
+    expr: (${m} >= ${t3}) ${cap3}
+    labels: { severity: info }
+```
+
+An empty threshold takes the large default, and "below a huge number" is no
+limit at all, so each band ends at the nearest higher threshold that is set,
+or at `upper`. "Below `t1` and below `upper`" is "below whichever is
+smaller": no `min()` is needed.
+
+The lowest threshold, `t3` here, has no default: left empty, the
+[Empty cells](#empty-cells) rule leaves out that rule for the row.
+
+With `upper: 50, t1: 40, t2: 30, t3: 20`:
+
+| The row fills in | 25 | 35 | 45 | 55 |
+|---|---|---|---|---|
+| all four | Info | Warning | Critical | — |
+| all but `t2` | Info | **Info** | Critical | — |
+| all but `t1` | Info | Warning | **Warning** | — |
+| all but `upper` | Info | Warning | Critical | **Critical** |
+
+### Below a floor
+
+A separate "too low" alert is its own rule, with its own column and no
+default:
+
+```yaml
+  low: { type: number, description: "Below this, the metric is too low. Empty: not checked" }
+
+  - alert: DiskLatencyTooLow
+    expr: ${m} < ${low}
+```
+
+Between `low` and the lowest band nothing fires: that is the normal range.
+
+### What to watch
+
+- **Fill the thresholds from high to low.** `upper > t1 > t2 > t3`, and
+  `low` at or below the lowest one. Nothing checks the order: with `t2` above
+  `t1`, the warning band never fires, and with `low` above `t3`, both alerts
+  fire in the overlap.
+- **A band only reaches up, never down.** With `t3` empty, values below `t2`
+  raise nothing (until `low`); the warning band does not grow downwards.
+- **An empty threshold still produces its rule.** With `t2` empty, the
+  warning rule is generated as `>= 9000000000000000` and never fires. It
+  appears in Preview's summary like any other rule.
+- **Use a large number, not `.inf`.** An infinite default is not kept in the
+  generated schema.
+- **Write what an empty cell means in the description.** The table shows the
+  default, `9e15`, to whoever fills it in.
+
 ## `_common.yaml`
 
 Columns that belong to the chart rather than to one group: filled in once per

@@ -7,6 +7,7 @@ import RuleEditor from '../components/RuleEditor'
 import KVEditor from '../components/KVEditor'
 import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
+import { syncFailedNotice } from '../utils/syncNotice'
 import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_RE } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
@@ -457,7 +458,9 @@ export default function TemplateDevEditor() {
   // A save that did not happen says why, and leaves the editor as it is —
   // reloading the chart after a failure would throw the edits away.
   function reportFailedSave(result, title = 'Save failed') {
-    const lines = result?.errors || (result?.findings || []).map(f => f.description || f.message)
+    const lines = result?.errors ||
+      result?.migrationProblems?.flatMap(d => d.problems.map(p => `${d.path}: ${p.message}`)) ||
+      (result?.findings || []).map(f => f.description || f.message)
     Modal.error({
       title: result?.error || title,
       content: lines?.length ? lines.join('; ') : 'The server did not save the chart.',
@@ -471,6 +474,8 @@ export default function TemplateDevEditor() {
       return
     }
     setBreaking(null)
+    const notice = syncFailedNotice(result.syncFailed, 'Changed')
+    if (notice) message.warning(notice, 10)
     await saveChartMeta(activeChart, chartMeta)
     await loadChart(activeChart)
   }

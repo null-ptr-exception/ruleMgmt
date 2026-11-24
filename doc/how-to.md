@@ -163,14 +163,23 @@ already exist. Save opens a dialog instead of saving:
 2. **Continue** → for each column that goes away, pick what it **Becomes**:
    another column of the same group, or *Delete (value not kept)*. Everything
    starts as delete
-3. **Continue** → the preview shows, per deployment, the rows that change and
-   the values that are lost
+3. **Continue** → the preview shows, per deployment, the rows that change,
+   the values that are lost, and the **Problems**: what a values save would
+   refuse in the rewritten file — a value that cannot go in a label, rows a
+   selector cannot tell apart, a required value left empty
 4. **Change in place** rewrites the chart and every affected deployment in one
-   step
+   step. It stays off while the change would cause a problem: change the
+   mapping, or fix the deployment first (one synced from another is
+   read-only: unlink it first). Each problem a deployment already had before
+   this change is marked *already there before* and does not stop it; a new
+   one in the same deployment still does
 
 A deployment that follows another through sync gets its source's new file in
 the same step, so the two stay identical; the preview says *copied from* the
-source. One whose source does not use this chart is rewritten on its own.
+source. One whose source does not use this chart is rewritten on its own. A
+sync target that cannot be written does not stop the change: the chart and
+its source are rewritten, and the editor names the target, which may not
+match its source until the source is saved again.
 
 A removed rule is found by counting the rules of each name, raw rules
 included (a raw rule is read for the `alert:` or `record:` in it, and one

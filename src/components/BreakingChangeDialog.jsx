@@ -134,9 +134,24 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
               ? (d.losses.map(l => `${l.group}: ${l.columns.join(', ')}`).join('; '))
               : <Text type="secondary">none</Text>,
           },
+          // What a values save would refuse in the migrated file (#176).
+          {
+            title: 'Problems', render: (_, d) => (d.problems || []).length
+              ? (
+                <ul data-testid="migration-problems" style={{ paddingLeft: 18, margin: 0 }}>
+                  {d.problems.map((p, i) => (
+                    <li key={i}>{p.message}{p.before && <Tag color="orange" style={{ marginLeft: 6 }}>already there before</Tag>}</li>
+                  ))}
+                </ul>
+              )
+              : <Text type="secondary">none</Text>,
+          },
         ]}
       />
     )
+  // Problems this change would cause stop it; ones a deployment already had
+  // are shown, but are no reason to hold the change up.
+  const refused = (preview?.deployments || []).filter(d => d.problems?.some(p => !p.before))
 
   const cloneControl = (
     <Space.Compact>
@@ -165,6 +180,10 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
         </>
       )}
       {step === 2 && previewView}
+      {step === 2 && refused.length > 0 && (
+        <Alert style={{ marginTop: 12 }} type="error" data-testid="migration-refused"
+          message={`${refused.map(d => d.path).join(', ')} would get values a save refuses. Change the mapping, or fix ${refused.length === 1 ? 'that deployment' : 'those deployments'} first${refused.some(d => d.readonly) ? ' (one synced from another deployment is read-only: unlink it first)' : ''}.`} />
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', marginTop: 20 }}>
         <div>{cloneControl}</div>
@@ -176,7 +195,7 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
           )}
           {step === 1 && <Button type="primary" onClick={goToPreview}>Continue</Button>}
           {step === 2 && (
-            <Button type="primary" danger onClick={() => onApplyInPlace(migration)}>Change in place</Button>
+            <Button type="primary" danger disabled={preview == null || refused.length > 0} onClick={() => onApplyInPlace(migration)}>Change in place</Button>
           )}
         </div>
       </div>

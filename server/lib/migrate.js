@@ -16,6 +16,14 @@ import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
 import { getDepName, wrapValues, unwrapValues } from './subchart.js'
 import { readSyncRegistry, isTarget, getSourceForTarget } from './sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'
+import { valueProblems } from '../../src/utils/rulesFile.js'
+import { selectorValueProblems } from '../../src/utils/selectorContract.js'
+
+// Everything a values save would refuse, both kinds at once (a save stops at
+// the first kind). Each names its cell in its message.
+function allProblems(bare, model) {
+  return [...valueProblems(bare, model), ...selectorValueProblems(bare, model).problems]
+}
 
 function rowsChanged(before, after) {
   let n = 0
@@ -59,7 +67,14 @@ async function locate(gitopsDir, relPath) {
 /**
  * Writes nothing itself: a caller that ignores `writes` gets a preview —
  * every entry has `rowsChanged` and `losses` for the dialog.
- * @returns { deployments: [{ deployment, path, readonly, copiedFrom, rowsChanged, losses, orphaned }], writes: [[file, text]] }
+ * With `model` (the new Template's) each migrated file is checked as a
+ * values save would check it (#176): `problems` lists what a save would
+ * refuse. One the file had already, against `beforeModel`, before this
+ * change is marked `before: true` — reported, but no reason to refuse it.
+ * A problem counts as the same when its message is: the message names the
+ * group, the row and the column. A copied follower lists none: its
+ * problems are its source's.
+ * @returns { deployments: [{ deployment, path, readonly, copiedFrom, rowsChanged, losses, orphaned, problems: [{ message, before }] }], writes: [[file, text, isTarget, path]] }
  *          `copiedFrom` is the source a sync follower's file is copied from,
  *          or null when the follower is migrated on its own (its source is
  *          not among the deployments using this chart, or has no values.yaml
@@ -67,7 +82,7 @@ async function locate(gitopsDir, relPath) {
  *          with the source's migrated rows, which is what it ends up with;
  *          its `losses` and `orphaned` are the source's.
  */
-export async function planDeploymentMigration(gitopsDir, chart, targetSchema, migration, { deploymentsDirEnv } = {}) {
+export async function planDeploymentMigration(gitopsDir, chart, targetSchema, migration, { deploymentsDirEnv, model, beforeModel } = {}) {
   const found = await findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv)
   const registry = await readSyncRegistry(gitopsDir)
 
@@ -94,6 +109,8 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     const before = unwrapValues(parsed, depName)
 
     const { values: after, orphaned } = migrateValues(before, migration, targetSchema)
+    const had = new Set(model && beforeModel ? allProblems(before, beforeModel).map(p => p.message) : [])
+    const problems = model ? allProblems(after, model).map(p => ({ ...p, before: had.has(p.message) })) : []
     deployments.push({
       deployment: dep.deployment,
       path: dep.path,
@@ -101,6 +118,7 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
       rowsChanged: rowsChanged(before, after),
       losses: migrationLosses(before, migration, targetSchema),
       orphaned,
+      problems,
     })
 
     // Only the chart's own block is replaced; anything else at the top of a
@@ -128,8 +146,9 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
       entry.rowsChanged = rowsReplaced(befores.get(entry.path), afters.get(entry.copiedFrom))
       entry.losses = src.losses
       entry.orphaned = src.orphaned
+      entry.problems = []
     }
-    writes.push([files.get(entry.path), texts.get(entry.copiedFrom ?? entry.path)])
+    writes.push([files.get(entry.path), texts.get(entry.copiedFrom ?? entry.path), entry.readonly, entry.path])
   }
 
   return { deployments, writes }

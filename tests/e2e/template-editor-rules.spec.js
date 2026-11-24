@@ -133,6 +133,39 @@ rules:
     await request.delete(`/api/v2/deployments/${CHART}/prod`)
   })
 
+  // #176: a change that leaves a deployment with values a save refuses — here
+  // a column made required that a row leaves empty — is not applied.
+  test('the breaking dialog will not change in place what a save would refuse', async ({ page, request }) => {
+    const optionalWarn = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number}
+rules:
+  - alert: A
+    expr: cpu{ns="\${namespace}"} > 1
+`
+    expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': optionalWarn }, confirmBreaking: true } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p' }] } } })).ok()).toBeTruthy()
+    const deployment = async () => (await (await request.get(`/api/v2/deployments/${CHART}/prod`)).json()).content || ''
+    const before = await deployment()
+    try {
+      await openChart(page)
+      await page.locator('input[value="warn"]').locator('xpath=following::input[@type="checkbox"][1]').check()
+      await page.getByRole('button', { name: 'Save' }).first().click()
+
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      await dialog.getByRole('button', { name: 'Continue' }).click()
+      await expect(dialog.getByTestId('migration-problems')).toContainText('warn', { timeout: 5000 })
+      await expect(dialog.getByTestId('migration-refused')).toContainText('would get values a save refuses')
+      await expect(dialog.getByRole('button', { name: 'Change in place' })).toBeDisabled()
+      expect(await deployment()).toBe(before)
+    } finally {
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+      await request.delete(`/api/v2/deployments/${CHART}/prod`)
+    }
+  })
+
   // #185: "Save anyway" answers "the files changed on disk", not "this breaks
   // deployments" — the breaking dialog still has to come up.
   test('Save anyway over files changed on disk still asks about a breaking change', async ({ page, request }) => {

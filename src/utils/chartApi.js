@@ -78,7 +78,8 @@ export async function deleteChartTemplate(chart, template) {
  *
  * A breaking change comes back as 409 with `breaking` / `notices` / `added` /
  * `deployments` (each `readonly`); parse errors and failed rule checks come
- * back as 400 with `errors` / `findings`. `migration` ({ groups?, columns?,
+ * back as 400 with `errors` / `findings`. A migration that would write values
+ * a save refuses comes back `refused` with `migrationProblems` (#176). `migration` ({ groups?, columns?,
  * dropped? }) with confirmBreaking rewrites every affected deployment's values.
  */
 export async function saveChartRules(chart, files, confirmBreaking = false, migration = undefined) {
@@ -87,7 +88,12 @@ export async function saveChartRules(chart, files, confirmBreaking = false, migr
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ files, confirmBreaking, migration })
   })
-  if (res.status === 409) return { blocked: true, ...(await res.json()) }
+  if (res.status === 409) {
+    const body = await res.json()
+    // A migration that would write values a save refuses (#176) is a 409 of
+    // its own: not the breaking change the dialog asks about.
+    return body.migrationProblems ? { refused: true, ...body } : { blocked: true, ...body }
+  }
   if (res.status === 400) return { invalid: true, ...(await res.json()) }
   // Anything else — "Generation failed", "Deployment migration failed" — keeps
   // its message, so the editor can say what went wrong instead of nothing.

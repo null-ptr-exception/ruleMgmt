@@ -1,7 +1,7 @@
 import express from 'express'
 import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing } from '../lib/chartUsage.js'
-import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts } from '../lib/chartFiles.js'
+import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
@@ -39,6 +39,10 @@ async function withReadonly(gitopsDir, deployments) {
   const registry = await readSyncRegistry(gitopsDir)
   return deployments.map(d => ({ ...d, readonly: isTarget(registry, d.path) }))
 }
+
+// The Template's model as it is on disk, before a save: what a migrated
+// deployment's values were valid against (#176). null when it has none.
+const modelBefore = async chartDir => (await readChartModel(chartDir)).model
 
 export default function templatesRouter() {
   const router = express.Router()
@@ -218,13 +222,27 @@ export default function templatesRouter() {
       // deployment's values.yaml in the same request.
       let migratedDeployments = []
       let migrationWrites = []
+      let targetWrites = []
       if (confirmBreaking && migration && isBreaking) {
         try {
-          const plan = await planDeploymentMigration(req.gitopsDir, req.params.chart, newSchema, migration, { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR })
+          const plan = await planDeploymentMigration(req.gitopsDir, req.params.chart, newSchema, migration, {
+            deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: await modelBefore(chartDir),
+          })
           migratedDeployments = plan.deployments
-          migrationWrites = plan.writes
+          migrationWrites = plan.writes.filter(w => !w[2]).map(([file, text]) => [file, text])
+          targetWrites = plan.writes.filter(w => w[2])
         } catch (err) {
           return res.status(500).json({ error: `Deployment migration failed: ${err.message}` })
+        }
+        // What a values save would refuse is not written by a migration
+        // either (#176). A problem a deployment had already is not this
+        // change's doing: it is shown in the preview, not a reason to refuse.
+        const refused = migratedDeployments.filter(d => d.problems.some(p => !p.before))
+        if (refused.length) {
+          return res.status(409).json({
+            error: 'The migration would write values a save refuses',
+            migrationProblems: refused.map(d => ({ path: d.path, readonly: d.readonly, problems: d.problems.filter(p => !p.before) })),
+          })
         }
       }
 
@@ -255,6 +273,17 @@ export default function templatesRouter() {
 
       const wrote = await writeChanged(entries)
       for (const abs of removed) await fs.rm(abs, { force: true })
+      // A sync target that cannot be written does not undo the Template or
+      // its source: it is reported, as a values save reports it (#180).
+      const syncFailed = []
+      for (const [file, text, , target] of targetWrites) {
+        try {
+          wrote.push(...await writeChanged([[file, text]]))
+        } catch (err) {
+          console.error(`Migration: ${target} could not be written`, err)
+          syncFailed.push({ target, error: err.code || err.message })
+        }
+      }
 
       res.json({
         ok: true,
@@ -264,6 +293,7 @@ export default function templatesRouter() {
         ],
         notices: withDesc(notices),
         migrated: migratedDeployments.map(d => ({ deployment: d.deployment, path: d.path, readonly: d.readonly, copiedFrom: d.copiedFrom, rowsChanged: d.rowsChanged })),
+        ...(syncFailed.length ? { syncFailed } : {}),
       })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -281,7 +311,8 @@ export default function templatesRouter() {
       if (errors.length) return res.status(400).json({ error: 'Invalid rules', errors })
       const targetSchema = modelToSchema(model, await readSchema(schemaFile))
       const { deployments } = await planDeploymentMigration(
-        req.gitopsDir, req.params.chart, targetSchema, migration || {}, { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR })
+        req.gitopsDir, req.params.chart, targetSchema, migration || {},
+        { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: await modelBefore(chartPaths(req, req.params.chart).chartDir) })
       res.json({ deployments })
     } catch (err) {
       res.status(500).json({ error: err.message })

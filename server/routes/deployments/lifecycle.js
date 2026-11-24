@@ -3,22 +3,14 @@
 import { withoutPath } from '../../lib/answerPaths.js'
 import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
-import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink, isDeploymentDir } from '../../lib/sync.js'
+import { writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink } from '../../lib/sync.js'
+import { syncAnswer } from '../../repo/sync.js'
+import { folderEntry, isDeployment } from '../../repo/walk.js'
+import { openRepo } from '../../repo/openRepo.js'
 import { NAME_RE } from '../../lib/safePath.js'
 import { errorAnswer } from '../../lib/readIfThere.js'
 
-import { isValidDeploymentParam, syncFolder, resolveDeploymentDir, resolveValuesFile, exists, commonRefused } from './resolve.js'
-// A Chart.yaml naming a dependency, and no values.yaml.
-async function chartOnly(dir) {
-  try {
-    const chart = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8'))
-    return Array.isArray(chart?.dependencies) && chart.dependencies.length > 0 && !(await exists(path.join(dir, 'values.yaml')))
-  } catch {
-    return false
-  }
-}
-
+import { isValidDeploymentParam, syncFolder, resolveDeploymentDir, resolveValuesFile, commonRefused } from './resolve.js'
 export function lifecycleRoutes(router) {
   router.post('/:chart/:deployment/clone', async (req, res) => {
     if (commonRefused(req, res, 'cloned')) return
@@ -54,7 +46,7 @@ export function lifecycleRoutes(router) {
       const folder = syncFolder(req)
       // A folder with a Chart.yaml and no values.yaml is removed whole too:
       // it renders the Template, and keeps the Template from being deleted.
-      const direct = resolved.direct || (!!folder && req.params.deployment === path.basename(dir) && await chartOnly(dir))
+      const direct = resolved.direct || (!!folder && req.params.deployment === path.basename(dir) && !!(await folderEntry(openRepo(req.gitopsDir), folder)).chartOnly)
       // Deleting a legacy sibling leaves the folder's deployment, and so its
       // sync link, in place. A deleted target leaves its source; a deleted
       // source lets go of its targets, which keep what they have and become
@@ -66,8 +58,10 @@ export function lifecycleRoutes(router) {
         // just one file would leave an orphaned, half-deleted deployment.
         // Removed first, inside the lock: a removal that fails leaves the
         // sync links as they were, and no sync can be made to it meanwhile.
-        await withSyncRegistryLock(req.gitopsDir, async () => {
-          const registry = await readSyncRegistry(req.gitopsDir)
+        const refused = await withSyncRegistryLock(req.gitopsDir, async () => {
+          const repo = openRepo(req.gitopsDir)
+          const { registry, refusal } = await syncAnswer(repo)
+          if (refusal) return refusal
           await fs.rm(dir, { recursive: true, force: true })
           let changed = false
           if (isTarget(registry, folder)) {
@@ -81,11 +75,13 @@ export function lifecycleRoutes(router) {
             changed = true
             // Listed as let go: on disk, and not still under another source.
             for (const t of new Set(entries.flatMap(e => e.targets))) {
-              if (t !== folder && !isTarget(registry, t) && await isDeploymentDir(path.join(req.gitopsDir, t))) unlinked.push(t)
+              if (t !== folder && !isTarget(registry, t) && await isDeployment(repo, t)) unlinked.push(t)
             }
           }
           if (changed) await writeSyncRegistry(req.gitopsDir, registry)
+          return null
         })
+        if (refused) return res.status(refused.status).json(refused.body)
       } else if (direct) {
         await fs.rm(dir, { recursive: true, force: true })
       } else {

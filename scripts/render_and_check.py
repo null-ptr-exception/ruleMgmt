@@ -49,7 +49,7 @@ def discover_chart_targets(root: Path) -> list[RenderTarget]:
     return targets
 
 
-# The same rules as AlertForge's own walk (server/lib/deploymentWalk.js), so
+# The same rules as AlertForge's own walk (server/repo/walk.js), so
 # what this renders is what AlertForge lists and checks:
 # - a deployment is a folder with a Chart.yaml naming a dependency and a
 #   values.yaml; a folder right inside a _common/ is a _common chart, which

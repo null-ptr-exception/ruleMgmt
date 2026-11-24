@@ -3,8 +3,9 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
+import { syncAnswer } from '../../server/repo/sync.js'
+import { openRepo } from '../../server/repo/openRepo.js'
 import {
-  readSyncRegistry,
   writeSyncRegistry,
   getTargetsForSource,
   getSourceForTarget,
@@ -15,6 +16,9 @@ import {
   applySync,
   applyUnlink,
 } from '../../server/lib/sync.js'
+
+// sync.yaml as every route reads it (repo/sync.js).
+const readSyncRegistry = async dir => (await syncAnswer(openRepo(dir))).registry
 
 describe('sync registry file I/O', () => {
   let tmpDir

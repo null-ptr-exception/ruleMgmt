@@ -6,7 +6,11 @@ import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
 import deploymentsRouter from '../../server/routes/deployments.js'
-import { writeSyncRegistry, readSyncRegistry } from '../../server/lib/sync.js'
+import { writeSyncRegistry } from '../../server/lib/sync.js'
+import { syncAnswer } from '../../server/repo/sync.js'
+import { openRepo } from '../../server/repo/openRepo.js'
+
+const readSyncRegistry = async dir => (await syncAnswer(openRepo(dir))).registry
 
 describe('deployments API — eager sync integration', () => {
   let tmpDir, app

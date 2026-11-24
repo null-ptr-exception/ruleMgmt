@@ -6,6 +6,8 @@ import { normalizeSyncPath } from '../../lib/sync.js'
 import { isCommonChartPath, COMMON_DIR } from '../../../src/utils/reservedNames.js'
 import { NAME_RE, isRepoPath, insideReal } from '../../lib/safePath.js'
 import { isAbsent, UnreadableError } from '../../lib/readIfThere.js'
+import { linkRefusal } from '../../repo/walk.js'
+import { openRepo } from '../../repo/openRepo.js'
 
 // One segment of a file name: not a path, not hidden.
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
@@ -27,7 +29,8 @@ export async function resolveDeploymentDir(req) {
   if (folder) {
     // A path in the repo, staying in it (safePath.js).
     if (!isRepoPath(folder)) return null
-    // Where it really is, through any link: in the repo.
+    // A folder that is a link (or is reached through one) is no deployment.
+    if (await linkRefusal(openRepo(req.gitopsDir), folder)) return null
     return insideReal(req.gitopsDir, folder)
   }
   const deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments')

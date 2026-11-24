@@ -312,7 +312,7 @@ describe('a deployment whose Chart.yaml cannot be read', () => {
     // A breaking change asks first while any folder that may use the chart cannot be read.
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU.replace(/namespace/g, 'ns') } })
     expect(status).toBe(409)
-    expect(JSON.parse(data && JSON.stringify(data)).unreadable).toEqual([{ path: 'deployments/team/a', error: 'EACCES' }])
+    expect(JSON.parse(data && JSON.stringify(data)).unreadable).toEqual([{ path: 'deployments/team/a', error: 'its Chart.yaml cannot be read (permission denied)' }])
   })
 })
 
@@ -324,11 +324,13 @@ describe('a folder whose Chart.yaml cannot be read, placed by its path', () => {
       await write(`${dir}/Chart.yaml`, 'name: x\n')
       await lock(`${dir}/Chart.yaml`)
     }
-    const { walkDeployments } = await import('../../server/lib/deploymentWalk.js')
-    const unreadable = (await walkDeployments(tmpDir)).filter(d => d.kind === 'unreadable')
+    const { walk } = await import('../../server/repo/walk.js')
+    const { openRepo } = await import('../../server/repo/openRepo.js')
+    const unreadable = (await walk(openRepo(tmpDir))).filter(d => d.kind === 'unreadable')
+    const why = 'its Chart.yaml cannot be read (permission denied)'
     expect(unreadable).toEqual([
-      { path: 'deployments/team/_common/demo/inner', kind: 'unreadable', error: 'EACCES', nestedIn: null, inCommon: true },
-      { path: 'deployments/team/a/canary', kind: 'unreadable', error: 'EACCES', nestedIn: 'deployments/team/a', inCommon: false },
+      { rel: 'deployments/team/_common/demo/inner', kind: 'unreadable', why, cause: 'chart', nestedIn: null, inCommon: true },
+      { rel: 'deployments/team/a/canary', kind: 'unreadable', why, cause: 'chart', nestedIn: 'deployments/team/a', inCommon: false },
     ])
   })
 })

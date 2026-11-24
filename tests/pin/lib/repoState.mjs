@@ -34,7 +34,7 @@ export const changed = (a, b) => [...new Set([...a.keys(), ...b.keys()])].filter
  *   'text'                       a file
  *   { mode: 0, content }         a file with that mode
  *   { dir: true }                a folder
- *   { link: target }             a link ('__OUTSIDE__' → `outside`)
+ *   { link: target }             a link ('__OUTSIDE__' at its start → `outside`)
  *   { remove: true }             nothing
  *   { dirMode: 0 }               only the folder's mode changes
  */
@@ -47,7 +47,7 @@ export async function put(root, rel, spec, outside) {
   await fs.mkdir(path.dirname(abs), { recursive: true })
   if (typeof spec === 'string') return fs.writeFile(abs, spec)
   if (spec.dir) return fs.mkdir(abs)
-  if (spec.link) return fs.symlink(spec.link === '__OUTSIDE__' ? outside : spec.link, abs)
+  if (spec.link) return fs.symlink(spec.link.replace(/^__OUTSIDE__/, outside), abs)
   if (spec.mode !== undefined) { await fs.writeFile(abs, spec.content); return fs.chmod(abs, spec.mode) }
 }
 

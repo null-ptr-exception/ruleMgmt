@@ -20,7 +20,8 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { resolveStack, wrapPath } from './stack.js'
 import { copyRouting, readRouting, restoreRouting, writeWhole } from './routingFiles.js'
-import { getTargetsForSource, isSafeSyncPath, isDeploymentDir } from './sync.js'
+import { getTargetsForSource, isSafeSyncPath } from './sync.js'
+import { isDeployment } from '../repo/walk.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { readTextIfThere } from './readIfThere.js'
@@ -215,7 +216,7 @@ export async function copyToTargets(gitopsDir, registry, source, what) {
       // Through a link, still in the repo.
       if (!(await insideReal(gitopsDir, target))) throw new Error('not a path sync may write to: it leads outside the repo')
       const dstDir = path.join(gitopsDir, target)
-      if (!(await isDeploymentDir(dstDir))) throw new Error('not a deployment on disk')
+      if (!(await isDeployment(openRepo(gitopsDir), target))) throw new Error('not a deployment on disk')
       await copyToTarget(srcDir, dstDir, what)
     } catch (err) {
       // A file error's message carries the server's absolute path; the

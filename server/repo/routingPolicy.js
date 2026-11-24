@@ -34,17 +34,7 @@ export const ROUTING_POLICIES = Object.freeze({
     'routing.cr-unreadable': { action: 'ignore', why: 'the resource is made again from routing.yaml, not copied' },
     'routing.warning': { action: 'ignore', why: 'said where it is saved and committed' },
   } }),
-  // The app's Commit: what blocks today blocks; a routing.yaml's own
-  // problems are listed (routingProblems), not a reason to refuse a commit
-  // of everything else.
-  commit: definePolicy('commit', { rows: {
-    'routing.problem': { action: 'list', why: PROBLEM },
-    'routing.shared-unresolved': { action: 'refuse', why: 'the shared file was changed (removed, broken, a config taken out) under deployments that were fine: a resource made now would have no one to send to' },
-    'routing.warning': { action: 'warn', why: 'what its configs will do that is worth saying' },
-    'routing.common-resource': { action: 'list', why: 'named, not a reason to refuse the commit: Commit did not block it before (check-deployment does)' },
-    'shared.problem': { action: 'list', why: 'blocks only while a deployment uses the file (routing.shared-unresolved)' },
-    'shared.warning': { action: 'warn', why: 'what its configs will do that is worth saying' },
-  } }),
+  // The app's Commit's rows are in policy.js POLICIES.commit (findings/commitRows.js).
   // check-deployment, the gate outside the app: what deploys is what the
   // table says, or it fails.
   checkDeployment: definePolicy('checkDeployment', { rows: {

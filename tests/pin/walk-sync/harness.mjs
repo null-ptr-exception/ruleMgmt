@@ -17,8 +17,16 @@ import { A, B, X, FLAT, BASE, chartAt, valuesFor } from './cases.mjs'
 import { HELM, run, oneLine, tools } from '../lib/tools.mjs'
 import { snapshot as snapshotAll, changed, put } from '../lib/repoState.mjs'
 import { clusterReads } from '../lib/alertmanager.mjs'
-import { readSyncRegistry } from '../../../server/lib/sync.js'
+import { syncAnswer } from '../../../server/repo/sync.js'
+import { openRepo } from '../../../server/repo/openRepo.js'
 import { syncRegistryFindings } from '../../../server/lib/commit/sync.js'
+
+// sync.yaml as the routes read it: the registry, or a throw when it cannot be read.
+async function readSyncRegistry(root) {
+  const read = await syncAnswer(openRepo(root))
+  if (read.refusal) throw Object.assign(new Error(read.refusal.body.error), { code: 'unreadable' })
+  return read.registry
+}
 
 const WT = path.resolve(import.meta.dirname, '../../..')
 const snapshot = root => snapshotAll(root, rel => rel === 'marker.txt')
@@ -265,6 +273,7 @@ export async function runRow(ws, c) {
     const res = await api('GET', '/api/v2/folders/deployments')
     if (res.status !== 200) return http(res)
     const mine = (res.data || []).find(d => d.path === folder)
+    if (mine?.unreadable) return { cls: 'unreadable', status: 200, appValue: 'unreadable', raw: res.text }
     return { ...seen(mine, mine ? ` alertCount=${mine.alertCount}` : ''), raw: res.text }
   })
   await record('folder-list', async () => {
@@ -277,6 +286,9 @@ export async function runRow(ws, c) {
     const res = await api('GET', '/api/v2/templates/demo/deployments')
     if (res.status !== 200) return http(res)
     const mine = (res.data?.deployments || []).find(d => d.path === folder)
+    // Who is in a folder that cannot be read is not known: named apart.
+    const apart = !mine && (res.data?.unreadable || []).find(u => u.path === folder || folder.startsWith(`${u.path}/`))
+    if (apart) return { cls: 'unreadable', status: 200, appValue: `unreadable ${apart.path}`, raw: res.text }
     return { cls: !mine ? 'absent' : mine.kind || 'deployment', status: 200, appValue: mine ? `found${mine.broken ? ' broken' : ''}${mine.hidden ? ' hidden' : ''}` : 'not found', raw: res.text }
   })
   await record('migration', async () => {
@@ -317,13 +329,13 @@ export async function runRow(ws, c) {
     if (res.status !== 200) return http(res)
     return { cls: 'ok', status: 200, appValue: (res.data?.syncs || []).map(s => `${s.source}>${s.targets.join('+')}`).join(' ') || 'none', raw: res.text }
   })
-  // The two readers of sync.yaml, side by side: the one every route uses,
-  // and the commit check's own.
+  // sync.yaml as the routes read it, and as Commit checks it, side by side
+  // (they were two readers; they are one now, and must still agree).
   await record('parsers', async () => {
     let read, readErr
     try { read = await readSyncRegistry(root) } catch (err) { readErr = err.code || err.name }
     let found, foundErr
-    try { found = await syncRegistryFindings(root) } catch (err) { foundErr = err.code || err.name }
+    try { found = await syncRegistryFindings(openRepo(root)) } catch (err) { foundErr = err.code || err.name }
     const links = read ? read.syncs.map(s => `${s.source}>${s.targets.join('+')}`).join(' ') || 'none' : `throws ${readErr}`
     const commit = found ? `${found.readable ? 'readable' : 'not readable'}, ${found.findings.length} findings` : `throws ${foundErr}`
     const disagree = (read === undefined) !== (found === undefined || !found.readable)
@@ -354,7 +366,7 @@ export async function runRow(ws, c) {
     const res = await api('DELETE', `/api/v2/deployments/demo/a${q(A)}`)
     const r = http(res)
     let left
-    try { left = (await readSyncRegistry(root)).syncs.map(s => `${s.source}>${s.targets.join('+')}`).join(' ') || 'none' } catch (err) { left = `unreadable ${err.code || err.name}` }
+    try { left = (await readSyncRegistry(root)).syncs.map(s => `${s.source}>${s.targets.join('+')}`).join(' ') || 'none' } catch { left = 'unreadable' }
     return { ...r, appValue: `unlinked=${(res.data?.unlinked || []).join('+') || '-'} left=${left}` }
   })
   // A target is read-only: its routing cannot be saved.

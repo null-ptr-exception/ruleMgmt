@@ -5,8 +5,8 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts, templateForNewDeployment } from '../../lib/chartDiscovery.js'
 import { wrapValues } from '../../lib/subchart.js'
-import { isDeploymentDir, isSafeSyncPath } from '../../lib/sync.js'
-import { newDeploymentProblem } from '../../lib/deploymentWalk.js'
+import { isSafeSyncPath } from '../../lib/sync.js'
+import { newDeploymentProblem, isDeployment } from '../../repo/walk.js'
 import { resolveStack } from '../../lib/stack.js'
 import { newReservedSegment, reservedError } from '../../lib/reservedNames.js'
 import { dumpForHelm } from '../../../src/utils/yamlScalar.js'
@@ -81,12 +81,13 @@ export function initRoutes(router) {
     try {
       const reserved = await newReservedSegment(req.gitopsDir, folder)
       if (reserved) return res.status(400).json({ error: reservedError(reserved) })
-      const misplaced = await newDeploymentProblem(req.gitopsDir, folder)
+      const here = openRepo(req.gitopsDir)
+      const misplaced = await newDeploymentProblem(here, folder)
       if (misplaced) return res.status(400).json({ error: misplaced })
       // A deployment already there is never written over, whatever it
       // depends on: its Chart.yaml and values.yaml are someone's.
-      if (await isDeploymentDir(deployDir)) {
-        const existing = yaml.load(await fs.readFile(path.join(deployDir, 'Chart.yaml'), 'utf-8')) || {}
+      if (await isDeployment(here, folder)) {
+        const existing = (await here.helmYaml(`${folder}/Chart.yaml`)).value || {}
         const { chart: template } = await resolveStack(req.gitopsDir, deployDir)
         return res.json({ status: 'existing', chart: template ?? existing.dependencies?.[0]?.name ?? null })
       }

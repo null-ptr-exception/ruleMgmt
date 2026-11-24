@@ -16,6 +16,7 @@ import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
 import { UnreadableError } from '../lib/readIfThere.js'
 import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
+import { linkRefusal } from '../repo/walk.js'
 
 // One segment of a file name: not a path, not hidden.
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
@@ -93,6 +94,8 @@ export default function renderRouter() {
 
     let deploymentsDir
     if (folder) {
+      const link = isRepoPath(folder) ? await linkRefusal(openRepo(req.gitopsDir), folder) : null
+      if (link) return res.status(400).json({ error: link })
       deploymentsDir = isRepoPath(folder) ? await insideReal(req.gitopsDir, folder) : null
       if (!deploymentsDir) return res.status(400).json({ error: 'Invalid folder path' })
     } else {

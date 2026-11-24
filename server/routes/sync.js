@@ -2,14 +2,12 @@ import express from 'express'
 import fs from 'fs/promises'
 import path from 'path'
 import {
-  readSyncRegistry,
   writeSyncRegistry,
   withSyncRegistryLock,
   getTargetsForSource,
   getSourceForTarget,
   isSafeSyncPath,
   normalizeSyncPath,
-  isDeploymentDir,
   applySync,
   applyUnlink,
 } from '../lib/sync.js'
@@ -19,7 +17,8 @@ import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { openRepo } from '../repo/openRepo.js'
 import { writeProblems, writeRefusal } from '../repo/writePath.js'
 import { valuesWrite, copyToTarget } from '../lib/deploymentWrite.js'
-import { newDeploymentProblem } from '../lib/deploymentWalk.js'
+import { newDeploymentProblem, isDeployment, linkRefusal } from '../repo/walk.js'
+import { syncAnswer } from '../repo/sync.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
@@ -34,8 +33,9 @@ async function validateSyncPath(gitopsDir, candidate) {
     return `Invalid path: ${candidate}`
   }
   if (await inSharedDir(gitopsDir, candidate)) return `${candidate}: ${SHARED_DIR}/ holds the shared notification configs, and no deployment`
-  const absDir = path.join(gitopsDir, candidate)
-  if (!(await isDeploymentDir(absDir))) {
+  const link = await linkRefusal(openRepo(gitopsDir), candidate)
+  if (link) return link
+  if (!(await isDeployment(openRepo(gitopsDir), candidate))) {
     return `${candidate} is not a valid deployment`
   }
   return null
@@ -48,15 +48,10 @@ export default function syncRouter() {
   router.get('/', async (req, res) => {
     const source = req.query.source ? normalizeSyncPath(req.query.source) : undefined
     const target = req.query.target ? normalizeSyncPath(req.query.target) : undefined
-    let registry
-    try {
-      registry = await readSyncRegistry(req.gitopsDir)
-    } catch (err) {
-      // A malformed/unreadable sync.yaml is a real error, not "no syncs" —
-      // reporting it as empty here would invite the next write to wipe it.
-      console.error('Failed to read sync registry', err)
-      return res.status(500).json({ error: 'Failed to read sync registry' })
-    }
+    // A sync.yaml that cannot be read is named, not taken for "no syncs":
+    // reporting it as empty would invite the next write to wipe it.
+    const { registry, refusal } = await syncAnswer(openRepo(req.gitopsDir))
+    if (refusal) return res.status(refusal.status).json(refusal.body)
 
     if (source) {
       return res.json({ source, targets: getTargetsForSource(registry, source) })
@@ -97,17 +92,20 @@ export default function syncRouter() {
         // Whether the target is there is read under the lock: another sync
         // to the same new target may have made it while this one waited, and
         // a rollback that took it for new would delete that one's deployment.
+        const here = openRepo(req.gitopsDir)
         const targetExists = await fs.access(targetDir).then(() => true).catch(() => false)
-        if (targetExists && !(await isDeploymentDir(targetDir))) {
+        if (targetExists && !(await isDeployment(here, target))) {
           return { status: 400, body: { error: `${target} exists but is not a valid deployment` } }
         }
         // A new target is made where any new deployment may be: not inside
         // another deployment (the source too), around one, or in a _common folder.
         if (!targetExists) {
-          const misplaced = await newDeploymentProblem(req.gitopsDir, target)
+          const misplaced = await newDeploymentProblem(here, target)
           if (misplaced) return { status: 400, body: { error: misplaced } }
         }
-        const registry = await readSyncRegistry(req.gitopsDir)
+        const read = await syncAnswer(here)
+        if (read.refusal) return read.refusal
+        const { registry } = read
         const result = applySync(registry, source, target)
         if (!result.ok) return { status: 400, body: { error: result.error } }
 
@@ -199,7 +197,8 @@ export default function syncRouter() {
 
     try {
       const outcome = await withSyncRegistryLock(req.gitopsDir, async () => {
-        const registry = await readSyncRegistry(req.gitopsDir)
+        const { registry, refusal } = await syncAnswer(openRepo(req.gitopsDir))
+        if (refusal) return refusal
         const result = applyUnlink(registry, target)
         if (!result.ok) return { status: 400, body: { error: result.error } }
         await writeSyncRegistry(req.gitopsDir, registry)

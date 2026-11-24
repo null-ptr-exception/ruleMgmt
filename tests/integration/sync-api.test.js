@@ -219,11 +219,28 @@ describe('sync API', () => {
       expect(res.body).toEqual({ syncs: [] })
     })
 
-    it('a corrupt sync.yaml surfaces as 500, not as an empty registry', async () => {
+    it('a corrupt sync.yaml is named (409), not taken for an empty registry', async () => {
       fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), 'syncs: [unclosed')
 
       const res = await request(app).get('/api/v2/sync')
-      expect(res.status).toBe(500)
+      expect(res.status).toBe(409)
+      expect(res.body).toMatchObject({ file: 'sync.yaml', unreadable: true })
+      expect(res.body.error).toMatch(/^sync\.yaml cannot be read \(it is not valid YAML/)
+    })
+
+    it('a sync.yaml that cannot be read is named by every sync route (409), and left as it is', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('cpu/staging')
+      fs.mkdirSync(path.join(tmpDir, 'sync.yaml'))
+      for (const res of [
+        await request(app).get('/api/v2/sync'),
+        await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' }),
+        await request(app).delete('/api/v2/sync').send({ target: 'cpu/staging' }),
+      ]) {
+        expect(res.status).toBe(409)
+        expect(res.body).toEqual({ error: 'sync.yaml cannot be read (it is a folder, not a file)', file: 'sync.yaml', unreadable: true })
+      }
+      expect(fs.statSync(path.join(tmpDir, 'sync.yaml')).isDirectory()).toBe(true)
     })
 
     it('a corrupt sync.yaml fails POST without clobbering the file', async () => {
@@ -233,7 +250,7 @@ describe('sync API', () => {
       fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), corrupt)
 
       const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
-      expect(res.status).toBe(500)
+      expect(res.status).toBe(409)
       // The unparseable registry must survive untouched — treating it as
       // empty and rewriting it would silently drop every existing link.
       expect(fs.readFileSync(path.join(tmpDir, 'sync.yaml'), 'utf-8')).toBe(corrupt)
@@ -288,10 +305,10 @@ describe('sync API', () => {
       expect(res.body.error).not.toContain(tmpDir)
     })
 
-    it('500 responses do not leak filesystem paths', async () => {
+    it('a sync.yaml it cannot read is named without the filesystem path', async () => {
       fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), 'syncs: [unclosed')
       const res = await request(app).get('/api/v2/sync')
-      expect(res.status).toBe(500)
+      expect(res.status).toBe(409)
       expect(JSON.stringify(res.body)).not.toContain(tmpDir)
     })
   })

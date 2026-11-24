@@ -9,6 +9,8 @@ import path from 'path'
 import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
+import { loadSync } from '../../server/repo/sync.js'
+import { openRepo as openRepoForSync } from '../../server/repo/openRepo.js'
 
 // chmod does not stop root from writing.
 const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0
@@ -325,7 +327,8 @@ describe('a hand-edited sync.yaml', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true, version: expect.any(String) } })
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping an entry'), expect.anything())
+      // Left out by every reader, and said: Commit names the row.
+      expect((await loadSync(openRepoForSync(tmpDir))).findings.map(f => f.code)).toEqual(['sync.row'])
     } finally {
       warn.mockRestore()
     }
@@ -362,7 +365,8 @@ describe('a hand-edited sync.yaml', () => {
       expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true, version: expect.any(String) } })
       for (const t of [TGT, T2]) expect(await read(`${t}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
       expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT, T2] }] })
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping 2 target(s) that are not a path'))
+      expect((await loadSync(openRepoForSync(tmpDir))).findings.filter(f => f.code === 'sync.target-not-path').map(f => f.message)).toEqual([
+        'sync.yaml syncs[0]: a target is not a path (a map)', 'sync.yaml syncs[0]: a target is not a path (a map)'])
     } finally {
       warn.mockRestore()
     }

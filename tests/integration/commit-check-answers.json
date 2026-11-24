@@ -252,7 +252,7 @@
       "unreadable": [
         {
           "path": "deployments/hidden",
-          "error": "EACCES"
+          "error": "permission denied"
         }
       ],
       "regenerable": 0,
@@ -267,7 +267,7 @@
         "unreadable": [
           {
             "path": "deployments/hidden",
-            "error": "EACCES"
+            "error": "permission denied"
           }
         ]
       }
@@ -928,7 +928,7 @@
         {
           "severity": "commit",
           "kind": "sync-registry",
-          "description": "sync.yaml : is not valid YAML (unexpected end of the stream within a flow collection)"
+          "description": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
         }
       ],
       "routingProblems": [],
@@ -946,7 +946,7 @@
           {
             "severity": "commit",
             "kind": "sync-registry",
-            "description": "sync.yaml : is not valid YAML (unexpected end of the stream within a flow collection)"
+            "description": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
           }
         ],
         "regenerable": 0
@@ -959,7 +959,7 @@
         "failed": [
           {
             "deployment": "sync.yaml",
-            "error": "not valid YAML: fix it first"
+            "error": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
           }
         ]
       }
@@ -970,7 +970,7 @@
           {
             "severity": "commit",
             "kind": "sync-registry",
-            "description": "sync.yaml : is not valid YAML (unexpected end of the stream within a flow collection)"
+            "description": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
           }
         ],
         "routingProblems": [],
@@ -988,7 +988,7 @@
             {
               "severity": "commit",
               "kind": "sync-registry",
-              "description": "sync.yaml : is not valid YAML (unexpected end of the stream within a flow collection)"
+              "description": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
             }
           ],
           "regenerable": 0

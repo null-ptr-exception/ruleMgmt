@@ -14,7 +14,8 @@ import path from 'path'
 import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
 import { getDepName } from './subchart.js'
 import { unwrapPath, wrapPath, replaceAtPath } from './stack.js'
-import { readSyncRegistry, isTarget, getSourceForTarget } from './sync.js'
+import { isTarget, getSourceForTarget } from './sync.js'
+import { readRegistry } from '../repo/sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { openRepo } from '../repo/openRepo.js'
@@ -102,7 +103,7 @@ async function locate(gitopsDir, relPath, keys) {
 export async function planDeploymentMigration(gitopsDir, chart, targetSchema, migration, { deploymentsDirEnv, model, beforeModel, checkOnly = false } = {}) {
   const repo = openRepo(gitopsDir)
   const found = await findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv)
-  const registry = await readSyncRegistry(gitopsDir)
+  const registry = await readRegistry(repo)
 
   const deployments = []
   const writes = []

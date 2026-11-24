@@ -8,7 +8,7 @@ import path from 'path'
 import { openRepo } from '../../../server/repo/openRepo.js'
 import { loadRouting, commonResource, buildRouting, ROUTING_CR_FILE } from '../../../server/repo/routing.js'
 import { loadShared, loadSharedDir, sharedDirProblemOf, sharedForBuild } from '../../../server/repo/shared.js'
-import { decide, explain } from '../../../server/repo/policy.js'
+import { decide, explain, POLICIES } from '../../../server/repo/policy.js'
 import { ROUTING_POLICIES } from '../../../server/repo/routingPolicy.js'
 import { listRoutingCases, generateRoutingCase, ROUTING_CASES_DIR } from '../../blind/harness.js'
 import { routingFindings } from '../../../server/lib/commit/routing.js'
@@ -230,7 +230,7 @@ describe('the shared configs', () => {
 
 describe('each entry point\'s table', () => {
   const f = code => ({ code, helm: { 'routing.orphaned': 'renders-differently', 'routing.stale': 'renders-differently', 'routing.cr-unreadable': 'fails', 'routing.common-resource': 'renders-differently', 'routing.warning': 'renders' }[code] ?? 'n/a', message: code, file: '' })
-  const actions = (policy, list) => Object.fromEntries(list.map(c => [c, explain(f(c), ROUTING_POLICIES[policy]).action]))
+  const actions = (policy, list) => Object.fromEntries(list.map(c => [c, explain(f(c), policy === 'commit' ? POLICIES.commit : ROUTING_POLICIES[policy]).action]))
   const ALL = ['routing.orphaned', 'routing.cr-unreadable', 'routing.shared-unresolved', 'routing.problem', 'routing.stale', 'routing.warning', 'routing.common-resource']
 
   it('Commit blocks what it blocked, lists routing.yaml\'s own problems and a _common\'s resource', () => {

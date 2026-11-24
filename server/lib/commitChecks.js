@@ -14,13 +14,15 @@
  */
 
 import path from 'path'
-import { writeRouting, routingToCopy, copyRouting, registryOrRefusal, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
+import { writeRouting, routingToCopy, copyRouting, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
 import { writeProblems } from '../repo/writePath.js'
-import { isDeploymentDir, isSafeSyncPath, readSyncRegistry, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
+import { isSafeSyncPath, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
+import { syncAnswer } from '../repo/sync.js'
+import { walk, walkFindings, isDeployment } from '../repo/walk.js'
+import { decide } from '../repo/policy.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadRouting } from '../repo/routing.js'
 import { loadShared, sharedForBuild } from '../repo/shared.js'
-import { listDeploymentPaths, walkDeployments } from './deploymentWalk.js'
 import { resolveStack } from './stack.js'
 import { insideReal } from './safePath.js'
 import { templateFindings } from './commit/template.js'
@@ -32,30 +34,31 @@ const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
 /**
  * Every folder deployment, relative to the gitops repo, sorted — one inside
- * another's folder too, as the tree shows it (the one walk, deploymentWalk).
+ * another's folder too, as the tree shows it (the one walk, repo/walk.js).
  */
-export async function listFolderDeployments(gitopsDir) {
-  return listDeploymentPaths(gitopsDir)
+export async function listFolderDeployments(gitopsDir, repo = openRepo(gitopsDir)) {
+  return (await walk(repo)).filter(d => d.kind === 'deployment').map(d => d.rel)
 }
 
 export async function deploymentCommitBlockers(gitopsDir) {
-  const sync = await syncRegistryFindings(gitopsDir)
+  // `repo` is one snapshot for every deployment: a Template is read once.
+  const repo = openRepo(gitopsDir)
+  const sync = await syncRegistryFindings(repo)
   const findings = [...sync.findings]
   const routingProblems = []
   // Never blocking: what a routing's configs will do that is worth saying.
   const routingWarnings = []
   // Never blocking either: rows the row identity label cannot tell apart.
   const valueWarnings = []
-  const registry = sync.readable ? await readSyncRegistry(gitopsDir) : { syncs: [] }
-  const walked = await walkDeployments(gitopsDir)
-  const deployments = walked.filter(d => d.kind === 'deployment').map(d => d.path)
+  const registry = sync.registry
+  const walked = await walk(repo)
+  const deployments = walked.filter(d => d.kind === 'deployment').map(d => d.rel)
   // A folder that cannot be read: its deployments are not checked. Listed,
   // as a routing.yaml's own problems are, not a reason to refuse a commit
   // of everything else.
-  const unreadable = walked.filter(d => d.kind === 'unreadable').map(d => ({ path: d.path || '.', error: d.error }))
+  const unreadable = decide(walkFindings(walked), 'commit').list.map(f => ({ path: f.file, error: f.detail.why }))
   // A routing.yaml using a shared config is made with it (#123): a change to
   // the shared file leaves every resource made from it behind.
-  const repo = openRepo(gitopsDir)
   const shared = sharedForBuild(await loadShared(repo))
   // Who uses a shared config the shared file does not give: a resource made
   // now would have no one to send to. Blocks, unlike a routing.yaml's own
@@ -65,7 +68,6 @@ export async function deploymentCommitBlockers(gitopsDir) {
   // What Regenerate would make: a source behind makes its targets again too.
   const fixes = new Set()
   const brokenSources = new Set()
-  // `repo` is one snapshot for every deployment: a Template is read once.
   for (const dep of deployments) {
     // Read once for both.
     const stack = await resolveStack(gitopsDir, path.join(gitopsDir, dep), { repo })
@@ -92,7 +94,7 @@ export async function deploymentCommitBlockers(gitopsDir) {
   findings.push(...sharedFile.findings)
   routingProblems.push(...sharedFile.problems)
 
-  const targets = await syncTargetFindings(gitopsDir, deployments, registry, brokenSources)
+  const targets = await syncTargetFindings(repo, deployments, registry, brokenSources)
   findings.push(...targets.findings)
   for (const f of targets.fixes) fixes.add(f)
   return { findings, routingProblems, routingWarnings, valueWarnings, unreadable, regenerable: fixes.size, readable: sync.readable }
@@ -117,12 +119,11 @@ export async function regenerateRouting(gitopsDir) {
     const regenerated = []
     const failed = []
     // Who is whose target cannot be told without sync.yaml: named first.
-    const read = await registryOrRefusal(gitopsDir)
-    if (read.refusal) return { regenerated, failed: [{ deployment: SYNC_FILE, error: read.notYaml ? 'not valid YAML: fix it first' : read.refusal.body.error }] }
-    const { registry } = read
-    const { findings, readable } = await deploymentCommitBlockers(gitopsDir)
-    if (!readable) return { regenerated, failed: [{ deployment: SYNC_FILE, error: 'not valid YAML: fix it first' }] }
     const repo = openRepo(gitopsDir)
+    const read = await syncAnswer(repo)
+    if (read.refusal) return { regenerated, failed: [{ deployment: SYNC_FILE, error: read.refusal.body.error }] }
+    const { registry } = read
+    const { findings } = await deploymentCommitBlockers(gitopsDir)
 
     // One that cannot be read is named, not made again.
     for (const f of findings.filter(f => f.kind === 'file-unreadable' && f.deployment)) failed.push({ deployment: f.deployment, error: f.description })
@@ -150,7 +151,7 @@ export async function regenerateRouting(gitopsDir) {
         // workspace, holding a deployment (as copyToTargets checks).
         if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
         if (!(await insideReal(gitopsDir, target))) throw new Error('not a path sync may write to: it leads outside the repo')
-        if (!(await isDeploymentDir(path.join(gitopsDir, target)))) throw new Error('not a deployment on disk')
+        if (!(await isDeployment(repo, target))) throw new Error('not a deployment on disk')
         await refuseOutside(gitopsDir, target)
         // Read before anything is written: the source as it is made now.
         const routing = await routingToCopy(openRepo(gitopsDir), source)

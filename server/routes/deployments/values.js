@@ -5,7 +5,8 @@ import path from 'path'
 import { resolveStack, unwrapPath, readStackValues, stackValues } from '../../lib/stack.js'
 import { originsOf, folderCommonOf, inheritsFromOf } from '../../lib/commonEdit.js'
 import { valuesWrite, saveValues, valuesVersion } from '../../lib/deploymentWrite.js'
-import { readSyncRegistry, withSyncRegistryLock, isTarget } from '../../lib/sync.js'
+import { withSyncRegistryLock, isTarget } from '../../lib/sync.js'
+import { syncAnswer } from '../../repo/sync.js'
 import { newReservedSegment, reservedError } from '../../lib/reservedNames.js'
 import { writeWhole } from '../../lib/routingFiles.js'
 import { UnreadableError, errorAnswer } from '../../lib/readIfThere.js'
@@ -99,7 +100,9 @@ export function valuesRoutes(router) {
         // the frontend's freeze can race (see AlertUserView's getSyncSource
         // call), so this must be enforced here too, not only by disabling
         // Save. Checked again under the lock below.
-        if (isTarget(await readSyncRegistry(req.gitopsDir), folder)) {
+        const read = await syncAnswer(openRepo(req.gitopsDir))
+        if (read.refusal) return res.status(read.refusal.status).json(read.refusal.body)
+        if (isTarget(read.registry, folder)) {
           const { status, body } = readOnly()
           return res.status(status).json(body)
         }
@@ -115,7 +118,8 @@ export function valuesRoutes(router) {
       // registry lock.
       if (folder && direct) {
         const outcome = await withSyncRegistryLock(req.gitopsDir, async () => {
-          const registry = await readSyncRegistry(req.gitopsDir)
+          const { registry, refusal } = await syncAnswer(openRepo(req.gitopsDir))
+          if (refusal) return refusal
           if (isTarget(registry, folder)) return readOnly()
           return saveValues(req.gitopsDir, registry, folder, req.body.values, { chartName: req.params.chart, version: req.body.version })
         })

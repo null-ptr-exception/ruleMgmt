@@ -1,7 +1,8 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { getDeploymentsDir } from './chartDiscovery.js'
-import { walkDeployments } from './deploymentWalk.js'
+import { walk } from '../repo/walk.js'
+import { openRepo } from '../repo/openRepo.js'
 import { resolveStack } from './stack.js'
 
 /**
@@ -46,13 +47,16 @@ async function fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv) {
  * stack (#100), or as any of its Chart.yaml dependencies. Hidden folders
  * are looked into too (`hidden: true`): ArgoCD deploys whatever folder it
  * is pointed at. `keys` are the keys its values are wrapped under. Folders
- * that cannot be read are returned apart.
+ * that cannot be read, and deployments whose Chart.yaml cannot be (which
+ * Template they use is not known), are returned apart.
  */
 async function fromFolders(gitopsDir, chart) {
   const found = []
   const unreadable = []
-  for (const d of await walkDeployments(gitopsDir, { chartOnly: true, hidden: true })) {
-    if (d.kind === 'unreadable') { unreadable.push({ path: d.path || '.', error: d.error }); continue }
+  for (const e of await walk(openRepo(gitopsDir), { hidden: true })) {
+    if (e.kind === 'unreadable') { unreadable.push({ path: e.rel || '.', error: e.why }); continue }
+    if (e.kind === 'folder' && !e.chartOnly) continue
+    const d = { path: e.rel, kind: e.chartOnly ? 'chart-only' : e.kind }
     const dir = path.join(gitopsDir, d.path)
     const stack = await resolveStack(gitopsDir, dir)
     // A stack that does not reach its Template (a _common missing, a link

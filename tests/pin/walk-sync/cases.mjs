@@ -7,7 +7,7 @@
 //         each target a copy of its source
 // files:  { rel: content | { mode: 0, content } | { dir: true } | { link } |
 //         { remove: true } | { dirMode: 0 } | { copy: rel } }
-//         ('__OUTSIDE__' as a link: a deployment outside the repo)
+//         ('__OUTSIDE__' at the start of a link: the deployment outside the repo)
 import path from 'path'
 
 export const A = 'deployments/t/a'
@@ -49,6 +49,13 @@ export const CASES = [
   W('link-inside', 'deployments/w/ln', { 'deployments/w/ln': { link: '../t/a' } }),
   W('link-outside', 'deployments/w/out', { 'deployments/w/out': { link: '__OUTSIDE__' } }),
   W('link-loop', 'deployments/w/loop', { 'deployments/w/loop': { link: '.' } }),
+  W('link-dangling', 'deployments/w/gone', { 'deployments/w/gone': { link: 'nowhere' } }),
+  W('link-self-loop', 'deployments/w/self', { 'deployments/w/self': { link: 'self' } }),
+  W('charts-link-inside', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w/d/charts/demo': { link: '../../../../charts/demo' } }),
+  W('chart-link-inside', 'deployments/w/d', { 'deployments/w/d/Chart.yaml': { link: '../../t/a/Chart.yaml' }, 'deployments/w/d/values.yaml': valuesFor('d') }),
+  W('values-link-outside', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w/d/values.yaml': { link: '__OUTSIDE__/values.yaml' } }),
+  W('nested-two-deep', `${A}/n/inner`, DEP(`${A}/n/inner`)),
+  W('layer-chart-null', X, {}, { files: { 'deployments/s/_common/demo/values.yaml': 'demo: ~\n' } }),
   W('unreadable-folder', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w': { dirMode: 0 } }),
   W('unreadable-chart', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w/d/Chart.yaml': { mode: 0, content: chartAt('deployments/w/d') } }),
   W('chart-not-yaml', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w/d/Chart.yaml': 'dependencies: [\n' }),
@@ -56,6 +63,8 @@ export const CASES = [
   W('chart-template-gone', 'deployments/w/d', DEP('deployments/w/d', { charts: ['gone'], values: valuesFor('d', 'gone') })),
   W('chart-two-templates', 'deployments/w/d', DEP('deployments/w/d', { charts: ['demo', 'other'] })),
   W('chart-is-folder', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w/d/Chart.yaml': { dir: true } }),
+  W('chart-empty', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w/d/Chart.yaml': '' }),
+  W('chart-deps-not-list', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w/d/Chart.yaml': 'apiVersion: v2\nname: d\nversion: 0.1.0\ndependencies: demo\n' }),
   W('chart-dangling-link', 'deployments/w/d', { ...DEP('deployments/w/d'), 'deployments/w/d/Chart.yaml': { link: 'nowhere.yaml' } }),
   W('no-values', 'deployments/w/d', { 'deployments/w/d/Chart.yaml': chartAt('deployments/w/d') }),
   W('values-only', 'deployments/w/d', { 'deployments/w/d/values.yaml': valuesFor('d') }),
@@ -93,6 +102,12 @@ export const CASES = [
   Y('target-hand-edited', BASE.SYNC, { [`${B}/values.yaml`]: valuesFor('edited') }),
   Y('target-routing-hand-edited', BASE.SYNC, { [`${B}/routing.yaml`]: ROUTING.replace('ops@', 'mine@') }),
   Y('target-other-template', BASE.SYNC, { [`${B}/Chart.yaml`]: chartAt(B, ['other']), [`${B}/values.yaml`]: valuesFor('b', 'other') }),
+  Y('target-twice', `syncs:\n  - source: ${A}\n    targets: [${B}, ${B}]\n`),
+  Y('target-is-common', `syncs:\n  - source: ${A}\n    targets: [deployments/s/_common/demo]\n`),
+  Y('source-is-common', `syncs:\n  - source: deployments/s/_common/demo\n    targets: [${B}]\n`),
+  Y('target-link-inside', `syncs:\n  - source: ${A}\n    targets: [deployments/w/ln]\n`, { 'deployments/w/ln': { link: '../t/b' } }),
+  Y('target-not-deployment', `syncs:\n  - source: ${A}\n    targets: [deployments/w/plain]\n`, { 'deployments/w/plain/notes.txt': 'x\n' }),
+  Y('target-chart-unreadable', BASE.SYNC, { [`${B}/Chart.yaml`]: { mode: 0, content: chartAt(B) } }),
   Y('sync-unreadable', { mode: 0, content: BASE.SYNC }),
   Y('sync-is-folder', { dir: true }),
 ]

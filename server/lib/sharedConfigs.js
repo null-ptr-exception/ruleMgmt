@@ -23,7 +23,8 @@ import { readsAsNonString } from '../../src/utils/yamlScalar.js'
 import { sameConfig } from '../../src/utils/routingModel.js'
 import { SHARED_DIR, SHARED_FILE } from '../../src/utils/routingGenerator.js'
 import { configNameProblem } from '../../src/utils/routingSchema.js'
-import { buildRouting, writeWhole, registryOrRefusal, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
+import { buildRouting, writeWhole, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
+import { syncAnswer } from '../repo/sync.js'
 import { listFolderDeployments } from './commitChecks.js'
 import { getSourceForTarget, getTargetsForSource } from './sync.js'
 import { copyToTargets } from './deploymentWrite.js'
@@ -58,10 +59,10 @@ export async function inSharedDir(gitopsDir, relPath) {
  * @returns [{ deployment, text, uses: [name], syncedFrom?, unreadable? }]
  */
 export async function routingUsers(repo) {
-  const { registry, refusal } = await registryOrRefusal(repo.root)
+  const { registry, refusal } = await syncAnswer(repo)
   if (refusal) return { refusal }
   const users = []
-  for (const deployment of await listFolderDeployments(repo.root)) {
+  for (const deployment of await listFolderDeployments(repo.root, repo)) {
     const source = getSourceForTarget(registry, deployment)
     const synced = source && source !== deployment ? { syncedFrom: source } : {}
     const loaded = await loadRouting(repo, deployment)

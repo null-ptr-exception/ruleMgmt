@@ -1,11 +1,12 @@
 import express from 'express'
 import { holdSyncRegistryLock } from '../lib/sync.js'
 import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupNameChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
-import { findDeploymentsUsing, findChartUsage } from '../lib/chartUsage.js'
+import { findChartUsage } from '../lib/chartUsage.js'
 import { regenerateProducts, writeChanged, readTemplate } from '../lib/chartFiles.js'
 import { UnreadableError, errorAnswer } from '../lib/readIfThere.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
-import { readSyncRegistry, isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
+import { isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
+import { readRegistry } from '../repo/sync.js'
 import { parseRulesDir, modelToSchema, genSchema, valueChecksKey } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates, replacedByConversion } from '../../src/utils/drift.js'
@@ -53,7 +54,7 @@ function addedInSchema(before, after) {
 }
 
 async function withReadonly(gitopsDir, deployments) {
-  const registry = await readSyncRegistry(gitopsDir)
+  const registry = await readRegistry(openRepo(gitopsDir))
   return deployments.map(d => ({ ...d, readonly: isTarget(registry, d.path) }))
 }
 
@@ -67,7 +68,7 @@ const modelBefore = t => (t?.ruleErrors.length ? null : t?.model ?? null)
 // target its source's copy would fix has none of its own: one listed here
 // is migrated on its own, and is changed by unlinking it.
 async function withSources(gitopsDir, refused) {
-  const registry = await readSyncRegistry(gitopsDir)
+  const registry = await readRegistry(openRepo(gitopsDir))
   return refused.map(d => ({
     path: d.path,
     readonly: d.readonly,
@@ -191,7 +192,7 @@ export default function templatesRouter() {
   // and to know when an old chart is free to retire.
   router.get('/:chart/deployments', async (req, res) => {
     try {
-      res.json({ deployments: await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR) })
+      res.json(await findChartUsage(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR))
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

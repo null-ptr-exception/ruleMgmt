@@ -25,6 +25,7 @@
  *   explain(finding, policy) → { action, why }
  */
 import { TEMPLATE_ROWS } from './findings/templateRows.js'
+import { ROUTING_COMMIT_ROWS, WALK_SYNC_ROWS } from './findings/commitRows.js'
 
 export const ACTIONS = Object.freeze(['refuse', 'warn', 'list', 'ignore'])
 
@@ -95,11 +96,14 @@ export const POLICIES = Object.freeze({
       'stack.null-on-stack': { action: 'refuse', why: 'a null in a _common above, or in the Template\'s values.yaml, on a stack deploys differently on the two supported Helm versions (measured: 3.15.4 keeps the key as null, 3.19.0 drops it): what deploys would depend on the Helm version' },
       'stack.duplicate-key': LISTED('a key a _common writes twice deploys the later one, which may not be the one meant: said'),
       ...TEMPLATE_ROWS.commit,
+      ...ROUTING_COMMIT_ROWS,
+      ...WALK_SYNC_ROWS.commit,
     },
   }),
   checkRepo: definePolicy('checkRepo', {
     rows: {
       ...TEMPLATE_ROWS.checkRepo,
+      ...WALK_SYNC_ROWS.checkRepo,
       'values.unreadable': { action: 'refuse', why: 'Helm renders something other than the repo holds' },
       'values.rows-alike': { action: 'warn', why: 'rows the row identity label cannot tell apart are said' },
       'values.required-empty': { action: 'warn', why: EDITOR },

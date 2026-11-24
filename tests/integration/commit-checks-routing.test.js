@@ -273,12 +273,12 @@ describe('nothing behind', () => {
 })
 
 describe('more that a commit checks', () => {
-  it('a sync.yaml that is not YAML is refused, naming it, and Regenerate says to fix it first', async () => {
+  it('a sync.yaml that is not YAML is refused, naming it, and Regenerate names it', async () => {
     await write('sync.yaml', 'syncs: [\n')
     const { status, data } = await commit()
     expect(status).toBe(409)
-    expect(data.findings.map(f => f.description)).toContainEqual(expect.stringContaining('sync.yaml : is not valid YAML'))
-    expect(await regenerate()).toEqual({ status: 200, data: { regenerated: [], failed: [{ deployment: 'sync.yaml', error: 'not valid YAML: fix it first' }] } })
+    expect(data.findings.map(f => f.description)).toContainEqual(expect.stringMatching(/^sync\.yaml cannot be read \(it is not valid YAML/))
+    expect(await regenerate()).toEqual({ status: 200, data: { regenerated: [], failed: [{ deployment: 'sync.yaml', error: expect.stringMatching(/^sync\.yaml cannot be read \(it is not valid YAML/) }] } })
   })
 
   it('an empty syncs: is no sync at all', async () => {

@@ -378,7 +378,14 @@ Two more kinds of folder are flagged in the tree:
 | Folder | What it means | Counts as using its Template |
 |---|---|---|
 | A `Chart.yaml` and no `values.yaml` | Helm deploys the Template's example rows | Yes: listed for a breaking change (nothing is written in it), and the Template cannot be deleted while it is there. Delete it like a deployment, or add a `values.yaml` |
-| One AlertForge cannot read (permissions) | The deployments in it are not listed, checked or migrated | Not known: named when a commit goes through, when a breaking change is confirmed and when the Template is deleted, and blocks none of them |
+| One AlertForge cannot read (permissions), a deployment whose `Chart.yaml` cannot be read or used (no permission, a folder, a link to nothing or out of the repo, not YAML), or a folder that is a link leading outside the repo | The deployments in it (or it) are not listed for sync, checked or migrated | Not known: named in the tree, in the list of who uses a Template, when a commit goes through, when a breaking change is confirmed and when the Template is deleted, and blocks none of them (`check-deployment` cannot check it: exit 2) |
+
+A folder that is a link — or is reached through one — is never a
+deployment, wherever it leads: the tree does not show it (one leading out
+of the repo is shown as one that cannot be read), sync, Preview, the
+Routing page and the deployment routes refuse it (400), and
+`check-deployment` names it and what it leads to (exit 2). The deployment
+it leads to is found, listed and checked where it is.
 
 A deployment in a hidden folder (`.something/…`) is not in the tree, but
 counts as using its Template, and a breaking change migrates it: ArgoCD
@@ -876,6 +883,11 @@ copied to it.
   and the response lists them as `unlinked`. Those marked to be deleted go
   first: when the source then cannot be deleted, the message says why and
   names the ones already gone; the source keeps the rest.
+- A `sync.yaml` that cannot be read (not YAML, no permission, a folder in
+  its place) is named, with 409 and `unreadable: true`, by everything that
+  needs to know who syncs from whom: the sync list, sync and unlink, a
+  save, deleting a deployment, the Routing page and the shared configs.
+  It is never taken for "no syncs", and nothing rewrites it.
 - When a save cannot write a target (a permission error, or a `sync.yaml`
   entry that is not a deployment on disk), the source is still saved and the
   page names the target, which may not match the source. Fix the cause and
@@ -974,9 +986,11 @@ cannot tell apart are; `check-repo` refuses them.
 
 and while `sync.yaml` has an entry that cannot be right: one deployment
 following another that follows a third, a target with two sources, a path
-that is not a deployment, an entry with no `targets` list, a source listed
-twice. The refusal names each
-deployment or entry. **Regenerate N** makes the routing that is behind again
+that is not a deployment (a folder that is a link included), an entry with
+no `targets` list, a source listed twice — or cannot be read at all (not
+YAML, no permission, a folder). The refusal names each
+deployment or entry. A `\` in a path is read as `/`, and a target listed
+twice under one source is one link: neither refuses a commit. **Regenerate N** makes the routing that is behind again
 from each `routing.yaml` (the text stays as written) and copies each sync
 target's from its source; it writes the files and commits nothing, so look
 at the changes, then commit. One that cannot be made is listed, and the
@@ -1231,7 +1245,8 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
 It exits 0 when both pass, 1 when the deployment has a problem (printed) —
 Helm failing to render it included — and 2 when it could not check: wrong
 arguments, a folder that is not a folder deployment (its own `Chart.yaml`
-and `values.yaml`), site settings it cannot read, helm or a checker missing,
+and `values.yaml`, its `Chart.yaml` naming a Template; a folder that is a
+link is none, and is named with what it leads to), site settings it cannot read, helm or a checker missing,
 a file it cannot read (a `routing.yaml` or routing resource included: no
 permission, a folder in its place, a link to nothing or out of the repo), or
 a repo root it cannot tell (below).

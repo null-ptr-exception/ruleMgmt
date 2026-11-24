@@ -34,7 +34,7 @@
 
 import path from 'path'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
-import { CannotCheck, notADeployment, helmHome, checkRuleObjects, checkRouting } from '../server/lib/deploymentCheck.js'
+import { CannotCheck, notADeployment, deploymentPath, realRoot, helmHome, checkRuleObjects, checkRouting } from '../server/lib/deploymentCheck.js'
 import { valuesLimitNote } from '../server/repo/limits.js'
 import { openRepoAt, realFolder } from '../server/repo/locate.js'
 import { isCommonChartPath } from '../src/utils/reservedNames.js'
@@ -101,8 +101,11 @@ async function main() {
     console.error(USAGE)
     return 2
   }
-  const dir = path.resolve(args[0])
-  const why = await notADeployment(dir)
+  // A repo reached through a linked path is the repo it leads to: both are
+  // taken as they really are, so the one is found inside the other.
+  const dir = await deploymentPath(args[0])
+  if (repo) repo = await realRoot(repo)
+  const why = await notADeployment(dir, repo)
   if (why) throw new CannotCheck(why)
   // The site's labels decide whether the AlertmanagerConfig is current: a
   // setting that cannot be read would give the wrong answer, so stop, as

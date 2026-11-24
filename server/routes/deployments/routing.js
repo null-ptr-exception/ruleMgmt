@@ -1,8 +1,9 @@
 /** A deployment's notification routing (#92). */
 
 import { copyToTargets, okWith } from '../../lib/deploymentWrite.js'
-import { readSyncRegistry, withSyncRegistryLock, isTarget, getSourceForTarget, getTargetsForSource } from '../../lib/sync.js'
-import { buildRouting, writeRouting, removeRouting, registryOrRefusal, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from '../../lib/routingFiles.js'
+import { withSyncRegistryLock, isTarget, getSourceForTarget, getTargetsForSource } from '../../lib/sync.js'
+import { buildRouting, writeRouting, removeRouting, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from '../../lib/routingFiles.js'
+import { syncAnswer } from '../../repo/sync.js'
 import { isLinkKind } from '../../repo/loaded.js'
 import { writeProblems, writeRefusal, targetWriteProblem } from '../../repo/writePath.js'
 import { errorAnswer } from '../../lib/readIfThere.js'
@@ -77,7 +78,7 @@ export function routingRoutes(router) {
     }
     // A synced target is read-only: refused before its routing is checked,
     // and checked again under the lock when it is written.
-    const { registry, refusal } = await registryOrRefusal(req.gitopsDir)
+    const { registry, refusal } = await syncAnswer(openRepo(req.gitopsDir))
     if (refusal) { res.status(refusal.status).json(refusal.body); return null }
     if (write && isTarget(registry, folder)) {
       res.status(409).json({ error: `${folder} is synced from another deployment and is read-only` })
@@ -92,7 +93,8 @@ export function routingRoutes(router) {
   // is read-only.
   function writeRoutingAndSync(req, { dir, folder }, write) {
     return withSyncRegistryLock(req.gitopsDir, async () => {
-      const registry = await readSyncRegistry(req.gitopsDir)
+      const { registry, refusal } = await syncAnswer(openRepo(req.gitopsDir))
+      if (refusal) return refusal
       if (isTarget(registry, folder)) {
         return { status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } }
       }

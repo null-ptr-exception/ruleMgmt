@@ -967,7 +967,7 @@ dangling-link	A	migration-preview	listed	200	-	no	-	fails	1	-	-	-	-	-
 dangling-link	A	migration-apply	refused	409	-	no	-	fails	1	-	-	-	-	-	
 dangling-link	A	commit	refused	409	deployments/t/a	no	-	fails	1	-	-	-	-	-	
 dangling-link	A	preview	refused	200	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	-	
-dangling-link	A	check-deployment	cannot-check	exit 2	deployments/t/a	no	-	fails	1	-	-	-	-	-	
+dangling-link	A	check-deployment	refused	exit 1	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	-	
 link-outside	A	get	unreadable	409	deployments/t/a/values.yaml	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	null	
 link-outside	A	list	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	alertCount=1	
 link-outside	A	save-text	unreadable	409	deployments/t/a/values.yaml	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	refuses-what-helm-renders
@@ -989,7 +989,7 @@ link-loop	A	migration-preview	listed	200	-	no	-	fails	1	-	-	-	-	-
 link-loop	A	migration-apply	refused	409	-	no	-	fails	1	-	-	-	-	-	
 link-loop	A	commit	refused	409	deployments/t/a	no	-	fails	1	-	-	-	-	-	
 link-loop	A	preview	refused	200	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	-	
-link-loop	A	check-deployment	cannot-check	exit 2	deployments/t/a	no	-	fails	1	-	-	-	-	-	
+link-loop	A	check-deployment	refused	exit 1	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	-	
 cond-no	A	get	ok	200	-	no	-	renders-empty	0	0	-	empty	-	{"job":"api"}	
 cond-no	A	list	ok	200	-	no	-	renders-empty	0	0	-	empty	-	alertCount=1	
 cond-no	A	save-text	refused	400	deployments/t/a/values.yaml	no	-	renders-empty	0	0	-	empty	-	-	

@@ -11,6 +11,8 @@ import { checkRules, renderChart, runCommand } from './ruleCheck.js'
 import { ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
 import { resolveStack } from './stack.js'
 import { openRepo } from '../repo/openRepo.js'
+import { openRepoAt } from '../repo/locate.js'
+import { folderEntry } from '../repo/walk.js'
 import { loadRouting, commonResource } from '../repo/routing.js'
 import { decide } from '../repo/policy.js'
 import { ROUTING_POLICIES } from '../repo/routingPolicy.js'
@@ -23,18 +25,50 @@ export class CannotCheck extends Error {}
 
 const exists = file => fs.access(file).then(() => true, () => false)
 
-/** Why this folder cannot be checked, or null for a folder deployment. */
-export async function notADeployment(dir) {
-  const stat = await fs.stat(dir).catch(() => null)
-  if (!stat) return `${dir} does not exist`
-  if (!stat.isDirectory()) return `${dir} is not a folder: give the deployment's folder`
+/**
+ * The folder as given, with any link above it resolved (a repo reached
+ * through a linked path is that repo), but not the folder itself: a
+ * folder that is a link is not a deployment.
+ *   /home/me/gitops-link/deployments/t/a → /work/gitops/deployments/t/a
+ */
+export async function deploymentPath(dir) {
+  const abs = path.resolve(dir)
+  const parent = await fs.realpath(path.dirname(abs)).catch(() => path.dirname(abs))
+  return path.join(parent, path.basename(abs))
+}
+
+/** The repo's root as it really is, through any link. */
+export const realRoot = given => fs.realpath(path.resolve(given)).catch(() => path.resolve(given))
+
+/**
+ * Why this folder cannot be checked, or null for a folder deployment: the
+ * walk's answer (repo/walk.js), in the repo given (or the one it is in).
+ */
+export async function notADeployment(dir, given) {
+  const link = await fs.lstat(dir).catch(() => null)
+  if (!link) return `${dir} does not exist`
+  // The repo it is in: given, or the one its folder is in.
+  const at = given ? { repo: openRepo(await realRoot(given)) } : openRepoAt(path.dirname(dir))
+  const rel = path.relative(at.repo.root, dir).split(path.sep).join('/')
+  const entry = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? await folderEntry(at.repo, rel) : null
+  if (link.isSymbolicLink()) {
+    // Named by its place in the repo; a place outside it is not shown.
+    const said = entry?.link ? entry.why.replace(/^it is /, '') : 'a link'
+    return `${dir} is ${said}: a folder that is a link is no deployment${entry?.real ? ` — check ${entry.real}` : ''}`
+  }
+  if (!link.isDirectory()) return `${dir} is not a folder: give the deployment's folder`
   if (isCommonChartPath(dir)) return `${dir} is a ${COMMON_DIR} chart — what the deployments beside its ${COMMON_DIR}/ inherit — not a deployment: check one of them`
-  if (await exists(path.join(dir, 'Chart.yaml')) && await exists(path.join(dir, 'values.yaml'))) return null
+  if (entry?.kind === 'deployment') return null
+  if (entry?.kind === 'unreadable') return `${dir} cannot be checked: ${entry.why}`
+  if (entry?.link) return `${dir}: ${entry.why} — a folder reached through a link is no deployment`
+  if (!entry && await exists(path.join(dir, 'Chart.yaml')) && await exists(path.join(dir, 'values.yaml'))) return null
   const legacy = (await fs.readdir(dir)).filter(f => f.endsWith('-values.yaml'))
   if (legacy.length) {
     return `${dir} keeps several deployments as <name>-values.yaml files (${legacy.join(', ')}). ` +
       'Only a folder deployment — its own Chart.yaml and values.yaml — can be checked.'
   }
+  if (entry?.chartOnly) return `${dir} is not a deployment: it has a Chart.yaml and no values.yaml`
+  if (await exists(path.join(dir, 'Chart.yaml')) && await exists(path.join(dir, 'values.yaml'))) return `${dir} is not a deployment: its Chart.yaml names no Template (no dependencies)`
   return `${dir} is not a deployment: it has no Chart.yaml and values.yaml`
 }
 

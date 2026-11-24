@@ -5,7 +5,6 @@ import { SHARED_FILE } from '../../repo/shared.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadRouting, routingFiles, commonResource } from '../../repo/routing.js'
 import { decide } from '../../repo/policy.js'
-import { ROUTING_POLICIES } from '../../repo/routingPolicy.js'
 
 // Both files of a deployment; one that cannot be read is like no other.
 const filesOf = async (repo, dep) => {
@@ -48,7 +47,7 @@ const KIND = {
 export async function routingFindings(repo, dep, { registry, layers = [] }) {
   const out = { findings: [], problems: [], warnings: [], unresolved: false, broken: false, fixes: [] }
   const common = (await Promise.all(layers.map(l => commonResource(repo, l.path)))).filter(Boolean)
-  const said = decide(common, ROUTING_POLICIES.commit)
+  const said = decide(common, 'commit')
   // One entry per deployment: the Commit dialog lists them by deployment.
   const listed = said.list.map(f => f.message)
   const done = () => {
@@ -63,7 +62,7 @@ export async function routingFindings(repo, dep, { registry, layers = [] }) {
     return done()
   }
   if (loaded.state === 'absent') return done()
-  const { refuse, list, warn } = decide(loaded.findings, ROUTING_POLICIES.commit)
+  const { refuse, list, warn } = decide(loaded.findings, 'commit')
   // Every refusal is said at once; a shared config the file does not give
   // is a routing.yaml problem too, which is then not listed again.
   const unresolved = refuse.filter(f => f.code === 'routing.shared-unresolved')

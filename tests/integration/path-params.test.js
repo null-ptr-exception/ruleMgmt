@@ -214,9 +214,9 @@ describe('links', () => {
     expect(await fs.readFile(path.join(root, 'outside-file.yaml'), 'utf-8')).toBe(SENTINEL)
   })
 
-  it('a link to a place in the repo is followed', async () => {
+  it('a link to a place in the repo is followed to a Template file; a deployment folder reached through one is none', async () => {
     expect((await api('GET', '/api/v2/templates/demo/in-link')).status).toBe(200)
-    expect((await api('GET', `/api/v2/deployments/demo/a?folder=${q('deployments/in-link/a')}`)).status).toBe(200)
+    expect((await api('GET', `/api/v2/deployments/demo/a?folder=${q('deployments/in-link/a')}`)).status).toBe(400)
   })
 })
 

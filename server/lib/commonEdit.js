@@ -31,8 +31,9 @@ import yaml from 'js-yaml'
 import { isDeepStrictEqual } from 'util'
 import { createHash } from 'crypto'
 import { resolveStack, readStackValues, stackValues, readChart, wrapPath } from './stack.js'
-import { walkDeployments, excludedFolder } from './deploymentWalk.js'
-import { isCommonChartDir, isDeploymentDir, readSyncRegistry, getSourceForTarget, getTargetsForSource, normalizeSyncPath } from './sync.js'
+import { walk, excludedFolder, isCommonChart, isDeployment } from '../repo/walk.js'
+import { getSourceForTarget, getTargetsForSource, normalizeSyncPath } from './sync.js'
+import { readRegistry } from '../repo/sync.js'
 import { writeWhole } from './routingFiles.js'
 import { loadMap, wrapEntry, liftEntry, addMissing, setDependency } from '../repo/valuesDoc.js'
 import { helmAvailable, renderAll, sameRender } from './helmCheck.js'
@@ -86,11 +87,12 @@ const groupsOf = defaults => Object.entries(defaults).filter(([, v]) => Array.is
 async function loadItems(gitopsDir) {
   const items = []
   const unreadable = []
-  for (const d of await walkDeployments(gitopsDir, { chartOnly: true })) {
-    if (d.kind === 'unreadable') { unreadable.push(d.path || '.'); continue }
-    const abs = path.join(gitopsDir, d.path)
+  for (const d of await walk(openRepo(gitopsDir))) {
+    if (d.kind === 'unreadable') { unreadable.push(d.rel || '.'); continue }
+    if (d.kind === 'folder' && !d.chartOnly) continue
+    const abs = path.join(gitopsDir, d.rel)
     const stack = await resolveStack(gitopsDir, abs)
-    items.push({ path: d.path, kind: d.kind, abs, stack, chain: [d.path, ...stack.layers.map(l => l.path)] })
+    items.push({ path: d.rel, kind: d.chartOnly ? 'chart-only' : d.kind, abs, stack, chain: [d.rel, ...stack.layers.map(l => l.path)] })
   }
   return { items, byPath: new Map(items.map(i => [i.path, i])), unreadable }
 }
@@ -206,13 +208,13 @@ async function folderProblem(gitopsDir, folder) {
   const stat = await fs.stat(path.join(gitopsDir, ...segments)).catch(() => null)
   if (!stat?.isDirectory()) return `${folder} is not a folder of the repo`
   let inChart = false
+  const repo = openRepo(gitopsDir)
   for (let i = 1; i <= segments.length; i++) {
     const prefix = segments.slice(0, i).join('/')
-    const excluded = await excludedFolder(gitopsDir, prefix, { inChart })
+    const excluded = await excludedFolder(repo, prefix, { inChart })
     if (excluded) return `${folder}: ${prefix} is ${excluded}, which AlertForge does not look into`
-    const abs = path.join(gitopsDir, prefix)
-    if (await isCommonChartDir(abs)) return `${folder} is inside the ${COMMON_DIR} chart ${prefix}`
-    if (await isDeploymentDir(abs)) return `${folder} is ${i === segments.length ? 'a deployment' : `inside the deployment ${prefix}`}: a ${COMMON_DIR} goes in a folder that holds deployments`
+    if (await isCommonChart(repo, prefix)) return `${folder} is inside the ${COMMON_DIR} chart ${prefix}`
+    if (await isDeployment(repo, prefix)) return `${folder} is ${i === segments.length ? 'a deployment' : `inside the deployment ${prefix}`}: a ${COMMON_DIR} goes in a folder that holds deployments`
     inChart = false
   }
   if (segments.includes(COMMON_DIR)) return `${folder} is inside a ${COMMON_DIR} folder`
@@ -297,7 +299,7 @@ export async function planCreate(gitopsDir, folderIn, chart) {
   const tpl = await templateValues(repo, chart)
   if (tpl.why) return templateRefusal('Not made', tpl)
   const { items, byPath, unreadable } = await loadItems(gitopsDir)
-  const registry = await readSyncRegistry(gitopsDir)
+  const registry = await readRegistry(repo)
   const groups = groupsOf(tpl.defaults)
 
   // The `_common` of the nearest folder above, if any: the new one stacks on it.
@@ -486,9 +488,11 @@ async function expectedOf(gitopsDir, writes, removed) {
 export async function planDelete(gitopsDir, commonRelIn) {
   if (!isRepoPath(commonRelIn)) return refuse(400, 'Invalid path')
   const commonRel = segmentsOf(normalizeSyncPath(commonRelIn)).join('/')
-  if (!isCommonChartPath(commonRel) || !(await isCommonChartDir(path.join(gitopsDir, commonRel)))) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
+  if (!isCommonChartPath(commonRel)) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
+  // A link is no _common chart to the walk: said as a link, not as none.
   const link = await linkOnPath(gitopsDir, commonRel)
   if (link) return refuse(409, `Not removed: ${link} is a link, which may lead outside the repo — remove it by hand`)
+  if (!(await isCommonChart(openRepo(gitopsDir), commonRel))) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
   const { items, byPath, unreadable } = await loadItems(gitopsDir)
   // A folder that cannot be read may hold a deployment on it, which would
   // be left pointing at nothing.
@@ -676,12 +680,12 @@ export async function applyPlan(gitopsDir, planned) {
  * the nearest folder above with one for `chart`, or null. A sync target
  * may render another (its source's, #103): its Chart.yaml says which.
  */
-export async function folderCommonOf(gitopsDir, rel, chart) {
+export async function folderCommonOf(gitopsDir, rel, chart, repo = openRepo(gitopsDir)) {
   if (!chart) return null
   const segments = segmentsOf(rel)
   for (let i = segments.length - 1; i >= 1; i--) {
     const commonRel = commonPathOf(segments.slice(0, i).join('/'), chart)
-    if (await isCommonChartDir(path.join(gitopsDir, commonRel))) return commonRel
+    if (await isCommonChart(repo, commonRel)) return commonRel
   }
   return null
 }
@@ -733,14 +737,14 @@ export async function deploymentOnCommon(gitopsDir, folder, chart) {
  */
 export async function commonUsers(gitopsDir, commonRel) {
   const out = []
-  for (const d of await walkDeployments(gitopsDir)) {
+  for (const d of await walk(openRepo(gitopsDir))) {
     if (d.kind !== 'deployment') continue
-    const abs = path.join(gitopsDir, d.path)
+    const abs = path.join(gitopsDir, d.rel)
     const stack = await resolveStack(gitopsDir, abs)
     const at = stack.layers.findIndex(l => l.path === commonRel)
     if (at < 0) continue
     await readStackValues(gitopsDir, abs, stack)
-    out.push({ path: d.path, direct: at === 0, ...originsOf(stackValues(stack), stack.groups) })
+    out.push({ path: d.rel, direct: at === 0, ...originsOf(stackValues(stack), stack.groups) })
   }
   return out
 }

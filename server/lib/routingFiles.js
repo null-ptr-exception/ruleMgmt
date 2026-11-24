@@ -15,9 +15,6 @@ import path from 'path'
 import { ROUTING_FILE, ROUTING_CR_FILE, buildRouting, loadRouting, routingFiles } from '../repo/routing.js'
 import { decide } from '../repo/policy.js'
 import { ROUTING_POLICIES } from '../repo/routingPolicy.js'
-import { readSyncRegistry } from './sync.js'
-
-const SYNC_FILE = 'sync.yaml'
 
 export { ROUTING_FILE, ROUTING_CR_FILE, buildRouting }
 
@@ -37,22 +34,6 @@ async function readOr(file) {
  * never a 500. `loaded` is a Loaded that is not ok, or { file, why }.
  */
 export const unreadableAnswer = ({ file, why }) => ({ status: 409, body: { error: `${file} cannot be read (${why})`, file, unreadable: true } })
-
-const ERRNO_WHY = { EACCES: 'permission denied', EPERM: 'permission denied', EISDIR: 'it is a folder, not a file' }
-
-/**
- * The sync registry, or the answer naming it when it cannot be read: a
- * sync.yaml taken for "no syncs" would leave every target behind.
- * @returns { registry } | { refusal: { status, body }, notYaml }
- */
-export async function registryOrRefusal(gitopsDir) {
-  try {
-    return { registry: await readSyncRegistry(gitopsDir) }
-  } catch (err) {
-    const why = err?.name === 'YAMLException' ? 'it is not valid YAML' : ERRNO_WHY[err?.code] ?? 'it could not be read'
-    return { refusal: unreadableAnswer({ file: SYNC_FILE, why }), notYaml: err?.name === 'YAMLException' }
-  }
-}
 
 /** Both files, or — when either write fails — both as they were. */
 export async function writeRouting(dir, { text, cr }) {

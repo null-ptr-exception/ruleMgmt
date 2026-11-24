@@ -330,6 +330,9 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
 
   function handleSelect(selectedKeys) {
     if (selectedKeys.length === 0) return
+    // sync.yaml could not be read: read again, so the marks and menus come
+    // back once it can.
+    if (syncError) refreshAll()
     const key = selectedKeys[0]
     const node = findNode(treeData, key)
     if (node?.isDeployment) {

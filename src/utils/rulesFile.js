@@ -1063,6 +1063,15 @@ export function derivedTable(values, model) {
   return out
 }
 
+/**
+ * Whether a required cell is still to be filled: left out of its row, or
+ * null or "". The one answer, for a save (valueProblems) and for the table
+ * that marks the cell (valueUtils isMissingRequired); false and 0 are values.
+ */
+export function requiredValueMissing(present, value) {
+  return !present || value === null || value === ''
+}
+
 export function valueProblems(values, model) {
   const problems = []
   const isEmpty = v => v === null || v === ''
@@ -1073,7 +1082,7 @@ export function valueProblems(values, model) {
 
   // What is wrong with one cell, or null. `present` is whether the key is there.
   const cellProblem = (col, present, value, quoted, position) => {
-    if (col?.required && (!present || isEmpty(value))) return REQUIRED
+    if (col?.required && requiredValueMissing(present, value)) return REQUIRED
     if (!present) return null
     if (isEmpty(value)) return 'empty — fill it in, or leave the cell out'
     if (hasNewline(value)) return 'contains a line break — values are one line'

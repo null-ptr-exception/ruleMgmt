@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { pruneEmptyValues, pruneAllValues, buildNewRow, isMissingRequired } from '../valueUtils.js'
+import { valueProblems } from '../rulesFile.js'
 
 const vars = [
   { name: 'host', type: 'string', required: true },
@@ -126,8 +127,23 @@ describe('isMissingRequired', () => {
     expect(isMissingRequired(req, 'prod')).toBe(false)
     expect(isMissingRequired({ ...req, type: 'number' }, 0)).toBe(false)
   })
-  it('is false for an optional cell, and for a checkbox, which always holds a value', () => {
+  it('is false for an optional cell', () => {
     expect(isMissingRequired({ ...req, required: false }, '')).toBe(false)
-    expect(isMissingRequired({ ...req, type: 'boolean' }, undefined)).toBe(false)
+  })
+  // A row edited by hand can leave a required boolean out: the server
+  // refuses it, so the table marks it. A box ticked or unticked holds a value.
+  it('is true for a required boolean a row leaves out, false once it holds true or false', () => {
+    const page = { name: 'page', type: 'boolean', required: true }
+    expect(isMissingRequired(page, undefined)).toBe(true)
+    expect(isMissingRequired(page, false)).toBe(false)
+    expect(isMissingRequired(page, true)).toBe(false)
+  })
+  it('says what the server says of the same cell', () => {
+    const model = { common: { columns: {} }, groups: { cpu: { group: 'cpu', columns: { job: { type: 'string' }, page: { type: 'boolean', required: true } }, rules: [{ alert: 'A', expr: 'up{job="${job}"} > 1', labels: { page: '${page}' } }] } } }
+    const col = { name: 'page', type: 'boolean', required: true }
+    for (const row of [{ job: 'api' }, { job: 'api', page: null }, { job: 'api', page: '' }, { job: 'api', page: false }, { job: 'api', page: true }]) {
+      const server = valueProblems({ cpu: [row] }, model).some(p => /"page": required/.test(p.message))
+      expect(isMissingRequired(col, row.page), JSON.stringify(row)).toBe(server)
+    }
   })
 })

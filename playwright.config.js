@@ -20,7 +20,9 @@ export default defineConfig({
   // change to them is refused while any deployment's routing.yaml cannot be
   // read, which other specs write on purpose. Their spec runs after the rest.
   // sync.yaml is the whole workspace's too: while one spec makes it
-  // unreadable, every save and sync is refused. That spec runs last.
+  // unreadable, every save and sync is refused. That spec runs last. Run it
+  // alone with `--no-deps`, or the projects it depends on run first, whole:
+  //   npx playwright test sync-unreadable --no-deps
   projects: [
     { name: 'main', testIgnore: /(routing-shared|sync-unreadable)\.spec\.js/ },
     { name: 'shared-configs', testMatch: /routing-shared\.spec\.js/, dependencies: ['main'] },

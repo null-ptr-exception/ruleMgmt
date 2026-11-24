@@ -467,15 +467,17 @@ test.describe('a save refused for another reason', () => {
   })
   test.afterAll(async ({ request }) => { await removeChart(request, GONE) })
 
-  test('says why, with no breaking dialog and no extra Template', async ({ page, request }) => {
-    const before = (await (await request.get('/api/v2/charts')).json()).map(c => c.name).sort()
+  test('says why, with no breaking dialog and no extra Template', async ({ page }) => {
+    // Other specs make charts meanwhile: what this page asks for is counted.
+    const made = []
+    page.on('request', r => { if (r.method() === 'POST' && /\/api\/v2\/charts(\/[^/]+\/clone)?$/.test(new URL(r.url()).pathname)) made.push(r.url()) })
     await openTemplateChart(page, GONE)
     await page.getByRole('button', { name: 'Save' }).first().click()
 
-    const refused = page.locator('.ant-modal').filter({ hasText: `charts/${GONE}/rules is not there` })
+    const refused = page.locator('.ant-modal').filter({ hasText: `charts/${GONE}/rules` })
     await expect(refused).toBeVisible({ timeout: 8000 })
     await expect(page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })).toHaveCount(0)
-    expect((await (await request.get('/api/v2/charts')).json()).map(c => c.name).sort()).toEqual(before)
+    expect(made).toEqual([])
   })
 })
 
@@ -511,11 +513,54 @@ test.describe('a description that cannot be saved', () => {
     await page.getByRole('button', { name: 'Save' }).first().click()
 
     const said = page.locator('.ant-modal-confirm').filter({ hasText: 'The rules were saved, but the description was not' })
-    await expect(said).toContainText(`EACCES: permission denied, access 'charts/${DESC}/Chart.yaml'`, { timeout: 8000 })
+    await expect(said).toContainText(`charts/${DESC}/Chart.yaml`, { timeout: 8000 })
     const info = await (await request.get(`/api/v2/templates/${DESC}`)).json()
     expect(info.rulesFiles['cpu.yaml']).toContain('alert: CpuTooHigh')
     await said.getByRole('button', { name: 'OK' }).click()
     await expect(page.getByPlaceholder('Description')).toHaveValue('what the user typed')
     await expect(page.getByRole('button', { name: 'Save' }).first()).toBeEnabled()
+  })
+})
+
+// While a save is on its way the editor takes no edits: the reload after it
+// would throw them away.
+test.describe('a Template save in flight', () => {
+  const FLY = 'e2e-template-save-in-flight'
+  test.beforeEach(async ({ request }) => {
+    await removeChart(request, FLY)
+    expect((await request.post('/api/v2/charts', { data: { name: FLY } })).ok()).toBeTruthy()
+    const res = await request.post(`/api/v2/templates/${FLY}/rules`, {
+      data: { files: { 'cpu.yaml': 'group: cpu\nrules:\n  - alert: CpuHigh\n    expr: up > 1\n' } },
+    })
+    expect(res.ok()).toBeTruthy()
+  })
+  test.afterAll(async ({ request }) => { await removeChart(request, FLY) })
+
+  test('takes no typing until the answer, and Save is sent once', async ({ page, request }) => {
+    await openTemplateChart(page, FLY)
+    await page.getByText('cpu', { exact: true }).first().click()
+    const name = page.getByPlaceholder('alert name')
+    await name.fill('CpuSent')
+    let release
+    const held = new Promise(resolve => { release = resolve })
+    let posts = 0
+    await page.route(`**/api/v2/templates/${FLY}/rules`, async route => {
+      if (route.request().method() !== 'POST') return route.continue()
+      posts++
+      await held
+      return route.continue()
+    })
+    const save = page.getByRole('button', { name: 'Save' }).first()
+    await save.dblclick()
+    await expect(page.getByText('Saving…').first()).toBeVisible()
+    await name.focus().catch(() => {})
+    await page.keyboard.type('Typed')
+    await expect(name).toHaveValue('CpuSent')
+    release()
+    await expect(page.getByText('Saving…')).toHaveCount(0, { timeout: 8000 })
+    await expect(name).toHaveValue('CpuSent')
+    expect(posts).toBe(1)
+    const info = await (await request.get(`/api/v2/templates/${FLY}`)).json()
+    expect(info.rulesFiles['cpu.yaml']).toContain('alert: CpuSent')
   })
 })

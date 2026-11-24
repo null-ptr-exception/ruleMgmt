@@ -9,6 +9,19 @@ import { durationCellFault } from '../utils/duration'
 
 const REGEX_HINT = 'Matched exactly, not as a regex. For a regex, use a column that is not a selector, in the expr'
 
+/**
+ * A checkbox has no error status: a required one with no value (a key a
+ * hand-edited row leaves out) is outlined instead, with the same "Required".
+ */
+export function MissingRequired({ missing, children }) {
+  if (!missing) return children
+  return (
+    <Tooltip title="Required">
+      <span data-testid="required-missing" style={{ display: 'inline-block', padding: '0 3px', border: '1px solid #ff4d4f', borderRadius: 4 }}>{children}</span>
+    </Tooltip>
+  )
+}
+
 export const RequiredMark = () => (
   <span data-testid="required-mark" aria-label="required" style={{ color: '#ff4d4f', marginLeft: 2 }}>*</span>
 )
@@ -112,13 +125,14 @@ export default function AlertTable({
       return <span style={{ fontSize: 13, padding: '0 7px' }}>{String(text)}</span>
     }
     if (v.type === 'boolean') {
-      return (
+      const box = (
         <Checkbox
           checked={!!val}
           disabled={readOnly}
           onChange={e => handleCellChange(realIndex, v.name, e.target.checked)}
         />
       )
+      return <MissingRequired missing={missing}>{box}</MissingRequired>
     }
     if (v.type === 'number' || v.type === 'integer') {
       return hint(

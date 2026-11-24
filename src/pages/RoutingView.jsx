@@ -403,9 +403,8 @@ export default function RoutingView() {
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
         {!showShared && syncUnknown && selectedFolder && (
-          <div data-testid="sync-unknown" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
-            {syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.
-          </div>
+          <Alert data-testid="sync-unknown" type="error" banner showIcon style={{ fontSize: 12 }}
+            message={`${syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.`} />
         )}
         {!showShared && frozenSource && selectedFolder && (
           <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>

@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Modal, Typography, Empty, Input, Select, message, Segmented, Alert, Tooltip, Tag } from 'antd'
+import { Button, Modal, Typography, Empty, Input, Select, message, Segmented, Alert, Tooltip, Tag, Checkbox } from 'antd'
 import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
 import OverviewTemplateTree from '../components/OverviewTemplateTree'
-import AlertTable, { RequiredMark } from '../components/AlertTable'
+import AlertTable, { RequiredMark, MissingRequired } from '../components/AlertTable'
 import { isMissingRequired, buildNewRow } from '../utils/valueUtils'
 import { durationCellFault } from '../utils/duration'
 import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
@@ -16,6 +16,7 @@ import { parseRulesDir } from '../utils/rulesFile'
 import { isReservedName, RESERVED_HINT, isCommonChartPath, COMMON_DIR } from '../utils/reservedNames'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import { syncFailedNotice } from '../utils/syncNotice'
+import { valuesInEffect, inheritedFromOf } from '../utils/valuesInEffect'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -215,10 +216,7 @@ export default function AlertUserView() {
 
   // The _common a group is inherited from, or null: a group no layer gives
   // (or a deployment with no _common) is the deployment's own, as before.
-  const inheritedFrom = group => {
-    const from = inherited?.from?.groups?.[group]?.from
-    return from && from !== 'own' && from !== 'template' ? from : null
-  }
+  const inheritedFrom = group => inheritedFromOf(inherited, group)
   const inheritedCommon = inherited?.values?._common || {}
   const commonFrom = inherited?.from?.common || {}
 
@@ -237,11 +235,15 @@ export default function AlertUserView() {
     let stale = false
     const missing = viewed.filter(p => !viewedValues[p])
     // A failed read is not cached: it would show as an empty deployment.
+    // Each shows what is in effect for it, as its own page does: the groups
+    // and Common Values it inherits included.
     Promise.all(missing.map(p => getDeployment(selectedChart, p.split('/').pop(), p)
       .then(data => {
         if (!data.parsed) return [p, null]
-        const { _common, ...rest } = data.parsed
-        return [p, { values: rest, commonValues: _common || {} }]
+        // A stack Helm cannot render as shown (a _common that cannot be
+        // read): said, and nothing inherited is shown as what deploys.
+        if (data.stackProblems?.length) return [p, { ...valuesInEffect(data.parsed, null), stackProblems: data.stackProblems }]
+        return [p, valuesInEffect(data.parsed, data.inherited)]
       })
       .catch(() => [p, null])))
       .then(entries => {
@@ -506,6 +508,11 @@ export default function AlertUserView() {
   // since). Rows that would fix a selector overlap (#60) each come with a
   // button that adds them.
   function reportSaveFailure(result) {
+    if (result.unknown) {
+      // As any answer that cannot be read is said (main.jsx).
+      message.error({ content: result.error, duration: 0, key: 'answer-cut-off' })
+      return
+    }
     if (result.changed) {
       reportChanged(result)
       return
@@ -547,7 +554,26 @@ export default function AlertUserView() {
     setReadNotes([])
   }
 
-  async function handleSave() {
+  // While a save is on its way nothing is edited and no second save is
+  // sent: the answer would overwrite an edit made meanwhile, or leave it
+  // looking saved, and a second save of the old version is refused as
+  // changed since. A ref, so a double click sees the first.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+  async function oneSaveAtATime(save) {
+    if (savingRef.current) return false
+    savingRef.current = true
+    setSaving(true)
+    try {
+      return await save()
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
+  const handleSave = () => oneSaveAtATime(saveSingle)
+  async function saveSingle() {
     if (!selectedChart || !selectedFolder) return
     const isCommon = activeAlert === '__common_vars__'
     // An inherited group is written only once it is overridden here (#102).
@@ -571,7 +597,8 @@ export default function AlertUserView() {
     return true
   }
 
-  async function handleOverviewSave() {
+  const handleOverviewSave = () => oneSaveAtATime(saveOverview)
+  async function saveOverview() {
     if (!selectedChart || !selectedFolder) return false
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...allValues }
@@ -666,7 +693,7 @@ export default function AlertUserView() {
   const isCommonView = activeAlert === '__common_vars__'
   // Nothing to edit: a sync target, values that cannot be read, or
   // sync.yaml that cannot be read (whether it is a target is not known).
-  const locked = !!frozenSource || !!loadError || !!syncUnknown
+  const locked = !!frozenSource || !!loadError || !!syncUnknown || saving
   const commonVarDefs = schema ? getCommonVars(schema) : []
   const showMain = selectedFolder && selectedChart && activeAlert
 
@@ -777,9 +804,8 @@ export default function AlertUserView() {
           </div>
         )}
         {syncUnknown && selectedFolder && !multi && (
-          <div data-testid="sync-unknown" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
-            {syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.
-          </div>
+          <Alert data-testid="sync-unknown" type="error" banner showIcon style={{ fontSize: 12 }}
+            message={`${syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.`} />
         )}
         {loadError && selectedFolder && !multi && (
           <div data-testid="values-load-error" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
@@ -828,12 +854,12 @@ export default function AlertUserView() {
           <AlertOverviewWorkspace
             checkedAlerts={checkedAlerts}
             allValues={allValues}
-            commonValues={commonValues}
+            commonValues={{ ...inheritedCommon, ...commonValues }}
             onAllValuesChange={updated => { setAllValues(updated); setDirty(true) }}
             onSave={handleOverviewSave}
             onPreview={onCommon ? undefined : handlePreview}
             dirty={dirty}
-            saveStatus={saveStatus}
+            saveStatus={saving ? 'Saving…' : saveStatus}
             getVars={getVars}
             readOnly={locked}
             deployments={viewedDeployments}
@@ -864,7 +890,17 @@ export default function AlertUserView() {
                     const missing = !frozenSource && !onCommon && isMissingRequired(v, own ? commonValues[v.name] : inheritedCommon[v.name])
                     const badDuration = !missing && !frozenSource && v.type === 'duration' && commonValues[v.name]
                       ? durationCellFault(commonValues[v.name], null) : null
-                    const field = v.enum ? (
+                    const shownValue = own ? commonValues[v.name] : inheritedCommon[v.name]
+                    // A boolean is a checkbox, as its column is: true or
+                    // false, not the text "true", which a save refuses. One
+                    // inherited shows the inherited value, dimmed.
+                    const field = v.type === 'boolean' ? (
+                        <MissingRequired missing={missing}>
+                          <Checkbox checked={!!shownValue} disabled={locked}
+                            style={from ? { opacity: 0.6 } : undefined}
+                            onChange={e => { setCommonValues({ ...commonValues, [v.name]: e.target.checked }); setDirty(true) }} />
+                        </MissingRequired>
+                      ) : v.enum ? (
                         <Select size="small" value={commonValues[v.name] ?? ''}
                           status={missing ? 'error' : undefined}
                           onChange={val => { setCommonValues({ ...commonValues, [v.name]: val }); setDirty(true) }}
@@ -892,7 +928,7 @@ export default function AlertUserView() {
                     return (
                       <div key={v.name} data-testid={`common-value-${v.name}`} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                         <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}{v.required && <RequiredMark />}</Text>
-                        {missing ? <Tooltip title="Required">{field}</Tooltip> : badDuration ? <Tooltip title={badDuration}>{field}</Tooltip> : field}
+                        {missing && v.type !== 'boolean' ? <Tooltip title="Required">{field}</Tooltip> : badDuration ? <Tooltip title={badDuration}>{field}</Tooltip> : field}
                         {from && <Tag data-testid={`inherited-from-${v.name}`} style={{ margin: 0, opacity: 0.7 }}>from {from}</Tag>}
                         {own && v.name in inheritedCommon && !frozenSource && !syncUnknown && (
                           <Tooltip title={`Remove it here: ${inheritedCommon[v.name]} from ${commonFrom[v.name]} again`}>
@@ -963,7 +999,7 @@ export default function AlertUserView() {
               {!isCommonView && Object.values(filters).some(f => f && f.value !== '' && f.value != null) && (
                 <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>
               )}
-              {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
+              {(saving || saveStatus) && <Text type="secondary" style={{ fontSize: 12 }}>{saving ? 'Saving…' : saveStatus}</Text>}
               {saveWarnings.length > 0 && (
                 <Text type="warning" data-testid="values-warnings" style={{ fontSize: 12 }}>{saveWarnings.join('; ')}</Text>
               )}

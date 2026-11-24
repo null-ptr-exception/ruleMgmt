@@ -65,6 +65,18 @@ test.describe('sync.yaml that cannot be read', () => {
     await expect(page.getByTestId('sync-read-error')).toContainText('sync.yaml cannot be read (permission denied)')
   })
 
+  test('readable again, the tree shows the syncs once a deployment is opened', async ({ page }) => {
+    await fs.chmod(SYNC, 0o000)
+    await openTree(page)
+    await expect(page.getByTestId('sync-read-error')).toBeVisible()
+    await fs.chmod(SYNC, 0o644)
+    await deploymentNode(page, 'tgt').locator('.ant-tree-node-content-wrapper').click()
+    await expect(page.getByText(`Synced from ${SRC}`)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('sync-read-error')).toHaveCount(0)
+    await expect(deploymentNode(page, 'tgt')).toContainText('synced')
+    await expect(deploymentNode(page, 'src')).toContainText('source')
+  })
+
   test('the target\'s page says so and offers nothing to edit', async ({ page }) => {
     await openTree(page)
     await deploymentNode(page, 'tgt').locator('.ant-tree-node-content-wrapper').click()
@@ -73,7 +85,8 @@ test.describe('sync.yaml that cannot be read', () => {
     await fs.chmod(SYNC, 0o000)
     await page.reload()
     await page.getByText('Common Values').click()
-    await expect(page.getByTestId('sync-unknown')).toContainText('sync.yaml cannot be read (permission denied)', { timeout: 5000 })
+    await expect(page.getByTestId('sync-unknown')).toContainText('sync.yaml cannot be read', { timeout: 5000 })
+    await expect(page.getByTestId('sync-unknown')).toHaveAttribute('role', 'alert')
     await expect(page.locator('input.ant-input:visible').first()).toBeDisabled()
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
@@ -82,7 +95,8 @@ test.describe('sync.yaml that cannot be read', () => {
     await fs.chmod(SYNC, 0o000)
     await openTree(page, '#/routing')
     await deploymentNode(page, 'tgt').locator('.ant-tree-node-content-wrapper').click()
-    await expect(page.getByTestId('sync-unknown')).toContainText('sync.yaml cannot be read (permission denied)', { timeout: 5000 })
+    await expect(page.getByTestId('sync-unknown')).toContainText('sync.yaml cannot be read', { timeout: 5000 })
+    await expect(page.getByTestId('sync-unknown')).toHaveAttribute('role', 'alert')
   })
 
   test('Sync to... and Sync from... say so and offer nothing to overwrite', async ({ page }) => {
@@ -90,7 +104,7 @@ test.describe('sync.yaml that cannot be read', () => {
     await fs.chmod(SYNC, 0o000)
 
     let dialog = await menu(page, 'src', 'Sync to...')
-    await expect(dialog.getByTestId('sync-read-error')).toContainText('sync.yaml cannot be read (permission denied)', { timeout: 5000 })
+    await expect(dialog.getByTestId('sync-read-error')).toContainText('sync.yaml cannot be read', { timeout: 5000 })
     await expect(dialog.getByText('will overwrite its content')).toHaveCount(0)
     await expect(dialog.getByRole('checkbox')).toHaveCount(0)
     await expect(dialog.getByRole('button', { name: 'Confirm sync' })).toBeDisabled()
@@ -98,7 +112,7 @@ test.describe('sync.yaml that cannot be read', () => {
     await expect(dialog).not.toBeVisible()
 
     dialog = await menu(page, 'tgt', 'Sync from...')
-    await expect(dialog.getByTestId('sync-read-error')).toContainText('sync.yaml cannot be read (permission denied)', { timeout: 5000 })
+    await expect(dialog.getByTestId('sync-read-error')).toContainText('sync.yaml cannot be read', { timeout: 5000 })
     await expect(dialog.locator('.ant-select')).toHaveCount(0)
     await expect(dialog.getByRole('button', { name: 'Confirm sync' })).toBeDisabled()
   })

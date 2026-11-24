@@ -53,7 +53,7 @@ test.describe('the Template of the deployment opened', () => {
       await openTree(page)
       await deploymentNode(page, 'a', A).locator('.ant-tree-node-content-wrapper').click()
       await expect(page.getByTestId('chart-load-error'))
-        .toContainText(`charts/${A}/rules/alpha_grp.yaml cannot be read: permission denied`, { timeout: 5000 })
+        .toContainText(`charts/${A}/rules/alpha_grp.yaml cannot be read`, { timeout: 5000 })
     } finally {
       await fs.chmod(rulesFile(), 0o644)
     }

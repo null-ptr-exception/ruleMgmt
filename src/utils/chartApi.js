@@ -1,4 +1,4 @@
-import { apiFetch } from '../lib/apiFetch.js'
+import { apiFetch, AnswerCutOff, cutOffMessage } from '../lib/apiFetch.js'
 
 const BASE = '/api/v2'
 
@@ -127,9 +127,18 @@ export async function saveDeployment(chart, deployment, values, folder, version)
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ values, ...(version ? { version } : {}) })
   })
-  // A refusal carries { error, problems } — which cells, and why.
-  if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({}))) }
-  return res.json()
+  // A refusal carries { error, problems } — which cells, and why. An answer
+  // that cannot be read (a proxy's error page, a body cut off) may follow a
+  // save that was made: `{ ok: false, unknown: true, error }` says that it
+  // is not known.
+  let body
+  try {
+    body = await res.json()
+  } catch (err) {
+    if (err instanceof AnswerCutOff) return { ok: false, unknown: true, error: cutOffMessage(err) }
+    throw err
+  }
+  return res.ok ? body : { ok: false, ...body }
 }
 
 export async function deleteDeployment(chart, deployment, folder) {

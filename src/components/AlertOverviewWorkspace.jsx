@@ -108,13 +108,26 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
 }
 
 // One part of a group's card per deployment, when several are viewed (#91):
-// each is that deployment's own rows, as its own Overview shows them.
+// each is that deployment's rows in effect, as its own Overview shows them —
+// a group it inherits from a _common (#102) said as such.
 function DeploymentPart({ deployment, alertName, vars, sectionFilters, effectiveFilters, onFiltersChange, onOpen, scrollContainer, stickyOffsetHeader }) {
+  const from = deployment.from?.[alertName]
+  const count = (deployment.values[alertName] || []).length
   return (
     <div data-testid="deployment-part" style={{ marginBottom: 12 }}>
       <Button type="link" size="small" onClick={() => onOpen(deployment.path)} style={{ padding: 0, fontSize: 12, fontWeight: 500 }}>
         {deployment.path}
       </Button>
+      {deployment.stackProblems?.length > 0 && (
+        <div data-testid="part-stack-problems" style={{ padding: '2px 0 6px', fontSize: 12, color: '#a8071a' }}>
+          Helm cannot render this as shown: {deployment.stackProblems.join('; ')}
+        </div>
+      )}
+      {from && (
+        <div data-testid={`part-inherited-${alertName}`} style={{ padding: '2px 0 6px', fontSize: 12, color: '#1d39c4' }}>
+          Inherited from <b>{from}</b>: {count} row{count === 1 ? '' : 's'}
+        </div>
+      )}
       <AlertTable
         vars={vars}
         rows={deployment.values[alertName] || []}
@@ -241,7 +254,8 @@ export default function AlertOverviewWorkspace({
   getVars,
   readOnly = false,
   // Two or more deployments of the chart, viewed read-only (#91):
-  // [{ path, values, commonValues }] in the order they were checked.
+  // [{ path, values, commonValues, from, stackProblems? }] in the order they
+  // were checked, each its values in effect (valuesInEffect).
   deployments = null,
   onOpenDeployment,
   // A group the deployment inherits from a _common (#102): its rows shown,

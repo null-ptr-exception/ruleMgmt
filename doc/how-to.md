@@ -830,7 +830,11 @@ In Overview, the deployment tree has a checkbox on each deployment of the
 selected chart. Check a few more — say `shop/stg` and `cart/prod` next to
 `shop/prod` — and every group's card shows one part per deployment, in the
 order you checked them, each exactly as that deployment's own Overview shows
-it. Filters apply to every part.
+it: the rows and Common Values in effect for it. A group a deployment inherits
+from a `_common` shows the inherited rows, under "Inherited from
+&lt;the _common&gt;: N rows"; one it writes itself (an empty one included,
+which clears what it would inherit) shows its own. Filters apply to every
+part, and a card's row count is of the rows shown.
 
 With two or more checked the view is read-only. Click a deployment's name in a
 card to go back to editing just that one; the groups stay checked. Only one

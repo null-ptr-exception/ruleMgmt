@@ -109,3 +109,18 @@ describe('saveChartMeta', () => {
     await expect(saveChartMeta('c', { description: 'd' })).resolves.toEqual({ ok: false, error: "EACCES: permission denied, access 'charts/c/Chart.yaml'" })
   })
 })
+
+describe('saveDeployment: an answer that cannot be read', () => {
+  afterEach(() => { vi.restoreAllMocks() })
+  it.each([
+    ['a proxy\'s error page', 504],
+    ['a body cut off', 200],
+  ])('%s says whether it was saved is not known', async (_, status) => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: status < 400, status, json: async () => { throw new SyntaxError('Unexpected token') } })
+    const { saveDeployment } = await import('../../src/utils/chartApi.js')
+    const result = await saveDeployment('c', 'd', {}, 'f')
+    expect(result.ok).toBe(false)
+    expect(result.unknown).toBe(true)
+    expect(result.error).toContain('whether the change was made is not known')
+  })
+})

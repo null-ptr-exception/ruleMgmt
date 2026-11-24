@@ -611,7 +611,24 @@ export default function TemplateDevEditor() {
   // `overwrite` is the answer to "the files changed on disk": it lets the
   // save go ahead over them and nothing more. A breaking change still gets
   // its own dialog — the server is never told it was confirmed here (#185).
+  // While a save is on its way the editor takes no edits (inert) and no
+  // second save: the reload after it would throw an edit made meanwhile
+  // away. A ref, so a double click sees the first.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
   async function handleSave(overwrite = false) {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      await saveNow(overwrite)
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
+  async function saveNow(overwrite) {
     if (!activeChart) return
 
     // A group field whose text could not be read: saving now would save the
@@ -928,7 +945,7 @@ export default function TemplateDevEditor() {
   const setRules = rules => updateGroup(activeGroup, g => ({ ...g, rules }))
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div inert={saving ? '' : undefined} style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <ImportRulesModal
         open={importTarget !== null}
         needsName={importTarget === 'new'}
@@ -982,7 +999,7 @@ export default function TemplateDevEditor() {
               style={{ flex: 1, maxWidth: 400 }} />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
               <Button icon={<ImportOutlined />} onClick={() => setImportTarget('existing')}>Import</Button>
-              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={!dirty && !needsSave}>Save</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={saving || (!dirty && !needsSave)}>{saving ? 'Saving…' : 'Save'}</Button>
               <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
             </div>
           </>
@@ -1234,7 +1251,7 @@ export default function TemplateDevEditor() {
       {activeChart && dirty && (
         <div style={{ padding: '8px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fffbe6' }}>
           <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>
-          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => handleSave()}>Save</Button>
+          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
         </div>
       )}
     </div>

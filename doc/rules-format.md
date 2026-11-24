@@ -451,7 +451,10 @@ with no escaping. So a save is refused — naming the row and column — and
   `namespace=""` — valid PromQL that matches nothing. A required `_common`
   column counts whenever anything renders — any row, or a once group, which
   renders with none: with no `_common` block at all, Helm checks nothing and
-  every reference renders empty.
+  every reference renders empty. The table marks such a cell before Save,
+  a required `boolean` a hand-edited row leaves out included: its checkbox
+  shows unticked, but the row holds no value until it is ticked or
+  unticked.
 - **`""` or `null` in any other column.** A guard reads the key as set, so
   the rule would render with the value missing. Leave the cell out instead.
 - **A newline, in any column.** Values are one line; the table never

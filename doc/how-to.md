@@ -978,27 +978,39 @@ reads it — including whether `templates/alertmanagerconfig.yaml` is still what
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
-  node scripts/check-deployment.mjs /work/deployments/<chart>/<env>
+  node scripts/check-deployment.mjs --repo /work /work/deployments/<chart>/<env>
 ```
 
-It exits 0 when both pass, 1 when the deployment has a problem (printed),
-and 2 when it could not check: wrong arguments, a folder that is not a
-folder deployment (its own `Chart.yaml` and `values.yaml`), site settings it
-cannot read, helm or a checker missing, or a file it cannot read.
+It exits 0 when both pass, 1 when the deployment has a problem (printed) —
+Helm failing to render it included — and 2 when it could not check: wrong
+arguments, a folder that is not a folder deployment (its own `Chart.yaml`
+and `values.yaml`), site settings it cannot read, helm or a checker missing,
+a file it cannot read, or a repo root it cannot tell (below).
 
 - Mount the gitops repo whole: the deployment finds its chart through
   `file://../../../charts/<chart>`.
 - Mount it writable (no `:ro`) for the uid you run as: like Preview, Helm
   writes `Chart.lock` and `charts/` into the deployment folder; the gitops
-  repo's `.gitignore` keeps them out ([setup](gitops-repo-setup.md)).
+  repo's `.gitignore` keeps them out ([setup](gitops-repo-setup.md)). A
+  read-only mount fails with Helm's `read-only file system`, exit 1.
 - Pass the site's labels with `-e` as for `gen-rules --check`, or every
   AlertmanagerConfig is reported as out of date.
 - A `routing.yaml` using shared configs is checked with the repo's
   `_shared/notification-configs.yaml` — the one at the root of the git
   checkout the deployment is in, or of the folder given with
   `--repo <root>` (before the deployment). No file above that root is read.
-  When neither tells the root, it exits 2 and says so. git in the container
-  may refuse a checkout another uid owns: pass `--repo /work` then.
+  Pass `--repo /work`, as above: git in the container refuses a checkout
+  another uid owns ("dubious ownership" — root included), and a plain copy or
+  a worktree mounted alone is no checkout at all. Without `--repo`, when git
+  cannot tell the root, it exits 2 with git's own message.
+- A deployment on a `_common` chart needs the same root: it tells the
+  Template at the bottom of the stack from any other chart. Without `--repo`,
+  when git cannot tell it, `check-deployment` exits 2 with git's own message
+  rather than check against a smaller folder; given a folder inside the repo
+  (`--repo /work/deployments`), one without the `charts/` folder, it exits 2
+  saying that is not the repo's root. A deployment that renders its Template
+  directly, with no `routing.yaml` using shared configs, needs no root: git
+  and `--repo` are not read for it.
 
 In the gitops repo's CI, check every deployment a change touches. A changed
 file belongs to the nearest folder above it with both `Chart.yaml` and
@@ -1034,7 +1046,7 @@ fi
 status=0
 while IFS= read -r -d '' dir; do
   docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
-    node scripts/check-deployment.mjs "/work/$dir" || status=1
+    node scripts/check-deployment.mjs --repo /work "/work/$dir" || status=1
 done < "$list"
 exit "$status"
 ```

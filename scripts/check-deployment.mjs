@@ -17,8 +17,11 @@
  * them out (doc/gitops-repo-setup.md).
  *
  * A routing.yaml using shared notification configs (#123) is checked with
- * the repo's _shared/notification-configs.yaml: the repo is the git checkout
- * the deployment is in, or the root given with --repo.
+ * the repo's _shared/notification-configs.yaml, and a deployment on a
+ * _common chart with the repo's Templates: the repo is the git checkout the
+ * deployment is in, or the root given with --repo. When neither tells it,
+ * the check stops and says so (exit 2); a deployment that needs neither does
+ * not need git.
  *
  * Whether the AlertmanagerConfig is current depends on the site's object
  * labels (RULE_OBJECT_LABELS and friends): pass them with -e, as for
@@ -80,16 +83,35 @@ function releaseName(dir, stack) {
   return `${stack.chart || 'deployment'}-${path.basename(dir)}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 }
 
+const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
+const NO_ROOT_HINT = "Pass --repo <the gitops repo's root> (in the image: --repo /work)"
+
 async function checkRuleObjects(dir, repo) {
   // A `_common` stack (#100): a link gone or a layer missing renders
   // nothing, which would read as passed; a hand-written null is read
   // differently by each Helm version.
-  const root = await repoRoot(dir, repo).catch(() => null) ?? path.dirname(dir)
+  // The repo's root tells a Template from any other chart a `_common` passes
+  // its values to. A deployment on no `_common` does not need it — not git,
+  // and not --repo either, whatever that names; one on a `_common` is not
+  // checked against any other root than the repo's.
+  let root = path.dirname(dir)
   let stack, nulls
   try {
     stack = await resolveStack(root, dir)
+    if (stack.firstLayerPath !== undefined) {
+      const { root: found, why } = await repoRoot(dir, repo)
+      if (!found) throw new CannotCheck(`Rules: the deployment renders on a ${COMMON_DIR} chart, and the repo's root cannot be told — git says: ${why}. ${NO_ROOT_HINT}`)
+      // A folder inside the repo (deployments/, say) has the _common but not
+      // the Templates: every stack would read as rendering nothing.
+      if (!(await exists(path.join(found, chartsDirName())))) {
+        throw new CannotCheck(`Rules: the deployment renders on a ${COMMON_DIR} chart, and ${found}${repo ? ', given with --repo,' : ''} is not the gitops repo's root: it has no ${chartsDirName()}/ folder with the Templates. ${NO_ROOT_HINT}`)
+      }
+      root = found
+      stack = await resolveStack(root, dir)
+    }
     nulls = stack.layers.length ? (await readStackValues(root, dir, stack)).nulls : []
   } catch (err) {
+    if (err instanceof CannotCheck) throw err
     return { ok: false, lines: [`Rules: not checked — its _common stack cannot be read (${err.code || err.message})`] }
   }
   if (stack.problems.length) return { ok: false, lines: ['Rules: not checked — Helm would not render it as it reads:', ...stack.problems.map(p => `  ${p.description}`)] }
@@ -120,13 +142,17 @@ async function repoRoot(dir, given) {
     const root = path.resolve(given)
     const rel = path.relative(root, dir)
     if (rel.startsWith('..') || path.isAbsolute(rel)) throw new CannotCheck(`${dir} is not inside the repo ${root}`)
-    return root
+    return { root }
   }
+  // git says why it cannot: not a checkout (a plain copy, a worktree
+  // mounted alone), or one another uid owns ("dubious ownership", root in a
+  // container included). AlertForge does not override git's check.
   try {
     const { stdout } = await runCommand('git', ['-C', dir, 'rev-parse', '--show-toplevel'])
-    return stdout.trim() || null
-  } catch {
-    return null
+    return stdout.trim() ? { root: stdout.trim() } : { why: 'git gave no root' }
+  } catch (err) {
+    const said = `${err.stderr || ''}`.split('\n').map(l => l.trim()).find(Boolean)
+    return { why: said || (err.code === 'ENOENT' ? 'git is not installed' : err.message) }
   }
 }
 
@@ -137,8 +163,8 @@ async function checkRouting(dir, repo) {
   let uses = []
   try { uses = text === null ? [] : sharedNamesIn(yaml.load(text)) } catch { /* routingState says why */ }
   if (uses.length) {
-    const root = await repoRoot(dir, repo)
-    if (!root) throw new CannotCheck(`${ROUTING_FILE} uses shared configs (${uses.join(', ')}), and the repo's root cannot be told: run it in the repo's git checkout, or pass --repo <the gitops repo's root>`)
+    const { root, why } = await repoRoot(dir, repo)
+    if (!root) throw new CannotCheck(`${ROUTING_FILE} uses shared configs (${uses.join(', ')}), and the repo's root cannot be told — git says: ${why}. ${NO_ROOT_HINT}`)
     shared = await readSharedConfigs(root)
   }
   const state = await routingState(dir, shared)

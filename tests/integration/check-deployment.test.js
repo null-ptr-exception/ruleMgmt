@@ -400,9 +400,20 @@ describe.skipIf(!CAN_RUN)('check-deployment with shared configs', () => {
   it('takes the root from --repo, and says when it cannot tell it', async () => {
     await writeShared(gitops, 'ops@example.com')
     await withRouting()
+    // Not a checkout: git says so, and the hint is --repo.
     let r = check()
-    expect(r.out).toMatch(/uses shared configs \(ops\), and the repo's root cannot be told: .*--repo/)
+    expect(r.out).toMatch(/uses shared configs \(ops\), and the repo's root cannot be told — git says: fatal: not a git repository[^\n]*\. Pass --repo <the gitops repo's root> \(in the image: --repo \/work\)/)
     expect(r.code).toBe(2)
+    // git refusing a checkout it will not read (as for another uid's):
+    // its own words are passed on.
+    execFileSync('git', ['init', '-q', gitops])
+    r = check(dir, { GIT_DIR: path.join(gitops, 'nowhere') })
+    expect(r.out).toMatch(/cannot be told — git says: fatal: not a git repository: .*nowhere/)
+    expect(r.code).toBe(2)
+    r = check(dir, { GIT_DIR: path.join(gitops, 'nowhere') }, ['--repo', gitops])
+    expect(r.out).toContain('Routing: passed')
+    expect(r.code).toBe(0)
+    await fs.rm(path.join(gitops, '.git'), { recursive: true, force: true })
     r = check(dir, {}, ['--repo', gitops])
     expect(r.out).toContain('Routing: passed')
     expect(r.code).toBe(0)
@@ -418,5 +429,85 @@ describe.skipIf(!CAN_RUN)('check-deployment with shared configs', () => {
     const { code, out } = check()
     expect(out).toContain('_shared/notification-configs.yaml has problems')
     expect(code).toBe(1)
+  })
+})
+
+// A deployment on a _common chart is checked with the repo's Templates, so
+// with the repo's root: the git checkout, or --repo. When neither tells it,
+// it stops and says why, rather than look in a smaller folder and report
+// what Helm does not do. A deployment on no _common does not need git.
+describe.skipIf(!CAN_RUN)('check-deployment on a _common stack', () => {
+  // deployments/_common/tiny passes its values to charts/tiny, a Template.
+  beforeEach(async () => {
+    await fs.writeFile(path.join(gitops, 'charts', 'tiny', 'Chart.yaml'), 'apiVersion: v2\nname: tiny\nversion: 0.1.0\nannotations:\n  app: alertforge\n')
+    const layer = path.join(gitops, 'deployments', '_common', 'tiny')
+    await fs.mkdir(path.join(layer, 'charts'), { recursive: true })
+    await fs.writeFile(path.join(layer, 'Chart.yaml'), 'apiVersion: v2\nname: common\nversion: 0.1.0\ndependencies:\n  - name: tiny\n    version: 0.1.0\n')
+    await fs.symlink(path.relative(path.join(layer, 'charts'), path.join(gitops, 'charts', 'tiny')), path.join(layer, 'charts', 'tiny'))
+    await fs.writeFile(path.join(layer, 'values.yaml'), 'tiny:\n  expr: up == 0\n')
+    await fs.writeFile(path.join(dir, 'Chart.yaml'),
+      'apiVersion: v2\nname: prod\nversion: 0.1.0\ndependencies:\n  - name: common\n    version: 0.1.0\n    repository: file://../../_common/tiny\n')
+    await fs.writeFile(path.join(dir, 'values.yaml'), 'common:\n  tiny: {}\n')
+  })
+
+  it('checks it in a git checkout, or with --repo', () => {
+    let r = check(dir, {}, ['--repo', gitops])
+    expect(r.out).toContain('Rules: passed')
+    expect(r.code).toBe(0)
+    execFileSync('git', ['init', '-q', gitops])
+    r = check()
+    expect(r.out).toContain('Rules: passed')
+    expect(r.code).toBe(0)
+  })
+
+  it('says when the root cannot be told, in git\'s words, and how to give it', () => {
+    let r = check()
+    expect(r.out).toMatch(/Rules: the deployment renders on a _common chart, and the repo's root cannot be told — git says: fatal: not a git repository[^\n]*\. Pass --repo <the gitops repo's root> \(in the image: --repo \/work\)/)
+    expect(r.out).not.toContain('Helm would not render it')
+    expect(r.code).toBe(2)
+    // A checkout git will not read (as another uid's).
+    execFileSync('git', ['init', '-q', gitops])
+    r = check(dir, { GIT_DIR: path.join(gitops, 'nowhere') })
+    expect(r.out).toMatch(/cannot be told — git says: fatal: not a git repository: .*nowhere/)
+    expect(r.code).toBe(2)
+  })
+
+  it('says when the root given with --repo is a folder inside the repo, not its root', () => {
+    const r = check(dir, {}, ['--repo', path.join(gitops, 'deployments')])
+    expect(r.out).toContain(`Rules: the deployment renders on a _common chart, and ${path.join(gitops, 'deployments')}, given with --repo, is not the gitops repo's root: it has no charts/ folder with the Templates. Pass --repo`)
+    expect(r.out).not.toContain('has no link to')
+    expect(r.code).toBe(2)
+  })
+
+  it('a deployment on no _common does not read --repo, wherever it points', async () => {
+    const plain = path.join(gitops, 'deployments', 'tiny', 'dev')
+    await fs.mkdir(plain, { recursive: true })
+    await fs.writeFile(path.join(plain, 'Chart.yaml'),
+      'apiVersion: v2\nname: dev\nversion: 0.1.0\ndependencies:\n  - name: tiny\n    version: 0.1.0\n    repository: file://../../../charts/tiny\n')
+    await fs.writeFile(path.join(plain, 'values.yaml'), 'tiny:\n  expr: up == 0\n')
+    for (const elsewhere of [os.tmpdir(), path.join(gitops, 'charts')]) {
+      const r = check(plain, {}, ['--repo', elsewhere])
+      expect(r.out, elsewhere).toContain('Rules: passed')
+      expect(r.code, elsewhere).toBe(0)
+    }
+  })
+
+  it('a deployment on no _common is checked without git, as before', async () => {
+    const plain = path.join(gitops, 'deployments', 'tiny', 'dev')
+    await fs.mkdir(plain, { recursive: true })
+    await fs.writeFile(path.join(plain, 'Chart.yaml'),
+      'apiVersion: v2\nname: dev\nversion: 0.1.0\ndependencies:\n  - name: tiny\n    version: 0.1.0\n    repository: file://../../../charts/tiny\n')
+    await fs.writeFile(path.join(plain, 'values.yaml'), 'tiny:\n  expr: up == 0\n')
+    // A PATH with node, helm and promtool, and no git.
+    const bin = path.join(gitops, 'bin')
+    await fs.mkdir(bin)
+    const where = name => execFileSync('which', [name], { encoding: 'utf-8' }).trim()
+    await fs.symlink(process.execPath, path.join(bin, 'node'))
+    await fs.symlink(process.env.HELM_BIN || where('helm'), path.join(bin, 'helm'))
+    await fs.symlink(where('promtool'), path.join(bin, 'promtool'))
+    const r = check(plain, { PATH: bin })
+    expect(spawnSync('git', ['--version'], { env: { PATH: bin } }).error?.code).toBe('ENOENT')
+    expect(r.out).toContain('Rules: passed')
+    expect(r.code).toBe(0)
   })
 })

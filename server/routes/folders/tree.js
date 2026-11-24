@@ -15,7 +15,7 @@ import { loadValues } from '../../../src/utils/valuesText.js'
 async function listChildren(baseDir, parentPath) {
   const repo = openRepo(baseDir)
   // Every deployment in it has the same folders above it: each asked once.
-  const folderCommonHere = folderCommons(baseDir, parentPath || '.')
+  const folderCommonHere = folderCommons(baseDir, parentPath || '.', repo)
   const folders = []
   for (const e of await childEntries(repo, parentPath)) {
     const nodePath = e.rel
@@ -71,7 +71,8 @@ async function listChildren(baseDir, parentPath) {
 // source's Template, which a target renders (#103) — else each one's own.
 async function collectDeployments(baseDir, chartFor = null) {
   const results = []
-  for (const e of await walk(openRepo(baseDir))) {
+  const repo = openRepo(baseDir)
+  for (const e of await walk(repo)) {
     if (e.kind !== 'deployment') continue
     const d = { path: e.rel }
     const absPath = path.join(baseDir, d.path)
@@ -84,7 +85,7 @@ async function collectDeployments(baseDir, chartFor = null) {
       const stack = await resolveStack(baseDir, absPath)
       chart = stack.chart
       inheritsFrom = inheritsFromOf(stack)
-      folderCommon = await folderCommonOf(baseDir, d.path, chartFor || chart || stack.claims)
+      folderCommon = await folderCommonOf(baseDir, d.path, chartFor || chart || stack.claims, repo)
       const valuesYaml = loadValues(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
       alertCount = countAlerts(valuesYaml, stack.keys)
     } catch { /* leave defaults */ }

@@ -46,7 +46,6 @@ link-outside	sync-from	refuses-what-helm-renders	policy	a deployment folder that
 chart-template-gone	sync-from	accepts-what-helm-fails	bug	no issue yet: sync from a deployment whose Template is gone is accepted, though Helm cannot render the source
 chart-two-templates	preview	refuses-what-helm-renders	policy	a deployment naming two Templates is not supported: Commit and Preview refuse it, Helm renders both
 chart-two-templates	commit	refuses-what-helm-renders	policy	a deployment naming two Templates is not supported: Commit and Preview refuse it, Helm renders both
-values-is-folder	sync-to	5xx	bug	no issue yet: a values.yaml that is a folder answers 500 in the migration check and in sync
 file-not-folder	folder-list	5xx	bug	no issue yet: a folder path that is a file answers 500 in a folder's deployment list (mkdir ENOTDIR/EEXIST)
 legacy-flat	tree	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
 legacy-flat	list	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
@@ -80,3 +79,4 @@ link-inside	preview	refuses-what-helm-renders	policy	a folder that is a link (or
 link-inside	routing-get	misses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
 link-inside	sync-from	refuses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
 link-inside	sync-to	refuses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
+link-outside	users	misses-what-helm-renders	policy	a folder that is a link leading outside the repo holds none of the repo's deployments: who uses a Template does not follow it (the tree and Commit name it)

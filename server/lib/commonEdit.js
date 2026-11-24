@@ -88,8 +88,9 @@ async function loadItems(gitopsDir) {
   const items = []
   const unreadable = []
   for (const d of await walk(openRepo(gitopsDir))) {
-    if (d.kind === 'unreadable') { unreadable.push(d.rel || '.'); continue }
-    if (d.kind === 'folder' && !d.chartOnly) continue
+    // A link out of the repo holds none of its deployments: not followed.
+    if (d.kind === 'unreadable' && d.cause !== 'link') { unreadable.push(d.rel || '.'); continue }
+    if (d.kind !== 'deployment' && d.kind !== 'common' && !d.chartOnly) continue
     const abs = path.join(gitopsDir, d.rel)
     const stack = await resolveStack(gitopsDir, abs)
     items.push({ path: d.rel, kind: d.chartOnly ? 'chart-only' : d.kind, abs, stack, chain: [d.rel, ...stack.layers.map(l => l.path)] })
@@ -695,11 +696,11 @@ export async function folderCommonOf(gitopsDir, rel, chart, repo = openRepo(gito
  * asked once. `folderCommons(gitopsDir, parent)(chart)` is what a
  * deployment right in `parent` would inherit.
  */
-export function folderCommons(gitopsDir, parent) {
+export function folderCommons(gitopsDir, parent, repo = openRepo(gitopsDir)) {
   const asked = new Map()
   return chart => {
     if (!chart) return Promise.resolve(null)
-    if (!asked.has(chart)) asked.set(chart, folderCommonOf(gitopsDir, `${parent}/x`, chart))
+    if (!asked.has(chart)) asked.set(chart, folderCommonOf(gitopsDir, `${parent}/x`, chart, repo))
     return asked.get(chart)
   }
 }

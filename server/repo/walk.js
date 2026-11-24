@@ -46,6 +46,10 @@ import { loadSharedDir, sharedDirProblemOf, SHARED_DIR } from './shared.js'
 import { chartsDir } from './template.js'
 import { repoRel } from './readRepoFile.js'
 import { finding } from './finding.js'
+import { createLimit } from '../lib/limit.js'
+
+// How many folders one walk looks at at once: far below any open-files limit.
+const WALK_AT_ONCE = 16
 
 export { COMMON_DIR }
 
@@ -195,15 +199,15 @@ async function contextOf(repo, rel) {
 
 const placed = (e, nestedIn) => ({ ...e, nestedIn: e.kind === 'deployment' || e.kind === 'unreadable' || e.chartOnly ? nestedIn : null, inCommon: (e.kind === 'deployment' || e.kind === 'unreadable' || !!e.chartOnly) && segmentsOf(e.rel).includes(COMMON_DIR) })
 
-// The folders right inside `rel` the walk looks at: a link counts (as what
-// it is), a file does not.
+// The folders right inside `rel` the walk looks at: a link to a folder
+// counts (as what it is), a file or a link to one does not.
 async function subfolders(repo, rel, { inChart, hidden }) {
   const dir = await repo.dir(rel)
   if (dir.state !== 'ok') return []
   const out = []
   for (const [name, kind] of dir.value.entries) {
     const link = dir.value.links.get(name)
-    if (kind !== 'dir' && !link) continue
+    if (kind !== 'dir') continue
     const child = rel ? `${rel}/${name}` : name
     if (await excludedFolder(repo, child, { inChart, hidden })) continue
     out.push({ name, child, link })
@@ -216,17 +220,20 @@ export function walk(repo, { from = '', hidden = false } = {}) {
   return repo.memo('walk', `${start}\0${hidden}`, async () => {
     const found = []
     const { nestedIn: above, inChart: startInChart } = await contextOf(repo, start)
+    // Folders looked at side by side, a few at a time (each reads a file or
+    // two): the answer is sorted below.
+    const limit = createLimit(WALK_AT_ONCE)
     async function into(rel, { inChart, nestedIn }) {
-      for (const { child, link } of await subfolders(repo, rel, { inChart, hidden })) {
-        const e = await folderEntry(repo, child)
+      await Promise.all((await subfolders(repo, rel, { inChart, hidden })).map(async ({ child, link }) => {
+        const e = await limit(() => folderEntry(repo, child))
         if (link) {
           // Never walked into; one leading out of the repo is named.
           if (e.kind === 'unreadable' || link === 'inside') found.push(placed(e, nestedIn))
-          continue
+          return
         }
         if (e.kind !== 'folder' || e.chartOnly) found.push(placed(e, nestedIn))
         await into(child, { inChart: isChart(e), nestedIn: e.kind === 'deployment' ? (nestedIn ?? child) : nestedIn })
-      }
+      }))
     }
     const root = start ? await folderEntry(repo, start) : null
     if (root?.kind === 'unreadable' && !root.link) found.push(placed(root, above))
@@ -249,21 +256,22 @@ export async function childEntries(repo, rel) {
   const dir = await repo.dir(key)
   if (dir.state !== 'ok') return []
   const hideShared = !key && await inShared(repo, SHARED_DIR)
-  const out = []
-  for (const [name, kind] of dir.value.entries) {
+  const names = [...dir.value.entries].filter(([name, kind]) => {
     const link = dir.value.links.get(name)
-    if (kind !== 'dir' && link !== 'outside') continue
-    if (link && link !== 'outside') continue
-    if (skippedDir(name, { inChart }) || (hideShared && name === SHARED_DIR)) continue
+    if (kind !== 'dir' || (link && link !== 'outside')) return false
+    return !skippedDir(name, { inChart }) && !(hideShared && name === SHARED_DIR)
+  }).map(([name]) => name)
+  // Side by side, a few at a time, in the folder's order.
+  const limit = createLimit(WALK_AT_ONCE)
+  return Promise.all(names.map(name => limit(async () => {
     const e = placed(await folderEntry(repo, key ? `${key}/${name}` : name), nestedIn)
     let hasFolders = false
-    if (!link) {
+    if (!dir.value.links.get(name)) {
       const sub = await repo.dir(e.rel)
       if (sub.state === 'ok') hasFolders = [...sub.value.entries].some(([n, k]) => k === 'dir' && !sub.value.links.has(n) && !skippedDir(n, { inChart: isChart(e) }))
     }
-    out.push({ ...e, name, hasFolders })
-  }
-  return out
+    return { ...e, name, hasFolders }
+  })))
 }
 
 /**

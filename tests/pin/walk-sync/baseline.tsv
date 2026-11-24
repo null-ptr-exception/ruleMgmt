@@ -236,7 +236,7 @@ link-inside	W	commit	ok	200	-	no	-	link	renders	0	1	-	-
 link-outside	W	tree	unreadable	200	-	no	-	link	renders	0	1	-	unreadable=it is a link that leads outside the repo	
 link-outside	W	list	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-outside	W	folder-list	refused	400	-	no	-	link	renders	0	1	-	-	
-link-outside	W	users	unreadable	200	-	no	-	link	renders	0	1	-	unreadable deployments/w/out	
+link-outside	W	users	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-outside	W	migration	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-outside	W	routing-get	absent	400	-	no	-	link	renders	0	1	-	-	misses-what-helm-renders
 link-outside	W	preview	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
@@ -483,7 +483,7 @@ values-is-folder	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	fo
 values-is-folder	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
 values-is-folder	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
 values-is-folder	W	check-deployment	refused	exit 1	-	no	-	folder	renders-empty	0	0	-	-	
-values-is-folder	W	sync-to	error	500	-	no	-	folder	renders-empty	0	0	-	-	5xx
+values-is-folder	W	sync-to	refused	409	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	-	
 values-is-folder	W	sync-from	unreadable	409	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	-	
 values-is-folder	W	commit	refused	409	deployments/w/d	no	-	folder	renders-empty	0	0	-	values-unreadable	
 empty-folder	W	tree	folder	200	-	no	-	folder	no-chart	-	-	-	-	

@@ -409,21 +409,21 @@ unreadable-dir	A	list	ok	200	no	-	0	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=
 unreadable-dir	A	all-list	ok	200	no	null	-	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=- preview=-	
 unreadable-dir	A	editor	unreadable	409	no	-	-	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=- preview=-	
 unreadable-dir	A	preview	ok	200	no	no-summary	-	-	-	0	1	0	w=-; names=Down	tree=0 list=0 all-list=- editor=- preview=-	no-count-helm-renders
-dangling-link	A	tree	not-deployment	200	no	noValues	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
-dangling-link	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	count-while-helm-fails
-dangling-link	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
-dangling-link	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
-dangling-link	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=- list=0 all-list=- editor=- preview=-	
+dangling-link	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+dangling-link	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+dangling-link	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+dangling-link	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+dangling-link	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=- editor=- preview=-	
 link-outside	A	tree	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=- preview=-	
 link-outside	A	list	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=- preview=-	
 link-outside	A	all-list	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=- preview=-	
 link-outside	A	editor	unreadable	409	no	-	-	-	-	0	3	1	_common.team="shop"; cpu.0.job="api"	tree=1 list=1 all-list=1 editor=- preview=-	no-count-helm-renders
 link-outside	A	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=1 list=1 all-list=1 editor=- preview=-	no-count-helm-renders
-link-loop	A	tree	not-deployment	200	no	noValues	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
-link-loop	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	count-while-helm-fails
-link-loop	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
-link-loop	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
-link-loop	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=- list=0 all-list=- editor=- preview=-	
+link-loop	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+link-loop	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+link-loop	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+link-loop	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+link-loop	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=- editor=- preview=-	
 cond-no	A	tree	ok	200	no	-	1	-	-	0	0	0	-	tree=1 list=1 all-list=1 editor=1 preview=-	rows-differ
 cond-no	A	list	ok	200	no	-	1	-	-	0	0	0	-	tree=1 list=1 all-list=1 editor=1 preview=-	rows-differ
 cond-no	A	all-list	ok	200	no	-	1	-	-	0	0	0	-	tree=1 list=1 all-list=1 editor=1 preview=-	rows-differ

@@ -36,7 +36,6 @@ second-is-folder	save-text	server-path+partial	bug	no issue yet: a 200 answer is
 second-is-folder	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
 second-is-folder	rules-save	refused-but-changed	bug	no issue yet: a Template save writes rules/, then templates/ and the schema one file at a time; a later file that cannot be written leaves the earlier ones written (the code says so: writeChanged is not rolled back)
 second-is-folder	chart-create	refused-but-changed+5xx	bug	no issue yet: a new Template is written file by file; one that fails leaves Chart.yaml, and a retry is refused as "already exists"
-second-is-folder	deployment-delete	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 second-is-folder	routing-save	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 second-is-folder	routing-remove	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 second-is-folder	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
@@ -52,8 +51,6 @@ dangling-link	deployment-delete	5xx	bug	no issue yet: a deployment whose values.
 dangling-link	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 dir-link-outside	deployment-clone	wrote-outside	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 dir-link-outside	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
-is-folder	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
-is-folder	sync-unlink	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
 is-folder	template-values	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 is-folder	template-file-save	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 is-folder	template-file-delete	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
@@ -61,7 +58,6 @@ is-folder	deployment-clone	5xx	out-of-scope	a legacy <name>-values.yaml beside a
 is-folder	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 is-folder	gen-rules	refused-but-changed	bug	no issue yet: gen-rules writes the schema, then exits 2 at a template it cannot write; the schema stays written
 primary-unreadable	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
-primary-unreadable	sync-unlink	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
 primary-unreadable	template-values	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 primary-unreadable	template-file-save	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 primary-unreadable	deployment-clone	5xx	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does

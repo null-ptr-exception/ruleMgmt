@@ -111,6 +111,41 @@ describe('a folder that is a link', () => {
   })
 })
 
+describe('check-deployment on a repo reached through a linked path', () => {
+  it('with no repo given, checks the routing too: the deployment is inside the repo git finds', async () => {
+    const via = `${tmpDir}-via`
+    await fs.symlink(tmpDir, via)
+    try {
+      let out = ''
+      try {
+        ({ stdout: out } = await run('node', [path.join(ROOT, 'scripts/check-deployment.mjs'), path.join(via, A)]))
+      } catch (err) { out = err.stdout + err.stderr }
+      expect(out).toContain('Routing: no routing.yaml')
+      expect(out).not.toContain('not a deployment folder inside the repo')
+    } finally {
+      await fs.rm(via, { force: true })
+    }
+  })
+})
+
+describe('a folder that is a link leading outside the repo', () => {
+  it('is named in the tree and by Commit, and holds none of the repo\'s deployments for who uses a Template', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'walk-sync-out-'))
+    try {
+      await fs.mkdir(path.join(outside, 'x'))
+      await fs.symlink(outside, path.join(tmpDir, 'deployments', 'out'))
+      await fs.symlink(path.join(outside, 'f.yaml'), path.join(tmpDir, 'deployments', 'f.yaml'))
+      const tree = (await api('GET', '/api/v2/folders/tree?path=deployments')).data
+      expect(tree.map(n => [n.name, n.unreadable ?? null])).toEqual([['out', 'it is a link that leads outside the repo'], ['t', null]])
+      expect((await deploymentCommitBlockers(tmpDir)).unreadable).toEqual([{ path: 'deployments/out', error: 'it is a link that leads outside the repo' }])
+      expect((await api('GET', '/api/v2/templates/demo/deployments')).data.unreadable).toEqual([])
+      expect((await api('GET', '/api/v2/folders/tree?path=deployments/out')).data).toEqual([])
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('sync.yaml, read once for everyone', () => {
   it('a backslash and a target listed twice are read as one link, said as facts Commit lets through', async () => {
     await fs.writeFile(path.join(tmpDir, 'sync.yaml'), `syncs:\n  - source: ${A}\n    targets: ['deployments\\t\\b', ${B}]\n`)

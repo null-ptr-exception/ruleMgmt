@@ -256,6 +256,17 @@ describe('sync API', () => {
       expect(fs.readFileSync(path.join(tmpDir, 'sync.yaml'), 'utf-8')).toBe(corrupt)
     })
 
+    it('a target whose values.yaml is a folder is named (409), and nothing is written', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('cpu/staging')
+      fs.rmSync(path.join(tmpDir, 'cpu/staging/values.yaml'))
+      fs.mkdirSync(path.join(tmpDir, 'cpu/staging/values.yaml'))
+      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
+      expect(res.status).toBe(409)
+      expect(res.body).toEqual({ error: 'cpu/staging/values.yaml cannot be written: it is a folder, not a file', file: 'cpu/staging/values.yaml' })
+      expect(fs.existsSync(path.join(tmpDir, 'sync.yaml'))).toBe(false)
+    })
+
     it('concurrent POSTs are serialized — neither sync link is lost', async () => {
       makeDeployment('cpu/prod')
       makeDeployment('cpu/staging')

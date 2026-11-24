@@ -228,7 +228,7 @@ second-is-folder	init	refused	409	deployments/t/n/values.yaml	no	-	-	-	?? deploy
 second-is-folder	migration-apply	refused	409	-	no	-	-	-	D deployments/t/c/values.yaml,?? deployments/t/c/values.yaml/keep	released	answered	-	
 second-is-folder	rules-save	refused	409	charts/demo/templates/cpu.yaml	no	-	charts/demo/rules/cpu.yaml	-	M charts/demo/rules/cpu.yaml,D charts/demo/templates/cpu.yaml,?? charts/demo/templates/cpu.yaml/keep	released	answered	-	refused-but-changed
 second-is-folder	chart-create	error	500	charts/fresh/_values.yaml.<random>.tmp	no	-	charts/fresh/Chart.yaml,charts/fresh/templates	-	?? charts/fresh/Chart.yaml,?? charts/fresh/README.md,?? charts/fresh/values.yaml/keep	released	answered	-	refused-but-changed+5xx
-second-is-folder	deployment-delete	error	500	-	no	-	-	-	D sync.yaml,?? sync.yaml/keep	released	answered	-	5xx
+second-is-folder	deployment-delete	refused	409	sync.yaml	no	-	-	-	D sync.yaml,?? sync.yaml/keep	released	answered	-	
 second-is-folder	routing-save	listed	200	deployments/t/b	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	M deployments/t/a/routing.yaml,M deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/b/routing.yaml,?? deployments/t/b/routing.yaml/keep	released	answered	-	partial
 second-is-folder	routing-remove	listed	200	deployments/t/b	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	deployments/t/a/routing.yaml,deployments/t/a/templates,deployments/t/a/templates/alertmanagerconfig.yaml	-	D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/b/routing.yaml,?? deployments/t/b/routing.yaml/keep	released	answered	-	partial
 second-is-folder	regenerate	listed	200	deployments/t/b	no	deployments/t/a/,deployments/t/b/	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml	-	M deployments/t/a/routing.yaml,M deployments/t/a/templates/alertmanagerconfig.yaml,M deployments/t/b/routing.yaml,D deployments/t/b/templates/alertmanagerconfig.yaml,?? deployments/t/b/templates/alertmanagerconfig.yaml/keep	released	answered	-	partial
@@ -297,7 +297,7 @@ link-outside	save-text	refused	409	deployments/t/a/values.yaml	no	-	-	-	T deploy
 link-outside	save-legacy	refused	409	deployments/demo/old-values.yaml	no	-	-	-	T deployments/demo/old-values.yaml	released	answered	-	
 link-outside	save-layer	refused	409	deployments/s/_common/demo/values.yaml	no	-	-	-	T deployments/s/_common/demo/values.yaml	released	answered	-	
 link-outside	sync-create	ok	200	-	no	deployments/t/d/,sync.yaml	deployments/t/d/routing.yaml,deployments/t/d/templates/alertmanagerconfig.yaml,deployments/t/d/values.yaml,sync.yaml	-	M deployments/t/d/routing.yaml,M deployments/t/d/templates/alertmanagerconfig.yaml,M deployments/t/d/values.yaml,M sync.yaml	released	answered	-	
-link-outside	sync-unlink	ok	200	-	no	sync.yaml	sync.yaml	-	M sync.yaml	released	answered	-	
+link-outside	sync-unlink	refused	409	sync.yaml	no	-	-	-	T sync.yaml	released	answered	-	
 link-outside	common-create	refused	409	deployments/u/p	no	-	-	-	T deployments/u/p/values.yaml	released	answered	-	
 link-outside	common-remove	refused	409	deployments/s/x	no	-	-	-	T deployments/s/x/values.yaml	released	answered	-	
 link-outside	init	refused	409	deployments/t/n/Chart.yaml	no	-	-	-	?? deployments/t/n/Chart.yaml	released	answered	-	
@@ -328,7 +328,7 @@ dangling-link	save-text	refused	409	deployments/t/a/values.yaml	no	-	-	-	T deplo
 dangling-link	save-legacy	refused	409	deployments/demo/old-values.yaml	no	-	-	-	T deployments/demo/old-values.yaml	released	answered	-	
 dangling-link	save-layer	refused	409	deployments/s/_common/demo/values.yaml	no	-	-	-	T deployments/s/_common/demo/values.yaml	released	answered	-	
 dangling-link	sync-create	error	500	-	no	-	-	-	T deployments/t/d/values.yaml	released	answered	-	5xx
-dangling-link	sync-unlink	refused	400	deployments/t/b	no	-	-	-	T sync.yaml	released	answered	-	
+dangling-link	sync-unlink	refused	409	sync.yaml	no	-	-	-	T sync.yaml	released	answered	-	
 dangling-link	common-create	refused	409	deployments/u/p	no	-	-	-	T deployments/u/p/values.yaml	released	answered	-	
 dangling-link	common-remove	refused	409	deployments/s/x	no	-	-	-	T deployments/s/x/values.yaml	released	answered	-	
 dangling-link	init	refused	409	deployments/t/n/Chart.yaml	no	-	-	-	?? deployments/t/n/Chart.yaml	released	answered	-	
@@ -388,8 +388,8 @@ is-folder	save-json	refused	409	deployments/t/a	no	-	-	-	D deployments/t/a/value
 is-folder	save-text	refused	409	deployments/t/a	no	-	-	-	D deployments/t/a/values.yaml,?? deployments/t/a/values.yaml/keep	released	answered	-	
 is-folder	save-legacy	refused	409	deployments/demo/old-values.yaml	no	-	-	-	D deployments/demo/old-values.yaml,?? deployments/demo/old-values.yaml/keep	released	answered	-	
 is-folder	save-layer	refused	409	deployments/s/_common/demo	no	-	-	-	D deployments/s/_common/demo/values.yaml,?? deployments/s/_common/demo/values.yaml/keep	released	answered	-	
-is-folder	sync-create	error	500	-	no	-	-	-	D deployments/t/d/values.yaml,?? deployments/t/d/values.yaml/keep	released	answered	-	5xx
-is-folder	sync-unlink	error	500	-	no	-	-	-	D sync.yaml,?? sync.yaml/keep	released	answered	-	5xx
+is-folder	sync-create	refused	409	deployments/t/d/values.yaml	no	-	-	-	D deployments/t/d/values.yaml,?? deployments/t/d/values.yaml/keep	released	answered	-	
+is-folder	sync-unlink	refused	409	sync.yaml	no	-	-	-	D sync.yaml,?? sync.yaml/keep	released	answered	-	
 is-folder	common-create	refused	409	deployments/u/p	no	-	-	-	D deployments/u/p/values.yaml,?? deployments/u/p/values.yaml/keep	released	answered	-	
 is-folder	common-remove	refused	409	deployments/s/x	no	-	-	-	D deployments/s/x/values.yaml,?? deployments/s/x/values.yaml/keep	released	answered	-	
 is-folder	init	refused	409	deployments/t/n/Chart.yaml	no	-	-	-	?? deployments/t/n/Chart.yaml/keep	released	answered	-	
@@ -420,7 +420,7 @@ primary-unreadable	save-text	refused	409	deployments/t/a	no	-	-	-	-	released	ans
 primary-unreadable	save-legacy	refused	409	deployments/demo/old-values.yaml	no	-	-	-	-	released	answered	-	
 primary-unreadable	save-layer	refused	409	deployments/s/_common/demo	no	-	-	-	-	released	answered	-	
 primary-unreadable	sync-create	error	500	-	no	-	-	-	-	released	answered	-	5xx
-primary-unreadable	sync-unlink	error	500	-	no	-	-	-	-	released	answered	-	5xx
+primary-unreadable	sync-unlink	refused	409	sync.yaml	no	-	-	-	-	released	answered	-	
 primary-unreadable	common-create	refused	409	deployments/u/p	no	-	-	-	-	released	answered	-	
 primary-unreadable	common-remove	refused	409	deployments/s/x	no	-	-	-	-	released	answered	-	
 primary-unreadable	init	refused	409	deployments/t/n/Chart.yaml	no	-	-	-	?? deployments/t/n/Chart.yaml	released	answered	-	

@@ -1116,23 +1116,23 @@ link-in	templates.template-save:template	legit	ok	200	same	no	same	no	free	chart
 link-in	templates.template-delete:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	templates.template-delete:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/inlink.yaml	-	-	-	
 link-in	deployments.list:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	deployments.list:folder	legit	ok	200	same	no	same	no	free		-	-	-	
+link-in	deployments.list:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	deployments.get:folder	legit	ok	200	same	no	same	no	free		-	-	-	
+link-in	deployments.get:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.save:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/values.yaml	-	-	-	
-link-in	deployments.save:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/values.yaml	-	-	-	
+link-in	deployments.save:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.routing-get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	deployments.routing-get:folder	legit	ok	200	same	no	same	no	free		-	-	-	
+link-in	deployments.routing-get:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.routing-put:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	deployments.routing-put:folder	legit	ok	200	same	no	same	no	free		-	-	-	
+link-in	deployments.routing-put:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.routing-delete:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-link-in	deployments.routing-delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml	-	-	-	
+link-in	deployments.routing-delete:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.clone:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-link-in	deployments.clone:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
+link-in	deployments.clone:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.delete:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
-link-in	deployments.delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/inlink	-	-	-	
+link-in	deployments.delete:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	render.preview:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	render.preview:folder	legit	ok	200	same	no	same	no	free		-	-	-	
+link-in	render.preview:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	git.diff:file@HEAD	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	folders.common-plan:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
@@ -1140,15 +1140,15 @@ link-in	folders.common-plan:chart	legit	ok	200	same	no	same	no	free		-	-	-
 link-in	folders.common:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	folders.common:chart	legit	conflict	409	same	no	same	no	free		-	-	-	
 link-in	folders.create:path	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	folders.init:folder	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	-	
+link-in	folders.init:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	folders.init:chart	legit	conflict	409	same	no	same	no	free		-	-	-	
 link-in	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	folders.deployments:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	sync.create:source	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	-	
-link-in	sync.create:target	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	-	
+link-in	sync.create:source	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-in	sync.create:target	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	charts.clone:name	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	charts.delete:name	any	ok	200	same	no	same	no	free	charts/outchart	-	-	-	
@@ -1196,7 +1196,7 @@ link-out	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-
 link-out	folders.list:path	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
-link-out	sync.create:source	any	conflict	409	same	no	same	no	free		-	-	-	
+link-out	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1217,11 +1217,11 @@ link-via	folders.common:path	any	not-found	404	same	no	same	no	free		-	-	-
 link-via	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
-link-via	folders.tree:path	any	ok	200	same	answer	same	no	free		-	-	-	outside-read
-link-via	folders.list:path	any	ok	200	same	answer	same	no	free		-	-	-	outside-read
+link-via	folders.tree:path	any	ok	200	same	no	same	no	free		-	-	-	
+link-via	folders.list:path	any	ok	200	same	no	same	no	free		-	-	-	
 link-via	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 link-via	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
-link-via	sync.create:source	any	conflict	409	same	no	same	no	free		-	-	-	
+link-via	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
 ref:full	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	

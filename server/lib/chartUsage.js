@@ -54,8 +54,9 @@ async function fromFolders(gitopsDir, chart) {
   const found = []
   const unreadable = []
   for (const e of await walk(openRepo(gitopsDir), { hidden: true })) {
-    if (e.kind === 'unreadable') { unreadable.push({ path: e.rel || '.', error: e.why }); continue }
-    if (e.kind === 'folder' && !e.chartOnly) continue
+    // A link out of the repo holds none of its deployments: not followed.
+    if (e.kind === 'unreadable' && e.cause !== 'link') { unreadable.push({ path: e.rel || '.', error: e.why }); continue }
+    if (e.kind !== 'deployment' && e.kind !== 'common' && !e.chartOnly) continue
     const d = { path: e.rel, kind: e.chartOnly ? 'chart-only' : e.kind }
     const dir = path.join(gitopsDir, d.path)
     const stack = await resolveStack(gitopsDir, dir)

@@ -888,6 +888,8 @@ copied to it.
   needs to know who syncs from whom: the sync list, sync and unlink, a
   save, deleting a deployment, the Routing page and the shared configs.
   It is never taken for "no syncs", and nothing rewrites it.
+- A sync to a target whose `values.yaml` or `Chart.yaml` is a folder is
+  refused (409) naming the file; nothing is written.
 - When a save cannot write a target (a permission error, or a `sync.yaml`
   entry that is not a deployment on disk), the source is still saved and the
   page names the target, which may not match the source. Fix the cause and

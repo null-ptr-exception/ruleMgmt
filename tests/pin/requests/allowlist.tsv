@@ -27,8 +27,6 @@ link-in	folders.common:folder	refuses-legit	policy	no _common is made through a 
 link-out	git.diff:file	server-path	policy	the diff shows a link as git keeps it, its target; the target the repo holds is an absolute path of this machine
 link-out	git.diff:file@HEAD	server-path	policy	the diff shows a link as git keeps it, its target; the target the repo holds is an absolute path of this machine
 link-via	git.diff:file	outside-read	bug	no issue yet: without a ref the diff reads the working file through a folder on the way that is a link out of the repo (only a link that is the file itself is not followed)
-link-via	folders.tree:path	outside-read	bug	no issue yet: listing a folder that is a link out of the repo lists the folders there
-link-via	folders.list:path	outside-read	bug	no issue yet: listing a folder that is a link out of the repo lists the folders there
 ref:branch	git.diff:ref	refuses-what-git-accepts	policy	a diff takes a commit id, HEAD, HEAD~N or HEAD^ (1afe6a5), not a branch name
 ref:missing	git.diff:ref	accepts-what-git-refuses	bug	no issue yet: a commit id that is not in the repo is answered with an empty diff, not refused
 body:none	charts.clone{}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
@@ -177,3 +175,15 @@ field:deep	folders.common{chart}	unnamed-field	bug	no issue yet: refused, but th
 field:deep	sync.create{source}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
 field:deep	sync.create{target}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
 field:deep	sync.delete{target}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
+link-in	deployments.clone:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	deployments.delete:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	deployments.get:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	deployments.list:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	deployments.routing-delete:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	deployments.routing-get:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	deployments.routing-put:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	deployments.save:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	folders.init:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	render.preview:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	sync.create:source	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-in	sync.create:target	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is

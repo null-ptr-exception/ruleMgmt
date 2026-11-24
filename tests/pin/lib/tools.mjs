@@ -9,7 +9,8 @@ export const CHECKERS = {
 }
 
 export const has = (bin, args = ['--version']) => { try { execFileSync(bin, args, { stdio: 'ignore' }); return true } catch { return false } }
-export const tools = () => ({ helm: has(HELM(), ['version']), promtool: has(CHECKERS.promtool()), promtool3: has(CHECKERS.promtool3()), vmalert: has(CHECKERS.vmalert()) })
+export const AMTOOL = () => process.env.AMTOOL_BIN || 'amtool'
+export const tools = () => ({ helm: has(HELM(), ['version']), promtool: has(CHECKERS.promtool()), promtool3: has(CHECKERS.promtool3()), vmalert: has(CHECKERS.vmalert()), amtool: has(AMTOOL()) })
 export const helmVersion = () => { try { return execFileSync(HELM(), ['version', '--template', '{{.Version}}'], { encoding: 'utf-8' }).trim() } catch { return null } }
 
 /** A process's exit status and output; it never throws (127: not found). */

@@ -1,0 +1,67 @@
+# Cells where an entry point disagrees with the tools today, each with why.
+# category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
+# Edited by hand: a fix removes its line; a new disagreement needs one.
+id	entry	kind	category	reason
+smtp-absent	put-text	accepts-what-tool-refuses	out-of-scope	the platform Alertmanager's global SMTP settings are not something AlertForge can see; an e-mail config without its own server relies on them
+smtp-absent	regenerate	accepts-what-tool-refuses	out-of-scope	the platform Alertmanager's global SMTP settings are not something AlertForge can see; an e-mail config without its own server relies on them
+smtp-absent	sync	accepts-what-tool-refuses	out-of-scope	the platform Alertmanager's global SMTP settings are not something AlertForge can see; an e-mail config without its own server relies on them
+smtp-absent	schema	accepts-what-tool-refuses	out-of-scope	the platform Alertmanager's global SMTP settings are not something AlertForge can see; an e-mail config without its own server relies on them
+absent-cr-left	get	accepts-what-tool-refuses	bug	no issue yet: a resource left without its routing.yaml is deployed, the Routing page says there is no routing (Commit refuses it)
+absent-cr-left	check-deployment	accepts-what-tool-refuses	bug	no issue yet: check-deployment passes a resource left without its routing.yaml, which Commit refuses
+top-unknown-key	get	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
+top-unknown-key	put-text	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
+top-unknown-key	sync	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
+top-unknown-key	check-deployment	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
+top-unknown-key	schema	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
+url-credential	put-text	refuses-what-tool-accepts	policy	a webhook address carrying a credential is refused: it belongs in a Secret (urlSecret)
+url-credential	sync	refuses-what-tool-accepts	policy	a webhook address carrying a credential is refused: it belongs in a Secret (urlSecret)
+smarthost-half-login	put-text	refuses-what-tool-accepts	policy	a smarthost with only half a login is refused: Alertmanager would fill the other half from the platform's
+smarthost-half-login	sync	refuses-what-tool-accepts	policy	a smarthost with only half a login is refused: Alertmanager would fill the other half from the platform's
+cell-missing-label	put-text	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-missing-label	put-json	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-missing-label	sync	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-extra-label	put-text	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-extra-label	sync	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-value-outside	put-text	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-value-outside	sync	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-configs-empty	put-text	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-configs-empty	sync	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cell-configs-empty	schema	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cells-twice	put-text	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+cells-twice	sync	refuses-what-tool-accepts	policy	the table format: a cell names every label with one of its values, once, and notifies someone (an empty cell is no cell)
+number-values	put-text	refuses-what-tool-accepts	policy	a label value YAML reads as a number is refused: values are text (quote them)
+number-values	sync	refuses-what-tool-accepts	policy	a label value YAML reads as a number is refused: values are text (quote them)
+number-values	schema	refuses-what-tool-accepts	policy	a label value YAML reads as a number is refused: values are text (quote them)
+unreadable-perm	get	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+unreadable-perm	regenerate	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+unreadable-perm	sync	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+unreadable-dir	get	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+unreadable-dir	delete	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+unreadable-dir	regenerate	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+unreadable-dir	sync	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+unreadable-dir	commit	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+dangling-link	get	accepts-what-tool-refuses	bug	no issue yet: a routing.yaml that is a link to nothing is read as no routing.yaml; Helm cannot load the chart
+cr-extra	get	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig written by hand into templates/ is deployed too; AlertForge only knows the file it generates
+cr-extra	delete	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig written by hand into templates/ is deployed too; AlertForge only knows the file it generates
+cr-extra	commit	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig written by hand into templates/ is deployed too; AlertForge only knows the file it generates
+cr-extra	check-deployment	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig written by hand into templates/ is deployed too; AlertForge only knows the file it generates
+cr-unreadable	get	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+cr-unreadable	put-text	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+cr-unreadable	regenerate	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+cr-unreadable	sync	5xx	bug	no issue yet: a routing.yaml or AlertmanagerConfig that cannot be read (no permission, a folder) is answered with 500, not named as unreadable
+common-has-routing	get	accepts-what-tool-refuses	bug	no issue yet: an AlertmanagerConfig in a _common chart's templates/ is deployed with every deployment on it, and no entry point says so
+common-has-routing	commit	accepts-what-tool-refuses	bug	no issue yet: an AlertmanagerConfig in a _common chart's templates/ is deployed with every deployment on it, and no entry point says so
+common-has-routing	check-deployment	accepts-what-tool-refuses	bug	no issue yet: an AlertmanagerConfig in a _common chart's templates/ is deployed with every deployment on it, and no entry point says so
+target-ok	delete	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
+target-hand-edited	get	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
+target-hand-edited	put-text	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
+target-hand-edited	delete	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
+target-hand-edited	commit	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
+target-hand-edited	check-deployment	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
+target-cr-deleted	delete	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
+shared-dir-holds-more	shared-get	refuses-what-tool-accepts	policy	a _shared/ folder holding other files is the repo's own folder, not the shared configs' (#123)
+shared-dir-holds-more	shared-put	refuses-what-tool-accepts	policy	a _shared/ folder holding other files is the repo's own folder, not the shared configs' (#123)
+shared-unreadable	shared-put	5xx	bug	no issue yet: a shared configs file that cannot be read makes their save answer 500, not a refusal naming it
+shared-smtp-absent	shared-put	accepts-what-tool-refuses	out-of-scope	the platform Alertmanager's global SMTP settings are not something AlertForge can see; an e-mail config without its own server relies on them
+shared-smtp-absent	shared-rename	accepts-what-tool-refuses	out-of-scope	the platform Alertmanager's global SMTP settings are not something AlertForge can see; an e-mail config without its own server relies on them
+shared-smtp-absent	regenerate	accepts-what-tool-refuses	out-of-scope	the platform Alertmanager's global SMTP settings are not something AlertForge can see; an e-mail config without its own server relies on them

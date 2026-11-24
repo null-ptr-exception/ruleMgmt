@@ -1,0 +1,764 @@
+# Written by PIN_UPDATE=1 (the same under every Helm version this was run with); see tests/pin/routing/routing.pin.test.js.
+# The base repo every row starts from:
+# == deployments/t/a/routing.yaml
+# labels:
+#   severity: [critical, warning]
+#   team: [db, web]
+# defaults: { groupWait: 30s }
+# configs:
+#   ops: { type: email, to: ops@example.com }
+#   hook: { type: webhook, url: "http://hook.example.com:8080/alert" }
+# cells:
+#   - match: { severity: critical, team: db }
+#     configs: [ops, hook]
+#     repeatInterval: 1h
+#   - match: { severity: warning, team: db }
+#     configs: [ops]
+# 
+# == deployments/t/c/routing.yaml
+# labels:
+#   severity: [critical]
+# configs:
+#   relay: { shared: true }
+# cells:
+#   - match: { severity: critical }
+#     configs: [relay]
+# 
+# == deployments/s/x/routing.yaml
+# labels:
+#   severity: [critical]
+# configs:
+#   only: { type: email, to: x@example.com }
+# cells:
+#   - match: { severity: critical }
+#     configs: [only]
+# 
+# == _shared/notification-configs.yaml
+# configs:
+#   relay: { type: webhook, url: "http://relay.example.com:8080" }
+# 
+# == sync.yaml
+# syncs:
+#   - source: deployments/t/a
+#     targets:
+#       - deployments/t/b
+id	target	entry	cls	status	file	leak	written	table	helm	helmExit	amc	deployed	appValue	vsHelm
+ok	A	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+ok	A	put-text	ok	200	-	no	-	ok	renders	0	1	routes	-	
+ok	A	put-json	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/b/routing.yaml	ok	renders	0	1	routes	-	
+ok	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+ok	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+ok	A	shared-put	ok	200	-	no	-	ok	renders	0	1	routes	written=2	
+ok	A	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+ok	A	sync	ok	200	-	no	-	ok	renders	0	1	routes	-	
+ok	A	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+ok	A	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+ok	A	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+ok	A	schema	ok	valid	-	no	-	ok	renders	0	1	routes	-	
+ok-comment	A	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+ok-comment	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/b/routing.yaml	ok	renders	0	1	routes	-	
+ok-comment	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+ok-comment	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+ok-comment	A	shared-put	ok	200	-	no	-	ok	renders	0	1	routes	written=2	
+ok-comment	A	regenerate	ok	200	-	no	deployments/t/b/routing.yaml	ok	renders	0	1	routes	regenerated=no failed=-	
+ok-comment	A	sync	ok	200	-	no	deployments/t/b/routing.yaml	ok	renders	0	1	routes	-	
+ok-comment	A	commit	refused-other	409	-	no	-	ok	renders	0	1	routes	-	
+ok-comment	A	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+ok-comment	A	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+ok-comment	A	schema	ok	valid	-	no	-	ok	renders	0	1	routes	-	
+email-full	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=1	
+email-full	A	put-text	warned	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+email-full	A	put-json	warned	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+email-full	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+email-full	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+email-full	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+email-full	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+email-full	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+email-full	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+email-full	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+email-full	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+email-full	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+email-auth-identity	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=1	
+email-auth-identity	A	put-text	warned	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+email-auth-identity	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+email-auth-identity	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+email-auth-identity	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+email-auth-identity	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+email-auth-identity	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+email-auth-identity	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+email-auth-identity	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+email-auth-identity	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+email-auth-identity	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+email-auth-secret	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+email-auth-secret	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+email-auth-secret	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+email-auth-secret	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+email-auth-secret	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+email-auth-secret	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+email-auth-secret	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+email-auth-secret	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+email-auth-secret	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+email-auth-secret	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+email-auth-secret	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+webhook-full	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+webhook-full	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+webhook-full	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+webhook-full	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+webhook-full	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+webhook-full	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+webhook-full	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+webhook-full	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+webhook-full	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+webhook-full	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+webhook-full	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+webhook-secret-basic	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+webhook-secret-basic	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+webhook-secret-basic	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+webhook-secret-basic	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+webhook-secret-basic	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+webhook-secret-basic	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+webhook-secret-basic	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+webhook-secret-basic	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+webhook-secret-basic	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+webhook-secret-basic	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+webhook-secret-basic	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+webhook-timeout-90s	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+webhook-timeout-90s	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+webhook-timeout-90s	A	put-json	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+webhook-timeout-90s	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+webhook-timeout-90s	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+webhook-timeout-90s	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+webhook-timeout-90s	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+webhook-timeout-90s	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+webhook-timeout-90s	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+webhook-timeout-90s	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+webhook-timeout-90s	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+webhook-timeout-90s	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+labels-one	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+labels-one	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+labels-one	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+labels-one	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+labels-one	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+labels-one	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+labels-one	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+labels-one	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+labels-one	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+labels-one	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+labels-one	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+labels-three	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+labels-three	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+labels-three	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+labels-three	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+labels-three	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+labels-three	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+labels-three	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+labels-three	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+labels-three	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+labels-three	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+labels-three	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+cells-none	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+cells-none	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+cells-none	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cells-none	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cells-none	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+cells-none	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+cells-none	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+cells-none	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+cells-none	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+cells-none	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+cells-none	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+shared-used	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+shared-used	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+shared-used	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+shared-used	A	shared-get	stale	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=relay overlaps=1 stale=true unreadable=false	
+shared-used	A	shared-put	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	written=3	
+shared-used	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+shared-used	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+shared-used	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+shared-used	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+shared-used	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+shared-used	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+reaches-nobody	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=1	
+reaches-nobody	A	put-text	warned	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+reaches-nobody	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+reaches-nobody	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+reaches-nobody	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+reaches-nobody	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+reaches-nobody	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+reaches-nobody	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+reaches-nobody	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+reaches-nobody	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+reaches-nobody	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+smtp-absent	A	get	stale	200	-	no	-	am-fails	renders	0	1	am-fails	errors=0 stale=true warnings=0	
+smtp-absent	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	am-fails	renders	0	1	am-fails	-	accepts-what-tool-refuses
+smtp-absent	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+smtp-absent	A	shared-get	not-seen	200	-	no	-	am-fails	renders	0	1	am-fails	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+smtp-absent	A	shared-put	ok	200	-	no	-	am-fails	renders	0	1	am-fails	written=2	
+smtp-absent	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	am-fails	renders	0	1	am-fails	regenerated=yes failed=-	accepts-what-tool-refuses
+smtp-absent	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	am-fails	renders	0	1	am-fails	-	accepts-what-tool-refuses
+smtp-absent	A	commit	refused	409	deployments/t/a	no	-	am-fails	renders	0	1	am-fails	routing-stale	
+smtp-absent	A	preview	ok	200	-	no	-	am-fails	renders	0	1	am-fails	amc=1	
+smtp-absent	A	check-deployment	refused	exit 1	routing.yaml	no	-	am-fails	renders	0	1	am-fails	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+smtp-absent	A	schema	ok	valid	-	no	-	am-fails	renders	0	1	am-fails	-	accepts-what-tool-refuses
+templated	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+templated	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+templated	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+templated	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+templated	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+templated	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+templated	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+templated	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+templated	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+templated	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+templated	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+brace-runs	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+brace-runs	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+brace-runs	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+brace-runs	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+brace-runs	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+brace-runs	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+brace-runs	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+brace-runs	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+brace-runs	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+brace-runs	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+brace-runs	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+absent-cr-left	A	get	absent	404	-	no	-	none	renders	0	1	orphan	-	accepts-what-tool-refuses
+absent-cr-left	A	delete	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+absent-cr-left	A	shared-get	not-seen	200	-	no	-	none	renders	0	1	orphan	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+absent-cr-left	A	shared-put	ok	200	-	no	-	none	renders	0	1	orphan	written=2	
+absent-cr-left	A	regenerate	ok	200	-	no	-	none	renders	0	1	orphan	regenerated=no failed=-	
+absent-cr-left	A	sync	refused	400	deployments/t/a	no	-	none	renders	0	1	orphan	-	
+absent-cr-left	A	commit	refused	409	deployments/t/a	no	-	none	renders	0	1	orphan	routing-orphaned	
+absent-cr-left	A	preview	ok	200	-	no	-	none	renders	0	1	orphan	amc=1	
+absent-cr-left	A	check-deployment	ok	exit 0	routing.yaml	no	-	none	renders	0	1	orphan	Routing: no routing.yaml — not checked	accepts-what-tool-refuses
+absent-cr-left	A	schema	absent	-	-	no	-	none	renders	0	1	orphan	-	
+absent-both	A	get	absent	404	-	no	-	none	renders	0	0	none	-	
+absent-both	A	delete	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+absent-both	A	shared-get	not-seen	200	-	no	-	none	renders	0	0	none	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+absent-both	A	shared-put	ok	200	-	no	-	none	renders	0	0	none	written=2	
+absent-both	A	regenerate	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	regenerated=no failed=-	
+absent-both	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+absent-both	A	commit	refused-other	409	-	no	-	none	renders	0	0	none	-	
+absent-both	A	preview	ok	200	-	no	-	none	renders	0	0	none	amc=0	
+absent-both	A	check-deployment	ok	exit 0	routing.yaml	no	-	none	renders	0	0	none	Routing: no routing.yaml — not checked	
+absent-both	A	schema	absent	-	-	no	-	none	renders	0	0	none	-	
+empty	A	get	listed	200	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+empty	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+empty	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+empty	A	shared-get	unreadable	200	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=true	
+empty	A	shared-put	unreadable	409	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+empty	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+empty	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+empty	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+empty	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+empty	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   routing.yaml must be a map with labels, configs and cells	
+empty	A	schema	refused	invalid	-	no	-	not-a-table	renders	0	1	unjudged	-	
+not-yaml	A	get	listed	200	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+not-yaml	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+not-yaml	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+not-yaml	A	shared-get	unreadable	200	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=true	
+not-yaml	A	shared-put	unreadable	409	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+not-yaml	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+not-yaml	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+not-yaml	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+not-yaml	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+not-yaml	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   routing.yaml is not valid YAML: unexpected end of the stream within a flow collecti	
+not-yaml	A	schema	cannot-check	not YAML	-	no	-	not-a-table	renders	0	1	unjudged	-	
+top-list	A	get	listed	200	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+top-list	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+top-list	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+top-list	A	shared-get	unreadable	200	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=true	
+top-list	A	shared-put	unreadable	409	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+top-list	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+top-list	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+top-list	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+top-list	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+top-list	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   routing.yaml must be a map with labels, configs and cells	
+top-list	A	schema	refused	invalid	-	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-not-map	A	get	listed	200	-	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+labels-not-map	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-not-map	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+labels-not-map	A	shared-get	not-seen	200	-	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+labels-not-map	A	shared-put	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	written=2	
+labels-not-map	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+labels-not-map	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-not-map	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-not-map	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+labels-not-map	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   labels: name at least one label, with its values	
+labels-not-map	A	schema	refused	invalid	-	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-scalar-values	A	get	listed	200	-	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+labels-scalar-values	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-scalar-values	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+labels-scalar-values	A	shared-get	not-seen	200	-	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+labels-scalar-values	A	shared-put	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	written=2	
+labels-scalar-values	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+labels-scalar-values	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-scalar-values	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-scalar-values	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+labels-scalar-values	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   labels.severity: list its values	
+labels-scalar-values	A	schema	refused	invalid	-	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-empty	A	get	listed	200	-	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+labels-empty	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-empty	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+labels-empty	A	shared-get	not-seen	200	-	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+labels-empty	A	shared-put	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	written=2	
+labels-empty	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+labels-empty	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-empty	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+labels-empty	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+labels-empty	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   labels: name at least one label, with its values	
+labels-empty	A	schema	refused	invalid	-	no	-	not-a-table	renders	0	1	unjudged	-	
+config-not-map	A	get	listed	200	-	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+config-not-map	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+config-not-map	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+config-not-map	A	shared-get	not-seen	200	-	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+config-not-map	A	shared-put	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	written=2	
+config-not-map	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+config-not-map	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+config-not-map	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+config-not-map	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+config-not-map	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.only: must be a map with a "type"	
+config-not-map	A	schema	refused	invalid	-	no	-	not-a-table	renders	0	1	unjudged	-	
+config-other-kind	A	get	listed	200	-	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+config-other-kind	A	put-text	refused	400	routing.yaml	no	-	crd-fails	renders	0	1	differs	-	
+config-other-kind	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+config-other-kind	A	shared-get	not-seen	200	-	no	-	crd-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+config-other-kind	A	shared-put	ok	200	-	no	-	crd-fails	renders	0	1	differs	written=2	
+config-other-kind	A	regenerate	ok	200	-	no	-	crd-fails	renders	0	1	differs	regenerated=no failed=-	
+config-other-kind	A	sync	refused	400	deployments/t/a	no	-	crd-fails	renders	0	1	differs	-	
+config-other-kind	A	commit	refused-other	409	-	no	-	crd-fails	renders	0	1	differs	-	
+config-other-kind	A	preview	ok	200	-	no	-	crd-fails	renders	0	1	differs	amc=1	
+config-other-kind	A	check-deployment	refused	exit 1	routing.yaml	no	-	crd-fails	renders	0	1	differs	Routing: routing.yaml has problems   configs.only: type must be one of email, webhook	
+config-other-kind	A	schema	refused	invalid	-	no	-	crd-fails	renders	0	1	differs	-	
+config-unknown-field	A	get	listed	200	-	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+config-unknown-field	A	put-text	refused	400	routing.yaml	no	-	crd-fails	renders	0	1	differs	-	
+config-unknown-field	A	put-json	refused	400	routing.yaml	no	-	crd-fails	renders	0	1	differs	-	
+config-unknown-field	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+config-unknown-field	A	shared-get	not-seen	200	-	no	-	crd-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+config-unknown-field	A	shared-put	ok	200	-	no	-	crd-fails	renders	0	1	differs	written=2	
+config-unknown-field	A	regenerate	ok	200	-	no	-	crd-fails	renders	0	1	differs	regenerated=no failed=-	
+config-unknown-field	A	sync	refused	400	deployments/t/a	no	-	crd-fails	renders	0	1	differs	-	
+config-unknown-field	A	commit	refused-other	409	-	no	-	crd-fails	renders	0	1	differs	-	
+config-unknown-field	A	preview	ok	200	-	no	-	crd-fails	renders	0	1	differs	amc=1	
+config-unknown-field	A	check-deployment	refused	exit 1	routing.yaml	no	-	crd-fails	renders	0	1	differs	Routing: routing.yaml has problems   configs.only: unknown key "smartHost" (expected type, to, from, smarthost, authUser	
+config-unknown-field	A	schema	refused	invalid	-	no	-	crd-fails	renders	0	1	differs	-	
+top-unknown-key	A	get	listed	200	routing.yaml	no	-	ok	renders	0	1	routes	errors=1 stale=true warnings=0	refuses-what-tool-accepts
+top-unknown-key	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
+top-unknown-key	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+top-unknown-key	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+top-unknown-key	A	shared-put	ok	200	-	no	-	ok	renders	0	1	routes	written=2	
+top-unknown-key	A	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+top-unknown-key	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
+top-unknown-key	A	commit	refused-other	409	-	no	-	ok	renders	0	1	routes	-	
+top-unknown-key	A	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+top-unknown-key	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	routes	Routing: routing.yaml has problems   routing.yaml: unknown key "routes" (expected labels, defaults, configs, cells)	refuses-what-tool-accepts
+top-unknown-key	A	schema	refused	invalid	-	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
+timeout-bad	A	get	listed	200	-	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+timeout-bad	A	put-text	refused	400	routing.yaml	no	-	crd-fails	renders	0	1	differs	-	
+timeout-bad	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+timeout-bad	A	shared-get	not-seen	200	-	no	-	crd-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+timeout-bad	A	shared-put	ok	200	-	no	-	crd-fails	renders	0	1	differs	written=2	
+timeout-bad	A	regenerate	ok	200	-	no	-	crd-fails	renders	0	1	differs	regenerated=no failed=-	
+timeout-bad	A	sync	refused	400	deployments/t/a	no	-	crd-fails	renders	0	1	differs	-	
+timeout-bad	A	commit	refused-other	409	-	no	-	crd-fails	renders	0	1	differs	-	
+timeout-bad	A	preview	ok	200	-	no	-	crd-fails	renders	0	1	differs	amc=1	
+timeout-bad	A	check-deployment	refused	exit 1	routing.yaml	no	-	crd-fails	renders	0	1	differs	Routing: routing.yaml has problems   configs.only: timeout must be a duration such as 30s, 5m or 4h	
+timeout-bad	A	schema	refused	invalid	-	no	-	crd-fails	renders	0	1	differs	-	
+url-credential	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+url-credential	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+url-credential	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+url-credential	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+url-credential	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+url-credential	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+url-credential	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+url-credential	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+url-credential	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+url-credential	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   configs.only: url is refused because its query parameter "token" looks like a crede	
+url-credential	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+smarthost-half-login	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+smarthost-half-login	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+smarthost-half-login	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+smarthost-half-login	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+smarthost-half-login	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+smarthost-half-login	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+smarthost-half-login	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+smarthost-half-login	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+smarthost-half-login	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+smarthost-half-login	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   configs.only: smarthost with only half a login: Alertmanager would fill in the othe	
+smarthost-half-login	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+cell-missing-label	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+cell-missing-label	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-missing-label	A	put-json	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-missing-label	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cell-missing-label	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cell-missing-label	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+cell-missing-label	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+cell-missing-label	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-missing-label	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+cell-missing-label	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+cell-missing-label	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   cells[0]: match has no team — a cell names every label	
+cell-missing-label	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+cell-extra-label	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+cell-extra-label	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-extra-label	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cell-extra-label	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cell-extra-label	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+cell-extra-label	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+cell-extra-label	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-extra-label	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+cell-extra-label	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+cell-extra-label	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   cells[0]: match names zone, which is not in labels	
+cell-extra-label	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+cell-value-outside	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+cell-value-outside	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-value-outside	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cell-value-outside	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cell-value-outside	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+cell-value-outside	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+cell-value-outside	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-value-outside	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+cell-value-outside	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+cell-value-outside	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   cells[0]: severity=info is not one of labels.severity	
+cell-value-outside	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+cell-config-unknown	A	get	listed	200	-	no	-	unresolved	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+cell-config-unknown	A	put-text	refused	400	routing.yaml	no	-	unresolved	renders	0	1	unjudged	-	
+cell-config-unknown	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cell-config-unknown	A	shared-get	not-seen	200	-	no	-	unresolved	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cell-config-unknown	A	shared-put	ok	200	-	no	-	unresolved	renders	0	1	unjudged	written=2	
+cell-config-unknown	A	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged	regenerated=no failed=-	
+cell-config-unknown	A	sync	refused	400	deployments/t/a	no	-	unresolved	renders	0	1	unjudged	-	
+cell-config-unknown	A	commit	refused-other	409	-	no	-	unresolved	renders	0	1	unjudged	-	
+cell-config-unknown	A	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
+cell-config-unknown	A	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   cells[0]: config "nobody" is not in configs	
+cell-config-unknown	A	schema	ok	valid	-	no	-	unresolved	renders	0	1	unjudged	-	
+cell-configs-empty	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+cell-configs-empty	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-configs-empty	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cell-configs-empty	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cell-configs-empty	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+cell-configs-empty	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+cell-configs-empty	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cell-configs-empty	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+cell-configs-empty	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+cell-configs-empty	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   cells[0]: configs lists who is notified	
+cell-configs-empty	A	schema	refused	invalid	-	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cells-twice	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+cells-twice	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cells-twice	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cells-twice	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cells-twice	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+cells-twice	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+cells-twice	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+cells-twice	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+cells-twice	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+cells-twice	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   cells[1]: same match as cells[0]	
+cells-twice	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+cells-not-list	A	get	listed	200	-	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+cells-not-list	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+cells-not-list	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cells-not-list	A	shared-get	not-seen	200	-	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cells-not-list	A	shared-put	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	written=2	
+cells-not-list	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+cells-not-list	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+cells-not-list	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+cells-not-list	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+cells-not-list	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   cells: must be a list	
+cells-not-list	A	schema	refused	invalid	-	no	-	not-a-table	renders	0	1	unjudged	-	
+duplicate-key	A	get	listed	200	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+duplicate-key	A	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+duplicate-key	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+duplicate-key	A	shared-get	unreadable	200	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=true	
+duplicate-key	A	shared-put	unreadable	409	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+duplicate-key	A	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+duplicate-key	A	sync	refused	400	deployments/t/a	no	-	not-a-table	renders	0	1	unjudged	-	
+duplicate-key	A	commit	refused-other	409	-	no	-	not-a-table	renders	0	1	unjudged	-	
+duplicate-key	A	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+duplicate-key	A	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   routing.yaml is not valid YAML: duplicated mapping key	
+duplicate-key	A	schema	cannot-check	not YAML	-	no	-	not-a-table	renders	0	1	unjudged	-	
+yaml11-values	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+yaml11-values	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+yaml11-values	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+yaml11-values	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+yaml11-values	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+yaml11-values	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+yaml11-values	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+yaml11-values	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+yaml11-values	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+yaml11-values	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+yaml11-values	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+number-values	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=2 stale=true warnings=0	
+number-values	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+number-values	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+number-values	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+number-values	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+number-values	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+number-values	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+number-values	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+number-values	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+number-values	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   labels.severity[1]: values must be text — quote one that YAML reads otherwise (e.g.	
+number-values	A	schema	refused	invalid	-	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+name-constructor	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+name-constructor	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+name-constructor	A	put-json	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+name-constructor	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+name-constructor	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+name-constructor	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+name-constructor	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+name-constructor	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+name-constructor	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+name-constructor	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+name-constructor	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+name-constructor	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+name-proto	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+name-proto	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+name-proto	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+name-proto	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+name-proto	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+name-proto	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+name-proto	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+name-proto	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+name-proto	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+name-proto	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+name-proto	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+unreadable-perm	A	get	error	500	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	-	5xx
+unreadable-perm	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+unreadable-perm	A	shared-get	unreadable	200	deployments/t/a	no	-	unreadable	fails	1	-	helm-fails	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=true	
+unreadable-perm	A	shared-put	unreadable	409	routing.yaml	no	-	unreadable	fails	1	-	helm-fails	-	
+unreadable-perm	A	regenerate	error	500	-	no	-	unreadable	fails	1	-	helm-fails	regenerated=no failed=-	5xx
+unreadable-perm	A	sync	error	500	-	no	-	unreadable	renders	0	1	unjudged	-	5xx
+unreadable-perm	A	commit	refused	409	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	file-unreadable	
+unreadable-perm	A	preview	refused	200	routing.yaml	no	-	unreadable	fails	1	-	helm-fails	-	
+unreadable-perm	A	check-deployment	cannot-check	exit 2	routing.yaml	no	-	unreadable	fails	1	-	helm-fails	-	
+unreadable-perm	A	schema	cannot-check	EACCES	-	no	-	unreadable	fails	1	-	helm-fails	-	
+unreadable-dir	A	get	error	500	-	no	-	unreadable	renders	0	1	unjudged	-	5xx
+unreadable-dir	A	delete	error	500	deployments/t/a/routing.yaml	no	-	unreadable	renders	0	1	unjudged	-	5xx
+unreadable-dir	A	shared-get	unreadable	200	deployments/t/a	no	-	unreadable	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=true	
+unreadable-dir	A	shared-put	unreadable	409	routing.yaml	no	-	unreadable	renders	0	1	unjudged	-	
+unreadable-dir	A	regenerate	error	500	-	no	-	unreadable	renders	0	1	unjudged	regenerated=no failed=-	5xx
+unreadable-dir	A	sync	error	500	-	no	-	unreadable	renders	0	1	unjudged	-	5xx
+unreadable-dir	A	commit	error	500	-	no	-	unreadable	renders	0	1	unjudged	-	5xx
+unreadable-dir	A	preview	ok	200	-	no	-	unreadable	renders	0	1	unjudged	amc=1	
+unreadable-dir	A	check-deployment	cannot-check	exit 2	-	no	-	unreadable	renders	0	1	unjudged	-	
+unreadable-dir	A	schema	cannot-check	EISDIR	-	no	-	unreadable	renders	0	1	unjudged	-	
+dangling-link	A	get	absent	404	-	no	-	unreadable	fails	1	-	helm-fails	-	accepts-what-tool-refuses
+dangling-link	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+dangling-link	A	shared-get	not-seen	200	-	no	-	unreadable	fails	1	-	helm-fails	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+dangling-link	A	shared-put	ok	200	-	no	-	unreadable	fails	1	-	helm-fails	written=2	
+dangling-link	A	regenerate	ok	200	-	no	-	unreadable	fails	1	-	helm-fails	regenerated=no failed=-	
+dangling-link	A	sync	refused	400	deployments/t/a	no	-	unreadable	renders	0	1	unjudged	-	
+dangling-link	A	commit	refused	409	deployments/t/a	no	-	unreadable	fails	1	-	helm-fails	routing-orphaned	
+dangling-link	A	preview	refused	200	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	-	
+dangling-link	A	check-deployment	refused	exit 1	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	Routing: no routing.yaml — not checked	
+dangling-link	A	schema	cannot-check	dangling link	-	no	-	unreadable	fails	1	-	helm-fails	-	
+link-outside	A	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+link-outside	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+link-outside	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+link-outside	A	shared-put	ok	200	-	no	-	ok	renders	0	1	routes	written=2	
+link-outside	A	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+link-outside	A	sync	ok	200	-	no	-	ok	renders	0	1	routes	-	
+link-outside	A	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+link-outside	A	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+link-outside	A	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+link-outside	A	schema	ok	valid	-	no	-	ok	renders	0	1	routes	-	
+link-inside	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+link-inside	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+link-inside	A	shared-get	stale	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=relay overlaps=1 stale=true unreadable=false	
+link-inside	A	shared-put	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	written=3	
+link-inside	A	regenerate	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+link-inside	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+link-inside	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+link-inside	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+link-inside	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+link-inside	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+cr-hand-edited	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+cr-hand-edited	A	put-text	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+cr-hand-edited	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cr-hand-edited	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cr-hand-edited	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+cr-hand-edited	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+cr-hand-edited	A	sync	ok	200	-	no	-	ok	renders	0	1	routes	-	
+cr-hand-edited	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+cr-hand-edited	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+cr-hand-edited	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+cr-hand-edited	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+cr-deleted	A	get	stale	200	-	no	-	ok	renders	0	0	no-amc	errors=0 stale=true warnings=0	
+cr-deleted	A	put-text	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+cr-deleted	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cr-deleted	A	shared-get	not-seen	200	-	no	-	ok	renders	0	0	no-amc	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cr-deleted	A	shared-put	ok	200	-	no	-	ok	renders	0	0	no-amc	written=2	
+cr-deleted	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+cr-deleted	A	sync	ok	200	-	no	-	ok	renders	0	1	routes	-	
+cr-deleted	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	0	no-amc	routing-stale	
+cr-deleted	A	preview	ok	200	-	no	-	ok	renders	0	0	no-amc	amc=0	
+cr-deleted	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	0	no-amc	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+cr-deleted	A	schema	ok	valid	-	no	-	ok	renders	0	0	no-amc	-	
+cr-extra	A	get	ok	200	-	no	-	ok	renders	0	2	differs	errors=0 stale=false warnings=0	accepts-what-tool-refuses
+cr-extra	A	put-text	ok	200	-	no	-	ok	renders	0	2	differs	-	
+cr-extra	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	1	orphan	-	accepts-what-tool-refuses
+cr-extra	A	shared-get	not-seen	200	-	no	-	ok	renders	0	2	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+cr-extra	A	shared-put	ok	200	-	no	-	ok	renders	0	2	differs	written=2	
+cr-extra	A	regenerate	ok	200	-	no	-	ok	renders	0	2	differs	regenerated=no failed=-	
+cr-extra	A	sync	ok	200	-	no	-	ok	renders	0	1	routes	-	
+cr-extra	A	commit	ok	200	-	no	-	ok	renders	0	2	differs	-	accepts-what-tool-refuses
+cr-extra	A	preview	ok	200	-	no	-	ok	renders	0	2	differs	amc=2	
+cr-extra	A	check-deployment	ok	exit 0	-	no	-	ok	renders	0	2	differs	Routing: passed	accepts-what-tool-refuses
+cr-extra	A	schema	ok	valid	-	no	-	ok	renders	0	2	differs	-	
+cr-unreadable	A	get	error	500	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	-	5xx
+cr-unreadable	A	put-text	error	500	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	-	5xx
+cr-unreadable	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+cr-unreadable	A	shared-get	unreadable	200	deployments/t/a	no	-	ok	fails	1	-	helm-fails	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=true	
+cr-unreadable	A	shared-put	unreadable	409	routing.yaml	no	-	ok	fails	1	-	helm-fails	-	
+cr-unreadable	A	regenerate	error	500	-	no	-	ok	fails	1	-	helm-fails	regenerated=no failed=-	5xx
+cr-unreadable	A	sync	error	500	-	no	-	ok	renders	0	1	routes	-	5xx
+cr-unreadable	A	commit	refused	409	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	file-unreadable	
+cr-unreadable	A	preview	refused	200	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	-	
+cr-unreadable	A	check-deployment	cannot-check	exit 2	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	-	
+cr-unreadable	A	schema	ok	valid	-	no	-	ok	fails	1	-	helm-fails	-	
+routing-hand-edited	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+routing-hand-edited	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+routing-hand-edited	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+routing-hand-edited	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+routing-hand-edited	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+routing-hand-edited	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+routing-hand-edited	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+routing-hand-edited	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+routing-hand-edited	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+routing-hand-edited	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+routing-hand-edited	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+stack-ok	S	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+stack-ok	S	put-text	ok	200	-	no	-	ok	renders	0	1	routes	-	
+stack-ok	S	delete	ok	200	-	no	deployments/s/x/routing.yaml,deployments/s/x/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+stack-ok	S	shared-get	not-seen	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+stack-ok	S	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+stack-ok	S	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+stack-ok	S	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+stack-ok	S	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+stack-ok	S	schema	ok	valid	-	no	-	ok	renders	0	1	routes	-	
+stack-hand-edited	S	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+stack-hand-edited	S	put-text	ok	200	-	no	deployments/s/x/routing.yaml,deployments/s/x/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+stack-hand-edited	S	delete	ok	200	-	no	deployments/s/x/routing.yaml,deployments/s/x/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+stack-hand-edited	S	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+stack-hand-edited	S	regenerate	ok	200	-	no	deployments/s/x/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+stack-hand-edited	S	commit	refused	409	deployments/s/x	no	-	ok	renders	0	1	differs	routing-stale	
+stack-hand-edited	S	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+stack-hand-edited	S	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+stack-hand-edited	S	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+stack-not-yaml	S	get	listed	200	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+stack-not-yaml	S	put-text	refused	400	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	-	
+stack-not-yaml	S	delete	ok	200	-	no	deployments/s/x/routing.yaml,deployments/s/x/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+stack-not-yaml	S	shared-get	unreadable	200	deployments/s/x	no	-	not-a-table	renders	0	1	unjudged	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=true	
+stack-not-yaml	S	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+stack-not-yaml	S	commit	listed	200	deployments/s/x	no	-	not-a-table	renders	0	1	unjudged	-	
+stack-not-yaml	S	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+stack-not-yaml	S	check-deployment	refused	exit 1	routing.yaml	no	-	not-a-table	renders	0	1	unjudged	Routing: routing.yaml has problems   routing.yaml is not valid YAML: unexpected end of the stream within a flow collecti	
+stack-not-yaml	S	schema	cannot-check	not YAML	-	no	-	not-a-table	renders	0	1	unjudged	-	
+common-has-routing	L	get	ok	200	-	no	-	ok	renders	0	2	differs	errors=0 stale=false warnings=0	accepts-what-tool-refuses
+common-has-routing	L	regenerate	ok	200	-	no	-	ok	renders	0	2	differs	regenerated=no failed=-	
+common-has-routing	L	commit	ok	200	-	no	-	ok	renders	0	2	differs	-	accepts-what-tool-refuses
+common-has-routing	L	preview	ok	200	-	no	-	ok	renders	0	2	differs	amc=2	
+common-has-routing	L	check-deployment	ok	exit 0	-	no	-	ok	renders	0	2	differs	Routing: passed	accepts-what-tool-refuses
+target-ok	B	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+target-ok	B	delete	refused	409	deployments/t/b	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
+target-ok	B	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+target-ok	B	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+target-ok	B	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+target-ok	B	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+target-hand-edited	B	get	stale	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=true warnings=0 differsFromSource	refuses-what-tool-accepts
+target-hand-edited	B	put-text	refused	409	deployments/t/b	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
+target-hand-edited	B	delete	refused	409	deployments/t/b	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
+target-hand-edited	B	regenerate	ok	200	-	no	deployments/t/b/routing.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+target-hand-edited	B	commit	refused	409	deployments/t/b	no	-	ok	renders	0	1	routes	routing-target-differs	refuses-what-tool-accepts
+target-hand-edited	B	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+target-hand-edited	B	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	routes	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	refuses-what-tool-accepts
+target-cr-deleted	B	get	stale	200	-	no	-	ok	renders	0	0	no-amc	errors=0 stale=true warnings=0 differsFromSource	
+target-cr-deleted	B	delete	refused	409	deployments/t/b	no	-	ok	renders	0	0	no-amc	-	refuses-what-tool-accepts
+target-cr-deleted	B	regenerate	ok	200	-	no	deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+target-cr-deleted	B	commit	refused	409	deployments/t/b	no	-	ok	renders	0	0	no-amc	routing-target-differs	
+target-cr-deleted	B	preview	ok	200	-	no	-	ok	renders	0	0	no-amc	amc=0	
+target-cr-deleted	B	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	0	no-amc	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+source-broken	B	get	stale	200	-	no	-	not-a-table	renders	0	1	unjudged	errors=0 stale=true warnings=0 differsFromSource	
+source-broken	B	delete	refused	409	deployments/t/b	no	-	not-a-table	renders	0	1	unjudged	-	
+source-broken	B	regenerate	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	regenerated=no failed=-	
+source-broken	B	commit	refused	409	deployments/t/b	no	-	not-a-table	renders	0	1	unjudged	routing-target-differs	
+source-broken	B	preview	ok	200	-	no	-	not-a-table	renders	0	1	unjudged	amc=1	
+source-broken	B	check-deployment	ok	exit 0	-	no	-	not-a-table	renders	0	1	unjudged	Routing: passed	
+shared-ok	SH	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+shared-ok	SH	shared-get	ok	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=relay overlaps=0 stale=false unreadable=false	
+shared-ok	SH	shared-put	ok	200	-	no	-	ok	renders	0	1	routes	written=2	
+shared-ok	SH	shared-rename	ok	200	-	no	_shared/notification-configs.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+shared-ok	SH	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+shared-ok	SH	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+shared-ok	SH	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+shared-ok	SH	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+shared-changed	SH	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+shared-changed	SH	shared-get	stale	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=relay overlaps=0 stale=true unreadable=false	
+shared-changed	SH	shared-put	ok	200	-	no	_shared/notification-configs.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	written=2	
+shared-changed	SH	shared-rename	ok	200	-	no	_shared/notification-configs.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+shared-changed	SH	regenerate	ok	200	-	no	deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+shared-changed	SH	commit	refused	409	deployments/t/c	no	-	ok	renders	0	1	differs	routing-stale	
+shared-changed	SH	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+shared-changed	SH	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+shared-absent	SH	get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+shared-absent	SH	shared-get	stale	200	-	no	-	unresolved	renders	0	1	unjudged	exists=false errors=0 uses=relay overlaps=0 stale=true unreadable=false	
+shared-absent	SH	shared-put	ok	200	-	no	_shared/notification-configs.yaml	ok	renders	0	1	routes	written=2	
+shared-absent	SH	shared-rename	refused	404	-	no	-	unresolved	renders	0	1	unjudged	-	
+shared-absent	SH	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged	regenerated=no failed=-	
+shared-absent	SH	commit	refused	409	deployments/t/c	no	-	unresolved	renders	0	1	unjudged	routing-shared-unresolved	
+shared-absent	SH	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
+shared-absent	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but there are no shared configs (_shar	
+shared-not-yaml	SH	get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+shared-not-yaml	SH	shared-get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	exists=true errors=1 uses=relay overlaps=0 stale=true unreadable=false	
+shared-not-yaml	SH	shared-put	refused	400	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	-	
+shared-not-yaml	SH	shared-rename	refused	400	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	-	
+shared-not-yaml	SH	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged	regenerated=no failed=-	
+shared-not-yaml	SH	commit	refused	409	deployments/t/c	no	-	unresolved	renders	0	1	unjudged	routing-shared-unresolved,routing-shared-broken	
+shared-not-yaml	SH	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
+shared-not-yaml	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but _shared/notification-configs.yaml	
+shared-refused-entry	SH	get	listed	200	_shared/notification-configs.yaml	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+shared-refused-entry	SH	shared-get	listed	200	-	no	-	crd-fails	renders	0	1	differs	exists=true errors=1 uses=relay overlaps=0 stale=true unreadable=false	
+shared-refused-entry	SH	shared-put	refused	400	_shared/notification-configs.yaml	no	-	crd-fails	renders	0	1	differs	-	
+shared-refused-entry	SH	shared-rename	refused	400	_shared/notification-configs.yaml	no	-	crd-fails	renders	0	1	differs	-	
+shared-refused-entry	SH	regenerate	ok	200	-	no	-	crd-fails	renders	0	1	differs	regenerated=no failed=-	
+shared-refused-entry	SH	commit	refused	409	deployments/t/c	no	-	crd-fails	renders	0	1	differs	routing-shared-unresolved,routing-shared-broken	
+shared-refused-entry	SH	preview	ok	200	-	no	-	crd-fails	renders	0	1	differs	amc=1	
+shared-refused-entry	SH	check-deployment	refused	exit 1	routing.yaml	no	-	crd-fails	renders	0	1	differs	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but _shared/notification-configs.yaml	
+shared-unused-entry	SH	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+shared-unused-entry	SH	shared-get	ok	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=relay overlaps=0 stale=false unreadable=false	
+shared-unused-entry	SH	shared-put	ok	200	-	no	_shared/notification-configs.yaml	ok	renders	0	1	routes	written=2	
+shared-unused-entry	SH	shared-rename	ok	200	-	no	_shared/notification-configs.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+shared-unused-entry	SH	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+shared-unused-entry	SH	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+shared-unused-entry	SH	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+shared-unused-entry	SH	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+shared-reaches-nobody	SH	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=1	
+shared-reaches-nobody	SH	shared-get	stale	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=relay overlaps=0 stale=true unreadable=false	
+shared-reaches-nobody	SH	shared-put	warned	200	-	no	_shared/notification-configs.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	written=2	
+shared-reaches-nobody	SH	shared-rename	ok	200	-	no	_shared/notification-configs.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+shared-reaches-nobody	SH	regenerate	ok	200	-	no	deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+shared-reaches-nobody	SH	commit	refused	409	deployments/t/c	no	-	ok	renders	0	1	differs	routing-stale	
+shared-reaches-nobody	SH	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+shared-reaches-nobody	SH	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+shared-dir-holds-more	SH	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+shared-dir-holds-more	SH	shared-get	refused	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=relay overlaps=0 stale=false unreadable=false dirProblem	refuses-what-tool-accepts
+shared-dir-holds-more	SH	shared-put	refused	409	-	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
+shared-dir-holds-more	SH	shared-rename	ok	200	-	no	_shared/notification-configs.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+shared-dir-holds-more	SH	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+shared-dir-holds-more	SH	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+shared-dir-holds-more	SH	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+shared-dir-holds-more	SH	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+shared-unreadable	SH	get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	errors=1 stale=true warnings=0	
+shared-unreadable	SH	shared-get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	exists=true errors=1 uses=relay overlaps=0 stale=true unreadable=false	
+shared-unreadable	SH	shared-put	error	500	_shared/notification-configs.yaml	no	-	ok	renders	0	1	unjudged	-	5xx
+shared-unreadable	SH	shared-rename	refused	400	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	-	
+shared-unreadable	SH	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged	regenerated=no failed=-	
+shared-unreadable	SH	commit	refused	409	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	file-unreadable	
+shared-unreadable	SH	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
+shared-unreadable	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but _shared/notification-configs.yaml	
+shared-smtp-absent	SH	get	stale	200	-	no	-	am-fails	renders	0	1	differs	errors=0 stale=true warnings=0	
+shared-smtp-absent	SH	shared-get	stale	200	-	no	-	am-fails	renders	0	1	differs	exists=true errors=0 uses=relay overlaps=0 stale=true unreadable=false	
+shared-smtp-absent	SH	shared-put	ok	200	-	no	_shared/notification-configs.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	am-fails	renders	0	1	am-fails	written=2	accepts-what-tool-refuses
+shared-smtp-absent	SH	shared-rename	ok	200	-	no	_shared/notification-configs.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml	am-fails	renders	0	1	am-fails	-	accepts-what-tool-refuses
+shared-smtp-absent	SH	regenerate	ok	200	-	no	deployments/t/c/templates/alertmanagerconfig.yaml	am-fails	renders	0	1	am-fails	regenerated=yes failed=-	accepts-what-tool-refuses
+shared-smtp-absent	SH	commit	refused	409	deployments/t/c	no	-	am-fails	renders	0	1	differs	routing-stale	
+shared-smtp-absent	SH	preview	ok	200	-	no	-	am-fails	renders	0	1	differs	amc=1	
+shared-smtp-absent	SH	check-deployment	refused	exit 1	routing.yaml	no	-	am-fails	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	

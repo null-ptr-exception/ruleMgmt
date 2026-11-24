@@ -1,0 +1,102 @@
+# Cells where an entry point disagrees with Helm today, each with why.
+# category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
+# Edited by hand: a fix removes its line; a new disagreement needs one.
+id	entry	kind	category	reason
+inside-deployment-templates	list	misses-what-helm-renders	policy	a chart's own templates/ and charts/ folders are not walked into (Helm reads them as the chart's)
+inside-deployment-templates	users	misses-what-helm-renders	policy	a chart's own templates/ and charts/ folders are not walked into (Helm reads them as the chart's)
+inside-deployment-templates	migration	misses-what-helm-renders	policy	a chart's own templates/ and charts/ folders are not walked into (Helm reads them as the chart's)
+inside-deployment-templates	sync-to	not-a-copy-after	bug	no issue yet: sync accepts a target inside its source's templates/ (a folder there that is a deployment) and writes into it: the source then fails to render
+in-common-folder	tree	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	list	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	folder-list	count-differs	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	users	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	migration	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	routing-get	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	preview	refuses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	check-deployment	refuses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	sync-to	refuses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	sync-from	refuses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+name-non-ascii	preview	refuses-what-helm-renders	bug	no issue yet: Preview and check-deployment make the release name from the folder name, and one of only non-ASCII letters is no valid release name
+name-non-ascii	check-deployment	refuses-what-helm-renders	bug	no issue yet: Preview and check-deployment make the release name from the folder name, and one of only non-ASCII letters is no valid release name
+hidden-folder	list	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-folder	routing-get	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-folder	preview	refuses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-folder	sync-to	refuses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-folder	sync-from	refuses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-deployment	tree	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-deployment	list	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-deployment	routing-get	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-deployment	preview	refuses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-deployment	sync-to	refuses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+hidden-deployment	sync-from	refuses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+node-modules	list	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+node-modules	users	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+node-modules	migration	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
+link-inside	tree	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-inside	list	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-inside	users	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-inside	migration	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-outside	tree	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-outside	list	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-outside	users	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-outside	migration	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-outside	routing-get	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-outside	preview	refuses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+link-outside	sync-to	refuses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
+unreadable-folder	folder-list	no-answer	bug	no issue yet: under a folder that cannot be read, the handler throws outside its try (realpath EACCES in insideReal): no answer, and in the server Node ends the process
+unreadable-folder	routing-get	5xx	bug	no issue yet: the Routing page of a deployment under a folder that cannot be read answers 500
+unreadable-folder	preview	no-answer	bug	no issue yet: under a folder that cannot be read, the handler throws outside its try (realpath EACCES in insideReal): no answer, and in the server Node ends the process
+unreadable-folder	sync-to	no-answer	bug	no issue yet: under a folder that cannot be read, the handler throws outside its try (realpath EACCES in insideReal): no answer, and in the server Node ends the process
+chart-not-yaml	commit	accepts-what-helm-fails	bug	no issue yet: a deployment whose Chart.yaml is not YAML is no deployment to the walk, and Commit says nothing; Helm cannot render it
+chart-template-gone	sync-from	accepts-what-helm-fails	bug	no issue yet: sync from a deployment whose Template is gone is accepted, though Helm cannot render the source
+chart-two-templates	preview	refuses-what-helm-renders	policy	a deployment naming two Templates is not supported: Commit and Preview refuse it, Helm renders both
+chart-two-templates	commit	refuses-what-helm-renders	policy	a deployment naming two Templates is not supported: Commit and Preview refuse it, Helm renders both
+values-yaml11	sync-from	accepts-what-helm-fails	bug	#202: a bare y in values is true to Helm, text to AlertForge; the Template's schema then fails
+values-yaml11	commit	accepts-what-helm-fails	bug	#202: a bare y in values is true to Helm, text to AlertForge; the Template's schema then fails
+values-is-folder	migration	5xx	bug	no issue yet: a values.yaml that is a folder answers 500 in the migration check and in sync
+values-is-folder	sync-to	5xx	bug	no issue yet: a values.yaml that is a folder answers 500 in the migration check and in sync
+values-is-folder	sync-from	5xx	bug	no issue yet: a values.yaml that is a folder answers 500 in the migration check and in sync
+file-not-folder	folder-list	5xx	bug	no issue yet: a folder path that is a file answers 500 in a folder's deployment list (mkdir ENOTDIR/EEXIST)
+legacy-flat	tree	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat	list	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat	routing-get	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat	check-deployment	refuses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat	sync-to	refuses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat	sync-from	refuses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat-second	tree	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat-second	list	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat-second	routing-get	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat-second	check-deployment	refuses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat-second	sync-to	refuses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+legacy-flat-second	sync-from	refuses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
+sync-not-yaml	sync-get	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-not-yaml	sync-post	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-not-yaml	sync-unlink	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-not-yaml	save-copy	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-not-yaml	routing-copy	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-not-yaml	delete-source	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-not-yaml	target-readonly	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+target-hidden	regenerate	not-a-copy-after	bug	no issue yet: a target sync will not write (hidden, a link out of the repo, charts/) is left behind; Regenerate answers ok and Commit does not name it (charts/: sync.yaml finding only)
+target-hidden	commit	accepts-a-target-not-its-copy	bug	no issue yet: a target sync will not write (hidden, a link out of the repo, charts/) is left behind; Regenerate answers ok and Commit does not name it (charts/: sync.yaml finding only)
+target-link-outside	regenerate	not-a-copy-after	bug	no issue yet: a target sync will not write (hidden, a link out of the repo, charts/) is left behind; Regenerate answers ok and Commit does not name it (charts/: sync.yaml finding only)
+target-link-outside	commit	accepts-a-target-not-its-copy	bug	no issue yet: a target sync will not write (hidden, a link out of the repo, charts/) is left behind; Regenerate answers ok and Commit does not name it (charts/: sync.yaml finding only)
+target-charts	regenerate	not-a-copy-after	bug	no issue yet: a target sync will not write (hidden, a link out of the repo, charts/) is left behind; Regenerate answers ok and Commit does not name it (charts/: sync.yaml finding only)
+target-hand-edited	commit	accepts-a-target-not-its-copy	bug	no issue yet (see #180): Commit holds a sync target to its source's routing only; values or a Template changed on the target are not named
+target-other-template	commit	accepts-a-target-not-its-copy	bug	no issue yet (see #180): Commit holds a sync target to its source's routing only; values or a Template changed on the target are not named
+sync-unreadable	sync-get	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-unreadable	sync-post	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-unreadable	sync-unlink	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-unreadable	save-copy	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-unreadable	routing-copy	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-unreadable	regenerate	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-unreadable	delete-source	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-unreadable	target-readonly	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	sync-get	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	sync-post	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	sync-unlink	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	save-copy	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	routing-copy	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	regenerate	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	delete-source	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	target-readonly	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)
+sync-is-folder	commit	5xx	bug	no issue yet: a sync.yaml that cannot be read (not YAML, no permission, a folder) answers 500 instead of naming it (deliberately not read as empty)

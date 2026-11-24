@@ -9,8 +9,8 @@ vulnerabilities:
   - id: CVE-2026-42154
     paths: [usr/local/bin/promtool]
 
-  # golang.org/x/net in vmalert: no vmalert release has 0.62.0 yet (v1.155.0
-  # has 0.60.0). promtool is rebuilt with 0.62.0. Remove once vmalert ships
-  # it (#152).
-  - id: CVE-2026-78661
+  # Go's standard library in vmalert: the official v1.156.0 binary is built
+  # with Go 1.27.3; the fix is in 1.27.4. promtool is built here with a fixed
+  # Go. Remove once a vmalert release is built with 1.27.4 or later (#192).
+  - id: CVE-2026-97054
     paths: [usr/local/bin/vmalert]

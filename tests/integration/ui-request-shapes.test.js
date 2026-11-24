@@ -134,6 +134,9 @@ describe('a request of another shape is refused naming the field', () => {
     ['a sync source that is no text', 'POST', '/api/v2/sync', { source: 5, target: OTHER }, 'source must be text: a deployment\'s folder'],
     ['a sync target asked for twice', 'GET', `/api/v2/sync?target=${enc(OTHER)}&target=x`, undefined, 'query parameter target must be text'],
     ['a shared config renamed from no name', 'POST', '/api/v2/routing/shared/rename', { from: '', to: 'crew' }, 'from cannot be empty'],
+    ['values nested 16000 levels deep', 'POST', `/api/v2/deployments/demo/a?folder=${enc(DEP)}`, `{"values":${'{"a":'.repeat(16000)}1${'}'.repeat(16000)}}`, 'The request body is nested too deeply: values.a goes more than 256 levels deep'],
+    ['a _common\'s folder that is a list', 'POST', '/api/v2/folders/common', { action: 'create', folder: [], chart: 'demo', expected: {} }, 'folder must be text'],
+    ['a rename from a list', 'POST', '/api/v2/routing/shared/rename', { from: [], to: 'crew' }, 'from must be text'],
     ['a folder given twice', 'GET', `/api/v2/deployments/demo/a?folder=${enc(DEP)}&folder=x`, undefined, 'Invalid folder path: a path is text'],
   ])('%s', async (_, method, url, body, error) => {
     expect(await api(method, url, body)).toMatchObject({ status: 400, json: { error } })
@@ -152,5 +155,53 @@ describe('a legacy deployment folder that leads out of the repo', () => {
       await fs.rm(path.join(tmpDir, 'deployments', 'outchart'), { force: true })
       await fs.rm(outside, { recursive: true, force: true })
     }
+  })
+})
+
+// A map's key named __proto__ (JSON.parse keeps it as a key of its own)
+// would be dropped by the schema without a word, and the rest written:
+// refused, naming it. constructor and prototype are keys like any other.
+describe('a map with a key named __proto__', () => {
+  const at = `?folder=${enc(DEP)}`
+  it.each([
+    ['values', 'POST', `/api/v2/deployments/demo/a${at}`, '{"values":{"__proto__":{"polluted":"yes"},"cpu":[]}}', 'values.__proto__'],
+    ['routing', 'PUT', `/api/v2/deployments/demo/a/routing${at}`, '{"routing":{"__proto__":{"polluted":"yes"},"labels":{}}}', 'routing.__proto__'],
+    ['shared', 'PUT', '/api/v2/routing/shared', '{"shared":{"__proto__":{"polluted":"yes"},"configs":{}}}', 'shared.__proto__'],
+    ['expected', 'POST', '/api/v2/folders/common', '{"action":"create","folder":"deployments/team","chart":"demo","expected":{"__proto__":"x"}}', 'expected.__proto__'],
+    ['a rules file', 'POST', '/api/v2/templates/demo/rules', '{"files":{"__proto__":"x"}}', 'files.__proto__'],
+    ['a migration, two maps deep', 'POST', '/api/v2/templates/demo/migration-preview', '{"files":{},"migration":{"columns":{"cpu":{"__proto__":"y"}}}}', 'migration.columns.cpu.__proto__'],
+    ['a migration itself', 'POST', '/api/v2/templates/demo/migration-preview', '{"files":{},"migration":{"__proto__":{"columns":{}}}}', 'migration.__proto__'],
+  ])('in %s is refused 400 naming it', async (_, method, url, body, field) => {
+    const r = await api(method, url, body)
+    expect(r.status, r.text).toBe(400)
+    expect(r.json.error).toBe(`${field}: a key named __proto__ is not taken`)
+    expect({}.polluted).toBeUndefined()
+  })
+
+  it('constructor and prototype are taken and written as before', async () => {
+    const r = await api('POST', `/api/v2/deployments/demo/a${at}`, '{"values":{"constructor":{"x":1},"prototype":{"y":2},"cpu":[]}}')
+    expect(r.status, r.text).toBe(200)
+    const written = await fs.readFile(path.join(tmpDir, DEP, 'values.yaml'), 'utf-8')
+    expect(written).toContain('constructor:')
+    expect(written).toContain('prototype:')
+    expect({}.x).toBeUndefined()
+  })
+})
+
+// A deployment name that is not its folder's own is a legacy
+// <name>-values.yaml there: a name too long for that file is refused alike
+// by opening, saving and deleting it (a 409, a 409 and a 500 before).
+describe('a deployment name too long for its values file', () => {
+  const name = 'a'.repeat(250)
+  const url = `/api/v2/deployments/demo/${name}?folder=${enc(DEP)}`
+  const error = `Invalid deployment name: its values file, ${name}-values.yaml, would be longer than 255 bytes, what the file system takes`
+  it.each([['GET'], ['POST'], ['DELETE']])('%s → 400 saying so', async method => {
+    const r = await api(method, url, method === 'POST' ? { values: {} } : undefined)
+    expect(r.status, r.text).toBe(400)
+    expect(r.json.error).toBe(error)
+  })
+  it('one that fits is still asked as before', async () => {
+    const r = await api('GET', `/api/v2/deployments/demo/${'a'.repeat(243)}?folder=${enc(DEP)}`)
+    expect(r.status, r.text).not.toBe(400)
   })
 })

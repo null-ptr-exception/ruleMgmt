@@ -4,7 +4,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { z } from 'zod'
 import { isCommonChartPath, COMMON_DIR } from '../../../src/utils/reservedNames.js'
-import { pathProblem, realPlace, PLACE_WHY } from '../../repo/paths.js'
+import { deploymentNameProblem, realPlace, PLACE_WHY, LEGACY_VALUES_SUFFIX } from '../../repo/paths.js'
 import { repoName, repoPath } from '../../http/route.js'
 import { isAbsent, UnreadableError } from '../../lib/readIfThere.js'
 
@@ -45,7 +45,7 @@ export async function deploymentAt({ params, query }, gitopsDir) {
     if (why) return { error: `${rel}: ${PLACE_WHY[why]}` }
     dir = target
   }
-  const problem = pathProblem(deployment, folder ? 'folder-name' : 'name')
+  const problem = deploymentNameProblem(deployment, folder)
   if (problem) return { error: `Invalid deployment name: ${problem.why}` }
   return { dir, folder, chart, deployment }
 }
@@ -56,7 +56,7 @@ export async function deploymentAt({ params, query }, gitopsDir) {
 // other name is a legacy `<name>-values.yaml` sibling and never touches
 // `values.yaml`, or saving it would overwrite the folder's deployment (#90).
 export async function resolveValuesFile(dir, deployment) {
-  const legacyFile = path.join(dir, `${deployment}-values.yaml`)
+  const legacyFile = path.join(dir, `${deployment}${LEGACY_VALUES_SUFFIX}`)
   const directFile = path.join(dir, 'values.yaml')
   if (deployment === path.basename(dir)) {
     try {

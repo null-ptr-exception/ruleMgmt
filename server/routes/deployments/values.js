@@ -2,7 +2,7 @@
 
 import { reasonOf } from '../../repo/finding.js'
 import { z } from 'zod'
-import { route } from '../../http/route.js'
+import { route, map } from '../../http/route.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { resolveStack, unwrapPath, readStackValues, stackValues } from '../../lib/stack.js'
@@ -35,7 +35,7 @@ async function inheritedOf(gitopsDir, dir, stack) {
 // `version`: what the page was loaded from (#102), left out by a page that
 // has none.
 const SAVE_BODY = z.object({
-  values: z.union([z.string(), z.record(z.string(), z.unknown())], { error: iss => (iss.input === undefined ? 'values is required: the text of values.yaml, or the values as a map' : 'values must be the text of values.yaml, or the values as a map') }),
+  values: z.union([z.string(), map()], { error: iss => (iss.input === undefined ? 'values is required: the text of values.yaml, or the values as a map' : 'values must be the text of values.yaml, or the values as a map') }),
   version: z.string().optional(),
 })
 

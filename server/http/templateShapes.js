@@ -5,6 +5,7 @@
  */
 import { z } from 'zod'
 import { pathProblem } from '../repo/paths.js'
+import { map, noProtoKey } from './route.js'
 
 /**
  * A Template's rules/ as the editor sends it: { '<group>.yaml': text },
@@ -12,7 +13,7 @@ import { pathProblem } from '../repo/paths.js'
  * rules file name as paths.js takes it ('rules-file').
  *   { files: { '../x.yaml': '…' } } → 400 'Invalid rules file name: ../x.yaml'
  */
-export const rulesFiles = z.record(z.string(), z.string()).superRefine((files, ctx) => {
+export const rulesFiles = map(z.string()).superRefine((files, ctx) => {
   for (const name of Object.keys(files)) {
     if (pathProblem(name, 'rules-file')) ctx.addIssue({ code: 'custom', message: `Invalid rules file name: ${name}`, path: [name] })
   }
@@ -25,8 +26,8 @@ export const rulesFiles = z.record(z.string(), z.string()).superRefine((files, c
  * ({ dropped: { cpu: ['team'] } }). Anything else in it is kept as it is
  * (a clone records the mapping on the copy).
  */
-export const migrationMapping = z.looseObject({
-  columns: z.record(z.string(), z.record(z.string(), z.string())).optional(),
-  groups: z.record(z.string(), z.string()).optional(),
-  dropped: z.record(z.string(), z.array(z.string())).optional(),
-})
+export const migrationMapping = noProtoKey(z.looseObject({
+  columns: map(map(z.string())).optional(),
+  groups: map(z.string()).optional(),
+  dropped: map(z.array(z.string())).optional(),
+}))

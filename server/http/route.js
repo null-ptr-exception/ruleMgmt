@@ -17,7 +17,8 @@
  *     the route's name
  *   - it does not answer (and does not pass the request on) by the
  *     deadline (route()'s `deadlineMs`) → the same 500, logged; an answer
- *     it gives after returning (res.sendFile, a callback) is waited for
+ *     it gives after returning (res.sendFile, a callback) is waited for;
+ *     one it started (headers, a chunk) and did not end is ended there
  *   - what it writes after the wrapper answered is dropped, not thrown
  * Answering ends the response, which lets the lock go at once.
  *
@@ -51,9 +52,9 @@ import { parsePath } from '../repo/paths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { errorAnswer } from '../lib/readIfThere.js'
 import { clientStatus, clientRefusal } from './body.js'
-import { withoutPath } from '../lib/answerPaths.js'
+import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { logger } from '../lib/logger.js'
-import { HOLD_LIMIT_MS } from '../lib/sync.js'
+import { HOLD_LIMIT_MS, holdSyncRegistryLock } from '../lib/sync.js'
 
 const WRAPPED = Symbol('route')
 const DECLARED = Symbol('route declares its request')
@@ -116,15 +117,17 @@ async function answer(name, err, req, res) {
 }
 
 /**
- * Whether the response is answered (finished, or the client gone) within
+ * Whether the response is answered (ended, or the client gone) within
  * `ms`: a handler may answer after it returns (res.sendFile, a callback).
+ * Headers or a first chunk written are not an answer: a response never
+ * ended holds the connection, and a write's commit lock, until it is.
  */
 function answeredWithin(res, ms) {
   if (res.writableEnded || res.destroyed) return Promise.resolve(true)
   return new Promise(resolve => {
     const done = answered => { clearTimeout(timer); res.off('finish', yes); res.off('close', yes); resolve(answered) }
     const yes = () => done(true)
-    const timer = setTimeout(() => done(res.writableEnded || res.headersSent), ms)
+    const timer = setTimeout(() => done(res.writableEnded), ms)
     res.once('finish', yes)
     res.once('close', yes)
   })
@@ -146,7 +149,8 @@ function wrap(name, fn, { mustAnswer, deadlineMs = ANSWER_DEADLINE_MS }) {
         if (!mustAnswer || passed) return
         // Decided by the response, not by the handler's return.
         if (await answeredWithin(res, deadlineMs)) return
-        if (!passed) answer(name, new Error(`the route did not answer within ${deadlineMs} ms`), req, res)
+        // Not ended: answered 500, or, an answer started, ended as it is.
+        if (!passed) answer(name, new Error(`the route did not end its answer within ${deadlineMs} ms`), req, res)
       },
       err => answer(name, err, req, res),
     )
@@ -223,10 +227,50 @@ function issueText(iss) {
   }
 }
 
+// A map's key named __proto__: JSON.parse keeps it as a key of its own,
+// and a map the schema builds would drop it without a word (assigning it
+// sets the new object's prototype). noProtoKey() refuses it instead.
+const PROTO_KEY = 'proto-key'
+const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+
+/**
+ * `schema` (a map: z.record, z.looseObject), refusing a key named
+ * __proto__ of the map it is given, naming it:
+ *   noProtoKey(z.record(z.string(), z.unknown()))
+ *   { values: { "__proto__": {} } } → 400 'values.__proto__: a key named __proto__ is not taken'
+ * map(value, params) is noProtoKey(z.record(z.string(), value, params)).
+ */
+export const noProtoKey = schema => z.preprocess((input, ctx) => {
+  if (isMap(input) && Object.hasOwn(input, '__proto__')) {
+    ctx.issues.push({ code: 'custom', message: OURS, path: ['__proto__'], input, params: { [PROTO_KEY]: true } })
+  }
+  return input
+}, schema)
+export const map = (value = z.unknown(), params) => noProtoKey(z.record(z.string(), value, params))
+
+// A key named __proto__ inside a union's branch: the union says only that
+// no branch fits; the key is what to name.
+function protoIssues(issues, at = []) {
+  const out = []
+  for (const iss of issues) {
+    const path = [...at, ...(iss.path || [])]
+    if (iss.code === 'custom' && iss.params?.[PROTO_KEY]) out.push({ ...iss, path })
+    else if (iss.code === 'invalid_union') out.push(...protoIssues((iss.errors || []).flat(), path))
+  }
+  return out
+}
+
 const fieldOf = path => path.map((p, i) => (typeof p === 'number' ? `[${p}]` : i ? `.${String(p)}` : String(p))).join('')
 
 /** What a request part that does not fit is answered: one line per issue. */
 function refusalOf(part, issues, schema) {
+  const protos = protoIssues(issues)
+  if (protos.length) return [...new Set(protos.map(iss => `${LABEL[part](fieldOf(iss.path))}: a key named __proto__ is not taken`))].join('; ')
+  // After a field's wrong type, nothing more about the same field: `[]`
+  // for a text is no text, not also an empty list.
+  const pathKey = iss => JSON.stringify(iss.path)
+  const wrongType = new Set(issues.filter(i => i.code === 'invalid_type' || i.code === 'invalid_union').map(pathKey))
+  issues = issues.filter(i => i.code === 'invalid_type' || i.code === 'invalid_union' || !wrongType.has(pathKey(i)))
   const lines = issues.map(iss => {
     // A path or a name: parsePath's own answer, which names it.
     if (iss.code === 'custom' && iss.params?.[PATH_ISSUE]) return iss.message
@@ -311,32 +355,79 @@ export const repoPath = (intent, opts = {}) => pathSchema(intent, opts, p => ({ 
  */
 export const repoName = (intent, opts = {}) => pathSchema(intent, opts, p => p.rel)
 
+// The path a router or middleware is mounted at (router.use(path, …)):
+// Express 4 keeps only its regexp. '' at the router's own path.
+//   ^\/inner\/?(?=\/|$) → '/inner';  ^(?:\/([^/]+?))\/x… → '/:chart/x'
+function mountOf(layer) {
+  if (layer.regexp?.fast_slash || !layer.regexp) return ''
+  let i = 0
+  return layer.regexp.source
+    .replace(/^\^/, '')
+    .replace(/\\\/\?\(\?=\\\/\|\$\)$/, '')
+    .replace(/\(\?:\\\/\(\[\^\/\]\+\?\)\)/g, () => `/:${layer.keys[i++]?.name ?? 'param'}`)
+    .replace(/\\(.)/g, '$1')
+}
+
+/**
+ * A middleware that only passes a request on (next()), never answering it
+ * itself, for declaredRoutes to take: what answers a request is a declared
+ * route. A failure of it is still answered (500), as a route's is.
+ *   router.use(passesOn((req, res, next) => (req.method === 'GET' ? next() : hold(req, res, next))))
+ */
+export function passesOn(fn) {
+  fn[PASSES_ON] = true
+  return fn
+}
+const PASSES_ON = Symbol('passes the request on')
+// The app's own, which only pass a request on.
+const KNOWN_PASS_ON = new Set([answersWithoutPaths, holdSyncRegistryLock])
+const passes = fn => !!fn[PASSES_ON] || KNOWN_PASS_ON.has(fn)
+
 /**
  * Every route of `router` declares its request (route(name, shape,
- * handler)), or this throws naming the ones that do not: a router whose
- * route reads an undeclared request does not start. The router's other
- * handlers (middleware) are answered as a route is, named after their
- * method and path; a router mounted in it is held to the same.
+ * handler)), or this throws naming each that does not, with the path it
+ * is mounted at: a router whose route reads an undeclared request does
+ * not start. Refused the same way: a method and path declared twice, a
+ * router.param (a route declares its params), a middleware not known to
+ * only pass the request on (passesOn). Middleware is answered as a route
+ * is, named after its path; a router mounted in it is held to the same.
  */
 export function declaredRoutes(router) {
   const missing = []
-  const walk = r => {
+  const twice = []
+  const other = []
+  const walk = (r, prefix) => {
+    if (r.params && Object.keys(r.params).length) other.push(`router.param(${Object.keys(r.params).join(', ')}) at ${prefix || '/'}`)
+    const seen = new Set()
     for (const layer of r.stack) {
       if (layer.route) {
-        const name = `${Object.keys(layer.route.methods).join(',').toUpperCase()} ${layer.route.path}`
+        const at = `${prefix}${layer.route.path}`
+        const name = `${Object.keys(layer.route.methods).join(',').toUpperCase()} ${at}`
+        for (const m of Object.keys(layer.route.methods)) {
+          const key = `${m.toUpperCase()} ${at}`
+          if (seen.has(key)) twice.push(key)
+          seen.add(key)
+        }
         // The last handler of a route answers it; what runs before it is middleware.
         const handlers = layer.route.stack
         if (!handlers.length || !handlers.at(-1).handle[DECLARED]) missing.push(name)
         for (const l of handlers) l.handle = wrap(name, l.handle, { mustAnswer: false })
       } else if (Object.getPrototypeOf(layer.handle) === express.Router) {
-        walk(layer.handle)
+        walk(layer.handle, `${prefix}${mountOf(layer)}`)
       } else {
-        layer.handle = wrap(`middleware ${layer.handle.name || 'anonymous'}`, layer.handle, { mustAnswer: false })
+        const at = `${prefix}${mountOf(layer)}` || '/'
+        if (!passes(layer.handle)) other.push(`middleware ${layer.handle.name || 'anonymous'} at ${at} may answer a request itself (passesOn() takes one that only passes it on)`)
+        layer.handle = wrap(`middleware ${layer.handle.name || 'anonymous'} at ${at}`, layer.handle, { mustAnswer: false })
       }
     }
   }
-  walk(router)
-  if (missing.length) throw new Error(`these routes do not declare their request (route(name, shape, handler)): ${missing.join(', ')}`)
+  walk(router, '')
+  const problems = [
+    missing.length && `these routes do not declare their request (route(name, shape, handler)): ${missing.join(', ')}`,
+    twice.length && `these routes are declared twice: ${[...new Set(twice)].join(', ')}`,
+    ...other,
+  ].filter(Boolean)
+  if (problems.length) throw new Error(problems.join('; '))
   return router
 }
 

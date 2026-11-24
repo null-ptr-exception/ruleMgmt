@@ -1505,29 +1505,29 @@ field:long	shared.rename{from}	any	not-found	404	same	no	same	no	free		-	-	-
 field:long	shared.rename{to}	any	ok	200	same	no	same	no	free	_shared/notification-configs.yaml	-	-	-	
 field:deep	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:deep	charts.clone{migration}	any	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	
+field:deep	charts.clone{migration}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	charts.clone{migration.columns}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	charts.clone{migration.groups}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	charts.clone{migration.dropped}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.rules{files}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:deep	templates.rules{migration}	any	ok	200	same	no	same	no	free		-	-	-	
+field:deep	templates.rules{migration}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.rules{migration.columns}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.rules{migration.groups}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.rules{migration.dropped}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.migration-preview{files}	any	refused	400	same	no	same	no	free		-	-	-	
-field:deep	templates.migration-preview{migration}	any	ok	200	same	no	same	no	free		-	-	-	
+field:deep	templates.migration-preview{migration}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.migration-preview{migration.columns}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.migration-preview{migration.groups}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.migration-preview{migration.dropped}	any	refused	400	same	no	same	no	free		-	-	-	
-field:deep	templates.chart-meta{chartMeta}	any	ok	200	same	no	same	no	free		-	-	-	
+field:deep	templates.chart-meta{chartMeta}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	deployments.save{version}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:deep	folders.common{expected}	any	conflict	409	same	no	same	no	free		-	-	-	
+field:deep	folders.common{expected}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	

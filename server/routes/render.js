@@ -16,6 +16,7 @@ import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { route, declaredRoutes } from '../http/route.js'
 import { UnreadableError } from '../lib/readIfThere.js'
 import { DEPLOYMENT_REQUEST, deploymentAt } from './deployments/resolve.js'
+import { LEGACY_VALUES_SUFFIX } from '../repo/paths.js'
 
 // The Preview summary the rule owner sees instead of raw YAML: per group, how
 // many alerts it actually produced (by name and severity, never merged), which
@@ -104,7 +105,7 @@ export default function renderRouter() {
       if (folder) {
         templateArgs = ['template', releaseName, templateDir]
       } else {
-        const valuesFile = path.join(deploymentsDir, `${deployment}-values.yaml`)
+        const valuesFile = path.join(deploymentsDir, `${deployment}${LEGACY_VALUES_SUFFIX}`)
         templateArgs = ['template', releaseName, chartDir, '-f', valuesFile]
       }
 
@@ -148,7 +149,7 @@ export default function renderRouter() {
       // null on the stack is said beside the render.
       let valueWarnings = []
       const readValues = async () => {
-        const rel = folder || `${process.env.DEPLOYMENTS_DIR || 'deployments'}/${chart}/${deployment}-values.yaml`
+        const rel = folder || `${process.env.DEPLOYMENTS_DIR || 'deployments'}/${chart}/${deployment}${LEGACY_VALUES_SUFFIX}`
         const dep = await loadDeployment(openRepo(gitopsDir), rel, { chart: folder ? undefined : chart })
         if (dep.state !== 'ok') throw new NotLoadedError(dep)
         valueWarnings = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code) || explain(f, 'preview').action === 'warn').map(f => f.message)

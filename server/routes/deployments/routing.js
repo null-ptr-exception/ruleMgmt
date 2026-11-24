@@ -61,13 +61,13 @@ async function removalRefusal(repo, dep) {
 }
 
 import { z } from 'zod'
-import { route } from '../../http/route.js'
+import { route, map } from '../../http/route.js'
 import { DEPLOYMENT_REQUEST, deploymentAt, resolveValuesFile, commonRefused } from './resolve.js'
 
 // The body's `routing` is routing.yaml's text, kept as written, or the
 // parsed table.
 const ROUTING_BODY = z.object({
-  routing: z.union([z.string(), z.record(z.string(), z.unknown())], { error: iss => (iss.input === undefined ? 'routing is required: the text of routing.yaml, or its table' : 'routing must be the text of routing.yaml, or its table') }),
+  routing: z.union([z.string(), map()], { error: iss => (iss.input === undefined ? 'routing is required: the text of routing.yaml, or its table' : 'routing must be the text of routing.yaml, or its table') }),
 })
 
 export function routingRoutes(router) {

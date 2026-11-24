@@ -7,11 +7,11 @@ import {
 import { loadShared, loadSharedDir, sharedDirProblemOf, sharedForBuild } from '../repo/shared.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { z } from 'zod'
-import { route, declaredRoutes } from '../http/route.js'
+import { route, declaredRoutes, map } from '../http/route.js'
 
 // `shared` is the file's text, kept as written, or `{ configs }`.
 const PUT_BODY = z.object({
-  shared: z.union([z.string(), z.record(z.string(), z.unknown())], { error: iss => (iss.input === undefined ? 'shared is required: the text of the shared configs, or { configs }' : 'shared must be the text of the shared configs, or { configs }') }),
+  shared: z.union([z.string(), map()], { error: iss => (iss.input === undefined ? 'shared is required: the text of the shared configs, or { configs }' : 'shared must be the text of the shared configs, or { configs }') }),
 })
 // A config's name now and the one it is given (checked by renameShared).
 const RENAME_BODY = z.object({ from: z.string().min(1), to: z.string().min(1) })

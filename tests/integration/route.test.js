@@ -9,8 +9,8 @@ import os from 'os'
 import path from 'path'
 import express from 'express'
 import { z } from 'zod'
-import { route, answerUncaught, declaredRoutes, repoPath, repoName, FAILED } from '../../server/http/route.js'
-import { jsonBody } from '../../server/http/body.js'
+import { route, answerUncaught, declaredRoutes, passesOn, repoPath, repoName, FAILED } from '../../server/http/route.js'
+import { jsonBody, BODY_MAX_DEPTH } from '../../server/http/body.js'
 import { holdSyncRegistryLock } from '../../server/lib/sync.js'
 import { UnreadableError } from '../../server/lib/readIfThere.js'
 import { unreadable, invalidOwn } from '../../server/repo/loaded.js'
@@ -46,15 +46,18 @@ beforeAll(async () => {
     throw new Error('failed first')
   }))
   router.post('/never', route('t.never', {}, () => {}, { deadlineMs: 300 }))
+  // Headers and a first chunk written, never ended.
+  router.post('/half', route('t.half', {}, (_, { res }) => { res.status(200).write('partial') }, { deadlineMs: 300 }))
   // Middleware, and a router inside: declaredRoutes covers them.
   const inner = express.Router()
-  inner.use('/deep', async () => { throw new Error(`failed at ${dir}/charts/demo`) })
+  // Each only fails or passes on (passesOn): what answers is a route.
+  inner.use('/deep', passesOn(async () => { throw new Error(`failed at ${dir}/charts/demo`) }))
   router.use('/inner', inner)
-  router.use('/unwrapped', async () => { throw new Error('unwrapped') })
-  router.use('/to-error-handler', (req, res, next) => next(new Error('passed on')))
-  router.use('/passes-on', (req, res, next) => next())
+  router.use('/unwrapped', passesOn(async () => { throw new Error('unwrapped') }))
+  router.use('/to-error-handler', passesOn((req, res, next) => next(new Error('passed on'))))
+  router.use('/passes-on', passesOn((req, res, next) => next()))
   router.get('/passes-on', route('t.passes-on', {}, () => ({ status: 200, body: { passed: true } })))
-  router.use((err, req, res, next) => res.status(418).json({ error: `handled: ${err.message}` }))
+  router.use(passesOn((err, req, res, next) => res.status(418).json({ error: `handled: ${err.message}` })))
   declaredRoutes(router)
   const app = express()
   app.use(jsonBody())
@@ -152,6 +155,15 @@ describe('a route that answers later, twice or never', () => {
     expect(lateErrors).toEqual([])
     expect(unhandled).toEqual([])
   })
+  it('a write that started its answer and never ended it is ended at the deadline, and the lock is let go', async () => {
+    const r = await ask('POST', '/half')
+    expect(r).toMatchObject({ status: 200, text: 'partial' })
+    expect(r.ms).toBeLessThan(3000)
+    const next = await ask('POST', '/write', { body: '{}' })
+    expect(next.status).toBe(200)
+    expect(next.ms).toBeLessThan(1000)
+  })
+
   it('a write never answered is answered 500 at the deadline, and the lock is let go', async () => {
     const r = await ask('POST', '/never')
     expect(r.status).toBe(500)
@@ -311,7 +323,43 @@ describe('a route that declares its request', () => {
     const inner = express.Router()
     inner.delete('/c', (req, res) => res.json({}))
     r.use('/inner', inner)
-    expect(() => declaredRoutes(r)).toThrow('these routes do not declare their request (route(name, shape, handler)): POST /b, DELETE /c')
+    expect(() => declaredRoutes(r)).toThrow('these routes do not declare their request (route(name, shape, handler)): POST /b, DELETE /inner/c')
+  })
+
+  const ok = () => route('ok', {}, async () => ({ status: 200, body: {} }))
+  it('a route in a router mounted at a path with a param is named with it', () => {
+    const r = express.Router()
+    const inner = express.Router()
+    inner.get('/routing', (req, res) => res.json({}))
+    r.use('/:chart/:deployment', inner)
+    expect(() => declaredRoutes(r)).toThrow('GET /:chart/:deployment/routing')
+  })
+
+  it('a method and path declared twice does not start', () => {
+    const r = express.Router()
+    r.get('/a', ok())
+    r.post('/a', ok())
+    r.get('/a', ok())
+    expect(() => declaredRoutes(r)).toThrow('these routes are declared twice: GET /a')
+  })
+
+  it('a router.param does not start: a route declares its params', () => {
+    const r = express.Router()
+    r.param('chart', (req, res, next) => next())
+    r.get('/:chart', ok())
+    expect(() => declaredRoutes(r)).toThrow('router.param(chart) at /')
+  })
+
+  it('a middleware not known to only pass a request on does not start; one that is, or the app\'s own, does', () => {
+    const r = express.Router()
+    r.use('/x', function answersItself(req, res) { res.json({ body: req.body }) })
+    r.get('/a', ok())
+    expect(() => declaredRoutes(r)).toThrow('middleware answersItself at /x may answer a request itself')
+    const s = express.Router()
+    s.use(holdSyncRegistryLock)
+    s.use(passesOn((req, res, next) => next()))
+    s.get('/a', ok())
+    expect(() => declaredRoutes(s)).not.toThrow()
   })
 
   it('a route made without a shape is refused when it is made', () => {
@@ -321,5 +369,26 @@ describe('a route that declares its request', () => {
   it('a shape that is not one is refused when the route is made', () => {
     expect(() => route('x', { body: { values: 'string' } }, () => {})).toThrow('route x: body is not a zod schema')
     expect(() => route('x', { headers: z.object({}) }, () => {})).toThrow('route x: a request has params, query and body, not headers')
+  })
+})
+
+// A body nested deeper than any page sends: refused before a route reads it
+// by recursion and runs out of stack (a 500 before).
+describe('a body nested too deeply', () => {
+  const obj = n => '{"a":'.repeat(n) + '1' + '}'.repeat(n)
+  const arr = n => '['.repeat(n) + ']'.repeat(n)
+  it.each([
+    ['a map 16000 levels deep', `{"values":${obj(16000)}}`, 'values.a goes'],
+    ['a list 45000 levels deep', `{"values":{"cpu":${arr(45000)}}}`, 'values.cpu goes'],
+    ['just past the limit', `{"values":${obj(BODY_MAX_DEPTH)}}`, 'values.a goes'],
+    ['a body that is a list', arr(BODY_MAX_DEPTH + 1), 'it goes'],
+  ])('%s → 400 naming the field', async (_, body, what) => {
+    const r = await ask('POST', '/write', { body })
+    expect(r.status, r.text).toBe(400)
+    expect(JSON.parse(r.text)).toEqual({ error: `The request body is nested too deeply: ${what} more than ${BODY_MAX_DEPTH} levels deep` })
+  })
+  it('as deep as the limit is taken', async () => {
+    const r = await ask('POST', '/write', { body: `{"values":${obj(BODY_MAX_DEPTH - 1)}}` })
+    expect(r.status, r.text).toBe(200)
   })
 })

@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { linkOnTheWay } from '../../repo/paths.js'
 import { withoutPath } from '../../lib/answerPaths.js'
 import { errorAnswer } from '../../lib/readIfThere.js'
-import { route, repoPath } from '../../http/route.js'
+import { route, repoPath, map } from '../../http/route.js'
 import { COMMON_DIR } from '../../../src/utils/reservedNames.js'
 
 // What making (`action: create`, `folder`, `chart`) or removing
@@ -21,7 +21,7 @@ const PLAN_QUERY = z.object({ action: z.string().optional(), ...PLAN_FIELDS })
 // `expected` is the plan's, as shown: a file changed since refuses it.
 const APPLY_BODY = z.object({
   action: z.enum(['create', 'delete'], { error: 'action is create or delete' }),
-  expected: z.record(z.string(), z.unknown(), { error: 'expected is needed: the plan\'s expected, from GET /common/plan, as it was shown' }),
+  expected: map(z.unknown(), { error: 'expected is needed: the plan\'s expected, from GET /common/plan, as it was shown' }),
   ...PLAN_FIELDS,
 })
 const USERS_QUERY = z.object({

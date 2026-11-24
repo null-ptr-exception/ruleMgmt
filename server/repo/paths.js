@@ -144,6 +144,31 @@ export function pathProblem(raw, intent, { suffix = '' } = {}) {
   return null
 }
 
+/**
+ * What a legacy deployment's values file adds to its name:
+ * `<name>-values.yaml`, beside a folder's own values.yaml.
+ */
+export const LEGACY_VALUES_SUFFIX = '-values.yaml'
+
+/**
+ * Why `name` cannot be the deployment a request names, or null. In a
+ * folder (`folder`, its path) it is a file name, else a chart's name. One
+ * that is not its folder's own name is kept in `<name>-values.yaml`
+ * there, and that file's name must fit too, as it is read, written and
+ * removed alike.
+ *   deploymentNameProblem('a'.repeat(250), 'deployments/team/a')
+ *     → { kind: 'too-long', why: 'its values file, aaa…-values.yaml, would be longer than 255 bytes, …' }
+ *   deploymentNameProblem('a', 'deployments/team/a') → null
+ */
+export function deploymentNameProblem(name, folder) {
+  const intent = folder ? 'folder-name' : 'name'
+  const problem = pathProblem(name, intent)
+  if (problem) return problem
+  if (folder && name === path.posix.basename(folder)) return null
+  if (!pathProblem(name, intent, { suffix: LEGACY_VALUES_SUFFIX })) return null
+  return { kind: 'too-long', why: `its values file, ${name}${LEGACY_VALUES_SUFFIX}, would be longer than ${NAME_MAX_BYTES} bytes, what the file system takes` }
+}
+
 /** The path as the repo names it: `a//b/./c/` is `a/b/c`. */
 const tidy = raw => raw.split('/').filter(s => s !== '' && s !== '.').join('/')
 

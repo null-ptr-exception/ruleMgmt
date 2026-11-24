@@ -184,3 +184,28 @@ it('an entry of cells that is not a cell stays, after the cells', () => {
   expect(routing.cells.at(-1)).toEqual({ match: 'db' })
   expect(parseRouting(saved(routing)).cells).toHaveLength(7)
 })
+
+// A large table: 20 values in each of three labels, 8000 cells. Taking a
+// label away looked every merged cell's options up across the whole table,
+// about 5 s here; each cell is found once now.
+describe('taking a label away from a large table', () => {
+  const values = Array.from({ length: 20 }, (_, i) => `v${i}`)
+  const labels = { a: values, b: values, c: values }
+  const cells = []
+  for (const a of values) for (const b of values) for (const c of values) cells.push({ match: { a, b, c }, configs: [cells.length % 3 ? 'x' : 'y'] })
+  const routing = { labels, configs: { x: {}, y: {} }, cells }
+  const rows = [{ name: 'a', values, was: 'a' }, { name: 'b', values, was: 'b' }]
+
+  it('asks about each merged cell, and keeps the option chosen, in well under a second', () => {
+    const started = Date.now()
+    const { conflicts } = reshapeLabels(routing, rows)
+    expect(conflicts).toHaveLength(400)
+    const keep = Object.fromEntries(conflicts.map(c => [c.key, c.options[1].key]))
+    const { routing: merged } = reshapeLabels(routing, rows, { keep })
+    expect(Date.now() - started).toBeLessThan(1000)
+    expect(merged.cells).toHaveLength(400)
+    // Each merged cell is the one at c = v1: the option kept.
+    const at = (a, b) => cells.find(x => x.match.a === a && x.match.b === b && x.match.c === 'v1')
+    expect(merged.cells.find(x => x.match.a === 'v3' && x.match.b === 'v7')).toEqual({ ...at('v3', 'v7'), match: { a: 'v3', b: 'v7' } })
+  })
+})

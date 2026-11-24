@@ -392,7 +392,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
           removeDeleted([node.path])
           refreshAll()
         } else {
-          message.error('Delete failed')
+          message.error(`Failed to delete ${node.name}: ${result.error}`)
         }
       },
     })

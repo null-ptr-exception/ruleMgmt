@@ -471,7 +471,11 @@ describe('deleting a sync source', () => {
     const parent = path.join(tmpDir, 'deployments/team')
     await fs.chmod(parent, 0o555)
     try {
-      expect((await del(SRC)).status).toBe(500)
+      const { status, data } = await del(SRC)
+      expect(status).toBe(500)
+      // The reason reaches the user, without where the repo is.
+      expect(data.error).toMatch(/EACCES/)
+      expect(data.error).not.toContain(tmpDir)
     } finally {
       await fs.chmod(parent, 0o755)
     }
@@ -544,6 +548,72 @@ describe('saves racing sync changes leave the target a copy of its source', () =
     expect(state.stale).toBe(false)
     for (const rel of ['routing.yaml', 'templates/alertmanagerconfig.yaml']) {
       expect(await read(`${TGT}/${rel}`)).toBe(await read(`${SRC}/${rel}`))
+    }
+  })
+})
+
+// A target on another Template (a hand edit, a pull, a sync made before the
+// Template was copied): a save of its source gives it the source's Template
+// and values together. When its values.yaml cannot be written, its Template
+// is put back — the source's Template over values under the old Template's
+// name renders none of its alerts.
+describe.skipIf(IS_ROOT)('a target whose values cannot be written keeps its own Template', () => {
+  it('and is reported', async () => {
+    await setup([])
+    expect((await api('POST', '/api/v2/templates/other/rules', { files: { 'cpu.yaml': CPU } })).status).toBe(200)
+    expect((await api('POST', '/api/v2/folders/init', { folder: TGT, chart: 'other' })).status).toBe(200)
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [{ source: SRC, targets: [TGT] }] }))
+    const chartBefore = await read(`${TGT}/Chart.yaml`)
+    const valuesBefore = await read(`${TGT}/values.yaml`)
+    await fs.chmod(path.join(tmpDir, TGT, 'values.yaml'), 0o444)
+
+    const { status, data } = await saveSrc(70)
+
+    expect(status).toBe(200)
+    expect(data.syncFailed).toEqual([{ target: TGT, error: 'EACCES' }])
+    expect(await read(`${TGT}/Chart.yaml`)).toBe(chartBefore)
+    expect(await read(`${TGT}/values.yaml`)).toBe(valuesBefore)
+  })
+})
+
+// Two syncs to the same new target: the second waits for the first, which
+// makes the target. Whether it is there is read once the second has the
+// lock — read before, a failed copy took it for new and deleted the
+// deployment the first one made.
+describe.skipIf(IS_ROOT)('a sync to a new target that waited for the lock', () => {
+  it('does not delete the target made meanwhile when its copy fails', async () => {
+    await setup([])
+    const NEW = 'deployments/team/new'
+    const { withSyncRegistryLock } = await import('../../server/lib/sync.js')
+    // Hold the lock, as the first sync does while it makes the target.
+    let release
+    const held = withSyncRegistryLock(tmpDir, () => new Promise(r => { release = r }))
+    // Known once the request has looked for the target, before the lock.
+    const access = fs.access.bind(fs)
+    let looked
+    const lookedAt = new Promise(r => { looked = r })
+    const spy = vi.spyOn(fs, 'access').mockImplementation(async (p, ...rest) => {
+      if (String(p) === path.join(tmpDir, NEW)) looked()
+      return access(p, ...rest)
+    })
+    try {
+      const sync = api('POST', '/api/v2/sync', { source: SRC, target: NEW })
+      await Promise.race([lookedAt, new Promise(r => setTimeout(r, 2000))])
+      // Meanwhile the first sync made the target, with values of its own
+      // that this copy cannot write over.
+      await fs.mkdir(path.join(tmpDir, NEW), { recursive: true })
+      await fs.copyFile(path.join(tmpDir, SRC, 'Chart.yaml'), path.join(tmpDir, NEW, 'Chart.yaml'))
+      await fs.writeFile(path.join(tmpDir, NEW, 'values.yaml'), 'demo:\n  cpu:\n    - {namespace: mine, warn: 1}\n')
+      await fs.chmod(path.join(tmpDir, NEW, 'values.yaml'), 0o444)
+      release()
+      await held
+
+      expect((await sync).status).toBe(500)
+      expect(await read(`${NEW}/values.yaml`)).toContain('namespace: mine')
+    } finally {
+      release?.()
+      spy.mockRestore()
+      await fs.chmod(path.join(tmpDir, NEW, 'values.yaml'), 0o644).catch(() => {})
     }
   })
 })

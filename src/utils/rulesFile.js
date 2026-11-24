@@ -830,6 +830,42 @@ export function rowIdentityRepeats(values, model) {
   return found
 }
 
+// Where each name goes in a group's rules as rendered (vars expanded):
+// a duration in a range cannot be 0 (#117), nor a derived value (#118).
+function groupPositionOf(entry) {
+  const expanded = (entry.rules || []).map(r => ({
+    ...r, ...Object.fromEntries(['expr', 'for', 'keep_firing_for'].filter(k => r[k] !== undefined).map(k => [k, expandVars(r[k], entry.vars)])),
+  }))
+  const promql = isPromQLType(entry.type)
+  const zeroOffsetRefused = refusesZeroOffset(entry.type)
+  return name => derivedPosition(name, expanded, promql, zeroOffsetRefused)
+}
+
+/**
+ * Everything of a model that valueProblems and selectorValueProblems read,
+ * as one text. Two models with the same one refuse the same values: a
+ * Template change that leaves it as it was (an alert's name, an annotation,
+ * a threshold written another way) cannot give any deployment a problem it
+ * did not have.
+ */
+export function valueChecksKey(model) {
+  const commonCols = model?.common?.columns || {}
+  const groups = sortedGroups(model?.groups).map(([key, entry]) => {
+    if (entry.custom) return [key, 'custom']
+    const position = groupPositionOf(entry)
+    const names = [...new Set([...Object.keys(entry.columns || {}), ...Object.keys(entry.derived || {}), ...Object.keys(commonCols)])].sort()
+    return [key, {
+      once: !!entry.once,
+      columns: entry.columns || {},
+      derived: entry.derived || {},
+      selectors: entry.selectors || null,
+      quoted: [...columnsInQuotedValues(entry)].sort(),
+      positions: names.map(name => [name, position(name)]),
+    }]
+  })
+  return JSON.stringify({ common: commonCols, groups })
+}
+
 export function valueProblems(values, model) {
   const problems = []
   const isEmpty = v => v === null || v === ''
@@ -849,16 +885,7 @@ export function valueProblems(values, model) {
     return null
   }
 
-  // Where each name goes in a group's rules as rendered (vars expanded):
-  // a duration in a range cannot be 0 (#117), nor a derived value (#118).
-  const positionOf = entry => {
-    const expanded = (entry.rules || []).map(r => ({
-      ...r, ...Object.fromEntries(['expr', 'for', 'keep_firing_for'].filter(k => r[k] !== undefined).map(k => [k, expandVars(r[k], entry.vars)])),
-    }))
-    const promql = isPromQLType(entry.type)
-    const zeroOffsetRefused = refusesZeroOffset(entry.type)
-    return name => derivedPosition(name, expanded, promql, zeroOffsetRefused)
-  }
+  const positionOf = groupPositionOf
   const commonPosition = name => Object.values(model.groups || {}).filter(g => !g.custom)
     .map(g => positionOf(g)(name)).reduce(mergePosition, null)
 

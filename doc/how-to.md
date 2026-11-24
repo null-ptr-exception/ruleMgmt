@@ -767,11 +767,15 @@ copied to it.
 - Deleting a source lets go of its targets: each keeps what it has and can
   be edited again. The **Delete** dialog lists them, and each can be deleted
   along with the source instead. Deleting it through the API does the same,
-  and the response lists them as `unlinked`.
+  and the response lists them as `unlinked`. Those marked to be deleted go
+  first: when the source then cannot be deleted, the message says why and
+  names the ones already gone; the source keeps the rest.
 - When a save cannot write a target (a permission error, or a `sync.yaml`
   entry that is not a deployment on disk), the source is still saved and the
   page names the target, which may not match the source. Fix the cause and
-  save the source again.
+  save the source again. A target on another Template whose `values.yaml`
+  cannot be written keeps its own Template too, so it still renders its
+  alerts.
 
 ---
 

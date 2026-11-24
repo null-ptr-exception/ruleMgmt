@@ -5,7 +5,7 @@ import { findDeploymentsUsing, findChartUsage } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
-import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
+import { parseRulesDir, modelToSchema, genSchema, valueChecksKey } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates, replacedByConversion } from '../../src/utils/drift.js'
 import { isAlertGroup } from '../../src/utils/schemaUtils.js'
@@ -52,8 +52,9 @@ async function modelBefore(chartDir) {
   return (await readChartModel(chartDir)).model
 }
 
-// A refused deployment's new problems; a sync target names its source, the
-// one to change (its own Save is off).
+// A refused deployment's new problems; a sync target names its source. A
+// target its source's copy would fix has none of its own: one listed here
+// is migrated on its own, and is changed by unlinking it.
 async function withSources(gitopsDir, refused) {
   const registry = await readSyncRegistry(gitopsDir)
   return refused.map(d => ({
@@ -66,7 +67,9 @@ async function withSources(gitopsDir, refused) {
 
 export default function templatesRouter() {
   const router = express.Router()
-  router.use(holdSyncRegistryLock)
+  // The migration preview writes nothing: it does not wait for a save or a
+  // commit, as a read does not.
+  router.use((req, res, next) => (req.method === 'POST' && /^\/[^/]+\/migration-preview$/.test(req.path) ? next() : holdSyncRegistryLock(req, res, next)))
 
   router.use('/:chart', (req, res, next) => {
     if (!NAME_RE.test(req.params.chart)) {
@@ -285,9 +288,13 @@ export default function templatesRouter() {
       // that two rows fill the same (#176). Checked the same way, against
       // the values as they are; one that cannot be read is no reason to
       // stop this save.
-      if (!(confirmBreaking && migration && isBreaking)) {
+      // Every deployment is read only when the change can give one a new
+      // problem: with no model before, none counts as new; with the same
+      // checks as before, each has the problems it had.
+      const checkedBefore = !(confirmBreaking && migration && isBreaking) ? await modelBefore(chartDir) : null
+      if (checkedBefore && valueChecksKey(checkedBefore) !== valueChecksKey(model)) {
         const plan = await planDeploymentMigration(req.gitopsDir, req.params.chart, newSchema, {}, {
-          deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: await modelBefore(chartDir), checkOnly: true,
+          deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: checkedBefore, checkOnly: true,
         })
         const refused = plan.deployments.filter(d => d.problems.some(p => !p.before))
         if (refused.length) {

@@ -540,7 +540,7 @@ export default function TemplateDevEditor() {
   function reportFailedSave(result, title = 'Save failed') {
     const lines = result?.errors ||
       result?.migrationProblems?.flatMap(d => d.problems.map(p =>
-        `${d.path}${d.source ? ` (synced from ${d.source}: change it there)` : ''}: ${p.message}`)) ||
+        `${d.path}${d.source ? ` (synced from ${d.source} and read-only: unlink it to change it)` : ''}: ${p.message}`)) ||
       (result?.findings || []).map(f => f.description || f.message)
     Modal.error({
       title: result?.error || title,

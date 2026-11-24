@@ -184,7 +184,8 @@ export async function deleteDeployment(chart, deployment, folder) {
   const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}${params}`, {
     method: 'DELETE'
   })
-  if (!res.ok) return {}
+  // A refusal says why, as the server put it.
+  if (!res.ok) return { error: (await res.json().catch(() => ({}))).error || `HTTP ${res.status}` }
   return res.json()
 }
 

@@ -31,11 +31,17 @@ async function openTree(page) {
 const deploymentNode = (page, name) =>
   page.locator('.ant-tree .ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: new RegExp(`^${name}${CHART}`) })
 
+// The target's own files, to see that a refused sync left them as they were.
+const targetFiles = async () => Object.fromEntries(await Promise.all(['values.yaml', 'routing.yaml', 'Chart.yaml']
+  .map(async f => [f, await fs.readFile(onDisk(`${TGT}/${f}`), 'utf8').catch(() => null)])))
+
 test.describe.serial('sync write path', () => {
   test.beforeAll(async ({ request }) => {
     for (const f of [SRC, TGT]) {
       expect((await request.post('/api/v2/folders/init', { data: { folder: f, chart: CHART } })).status()).toBeLessThan(300)
     }
+    // The target's own values, unlike its source's.
+    await fs.appendFile(onDisk(`${TGT}/values.yaml`), '# the target\'s own\n')
   })
 
   test.afterAll(async ({ request }) => {
@@ -51,6 +57,7 @@ test.describe.serial('sync write path', () => {
   test('Sync to... says why a source with broken routing is refused, and does not sync', async ({ page, request }) => {
     const file = onDisk(`${SRC}/routing.yaml`)
     await fs.writeFile(file, 'labels: [\n')
+    const before = await targetFiles()
     try {
       await openTree(page)
       await deploymentNode(page, 'src').locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
@@ -65,6 +72,8 @@ test.describe.serial('sync write path', () => {
       await expect(modal.getByTestId('sync-problems')).toContainText('routing.yaml is not valid YAML')
       const { source } = await (await request.get(`/api/v2/sync?target=${encodeURIComponent(TGT)}`)).json()
       expect(source).toBeNull()
+      // Neither file reached the target.
+      expect(await targetFiles()).toEqual(before)
       await modal.getByRole('button', { name: 'Cancel' }).click()
       await expect(modal).not.toBeVisible()
     } finally {
@@ -76,6 +85,7 @@ test.describe.serial('sync write path', () => {
     const file = onDisk(`${SRC}/values.yaml`)
     const good = await fs.readFile(file, 'utf8')
     await fs.writeFile(file, `${CHART}:\n  _common: [\n`)
+    const before = await targetFiles()
     try {
       await openTree(page)
       await deploymentNode(page, 'src').locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
@@ -90,6 +100,7 @@ test.describe.serial('sync write path', () => {
       await expect(modal.getByTestId('sync-problems').locator('li')).toHaveCount(1)
       const { source } = await (await request.get(`/api/v2/sync?target=${encodeURIComponent(TGT)}`)).json()
       expect(source).toBeNull()
+      expect(await targetFiles()).toEqual(before)
       await modal.getByRole('button', { name: 'Cancel' }).click()
       // Until it has closed, the dialog takes the right-click below.
       await expect(modal).not.toBeVisible()

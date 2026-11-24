@@ -193,10 +193,22 @@ export async function copyChartDependencies(srcDir, dstDir) {
 // values still under the old one, dropped every alert of the target.
 export async function copyToTarget(srcDir, dstDir, { values = true, chart = values, routing = true, valuesContent, routingContent } = {}) {
   await fs.mkdir(dstDir, { recursive: true })
-  if (chart) await copyChartDependencies(srcDir, dstDir)
+  const chartFile = path.join(dstDir, 'Chart.yaml')
+  const chartBefore = chart && values ? await fs.readFile(chartFile, 'utf-8').catch(err => (err.code === 'ENOENT' ? null : Promise.reject(err))) : null
+  const wroteChart = chart ? await copyChartDependencies(srcDir, dstDir) : false
   if (values) {
-    const content = valuesContent ?? await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8')
-    await writeWhole(path.join(dstDir, 'values.yaml'), content)
+    try {
+      const content = valuesContent ?? await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8')
+      await writeWhole(path.join(dstDir, 'values.yaml'), content)
+    } catch (err) {
+      // The Template goes back with the values that stayed: the new Template
+      // over values under the old one's name renders none of its alerts.
+      if (wroteChart) {
+        await (chartBefore === null ? fs.rm(chartFile, { force: true }) : writeWhole(chartFile, chartBefore))
+          .catch(undo => console.error(`Sync: ${dstDir}/Chart.yaml could not be put back`, undo))
+      }
+      throw err
+    }
   }
   // Notification routing (#92) follows values.yaml: the target gets the
   // source's, or loses its own when the source has none.

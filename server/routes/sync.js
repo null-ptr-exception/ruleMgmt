@@ -83,19 +83,22 @@ export default function syncRouter() {
     const reserved = await newReservedSegment(req.gitopsDir, target)
     if (reserved) return res.status(400).json({ error: reservedError(reserved) })
     const targetDir = path.join(req.gitopsDir, target)
-    const targetExists = await fs.access(targetDir).then(() => true).catch(() => false)
-    if (targetExists && !(await isDeploymentDir(targetDir))) {
-      return res.status(400).json({ error: `${target} exists but is not a valid deployment` })
-    }
-    // A new target is made where any new deployment may be: not inside
-    // another deployment (the source too), around one, or in a _common folder.
-    if (!targetExists) {
-      const misplaced = await newDeploymentProblem(req.gitopsDir, target)
-      if (misplaced) return res.status(400).json({ error: misplaced })
-    }
 
     try {
       const outcome = await withSyncRegistryLock(req.gitopsDir, async () => {
+        // Whether the target is there is read under the lock: another sync
+        // to the same new target may have made it while this one waited, and
+        // a rollback that took it for new would delete that one's deployment.
+        const targetExists = await fs.access(targetDir).then(() => true).catch(() => false)
+        if (targetExists && !(await isDeploymentDir(targetDir))) {
+          return { status: 400, body: { error: `${target} exists but is not a valid deployment` } }
+        }
+        // A new target is made where any new deployment may be: not inside
+        // another deployment (the source too), around one, or in a _common folder.
+        if (!targetExists) {
+          const misplaced = await newDeploymentProblem(req.gitopsDir, target)
+          if (misplaced) return { status: 400, body: { error: misplaced } }
+        }
         const registry = await readSyncRegistry(req.gitopsDir)
         const result = applySync(registry, source, target)
         if (!result.ok) return { status: 400, body: { error: result.error } }

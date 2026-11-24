@@ -79,21 +79,36 @@ describe('a commit during a Template save', () => {
     expect(headRules).toContain('>= 1')
   })
 
-  it('a read is not held up by it', async () => {
+  // The save is held until the read has answered, or for good: a read that
+  // waited for it would never answer.
+  const heldSave = () => {
     const writeFile = fs.writeFile.bind(fs)
+    let reached, release
+    const at = new Promise(r => { reached = r })
+    const gate = new Promise(r => { release = r })
     vi.spyOn(fs, 'writeFile').mockImplementation(async (file, ...rest) => {
-      if (String(file).endsWith(path.join('templates', 'cpu.yaml'))) await new Promise(r => setTimeout(r, 300))
+      if (String(file).endsWith(path.join('templates', 'cpu.yaml'))) {
+        reached()
+        await gate
+      }
       return writeFile(file, ...rest)
     })
     const save = api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': rules('>=') } })
-    await new Promise(r => setTimeout(r, 50))
-    // Timed from the read alone: the setup before it is not what is measured.
-    const started = Date.now()
-    const read = await api('GET', '/api/v2/charts')
-    const readMs = Date.now() - started
-    expect(read.status).toBe(200)
-    expect(readMs).toBeLessThan(300)
-    await save
+    return { at, release, save }
+  }
+  const within = (p, ms = 5000) => Promise.race([p, new Promise(r => setTimeout(() => r('TIMEOUT'), ms))])
+
+  it.each([
+    ['a read', () => api('GET', '/api/v2/charts')],
+    ['a migration preview, which writes nothing', () => api('POST', '/api/v2/templates/demo/migration-preview', { files: { 'cpu.yaml': rules('>') }, migration: {} })],
+  ])('%s is not held up by it', async (_, request) => {
+    const { at, release, save } = heldSave()
+    await at
+    const answer = await within(request())
+    release()
+    expect(answer).not.toBe('TIMEOUT')
+    expect(answer.status).toBe(200)
+    expect((await save).status).toBe(200)
   })
 })
 

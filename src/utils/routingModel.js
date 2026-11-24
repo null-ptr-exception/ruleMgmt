@@ -204,8 +204,18 @@ export function reshapeLabels(routing, rows, { keep = {} } = {}) {
     const parts = combinations(gone)
     const conflicts = []
     const cells = []
+    // Each cell found once by its match, as cellAt finds it (the first one):
+    // looking every option up across the whole table made a large one take
+    // seconds.
+    const byMatch = new Map()
+    for (const cell of r1.cells) {
+      if (!isCell(cell)) continue
+      const key = matchKey(r1, cell.match)
+      if (!byMatch.has(key)) byMatch.set(key, cell)
+    }
+    const at = match => byMatch.get(matchKey(r1, match)) || null
     for (const match of combinations(rest)) {
-      const options = parts.map(part => ({ key: JSON.stringify(part), part, cell: cellAt(r1, { ...match, ...part }) }))
+      const options = parts.map(part => ({ key: JSON.stringify(part), part, cell: at({ ...match, ...part }) }))
       const key = JSON.stringify(match)
       const answer = Object.hasOwn(keep, key) ? options.find(o => o.key === keep[key]) : undefined
       let chosen

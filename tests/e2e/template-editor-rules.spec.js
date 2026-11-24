@@ -197,9 +197,38 @@ rules:
   })
 
   // A change that is not breaking but would leave a deployment with values a
-  // save refuses (rows a new selector cannot tell apart) is refused, and the
-  // editor names the deployment and the cell. The refusal is stubbed.
-  test('a save refused for a deployment it would break names the deployment', async ({ page }) => {
+  // save refuses — rows a new selector cannot tell apart — is refused, and
+  // the editor names the deployment and the cell. The editor opened the
+  // chart with the selector; meanwhile the chart on disk lost it and a
+  // deployment filled two rows the selector cannot tell apart.
+  test('a save that would leave a deployment\'s rows overlapping is refused, naming the deployment', async ({ page, request }) => {
+    const selected = CPU_RULES.replace('group: cpu\n', 'group: cpu\nselectors: [namespace]\n').replace('cpu{ns="${namespace}"}', 'cpu{${selector}}')
+    expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': selected }, confirmBreaking: true } })).ok()).toBeTruthy()
+    try {
+      await openChart(page)
+      expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })).ok()).toBeTruthy()
+      expect((await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p', warn: 1 }, { namespace: 'p', warn: 2 }] } } })).ok()).toBeTruthy()
+
+      await page.getByPlaceholder('5m').first().fill('10m')
+      await page.getByRole('button', { name: 'Save' }).first().click()
+      const changed = page.locator('.ant-modal').filter({ hasText: 'changed on disk' })
+      await expect(changed).toBeVisible({ timeout: 5000 })
+      await changed.getByRole('button', { name: 'Save anyway' }).click()
+
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'This change would leave deployments with values a save refuses' })
+      await expect(dialog).toBeVisible({ timeout: 5000 })
+      await expect(dialog).toContainText(`deployments/${CHART}/prod-values.yaml: cpu rows 1 and 2 select the same thing`)
+      expect((await (await request.get(`/api/v2/templates/${CHART}`)).json()).rulesFiles['cpu.yaml']).toBe(CPU_RULES)
+    } finally {
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+      await request.delete(`/api/v2/deployments/${CHART}/prod`)
+    }
+  })
+
+  // How a refused sync target is named: its source does not give it this
+  // change (a copied one has no problems of its own), so it is unlinked to
+  // be fixed. Stubbed: making one takes a sync across Templates.
+  test('a refused sync target says to unlink it', async ({ page }) => {
     await page.route(`**/api/v2/templates/${CHART}/rules`, route => route.request().method() === 'POST'
       ? route.fulfill({ status: 409, json: {
         error: 'This change would leave deployments with values a save refuses',
@@ -215,8 +244,7 @@ rules:
     const dialog = page.locator('.ant-modal').filter({ hasText: 'This change would leave deployments with values a save refuses' })
     await expect(dialog).toBeVisible({ timeout: 5000 })
     await expect(dialog).toContainText('deployments/shop/prod: cpu rows 1 and 2 select the same thing')
-    // A sync target says to change its source: its own Save is off.
-    await expect(dialog).toContainText('deployments/shop/dr (synced from deployments/shop/main: change it there): cpu row 1')
+    await expect(dialog).toContainText('deployments/shop/dr (synced from deployments/shop/main and read-only: unlink it to change it): cpu row 1')
     await expect(page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })).toHaveCount(0)
   })
 

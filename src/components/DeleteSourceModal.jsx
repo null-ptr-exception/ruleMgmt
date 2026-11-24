@@ -38,7 +38,7 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
         if (decisions[targetPath] !== 'delete') continue
         const result = await deleteDeployment(source.chart, targetPath.split('/').pop(), targetPath)
         if (!result.ok) {
-          message.error(`Failed to delete ${targetPath}${result.error ? `: ${result.error}` : ''}`)
+          message.error(`Failed to delete ${targetPath}: ${result.error}${deletedPaths.length ? `; ${deletedPaths.join(', ')} deleted already` : ''}`)
           return
         }
         anyChange = true
@@ -47,7 +47,10 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
 
       const result = await deleteDeployment(source.chart, source.name, source.path)
       if (!result.ok) {
-        message.error(`Failed to delete ${source.name}${result.error ? `: ${result.error}` : ''}`)
+        // The targets marked Delete are gone already: said, so the tree
+        // without them is no surprise. The source keeps its other targets.
+        const gone = deletedPaths.length ? `; ${deletedPaths.join(', ')} ${deletedPaths.length === 1 ? 'was' : 'were'} deleted already` : ''
+        message.error(`Failed to delete ${source.name}: ${result.error}${gone}`)
         return
       }
       const kept = result.unlinked?.length || 0
@@ -65,8 +68,8 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
       message.error(err?.message || 'Delete failed')
     } finally {
       setSubmitting(false)
-      // Refresh the tree even on a partial failure — some targets may have
-      // already been unlinked/deleted before the step that failed.
+      // Refresh the tree even on a partial failure — the targets marked
+      // Delete before the step that failed are gone.
       if (anyChange && !succeeded) onSuccess?.(deletedPaths)
     }
   }

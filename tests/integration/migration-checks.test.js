@@ -308,3 +308,36 @@ describe('a Template save that is not breaking, checked deployment by deployment
   })
 
 })
+
+// A save that changes nothing a values check reads (an annotation, an
+// alert's name) cannot give a deployment a new problem: no deployment is
+// read for it, which on a repo with hundreds of them was most of the save.
+describe('a Template save that cannot give a deployment a new problem', () => {
+  const checked = errors => errors.mock.calls.filter(c => String(c[0]).startsWith('Template save check')).length
+
+  it('reads no deployment; one that changes what is checked still does', async () => {
+    await start(APP, [{ namespace: 'p', app: 'api', threshold: 90 }])
+    // One that cannot be read says so when it is read.
+    await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo: [\n')
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const annotated = APP.replace('> ${threshold}\n', '> ${threshold}\n    annotations: {summary: high}\n')
+      expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': annotated } })).status).toBe(200)
+      expect(checked(errors)).toBe(0)
+
+      const quoted = annotated.replace('annotations: {summary: high}', 'labels: {ns: "x-${namespace}"}')
+      expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': quoted } })).status).toBe(200)
+      expect(checked(errors)).toBe(1)
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
+  it('a column quoted in a label for the first time is still checked against every deployment', async () => {
+    await start(APP, [{ namespace: 'a"b', app: 'api', threshold: 90 }])
+    const quoted = APP.replace('> ${threshold}\n', '> ${threshold}\n    labels: {ns: "x-${namespace}"}\n')
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': quoted } })
+    expect(status).toBe(409)
+    expect(data.migrationProblems.map(d => d.path)).toEqual([SRC])
+  })
+})

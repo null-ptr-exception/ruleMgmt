@@ -150,7 +150,11 @@ describe('Regenerate', () => {
     expect(yaml.load(await read(`${SRC}/${CR}`).then(t => t.replace(/\{\{[^}]*\}\}/g, 'x'))).metadata.labels).toMatchObject({ release: 'kps' })
     expect(await read(`${TGT}/${CR}`)).toBe(await read(`${SRC}/${CR}`))
     expect(await git(tmpDir, 'rev-parse', 'HEAD')).toBe(head)
-    expect((await commit()).status).toBe(200)
+    // The diff is there to look at, and the commit refused before takes it.
+    expect((await git(tmpDir, 'status', '--porcelain')).split('\n').filter(Boolean).map(l => l.slice(3))).toEqual(expect.arrayContaining([`${SRC}/${CR}`, `${TGT}/${CR}`]))
+    const { status, data } = await commit()
+    expect(status).toBe(200)
+    expect(await git(tmpDir, 'show', `${data.sha}:${SRC}/${CR}`)).toBe(await read(`${SRC}/${CR}`))
   })
 
   // A target in sync.yaml

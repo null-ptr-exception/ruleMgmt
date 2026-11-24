@@ -405,3 +405,40 @@ test.describe.serial('tree refresh preserves expanded children', () => {
     await expect(otherNode).toBeVisible({ timeout: 5000 })
   })
 })
+
+// A source that cannot be deleted after the targets marked Delete were: the
+// message says why, and which targets are gone already. The source's
+// removal is refused by a stub; the target's is real.
+test.describe.serial('deleting a sync source that fails', () => {
+  const FAIL = 'e2e-del-fail'
+  test.beforeAll(async ({ request }) => {
+    for (const name of ['dfsrc', 'dfrm', 'dfkeep']) await initDeployment(request, `${FAIL}/${name}`)
+    for (const name of ['dfrm', 'dfkeep']) {
+      expect((await request.post('/api/v2/sync', { data: { source: `${FAIL}/dfsrc`, target: `${FAIL}/${name}` } })).status()).toBe(200)
+    }
+  })
+  test.afterAll(async ({ request }) => {
+    for (const name of ['dfrm', 'dfkeep', 'dfsrc']) {
+      await request.delete('/api/v2/sync', { data: { target: `${FAIL}/${name}` } })
+      await request.delete(`/api/v2/deployments/${CHART}/${name}?folder=${encodeURIComponent(`${FAIL}/${name}`)}`)
+    }
+  })
+
+  test('says why, and which targets were deleted already', async ({ page, request }) => {
+    await page.route(`**/api/v2/deployments/${CHART}/dfsrc?folder=${encodeURIComponent(`${FAIL}/dfsrc`)}`, route => (route.request().method() === 'DELETE'
+      ? route.fulfill({ status: 500, json: { error: 'EACCES: permission denied, rmdir \'./e2e-del-fail/dfsrc\'' } })
+      : route.continue()))
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expandFolder(page, FAIL)
+    await rightClickMenuItem(page, deploymentNode(page, 'dfsrc'), 'Delete')
+    const modal = page.getByRole('dialog')
+    await expect(modal.getByText('2 deployments synced to')).toBeVisible({ timeout: 3000 })
+    await modal.locator('div').filter({ hasText: `${FAIL}/dfrm` }).last().locator('.ant-radio-button-wrapper', { hasText: 'Delete' }).click()
+    await modal.getByRole('button', { name: 'Delete dfsrc' }).click()
+
+    await expect(page.getByText(`Failed to delete dfsrc: EACCES: permission denied, rmdir './e2e-del-fail/dfsrc'; ${FAIL}/dfrm was deleted already`)).toBeVisible({ timeout: 5000 })
+    expect((await request.get(`/api/v2/deployments/${CHART}/dfrm?folder=${encodeURIComponent(`${FAIL}/dfrm`)}`)).status()).toBe(404)
+    expect((await request.get(`/api/v2/deployments/${CHART}/dfsrc?folder=${encodeURIComponent(`${FAIL}/dfsrc`)}`)).status()).toBe(200)
+  })
+})

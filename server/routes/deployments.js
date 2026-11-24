@@ -1,4 +1,5 @@
 import express from 'express'
+import { withoutPath } from './git.js'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
@@ -412,7 +413,9 @@ export default function deploymentsRouter() {
       }
       res.json(unlinked.length ? { ok: true, unlinked } : { ok: true })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      // Shown to the user as the reason: without where the repo is.
+      console.error('Delete failed', err)
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
     }
   })
 

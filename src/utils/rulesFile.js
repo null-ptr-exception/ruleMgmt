@@ -46,13 +46,20 @@ import { varsIn, expandVars, withoutVars } from './ruleModel.js'
 import { parseDerived, derivedColumns, DERIVED_UNITS, evalDerived, derivedPosition, mergePosition } from './derived.js'
 import { helmMerge } from './helmMerge.js'
 
-const GROUP_KEYS = ['group', 'once', 'type', ...GROUP_FIELD_NAMES, 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
-const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
+// The keys of each part of a rules file. schema/rules-file.schema.json is
+// generated from these (rulesFileSchema.js), so an editor offers the same.
+export const GROUP_KEYS = ['group', 'once', 'type', ...GROUP_FIELD_NAMES, 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
+export const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
 // A recording rule has no `for`, `keep_firing_for` or annotations in
 // Prometheus — only these.
-const RECORD_KEYS = ['record', 'selectorLabels', 'expr', 'labels', 'note']
-const COLUMN_KEYS = ['type', 'required', 'default', 'enum', 'description']
-const RESERVED = new Set(['selector'])
+export const RECORD_KEYS = ['record', 'selectorLabels', 'expr', 'labels', 'note']
+export const COLUMN_KEYS = ['type', 'required', 'default', 'enum', 'description']
+export const DERIVED_KEYS = ['expr', 'unit']
+export const COMMON_KEYS = ['rowIdentity', 'columns']
+export const RESERVED_NAMES = ['selector']
+const RESERVED = new Set(RESERVED_NAMES)
+// A derived value's name.
+export const DERIVED_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
 // What a column may hold (#172): JSON Schema's own names, the ones the table
 // has a cell for. Anything else — a typo — is not a type Helm knows, and it
 // refuses every deployment of the chart.
@@ -112,8 +119,21 @@ function columnsToSchema(columns = {}, selectorColumns = new Set()) {
 
 // ── rules ────────────────────────────────────────────────────────────────────
 
+// An empty entry (a `- ` with nothing) is no entry: the parser says so
+// (listEntryProblem), and nothing here throws on it.
 const entriesToMap = list =>
-  Array.isArray(list) ? Object.fromEntries(list.map(e => [e.key, String(e.value)])) : (list || undefined)
+  Array.isArray(list) ? Object.fromEntries(list.filter(e => e !== null && e !== undefined).map(e => [e.key, String(e.value)])) : (list || undefined)
+
+/** labels or annotations written as a list with an empty entry (`- `). */
+function listEntryProblem(rule, where) {
+  for (const key of ['labels', 'annotations']) {
+    const list = rule[key]
+    if (!Array.isArray(list)) continue
+    const at = list.findIndex(e => e === null || e === undefined)
+    if (at >= 0) return `${where}: ${key}[${at}] is empty — write ${key} as a mapping of name to value`
+  }
+  return null
+}
 
 /** One rule, keys in canonical order so the writer is deterministic. */
 function canonicalRule(rule) {
@@ -557,13 +577,13 @@ export function parseGroupFile(text, filename) {
     if (doc.once === true) errors.push(`${filename}.yaml: a once group has no rows, so it cannot have derived values`)
     for (const [name, def] of Object.entries(doc.derived)) {
       const where = `${filename}.yaml derived "${name}"`
-      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) errors.push(`${where}: a name is letters, digits and _, not starting with a digit`)
+      if (!DERIVED_NAME_RE.test(name)) errors.push(`${where}: a name is letters, digits and _, not starting with a digit`)
       if (RESERVED.has(name)) errors.push(`${where} is a reserved name`)
       // Own keys only: `toString` or `constructor` is no column (#118).
       if (Object.hasOwn(columns, name)) errors.push(`${where} collides with a column`)
       if (vars && Object.hasOwn(vars, name)) errors.push(`${where} collides with a vars entry`)
       if (!isMapping(def)) { errors.push(`${where}: must be { expr, unit }`); continue }
-      rejectUnknown(def, ['expr', 'unit'], where, errors)
+      rejectUnknown(def, DERIVED_KEYS, where, errors)
       // A unit is required for now (#118's first version): a derived value is
       // a duration, used in a range, an offset, for or keep_firing_for.
       if (def.unit === undefined) errors.push(`${where}: unit is required — one of ${DERIVED_UNITS.join(', ')}`)
@@ -582,6 +602,8 @@ export function parseGroupFile(text, filename) {
       return []
     }
     rejectUnknown(rule, RULE_KEYS, where, errors)
+    const entry = listEntryProblem(rule, where)
+    if (entry) errors.push(entry)
     checkRuleKind(rule, where, errors)
     checkSelectorLabelsShape(rule.selectorLabels, where, errors)
     // A duration written out is checked here; one read from a column
@@ -654,7 +676,7 @@ export function parseGroupFile(text, filename) {
 export function parseCommonFile(text) {
   const errors = []
   const doc = loadMapping(text, '_common.yaml', errors)
-  rejectUnknown(doc, ['rowIdentity', 'columns'], '_common.yaml', errors)
+  rejectUnknown(doc, COMMON_KEYS, '_common.yaml', errors)
   // The row identity label (see templateGenerator.js), off unless written.
   if (doc.rowIdentity !== undefined && typeof doc.rowIdentity !== 'boolean') {
     errors.push('_common.yaml: rowIdentity must be true or false')

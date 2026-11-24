@@ -192,6 +192,12 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
+    // The text of values.yaml, or the values as a map: anything else (left
+    // out, null, a number, a list) would be written as a file of no rows.
+    const given = req.body?.values
+    if (typeof given !== 'string' && (!given || typeof given !== 'object' || Array.isArray(given))) {
+      return res.status(400).json({ error: 'values is required: the text of values.yaml, or the values as a map' })
+    }
     const folder = syncFolder(req)
     try {
       const readOnly = () => ({ status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } })
@@ -350,7 +356,7 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    if (!req.body.newName || !NAME_RE.test(req.body.newName)) {
+    if (typeof req.body?.newName !== 'string' || !NAME_RE.test(req.body.newName)) {
       return res.status(400).json({ error: 'Invalid newName' })
     }
     const dstFile = path.join(dir, `${req.body.newName}-values.yaml`)

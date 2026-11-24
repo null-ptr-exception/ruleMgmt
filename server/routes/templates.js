@@ -20,6 +20,7 @@ import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
 // A templates/ file's text, for telling a 1.x rule file apart: null when it
 // is not there or is a folder named *.yaml (not a rule object; Helm says so
@@ -401,7 +402,13 @@ export default function templatesRouter() {
   // Save chart-level default values
   router.post('/:chart/values', async (req, res) => {
     const { valuesFile } = chartPaths(req, req.params.chart)
-    const { values } = req.body
+    const { values } = req.body || {}
+    // The text of values.yaml, or its values as a map: anything else
+    // (left out, null, a number, a list) would be written as an empty or
+    // meaningless file.
+    if (typeof values !== 'string' && !isMap(values)) {
+      return res.status(400).json({ error: 'values is required: the text of values.yaml, or its values as a map' })
+    }
     try {
       const content = typeof values === 'string' ? values : dumpForHelm(values, { lineWidth: -1 })
       await writeWhole(valuesFile, content)
@@ -450,8 +457,8 @@ export default function templatesRouter() {
   // Rename a template file
   router.post('/:chart/:template/rename', async (req, res) => {
     const { tmplDir } = chartPaths(req, req.params.chart)
-    const { newName } = req.body
-    if (!newName || !NAME_RE.test(newName)) {
+    const { newName } = req.body || {}
+    if (typeof newName !== 'string' || !NAME_RE.test(newName)) {
       return res.status(400).json({ error: 'Invalid newName' })
     }
     const oldFile = path.join(tmplDir, `${req.params.template}.yaml`)
@@ -483,7 +490,8 @@ export default function templatesRouter() {
   router.post('/:chart/:template', async (req, res) => {
     const { tmplDir } = chartPaths(req, req.params.chart)
     const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
-    const { content } = req.body
+    const { content } = req.body || {}
+    if (typeof content !== 'string') return res.status(400).json({ error: 'content is required: the template file\'s text' })
     try {
       await fs.mkdir(tmplDir, { recursive: true })
       await writeWhole(tmplFile, content)

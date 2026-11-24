@@ -37,8 +37,9 @@ export default function chartsRouter() {
 
   router.post('/', async (req, res) => {
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
-    const { name } = req.body
-    if (!name || !NAME_RE.test(name)) {
+    const { name } = req.body || {}
+    // Text only: RegExp#test turns 5 or ["x"] into a name that passes.
+    if (typeof name !== 'string' || !NAME_RE.test(name)) {
       return res.status(400).json({ error: 'Invalid chart name. Must match ^[a-z0-9][a-z0-9_-]*$' })
     }
     const chartDir = path.join(chartsDir, name)
@@ -74,8 +75,8 @@ export default function chartsRouter() {
   // dropped — and is stored on the clone as x-migrated-from.
   router.post('/:name/clone', async (req, res) => {
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
-    const { newName, migration } = req.body
-    if (!NAME_RE.test(req.params.name) || !NAME_RE.test(newName || '')) {
+    const { newName, migration } = req.body || {}
+    if (!NAME_RE.test(req.params.name) || typeof newName !== 'string' || !NAME_RE.test(newName)) {
       return res.status(400).json({ error: 'Invalid chart name' })
     }
 

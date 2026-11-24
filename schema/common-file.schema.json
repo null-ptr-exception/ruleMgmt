@@ -1,0 +1,194 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AlertForge common columns (rules/_common.yaml)",
+  "type": [
+    "object",
+    "null"
+  ],
+  "properties": {
+    "rowIdentity": {
+      "type": "boolean",
+      "description": "true: every rule gets a label naming its row, so two rows with the same labels stay apart."
+    },
+    "columns": {
+      "anyOf": [
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "selector"
+              ]
+            }
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "string",
+                      "number",
+                      "integer",
+                      "boolean",
+                      "duration",
+                      null
+                    ],
+                    "description": "One of string, number, integer, boolean, duration. No type is string."
+                  },
+                  "required": {
+                    "description": "true: every row has to fill it in."
+                  },
+                  "default": {
+                    "description": "The value of a row that leaves it out. A duration column's default is a duration with a unit, e.g. 5m."
+                  },
+                  "enum": {
+                    "description": "The values a row may choose from. Not for a duration column — use type: string with the enum."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Shown to whoever fills in the column."
+                  }
+                },
+                "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "duration"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "default": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?$"
+                    }
+                  },
+                  "not": {
+                    "required": [
+                      "enum"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": [
+                  "null",
+                  "number",
+                  "boolean"
+                ]
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              },
+              {
+                "type": "array",
+                "items": {
+                  "not": {}
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": [
+            "null",
+            "number",
+            "boolean"
+          ]
+        },
+        {
+          "type": "string",
+          "maxLength": 0
+        },
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "string",
+                      "number",
+                      "integer",
+                      "boolean",
+                      "duration",
+                      null
+                    ],
+                    "description": "One of string, number, integer, boolean, duration. No type is string."
+                  },
+                  "required": {
+                    "description": "true: every row has to fill it in."
+                  },
+                  "default": {
+                    "description": "The value of a row that leaves it out. A duration column's default is a duration with a unit, e.g. 5m."
+                  },
+                  "enum": {
+                    "description": "The values a row may choose from. Not for a duration column — use type: string with the enum."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Shown to whoever fills in the column."
+                  }
+                },
+                "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "duration"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "default": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?$"
+                    }
+                  },
+                  "not": {
+                    "required": [
+                      "enum"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": [
+                  "null",
+                  "number",
+                  "boolean"
+                ]
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              },
+              {
+                "type": "array",
+                "items": {
+                  "not": {}
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "description": "Columns every group of the chart reads, filled in once per deployment (Common Values)."
+    }
+  },
+  "additionalProperties": false
+}

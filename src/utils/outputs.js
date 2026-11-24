@@ -31,29 +31,30 @@ import { GROUP_FIELD_NAMES, BASE_GROUP_FIELDS } from './groupFields.js'
 
 export const DEFAULT_TYPE = 'prometheus2'
 
-const TOP_KEYS = ['outputs', 'routing']
-const PROFILE_KEYS = ['apiVersion', 'kind', 'groupFields', 'annotations', 'aliases', 'validate', 'query', 'groupKeys']
+// Exported for schema/outputs.schema.json (rulesFileSchema.js).
+export const TOP_KEYS = ['outputs', 'routing']
+export const PROFILE_KEYS = ['apiVersion', 'kind', 'groupFields', 'annotations', 'aliases', 'validate', 'query', 'groupKeys']
 // The language a group's expr is written in. It decides the checks that read
 // the expr itself — ranges, offsets, label matchers (#117, #118, selectors) —
 // which PromQL and MetricsQL share and LogsQL has none of. Which checker runs
 // is `validate`'s, a separate question.
-const QUERY = ['promql', 'metricsql', 'logsql']
+export const QUERY = ['promql', 'metricsql', 'logsql']
 const PROMQL_LIKE = ['promql', 'metricsql']
-const ROUTING_KEYS = ['apiVersion', 'kind']
+export const ROUTING_KEYS = ['apiVersion', 'kind']
 // The name objectMeta.js's _BY_PROFILE variables give the routing resource; a
 // profile of that name would make them ambiguous.
 export const ROUTING_KIND = 'routing'
 // promtool is Prometheus 2.x's (PROMTOOL_BIN), promtool3 Prometheus 3.x's
 // (PROMTOOL3_BIN).
-const VALIDATE = ['promtool', 'promtool3', 'vmalert', 'none']
+export const VALIDATE = ['promtool', 'promtool3', 'vmalert', 'none']
 // An annotation key: an optional DNS-subdomain prefix and a name.
-const ANNOTATION_KEY_RE = /^([a-z0-9]([-a-z0-9.]*[a-z0-9])?\/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$/
-const NAME_RE = /^[a-z][a-z0-9_-]*$/
+export const ANNOTATION_KEY_RE = /^([a-z0-9]([-a-z0-9.]*[a-z0-9])?\/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$/
+export const NAME_RE = /^[a-z][a-z0-9_-]*$/
 // Written by the generator (name, rules) or by the template owner (interval,
 // limit and the rest of groupFields.js) — a profile cannot set them too. A rules file's `type` is not one of
 // them: it only picks the profile and is never written out as it is; the
 // `type: vlogs` a VMRule group carries comes from the profile's groupFields.
-const RESERVED_GROUP_FIELDS = ['name', 'rules', ...GROUP_FIELD_NAMES]
+export const RESERVED_GROUP_FIELDS = ['name', 'rules', ...GROUP_FIELD_NAMES]
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 

@@ -639,6 +639,8 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 - A rule's or a group's label named `alertforge_row`, the
   [row identity label](#the-row-identity-label-rowidentity)'s
 - A `vars` entry referencing another `vars` entry
+- A rule's `labels` or `annotations` written as a list with an empty entry
+  (a `- ` with nothing after it), named by file and rule
 - An optional column with no default referenced from the middle of a string
 - `group:` not matching the filename
 - A `derived` without a `unit`, with an expression that does not parse or
@@ -662,6 +664,51 @@ And, before a commit:
 A once group with `columns`, a rule with both or neither of `alert` and
 `record`, and a recording rule with `for`, `keep_firing_for` or annotations
 are rejected at save time.
+
+## Editor hints: the JSON Schemas
+
+`schema/rules-file.schema.json` describes a group file and
+`schema/common-file.schema.json` a `_common.yaml`. In VS Code with the YAML
+extension, they offer the keys as you type, show what each means, and mark a
+misspelled key (`intervel:`), a `type` that is no profile, a group field the
+type does not have (`labels:` on a `prometheus2` group), a column type that
+is none, or a duration written wrong.
+
+Either point the editor at them for the whole gitops repo, in
+`.vscode/settings.json`. A group file's name starts with a letter, so
+`[a-z]*.yaml` leaves `_common.yaml` to its own schema:
+
+```json
+{
+  "yaml.schemas": {
+    "https://raw.githubusercontent.com/null-ptr-exception/ruleMgmt/main/schema/rules-file.schema.json": "charts/*/rules/[a-z]*.yaml",
+    "https://raw.githubusercontent.com/null-ptr-exception/ruleMgmt/main/schema/common-file.schema.json": "charts/*/rules/_common.yaml"
+  }
+}
+```
+
+or name one in a file's first line (a save from the editor writes a group
+file anew, without it):
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/null-ptr-exception/ruleMgmt/main/schema/rules-file.schema.json
+```
+
+Without access to GitHub, copy the two files into the gitops repo and give
+their paths instead.
+
+The schemas say what each key is and roughly what it holds, not everything
+a save checks: a `${…}` naming no column, a name colliding with one in
+`_common.yaml`, an `eval_offset` past its `interval`, a `derived` reading a
+string column and the rest of the list above are still only refused when
+the file is saved. They are never stricter than the save: where it reads a
+value leniently (`labels: { a: 5 }` is the text `"5"`), so does the schema.
+
+They are generated from the same tables the save checks read, and so is
+`schema/outputs.schema.json` for [`config/outputs.json`](#output-profiles).
+After changing a key, a group field, a column type or a profile, run
+`node scripts/gen-rules-schema.mjs`; a unit test fails until the files are
+current.
 
 ## A deployment's values
 
@@ -822,6 +869,11 @@ key is an error. The file is checked when the server starts and
 when the frontend is built, and a mistake stops both. Changing a profile's
 `kind`, or `routing.kind`, replaces every object it emits — they are deleted
 and created again — so it is a release-level change.
+
+`schema/outputs.schema.json` describes the file for an editor (the file
+itself cannot name it: `$schema` would be an unknown key). In VS Code:
+`"json.schemas": [{ "fileMatch": ["config/outputs.json"], "url": "./schema/outputs.schema.json" }]`
+in `.vscode/settings.json`.
 
 ## Names, one source
 

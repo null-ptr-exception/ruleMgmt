@@ -42,8 +42,7 @@ alerttemplateui/
 │   ├── components/
 │   │   ├── KVEditor.jsx        # Generic key-value table
 │   │   ├── VersionModal.jsx    # Save-as / version bump dialog
-│   │   ├── PromQLEditor.jsx    # CodeMirror wrapper
-│   │   └── PromQLBuilder.jsx   # Guided builder UI
+│   │   └── PromQLEditor.jsx    # CodeMirror wrapper
 │   └── utils/
 │       ├── api.js              # Typed fetch wrappers for all endpoints
 │       └── templateUtils.js    # Shared YAML helpers

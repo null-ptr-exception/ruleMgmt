@@ -48,31 +48,6 @@ export async function getChartInfo(chart) {
   return res.json()
 }
 
-export async function getChartTemplateFile(chart, template) {
-  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`)
-  if (!res.ok) return {}
-  return res.json()
-}
-
-export async function saveChartTemplateFile(chart, template, content) {
-  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content })
-  })
-  if (!res.ok) return {}
-  return res.json()
-}
-
-export async function deleteChartTemplate(chart, template) {
-  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/${encodeURIComponent(template)}`, {
-    method: 'DELETE'
-  })
-  if (!res.ok) return {}
-  return res.json()
-}
-
-
 /**
  * Save a chart's whole rules/*.yaml source in one request; the server
  * regenerates values.schema.json and every templates/*.yaml from it and writes
@@ -120,22 +95,6 @@ export async function migrationPreview(chart, files, migration) {
   return res.json()
 }
 
-export async function listChartDeployments(chart) {
-  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/deployments`)
-  if (!res.ok) return { deployments: [] }
-  return res.json()
-}
-
-export async function saveChartValues(chart, values) {
-  const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/values`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values })
-  })
-  if (!res.ok) return {}
-  return res.json()
-}
-
 export async function saveChartMeta(chart, chartMeta) {
   const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}/chart-meta`, {
     method: 'POST',
@@ -148,13 +107,6 @@ export async function saveChartMeta(chart, chartMeta) {
 }
 
 // ─── Deployments ─────────────────────────────────────────────────────────────
-
-export async function listDeployments(chart, folder) {
-  const params = folder ? `?folder=${encodeURIComponent(folder)}` : ''
-  const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}${params}`)
-  if (!res.ok) return []
-  return res.json()
-}
 
 // Not there (404) is a deployment with nothing yet; any other refusal — a
 // values.yaml that cannot be read — says why: `{ failed, status, error }`,
@@ -177,17 +129,6 @@ export async function saveDeployment(chart, deployment, values, folder, version)
   })
   // A refusal carries { error, problems } — which cells, and why.
   if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({}))) }
-  return res.json()
-}
-
-export async function cloneDeployment(chart, source, newName, folder) {
-  const params = folder ? `?folder=${encodeURIComponent(folder)}` : ''
-  const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(source)}/clone${params}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ newName })
-  })
-  if (!res.ok) return {}
   return res.json()
 }
 
@@ -276,22 +217,6 @@ export async function renderDeployment(chart, deployment, folder) {
 
 // ─── Folders ────────────────────────────────────────────────────────────────
 
-export async function listFolders() {
-  const res = await apiFetch(`${BASE}/folders`)
-  if (!res.ok) return []
-  return res.json()
-}
-
-export async function createFolder(folderPath) {
-  const res = await apiFetch(`${BASE}/folders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: folderPath })
-  })
-  if (!res.ok) return {}
-  return res.json()
-}
-
 export async function getFolderTree(parentPath = '') {
   const query = parentPath ? `?path=${encodeURIComponent(parentPath)}` : ''
   const res = await apiFetch(`${BASE}/folders/tree${query}`)
@@ -366,12 +291,6 @@ async function syncReadFailure(res) {
 export async function getSyncRegistry() {
   const res = await apiFetch(`${BASE}/sync`)
   if (!res.ok) return syncReadFailure(res)
-  return res.json()
-}
-
-export async function getSyncTargets(source) {
-  const res = await apiFetch(`${BASE}/sync?source=${encodeURIComponent(source)}`)
-  if (!res.ok) return { source, targets: [] }
   return res.json()
 }
 

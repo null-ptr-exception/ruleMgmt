@@ -43,10 +43,6 @@ link-outside	migration	misses-what-helm-renders	out-of-scope	whether a folder th
 link-outside	routing-get	misses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
 link-outside	preview	refuses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
 link-outside	sync-to	refuses-what-helm-renders	out-of-scope	whether a folder that is a link is a deployment is not decided: the walk does not follow folder links, some routes do
-unreadable-folder	folder-list	no-answer	bug	no issue yet: under a folder that cannot be read, the handler throws outside its try (realpath EACCES in insideReal): no answer, and in the server Node ends the process
-unreadable-folder	routing-get	5xx	bug	no issue yet: the Routing page of a deployment under a folder that cannot be read answers 500
-unreadable-folder	preview	no-answer	bug	no issue yet: under a folder that cannot be read, the handler throws outside its try (realpath EACCES in insideReal): no answer, and in the server Node ends the process
-unreadable-folder	sync-to	no-answer	bug	no issue yet: under a folder that cannot be read, the handler throws outside its try (realpath EACCES in insideReal): no answer, and in the server Node ends the process
 chart-not-yaml	commit	accepts-what-helm-fails	bug	no issue yet: a deployment whose Chart.yaml is not YAML is no deployment to the walk, and Commit says nothing; Helm cannot render it
 chart-template-gone	sync-from	accepts-what-helm-fails	bug	no issue yet: sync from a deployment whose Template is gone is accepted, though Helm cannot render the source
 chart-two-templates	preview	refuses-what-helm-renders	policy	a deployment naming two Templates is not supported: Commit and Preview refuse it, Helm renders both

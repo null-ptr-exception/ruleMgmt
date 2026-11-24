@@ -257,13 +257,13 @@ link-loop	W	sync-from	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-
 link-loop	W	commit	ok	200	-	no	-	link	no-chart	-	-	-	-	
 unreadable-folder	W	tree	absent	200	-	no	-	absent	fails	1	-	-	not shown	
 unreadable-folder	W	list	absent	200	-	no	-	absent	fails	1	-	-	not found	
-unreadable-folder	W	folder-list	no-answer	no-answer	-	no	-	absent	fails	1	-	-	-	no-answer
+unreadable-folder	W	folder-list	unreadable	409	deployments/w	no	-	absent	fails	1	-	-	-	
 unreadable-folder	W	users	absent	200	-	no	-	absent	fails	1	-	-	not found	
 unreadable-folder	W	migration	absent	200	-	no	-	absent	fails	1	-	-	not found	
-unreadable-folder	W	routing-get	error	500	deployments/w/d	no	-	absent	fails	1	-	-	-	5xx
-unreadable-folder	W	preview	no-answer	no-answer	-	no	-	absent	fails	1	-	-	-	no-answer
+unreadable-folder	W	routing-get	unreadable	409	deployments/w	no	-	absent	fails	1	-	-	-	
+unreadable-folder	W	preview	refused	409	deployments/w	no	-	absent	fails	1	-	-	-	
 unreadable-folder	W	check-deployment	cannot-check	exit 2	-	no	-	absent	fails	1	-	-	-	
-unreadable-folder	W	sync-to	no-answer	no-answer	-	no	-	absent	fails	1	-	-	-	no-answer
+unreadable-folder	W	sync-to	unreadable	409	deployments/w	no	-	absent	fails	1	-	-	-	
 unreadable-folder	W	sync-from	refused	400	deployments/w/d	no	-	absent	fails	1	-	-	-	
 unreadable-folder	W	commit	listed	200	deployments/w	no	-	absent	fails	1	-	-	listed	
 unreadable-chart	W	tree	folder	200	-	no	-	folder	fails	1	-	-	-	

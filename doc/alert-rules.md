@@ -347,7 +347,13 @@ is shown as a product to regenerate), but Save refuses it until it is fixed
 or removed: it may hold `x-custom-template` groups. On a chart without
 `rules/` it is the source, with nothing to regenerate it from: opening the
 chart says it cannot be read. A deployment's
-`values.yaml` that cannot be read refuses the commit too.
+`values.yaml` that cannot be read refuses the commit too. A folder on the
+way that cannot be looked into is named the same way: with `templates/` at
+no permission, opening, saving, renaming or deleting one of its files says
+`charts/demo/templates cannot be read: permission denied`, and with
+`deployments/w` at no permission, so does opening, previewing or syncing to
+`deployments/w/d`. Whatever fails, a request is answered and the server goes
+on serving the next one.
 
 ### Files of your own in templates/
 

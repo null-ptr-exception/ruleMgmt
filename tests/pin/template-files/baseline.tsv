@@ -466,10 +466,10 @@ tmpl-1x-file-repeats-alerts	conv	products-current	differ	-	-	no	-	renders-twice	
 tmpl-dir-unreadable	p2	open	unreadable	409	charts/p2/templates	no	-	fails	disk	-	fails	1	-	-	-	-	
 tmpl-dir-unreadable	p2	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=0 version=0.1.0	
 tmpl-dir-unreadable	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
-tmpl-dir-unreadable	p2	file-get	error	crash	-	no	-	fails	disk	-	fails	1	-	-	-	-	5xx
+tmpl-dir-unreadable	p2	file-get	unreadable	409	charts/p2/templates	no	-	fails	disk	-	fails	1	-	-	-	-	
 tmpl-dir-unreadable	p2	file-save	not-seen	-	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-tmpl-dir-unreadable	p2	file-rename	error	crash	-	no	-	fails	disk	-	fails	1	-	-	-	-	5xx
-tmpl-dir-unreadable	p2	file-delete	error	crash	-	no	-	fails	disk	-	fails	1	-	-	-	-	5xx
+tmpl-dir-unreadable	p2	file-rename	unreadable	409	charts/p2/templates	no	-	fails	disk	-	fails	1	-	-	-	-	
+tmpl-dir-unreadable	p2	file-delete	unreadable	409	charts/p2/templates	no	-	fails	disk	-	fails	1	-	-	-	-	
 tmpl-dir-unreadable	p2	save-rules	unreadable	409	charts/p2/templates	no	-	fails	would-be	-	-	-	-	-	-	body=disk	
 tmpl-dir-unreadable	p2	migration-preview	unreadable	409	charts/p2/templates	no	-	fails	disk	-	fails	1	-	-	-	-	
 tmpl-dir-unreadable	p2	save-values	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	body=disk	accepts-what-helm-fails

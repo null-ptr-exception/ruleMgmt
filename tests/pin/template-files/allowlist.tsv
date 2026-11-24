@@ -39,9 +39,6 @@ tmpl-1x-file-repeats-alerts	gen-chart-check	accepts-what-helm-fails	bug	#190: a 
 tmpl-1x-file-repeats-alerts	gen-chart	accepts-what-helm-fails	bug	#190: a 1.x prometheus-rule.yaml repeating the generated alerts renders each alert twice; only Commit, gen-rules and the editor's drift say so
 tmpl-1x-file-repeats-alerts	import-rules	accepts-what-helm-fails	bug	#190: a 1.x prometheus-rule.yaml repeating the generated alerts renders each alert twice; only Commit, gen-rules and the editor's drift say so
 tmpl-1x-file-repeats-alerts	products-current	entries-disagree	bug	#190: gen-chart --check compares only the generated files and passes the 1.x file that repeats them; the others say behind
-tmpl-dir-unreadable	file-get	5xx	bug	no issue yet: the templates/<file> routes resolve the path (insideReal) before their try: with templates/ unreadable the rejection is unhandled and ends the server process
-tmpl-dir-unreadable	file-rename	5xx	bug	no issue yet: the templates/<file> routes resolve the path (insideReal) before their try: with templates/ unreadable the rejection is unhandled and ends the server process
-tmpl-dir-unreadable	file-delete	5xx	bug	no issue yet: the templates/<file> routes resolve the path (insideReal) before their try: with templates/ unreadable the rejection is unhandled and ends the server process
 tmpl-dir-unreadable	save-values	accepts-what-helm-fails	bug	no issue yet: Save of the Template values checks nothing (not YAML, the schema, or the rest of the Template): it says ok while every deployment of the Template fails in Helm
 tmpl-dir-unreadable	clone	5xx	bug	no issue yet: clone copies the folder and reads Chart.yaml and the schema itself: a file it cannot read, a schema or Chart.yaml missing or broken is a 500 (the half-made copy is removed)
 tmpl-dir-unreadable	init	accepts-what-helm-fails	bug	no issue yet: a new deployment is made from a Template Helm cannot render: init reads only its Chart.yaml and values.yaml

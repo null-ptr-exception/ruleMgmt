@@ -9,6 +9,7 @@ import { derivedTable, groupName } from '../../src/utils/rulesFile.js'
 import { logger } from '../lib/logger.js'
 import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
+import { answerRejections } from '../lib/answerRejections.js'
 import { readTextIfThere, parseIfThere } from '../lib/readIfThere.js'
 import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
 import { loadValues } from '../../src/utils/valuesText.js'
@@ -171,5 +172,5 @@ export default function renderRouter() {
     }
   })
 
-  return router
+  return answerRejections(router)
 }

@@ -8,6 +8,7 @@ import { findChartUsage } from '../lib/chartUsage.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
+import { answerRejections } from '../lib/answerRejections.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -143,5 +144,5 @@ export default function chartsRouter() {
     }
   })
 
-  return router
+  return answerRejections(router)
 }

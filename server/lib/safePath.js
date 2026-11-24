@@ -10,6 +10,7 @@
  */
 import path from 'path'
 import fs from 'fs/promises'
+import { UnreadableError } from './readIfThere.js'
 
 export const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 export const isName = v => typeof v === 'string' && NAME_RE.test(v)
@@ -60,7 +61,20 @@ export function inside(base, ...parts) {
  * also in `base`'s real place: a link in the repo to a folder or a file
  * outside it is refused (null), one to a place in the repo is fine. The
  * part of the path that is not there yet is taken as it will be made.
+ * A folder on the way that cannot be looked into is an UnreadableError
+ * naming that folder (a 409 from a route), with the failure's `code`:
+ *
+ *   deployments/w (mode 000), asked for deployments/w/d
+ *     → "deployments/w cannot be read: permission denied"
  */
+// The deepest folder above `at` that resolves is the one that cannot be
+// looked into.
+async function unreadableOnTheWay(at, err) {
+  let up = path.dirname(at)
+  while (up !== path.dirname(up) && !(await fs.realpath(up).then(() => true, () => false))) up = path.dirname(up)
+  throw Object.assign(new UnreadableError(up, err), { code: err.code })
+}
+
 export async function insideReal(base, ...parts) {
   const target = inside(base, ...parts)
   if (!target) return null
@@ -68,7 +82,7 @@ export async function insideReal(base, ...parts) {
   let at = target
   let rest = ''
   for (;;) {
-    const real = await fs.realpath(at).catch(err => (err.code === 'ENOENT' || err.code === 'ENOTDIR' ? null : Promise.reject(err)))
+    const real = await fs.realpath(at).catch(err => (err.code === 'ENOENT' || err.code === 'ENOTDIR' ? null : unreadableOnTheWay(at, err)))
     if (real !== null) {
       const resolved = rest ? path.join(real, rest) : real
       const rel = path.relative(realBase, resolved)

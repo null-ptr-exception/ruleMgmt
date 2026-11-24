@@ -7,6 +7,7 @@ import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks
 import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
+import { answerRejections } from '../lib/answerRejections.js'
 import { isRepoPath } from '../lib/safePath.js'
 
 export { withoutPath }
@@ -336,7 +337,7 @@ export default function gitRouter() {
     }
   })
 
-  return router
+  return answerRejections(router)
 }
 
 function isAuthError(err) {

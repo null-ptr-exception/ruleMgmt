@@ -6,6 +6,7 @@ import {
   readSharedConfigs, routingUsers, usageOf, overlapsOf, unreadableOf, staleUsers, sharedDirProblem, writeShared, renameShared, updateConfigsInText, SHARED_FILE,
 } from '../lib/sharedConfigs.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
+import { answerRejections } from '../lib/answerRejections.js'
 
 /**
  * The repo's shared notification configs (#123): read them with who uses
@@ -88,5 +89,5 @@ export default function routingSharedRouter() {
     }
   })
 
-  return router
+  return answerRejections(router)
 }

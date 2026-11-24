@@ -20,6 +20,7 @@ import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
 import { newDeploymentProblem } from '../lib/deploymentWalk.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
+import { answerRejections } from '../lib/answerRejections.js'
 import { insideReal } from '../lib/safePath.js'
 
 function chartsDirName() {
@@ -199,5 +200,5 @@ export default function syncRouter() {
     }
   })
 
-  return router
+  return answerRejections(router)
 }

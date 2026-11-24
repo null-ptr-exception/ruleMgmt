@@ -2,11 +2,10 @@
 // (#180): the dialog says so, and how many of its alert rows go, before
 // the overwrite is confirmed.
 import { test, expect } from '@playwright/test'
-import { removeChart } from './charts.js'
+import { pickOption, removeChart } from './charts.js'
 
 const SRC_CHART = 'mariadb-alerts'
 const OTHER = 'e2e-sync-other'
-// Under deployments/, so its deployments sort among the first rows.
 const ROOT = 'deployments/e2e-sync-tmpl'
 const SRC = `${ROOT}/src`
 const TGT = `${ROOT}/redis`
@@ -75,7 +74,7 @@ test.describe.serial('sync to another Template', () => {
     const modal = page.getByRole('dialog')
     await expect(modal.getByTestId('template-change')).toHaveCount(0)
     await modal.locator('.ant-select').click()
-    await page.locator('.ant-select-item-option').filter({ hasText: new RegExp(`^${SRC}$`) }).click()
+    await pickOption(page, SRC)
     await expect(modal.getByTestId('template-change')).toHaveText(`redis ${change}.`)
     await expect(modal.getByText(`I understand, overwrite redis — it ${change}`)).toBeVisible()
   })

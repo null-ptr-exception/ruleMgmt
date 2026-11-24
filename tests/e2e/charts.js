@@ -54,3 +54,37 @@ export async function openedModal(modal) {
   await expect(modal).toBeVisible({ timeout: 10000 })
   await expect(modal).not.toHaveClass(/ant-zoom-(appear|enter)/)
 }
+
+/**
+ * Wait for the open antd dropdown (a Select's options) to finish sliding in.
+ * Mid-slide its options are scaled: Playwright can find one "stable" at its
+ * scaled place, press there, and let go after the list has grown, over the
+ * row above. Pressed and released on two rows, the click selects nothing and
+ * the list stays open (seen in a trace: the option clicked during
+ * ant-slide-up-appear-active, nothing picked).
+ */
+export async function openedDropdown(page) {
+  const dropdown = page.locator('.ant-select-dropdown:visible')
+  await expect(dropdown).toBeVisible({ timeout: 10000 })
+  await expect(dropdown).not.toHaveClass(/ant-slide-up-(appear|enter)/)
+}
+
+/**
+ * Pick the option titled `title` in the open Select's dropdown, from the
+ * keyboard. The dropdown only renders the options in view, so a click finds
+ * an option only while few enough options sort before it — and every
+ * deployment an earlier run left in the workspace is one more. Arrow down
+ * reaches it wherever it is, as a user scrolling would.
+ */
+export async function pickOption(page, title) {
+  await openedDropdown(page)
+  const active = page.locator('.ant-select-dropdown:visible .ant-select-item-option-active')
+  for (let seen = 0; seen < 200; seen++) {
+    if (await active.getAttribute('title') === title) {
+      await page.keyboard.press('Enter')
+      return
+    }
+    await page.keyboard.press('ArrowDown')
+  }
+  throw new Error(`no option titled ${title}`)
+}

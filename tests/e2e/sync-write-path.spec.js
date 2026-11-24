@@ -4,10 +4,9 @@
 import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
+import { pickOption } from './charts.js'
 
 const CHART = 'mariadb-alerts'
-// Under deployments/, so its deployments sort among the first options of
-// Sync from...: the Select's dropdown only renders the options in view.
 const ROOT = 'deployments/e2e-sync-write'
 const SRC = `${ROOT}/src`
 const TGT = `${ROOT}/tgt`
@@ -113,7 +112,7 @@ test.describe.serial('sync write path', () => {
       }
       let from = await fromMenu()
       await from.locator('.ant-select').click()
-      await page.locator('.ant-select-item-option', { hasText: SRC }).click()
+      await pickOption(page, SRC)
       await from.getByText(/I understand, overwrite/).click()
       await from.getByRole('button', { name: 'Confirm sync' }).click()
       await expect(from.getByText(`${SRC} cannot be synced: values.yaml is not valid YAML`)).toBeVisible({ timeout: 5000 })

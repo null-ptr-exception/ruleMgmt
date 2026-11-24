@@ -20,6 +20,8 @@ npm run test:e2e     # playwright E2E tests
 npm run lint         # eslint
 ```
 
+E2E starts its own server on port 3111 (it serves `dist`: `npm run build` first). To run E2E in two worktrees at once, give each its own port: `E2E_PORT=3122 npm run test:e2e`. A server already on the port stops the run ("is already used") rather than being tested, since it may be another worktree's; `E2E_REUSE_SERVER=1` tests it anyway.
+
 **Never** manually docker build / minikube image load / kubectl delete pod. Always use `make deploy`.
 
 Kubectl context: `minikube`. Namespace: `default`.

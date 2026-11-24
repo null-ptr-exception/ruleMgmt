@@ -20,8 +20,13 @@ const ANSWERS = [
   ['409 naming a file', json(409, { error: 'deployments/a/values.yaml cannot be read (permission denied)', file: 'deployments/a/values.yaml', unreadable: true })],
   ['500 with a reason', json(500, { error: 'Generation failed: boom' })],
   ['504 HTML from a proxy', () => new Response('<html><body>504 Gateway Time-out</body></html>', { status: 504, headers: { 'Content-Type': 'text/html' } })],
+  ['409 null', json(409, null)],
+  ['409 HTML', () => new Response('<html><body>409 Conflict</body></html>', { status: 409, headers: { 'Content-Type': 'text/html' } })],
   ['network failure', 'reject'],
   ['200 with no body', () => new Response('', { status: 200 })],
+  ['200 null', json(200, null)],
+  ['200 a string', json(200, 'ok')],
+  ['200 an array', json(200, [1])],
   ['204', () => new Response(null, { status: 204 })],
 ]
 

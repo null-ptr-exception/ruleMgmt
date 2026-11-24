@@ -13,8 +13,13 @@ answer's body is in that test (`ANSWERS`). "200 with its body" answers
 | 409 naming a file | returns {"user":null,"logoutUrl":null} |
 | 500 with a reason | returns {"user":null,"logoutUrl":null} |
 | 504 HTML from a proxy | returns {"user":null,"logoutUrl":null} |
+| 409 null | returns {"user":null,"logoutUrl":null} |
+| 409 HTML | returns {"user":null,"logoutUrl":null} |
 | network failure | returns {"user":null,"logoutUrl":null} |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | throws AnswerCutOff (uncertain: false) |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/user`
@@ -28,8 +33,13 @@ Request: `GET /api/v2/user`
 | 409 naming a file | returns [] |
 | 500 with a reason | returns [] |
 | 504 HTML from a proxy | returns [] |
+| 409 null | returns [] |
+| 409 HTML | returns [] |
 | network failure | returns [] |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | returns [1] |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/charts`
@@ -43,8 +53,13 @@ Request: `GET /api/v2/charts`
 | 409 naming a file | returns {"failed":true,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"failed":true,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"failed":true} |
+| 409 null | returns {"failed":true} |
+| 409 HTML | returns {"failed":true} |
 | network failure | returns {"failed":true,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/charts (application/json) {"name":"c"}`
@@ -58,8 +73,13 @@ Request: `POST /api/v2/charts (application/json) {"name":"c"}`
 | 409 naming a file | returns {"failed":true,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"failed":true,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"failed":true} |
+| 409 null | returns {"failed":true} |
+| 409 HTML | returns {"failed":true} |
 | network failure | returns {"failed":true,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `DELETE /api/v2/charts/c`
@@ -73,8 +93,13 @@ Request: `DELETE /api/v2/charts/c`
 | 409 naming a file | returns {"failed":true,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"failed":true,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"failed":true,"error":"the server answered 504"} |
+| 409 null | returns {"failed":true} |
+| 409 HTML | returns {"failed":true,"error":"the server answered 409"} |
 | network failure | returns {"failed":true,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | throws AnswerCutOff (uncertain: false) |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/templates/c`
@@ -88,8 +113,13 @@ Request: `GET /api/v2/templates/c`
 | 409 naming a file | returns {"failed":true,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"failed":true,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"failed":true} |
+| 409 null | returns {"failed":true} |
+| 409 HTML | throws AnswerCutOff (uncertain: true) |
 | network failure | returns {"failed":true,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/templates/c/rules (application/json) {"files":{"a.yaml":"groups: []"},"confirmBreaking":false}`
@@ -99,13 +129,18 @@ Request: `POST /api/v2/templates/c/rules (application/json) {"files":{"a.yaml":"
 | answer | the caller gets |
 |---|---|
 | 200 with its body | returns {"from":"server"} |
-| 400 with field problems | returns {"deployments":[]} |
-| 409 naming a file | returns {"deployments":[]} |
-| 500 with a reason | returns {"deployments":[]} |
-| 504 HTML from a proxy | returns {"deployments":[]} |
-| network failure | returns {"deployments":[]} |
-| 200 with no body | throws AnswerCutOff (uncertain: true) |
-| 204 | throws AnswerCutOff (uncertain: true) |
+| 400 with field problems | throws Error: The values have 1 problem |
+| 409 naming a file | throws Error: deployments/a/values.yaml cannot be read (permission denied) |
+| 500 with a reason | throws Error: Generation failed: boom |
+| 504 HTML from a proxy | throws Error: the server answered 504 |
+| 409 null | throws Error: the server answered 409 |
+| 409 HTML | throws Error: the server answered 409 |
+| network failure | throws Error: Failed to fetch |
+| 200 with no body | throws Error: The server's answer could not be read. Reload the page (and sign in again, if asked). |
+| 200 null | throws Error: The server's answer could not be read. Reload the page (and sign in again, if asked). |
+| 200 a string | throws Error: The server's answer could not be read. Reload the page (and sign in again, if asked). |
+| 200 an array | throws Error: The server's answer could not be read. Reload the page (and sign in again, if asked). |
+| 204 | throws Error: The server's answer could not be read. Reload the page (and sign in again, if asked). |
 
 Request: `POST /api/v2/templates/c/migration-preview (application/json) {"files":{"a.yaml":""},"migration":{"groups":{}}}`
 
@@ -118,8 +153,13 @@ Request: `POST /api/v2/templates/c/migration-preview (application/json) {"files"
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false,"error":"the server answered 504"} |
+| 409 null | returns {"ok":false} |
+| 409 HTML | returns {"ok":false,"error":"the server answered 409"} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/templates/c/chart-meta (application/json) {"chartMeta":{"description":"d"}}`
@@ -133,8 +173,13 @@ Request: `POST /api/v2/templates/c/chart-meta (application/json) {"chartMeta":{"
 | 409 naming a file | returns {"failed":true,"status":409,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"failed":true,"status":500,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"failed":true,"status":504,"error":"the server answered 504"} |
+| 409 null | returns {"failed":true,"status":409} |
+| 409 HTML | returns {"failed":true,"status":409,"error":"the server answered 409"} |
 | network failure | returns {"failed":true,"status":0,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | throws AnswerCutOff (uncertain: false) |
 | 204 | throws AnswerCutOff (uncertain: false) |
 | 404 | returns {"failed":true,"status":404,"error":"No values for d"} |
 
@@ -149,8 +194,13 @@ Request: `GET /api/v2/deployments/c/d?folder=team%2Fd`
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 409 null | returns {"ok":false} |
+| 409 HTML | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
 | 200 with no body | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 null | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 a string | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 an array | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
 | 204 | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
 
 Request: `POST /api/v2/deployments/c/d?folder=team%2Fd (application/json) {"values":{"cpu":[]},"version":"v1"}`
@@ -164,8 +214,13 @@ Request: `POST /api/v2/deployments/c/d?folder=team%2Fd (application/json) {"valu
 | 409 naming a file | returns {"error":"deployments/a/values.yaml cannot be read (permission denied)"} |
 | 500 with a reason | returns {"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"error":"HTTP 504"} |
+| 409 null | returns {"error":"HTTP 409"} |
+| 409 HTML | returns {"error":"HTTP 409"} |
 | network failure | returns {"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `DELETE /api/v2/deployments/c/d?folder=team%2Fd`
@@ -179,8 +234,13 @@ Request: `DELETE /api/v2/deployments/c/d?folder=team%2Fd`
 | 409 naming a file | returns {"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"error":"Could not read routing"} |
+| 409 null | returns {"error":"Could not read routing"} |
+| 409 HTML | returns {"error":"Could not read routing"} |
 | network failure | returns {"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | throws AnswerCutOff (uncertain: false) |
 | 204 | throws AnswerCutOff (uncertain: false) |
 | 404 | returns null |
 
@@ -195,8 +255,13 @@ Request: `GET /api/v2/deployments/c/d/routing?folder=team%2Fd`
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false} |
+| 409 null | returns {"ok":false} |
+| 409 HTML | returns {"ok":false} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `PUT /api/v2/deployments/c/d/routing?folder=team%2Fd (application/json) {"routing":"labels: {}"}`
@@ -210,8 +275,13 @@ Request: `PUT /api/v2/deployments/c/d/routing?folder=team%2Fd (application/json)
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false} |
+| 409 null | returns {"ok":false} |
+| 409 HTML | returns {"ok":false} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `DELETE /api/v2/deployments/c/d/routing?folder=team%2Fd`
@@ -225,8 +295,13 @@ Request: `DELETE /api/v2/deployments/c/d/routing?folder=team%2Fd`
 | 409 naming a file | returns {"error":"deployments/a/values.yaml cannot be read (permission denied)"} |
 | 500 with a reason | returns {"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"error":"Could not read the shared configs"} |
+| 409 null | returns {"error":"Could not read the shared configs"} |
+| 409 HTML | returns {"error":"Could not read the shared configs"} |
 | network failure | returns {"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | throws AnswerCutOff (uncertain: false) |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/routing/shared`
@@ -240,8 +315,13 @@ Request: `GET /api/v2/routing/shared`
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false} |
+| 409 null | returns {"ok":false} |
+| 409 HTML | returns {"ok":false} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `PUT /api/v2/routing/shared (application/json) {"shared":{"configs":[]}}`
@@ -255,8 +335,13 @@ Request: `PUT /api/v2/routing/shared (application/json) {"shared":{"configs":[]}
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false} |
+| 409 null | returns {"ok":false} |
+| 409 HTML | returns {"ok":false} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/routing/shared/rename (application/json) {"from":"a","to":"b"}`
@@ -270,8 +355,13 @@ Request: `POST /api/v2/routing/shared/rename (application/json) {"from":"a","to"
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false} |
+| 409 null | returns {"ok":false} |
+| 409 HTML | returns {"ok":false} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/routing/shared/regenerate (application/json)`
@@ -281,12 +371,17 @@ Request: `POST /api/v2/routing/shared/regenerate (application/json)`
 | answer | the caller gets |
 |---|---|
 | 200 with its body | returns {"from":"server"} |
-| 400 with field problems | returns {} |
-| 409 naming a file | returns {} |
-| 500 with a reason | returns {} |
-| 504 HTML from a proxy | returns {} |
-| network failure | returns {} |
+| 400 with field problems | returns {"ok":false,"error":"The values have 1 problem","problems":[{"path":"cpu[0].warn","message":"must be a number"}]} |
+| 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml","unreadable":true} |
+| 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
+| 504 HTML from a proxy | returns {"ok":false,"error":"the server answered 504"} |
+| 409 null | returns {"ok":false,"error":"the server answered 409"} |
+| 409 HTML | returns {"ok":false,"error":"the server answered 409"} |
+| network failure | returns {"ok":false,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/render/c/d?folder=team%2Fd (application/json) {}`
@@ -300,8 +395,13 @@ Request: `POST /api/v2/render/c/d?folder=team%2Fd (application/json) {}`
 | 409 naming a file | returns [] |
 | 500 with a reason | returns [] |
 | 504 HTML from a proxy | returns [] |
+| 409 null | returns [] |
+| 409 HTML | returns [] |
 | network failure | returns [] |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | returns [1] |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/folders/tree?path=team`
@@ -315,8 +415,13 @@ Request: `GET /api/v2/folders/tree?path=team`
 | 409 naming a file | returns [] |
 | 500 with a reason | returns [] |
 | 504 HTML from a proxy | returns [] |
+| 409 null | returns [] |
+| 409 HTML | returns [] |
 | network failure | returns [] |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | returns [1] |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/folders/deployments?chart=c`
@@ -330,8 +435,13 @@ Request: `GET /api/v2/folders/deployments?chart=c`
 | 409 naming a file | returns {"error":"deployments/a/values.yaml cannot be read (permission denied)"} |
 | 500 with a reason | returns {"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"error":"Could not create the deployment (HTTP 504)"} |
+| 409 null | returns {"error":"Could not create the deployment (HTTP 409)"} |
+| 409 HTML | returns {"error":"Could not create the deployment (HTTP 409)"} |
 | network failure | returns {"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/folders/init (application/json) {"folder":"team/d","chart":"c"}`
@@ -345,9 +455,14 @@ Request: `POST /api/v2/folders/init (application/json) {"folder":"team/d","chart
 | 409 naming a file | returns {"error":"deployments/a/values.yaml cannot be read (permission denied)","problems":[]} |
 | 500 with a reason | returns {"error":"Generation failed: boom","problems":[]} |
 | 504 HTML from a proxy | returns {"error":"HTTP 504","problems":[]} |
+| 409 null | returns {"error":"HTTP 409","problems":[]} |
+| 409 HTML | returns {"error":"HTTP 409","problems":[]} |
 | network failure | returns {"error":"Failed to fetch","problems":[]} |
-| 200 with no body | returns {} |
-| 204 | returns {} |
+| 200 with no body | returns {"error":"The server's answer could not be read. Reload the page (and sign in again, if asked).","problems":[]} |
+| 200 null | returns {"error":"The server's answer could not be read. Reload the page (and sign in again, if asked).","problems":[]} |
+| 200 a string | returns {"error":"The server's answer could not be read. Reload the page (and sign in again, if asked).","problems":[]} |
+| 200 an array | returns {"error":"The server's answer could not be read. Reload the page (and sign in again, if asked).","problems":[]} |
+| 204 | returns {"error":"The server's answer could not be read. Reload the page (and sign in again, if asked).","problems":[]} |
 
 Request: `GET /api/v2/folders/common/plan?action=create&folder=team&chart=c`
 
@@ -360,8 +475,13 @@ Request: `GET /api/v2/folders/common/plan?action=create&folder=team&chart=c`
 | 409 naming a file | returns {"error":"deployments/a/values.yaml cannot be read (permission denied)","problems":[]} |
 | 500 with a reason | returns {"error":"Generation failed: boom","problems":[]} |
 | 504 HTML from a proxy | returns {"error":"HTTP 504","problems":[]} |
+| 409 null | returns {"error":"HTTP 409","problems":[]} |
+| 409 HTML | returns {"error":"HTTP 409","problems":[]} |
 | network failure | returns {"error":"Failed to fetch","problems":[]} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/folders/common (application/json) {"action":"create","folder":"team","chart":"c","expected":["team/_common/c-values.yaml"]}`
@@ -375,8 +495,13 @@ Request: `POST /api/v2/folders/common (application/json) {"action":"create","fol
 | 409 naming a file | returns [] |
 | 500 with a reason | returns [] |
 | 504 HTML from a proxy | returns [] |
+| 409 null | returns [] |
+| 409 HTML | returns [] |
 | network failure | returns [] |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | returns [1] |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/folders/common/users?path=team%2F_common`
@@ -390,8 +515,13 @@ Request: `GET /api/v2/folders/common/users?path=team%2F_common`
 | 409 naming a file | returns {"failed":true,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml"} |
 | 500 with a reason | returns {"failed":true,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"failed":true,"error":"sync.yaml could not be read (the server answered 504)"} |
+| 409 null | returns {"failed":true,"error":"sync.yaml could not be read (the server answered 409)"} |
+| 409 HTML | returns {"failed":true,"error":"sync.yaml could not be read (the server answered 409)"} |
 | network failure | returns {"failed":true,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | throws AnswerCutOff (uncertain: false) |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/sync`
@@ -405,8 +535,13 @@ Request: `GET /api/v2/sync`
 | 409 naming a file | returns {"target":"team/d","failed":true,"error":"deployments/a/values.yaml cannot be read (permission denied)","file":"deployments/a/values.yaml"} |
 | 500 with a reason | returns {"target":"team/d","failed":true,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"target":"team/d","failed":true,"error":"sync.yaml could not be read (the server answered 504)"} |
+| 409 null | returns {"target":"team/d","failed":true,"error":"sync.yaml could not be read (the server answered 409)"} |
+| 409 HTML | returns {"target":"team/d","failed":true,"error":"sync.yaml could not be read (the server answered 409)"} |
 | network failure | returns {"target":"team/d","failed":true,"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | throws AnswerCutOff (uncertain: false) |
 | 204 | throws AnswerCutOff (uncertain: false) |
 
 Request: `GET /api/v2/sync?target=team%2Fd`
@@ -420,9 +555,14 @@ Request: `GET /api/v2/sync?target=team%2Fd`
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)"} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false,"error":"Sync failed"} |
+| 409 null | returns {"ok":false,"error":"Sync failed"} |
+| 409 HTML | returns {"ok":false,"error":"Sync failed"} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
-| 200 with no body | returns {} |
-| 204 | returns {} |
+| 200 with no body | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 null | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 a string | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 an array | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 204 | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
 
 Request: `POST /api/v2/sync (application/json) {"source":"team/a","target":"team/b"}`
 
@@ -435,9 +575,14 @@ Request: `POST /api/v2/sync (application/json) {"source":"team/a","target":"team
 | 409 naming a file | returns {"ok":false,"error":"deployments/a/values.yaml cannot be read (permission denied)"} |
 | 500 with a reason | returns {"ok":false,"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"ok":false,"error":"Unlink failed"} |
+| 409 null | returns {"ok":false,"error":"Unlink failed"} |
+| 409 HTML | returns {"ok":false,"error":"Unlink failed"} |
 | network failure | returns {"ok":false,"error":"Failed to fetch"} |
-| 200 with no body | returns {} |
-| 204 | returns {} |
+| 200 with no body | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 null | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 a string | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 200 an array | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
+| 204 | returns {"ok":false,"unknown":true,"error":"The server's answer could not be read, so whether the change was made is not known. Reload the page to see what the server has (and to sign in again, if asked)."} |
 
 Request: `DELETE /api/v2/sync (application/json) {"target":"team/b"}`
 
@@ -450,8 +595,13 @@ Request: `DELETE /api/v2/sync (application/json) {"target":"team/b"}`
 | 409 naming a file | returns {"error":"deployments/a/values.yaml cannot be read (permission denied)"} |
 | 500 with a reason | returns {"error":"Generation failed: boom"} |
 | 504 HTML from a proxy | returns {"error":"Clone failed"} |
+| 409 null | returns {"error":"Clone failed"} |
+| 409 HTML | returns {"error":"Clone failed"} |
 | network failure | returns {"error":"Failed to fetch"} |
 | 200 with no body | throws AnswerCutOff (uncertain: true) |
+| 200 null | throws AnswerCutOff (uncertain: true) |
+| 200 a string | throws AnswerCutOff (uncertain: true) |
+| 200 an array | throws AnswerCutOff (uncertain: true) |
 | 204 | throws AnswerCutOff (uncertain: true) |
 
 Request: `POST /api/v2/charts/c/clone (application/json) {"newName":"c2","migration":{"groups":{}}}`

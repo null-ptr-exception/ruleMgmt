@@ -10,8 +10,10 @@ const BASE = '/api/v2'
 //                                              `error` is its reason, if it says one
 //   { kind: 'unread', status, error, cutOff? } no answer that can be read: the
 //                                              network failed (status 0), or the
-//                                              body is not JSON (`cutOff` is the
-//                                              AnswerCutOff, #147)
+//                                              body is not JSON, or a 2xx's is not
+//                                              what was asked for: an object, or
+//                                              with `{ list: true }` an array
+//                                              (`cutOff` is the AnswerCutOff, #147)
 // Each function then says what that answer is to its callers.
 
 // How a refusal's body says why. A refusal of another shape is one more
@@ -21,29 +23,55 @@ const REASONS = [
 ]
 const reasonOf = body => REASONS.map(reason => reason(body)).find(r => typeof r === 'string')
 
-async function read(path, init) {
+// How long the body of a refusal is waited for. A proxy can send a 504's
+// headers and then nothing; a refusal's body is small, so past this it is
+// an answer that cannot be read. A 2xx's body (a whole Template, say) is
+// waited for as long as it takes.
+const REFUSAL_BODY_WAIT_MS = 10000
+
+function within(ms, reading, late) {
+  reading.catch(() => {}) // a body given up on may fail later: no one's to say
+  let timer
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(late()), ms) })
+  return Promise.race([reading, timeout]).finally(() => clearTimeout(timer))
+}
+
+const isObject = body => !!body && typeof body === 'object' && !Array.isArray(body)
+
+async function read(path, init, { list = false } = {}) {
   const res = await apiFetch(path, init)
   // apiFetch stands in for a request that never got an answer.
   if (res.status === 0) {
     return { kind: 'unread', status: 0, error: (await res.json()).error }
   }
+  const method = (init?.method || 'GET').toUpperCase()
   let body
   try {
-    body = await res.json()
+    body = res.ok
+      ? await res.json()
+      : await within(REFUSAL_BODY_WAIT_MS, res.json(), () => new AnswerCutOff(method, path, `no body after ${REFUSAL_BODY_WAIT_MS / 1000} s`))
   } catch (err) {
     if (!(err instanceof AnswerCutOff)) throw err
     return { kind: 'unread', status: res.status, error: cutOffMessage(err), cutOff: err }
   }
-  if (res.ok) return { kind: 'ok', status: res.status, body }
-  const refusal = body && typeof body === 'object' && !Array.isArray(body) ? body : {}
+  if (res.ok) {
+    if (list ? Array.isArray(body) : isObject(body)) return { kind: 'ok', status: res.status, body }
+    // null, a string, or an array for an object: the page would read
+    // fields of it and throw. It is an answer that cannot be read.
+    const err = new AnswerCutOff(method, path, `the answer is ${JSON.stringify(body)?.slice(0, 40)}, not ${list ? 'a list' : 'an object'}`)
+    return { kind: 'unread', status: res.status, error: cutOffMessage(err), cutOff: err }
+  }
+  const refusal = isObject(body) ? body : {}
   return { kind: 'refused', status: res.status, body: refusal, error: reasonOf(refusal) }
 }
 
+const cutOff2xx = a => !!a.cutOff && a.status >= 200 && a.status < 300
+
 // A 2xx whose body cannot be read throws its AnswerCutOff, as res.json()
 // does: main.jsx says it, for every caller that does not.
-async function answer(path, init) {
-  const a = await read(path, init)
-  if (a.cutOff && a.status >= 200 && a.status < 300) throw a.cutOff
+async function answer(path, init, opts) {
+  const a = await read(path, init, opts)
+  if (cutOff2xx(a)) throw a.cutOff
   return a
 }
 
@@ -57,6 +85,10 @@ const sent = (method, body) => ({
 // to read, the network's error (a body that is not JSON carries nothing).
 const carried = a => (a.kind === 'refused' ? a.body : a.status === 0 ? { error: a.error } : {})
 
+// Why a failed answer failed, as one sentence: the refusal's reason (a
+// string only), the network's error, or the status a proxy answered with.
+const whyFailed = a => (a.cutOff ? null : a.error) || `the server answered ${a.status}`
+
 // ─── User ───────────────────────────────────────────────────────────────────
 
 export async function getUserInfo() {
@@ -67,7 +99,7 @@ export async function getUserInfo() {
 // ─── Charts ──────────────────────────────────────────────────────────────────
 
 export async function listCharts() {
-  const a = await answer(`${BASE}/charts`)
+  const a = await answer(`${BASE}/charts`, undefined, { list: true })
   return a.kind === 'ok' ? a.body : []
 }
 
@@ -108,6 +140,9 @@ export async function getChartInfo(chart) {
 export async function saveChartRules(chart, files, confirmBreaking = false, migration = undefined) {
   const a = await answer(`${BASE}/templates/${encodeURIComponent(chart)}/rules`, sent('POST', { files, confirmBreaking, migration }))
   if (a.kind === 'ok') return a.body
+  // A 409 or 400 that cannot be read throws, as it always has (main.jsx
+  // says whether the change was made is not known).
+  if (a.cutOff && (a.status === 409 || a.status === 400)) throw a.cutOff
   if (a.kind === 'refused' && a.status === 409) {
     // Only a 409 that lists the breaking changes is the breaking-change
     // dialog. A migration that would write values a save refuses (#176) is
@@ -124,10 +159,18 @@ export async function saveChartRules(chart, files, confirmBreaking = false, migr
   return { failed: true, ...carried(a) }
 }
 
-/** Preview what a breaking change + mapping does to each deployment. */
+/**
+ * Preview what a breaking change + mapping does to each deployment. A preview
+ * that cannot be worked out throws, with why: not an empty preview, which
+ * would say no deployment is affected.
+ */
 export async function migrationPreview(chart, files, migration) {
-  const a = await answer(`${BASE}/templates/${encodeURIComponent(chart)}/migration-preview`, sent('POST', { files, migration }))
-  return a.kind === 'ok' ? a.body : { deployments: [] }
+  const a = await read(`${BASE}/templates/${encodeURIComponent(chart)}/migration-preview`, sent('POST', { files, migration }))
+  if (a.kind === 'ok') return a.body
+  // A 2xx that cannot be read says what any unreadable answer says. A
+  // preview changes nothing, so not "whether the change was made".
+  if (cutOff2xx(a)) throw new Error(cutOffMessage({ uncertain: false }))
+  throw new Error(whyFailed(a))
 }
 
 export async function saveChartMeta(chart, chartMeta) {
@@ -226,14 +269,16 @@ export const regenerateShared = () => sharedWrite(`${SHARED_URL}/regenerate`, 'P
 export async function renderDeployment(chart, deployment, folder) {
   const params = folder ? `?folder=${encodeURIComponent(folder)}` : ''
   const a = await answer(`${BASE}/render/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}${params}`, sent('POST', {}))
-  return a.kind === 'ok' ? a.body : {}
+  if (a.kind === 'ok') return a.body
+  // Preview says why: the refusal's reason, the network's, or the status.
+  return { ok: false, ...carried(a), error: whyFailed(a) }
 }
 
 // ─── Folders ────────────────────────────────────────────────────────────────
 
 export async function getFolderTree(parentPath = '') {
   const query = parentPath ? `?path=${encodeURIComponent(parentPath)}` : ''
-  const a = await answer(`${BASE}/folders/tree${query}`)
+  const a = await answer(`${BASE}/folders/tree${query}`, undefined, { list: true })
   return a.kind === 'ok' ? a.body : []
 }
 
@@ -241,7 +286,7 @@ export async function getFolderTree(parentPath = '') {
 // populate the Sync to/from modals' candidate lists (not the lazy tree).
 // `chart`: each folder's _common is looked up for that Template (#103).
 export async function listAllDeployments(chart) {
-  const a = await answer(`${BASE}/folders/deployments${chart ? `?chart=${encodeURIComponent(chart)}` : ''}`)
+  const a = await answer(`${BASE}/folders/deployments${chart ? `?chart=${encodeURIComponent(chart)}` : ''}`, undefined, { list: true })
   return a.kind === 'ok' ? a.body : []
 }
 
@@ -258,7 +303,8 @@ export async function initDeploymentFolder(folder, chart) {
 export async function getCommonPlan(query) {
   const a = await read(`${BASE}/folders/common/plan?${Object.entries(query).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`)
   if (a.kind === 'ok') return a.body
-  if (a.cutOff && a.status >= 200 && a.status < 300) return {}
+  // Not an empty plan: the dialog says it could not be read.
+  if (cutOff2xx(a)) return { error: a.error, problems: [] }
   const body = carried(a)
   return { error: body.error || `HTTP ${a.status}`, problems: body.problems || [] }
 }
@@ -275,7 +321,7 @@ export async function applyCommon(query, expected) {
 
 // The deployments that inherit from a _common, with where each group comes from.
 export async function getCommonUsers(commonPath) {
-  const a = await answer(`${BASE}/folders/common/users?path=${encodeURIComponent(commonPath)}`)
+  const a = await answer(`${BASE}/folders/common/users?path=${encodeURIComponent(commonPath)}`, undefined, { list: true })
   return a.kind === 'ok' ? a.body : []
 }
 
@@ -305,7 +351,8 @@ export async function getSyncSource(target) {
 export async function createSync(source, target) {
   const a = await read(`${BASE}/sync`, sent('POST', { source, target }))
   if (a.kind === 'ok') return a.body
-  if (a.cutOff && a.status >= 200 && a.status < 300) return {}
+  // Made, most likely, but not known: not "Sync failed".
+  if (cutOff2xx(a)) return { ok: false, unknown: true, error: a.error }
   const body = carried(a)
   // A source a values save would refuse is refused here too, with its cells.
   return { ok: false, error: body.error || 'Sync failed', problems: body.problems }
@@ -314,7 +361,7 @@ export async function createSync(source, target) {
 export async function unlinkSync(target) {
   const a = await read(`${BASE}/sync`, sent('DELETE', { target }))
   if (a.kind === 'ok') return a.body
-  if (a.cutOff && a.status >= 200 && a.status < 300) return {}
+  if (cutOff2xx(a)) return { ok: false, unknown: true, error: a.error }
   return { ok: false, error: carried(a).error || 'Unlink failed' }
 }
 

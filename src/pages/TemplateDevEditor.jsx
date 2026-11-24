@@ -15,6 +15,7 @@ import { renamedSelectorLabels } from '../utils/selectorContract'
 import SelectorLabelsList, { SelectorLabelsHint } from '../components/SelectorLabelsList'
 import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
 import { renameSelectorColumn } from '../utils/selectorContract'
+import { repeatsText, REPEATS_FIX } from '../utils/drift'
 import {
   listCharts, createChart, deleteChart, cloneChart,
   getChartInfo, saveChartRules, saveChartMeta,
@@ -373,8 +374,9 @@ export default function TemplateDevEditor() {
   // ── save ──────────────────────────────────────────────────────────────────
   // The banner for a legacy or stale chart says Save fixes it, so Save has to
   // be available before anything has been edited.
-  // rules/ that cannot be read has nothing a save would regenerate.
-  const needsSave = (drift?.state === 'legacy' || drift?.state === 'stale') && !drift?.errors?.length
+  // rules/ that cannot be read has nothing a save would regenerate, and a
+  // template repeating generated alerts has to be removed by hand (#190).
+  const needsSave = (drift?.state === 'legacy' || drift?.state === 'stale') && !drift?.errors?.length && (!drift?.repeats?.length || !!drift?.outOfDate)
 
   function buildFiles() {
     const files = {}
@@ -735,12 +737,18 @@ export default function TemplateDevEditor() {
       </div>
 
       {/* rules/ that cannot be read is listed below; saving regenerates nothing. */}
-      {activeChart && drift && (drift.state === 'legacy' || drift.state === 'stale') && !drift.errors?.length && (
+      {activeChart && drift?.repeats?.length > 0 && !drift.errors?.length && (
+        <Alert
+          type="error" banner showIcon data-testid="repeats-banner"
+          message={`${drift.repeats.map(repeatsText).join('; ')}: each alert would fire twice. To fix it, ${REPEATS_FIX}; saving does not.`}
+        />
+      )}
+      {activeChart && drift && (drift.state === 'legacy' || drift.state === 'stale') && !drift.errors?.length && (!drift.repeats?.length || drift.outOfDate) && (
         <Alert
           type="warning" banner showIcon
           message={drift.state === 'legacy'
             ? 'This chart still uses the old schema-only format. Saving migrates it to rules/*.yaml.'
-            : `Generated files are behind the source (${(drift.files || []).join(', ')}). Saving regenerates them.`}
+            : `Generated files are behind the source (${(drift.outOfDate || drift.files || []).join(', ')}). Saving regenerates them.`}
         />
       )}
       {parseErrors.length > 0 && (

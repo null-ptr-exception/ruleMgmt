@@ -72,8 +72,13 @@ done
 ```
 
 `gen-rules` writes `rules/`, then regenerates `values.schema.json` and
-`templates/` from it. Run it again with `--check`; it should report no
-problems.
+`templates/` from it, and removes the chart's old rule file
+(`templates/prometheus-rule.yaml`): its alerts are now generated, one file per
+group. Run it again with `--check`; it should report no problems.
+
+A chart converted with 2.3.0 kept that old file, so it renders every alert
+twice; a commit now names the file. Delete it, and check with **Preview**
+that each alert appears once.
 
 **Commit the output on its own** — nothing else in that commit — so that it
 can be reverted in one step. One commit per chart is easier still.

@@ -7,7 +7,7 @@ import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
-import { generateProducts, staleTemplates } from '../../src/utils/drift.js'
+import { generateProducts, staleTemplates, replacedByConversion } from '../../src/utils/drift.js'
 import { isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { ensureChartYaml } from '../../src/utils/chartYaml.js'
 import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
@@ -313,9 +313,15 @@ export default function templatesRouter() {
       const listYaml = async dir => {
         try { return (await fs.readdir(dir)).filter(f => f.endsWith('.yaml')) } catch { return [] }
       }
+      // Converting a 1.x chart (no rules/ before): its old rule file, which
+      // holds every group under a name no group has, goes too (#190).
+      const templateNames = await listYaml(tmplDir)
+      const replaced = oldRulesFiles && Object.keys(oldRulesFiles).length ? [] : replacedByConversion(
+        Object.fromEntries(await Promise.all(templateNames.map(async f => [f, await fs.readFile(path.join(tmplDir, f), 'utf-8').catch(() => null)]))),
+        products.templates)
       const removed = [
         ...(await listYaml(rulesDir)).filter(f => !(f in files)).map(f => path.join(rulesDir, f)),
-        ...staleTemplates(await listYaml(tmplDir), products.templates, { schemas: [before], models: [beforeModel, model] })
+        ...[...new Set([...staleTemplates(templateNames, products.templates, { schemas: [before], models: [beforeModel, model] }), ...replaced])]
           .map(f => path.join(tmplDir, f)),
       ]
 

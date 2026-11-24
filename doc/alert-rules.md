@@ -294,6 +294,24 @@ written by hand — is kept, is not drift, and `gen-rules` lists it as
 `kept templates/<file> (not generated)`. A file named exactly like a group's
 template is that group's, and is overwritten.
 
+Two exceptions concern rule objects (`PrometheusRule`, `VMRule`):
+
+- **Migrating a chart from before `rules/` removes its old rule file**, such
+  as 1.x's `templates/prometheus-rule.yaml`, when it holds nothing but rule
+  objects and every group in it is one the chart now generates. That file held
+  every group under a name no group has; kept, it would render each alert a
+  second time. A file with any other document, a group of its own, or a group
+  name built with Helm (`{{ .Values.group }}`) is kept.
+- **A rule object in `templates/` that repeats a rule the chart generates is
+  reported**, naming the file: the editor shows it, `gen-rules` (and
+  `--check`) lists it as `REPEATS` and exits 1, and a commit is refused.
+  A repeat is a rule with the same name and the same labels; a label value
+  written with `{{ }}` counts as possibly the same. So an alert with the same
+  name and another `severity` is a different alert, and is not reported.
+  Names in comments (`#`, `{{/* */}}`) or in an annotation's text are not
+  rules. Saving or regenerating does not remove the file: delete it, or rename
+  the rules in it if they are meant to be different ones.
+
 A whole group can be hand-written too. Define it in `values.schema.json` only,
 with `"x-custom-template": true`, and write its template yourself:
 

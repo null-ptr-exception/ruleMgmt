@@ -5,7 +5,7 @@ import os from 'os'
 import git from '../lib/git.js'
 import { checkRules } from '../../src/utils/ruleChecks.js'
 import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
-import { blocksCommit } from '../../src/utils/drift.js'
+import { blocksCommit, repeatsText, REPEATS_FIX } from '../../src/utils/drift.js'
 import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
 import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
@@ -70,9 +70,15 @@ async function checkChart(entry, chartDir, findings, unconverted) {
   if (blocksCommit(drift.state)) {
     // rules/ that cannot be read has nothing to regenerate from: say what
     // is wrong with it, not that the products are behind (#172).
+    // A rule object repeating the generated alerts is not fixed by
+    // regenerating: say which file, and what to do with it (#190).
+    const repeats = drift.repeats?.map(repeatsText)
+    const outOfDate = drift.outOfDate ? `; products are also out of date (${drift.outOfDate.join(', ')}) — regenerate` : ''
     const detail = drift.errors?.length
       ? `rules/ cannot be read (${drift.errors.slice(0, 3).join('; ')}${drift.errors.length > 3 ? `; and ${drift.errors.length - 3} more` : ''}) — fix it before committing`
-      : `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
+      : repeats?.length
+        ? `${repeats.join('; ')} — each alert would fire twice: ${REPEATS_FIX} before committing${outOfDate}`
+        : `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
     findings.push({ severity: 'commit', kind: `drift-${drift.state}`, chart: entry.name, description: `${entry.name}: ${detail}` })
   } else if (drift.state === 'legacy') {
     unconverted.push(entry.name)

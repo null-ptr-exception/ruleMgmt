@@ -31,7 +31,7 @@ import {
   schemaToModel, modelToFiles, parseRulesDir, validateValues, genSchema,
 } from '../src/utils/rulesFile.js'
 import { checkRules } from '../src/utils/ruleChecks.js'
-import { generateProducts, staleTemplates } from '../src/utils/drift.js'
+import { generateProducts, staleTemplates, replacedByConversion, repeatingTemplates, repeatsText, REPEATS_FIX } from '../src/utils/drift.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { ensureChartYaml } from '../src/utils/chartYaml.js'
 import yaml from 'js-yaml'
@@ -155,8 +155,9 @@ async function main() {
   }
 
   // A templates/ file whose group has gone or no longer generates one is
-  // removed, or under --check reported: Helm still renders it. Any other file
-  // there is hand-written and kept (#114). rules/ is never pruned: it is either
+  // removed, or under --check reported: Helm still renders it. So is, on a
+  // 1.x chart's conversion, its old rule file (#190). Any other file there is
+  // hand-written and kept (#114). rules/ is never pruned: it is either
   // being written for the first time or it is the source.
   {
     if (migrating && !check) await fs.mkdir(rulesDir, { recursive: true })
@@ -164,8 +165,25 @@ async function main() {
     let existingTemplates = []
     try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
     const stale = new Set(staleTemplates(existingTemplates, products.templates, { schemas: [schema], models: [model] }))
+    // Converting a 1.x chart: its one rule file holds every group under a name
+    // no group has, and is replaced by what is generated now (#190).
+    const texts = {}
+    // A file that cannot be read as text (a directory named *.yaml) is not a
+    // rule object; Helm reports it when it renders.
+    for (const name of existingTemplates) texts[name] = await readIfExists(path.join(tmplDir, name)).catch(() => null)
+    if (migrating) {
+      for (const name of replacedByConversion(texts, products.templates)) stale.add(name)
+    }
+    // On a converted chart such a file is left to the user, as a commit is:
+    // reported, never removed. Regenerating does not fix it.
+    const repeats = repeatingTemplates(Object.fromEntries(Object.entries(texts).filter(([n]) => !stale.has(n))), products.templates)
     for (const name of existingTemplates) {
       if (name in products.templates) continue
+      if (!stale.has(name) && repeats[name]) {
+        results.push(['REPEATS', `${repeatsText({ file: path.join('templates', name), rules: repeats[name] })} — ${REPEATS_FIX}`])
+        failed++
+        continue
+      }
       if (!stale.has(name)) {
         results.push(['kept', `${path.join('templates', name)} (not generated)`])
         continue

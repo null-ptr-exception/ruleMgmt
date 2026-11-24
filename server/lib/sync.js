@@ -160,10 +160,11 @@ export function normalizeSyncPath(candidate) {
 // below under a different spelling than what ends up on disk.
 export function isSafeSyncPath(candidate, chartsDirName) {
   if (!candidate || typeof candidate !== 'string') return false
-  // No `..`, no folder starting with a dot, no backslash or NUL (safePath.js).
-  if (!isRepoPath(candidate)) return false
   if (path.isAbsolute(candidate)) return false
+  // As sync.yaml may spell it (`apps\\prod`, `a/./b`), then checked: no
+  // `..`, no folder starting with a dot, no NUL (safePath.js).
   const normalized = normalizeSyncPath(candidate)
+  if (!isRepoPath(normalized)) return false
   if (normalized === '.' || normalized === '' || normalized === '..' || normalized.startsWith('../')) return false
   const firstSegment = normalized.split('/')[0]
   if (firstSegment === chartsDirName) return false

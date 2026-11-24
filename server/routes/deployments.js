@@ -14,7 +14,7 @@ import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath, COMMON_DIR } from '../../src/utils/reservedNames.js'
 import { writeWhole } from '../lib/routingFiles.js'
-import { NAME_RE, isRepoPath, inside } from '../lib/safePath.js'
+import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
 import { isAbsent, UnreadableError, readTextIfThere, errorAnswer } from '../lib/readIfThere.js'
 
 // One segment of a file name: not a path, not hidden.
@@ -32,12 +32,13 @@ function isValidDeploymentParam(req) {
 // and a deleted source keeps its sync link (#180).
 const syncFolder = req => (req.query.folder ? normalizeSyncPath(req.query.folder) : req.query.folder)
 
-function resolveDeploymentDir(req) {
+async function resolveDeploymentDir(req) {
   const folder = req.query.folder
   if (folder) {
     // A path in the repo, staying in it (safePath.js).
     if (!isRepoPath(folder)) return null
-    return inside(req.gitopsDir, folder)
+    // Where it really is, through any link: in the repo.
+    return insideReal(req.gitopsDir, folder)
   }
   const deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments')
   return path.join(deploymentsDir, req.params.chart)
@@ -113,7 +114,7 @@ export default function deploymentsRouter() {
   })
 
   router.get('/:chart', async (req, res) => {
-    const dir = resolveDeploymentDir(req)
+    const dir = await resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     try {
       if (req.query.folder) {
@@ -153,7 +154,7 @@ export default function deploymentsRouter() {
   })
 
   router.get('/:chart/:deployment', async (req, res) => {
-    const dir = resolveDeploymentDir(req)
+    const dir = await resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
@@ -198,7 +199,7 @@ export default function deploymentsRouter() {
   })
 
   router.post('/:chart/:deployment', async (req, res) => {
-    const dir = resolveDeploymentDir(req)
+    const dir = await resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
@@ -264,7 +265,7 @@ export default function deploymentsRouter() {
   // folder's own deployment has one — see routingFiles.js.
   async function routingTarget(req, res, { write = true } = {}) {
     if (commonRefused(req, res, 'given notification routing')) return null
-    const dir = resolveDeploymentDir(req)
+    const dir = await resolveDeploymentDir(req)
     if (!dir) { res.status(400).json({ error: 'Invalid folder path' }); return null }
     if (!isValidDeploymentParam(req)) { res.status(400).json({ error: 'Invalid deployment name' }); return null }
     const folder = syncFolder(req)
@@ -367,7 +368,7 @@ export default function deploymentsRouter() {
 
   router.post('/:chart/:deployment/clone', async (req, res) => {
     if (commonRefused(req, res, 'cloned')) return
-    const dir = resolveDeploymentDir(req)
+    const dir = await resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
@@ -388,7 +389,7 @@ export default function deploymentsRouter() {
 
   router.delete('/:chart/:deployment', async (req, res) => {
     if (commonRefused(req, res, 'deleted as one')) return
-    const dir = resolveDeploymentDir(req)
+    const dir = await resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })

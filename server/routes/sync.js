@@ -20,6 +20,7 @@ import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
 import { newDeploymentProblem } from '../lib/deploymentWalk.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
+import { insideReal } from '../lib/safePath.js'
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -76,7 +77,8 @@ export default function syncRouter() {
     const sourceError = await validateSyncPath(req.gitopsDir, source)
     if (sourceError) return res.status(400).json({ error: sourceError })
 
-    if (!isSafeSyncPath(target, chartsDirName())) {
+    // Through a link, still in the repo: a copy is written there.
+    if (!isSafeSyncPath(target, chartsDirName()) || !(await insideReal(req.gitopsDir, target))) {
       return res.status(400).json({ error: `Invalid path: ${target}` })
     }
     // Unlike source, target is allowed not to exist yet (it gets created as

@@ -340,12 +340,14 @@ export default function gitRouter() {
     const file = req.query.file
     const ref = req.query.ref
 
-    if (!isRepoPath(file)) {
+    // A tracked file, dot-files and dot-folders among them; never git's own.
+    if (!isRepoPath(file, { hidden: true })) {
       return res.status(400).json({ error: 'Invalid file path' })
     }
-    // A commit as git log names it, never an option or an expression; and
-    // what git is given after it is never read as an option either.
-    if (ref !== undefined && (typeof ref !== 'string' || !/^[0-9a-f]{4,64}$/i.test(ref))) {
+    // A commit as git log names it (or HEAD, HEAD~1), never an option or an
+    // expression; and what git is given after it is never read as an option
+    // either.
+    if (ref !== undefined && (typeof ref !== 'string' || !/^(HEAD|[0-9a-f]{4,64})(~\d*|\^\d*)*$/i.test(ref))) {
       return res.status(400).json({ error: 'Invalid commit' })
     }
 

@@ -27,6 +27,7 @@ import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { readTextIfThere } from './readIfThere.js'
+import { insideReal } from './safePath.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
@@ -295,6 +296,8 @@ export async function copyToTargets(gitopsDir, registry, source, what) {
     try {
       if (target === source) throw new Error('listed as its own sync target')
       if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
+      // Through a link, still in the repo.
+      if (!(await insideReal(gitopsDir, target))) throw new Error('not a path sync may write to: it leads outside the repo')
       const dstDir = path.join(gitopsDir, target)
       if (!(await isDeploymentDir(dstDir))) throw new Error('not a deployment on disk')
       await copyToTarget(srcDir, dstDir, what)

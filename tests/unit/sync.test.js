@@ -115,6 +115,11 @@ describe('isSafeSyncPath', () => {
     expect(isSafeSyncPath('./charts/mychart', 'charts')).toBe(false)
   })
 
+  it('takes a path written with backslashes, as sync.yaml may spell it, once normalised', () => {
+    expect(isSafeSyncPath('apps\\prod', 'charts')).toBe(true)
+    expect(isSafeSyncPath('apps\\.hidden\\prod', 'charts')).toBe(false)
+  })
+
   it('catches a charts-dir-rooted path spelled with backslashes', () => {
     expect(isSafeSyncPath('charts\\mychart', 'charts')).toBe(false)
     expect(isSafeSyncPath('..\\etc', 'charts')).toBe(false)

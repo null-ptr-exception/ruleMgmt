@@ -25,6 +25,7 @@ import { resolveStack } from './stack.js'
 import { valuesWarnings } from './deploymentWrite.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { parseIfThere, readTextIfThere, UnreadableError } from './readIfThere.js'
+import { insideReal } from './safePath.js'
 
 const SYNC_FILE = 'sync.yaml'
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
@@ -352,6 +353,7 @@ export async function regenerateRouting(gitopsDir) {
         // where sync itself would write it — a safe path inside the
         // workspace, holding a deployment (as copyToTargets checks).
         if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
+        if (!(await insideReal(gitopsDir, target))) throw new Error('not a path sync may write to: it leads outside the repo')
         if (!(await isDeploymentDir(path.join(gitopsDir, target)))) throw new Error('not a deployment on disk')
         const routing = await checkedRouting(path.join(gitopsDir, source), shared)
         if (routing.errors) throw new Error(`its source ${source} has routing problems`)

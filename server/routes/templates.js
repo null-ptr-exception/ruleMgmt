@@ -18,7 +18,7 @@ import yaml from 'js-yaml'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { NAME_RE, isFileName, inside } from '../lib/safePath.js'
+import { NAME_RE, isFileName, insideReal } from '../lib/safePath.js'
 
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
@@ -101,7 +101,8 @@ export default function templatesRouter() {
     if (!isFileName(req.params.template)) return res.status(400).json({ error: 'Invalid template name' })
     next()
   })
-  const templateFile = req => inside(chartPaths(req, req.params.chart).tmplDir, `${req.params.template}.yaml`)
+  // Where the file really is, through a link: in the repo.
+  const templateFile = req => insideReal(chartPaths(req, req.params.chart).tmplDir, `${req.params.template}.yaml`)
 
   function chartPaths(req, chart) {
     const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
@@ -473,7 +474,8 @@ export default function templatesRouter() {
     if (typeof newName !== 'string' || !NAME_RE.test(newName)) {
       return res.status(400).json({ error: 'Invalid newName' })
     }
-    const oldFile = templateFile(req)
+    const oldFile = await templateFile(req)
+    if (!oldFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
     const newFile = path.join(tmplDir, `${newName}.yaml`)
     try {
       await fs.rename(oldFile, newFile)
@@ -487,7 +489,8 @@ export default function templatesRouter() {
 
   // Get a single template file's content
   router.get('/:chart/:template', async (req, res) => {
-    const tmplFile = templateFile(req)
+    const tmplFile = await templateFile(req)
+    if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
     try {
       const content = await readTextIfThere(tmplFile)
       if (content === null) return res.status(404).json({ error: 'Template not found' })
@@ -501,7 +504,8 @@ export default function templatesRouter() {
   // Save a template file's content
   router.post('/:chart/:template', async (req, res) => {
     const { tmplDir } = chartPaths(req, req.params.chart)
-    const tmplFile = templateFile(req)
+    const tmplFile = await templateFile(req)
+    if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
     const { content } = req.body || {}
     if (typeof content !== 'string') return res.status(400).json({ error: 'content is required: the template file\'s text' })
     try {
@@ -515,7 +519,8 @@ export default function templatesRouter() {
 
   // Delete a template file
   router.delete('/:chart/:template', async (req, res) => {
-    const tmplFile = templateFile(req)
+    const tmplFile = await templateFile(req)
+    if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
     try {
       await fs.rm(tmplFile, { force: true })
       res.json({ ok: true })

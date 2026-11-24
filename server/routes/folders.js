@@ -15,7 +15,7 @@ import { planCreate, planDelete, applyPlan, commonUsers, deploymentOnCommon, fol
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { parseIfThere, errorAnswer } from '../lib/readIfThere.js'
-import { isRepoPath, repoPathProblem } from '../lib/safePath.js'
+import { isRepoPath, repoPathProblem, isName, insideReal } from '../lib/safePath.js'
 
 // What a new deployment asks of its Template's version: any.
 export const ANY_TEMPLATE_VERSION = ANY_VERSION
@@ -167,7 +167,7 @@ export default function foldersRouter() {
   router.get('/tree', async (req, res) => {
     try {
       const parentPath = req.query.path || ''
-      if (parentPath && !isRepoPath(parentPath)) {
+      if (parentPath && !isRepoPath(parentPath, { hidden: true })) {
         return res.status(400).json({ error: 'Invalid path' })
       }
       const children = await listChildren(req.gitopsDir, parentPath)
@@ -189,7 +189,7 @@ export default function foldersRouter() {
   router.get('/', async (req, res) => {
     try {
       const parentPath = req.query.path || ''
-      if (parentPath && !isRepoPath(parentPath)) {
+      if (parentPath && !isRepoPath(parentPath, { hidden: true })) {
         return res.status(400).json({ error: 'Invalid path' })
       }
       const children = await listChildren(req.gitopsDir, parentPath)
@@ -209,6 +209,8 @@ export default function foldersRouter() {
     try {
       const reserved = await newReservedSegment(req.gitopsDir, folderPath)
       if (reserved) return res.status(400).json({ error: reservedError(reserved) })
+      // Where it really is, through a link: in the repo.
+      if (!(await insideReal(req.gitopsDir, folderPath))) return res.status(400).json({ error: 'Invalid folder path: it leads outside the repo' })
       await fs.mkdir(path.join(req.gitopsDir, folderPath), { recursive: true })
       res.json({ ok: true })
     } catch (err) {
@@ -255,7 +257,7 @@ export default function foldersRouter() {
   router.get('/common/users', async (req, res) => {
     try {
       const rel = String(req.query.path || '')
-      if (rel && !isRepoPath(rel)) return res.status(400).json({ error: 'Invalid path' })
+      if (rel && !isRepoPath(rel, { hidden: true })) return res.status(400).json({ error: 'Invalid path' })
       if (await linkOnPath(req.gitopsDir, rel)) return res.status(400).json({ error: `${rel} goes through a link` })
       res.json(await commonUsers(req.gitopsDir, rel.replace(/\/+$/, '')))
     } catch (err) {
@@ -270,12 +272,14 @@ export default function foldersRouter() {
     if (!isSafeFolderPath(folder, req.gitopsDir)) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
-    if (!chart || typeof chart !== 'string' || chart.includes('..') || path.isAbsolute(chart)) {
+    // A Template is named like one (safePath.js): not `.cache`, not a path.
+    if (!isName(chart)) {
       return res.status(400).json({ error: 'Invalid chart name' })
     }
 
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
     const deployDir = path.join(req.gitopsDir, folder)
+    if (!(await insideReal(req.gitopsDir, folder))) return res.status(400).json({ error: 'Invalid folder path: it leads outside the repo' })
 
     try {
       const reserved = await newReservedSegment(req.gitopsDir, folder)

@@ -11,7 +11,7 @@ import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import yaml from 'js-yaml'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { readTextIfThere, parseIfThere } from '../lib/readIfThere.js'
-import { NAME_RE, isRepoPath, inside } from '../lib/safePath.js'
+import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
 
 // One segment of a file name: not a path, not hidden.
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
@@ -87,7 +87,7 @@ export default function renderRouter() {
 
     let deploymentsDir
     if (folder) {
-      deploymentsDir = isRepoPath(folder) ? inside(req.gitopsDir, folder) : null
+      deploymentsDir = isRepoPath(folder) ? await insideReal(req.gitopsDir, folder) : null
       if (!deploymentsDir) return res.status(400).json({ error: 'Invalid folder path' })
     } else {
       deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments', chart)

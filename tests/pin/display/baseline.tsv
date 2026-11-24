@@ -1,0 +1,632 @@
+# Written by PIN_UPDATE=1 (the same under every Helm version this was run with); see tests/pin/display/display.pin.test.js.
+# The inputs and the base repo are the deployment-values pin's (its baseline says the base files).
+# rows: the row count shown ('-' none, 'n/a' not a count there); alertsShown: Preview's "N alerts total".
+# values / helmValues: the probe cells _common.team, _common.base, cpu.0.job, cpu.0.threshold, cpu.0.window, cpu.0.severity, cpu.0.freq as JSON (the rule owner page), Preview's derived w of row 1 and the alerts it lists as producing none.
+# vsEntries: every entry's count of the input, when they are not all the same.
+id	target	entry	cls	status	leak	mark	rows	alertsShown	values	helmExit	helmAlerts	helmRows	helmValues	vsEntries	vsHelm
+ok	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+ok	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+ok	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+ok	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+ok	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+ok-full	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+ok-full	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+ok-full	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+ok-full	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=90; cpu.0.window="10m"; cpu.0.severity="critical"; cpu.0.freq=2	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=90; cpu.0.window="10m"; cpu.0.severity="critical"; cpu.0.freq=2		
+ok-full	A	preview	ok	200	no	-	1	3	w=8m; missing=CpuHigh/${severity}	0	3	1	w=8m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+ok-comment	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+ok-comment	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+ok-comment	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+ok-comment	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+ok-comment	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+ok-two-rows	A	tree	ok	200	no	-	2	-	-	0	5	2	-		
+ok-two-rows	A	list	ok	200	no	-	2	-	-	0	5	2	-		
+ok-two-rows	A	all-list	ok	200	no	-	2	-	-	0	5	2	-		
+ok-two-rows	A	editor	ok	200	no	-	2	-	_common.team="shop"; cpu.0.job="api"	0	5	2	_common.team="shop"; cpu.0.job="api"		
+ok-two-rows	A	preview	ok	200	no	-	2	5	w=4m; missing=CpuHigh/${severity}	0	5	2	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+number-col-text	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+number-col-text	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+number-col-text	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+number-col-text	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold="abc"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+number-col-text	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+integer-col-float	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+integer-col-float	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+integer-col-float	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+integer-col-float	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=2.5	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+integer-col-float	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+string-col-bool	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+string-col-bool	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+string-col-bool	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+string-col-bool	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job=true	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+string-col-bool	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+enum-miss	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+enum-miss	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+enum-miss	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+enum-miss	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.severity="fatal"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+enum-miss	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+required-miss	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+required-miss	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+required-miss	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+required-miss	A	editor	ok	200	no	values.required	1	-	_common.team="shop"; cpu.0.threshold=5	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+required-miss	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+required-empty	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+required-empty	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+required-empty	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+required-empty	A	editor	ok	200	no	values.required-empty	1	-	_common.team="shop"; cpu.0.job=""	0	3	1	_common.team="shop"; cpu.0.job=""		
+required-empty	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+duration-number	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+duration-number	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+duration-number	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+duration-number	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.window=5	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+duration-number	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+duration-bad	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+duration-bad	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+duration-bad	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+duration-bad	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.window="5x"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+duration-bad	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+number-col-zero	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+number-col-zero	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+number-col-zero	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+number-col-zero	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=0	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=0		
+number-col-zero	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+number-col-false	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+number-col-false	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+number-col-false	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+number-col-false	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=false	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+number-col-false	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+row-negative	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+row-negative	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+row-negative	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+row-negative	A	editor	ok	200	no	values.derived	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=-1	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=-1		
+row-negative	A	preview	ok	200	no	check-failed	1	3	w=problem; missing=CpuHigh/${severity}	0	3	1	w=-4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+cell-spaces	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+cell-spaces	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+cell-spaces	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+cell-spaces	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job=" api "	0	3	1	_common.team="shop"; cpu.0.job=" api "		
+cell-spaces	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+cell-null	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-null	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-null	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-null	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=null	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+cell-null	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+cell-list	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-list	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-list	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-list	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=[1]	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+cell-list	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+row-scalar	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+row-scalar	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+row-scalar	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+row-scalar	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+row-scalar	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+group-not-list	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+group-not-list	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+group-not-list	A	all-list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+group-not-list	A	editor	ok	200	no	values.schema	-	-	_common.team="shop"	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	
+group-not-list	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=0 editor=- preview=-	
+common-not-map	A	tree	ok	200	no	-	2	-	-	1	-	-	-	tree=2 list=2 all-list=2 editor=1 preview=-	count-while-helm-fails
+common-not-map	A	list	ok	200	no	-	2	-	-	1	-	-	-	tree=2 list=2 all-list=2 editor=1 preview=-	count-while-helm-fails
+common-not-map	A	all-list	ok	200	no	-	2	-	-	1	-	-	-	tree=2 list=2 all-list=2 editor=1 preview=-	count-while-helm-fails
+common-not-map	A	editor	ok	200	no	values.schema	1	-	cpu.0.job="api"	1	-	-	-	tree=2 list=2 all-list=2 editor=1 preview=-	
+common-not-map	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=2 list=2 all-list=2 editor=1 preview=-	
+group-empty	A	tree	ok	200	no	-	0	-	-	0	1	0	-		
+group-empty	A	list	ok	200	no	-	0	-	-	0	1	0	-		
+group-empty	A	all-list	ok	200	no	-	0	-	-	0	1	0	-		
+group-empty	A	editor	ok	200	no	-	0	-	_common.team="shop"	0	1	0	_common.team="shop"		
+group-empty	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down		
+rows-duplicate	A	tree	ok	200	no	-	2	-	-	0	5	2	-		
+rows-duplicate	A	list	ok	200	no	-	2	-	-	0	5	2	-		
+rows-duplicate	A	all-list	ok	200	no	-	2	-	-	0	5	2	-		
+rows-duplicate	A	editor	ok	200	no	-	2	-	_common.team="shop"; cpu.0.job="api"	0	5	2	_common.team="shop"; cpu.0.job="api"		
+rows-duplicate	A	preview	ok	200	no	-	2	5	w=4m; missing=CpuHigh/${severity}	0	5	2	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+group-null	A	tree	ok	200	no	-	0	-	-	0	1	0	-		
+group-null	A	list	ok	200	no	-	0	-	-	0	1	0	-		
+group-null	A	all-list	ok	200	no	-	0	-	-	0	1	0	-		
+group-null	A	editor	ok	200	no	-	0	-	_common.team="shop"	0	1	0	_common.team="shop"		
+group-null	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down		
+common-null	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-null	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-null	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-null	A	editor	ok	200	no	values.schema	1	-	cpu.0.job="api"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+common-null	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+common-team-null	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-team-null	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-team-null	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-team-null	A	editor	ok	200	no	values.schema	1	-	_common.team=null; cpu.0.job="api"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+common-team-null	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+once-group-map	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+once-group-map	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+once-group-map	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+once-group-map	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+once-group-map	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+once-group-null	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+once-group-null	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+once-group-null	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+once-group-null	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+once-group-null	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+common-empty	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+common-empty	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+common-empty	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+common-empty	A	editor	ok	200	no	values.required-empty	1	-	_common.team=""; cpu.0.job="api"	0	3	1	_common.team=""; cpu.0.job="api"		
+common-empty	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+common-wrong-type	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-wrong-type	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-wrong-type	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+common-wrong-type	A	editor	ok	200	no	values.schema	1	-	_common.team=5; cpu.0.job="api"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+common-wrong-type	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+cell-map	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-map	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-map	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+cell-map	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold={"a":1}	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+cell-map	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+two-bad-cells	A	tree	ok	200	no	-	2	-	-	1	-	-	-	tree=2 list=2 all-list=2 editor=2 preview=-	count-while-helm-fails
+two-bad-cells	A	list	ok	200	no	-	2	-	-	1	-	-	-	tree=2 list=2 all-list=2 editor=2 preview=-	count-while-helm-fails
+two-bad-cells	A	all-list	ok	200	no	-	2	-	-	1	-	-	-	tree=2 list=2 all-list=2 editor=2 preview=-	count-while-helm-fails
+two-bad-cells	A	editor	ok	200	no	values.schema	2	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold="abc"	1	-	-	-	tree=2 list=2 all-list=2 editor=2 preview=-	
+two-bad-cells	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=2 list=2 all-list=2 editor=2 preview=-	
+undeclared-cell	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-cell	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-cell	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-cell	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+undeclared-cell	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}; orphans=foo	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+undeclared-cell-list	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-cell-list	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-cell-list	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-cell-list	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+undeclared-cell-list	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}; orphans=foo	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+undeclared-group-list	A	tree	ok	200	no	-	2	-	-	0	3	1	-	tree=2 list=2 all-list=2 editor=1 preview=1	rows-differ
+undeclared-group-list	A	list	ok	200	no	-	2	-	-	0	3	1	-	tree=2 list=2 all-list=2 editor=1 preview=1	rows-differ
+undeclared-group-list	A	all-list	ok	200	no	-	2	-	-	0	3	1	-	tree=2 list=2 all-list=2 editor=1 preview=1	rows-differ
+undeclared-group-list	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"	tree=2 list=2 all-list=2 editor=1 preview=1	
+undeclared-group-list	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}; groups=extra:no-alerts; orphans=extra	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=2 list=2 all-list=2 editor=1 preview=1	lists-rendered-alert-as-none
+undeclared-common-map	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-common-map	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-common-map	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+undeclared-common-map	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+undeclared-common-map	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}; orphans=extra	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+proto-cell	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+proto-cell	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+proto-cell	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+proto-cell	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+proto-cell	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}; orphans=constructor	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+proto-group	A	tree	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+proto-group	A	list	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+proto-group	A	all-list	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+proto-group	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"	tree=1 list=1 all-list=1 editor=1 preview=-	
+proto-group	A	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=1 list=1 all-list=1 editor=1 preview=-	no-count-helm-renders
+proto-dunder	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+proto-dunder	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+proto-dunder	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+proto-dunder	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+proto-dunder	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-yes	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-yes	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-yes	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-yes	A	editor	ok	200	no	yaml.read-differently,values.schema	1	-	_common.team="shop"; cpu.0.job=true	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+y11-yes	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+y11-off-enum	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-off-enum	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-off-enum	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-off-enum	A	editor	ok	200	no	yaml.read-differently,values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.severity=false	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+y11-off-enum	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+y11-octal-010	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-octal-010	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-octal-010	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-octal-010	A	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=8		
+y11-octal-010	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-0o10	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-0o10	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-0o10	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-0o10	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=8		
+y11-0o10	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-underscore	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-underscore	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-underscore	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-underscore	A	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=1000	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=1000		
+y11-underscore	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-date	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-date	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-date	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-date	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="2024-01-01"	0	3	1	_common.team="shop"; cpu.0.job="2024-01-01"		
+y11-date	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-sexagesimal	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-sexagesimal	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-sexagesimal	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-sexagesimal	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold="1:30"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+y11-sexagesimal	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+y11-0_7	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-0_7	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-0_7	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-0_7	A	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=7	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=7		
+y11-0_7	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-hex	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-hex	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-hex	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-hex	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=16	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=16		
+y11-hex	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-exp	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-exp	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-exp	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-exp	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=1000	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=1000		
+y11-exp	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-octal-string	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-octal-string	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-octal-string	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+y11-octal-string	A	editor	ok	200	no	yaml.read-differently,values.schema	1	-	_common.team="shop"; cpu.0.job=8	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+y11-octal-string	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+y11-quoted-ok	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-quoted-ok	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-quoted-ok	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-quoted-ok	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="010"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="010"; cpu.0.threshold=8		
+y11-quoted-ok	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+y11-key	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+y11-key	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-key	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+y11-key	A	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+y11-key	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}; orphans=true	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+quoted-number	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+quoted-number	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+quoted-number	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+quoted-number	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold="10"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+quoted-number	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+dup-key	A	tree	ok	200	no	-	0	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	rows-differ
+dup-key	A	list	ok	200	no	-	0	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	rows-differ
+dup-key	A	all-list	ok	200	no	null	-	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	no-count-helm-renders
+dup-key	A	editor	ok	200	no	yaml.duplicate-key	1	-	_common.team="shop"; cpu.0.job="web"	0	3	1	_common.team="shop"; cpu.0.job="web"	tree=0 list=0 all-list=- editor=1 preview=1	
+dup-key	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=0 list=0 all-list=- editor=1 preview=1	lists-rendered-alert-as-none
+dup-key-block	A	tree	ok	200	no	-	0	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	rows-differ
+dup-key-block	A	list	ok	200	no	-	0	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	rows-differ
+dup-key-block	A	all-list	ok	200	no	null	-	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	no-count-helm-renders
+dup-key-block	A	editor	ok	200	no	yaml.duplicate-key	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=90	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=90	tree=0 list=0 all-list=- editor=1 preview=1	
+dup-key-block	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=0 list=0 all-list=- editor=1 preview=1	lists-rendered-alert-as-none
+dup-group	A	tree	ok	200	no	-	0	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	rows-differ
+dup-group	A	list	ok	200	no	-	0	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	rows-differ
+dup-group	A	all-list	ok	200	no	null	-	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	no-count-helm-renders
+dup-group	A	editor	ok	200	no	yaml.duplicate-key	1	-	_common.team="shop"; cpu.0.job="web"	0	3	1	_common.team="shop"; cpu.0.job="web"	tree=0 list=0 all-list=- editor=1 preview=1	
+dup-group	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=0 list=0 all-list=- editor=1 preview=1	lists-rendered-alert-as-none
+dup-wrapper	A	tree	ok	200	no	-	0	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=0 preview=0	
+dup-wrapper	A	list	ok	200	no	-	0	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=0 preview=0	
+dup-wrapper	A	all-list	ok	200	no	null	-	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=0 preview=0	
+dup-wrapper	A	editor	ok	200	no	yaml.duplicate-key,values.required-empty	0	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=0 preview=0	
+dup-wrapper	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down	tree=0 list=0 all-list=- editor=0 preview=0	
+dup-common-key	A	tree	ok	200	no	-	0	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	rows-differ
+dup-common-key	A	list	ok	200	no	-	0	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	rows-differ
+dup-common-key	A	all-list	ok	200	no	null	-	-	-	0	3	1	-	tree=0 list=0 all-list=- editor=1 preview=1	no-count-helm-renders
+dup-common-key	A	editor	ok	200	no	yaml.duplicate-key	1	-	_common.team="web"; cpu.0.job="api"	0	3	1	_common.team="web"; cpu.0.job="api"	tree=0 list=0 all-list=- editor=1 preview=1	
+dup-common-key	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=0 list=0 all-list=- editor=1 preview=1	lists-rendered-alert-as-none
+merge-key	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+merge-key	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+merge-key	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+merge-key	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=70	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=70		
+merge-key	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+comment-only	A	tree	ok	200	no	-	0	-	-	0	1	0	-		
+comment-only	A	list	ok	200	no	-	0	-	-	0	1	0	-		
+comment-only	A	all-list	ok	200	no	-	0	-	-	0	1	0	-		
+comment-only	A	editor	ok	200	no	values.required-empty	0	-	-	0	1	0	-		
+comment-only	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down		
+leading-dashes-comment	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+leading-dashes-comment	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+leading-dashes-comment	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+leading-dashes-comment	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+leading-dashes-comment	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+bom	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+bom	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+bom	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+bom	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+bom	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+crlf	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+crlf	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+crlf	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+crlf	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+crlf	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+tab-indent	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+tab-indent	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+tab-indent	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+tab-indent	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+tab-indent	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=- editor=- preview=-	
+empty-file	A	tree	ok	200	no	-	0	-	-	0	1	0	-		
+empty-file	A	list	ok	200	no	-	0	-	-	0	1	0	-		
+empty-file	A	all-list	ok	200	no	-	0	-	-	0	1	0	-		
+empty-file	A	editor	ok	200	no	values.required-empty	0	-	-	0	1	0	-		
+empty-file	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down		
+null-doc	A	tree	ok	200	no	-	0	-	-	0	1	0	-		
+null-doc	A	list	ok	200	no	-	0	-	-	0	1	0	-		
+null-doc	A	all-list	ok	200	no	-	0	-	-	0	1	0	-		
+null-doc	A	editor	ok	200	no	values.required-empty	0	-	-	0	1	0	-		
+null-doc	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down		
+demo-null	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=-	count-while-helm-fails
+demo-null	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=-	count-while-helm-fails
+demo-null	A	all-list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=-	count-while-helm-fails
+demo-null	A	editor	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=-	count-while-helm-fails
+demo-null	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=0 editor=0 preview=-	
+trailing-dashes	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+trailing-dashes	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+trailing-dashes	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+trailing-dashes	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+trailing-dashes	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+second-doc	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+second-doc	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+second-doc	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+second-doc	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+second-doc	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+second-doc-broken	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+second-doc-broken	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+second-doc-broken	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+second-doc-broken	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+second-doc-broken	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+not-yaml	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+not-yaml	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+not-yaml	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+not-yaml	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+not-yaml	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=- editor=- preview=-	
+top-scalar	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+top-scalar	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+top-scalar	A	all-list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+top-scalar	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	
+top-scalar	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=0 editor=- preview=-	
+top-list	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+top-list	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+top-list	A	all-list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	count-while-helm-fails
+top-list	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=- preview=-	
+top-list	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=0 editor=- preview=-	
+unwrapped	A	tree	ok	200	no	-	1	-	-	0	1	0	-	tree=1 list=1 all-list=1 editor=1 preview=0	rows-differ
+unwrapped	A	list	ok	200	no	-	1	-	-	0	1	0	-	tree=1 list=1 all-list=1 editor=1 preview=0	rows-differ
+unwrapped	A	all-list	ok	200	no	-	1	-	-	0	1	0	-	tree=1 list=1 all-list=1 editor=1 preview=0	rows-differ
+unwrapped	A	editor	ok	200	no	values.not-under-chart-key,values.required-empty	1	-	_common.team="shop"; cpu.0.job="api"	0	1	0	-	tree=1 list=1 all-list=1 editor=1 preview=0	rows-differ+value-differs
+unwrapped	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down	tree=1 list=1 all-list=1 editor=1 preview=0	
+wrong-wrapper	A	tree	ok	200	no	-	0	-	-	0	1	0	-		
+wrong-wrapper	A	list	ok	200	no	-	0	-	-	0	1	0	-		
+wrong-wrapper	A	all-list	ok	200	no	-	0	-	-	0	1	0	-		
+wrong-wrapper	A	editor	ok	200	no	values.not-under-chart-key,values.required-empty	0	-	-	0	1	0	-		
+wrong-wrapper	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down		
+common-zero	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+common-zero	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+common-zero	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+common-zero	A	editor	ok	200	no	values.derived	1	-	_common.team="shop"; _common.base=0; cpu.0.job="api"	0	3	1	_common.team="shop"; _common.base=0; cpu.0.job="api"		
+common-zero	A	preview	ok	200	no	check-failed	1	3	w=problem; missing=CpuHigh/${severity}	0	3	1	w=0m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+row-zero	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+row-zero	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+row-zero	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+row-zero	A	editor	ok	200	no	values.derived	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=0	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=0		
+row-zero	A	preview	ok	200	no	check-failed	1	3	w=problem; missing=CpuHigh/${severity}	0	3	1	w=0m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+derived-overflow	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+derived-overflow	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+derived-overflow	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+derived-overflow	A	editor	ok	200	no	values.derived	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=100000000000000000	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=100000000000000000		
+derived-overflow	A	preview	ok	200	no	check-failed	1	3	w=problem; missing=CpuHigh/${severity}	0	3	1	w=400000000000000000m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+threshold-inf	A	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=- preview=-	count-while-helm-fails
+threshold-inf	A	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=- preview=-	count-while-helm-fails
+threshold-inf	A	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=- preview=-	count-while-helm-fails
+threshold-inf	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=- preview=-	
+threshold-inf	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=- preview=-	
+unreadable-perm	A	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+unreadable-perm	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	count-while-helm-fails
+unreadable-perm	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+unreadable-perm	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=0 list=0 all-list=- editor=- preview=-	
+unreadable-perm	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=- editor=- preview=-	
+unreadable-dir	A	tree	ok	200	no	-	0	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=- preview=-	
+unreadable-dir	A	list	ok	200	no	-	0	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=- preview=-	
+unreadable-dir	A	all-list	ok	200	no	null	-	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=- preview=-	
+unreadable-dir	A	editor	unreadable	409	no	-	-	-	-	0	1	0	-	tree=0 list=0 all-list=- editor=- preview=-	
+unreadable-dir	A	preview	ok	200	no	no-summary	-	-	-	0	1	0	w=-; names=Down	tree=0 list=0 all-list=- editor=- preview=-	no-count-helm-renders
+dangling-link	A	tree	not-deployment	200	no	noValues	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
+dangling-link	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	count-while-helm-fails
+dangling-link	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
+dangling-link	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
+dangling-link	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=- list=0 all-list=- editor=- preview=-	
+link-outside	A	tree	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=- preview=-	
+link-outside	A	list	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=- preview=-	
+link-outside	A	all-list	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 editor=- preview=-	
+link-outside	A	editor	unreadable	409	no	-	-	-	-	0	3	1	_common.team="shop"; cpu.0.job="api"	tree=1 list=1 all-list=1 editor=- preview=-	no-count-helm-renders
+link-outside	A	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=1 list=1 all-list=1 editor=- preview=-	no-count-helm-renders
+link-loop	A	tree	not-deployment	200	no	noValues	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
+link-loop	A	list	ok	200	no	-	0	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	count-while-helm-fails
+link-loop	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
+link-loop	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-	tree=- list=0 all-list=- editor=- preview=-	
+link-loop	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=- list=0 all-list=- editor=- preview=-	
+cond-no	A	tree	ok	200	no	-	1	-	-	0	0	0	-	tree=1 list=1 all-list=1 editor=1 preview=-	rows-differ
+cond-no	A	list	ok	200	no	-	1	-	-	0	0	0	-	tree=1 list=1 all-list=1 editor=1 preview=-	rows-differ
+cond-no	A	all-list	ok	200	no	-	1	-	-	0	0	0	-	tree=1 list=1 all-list=1 editor=1 preview=-	rows-differ
+cond-no	A	editor	ok	200	no	yaml.read-differently,stack.stack-off,stackProblems	1	-	_common.team="shop"; cpu.0.job="api"	0	0	0	no-probe	tree=1 list=1 all-list=1 editor=1 preview=-	rows-differ+value-differs
+cond-no	A	preview	failed	200	no	error	-	-	-	0	0	0	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+cond-true	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+cond-true	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+cond-true	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+cond-true	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+cond-true	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+chart-link-missing	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+chart-link-missing	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+chart-link-missing	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+chart-link-missing	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+chart-link-missing	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+link-inside	A	tree	ok	200	no	-	1	-	-	0	3	1	-		
+link-inside	A	list	ok	200	no	-	1	-	-	0	3	1	-		
+link-inside	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+link-inside	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="web"	0	3	1	_common.team="shop"; cpu.0.job="web"		
+link-inside	A	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+tpl-common-team	T	tree	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-common-team	T	list	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-common-team	T	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-common-team	T	editor	ok	200	no	-	1	-	cpu.0.job="api"	0	3	1	_common.team="platform"; cpu.0.job="api"		
+tpl-common-team	T	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+tpl-common-zero	T	tree	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-common-zero	T	list	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-common-zero	T	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-common-zero	T	editor	ok	200	no	values.derived	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; _common.base=0; cpu.0.job="api"		
+tpl-common-zero	T	preview	ok	200	no	check-failed	1	3	w=problem; missing=CpuHigh/${severity}	0	3	1	w=0m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+tpl-null-merge	T	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-null-merge	T	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-null-merge	T	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-null-merge	T	editor	ok	200	no	values.required	1	-	_common.team=null; cpu.0.job="api"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+tpl-null-merge	T	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+tpl-trailing-dashes	T	tree	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-trailing-dashes	T	list	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-trailing-dashes	T	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-trailing-dashes	T	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+tpl-trailing-dashes	T	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+tpl-not-yaml	T	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-not-yaml	T	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-not-yaml	T	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-not-yaml	T	editor	ok	200	no	template.unusable	1	-	_common.team="shop"; cpu.0.job="api"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+tpl-not-yaml	T	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+tpl-unreadable	T	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-unreadable	T	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-unreadable	T	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-unreadable	T	editor	ok	200	no	template.unusable	1	-	_common.team="shop"; cpu.0.job="api"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+tpl-unreadable	T	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+tpl-row-incomplete	T	tree	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-row-incomplete	T	list	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-row-incomplete	T	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+tpl-row-incomplete	T	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
+tpl-row-incomplete	T	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+tpl-rules-unreadable	T	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-rules-unreadable	T	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-rules-unreadable	T	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-rules-unreadable	T	editor	ok	200	no	template.unusable	1	-	_common.team="shop"; cpu.0.job="api"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+tpl-rules-unreadable	T	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+stack-ok	S	tree	ok	200	no	-	1	-	-	0	3	1	-		
+stack-ok	S	list	ok	200	no	-	1	-	-	0	3	1	-		
+stack-ok	S	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+stack-ok	S	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="x"	0	3	1	_common.team="shop"; cpu.0.job="x"		
+stack-ok	S	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+stack-ok	S	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+stack-unwrapped	S	tree	ok	200	no	-	0	-	-	0	1	0	-	tree=0 list=0 all-list=0 editor=0 preview=0 common-users=-	
+stack-unwrapped	S	list	ok	200	no	-	0	-	-	0	1	0	-	tree=0 list=0 all-list=0 editor=0 preview=0 common-users=-	
+stack-unwrapped	S	all-list	ok	200	no	-	0	-	-	0	1	0	-	tree=0 list=0 all-list=0 editor=0 preview=0 common-users=-	
+stack-unwrapped	S	editor	ok	200	no	values.not-under-chart-key	0	-	_common.team="shop"	0	1	0	_common.team="shop"	tree=0 list=0 all-list=0 editor=0 preview=0 common-users=-	
+stack-unwrapped	S	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down	tree=0 list=0 all-list=0 editor=0 preview=0 common-users=-	
+stack-unwrapped	S	common-users	ok	200	no	-	-	-	cpu from template	0	1	0	-	tree=0 list=0 all-list=0 editor=0 preview=0 common-users=-	
+stack-x-null	S	tree	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	count-while-helm-fails
+stack-x-null	S	list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	count-while-helm-fails
+stack-x-null	S	all-list	ok	200	no	-	0	-	-	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	count-while-helm-fails
+stack-x-null	S	editor	ok	200	no	-	0	-	_common.team="shop"	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	count-while-helm-fails
+stack-x-null	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-x-null	S	common-users	ok	200	no	-	-	-	cpu from template	1	-	-	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-x-number-text	S	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=- common-users=1	count-while-helm-fails
+stack-x-number-text	S	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=- common-users=1	count-while-helm-fails
+stack-x-number-text	S	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=- common-users=1	count-while-helm-fails
+stack-x-number-text	S	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold="abc"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=- common-users=1	
+stack-x-number-text	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=- common-users=1	
+stack-x-number-text	S	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=- common-users=1	count-while-helm-fails
+stack-x-010	S	tree	ok	200	no	-	1	-	-	0	3	1	-		
+stack-x-010	S	list	ok	200	no	-	1	-	-	0	3	1	-		
+stack-x-010	S	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+stack-x-010	S	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold=8		
+stack-x-010	S	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+stack-x-010	S	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+stack-required-empty	S	tree	ok	200	no	-	1	-	-	0	3	1	-		
+stack-required-empty	S	list	ok	200	no	-	1	-	-	0	3	1	-		
+stack-required-empty	S	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+stack-required-empty	S	editor	ok	200	no	values.required-empty	1	-	_common.team="shop"; cpu.0.job=""	0	3	1	_common.team="shop"; cpu.0.job=""		
+stack-required-empty	S	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+stack-required-empty	S	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+stack-condition-no	S	tree	ok	200	no	-	0	-	-	0	0	0	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-condition-no	S	list	ok	200	no	-	0	-	-	0	0	0	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-condition-no	S	all-list	ok	200	no	-	0	-	-	0	0	0	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-condition-no	S	editor	ok	200	no	stack.stack-off,values.required-empty,stackProblems	0	-	-	0	0	0	no-probe	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-condition-no	S	preview	failed	200	no	error	-	-	-	0	0	0	w=-; names=-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-condition-no	S	common-users	ok	200	no	-	-	-	-	0	0	0	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-condition-yes	S	tree	ok	200	no	-	1	-	-	0	3	1	-		
+stack-condition-yes	S	list	ok	200	no	-	1	-	-	0	3	1	-		
+stack-condition-yes	S	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+stack-condition-yes	S	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="x"	0	3	1	_common.team="shop"; cpu.0.job="x"		
+stack-condition-yes	S	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+stack-condition-yes	S	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+stack-missing-link	S	tree	ok	200	no	-	0	-	-	0	0	0	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-missing-link	S	list	ok	200	no	-	0	-	-	0	0	0	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-missing-link	S	all-list	ok	200	no	-	0	-	-	0	0	0	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-missing-link	S	editor	ok	200	no	stack.template-missing,values.required-empty,stackProblems	0	-	-	0	0	0	no-probe	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-missing-link	S	preview	failed	200	no	error	-	-	-	0	0	0	w=-; names=-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+stack-missing-link	S	common-users	ok	200	no	-	-	-	-	0	0	0	-	tree=0 list=0 all-list=0 editor=0 preview=- common-users=-	
+layer-common-zero	L	tree	ok	200	no	-	1	-	-	0	3	1	-		
+layer-common-zero	L	list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-common-zero	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-common-zero	L	editor	ok	200	no	-	n/a	-	_common.team="shop"; _common.base=0	0	3	1	_common.team="shop"; _common.base=0		
+layer-common-zero	L	preview	ok	200	no	check-failed	1	3	w=problem; missing=CpuHigh/${severity}	0	3	1	w=0m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+layer-common-zero	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+layer-team-missing	L	tree	ok	200	no	-	1	-	-	0	3	1	-		
+layer-team-missing	L	list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-team-missing	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-team-missing	L	editor	ok	200	no	-	n/a	-	-	0	3	1	-		
+layer-team-missing	L	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+layer-team-missing	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+layer-group-map	L	tree	ok	200	no	-	1	-	-	0	3	1	-		
+layer-group-map	L	list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-group-map	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-group-map	L	editor	ok	200	no	values.schema	n/a	-	_common.team="shop"	0	3	1	_common.team="shop"		
+layer-group-map	L	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+layer-group-map	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+layer-not-yaml	L	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-not-yaml	L	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-not-yaml	L	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-not-yaml	L	editor	unreadable	409	no	-	n/a	-	-	1	-	-	-		
+layer-not-yaml	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 preview=- common-users=1	
+layer-not-yaml	L	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-unreadable	L	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-unreadable	L	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-unreadable	L	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-unreadable	L	editor	unreadable	409	no	-	n/a	-	-	1	-	-	-		
+layer-unreadable	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 preview=- common-users=1	
+layer-unreadable	L	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-link-outside	L	tree	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 preview=- common-users=1	
+layer-link-outside	L	list	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 preview=- common-users=1	
+layer-link-outside	L	all-list	ok	200	no	-	1	-	-	0	3	1	-	tree=1 list=1 all-list=1 preview=- common-users=1	
+layer-link-outside	L	editor	unreadable	409	no	-	n/a	-	-	0	3	1	_common.team="shop"		
+layer-link-outside	L	preview	failed	200	no	error	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	tree=1 list=1 all-list=1 preview=- common-users=1	no-count-helm-renders
+layer-link-outside	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-	tree=1 list=1 all-list=1 preview=- common-users=1	
+layer-unwrapped	L	tree	ok	200	no	-	1	-	-	0	3	1	-		
+layer-unwrapped	L	list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-unwrapped	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-unwrapped	L	editor	ok	200	no	values.not-under-chart-key	n/a	-	_common.team="shop"	0	3	1	-		value-differs
+layer-unwrapped	L	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+layer-unwrapped	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+layer-dup-key	L	tree	ok	200	no	-	1	-	-	0	3	1	-		
+layer-dup-key	L	list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-dup-key	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-dup-key	L	editor	ok	200	no	yaml.duplicate-key	n/a	-	_common.team="web"	0	3	1	_common.team="web"		
+layer-dup-key	L	preview	ok	200	no	warnings	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+layer-dup-key	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+layer-010	L	tree	ok	200	no	-	1	-	-	0	3	1	-		
+layer-010	L	list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-010	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-010	L	editor	ok	200	no	yaml.read-differently	n/a	-	_common.team="shop"; _common.base=8	0	3	1	_common.team="shop"; _common.base=8		
+layer-010	L	preview	ok	200	no	-	1	3	w=8m; missing=CpuHigh/${severity}	0	3	1	w=8m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+layer-010	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+layer-common-partial	L	tree	ok	200	no	-	1	-	-	0	3	1	-		
+layer-common-partial	L	list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-common-partial	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
+layer-common-partial	L	editor	ok	200	no	-	n/a	-	_common.base=5	0	3	1	_common.team="shop"; _common.base=5		
+layer-common-partial	L	preview	ok	200	no	-	1	3	w=5m; missing=CpuHigh/${severity}	0	3	1	w=5m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+layer-common-partial	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
+layer-chart-null	L	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-chart-null	L	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-chart-null	L	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+layer-chart-null	L	editor	ok	200	no	-	n/a	-	-	1	-	-	-		
+layer-chart-null	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 preview=- common-users=1	
+layer-chart-null	L	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	tree=1 list=1 all-list=1 preview=- common-users=1	count-while-helm-fails
+tpl-common-partial	T	tree	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-common-partial	T	list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-common-partial	T	all-list	ok	200	no	-	1	-	-	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	count-while-helm-fails
+tpl-common-partial	T	editor	ok	200	no	values.required	1	-	cpu.0.job="api"	1	-	-	-	tree=1 list=1 all-list=1 editor=1 preview=-	
+tpl-common-partial	T	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	tree=1 list=1 all-list=1 editor=1 preview=-	
+flat-ok	F	list	ok	200	no	-	1	-	-	0	3	1	-		
+flat-ok	F	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="f"	0	3	1	_common.team="shop"; cpu.0.job="f"		
+flat-ok	F	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+flat-number-text	F	list	ok	200	no	-	1	-	-	1	-	-	-	list=1 editor=1 preview=-	count-while-helm-fails
+flat-number-text	F	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="f"; cpu.0.threshold="abc"	1	-	-	-	list=1 editor=1 preview=-	
+flat-number-text	F	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	list=1 editor=1 preview=-	
+flat-010	F	list	ok	200	no	-	1	-	-	0	3	1	-		
+flat-010	F	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="f"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="f"; cpu.0.threshold=8		
+flat-010	F	preview	ok	200	no	-	1	3	w=4m; missing=CpuHigh/${severity}	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		lists-rendered-alert-as-none
+flat-not-yaml	F	list	ok	200	no	-	0	-	-	1	-	-	-	list=0 editor=- preview=-	count-while-helm-fails
+flat-not-yaml	F	editor	unreadable	409	no	-	-	-	-	1	-	-	-	list=0 editor=- preview=-	
+flat-not-yaml	F	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	list=0 editor=- preview=-	
+flat-empty	F	list	ok	200	no	-	0	-	-	0	1	0	-		
+flat-empty	F	editor	ok	200	no	values.required-empty	0	-	-	0	1	0	-		
+flat-empty	F	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down		
+flat-unreadable	F	list	ok	200	no	-	0	-	-	1	-	-	-	list=0 editor=- preview=-	count-while-helm-fails
+flat-unreadable	F	editor	unreadable	409	no	-	-	-	-	1	-	-	-	list=0 editor=- preview=-	
+flat-unreadable	F	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	list=0 editor=- preview=-	
+flat-wrapped	F	list	ok	200	no	-	0	-	-	0	1	0	-		
+flat-wrapped	F	editor	ok	200	no	values.required-empty	0	-	-	0	1	0	-		
+flat-wrapped	F	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/${severity},CpuRate/	0	1	0	w=-; names=Down		

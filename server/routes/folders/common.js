@@ -12,8 +12,6 @@ import { planChange, applyChange } from '../../repo/changes/index.js'
 import { expectedVersion } from '../../repo/changes/common.js'
 import { z } from 'zod'
 import { linkOnTheWay } from '../../repo/paths.js'
-import { withoutPath } from '../../lib/answerPaths.js'
-import { errorAnswer } from '../../lib/readIfThere.js'
 import { route, repoPath, map } from '../../http/route.js'
 import { COMMON_DIR } from '../../../src/utils/reservedNames.js'
 
@@ -79,15 +77,11 @@ export function commonRoutes(router) {
   }))
 
   // Written under the commit lock, the whole plan or nothing. A write
-  // that fails says why.
+  // that fails says why (the writer's answer); an error thrown on the way
+  // is answered by the route wrapper.
   router.post('/common', route('folders.common', { body: APPLY_BODY }, async ({ body }, { gitopsDir }) => {
-    try {
-      const plan = await planChange(openRepo(gitopsDir), changeOf(body))
-      return await applyChange(plan, { expect: expectedVersion(body.expected) })
-    } catch (err) {
-      const answer = errorAnswer(err)
-      return answer.status === 500 ? { status: 500, body: { error: await withoutPath(err.message, gitopsDir) } } : answer
-    }
+    const plan = await planChange(openRepo(gitopsDir), changeOf(body))
+    return applyChange(plan, { expect: expectedVersion(body.expected) })
   }))
 
   router.get('/common/users', route('folders.common-users', { query: USERS_QUERY }, async ({ query }, { gitopsDir }) => {

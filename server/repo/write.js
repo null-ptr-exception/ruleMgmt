@@ -104,6 +104,7 @@ import { realPlace } from './paths.js'
 import { withSyncRegistryLock, holdsLock } from './lock.js'
 import { writeRefusal, placeProblem } from './writePath.js'
 import { repoRel } from './readRepoFile.js'
+import { whyNotListed } from './readRepoDir.js'
 import { logger } from '../lib/logger.js'
 
 const CHANGES = new Map()
@@ -644,26 +645,58 @@ export async function writeWhole(abs, content) {
 
 /**
  * Every parked file or folder in the repo but .git (PARKED_NAME): content
- * a write moved aside and a crash, or a failed put-back, left there.
- * `[{ rel, original, free }]`, `free` whether its original name is free.
+ * a write moved aside and a crash, or a failed put-back, left there — and
+ * every folder that could not be listed while looking: what is in it is
+ * not known, so "none found" is not "none" while `unlisted` has a folder.
+ *
+ *   parkedSearch(root) → { parked: [{ rel, original, free }], unlisted: [{ rel, why }] }
+ *     free  whether the parked item's original name is free
+ *     why   plain words ('permission denied'); '' is the repo's own folder
+ *
+ * A folder gone between its listing and its own (removed meanwhile) holds
+ * nothing, and is not `unlisted`; nor is one that cannot be entered at all
+ * (mode 000): git sees nothing in it, so nothing in it can be committed
+ * away. Links are not followed.
  */
-export async function parkedItems(root) {
-  const out = []
+const canEnter = dir => fs.access(dir, fsConstants.X_OK).then(() => true, () => false)
+
+export async function parkedSearch(root) {
+  const parked = []
+  const unlisted = []
   async function walk(rel) {
     let entries
-    try { entries = await fs.readdir(path.join(root, rel), { withFileTypes: true }) } catch { return }
+    try {
+      entries = await fs.readdir(path.join(root, rel), { withFileTypes: true })
+    } catch (err) {
+      // Only a folder that can be entered: git stats the files in it by
+      // name, so it would commit the removal of one parked there unseen. One
+      // that cannot be entered git cannot see into either, and commits
+      // nothing of.
+      if (err.code !== 'ENOENT' && await canEnter(path.join(root, rel))) unlisted.push({ rel, why: whyNotListed(err) })
+      return
+    }
     for (const e of entries) {
       const r = rel ? `${rel}/${e.name}` : e.name
       if (!rel && e.name === '.git') continue
       const original = parkedOf(e.name)
       if (original) {
         const at = rel ? `${rel}/${original}` : original
-        out.push({ rel: r, original: at, free: !(await fs.lstat(path.join(root, at)).then(() => true, () => false)) })
+        parked.push({ rel: r, original: at, free: !(await fs.lstat(path.join(root, at)).then(() => true, () => false)) })
         continue
       }
       if (e.isDirectory()) await walk(r)
     }
   }
   await walk('')
-  return out.sort((a, b) => (a.rel < b.rel ? -1 : 1))
+  const byRel = (a, b) => (a.rel < b.rel ? -1 : 1)
+  return { parked: parked.sort(byRel), unlisted: unlisted.sort(byRel) }
+}
+
+/**
+ * The parked items parkedSearch found, alone: for a caller that looks at
+ * what is there. One that must know there is none (Commit) asks
+ * parkedSearch, which also says where it could not look.
+ */
+export async function parkedItems(root) {
+  return (await parkedSearch(root)).parked
 }

@@ -1168,6 +1168,16 @@ remove it: rename it back, then delete the Template again (when its
 moved aside) or save it again — removing it alone would leave half a
 Template: a folder with no `Chart.yaml`, or a generated file with no rules.
 
+A folder the server can enter but cannot list (permissions such as `311`)
+may hold such content unseen, and git would still commit the removal of
+the file it was, so Commit and Push refuse then too, naming the folder:
+"`deployments/t/a` cannot be listed (permission denied), so content a
+write moved aside may be in it unseen". Make the folder readable and
+commit again. The server's log names such a folder when it starts. A
+folder that cannot be entered at all (`000`) is not refused: git sees
+nothing in it either, so the commit goes through without it and its
+answer lists the folder as not checked.
+
 When the server starts, it removes the temp files a stopped write left in
 the repo — files named `_<name>.<8 hex>.tmp`, anywhere but `.git`, made more
 than an hour ago — and names them in its log; it removes nothing else from

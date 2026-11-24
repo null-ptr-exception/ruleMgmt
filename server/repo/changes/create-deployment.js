@@ -36,6 +36,9 @@ async function problemsOnceMade(repo, folder, files) {
 }
 
 const say = (status, error, extra = {}) => ({ refusal: { status, body: { error, ...extra } } })
+// A file that has to be read first and cannot be: nothing is made. One
+// shape for each of them — the file, why, and `unreadable` for the page.
+const cannotRead = (file, why) => say(409, `Not made: ${file} cannot be read: ${why}`, { file, unreadable: true })
 const existing = chart => ({ files: [], facts: { body: { status: 'existing', chart } } })
 
 defineChange('create-deployment', {
@@ -63,7 +66,7 @@ defineChange('create-deployment', {
     const was = {}
     for (const f of ['Chart.yaml', 'values.yaml']) {
       const read = await repo.file(`${folder}/${f}`)
-      if (read.state === 'unreadable') return say(409, `Not made: ${folder}/${f} cannot be read: ${read.why}`, { file: `${folder}/${f}` })
+      if (read.state === 'unreadable') return cannotRead(`${folder}/${f}`, read.why)
       was[f] = read
     }
     // A Chart.yaml there without a values.yaml: someone's. One that depends
@@ -71,7 +74,7 @@ defineChange('create-deployment', {
     // not written over.
     if (was['Chart.yaml'].state === 'ok') {
       const parsed = await repo.helmYaml(`${folder}/Chart.yaml`)
-      if (parsed.state !== 'ok') return say(409, `${folder}/Chart.yaml cannot be read: not valid YAML (${findingsOf(parsed).map(f => f.message).join('; ')})`, { file: `${folder}/Chart.yaml`, unreadable: true })
+      if (parsed.state !== 'ok') return cannotRead(`${folder}/Chart.yaml`, `not valid YAML (${findingsOf(parsed).map(f => f.message).join('; ')})`)
       const deps = parsed.value && typeof parsed.value === 'object' && Array.isArray(parsed.value.dependencies) ? parsed.value.dependencies : []
       // The alert Templates of the repo, as findAlertTemplateCharts lists
       // them (a folder of the Templates' whose Chart.yaml, as Helm reads it,
@@ -97,10 +100,10 @@ defineChange('create-deployment', {
     // taken for none.
     const valuesFile = `${chartsRel()}/${chart}/values.yaml`
     const tplValues = await repo.helmYaml(valuesFile)
-    if (tplValues.state === 'unreadable') return say(409, `Not made: ${valuesFile} cannot be read: ${tplValues.why}`, { file: valuesFile })
+    if (tplValues.state === 'unreadable') return cannotRead(valuesFile, tplValues.why)
     if (tplValues.state === 'invalid') {
       const what = findingsOf(tplValues).some(f => f.code === 'yaml.not-yaml') ? 'not valid YAML' : 'not values Helm reads'
-      return say(409, `Not made: ${valuesFile} cannot be read: ${what} (${findingsOf(tplValues).map(f => f.message).join('; ')})`, { file: valuesFile })
+      return cannotRead(valuesFile, `${what} (${findingsOf(tplValues).map(f => f.message).join('; ')})`)
     }
 
     let chartYaml

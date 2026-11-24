@@ -966,7 +966,7 @@ tvalues-not-yaml	p2	migration-preview	listed	200	-	no	-	fails	disk	-	fails	1	-	-
 tvalues-not-yaml	p2	chart-meta	ok	200	-	no	<T>/Chart.yaml	fails	after	same	fails	1	-	-	-	-	
 tvalues-not-yaml	p2	clone	ok	200	-	no	charts/p2-copy/Chart.yaml,charts/p2-copy/rules/_common.yaml,charts/p2-copy/rules/cpu.yaml,charts/p2-copy/rules/mem.yaml,charts/p2-copy/rules/up.yaml,charts/p2-copy/templates/cpu.yaml,charts/p2-copy/templates/mem.yaml,charts/p2-copy/templates/up.yaml,charts/p2-copy/values.schema.json,charts/p2-copy/values.yaml	fails	after	same	fails	1	-	-	-	-	
 tvalues-not-yaml	p2	delete	refused	409	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-tvalues-not-yaml	p2	init	refused	409	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
+tvalues-not-yaml	p2	init	unreadable	409	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 tvalues-not-yaml	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 tvalues-not-yaml	p2	commit	refused	409	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	chart-unreadable	
 tvalues-not-yaml	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
@@ -1038,7 +1038,7 @@ tvalues-cannot-tell	p2	migration-preview	listed	200	-	no	-	renders	disk	-	render
 tvalues-cannot-tell	p2	chart-meta	ok	200	-	no	<T>/Chart.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tvalues-cannot-tell	p2	clone	ok	200	-	no	charts/p2-copy/Chart.yaml,charts/p2-copy/rules/_common.yaml,charts/p2-copy/rules/cpu.yaml,charts/p2-copy/rules/mem.yaml,charts/p2-copy/rules/up.yaml,charts/p2-copy/templates/cpu.yaml,charts/p2-copy/templates/mem.yaml,charts/p2-copy/templates/up.yaml,charts/p2-copy/values.schema.json,charts/p2-copy/values.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tvalues-cannot-tell	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-cannot-tell	p2	init	refused	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-cannot-tell	p2	init	unreadable	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 tvalues-cannot-tell	p2	preview	refused	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6	refuses-what-helm-renders
 tvalues-cannot-tell	p2	commit	refused	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	chart-unreadable	refuses-what-helm-renders
 tvalues-cannot-tell	p2	check-deployment	refused	exit 1	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
@@ -1092,7 +1092,7 @@ tvalues-unreadable	p2	migration-preview	listed	200	-	no	-	fails	disk	-	fails	1	-
 tvalues-unreadable	p2	chart-meta	ok	200	-	no	<T>/Chart.yaml	fails	after	same	fails	1	-	-	-	-	
 tvalues-unreadable	p2	clone	unreadable	409	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 tvalues-unreadable	p2	delete	refused	409	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-tvalues-unreadable	p2	init	refused	409	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
+tvalues-unreadable	p2	init	unreadable	409	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 tvalues-unreadable	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 tvalues-unreadable	p2	commit	refused	409	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	file-unreadable	
 tvalues-unreadable	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
@@ -1110,7 +1110,7 @@ tvalues-folder	p2	migration-preview	listed	200	-	no	-	renders	disk	-	renders	0	6
 tvalues-folder	p2	chart-meta	ok	200	-	no	<T>/Chart.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tvalues-folder	p2	clone	ok	200	-	no	charts/p2-copy/Chart.yaml,charts/p2-copy/rules/_common.yaml,charts/p2-copy/rules/cpu.yaml,charts/p2-copy/rules/mem.yaml,charts/p2-copy/rules/up.yaml,charts/p2-copy/templates/cpu.yaml,charts/p2-copy/templates/mem.yaml,charts/p2-copy/templates/up.yaml,charts/p2-copy/values.schema.json	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tvalues-folder	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-folder	p2	init	refused	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-folder	p2	init	unreadable	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 tvalues-folder	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6	
 tvalues-folder	p2	commit	refused	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	chart-unreadable	refuses-what-helm-renders
 tvalues-folder	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	

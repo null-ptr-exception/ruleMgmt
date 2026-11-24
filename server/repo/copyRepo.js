@@ -198,7 +198,9 @@ export async function copyParts(repoRoot, rels, { prefix = SERVER_COPY, onStop =
 /**
  * A plan's files written into the copy at `root` (copyParts; never the
  * repo), each only where the copy really is: a folder on the way that
- * leads out of it throws (`outsideCopy`).
+ * leads out of it throws (`outsideCopy`). The entries are the writer's
+ * (write.js): a file's text (null removes it), a link, a folder made,
+ * a folder removed.
  */
 export async function writeIntoCopy(root, files) {
   const real = await fs.realpath(root)
@@ -216,6 +218,9 @@ export async function writeIntoCopy(root, files) {
     await fs.mkdir(path.dirname(abs), { recursive: true })
     await within(path.dirname(abs))
     if (f.removeFolder || f.removeWhole) { await fs.rm(abs, { recursive: true, force: true }); continue }
+    // A folder made when it is not there, as the writer makes it; one
+    // that is there stays, with what it holds.
+    if (f.makeFolder) { await fs.mkdir(abs, { recursive: true }); await within(abs); continue }
     await fs.rm(abs, { force: true })
     if (f.text === null) continue
     if (f.link !== undefined) await fs.symlink(f.link, abs)

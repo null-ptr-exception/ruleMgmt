@@ -42,3 +42,16 @@ export function parkedSaid(parked, charts) {
       : `${was}: ${back}, then save the Template ${t.name} again (or delete it again, if it was being deleted) — removing it alone would leave what was made from it behind`
   })
 }
+
+/**
+ * What is said of a folder that could not be listed while looking for
+ * parked content (repo/write.js parkedSearch): whether any is in it is not
+ * known, so it is named, with what to do.
+ *
+ *   unlistedSaid({ rel: 'deployments/t/a', why: 'permission denied' })
+ *   → 'deployments/t/a cannot be listed (permission denied), so content a write moved aside may be in it unseen:
+ *      make the folder readable, then commit'
+ */
+export function unlistedSaid({ rel, why }) {
+  return `${rel || 'The repo folder'} cannot be listed (${why}), so content a write moved aside may be in it unseen: make the folder readable, then commit`
+}

@@ -432,3 +432,53 @@ describe('stress: saves at once, and beside a Commit', () => {
     }
   }, 300_000)
 })
+
+// A target that was not copied to is listed with why, in words: never an
+// error code, a multi-line parser message, or a path of the machine.
+describe('a sync target left as it is is listed with a sentence saying why', () => {
+  const CHART = `${SRC}/Chart.yaml`
+  const listed = async () => {
+    const { status, data, text } = await save(SRC, 'new')
+    expect(status).toBe(200)
+    expect(text).not.toContain(work)
+    expect(data.syncFailed.map(f => f.target)).toEqual([TGT, T2])
+    for (const f of data.syncFailed) {
+      expect(f.error).not.toMatch(/\n/)
+      expect(f.error).not.toMatch(/\b(E[A-Z]{3,}|[A-Z]+_[A-Z_]+)\b/)
+    }
+    // The targets are as they were.
+    expect(await read(`${TGT}/values.yaml`)).not.toBe(await read(`${SRC}/values.yaml`))
+    return data.syncFailed[0].error
+  }
+
+  it('the source\'s Chart.yaml names no Template', async () => {
+    await fs.writeFile(path.join(root, CHART), 'apiVersion: v2\nname: a\nversion: 0.1.0\n')
+    expect(await listed()).toBe(`${CHART} names no Template: put its dependencies back, then save ${SRC} again`)
+  })
+
+  it('the source\'s Chart.yaml is not there', async () => {
+    await fs.rm(path.join(root, CHART))
+    expect(await listed()).toBe(`${CHART} is not there: restore it, then save ${SRC} again`)
+  })
+
+  it.skipIf(IS_ROOT)('the source\'s Chart.yaml cannot be read', async () => {
+    await fs.chmod(path.join(root, CHART), 0)
+    expect(await listed()).toBe(`${CHART} cannot be read (permission denied): once it can, save ${SRC} again`)
+  })
+
+  it('the source\'s Chart.yaml is not YAML', async () => {
+    await fs.writeFile(path.join(root, CHART), 'a: [\n')
+    expect(await listed()).toBe(`${CHART} is not valid YAML (unexpected end of the stream within a flow collection): fix it, then save ${SRC} again`)
+  })
+
+  it('a target that could not be checked (an error with a code and a path of the machine): words, neither', async () => {
+    const { syncTargets } = await import('../../server/lib/deploymentWrite.js')
+    const { openRepo } = await import('../../server/repo/openRepo.js')
+    const { syncAnswer } = await import('../../server/repo/sync.js')
+    const repo = openRepo(root)
+    const { registry } = await syncAnswer(repo)
+    const failing = { ...repo, file: async rel => { throw Object.assign(new Error(`EIO: i/o error, read '${path.join(root, rel)}'`), { code: 'EIO' }) }, with: () => failing }
+    const { failed } = await syncTargets(failing, registry, SRC)
+    expect(failed).toEqual([TGT, T2].map(target => ({ target, error: 'it could not be checked (the disk could not read it)' })))
+  })
+})

@@ -209,6 +209,53 @@ describe('making a deployment', () => {
     await expect(fs.access(abs('deployments/team/a'))).rejects.toThrow()
   })
 
+  // The four refusals for a file that cannot be read answer alike: "Not
+  // made:", the file, why — with `file` and `unreadable: true`.
+  describe('each file that cannot be read is refused in the same shape', () => {
+    const init = () => api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })
+    const refused = (data, file, why) => {
+      expect(Object.keys(data).sort()).toEqual(['error', 'file', 'unreadable'])
+      expect(data.file).toBe(file)
+      expect(data.unreadable).toBe(true)
+      expect(data.error).toMatch(why)
+      expect(data.error.startsWith(`Not made: ${file} cannot be read: `)).toBe(true)
+    }
+
+    it.skipIf(IS_ROOT)('the folder\'s Chart.yaml without permission', async () => {
+      await fs.mkdir(abs('deployments/team/a'), { recursive: true })
+      await write('deployments/team/a/Chart.yaml', 'name: theirs\n')
+      await lock('deployments/team/a/Chart.yaml')
+      const { status, data } = await init()
+      await unlock('deployments/team/a/Chart.yaml')
+      expect(status).toBe(409)
+      refused(data, 'deployments/team/a/Chart.yaml', /: permission denied$/)
+    })
+
+    it('the folder\'s Chart.yaml that is not YAML', async () => {
+      await fs.mkdir(abs('deployments/team/a'), { recursive: true })
+      await write('deployments/team/a/Chart.yaml', 'name: [theirs\n')
+      const { status, data } = await init()
+      expect(status).toBe(409)
+      refused(data, 'deployments/team/a/Chart.yaml', /: not valid YAML \(.+\)$/)
+    })
+
+    it.skipIf(IS_ROOT)('the Template\'s values.yaml without permission', async () => {
+      await write('charts/demo/values.yaml', '{}\n')
+      await lock('charts/demo/values.yaml')
+      const { status, data } = await init()
+      await unlock('charts/demo/values.yaml')
+      expect(status).toBe(409)
+      refused(data, 'charts/demo/values.yaml', /: permission denied$/)
+    })
+
+    it('the Template\'s values.yaml that is not YAML', async () => {
+      await write('charts/demo/values.yaml', 'cpu: [\n')
+      const { status, data } = await init()
+      expect(status).toBe(409)
+      refused(data, 'charts/demo/values.yaml', /: not (valid YAML|values Helm reads) \(.+\)$/)
+    })
+  })
+
   it('a Template that is not there: refused, and no folder made for it', async () => {
     const { status } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/new/deep/a', chart: 'nochart' })
     expect(status).toBeGreaterThanOrEqual(400)

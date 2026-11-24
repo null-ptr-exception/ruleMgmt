@@ -9,7 +9,7 @@ import path from 'path'
 import os from 'os'
 import { spawnSync, execFileSync } from 'child_process'
 import express from 'express'
-import { parkedItems, sweepTempFiles } from '../../server/repo/write.js'
+import { parkedItems, parkedSearch, sweepTempFiles } from '../../server/repo/write.js'
 
 const STOP = path.resolve('tests/helpers/stopAtPark.mjs')
 const CHANGES = path.resolve('server/repo/changes/index.js')
@@ -41,7 +41,7 @@ function killedAt(change, n) {
   return spawnSync('node', ['--import', STOP, '--input-type=module', '-e', code], { encoding: 'utf-8', env: { ...process.env, STOP_PARK_AT: String(n), CHARTS_DIR: 'charts' } })
 }
 
-async function commit() {
+async function commit(what = 'commit') {
   const { default: gitRouter } = await import('../../server/routes/git.js')
   const app = express()
   app.use(express.json())
@@ -49,7 +49,7 @@ async function commit() {
   app.use('/api/v2/git', gitRouter())
   const server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)) })
   try {
-    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/v2/git/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'x' }) })
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/v2/git/${what}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'x' }) })
     return { status: res.status, data: await res.json() }
   } finally { server.close() }
 }
@@ -171,5 +171,86 @@ describe('part of a Template change moved aside: what Commit says to do leaves a
     const c = await commit()
     expect(c.status).toBe(200)
     expect(c.data.templateWarnings).toEqual([{ kind: 'template-chart-absent', chart: 'two', description: 'charts/two/Chart.yaml is not there: Helm renders no deployment of the Template without it — it is not listed as a Template until it has one: write it (gen-rules.mjs --init), or remove the folder if the Template was to go' }])
+  })
+})
+
+// A folder that cannot be listed may hold content moved aside: "cannot
+// tell" is not "none". Commit would otherwise commit the removal of the
+// file whose content waits there under its parked name.
+describe.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('a folder that cannot be listed while looking for content moved aside', () => {
+  const dir = () => path.join(root, 'deployments/t/a')
+  afterEach(() => { try { fs.chmodSync(dir(), 0o755) } catch { /* gone */ } })
+  const parkValues = () => {
+    fs.renameSync(path.join(dir(), 'values.yaml'), path.join(dir(), '_values.yaml.deadbeef.parked'))
+    fs.chmodSync(dir(), 0o311)
+  }
+  const SAID = 'deployments/t/a cannot be listed (permission denied), so content a write moved aside may be in it unseen: make the folder readable, then commit'
+
+  it('parkedSearch names the folder; what it found elsewhere is still given', async () => {
+    fs.renameSync(path.join(root, 'charts/demo/values.yaml'), path.join(root, 'charts/demo/_values.yaml.0123abcd.parked'))
+    parkValues()
+    expect(await parkedSearch(root)).toEqual({
+      parked: [{ rel: 'charts/demo/_values.yaml.0123abcd.parked', original: 'charts/demo/values.yaml', free: true }],
+      unlisted: [{ rel: 'deployments/t/a', why: 'permission denied' }],
+    })
+  })
+
+  it('Commit refuses naming the folder, and commits nothing', async () => {
+    // Nothing else for Commit to refuse: without this refusal it answers 200
+    // and commits the removal of values.yaml.
+    fs.rmSync(path.join(root, 'charts/demo'), { recursive: true })
+    git('add', '-A'); git('commit', '-qm', 'no template')
+    parkValues()
+    const head = git('rev-parse', 'HEAD')
+    const c = await commit()
+    expect(c.status).toBe(409)
+    expect(c.data.error).toBe('Commit refused')
+    expect(c.data.findings).toEqual([{ severity: 'commit', kind: 'parked-unknown', regenerable: false, file: 'deployments/t/a', description: SAID }])
+    expect(git('rev-parse', 'HEAD')).toBe(head)
+    // Readable again: the parked file is seen, and named.
+    fs.chmodSync(dir(), 0o755)
+    const seen = await commit()
+    expect(seen.status).toBe(409)
+    expect(seen.data.findings.map(f => f.kind)).toEqual(['parked'])
+  })
+
+  it('Push refuses the same way', async () => {
+    const remote = path.join(work, 'remote.git')
+    execFileSync('git', ['init', '-q', '--bare', remote])
+    git('remote', 'add', 'origin', remote)
+    parkValues()
+    // Push is offered only with a token set: a made-up one, never used (the refusal comes first).
+    const before = process.env.GITLAB_TOKEN
+    process.env.GITLAB_TOKEN = 'made-up-for-this-test'
+    let p
+    try { p = await commit('push') } finally { if (before === undefined) delete process.env.GITLAB_TOKEN; else process.env.GITLAB_TOKEN = before }
+    expect(p.status).toBe(409)
+    expect(p.data.findings.map(f => f.description)).toEqual([SAID])
+  })
+
+  // A folder that cannot be entered at all: git sees nothing in it either,
+  // so nothing in it can be committed away — the commit goes through
+  // without it, and lists it.
+  it('a folder that cannot be entered (mode 000) goes through, listed, nothing of the folder committed', async () => {
+    fs.rmSync(path.join(root, 'charts/demo'), { recursive: true })
+    git('add', '-A'); git('commit', '-qm', 'no template')
+    fs.renameSync(path.join(dir(), 'values.yaml'), path.join(dir(), '_values.yaml.deadbeef.parked'))
+    fs.chmodSync(dir(), 0o000)
+    put('notes.md', 'something else to commit\n')
+    expect(await parkedSearch(root)).toEqual({ parked: [], unlisted: [] })
+    const c = await commit()
+    expect(c.status, JSON.stringify(c.data)).toBe(200)
+    expect(c.data.unreadable).toEqual([{ path: 'deployments/t/a', error: 'permission denied' }])
+    expect(git('show', '--name-status', '--format=', 'HEAD').trim()).toBe('A\tnotes.md')
+    fs.chmodSync(dir(), 0o755)
+    expect(git('ls-files', 'deployments/t/a').trim().split('\n')).toContain('deployments/t/a/values.yaml')
+    // Readable again: the parked file is seen, and Commit refuses naming it.
+    const seen = await commit()
+    expect(seen.status).toBe(409)
+    expect(seen.data.findings.map(f => f.kind)).toEqual(['parked'])
+  })
+
+  it('a folder gone while it was looked for is not one that cannot be listed', async () => {
+    expect(await parkedSearch(path.join(root, 'no-such-folder'))).toEqual({ parked: [], unlisted: [] })
   })
 })

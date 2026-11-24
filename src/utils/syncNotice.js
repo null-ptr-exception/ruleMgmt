@@ -1,12 +1,14 @@
 // A save that wrote the source but not every sync target (#180) answers
 // `{ ok: true, syncFailed: [{ target, error }] }`. Such a target may keep
 // some or all of its old files, and it is read-only, so the user is told
-// which.
+// which, each with the server's reason (reasonLine): a sentence, which may
+// hold brackets, colons and commas of its own — so they are set apart by
+// "; ".
 export function syncFailedNotice(syncFailed, done = 'Saved') {
   if (!syncFailed?.length) return null
-  const list = syncFailed.map(f => `${f.target} (${f.error})`).join(', ')
+  const list = syncFailed.map(f => reasonLine(f.target, f.error)).join('; ')
   const one = syncFailed.length === 1
-  return `${done}, but ${one ? 'this sync target' : 'these sync targets'} could not be updated and may not match the source: ${list}`
+  return `${done}, but ${one ? 'this sync target' : 'these sync targets'} could not be updated and may not match the source — ${list}`
 }
 
 // A reason said of `name` (a deployment, a sync target) in a list:

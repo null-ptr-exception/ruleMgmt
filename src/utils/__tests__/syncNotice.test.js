@@ -8,18 +8,18 @@ describe('syncFailedNotice', () => {
   })
 
   it('names one target and why', () => {
-    expect(syncFailedNotice([{ target: 'team/dr', error: 'EACCES' }]))
-      .toBe('Saved, but this sync target could not be updated and may not match the source: team/dr (EACCES)')
+    expect(syncFailedNotice([{ target: 'team/dr', error: 'not a deployment on disk' }]))
+      .toBe('Saved, but this sync target could not be updated and may not match the source — team/dr: not a deployment on disk')
   })
 
   it('says what was done, when it was not a save', () => {
-    expect(syncFailedNotice([{ target: 'team/dr', error: 'EACCES' }], 'Routing removed'))
-      .toBe('Routing removed, but this sync target could not be updated and may not match the source: team/dr (EACCES)')
+    expect(syncFailedNotice([{ target: 'team/dr', error: 'not a deployment on disk' }], 'Routing removed'))
+      .toBe('Routing removed, but this sync target could not be updated and may not match the source — team/dr: not a deployment on disk')
   })
 
-  it('names every target', () => {
-    expect(syncFailedNotice([{ target: 'a', error: 'EACCES' }, { target: 'b', error: 'not a deployment on disk' }]))
-      .toBe('Saved, but these sync targets could not be updated and may not match the source: a (EACCES), b (not a deployment on disk)')
+  it('names every target, each with its reason, a sentence with its own brackets and colons kept apart from the next', () => {
+    expect(syncFailedNotice([{ target: 'team/a', error: 'team/src/Chart.yaml cannot be read (permission denied): once it can, save team/src again' }, { target: 'team/b', error: 'not a deployment on disk' }]))
+      .toBe('Saved, but these sync targets could not be updated and may not match the source — team/a: team/src/Chart.yaml cannot be read (permission denied): once it can, save team/src again; team/b: not a deployment on disk')
   })
 })
 

@@ -51,16 +51,6 @@ export default function routingSharedRouter() {
     } }
   }))
 
-  // An error thrown on the way is a 500 with its code or message (a file
-  // that cannot be written is the writer's 409, not this).
-  const saysWhy = write => async (input, ctx) => {
-    try {
-      return await write(input, ctx)
-    } catch (err) {
-      return { status: 500, body: { error: err.code || err.message } }
-    }
-  }
-
   // Text or the page's { configs }: one change, all or none (changes/shared.js).
   router.put('/', route('shared.put', { body: PUT_BODY }, async ({ body }, { gitopsDir }) => (
     applyChange(await planChange(openRepo(gitopsDir), { kind: 'shared', shared: body.shared }))
@@ -71,9 +61,9 @@ export default function routingSharedRouter() {
   )))
 
   // Every resource behind — the shared file edited with git, say — made again.
-  router.post('/regenerate', route('shared.regenerate', {}, saysWhy(async (_, { gitopsDir }) => (
+  router.post('/regenerate', route('shared.regenerate', {}, async (_, { gitopsDir }) => (
     applyChange(await planChange(openRepo(gitopsDir), { kind: 'regenerate-routing' }))
-  ))))
+  )))
 
   return declaredRoutes(router)
 }

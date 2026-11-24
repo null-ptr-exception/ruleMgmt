@@ -12,7 +12,7 @@ import { isTarget } from '../../lib/sync.js'
 import { syncAnswer } from '../../repo/sync.js'
 import { newReservedSegment, reservedError } from '../../lib/reservedNames.js'
 import { planChange, applyChange } from '../../repo/changes/index.js'
-import { UnreadableError, errorAnswer } from '../../lib/readIfThere.js'
+import { UnreadableError } from '../../lib/readIfThere.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadDeployment } from '../../repo/deployment.js'
 
@@ -94,37 +94,32 @@ export function valuesRoutes(router) {
     if (at.error) return res.status(400).json({ error: at.error })
     const { dir, folder, chart, deployment } = at
     const { body: given } = input
-    try {
-      const readOnly = () => ({ status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } })
-      if (folder) {
-        // A synced target is read-only server-side, not just in the UI —
-        // the frontend's freeze can race (see AlertUserView's getSyncSource
-        // call), so this must be enforced here too, not only by disabling
-        // Save. Checked again under the lock below.
-        const read = await syncAnswer(openRepo(gitopsDir))
-        if (read.refusal) return res.status(read.refusal.status).json(read.refusal.body)
-        if (isTarget(read.registry, folder)) {
-          const { status, body } = readOnly()
-          return res.status(status).json(body)
-        }
-        const reserved = await newReservedSegment(gitopsDir, folder)
-        if (reserved) return res.status(400).json({ error: reservedError(reserved) })
+    const readOnly = () => ({ status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } })
+    if (folder) {
+      // A synced target is read-only server-side, not just in the UI —
+      // the frontend's freeze can race (see AlertUserView's getSyncSource
+      // call), so this must be enforced here too, not only by disabling
+      // Save. Checked again under the lock below.
+      const read = await syncAnswer(openRepo(gitopsDir))
+      if (read.refusal) return res.status(read.refusal.status).json(read.refusal.body)
+      if (isTarget(read.registry, folder)) {
+        const { status, body } = readOnly()
+        return res.status(status).json(body)
       }
-
-      const { file, direct } = await resolveValuesFile(dir, deployment)
-      // The folder's own deployment: its values.yaml and its sync targets'
-      // copies, written all or none (repo/changes/set-values.js). A legacy
-      // `<name>-values.yaml`: the same checks, and no sync.
-      const own = !!(folder && direct)
-      const common = own ? null : commonRefused(folder, 'given another values file')
-      if (common) return res.status(common.status).json(common.body)
-      const rel = own ? folder : path.relative(gitopsDir, direct ? dir : file).replace(/\\/g, '/')
-      const plan = await planChange(openRepo(gitopsDir), { kind: 'set-values', deployment: rel, values: given.values, chart, sync: own })
-      const { status, body } = await applyChange(plan, { expect: own ? given.version : undefined })
-      res.status(status).json(body)
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
+      const reserved = await newReservedSegment(gitopsDir, folder)
+      if (reserved) return res.status(400).json({ error: reservedError(reserved) })
     }
+
+    const { file, direct } = await resolveValuesFile(dir, deployment)
+    // The folder's own deployment: its values.yaml and its sync targets'
+    // copies, written all or none (repo/changes/set-values.js). A legacy
+    // `<name>-values.yaml`: the same checks, and no sync.
+    const own = !!(folder && direct)
+    const common = own ? null : commonRefused(folder, 'given another values file')
+    if (common) return res.status(common.status).json(common.body)
+    const rel = own ? folder : path.relative(gitopsDir, direct ? dir : file).replace(/\\/g, '/')
+    const plan = await planChange(openRepo(gitopsDir), { kind: 'set-values', deployment: rel, values: given.values, chart, sync: own })
+    const { status, body } = await applyChange(plan, { expect: own ? given.version : undefined })
+    res.status(status).json(body)
   }))
 }

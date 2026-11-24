@@ -35,6 +35,29 @@ const changedAnswer = (rel, { expected }) => ({ status: 409, body: {
 
 const unreadableCopy = (file, why) => ({ status: 409, body: { error: `${file} cannot be read: ${why}`, file, unreadable: true } })
 
+const firstLine = text => `${text}`.split('\n')[0]
+
+/**
+ * Why the Chart.yaml of a sync source (`src`, as read; `srcChart` its
+ * path, `rel` its deployment) cannot be copied to its targets, as one
+ * sentence saying what to do; null when it can.
+ *
+ *   chartProblem({ state: 'absent' }, 'deployments/t/a/Chart.yaml', 'deployments/t/a')
+ *   → 'deployments/t/a/Chart.yaml is not there: restore it, then save deployments/t/a again'
+ */
+function chartProblem(src, srcChart, rel) {
+  if (src.state === 'absent') return `${srcChart} is not there: restore it, then save ${rel} again`
+  if (src.state !== 'ok') return `${srcChart} cannot be read (${src.why ?? 'it could not be read'}): once it can, save ${rel} again`
+  try {
+    sourceChart(src.value.text)
+    return null
+  } catch (err) {
+    return err.code === 'SOURCE_HAS_NO_TEMPLATE'
+      ? `${srcChart} names no Template: put its dependencies back, then save ${rel} again`
+      : `${srcChart} is not valid YAML (${firstLine(err.reason || err.message)}): fix it, then save ${rel} again`
+  }
+}
+
 defineChange('set-values', {
   policy: 'save',
 
@@ -69,14 +92,16 @@ defineChange('set-values', {
           // cannot be read fails the save, naming it.
           if (dstValues.state === 'unreadable') return { refusal: unreadableCopy(valuesFile, dstValues.why) }
           if (dstChart.state === 'unreadable') return { refusal: unreadableCopy(chartFile, dstChart.why) }
+          // The source's Chart.yaml gone, unreadable, not YAML or naming
+          // no Template (a hand edit), or the target's not YAML: the target
+          // is left as it is and listed, as before — with why, in words.
+          const why = chartProblem(src, srcChart, rel)
+          if (why) { facts.syncFailed.push({ target, error: why }); continue }
           let chartText
           try {
-            if (src.state !== 'ok') throw Object.assign(new Error(`${srcChart} cannot be read`), { code: src.state === 'absent' ? 'ENOENT' : 'EACCES' })
             chartText = chartCopyText(sourceChart(src.value.text), path.join(repo.root, rel), dstChart.state === 'ok' ? dstChart.value.text : null, path.join(repo.root, target))
           } catch (err) {
-            // The source names no Template (a hand edit): the target is
-            // left as it is and listed, as before.
-            facts.syncFailed.push({ target, error: err.code || err.message })
+            facts.syncFailed.push({ target, error: `${chartFile} is not valid YAML (${firstLine(err.reason || err.message)}): fix it, then save ${rel} again` })
             continue
           }
           if (chartText !== null) files.push({ rel: chartFile, text: chartText })

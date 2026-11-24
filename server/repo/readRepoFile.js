@@ -57,6 +57,8 @@ const WHY = {
   EIO: 'the disk could not read it',
 }
 const reason = err => WHY[err?.code] ?? 'it could not be read'
+/** Plain words for why a file could not be read, from the error of reading it. */
+export const whyNotRead = reason
 const KIND = { EACCES: 'permission', EPERM: 'permission', ENOTDIR: 'not-a-folder', EISDIR: 'folder' }
 const failed = (key, err) => unreadable(key, reason(err), KIND[err?.code] ?? 'other')
 

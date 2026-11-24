@@ -32,6 +32,7 @@ import { insideReal, deploymentLinkProblem } from '../repo/paths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment, isFlatFile } from '../repo/deployment.js'
 import { decide } from '../repo/policy.js'
+import { whyNotRead } from '../repo/readRepoFile.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
@@ -249,6 +250,9 @@ async function targetProblem(repo, target) {
   return null
 }
 
+// A reason a target is not copied to, in words for the page.
+const notCopied = why => Object.assign(new Error(why), { notCopied: true })
+
 /**
  * The targets of `source` a values save writes to, in sync.yaml's order,
  * each once; the entries it may not write to (not a path sync writes to,
@@ -263,8 +267,8 @@ export async function syncTargets(repo, registry, source) {
   const failed = []
   for (const target of new Set(getTargetsForSource(registry, source))) {
     try {
-      if (target === source) throw new Error('listed as its own sync target')
-      if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
+      if (target === source) throw notCopied('listed as its own sync target')
+      if (!isSafeSyncPath(target, chartsDirName())) throw notCopied('not a path sync may write to')
       const link = await deploymentLinkProblem(repo.root, target)
       if (link) return { refusal: { status: 409, body: { error: `${target} cannot be written: ${link}`, file: target } } }
       const linkedStack = linkedStackRefusal(await resolveStack(repo.root, path.join(repo.root, target), { repo }), target)
@@ -274,11 +278,14 @@ export async function syncTargets(repo, registry, source) {
         if (read.state === 'unreadable') return { refusal: { status: 409, body: { error: `${target}/${f} cannot be read: ${read.why}`, file: `${target}/${f}`, unreadable: true } } }
       }
       const problem = await targetProblem(repo, target)
-      if (problem) throw new Error(problem)
+      if (problem) throw notCopied(problem)
       targets.push(target)
     } catch (err) {
       console.error(`Sync: ${source} could not be copied to ${target}`, err)
-      failed.push({ target, error: err.code || err.message })
+      // Words, as the page shows them beside the target: an error that is
+      // not one of the reasons above (its message may name a path of the
+      // machine) is said by what its code means.
+      failed.push({ target, error: err.notCopied ? err.message : `it could not be checked (${whyNotRead(err)})` })
     }
   }
   return { targets, failed, refusal: null }

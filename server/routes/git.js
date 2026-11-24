@@ -9,8 +9,8 @@ import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { getSourceForTarget, getTargetsForSource } from '../lib/sync.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../repo/lock.js'
 import { syncAnswer } from '../repo/sync.js'
-import { TEMP_PATHSPEC_EXCLUDE, parkedItems } from '../repo/write.js'
-import { parkedSaid } from '../lib/parkedSaid.js'
+import { TEMP_PATHSPEC_EXCLUDE, parkedSearch } from '../repo/write.js'
+import { parkedSaid, unlistedSaid } from '../lib/parkedSaid.js'
 import { chartsDir } from '../repo/template.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { parsePath, pathProblem } from '../repo/paths.js'
@@ -61,9 +61,13 @@ const count = (fallback, min, max) => z.any().transform(v => Math.min(max, Math.
 // each named, with what to do (parkedSaid). Null when there is none. A parked
 // deployment sync.yaml still names (a delete stopped before sync.yaml was
 // written) is not done with by removing it: the message says to unlink too.
+// A folder that could not be listed may hold some: it refuses too, named.
 async function parkedRefusal(cwd) {
-  const parked = await parkedItems(cwd)
-  if (!parked.length) return null
+  const { parked, unlisted } = await parkedSearch(cwd)
+  if (!parked.length && !unlisted.length) return null
+  const notListed = unlisted.map(u => ({ severity: 'commit', kind: 'parked-unknown', regenerable: false, file: u.rel || '.',
+    description: unlistedSaid(u) }))
+  if (!parked.length) return { status: 409, body: { error: 'Commit refused', findings: notListed }, unknownOnly: true }
   const { registry } = await syncAnswer(openRepo(cwd))
   const inSync = original => {
     if (!registry) return ''
@@ -74,8 +78,8 @@ async function parkedRefusal(cwd) {
     return ` — sync.yaml still lists ${original} as ${what}: removed, unlink ${source ? 'it' : 'them'} too (Unlink sync), or Commit refuses that next`
   }
   const said = parkedSaid(parked, chartsDir())
-  return { status: 409, body: { error: 'Commit refused', findings: parked.map((p, i) => ({ severity: 'commit', kind: 'parked', regenerable: false, file: p.rel,
-    description: `${said[i]}, then commit${inSync(p.original)}` })) } }
+  return { status: 409, body: { error: 'Commit refused', findings: [...parked.map((p, i) => ({ severity: 'commit', kind: 'parked', regenerable: false, file: p.rel,
+    description: `${said[i]}, then commit${inSync(p.original)}` })), ...notListed] } }
 }
 
 export default function gitRouter() {
@@ -125,8 +129,11 @@ export default function gitRouter() {
         let charts, deployments
         // Content a write moved aside and did not put back or remove (a
         // crash midway, a failed put-back) is never committed by itself.
+        // A folder that could not be listed may hold some: what the checks
+        // below refuse is said first (often the same folder, and why);
+        // when they pass, the commit is still refused, naming the folder.
         const parked = await parkedRefusal(cwd)
-        if (parked) return parked
+        if (parked && !parked.unknownOnly) return parked
         try {
           try {
             await git(cwd, 'add', '-A', '--', '.', TEMP_PATHSPEC_EXCLUDE)
@@ -156,6 +163,7 @@ export default function gitRouter() {
           return { status: 409, body: { error: 'Commit refused', findings, regenerable: deployments.regenerable,
             ...(deployments.unreadable.length ? { unreadable: deployments.unreadable } : {}) } }
         }
+        if (parked) return { status: parked.status, body: parked.body }
 
         await repoGit(cwd).commit(message)
         const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()

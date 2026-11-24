@@ -17,8 +17,8 @@ import { logger, httpLogger } from './server/lib/logger.js'
 import { jsonBody } from './server/http/body.js'
 import { answerUncaught } from './server/http/route.js'
 import { userRoute, unknownApiRoute } from './server/routes/own.js'
-import { sweepTempFiles, parkedItems } from './server/repo/write.js'
-import { parkedSaid } from './server/lib/parkedSaid.js'
+import { sweepTempFiles, parkedSearch } from './server/repo/write.js'
+import { parkedSaid, unlistedSaid } from './server/lib/parkedSaid.js'
 import { chartsDir as templatesDirRel } from './server/repo/template.js'
 import { sweepTempCopies } from './server/repo/copyRepo.js'
 import { objectMetaFromEnv } from './src/utils/objectMeta.js'
@@ -81,7 +81,10 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
   if (swept.length) logger.info(`Removed ${swept.length} temp file(s) a write left: ${swept.join(', ')}`)
   // Content a write moved aside and did not put back or remove is never
   // removed: said, and Commit refuses while it is there.
-  for (const said of parkedSaid(await parkedItems(GITOPS_DIR_V2), templatesDirRel())) logger.warn(said)
+  // A folder that could not be listed may hold some: said too.
+  const { parked, unlisted } = await parkedSearch(GITOPS_DIR_V2)
+  for (const said of parkedSaid(parked, templatesDirRel())) logger.warn(said)
+  for (const u of unlisted) logger.warn(unlistedSaid(u))
   // And the copies of the repo a plan checks in, left by a server killed meanwhile.
   const copies = await sweepTempCopies()
   if (copies.length) logger.info(`Removed ${copies.length} temp cop${copies.length > 1 ? 'ies' : 'y'} of the repo left by a stopped server`)

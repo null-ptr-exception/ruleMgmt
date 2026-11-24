@@ -44,6 +44,7 @@ import { loadDeployment } from '../repo/deployment.js'
 import { findingsOf } from '../repo/loaded.js'
 import { decide } from '../repo/policy.js'
 import { chartsDir } from '../repo/template.js'
+import { coalesce } from '../repo/coalesce.js'
 
 /** The name every `_common` chart has: the key its deployments' values are under. */
 export const COMMON_CHART = 'common'
@@ -98,7 +99,7 @@ async function loadItems(gitopsDir) {
 // or null when they cannot be worked out.
 async function renderedOf(repo, rel) {
   const dep = await loadDeployment(repo, rel)
-  if (dep.state !== 'ok' || dep.value.stack.problems.length || findingsOf(dep).some(f => f.code === 'values.null-on-stack')) return null
+  if (dep.state !== 'ok' || dep.value.stack.problems.length || findingsOf(dep).some(f => /\.null-on-stack$/.test(f.code))) return null
   return JSON.parse(JSON.stringify(dep.value.effective))
 }
 
@@ -250,10 +251,22 @@ async function baseline(gitopsDir, items, repo) {
  * the move's table (policy.js, `commonMove`) refuses it, and the moved text
  * as Helm would read it.
  */
-async function moveProblems(repo, y, text) {
+async function moveProblems(repo, y, text, { ontoStack = false } = {}) {
   const file = `${y.path}/values.yaml`
   const now = await loadDeployment(repo, y.path)
   const out = now.state === 'unreadable' ? [`${file} cannot be read: ${now.why}`] : decide(findingsOf(now), 'commonMove').refuse.map(f => f.message)
+  // On the Template directly now, on a _common once made: a null in its
+  // values or the Template's is then one Helm 3.15 and 3.19 deploy
+  // differently (repo/coalesce.js), which its save and Commit refuse. As
+  // the repo will be: what the deployment and the Template give, under the
+  // new _common's values (each group []: nothing of the Template's rows).
+  if (ontoStack && now.state === 'ok' && !now.value.layers.length && !now.value.isLayer) {
+    const dep = now.value
+    const groups = Object.fromEntries(Object.keys(dep.template?.defaults ?? {}).filter(g => Array.isArray(dep.template.defaults[g])).map(g => [g, []]))
+    for (const u of coalesce({ defaults: dep.template?.defaults ?? {}, layers: [groups], own: dep.bare, mode: 'chart' }).unsure) {
+      out.push(`${file}: ${u.path.join('.') || 'the values'} is null: on a _common, Helm 3.15 and 3.19 deploy different things for it, so its save and Commit would refuse it. Give it a value, or delete the line, first`)
+    }
+  }
   const moved = await repo.with([[file, text]]).helmYaml(file)
   if (moved.state !== 'ok') out.push(`${file} would not be read by Helm after the move (${findingsOf(moved).map(f => f.message).join('; ') || moved.why})`)
   return out
@@ -392,7 +405,7 @@ export async function planCreate(gitopsDir, folderIn, chart) {
         }
       }
       if (text !== null && text !== own.text) {
-        const issues = await moveProblems(repo, y, text)
+        const issues = await moveProblems(repo, y, text, { ontoStack: true })
         if (issues.length) { problems.push(...issues.map(message => ({ path: y.path, message }))); continue }
         writes.push({ rel: `${y.path}/values.yaml`, content: text })
         change.files.push(`${y.path}/values.yaml`)

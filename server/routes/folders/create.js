@@ -132,10 +132,22 @@ export function initRoutes(router) {
 
       // Everything is read: from here on it is written. A refusal above
       // made no folder; one below takes back what was made.
+      // What is there now, to put back as it was: only what this request
+      // made is removed.
+      const was = {}
+      const before = openRepo(req.gitopsDir)
+      for (const f of ['Chart.yaml', 'values.yaml']) {
+        const read = await before.file(`${folder}/${f}`)
+        if (read.state === 'unreadable') return res.status(409).json({ error: `Not made: ${folder}/${f} cannot be read: ${read.why}`, file: `${folder}/${f}` })
+        was[f] = read.state === 'ok' ? read.value.text : null
+      }
       const made = await fs.mkdir(deployDir, { recursive: true })
       const takeBack = async () => {
-        if (made) await fs.rm(made, { recursive: true, force: true })
-        else for (const f of ['Chart.yaml', 'values.yaml']) await fs.rm(path.join(deployDir, f), { force: true })
+        if (made) return fs.rm(made, { recursive: true, force: true })
+        for (const [f, text] of Object.entries(was)) {
+          if (text === null) await fs.rm(path.join(deployDir, f), { force: true })
+          else await writeWhole(path.join(deployDir, f), text)
+        }
       }
       // Loaded as Helm reads it, once written: what the Template or the
       // _common gives that Helm fails on is said, and nothing is kept.

@@ -111,6 +111,20 @@ describe('findings', () => {
   })
 })
 
+describe('a Template with no values.schema.json', () => {
+  // Helm checks nothing then; the columns of its rules/ still say what each
+  // value is, and Helm stops on, or renders wrongly, what does not fit them.
+  it.each([
+    ['a group that is not a list', 'demo:\n  cpu: 5\n'],
+    ['a list in a cell', 'demo:\n  cpu:\n    - {job: api, threshold: [1, 2]}\n'],
+    ['a list as a Common Value', 'demo:\n  _common: {team: [a]}\n  cpu: []\n'],
+  ])('%s is refused by a save, as the columns say', async (_, text) => {
+    await put('charts/demo/rules/_common.yaml', 'columns:\n  team: {type: string}\n')
+    await put(`${DEP}/values.yaml`, text)
+    expect(decide(findingsOf(await load()), 'save').refuse.length, text).toBeGreaterThan(0)
+  })
+})
+
 describe('the tables', () => {
   it('checkRepo refuses everything Commit refuses', () => {
     const codesIn = new Set(Object.values(POLICIES).flatMap(t => Object.keys(t.rows)).filter(k => !k.endsWith('.*')))

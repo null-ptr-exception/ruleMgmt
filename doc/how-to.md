@@ -343,8 +343,9 @@ It is made only where it can deploy: when the chart's own `values.yaml` or
 `rules/` cannot be read, or what the chart or the `_common` gives stops Helm
 or the rule checker (a group written as a map, a Common Value of `0` a
 derived window reads as `[0m]`), **Create** says so, naming the file, and
-nothing is written. Required cells left empty are fine: they are filled in
-the editor, and its Save asks for them.
+nothing is written. Required cells left empty, and a required Common Value
+nothing gives yet, are fine: they are filled in the editor, and its Save
+and Commit ask for them.
 
 Its `Chart.yaml` asks for any version of the chart (`">=0.0.0-0"`): there
 is one copy of each chart, and a new version of one is a clone of it under
@@ -417,7 +418,8 @@ deployment it changes before and after, and nothing is written unless it
 deploys the same. A deployment is not re-attached when its values cannot be
 moved as Helm reads them: a `values.yaml` that cannot be read (a folder, a
 link leading outside the repo), values not under the Template's name (Helm
-passes none of them on), a key written twice, or a Template whose own
+passes none of them on), a key written twice, a `null` (once on the
+`_common`, Helm 3.15 and 3.19 deploy it differently), or a Template whose own
 `values.yaml` cannot be read. The dialog names each, with why.
 
 Before anything is written, Helm renders every deployment it would touch,

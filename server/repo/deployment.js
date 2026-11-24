@@ -39,6 +39,8 @@ import { coalesce, firstNull } from './coalesce.js'
 import { chartsDir } from './template.js'
 import { isName } from '../lib/safePath.js'
 import { valueFindings } from './findings/values.js'
+import { schemaValidator } from './schema.js'
+import { modelToSchema } from '../../src/utils/rulesFile.js'
 import { resolveStack, stackValues } from '../lib/stack.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 
@@ -143,9 +145,20 @@ async function build(repo, rel, { chart, next }) {
     const same = v => JSON.stringify(firstNull(v ?? {})) === JSON.stringify(u.path)
     const where = same(bare) ? file : (layerValues.find(l => same(l.values))?.path ?? null)
     const inFile = where === file || where === null ? (where ?? (tpl ? `${tpl.dir}/values.yaml` : file)) : `${where}/values.yaml`
-    findings.push(finding({ code: 'values.null-on-stack', file, helm: 'unknown', at: { path: u.path }, message: `${inFile}: ${u.path.join('.') || 'the values'} is null on a _common stack: Helm 3.15 and 3.19 deploy different things for it (one keeps the null, the other removes the key and takes what is above it, or the default), so what deploys depends on the Helm version (${u.why}). Give it a value, or delete the line to inherit it` }))
+    // In its own file, the deployment's to fix; in a _common above or the
+    // Template's values.yaml, theirs (a save warns, Commit refuses).
+    findings.push(finding({ code: inFile === file ? 'values.null-on-stack' : 'stack.null-on-stack', file, helm: 'unknown', at: { path: u.path }, message: `${inFile}: ${u.path.join('.') || 'the values'} is null on a _common stack: Helm 3.15 and 3.19 deploy different things for it (one keeps the null, the other removes the key and takes what is above it, or the default), so what deploys depends on the Helm version (${u.why}). Give it a value, or delete the line to inherit it` }))
   }
   const columns = tpl && next && next.model !== undefined ? { model: next.model } : tpl ? await modelOf(repo, tpl) : { model: null }
+  // No schema for Helm to check against (none written, or one AlertForge
+  // cannot check as Helm does): the columns of rules/ still say what each
+  // value is, and what does not fit them Helm renders wrongly or stops on.
+  if (tpl && !tpl.schema && columns.model && !next?.validate) {
+    // Only the shape: required cells, patterns and choices the editor's
+    // own checks say, in its words.
+    const check = await repo.memo('columnsSchema', tpl.name, () => schemaValidator(modelToSchema(columns.model), `${tpl.dir}/rules`))
+    tpl = { ...tpl, validate: v => check(v).filter(f => f.detail?.keyword === 'type'), columnsSchema: true }
+  }
   if (columns.why) findings.push(finding({ code: 'template.unusable', file: `${tpl.dir}/rules`, helm: 'fails', message: `the Template ${chartName}'s rules cannot be read (${tpl.dir}/rules: ${columns.why}): its columns cannot be checked` }))
   const dep = {
     rel, file, flat, isLayer, chart: chartName, keys, doc, bare,

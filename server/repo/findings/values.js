@@ -98,15 +98,25 @@ export function valueFindings(dep, { every = false } = {}) {
   // 1. The Template's schema, on what the Template sees.
   const schema = template.validate(effective)
   for (const f of schema) {
+    // A _common need not be complete: a group or a Common Value it leaves
+    // out is its deployments' to give, and each deployment is checked whole.
+    const at = f.at?.path ?? []
+    if (isLayer && f.detail?.keyword === 'required' && (at.length === 0 || (at.length === 1 && at[0] === '_common'))) continue
     const w = schemaWording(f, effective, model)
     const own = (f.detail?.keyword === 'required' && w.group === '_common') || mine(w.group, w.column)
-    out.push(finding({ code: own ? 'values.schema' : 'stack.schema', file, helm: 'fails', at: { path: f.at?.path ?? [] }, message: own ? w.message : `${w.message} (given by a _common above, or the Template)`, detail: cell('', w) }))
+    // A value the schema requires and nothing gives: to be filled in.
+    const code = !own ? 'stack.schema' : f.detail?.keyword === 'required' ? 'values.required' : 'values.schema'
+    out.push(finding({ code, file, helm: template.columnsSchema ? 'renders-differently' : 'fails', at: { path: f.at?.path ?? [] }, message: own ? w.message : `${w.message} (given by a _common above, or the Template)`, detail: cell('', w) }))
   }
-  if (!model || (schema.length && !every)) return out
+  // A value only missing (to be filled in) leaves the rest to check.
+  if (!model || (schema.some(f => f.detail?.keyword !== 'required') && !every)) return out
 
   // 2. The editor's checks, only on values the schema lets through.
+  // A required value the schema already said is missing is said once.
+  const said = new Set(out.filter(f => f.code === 'values.required').map(f => [f.detail?.group, f.detail?.row ?? null, f.detail?.column].join('|')))
   for (const p of valueProblems(effective, model)) {
     if (isLayer && p.required && p.group === '_common') continue
+    if (p.required && said.has([p.group, p.row ?? null, p.column].join('|'))) continue
     // A required Common Value left empty is the deployment's to fill,
     // whoever left it so; a cell of a row a _common gives is the _common's.
     const own = (p.required && p.group === '_common') || mine(p.group, p.column)

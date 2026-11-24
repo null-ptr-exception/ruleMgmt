@@ -165,7 +165,7 @@ export default function renderRouter() {
         const rel = folder ? String(folder).replace(/\\/g, '/').replace(/\/+$/, '') : `${process.env.DEPLOYMENTS_DIR || 'deployments'}/${chart}/${deployment}-values.yaml`
         const dep = await loadDeployment(openRepo(req.gitopsDir), rel, { chart: folder ? undefined : chart })
         if (dep.state !== 'ok') throw new NotLoadedError(dep)
-        valueWarnings = findingsOf(dep).filter(f => f.code === 'values.null-on-stack' || explain(f, 'preview').action === 'warn').map(f => f.message)
+        valueWarnings = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code) || explain(f, 'preview').action === 'warn').map(f => f.message)
         return dep.value.effective
       }
       // The values read are what the Template sees, its own values.yaml in them.

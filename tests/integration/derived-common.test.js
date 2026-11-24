@@ -198,6 +198,32 @@ describe('a new deployment that could not deploy', () => {
     }
   })
 
+  it.skipIf(IS_ROOT)('leaves a folder that was there, with its own Chart.yaml, as it was', async () => {
+    const dir = path.join(tmpDir, 'deployments/team/kept')
+    await fs.mkdir(dir, { recursive: true })
+    await fs.writeFile(path.join(dir, 'Chart.yaml'), 'apiVersion: v2\nname: kept\nversion: 0.1.0\n# mine\n')
+    const tree = async () => {
+      const out = {}
+      const walk = async rel => {
+        for (const e of await fs.readdir(path.join(tmpDir, rel), { withFileTypes: true })) {
+          const r = path.join(rel, e.name)
+          if (e.isDirectory()) await walk(r)
+          else out[r] = await fs.readFile(path.join(tmpDir, r), 'utf-8').catch(() => '<unreadable>')
+        }
+      }
+      await walk('deployments')
+      return out
+    }
+    const before = await tree()
+    await fs.chmod(path.join(tmpDir, 'charts/demo/rules'), 0o000)
+    try {
+      expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/kept', chart: 'demo' })).status).toBe(409)
+    } finally {
+      await fs.chmod(path.join(tmpDir, 'charts/demo/rules'), 0o755)
+    }
+    expect(await tree()).toEqual(before)
+  })
+
   it('is not made when the Template\'s values.yaml is not YAML, naming it', async () => {
     await fs.writeFile(path.join(tmpDir, 'charts/demo/values.yaml'), 'spc: [\n')
     const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/new', chart: 'demo' })

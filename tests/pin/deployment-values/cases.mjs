@@ -158,6 +158,14 @@ export const CASES = [
   { id: 'layer-unwrapped', target: 'L', text: '_common:\n  team: shop\n' },
   { id: 'layer-dup-key', target: 'L', text: 'demo:\n  _common:\n    team: shop\n    team: web\n' },
   { id: 'layer-010', target: 'L', text: 'demo:\n  _common:\n    team: shop\n    base: 010\n' },
+  // A layer gives some Common Values, the deployment below the rest.
+  { id: 'layer-common-partial', target: 'L', text: 'demo:\n  _common:\n    base: 5\n', files: { 'deployments/s/x/values.yaml': 'common:\n  demo:\n    _common:\n      team: shop\n    cpu:\n      - job: x\n' } },
+  // The chart key of a layer written with nothing after it.
+  { id: 'layer-chart-null', target: 'L', text: 'demo: ~\n' },
+  // A null in the layer above a deployment that writes nothing there.
+  { id: 'stack-layer-null', target: 'S', text: BASE.X, files: { 'deployments/s/_common/demo/values.yaml': 'demo:\n  _common:\n    team: shop\n    base:\n' } },
+  // The Template's own Common Values, without the required one.
+  { id: 'tpl-common-partial', target: 'T', text: W(ROW('{ job: api }')), files: { [TPL]: '_common:\n  base: 3\ncpu: []\n' } },
   // flat legacy file (bare values)
   { id: 'flat-ok', target: 'F', text: BASE.F, json: { _common: { team: 'shop' }, cpu: [{ job: 'f' }] } },
   { id: 'flat-number-text', target: 'F', text: '_common:\n  team: shop\ncpu:\n  - { job: f, threshold: abc }\n', json: { _common: { team: 'shop' }, cpu: [{ job: 'f', threshold: 'abc' }] } },

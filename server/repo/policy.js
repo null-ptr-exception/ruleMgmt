@@ -92,6 +92,7 @@ export const POLICIES = Object.freeze({
       'yaml.duplicate-key': LISTED('Helm keeps the last of two keys; said so it can be written once'),
       'values.flat-not-checked': LISTED('a legacy <name>-values.yaml is not supported: said, not checked'),
       'values.null-on-stack': { action: 'refuse', why: 'a null on a _common stack deploys differently on the two supported Helm versions (one keeps it, the other removes the key and falls back to the layer above or the default): what deploys would depend on the Helm version' },
+      'stack.null-on-stack': { action: 'refuse', why: 'a null in a _common above, or in the Template\'s values.yaml, on a stack deploys differently on the two supported Helm versions (measured: 3.15.4 keeps the key as null, 3.19.0 drops it): what deploys would depend on the Helm version' },
       'stack.duplicate-key': LISTED('a key a _common writes twice deploys the later one, which may not be the one meant: said'),
       ...TEMPLATE_ROWS.commit,
     },
@@ -120,6 +121,7 @@ export const POLICIES = Object.freeze({
   init: definePolicy('init', {
     rows: {
       'values.required-empty': { action: 'ignore', why: 'a new deployment is made to be filled in: its required cells are said when it is saved' },
+      'values.required': { action: 'ignore', why: 'a new deployment is made to be filled in: a required value nothing gives yet is asked for when it is saved, and by Commit' },
       'values.rows-alike': { action: 'ignore', why: 'rows the row identity label cannot tell apart are said when it is saved' },
       'template.schema-unchecked': { action: 'ignore', why: 'a Template schema AlertForge cannot check is the Template\'s: the deployment is checked by its columns' },
     },
@@ -132,6 +134,7 @@ export const POLICIES = Object.freeze({
   commonMove: definePolicy('commonMove', {
     rows: {
       'values.schema': MOVED,
+      'values.required': MOVED,
       'values.cell': MOVED,
       'values.derived': MOVED,
       'values.required-empty': MOVED,

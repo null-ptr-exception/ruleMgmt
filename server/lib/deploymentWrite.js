@@ -68,10 +68,10 @@ function headline(found) {
     const cells = found.filter(f => f.detail?.cellProblem).length
     return cells === found.length ? 'Some selector cells cannot be used' : cells ? 'Some selector cells cannot be used, and some rows overlap' : 'Some rows overlap'
   }
-  if (codes.includes('values.null-on-stack')) return 'AlertForge cannot tell what Helm renders from a null on a _common stack'
+  if (codes.some(c => /\.null-on-stack$/.test(c))) return 'AlertForge cannot tell what Helm renders from a null on a _common stack'
   const notHelms = found.filter(f => /\.(schema|chart-key|not-under-chart-key)$/.test(f.code) || f.code === 'yaml.read-differently' || f.code === 'yaml.duplicate-key')
   // A required cell missing reads as the editor's "fill it in", as before.
-  if (notHelms.some(f => f.detail?.required !== true && !(f.code.endsWith('.schema') && /: required — fill it in$/.test(f.message)))) return 'Some values are not what Helm reads'
+  if (notHelms.some(f => f.detail?.required !== true && f.code !== 'values.required')) return 'Some values are not what Helm reads'
   return 'Some values cannot be rendered'
 }
 

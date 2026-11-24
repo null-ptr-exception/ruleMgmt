@@ -247,6 +247,13 @@ describe('the commit checks', () => {
       .toBe(`shop/inherit: its _common chart ${SHOP} is not in the repo`)
   })
 
+  it('a hand-written null in a layer is said, not refused, when a deployment under it is saved: the deployment cannot fix it', async () => {
+    await write(`${TEAM_B}/values.yaml`, `common:\n  ${CHART}:\n    ${DISK}: null\n`)
+    const { status, data } = await api('POST', `/api/v2/deployments/${CHART}/dev${q('shop/team-b/dev')}`, { values: {} })
+    expect(status).toBe(200)
+    expect(data.warnings).toEqual(expect.arrayContaining([expect.stringContaining(`${TEAM_B}/values.yaml: ${DISK} is null on a _common stack`)]))
+  })
+
   it('a hand-written null in a layer stops the commit for the deployments under it (Helm versions deploy it differently), naming the layer\'s file and key', async () => {
     await write(`${TEAM_B}/values.yaml`, `common:\n  ${CHART}:\n    ${DISK}: null\n`)
     const { findings } = await deploymentCommitBlockers(tmpDir)

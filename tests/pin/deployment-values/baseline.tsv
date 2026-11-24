@@ -312,8 +312,8 @@ group-null	A	list	ok	200	-	no	-	renders	0	1	Down:up{team="shop"} == 0	ok	promtoo
 group-null	A	save-text	ok	200	-	no	deployments/t/a/values.yaml	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
 group-null	A	save-json	ok	200	-	no	deployments/t/a/values.yaml	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
 group-null	A	sync	ok	200	-	no	deployments/t/b/values.yaml,sync.yaml	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
-group-null	A	common-plan	ok	200	-	no	-	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
-group-null	A	common-apply	ok	200	-	no	deployments/t/_common/demo/Chart.yaml,deployments/t/_common/demo/charts/demo,deployments/t/_common/demo/values.yaml,deployments/t/a/Chart.yaml,deployments/t/a/values.yaml,deployments/t/b/Chart.yaml,deployments/t/b/values.yaml	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
+group-null	A	common-plan	refused	409	deployments/t/a	no	-	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	refuses-what-helm-renders
+group-null	A	common-apply	refused-other	plan 409	-	no	-	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
 group-null	A	migration-preview	ok	200	-	no	-	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
 group-null	A	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/b/values.yaml	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	after: renders 1	
 group-null	A	commit	ok	200	-	no	-	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
@@ -358,8 +358,8 @@ once-group-null	A	get	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team=
 once-group-null	A	list	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	alertCount=1	
 once-group-null	A	save-text	ok	200	-	no	deployments/t/a/values.yaml	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
 once-group-null	A	sync	ok	200	-	no	deployments/t/b/values.yaml,sync.yaml	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
-once-group-null	A	common-plan	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
-once-group-null	A	common-apply	ok	200	-	no	deployments/t/_common/demo/Chart.yaml,deployments/t/_common/demo/charts/demo,deployments/t/_common/demo/values.yaml,deployments/t/a/Chart.yaml,deployments/t/a/values.yaml,deployments/t/b/Chart.yaml,deployments/t/b/values.yaml	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
+once-group-null	A	common-plan	refused	409	deployments/t/a	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	refuses-what-helm-renders
+once-group-null	A	common-apply	refused-other	plan 409	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
 once-group-null	A	migration-preview	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
 once-group-null	A	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	after: renders 3	
 once-group-null	A	commit	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
@@ -1053,7 +1053,7 @@ tpl-common-zero	T	save-text	refused	400	-	no	-	deploy-fails	0	3	CpuHigh:rate(cpu
 tpl-common-zero	T	sync	refused	400	deployments/t/a	no	-	deploy-fails	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[0m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	fails	promtool3=fails vmalert=ok	-	
 tpl-common-zero	T	common-plan	ok	200	-	no	-	deploy-fails	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[0m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	fails	promtool3=fails vmalert=ok	-	accepts-what-helm-fails
 tpl-common-zero	T	common-apply	ok	200	-	no	deployments/t/_common/demo/Chart.yaml,deployments/t/_common/demo/charts/demo,deployments/t/_common/demo/values.yaml,deployments/t/a/Chart.yaml,deployments/t/a/values.yaml,deployments/t/b/Chart.yaml,deployments/t/b/values.yaml	deploy-fails	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[0m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	fails	promtool3=fails vmalert=ok	-	accepts-what-helm-fails
-tpl-common-zero	T	init	refused	409	deployments/t/n	no	-	-	-	-	-	-	-	-	
+tpl-common-zero	T	init	ok	200	-	no	deployments/t/n/Chart.yaml,deployments/t/n/values.yaml	fails	1	-	-	-	-	-	accepts-what-helm-fails
 tpl-common-zero	T	migration-preview	listed	200	-	no	-	deploy-fails	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[0m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	fails	promtool3=fails vmalert=ok	-	
 tpl-common-zero	T	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	deploy-fails	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[0m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	fails	promtool3=fails vmalert=ok	after: deploy-fails 3	accepts-what-helm-fails
 tpl-common-zero	T	commit	listed	200	deployments/t/a	no	-	deploy-fails	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[0m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	fails	promtool3=fails vmalert=ok	-	
@@ -1291,6 +1291,44 @@ layer-010	L	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/t
 layer-010	L	commit	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[8m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
 layer-010	L	preview	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[8m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	alerts=3	
 layer-010	L	check-deployment	ok	exit 0	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[8m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
+layer-common-partial	L	get	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[5m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	{"_common":{"base":5}}	
+layer-common-partial	L	save-text	ok	200	-	no	deployments/s/_common/demo/values.yaml	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[5m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
+layer-common-partial	L	init	ok	200	-	no	deployments/s/n/Chart.yaml,deployments/s/n/values.yaml	fails	1	-	-	-	-	-	accepts-what-helm-fails
+layer-common-partial	L	migration-preview	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[5m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
+layer-common-partial	L	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[5m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	after: renders 3	
+layer-common-partial	L	commit	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[5m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
+layer-common-partial	L	preview	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[5m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	alerts=3	
+layer-common-partial	L	check-deployment	ok	exit 0	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[5m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
+layer-chart-null	L	get	ok	200	-	no	-	fails	1	-	-	-	-	{"demo":null}	
+layer-chart-null	L	save-text	refused	400	deployments/s/_common/demo/values.yaml	no	-	fails	1	-	-	-	-	-	
+layer-chart-null	L	init	ok	200	-	no	deployments/s/n/Chart.yaml,deployments/s/n/values.yaml	fails	1	-	-	-	-	-	accepts-what-helm-fails
+layer-chart-null	L	migration-preview	ok	200	-	no	-	fails	1	-	-	-	-	-	accepts-what-helm-fails
+layer-chart-null	L	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/s/_common/demo/values.yaml,deployments/t/a/values.yaml,deployments/t/b/values.yaml	fails	1	-	-	-	-	after: renders 3	accepts-what-helm-fails
+layer-chart-null	L	commit	listed	200	deployments/s/x	no	-	fails	1	-	-	-	-	-	
+layer-chart-null	L	preview	refused	200	-	no	-	fails	1	-	-	-	-	-	
+layer-chart-null	L	check-deployment	refused	exit 1	-	no	-	fails	1	-	-	-	-	-	
+stack-layer-null	S	get	ok	200	-	no	-	fails	1	-	-	-	-	{"job":"x"}	
+stack-layer-null	S	list	ok	200	-	no	-	fails	1	-	-	-	-	alertCount=1	
+stack-layer-null	S	save-text	listed	200	-	no	-	fails	1	-	-	-	-	-	accepts-what-helm-fails
+stack-layer-null	S	init	refused	409	deployments/s/n	no	-	-	-	-	-	-	-	-	
+stack-layer-null	S	migration-preview	ok	200	-	no	-	fails	1	-	-	-	-	-	accepts-what-helm-fails
+stack-layer-null	S	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/s/_common/demo/values.yaml,deployments/t/a/values.yaml,deployments/t/b/values.yaml	fails	1	-	-	-	-	after: fails -	accepts-what-helm-fails
+stack-layer-null	S	commit	refused	409	deployments/s/x	no	-	fails	1	-	-	-	-	-	
+stack-layer-null	S	preview	refused	200	-	no	-	fails	1	-	-	-	-	-	
+stack-layer-null	S	check-deployment	refused	exit 1	-	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	get	ok	200	-	no	-	fails	1	-	-	-	-	{"job":"api"}	
+tpl-common-partial	T	list	ok	200	-	no	-	fails	1	-	-	-	-	alertCount=1	
+tpl-common-partial	T	save-text	refused	400	-	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	sync	refused	400	deployments/t/a	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	common-plan	refused	409	deployments/t/a	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	common-apply	refused-other	plan 409	-	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	init	ok	200	-	no	deployments/t/n/Chart.yaml,deployments/t/n/values.yaml	fails	1	-	-	-	-	-	accepts-what-helm-fails
+tpl-common-partial	T	migration-preview	listed	200	-	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	fails	1	-	-	-	-	after: fails -	accepts-what-helm-fails
+tpl-common-partial	T	commit	listed	200	deployments/t/a	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	preview	refused	200	-	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	check-deployment	refused	exit 1	-	no	-	fails	1	-	-	-	-	-	
+tpl-common-partial	T	gen-rules	listed	exit 0	values.yaml	no	-	fails	1	-	-	-	-	-	
 flat-ok	F	get	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="f",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="f"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	{"job":"f"}	
 flat-ok	F	list	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="f",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="f"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	alertCount=1	
 flat-ok	F	save-text	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="f",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="f"}[4m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	

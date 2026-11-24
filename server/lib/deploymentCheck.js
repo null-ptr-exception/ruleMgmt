@@ -97,7 +97,7 @@ export async function checkRuleObjects(dir, repo) {
       const why = dep.state === 'unreadable' ? dep.why : findingsOf(dep).map(f => f.message).join('; ')
       return { ok: false, lines: [`Values: not checked — ${dep.file} cannot be read: ${why}`] }
     }
-    nulls = findingsOf(dep).filter(f => f.code === 'values.null-on-stack').map(f => f.message)
+    nulls = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code)).map(f => f.message)
     twice = findingsOf(dep).filter(f => f.code === 'stack.duplicate-key').map(f => f.message)
   } catch (err) {
     if (err instanceof CannotCheck) throw err

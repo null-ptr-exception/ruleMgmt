@@ -1373,36 +1373,36 @@ body:text-plain	sync.delete{}	bad-named	refused	400	same	no	same	no	free		-	yes	
 body:text-plain	shared.put{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	shared.rename{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	shared.regenerate{}	good	ok	200	same	no	same	no	free		-	-	-	
-body:not-json	charts.create{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	charts.clone{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	charts.delete{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	templates.rules{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	templates.migration-preview{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	templates.values{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	templates.chart-meta{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	templates.rename{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	templates.template-save{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	templates.template-delete{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	deployments.save{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	deployments.routing-put{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	deployments.routing-delete{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	deployments.clone{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	deployments.delete{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	render.preview{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	git.regenerate{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	git.commit{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	git.push{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	git.discard{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	git.pull{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	git.sync{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	folders.common{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	folders.create{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	folders.init{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	sync.create{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	sync.delete{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	shared.put{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	shared.rename{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
-body:not-json	shared.regenerate{}	bad	refused	400	same	no	same	yes	free		-	-	-	server-path
+body:not-json	charts.create{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	charts.clone{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	charts.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	templates.rules{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	templates.migration-preview{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	templates.values{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	templates.chart-meta{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	templates.rename{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	templates.template-save{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	templates.template-delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	deployments.save{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	deployments.routing-put{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	deployments.routing-delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	deployments.clone{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	deployments.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	render.preview{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	git.regenerate{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	git.commit{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	git.push{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	git.discard{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	git.pull{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	git.sync{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	folders.common{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	folders.create{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	folders.init{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	sync.create{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	sync.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	shared.put{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	shared.rename{}	bad	refused	400	same	no	same	no	free		-	-	-	
+body:not-json	shared.regenerate{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:array	charts.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
 body:array	charts.delete{}	any	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
@@ -1433,36 +1433,36 @@ body:array	sync.delete{}	bad-named	refused	400	same	no	same	no	free		-	yes	-
 body:array	shared.put{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	shared.rename{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	shared.regenerate{}	any	ok	200	same	no	same	no	free		-	-	-	
-body:over-limit	charts.create{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	charts.clone{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	charts.delete{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	templates.rules{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	templates.migration-preview{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	templates.values{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	templates.chart-meta{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	templates.rename{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	templates.template-save{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	templates.template-delete{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	deployments.save{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	deployments.routing-put{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	deployments.routing-delete{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	deployments.clone{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	deployments.delete{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	render.preview{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	git.regenerate{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	git.commit{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	git.push{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	git.discard{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	git.pull{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	git.sync{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	folders.common{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	folders.create{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	folders.init{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	sync.create{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	sync.delete{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	shared.put{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	shared.rename{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
-body:over-limit	shared.regenerate{}	bad	too-large	413	same	no	same	yes	free		-	-	-	server-path
+body:over-limit	charts.create{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	charts.clone{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	charts.delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	templates.rules{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	templates.migration-preview{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	templates.values{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	templates.chart-meta{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	templates.rename{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	templates.template-save{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	templates.template-delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	deployments.save{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	deployments.routing-put{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	deployments.routing-delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	deployments.clone{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	deployments.delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	render.preview{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	git.regenerate{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	git.commit{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	git.push{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	git.discard{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	git.pull{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	git.sync{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	folders.common{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	folders.create{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	folders.init{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	sync.create{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	sync.delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	shared.put{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	shared.rename{}	bad	too-large	413	same	no	same	no	free		-	-	-	
+body:over-limit	shared.regenerate{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 field:number	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
 field:number	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body

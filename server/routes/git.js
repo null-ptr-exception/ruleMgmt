@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { route, answerEveryRoute } from '../http/route.js'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
@@ -7,7 +8,6 @@ import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks
 import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerRejections } from '../lib/answerRejections.js'
 import { parsePath } from '../repo/paths.js'
 import { repoGit } from '../repo/git.js'
 
@@ -256,7 +256,7 @@ export default function gitRouter() {
     }
   })
 
-  router.get('/diff', async (req, res) => {
+  router.get('/diff', route('git.diff', async (req, res) => {
     const cwd = req.gitopsDir
     const file = req.query.file
     const ref = req.query.ref
@@ -272,23 +272,11 @@ export default function gitRouter() {
       if (!commit.ok) return res.status(400).json({ error: `Invalid commit: ${commit.why}` })
     }
 
-    try {
-      let original = ''
-      let modified = ''
-
-      if (ref) {
-        original = await g.show(`${ref}~1`, where.rel)
-        modified = await g.show(ref, where.rel)
-      } else {
-        original = await g.show('HEAD', where.rel)
-        modified = await g.working(where.rel)
-      }
-
-      res.json({ file, original, modified })
-    } catch (err) {
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
-    }
-  })
+    const [original, modified] = ref
+      ? [await g.show(`${ref}~1`, where.rel), await g.show(ref, where.rel)]
+      : [await g.show('HEAD', where.rel), await g.working(where.rel)]
+    res.json({ file, original, modified })
+  }))
 
   router.post('/pull', holdSyncRegistryLock, async (req, res) => {
     const cwd = req.gitopsDir
@@ -334,7 +322,7 @@ export default function gitRouter() {
     }
   })
 
-  return answerRejections(router)
+  return answerEveryRoute(router)
 }
 
 function isAuthError(err) {

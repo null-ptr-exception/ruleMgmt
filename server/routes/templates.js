@@ -1,3 +1,4 @@
+import { route, answerEveryRoute } from '../http/route.js'
 import express from 'express'
 import { holdSyncRegistryLock } from '../lib/sync.js'
 import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupNameChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
@@ -19,7 +20,6 @@ import path from 'path'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerRejections } from '../lib/answerRejections.js'
 import { pathProblem, parsePath } from '../repo/paths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { decide } from '../repo/policy.js'
@@ -142,52 +142,47 @@ export default function templatesRouter() {
   // Opening a chart is the moment a missing Chart.yaml is filled in and missing
   // products are generated (nothing is overwritten either way) — deliberately
   // not the list route, where a write would be a side effect of scrolling past.
-  router.get('/:chart', async (req, res) => {
+  router.get('/:chart', route('templates.get', async (req, res) => {
     const { chartYamlFile } = chartPaths(req, req.params.chart)
     const chart = req.params.chart
-    try {
-      // Reading a chart that does not exist must not create it — a typo or a
-      // stale saved selection would leave a directory under charts/.
-      let t = await readTemplate(req.gitopsDir, chart)
+    // Reading a chart that does not exist must not create it — a typo or a
+    // stale saved selection would leave a directory under charts/.
+    let t = await readTemplate(req.gitopsDir, chart)
+    if (!t) return res.status(404).json({ error: 'Chart not found' })
+    // A GET is not held by the commit's lock (holdSyncRegistryLock lets
+    // reads through), but these two write: they take it themselves, so a
+    // commit does not stage half the products.
+    const chartYamlMissing = t.findings.some(f => f.code === 'template.chart-absent')
+    if (chartYamlMissing || t.drift.state === 'missing') {
+      t = await withSyncRegistryLock(req.gitopsDir, async () => {
+        let now = await readTemplate(req.gitopsDir, chart)
+        // Deleted meanwhile: not there to open.
+        if (!now) return null
+        if (now.findings.some(f => f.code === 'template.chart-absent')) {
+          const { text } = ensureChartYaml(null, chart)
+          await writeWhole(chartYamlFile, text)
+        }
+        if (now.drift.state === 'missing') await regenerateProducts(req.gitopsDir, chart)
+        now = await readTemplate(req.gitopsDir, chart)
+        return now
+      })
       if (!t) return res.status(404).json({ error: 'Chart not found' })
-      // A GET is not held by the commit's lock (holdSyncRegistryLock lets
-      // reads through), but these two write: they take it themselves, so a
-      // commit does not stage half the products.
-      const chartYamlMissing = t.findings.some(f => f.code === 'template.chart-absent')
-      if (chartYamlMissing || t.drift.state === 'missing') {
-        t = await withSyncRegistryLock(req.gitopsDir, async () => {
-          let now = await readTemplate(req.gitopsDir, chart)
-          // Deleted meanwhile: not there to open.
-          if (!now) return null
-          if (now.findings.some(f => f.code === 'template.chart-absent')) {
-            const { text } = ensureChartYaml(null, chart)
-            await writeWhole(chartYamlFile, text)
-          }
-          if (now.drift.state === 'missing') await regenerateProducts(req.gitopsDir, chart)
-          now = await readTemplate(req.gitopsDir, chart)
-          return now
-        })
-        if (!t) return res.status(404).json({ error: 'Chart not found' })
-      }
-
-      const templateFiles = t.templateNames.map(f => f.replace(/\.yaml$/, ''))
-
-      // The values and Chart.yaml as Helm reads them (`010` is 8). One that
-      // cannot be read or parsed is said, not shown as empty for a Save to
-      // write over.
-      const stop = t.findings.find(f => /^template\.(values|chart)-(unreadable|not-yaml|cannot-tell|not-map)$/.test(f.code))
-      if (stop) throw new UnreadableError(path.join(req.gitopsDir, stop.file), { reason: stop.detail?.why ?? stop.message })
-
-      // The editor loads from `rulesFiles`; null when the chart has not been
-      // migrated to the rules/ format yet (it falls back to reading `schema`).
-      // A schema that is not JSON is shown as none on a chart with rules/: it
-      // is a product, the drift says it is missing and Save writes it again.
-      res.json({ templateFiles, schema: t.schema, values: t.values, chartMeta: t.chart || {}, drift: t.drift, rulesFiles: t.rulesFiles })
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
     }
-  })
+
+    const templateFiles = t.templateNames.map(f => f.replace(/\.yaml$/, ''))
+
+    // The values and Chart.yaml as Helm reads them (`010` is 8). One that
+    // cannot be read or parsed is said, not shown as empty for a Save to
+    // write over.
+    const stop = t.findings.find(f => /^template\.(values|chart)-(unreadable|not-yaml|cannot-tell|not-map)$/.test(f.code))
+    if (stop) throw new UnreadableError(path.join(req.gitopsDir, stop.file), { reason: stop.detail?.why ?? stop.message })
+
+    // The editor loads from `rulesFiles`; null when the chart has not been
+    // migrated to the rules/ format yet (it falls back to reading `schema`).
+    // A schema that is not JSON is shown as none on a chart with rules/: it
+    // is a product, the drift says it is missing and Save writes it again.
+    res.json({ templateFiles, schema: t.schema, values: t.values, chartMeta: t.chart || {}, drift: t.drift, rulesFiles: t.rulesFiles })
+  }))
 
   // --- Chart-level endpoints (must be before /:chart/:template) ---
 
@@ -593,5 +588,5 @@ export default function templatesRouter() {
     }
   })
 
-  return answerRejections(router)
+  return answerEveryRoute(router)
 }

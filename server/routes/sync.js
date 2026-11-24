@@ -21,7 +21,7 @@ import { newDeploymentProblem, isDeployment } from '../repo/walk.js'
 import { syncAnswer } from '../repo/sync.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerRejections } from '../lib/answerRejections.js'
+import { answerEveryRoute } from '../http/route.js'
 import { parsePath } from '../repo/paths.js'
 
 function chartsDirName() {
@@ -215,5 +215,5 @@ export default function syncRouter() {
     }
   })
 
-  return answerRejections(router)
+  return answerEveryRoute(router)
 }

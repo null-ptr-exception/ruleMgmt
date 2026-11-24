@@ -15,6 +15,8 @@ import syncRouter from './server/routes/sync.js'
 import routingSharedRouter from './server/routes/routingShared.js'
 import { getChartsDir, getDeploymentsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
 import { logger, httpLogger } from './server/lib/logger.js'
+import { jsonBody } from './server/http/body.js'
+import { answerUncaught } from './server/http/route.js'
 import { objectMetaFromEnv } from './src/utils/objectMeta.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -31,7 +33,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
   }
 }
 const app = express()
-app.use(express.json())
+// A body that is not JSON, or too big, is answered as JSON (server/http/body.js).
+app.use(jsonBody())
 app.use(httpLogger)
 app.use((req, res, next) => {
   const origJson = res.json.bind(res)
@@ -109,6 +112,8 @@ baseRouter.get('*', (req, res) => {
 })
 
 app.use(BASE_PATH, baseRouter)
+// An error no route answered: JSON, no stack trace, no path of the machine.
+app.use(answerUncaught)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => logger.info(`API server listening on port ${PORT}`))

@@ -345,3 +345,18 @@ describe('a diff', () => {
     expect(JSON.parse(text).modified).not.toBe('')
   })
 })
+
+// A values.yaml that is not YAML is named with its reason whole, also in
+// a folder whose name has a space.
+it('a deployment in a folder with a space whose values.yaml is not YAML: the answer names the file and the reason', async () => {
+  const folder = 'deployments/my team/a'
+  // Made by hand: the links above leave the Template one init refuses.
+  await fs.mkdir(path.join(repo, folder), { recursive: true })
+  await fs.copyFile(path.join(repo, 'deployments/team/a/Chart.yaml'), path.join(repo, folder, 'Chart.yaml'))
+  await fs.writeFile(path.join(repo, folder, 'values.yaml'), 'demo:\n  cpu: [\n')
+  const { status, text } = await api('GET', `/api/v2/deployments/demo/a?folder=${q(folder)}`)
+  expect(status, text).toBe(409)
+  const { error } = JSON.parse(text)
+  expect(error.startsWith('deployments/my team/a/values.yaml cannot be read: '), error).toBe(true)
+  expect(error).not.toContain('team/a/values.yaml line')
+})

@@ -1046,6 +1046,10 @@ change some other way (a terminal, a git pull) may answer **Files changed
 while committing — try again**. Nothing was committed; commit again. What would fail every time — a
 symlink pointing nowhere, a git `index.lock` left by a git that is gone, a
 commit hook that fails — is reported as a failure, naming it, instead.
+A save or a commit that fails in a way the server did not expect is
+answered at once (500, "the cause is in its log") and lets the next one
+go at once, instead of leaving it waiting. A request whose body is not
+JSON, or is over 100 KB, is answered 400 or 413 saying so.
 
 These checks are AlertForge's commit button only: a commit made with git, or
 in the Gitea web editor, does not go through them. `check-repo` (see

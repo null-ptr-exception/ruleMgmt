@@ -38,3 +38,16 @@ export function finding({ code, file = '', helm, message, at, deploy, detail }) 
   if (detail !== undefined) out.detail = Object.freeze({ ...detail })
   return Object.freeze(out)
 }
+
+/**
+ * A finding's message without the file (and line) it starts with — the
+ * reason alone, for a sentence that names the file itself. The file is
+ * the finding's own, never guessed from the text: a folder with a space
+ * in its name stays whole.
+ *   { file: 'deployments/my team/a/values.yaml', at: { line: 2 },
+ *     message: 'deployments/my team/a/values.yaml line 2: not YAML …' } → 'not YAML …'
+ */
+export function reasonOf(f) {
+  const where = [f.file, f.at?.line && `line ${f.at.line}`].filter(Boolean).join(' ')
+  return where && f.message.startsWith(`${where}: `) ? f.message.slice(where.length + 2) : f.message
+}

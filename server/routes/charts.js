@@ -10,7 +10,7 @@ import { chartsDir as chartsDirRel } from '../repo/template.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerRejections } from '../lib/answerRejections.js'
+import { answerEveryRoute } from '../http/route.js'
 import { pathProblem } from '../repo/paths.js'
 
 
@@ -170,5 +170,5 @@ export default function chartsRouter() {
     }
   })
 
-  return answerRejections(router)
+  return answerEveryRoute(router)
 }

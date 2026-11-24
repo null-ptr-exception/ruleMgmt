@@ -7,7 +7,7 @@ import {
 import { openRepo } from '../repo/openRepo.js'
 import { loadShared, loadSharedDir, sharedDirProblemOf, sharedForBuild } from '../repo/shared.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerRejections } from '../lib/answerRejections.js'
+import { answerEveryRoute } from '../http/route.js'
 
 /**
  * The repo's shared notification configs (#123): read them with who uses
@@ -84,5 +84,5 @@ export default function routingSharedRouter() {
     }
   })
 
-  return answerRejections(router)
+  return answerEveryRoute(router)
 }

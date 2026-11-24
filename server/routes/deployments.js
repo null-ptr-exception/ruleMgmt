@@ -1,6 +1,6 @@
 import express from 'express'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerRejections } from '../lib/answerRejections.js'
+import { answerEveryRoute } from '../http/route.js'
 import { parsePath } from '../repo/paths.js'
 
 import { listRoutes } from './deployments/list.js'
@@ -23,5 +23,5 @@ export default function deploymentsRouter() {
   routingRoutes(router)
   lifecycleRoutes(router)
 
-  return answerRejections(router)
+  return answerEveryRoute(router)
 }

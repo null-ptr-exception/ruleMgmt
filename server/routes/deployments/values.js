@@ -1,5 +1,7 @@
 /** A deployment's values: open and save. */
 
+import { reasonOf } from '../../repo/finding.js'
+import { route } from '../../http/route.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { resolveStack, unwrapPath, readStackValues, stackValues } from '../../lib/stack.js'
@@ -28,56 +30,51 @@ async function inheritedOf(gitopsDir, dir, stack) {
 }
 
 export function valuesRoutes(router) {
-  router.get('/:chart/:deployment', async (req, res) => {
+  router.get('/:chart/:deployment', route('deployments.get', async (req, res) => {
     const { dir, error } = await resolveDeploymentDir(req)
     if (error) return res.status(400).json({ error })
     const badName = deploymentParamProblem(req)
     if (badName) return res.status(400).json({ error: badName })
-    try {
-      const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
-      // Not there: not found. There and unreadable (no permission, a
-      // folder, a link to nothing, not YAML): said, naming the file.
-      // Read as Helm reads it (`010` is 8): the values shown are the ones deployed.
-      const repo = openRepo(req.gitopsDir)
-      const rel = path.relative(req.gitopsDir, file).replace(/\\/g, '/')
-      const read = await repo.helmYaml(rel)
-      if (read.state === 'absent') return res.status(404).json({ error: 'Not found' })
-      if (read.state === 'unreadable') throw new UnreadableError(file, { reason: read.why })
-      if (read.state === 'invalid') throw new UnreadableError(file, { reason: read.findings.map(f => f.message.replace(/^\S+ (line \d+: )?/, '')).join('; ') })
-      const content = (await repo.file(rel)).value.text
-      // Only the deployment's own values, under every key of its stack (#100).
-      const stack = await resolveStack(req.gitopsDir, dir, { repo })
-      const parsed = unwrapPath(read.value, stack.keys)
-      // What Helm does with them, for the page to say (findings, policy.js: as a save would decide).
-      const loadedDep = await loadDeployment(repo, direct ? path.relative(req.gitopsDir, dir).replace(/\\/g, '/') : rel, { chart: req.params.chart })
-      const findings = loadedDep.state === 'ok' ? loadedDep.findings.map(f => ({ code: f.code, message: f.message, helm: f.helm, ...(f.at ? { at: f.at } : {}) })) : []
-      // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
-      // anything; say so, or it looks like the file being edited.
-      const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
-      // The _common it renders on and the one its folder has (#103), for a
-      // sync target's page: it follows its source's.
-      const stackOf = req.query.folder && direct
-        ? { stack: { inheritsFrom: inheritsFromOf(stack), folderCommon: await folderCommonOf(req.gitopsDir, syncFolder(req), stack.chart || stack.claims) } }
-        : {}
-      // What it was loaded from: its save sends it back (#102).
-      const version = req.query.folder && direct ? { version: await valuesVersion(req.gitopsDir, dir, stack) } : {}
-      // A _common that cannot be read, a link gone: the deployment still
-      // opens, and says what keeps Helm from rendering it.
-      const problems = stack.problems.length ? { stackProblems: stack.problems.map(p => p.description) } : {}
-      let inherited = {}
-      if (direct && stack.layers.length) {
-        try {
-          inherited = { inherited: await inheritedOf(req.gitopsDir, dir, stack) }
-        } catch (err) {
-          problems.stackProblems = [...(problems.stackProblems || []), `what it inherits cannot be read (${err.code || err.message})`]
-        }
+    const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
+    // Not there: not found. There and unreadable (no permission, a
+    // folder, a link to nothing, not YAML): said, naming the file.
+    // Read as Helm reads it (`010` is 8): the values shown are the ones deployed.
+    const repo = openRepo(req.gitopsDir)
+    const rel = path.relative(req.gitopsDir, file).replace(/\\/g, '/')
+    const read = await repo.helmYaml(rel)
+    if (read.state === 'absent') return res.status(404).json({ error: 'Not found' })
+    if (read.state === 'unreadable') throw new UnreadableError(file, { reason: read.why })
+    if (read.state === 'invalid') throw new UnreadableError(file, { reason: read.findings.map(reasonOf).join('; ') })
+    const content = (await repo.file(rel)).value.text
+    // Only the deployment's own values, under every key of its stack (#100).
+    const stack = await resolveStack(req.gitopsDir, dir, { repo })
+    const parsed = unwrapPath(read.value, stack.keys)
+    // What Helm does with them, for the page to say (findings, policy.js: as a save would decide).
+    const loadedDep = await loadDeployment(repo, direct ? path.relative(req.gitopsDir, dir).replace(/\\/g, '/') : rel, { chart: req.params.chart })
+    const findings = loadedDep.state === 'ok' ? loadedDep.findings.map(f => ({ code: f.code, message: f.message, helm: f.helm, ...(f.at ? { at: f.at } : {}) })) : []
+    // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
+    // anything; say so, or it looks like the file being edited.
+    const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
+    // The _common it renders on and the one its folder has (#103), for a
+    // sync target's page: it follows its source's.
+    const stackOf = req.query.folder && direct
+      ? { stack: { inheritsFrom: inheritsFromOf(stack), folderCommon: await folderCommonOf(req.gitopsDir, syncFolder(req), stack.chart || stack.claims) } }
+      : {}
+    // What it was loaded from: its save sends it back (#102).
+    const version = req.query.folder && direct ? { version: await valuesVersion(req.gitopsDir, dir, stack) } : {}
+    // A _common that cannot be read, a link gone: the deployment still
+    // opens, and says what keeps Helm from rendering it.
+    const problems = stack.problems.length ? { stackProblems: stack.problems.map(p => p.description) } : {}
+    let inherited = {}
+    if (direct && stack.layers.length) {
+      try {
+        inherited = { inherited: await inheritedOf(req.gitopsDir, dir, stack) }
+      } catch (err) {
+        problems.stackProblems = [...(problems.stackProblems || []), `what it inherits cannot be read (${err.code || err.message})`]
       }
-      res.json({ content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited, ...(findings.length ? { findings } : {}) })
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
     }
-  })
+    res.json({ content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited, ...(findings.length ? { findings } : {}) })
+  }))
 
   router.post('/:chart/:deployment', async (req, res) => {
     const { dir, error } = await resolveDeploymentDir(req)

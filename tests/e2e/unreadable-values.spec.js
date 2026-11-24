@@ -47,7 +47,7 @@ test.describe('a deployment whose values.yaml cannot be read', () => {
     const mark = dev.getByRole('img', { name: 'cannot be read' })
     await expect(mark).toBeVisible({ timeout: 8000 })
     await mark.hover()
-    await expect(page.getByRole('tooltip')).toContainText('This deployment cannot be read as it is (its values.yaml cannot be read (it is a folder, not a file))', { timeout: 5000 })
+    await expect(page.getByRole('tooltip')).toHaveText('This deployment cannot be read as it is (its values.yaml cannot be read (it is a folder, not a file)) — fix it in git', { timeout: 5000 })
     await page.getByText('cpu', { exact: true }).first().click()
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
@@ -117,5 +117,35 @@ test.describe('a deployment whose chart key holds nothing', () => {
       .first().locator('.ant-tree-node-content-wrapper').click()
     await page.getByText('cpu', { exact: true }).first().click()
     await expect(page.getByTestId('values-read-notes')).toContainText(`${NULLED} must be a map of values, not null: Helm stops on it`, { timeout: 8000 })
+  })
+})
+
+// A group written as text instead of a list of rows: the page shows no
+// rows for it and says why, instead of going blank.
+test.describe('a deployment whose group is not a list of rows', () => {
+  const TEXT = 'e2e-group-as-text'
+  const DIR = `deployments/${TEXT}/dev`
+  test.afterAll(async ({ request }) => { await removeChart(request, TEXT) })
+
+  test('says Helm stops on it, and the page keeps working', async ({ page, request }) => {
+    await removeChart(request, TEXT)
+    expect((await request.post('/api/v2/charts', { data: { name: TEXT } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/templates/${TEXT}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
+    expect((await request.post('/api/v2/folders/init', { data: { folder: DIR, chart: TEXT } })).status()).toBeLessThan(300)
+    await fs.writeFile(path.join(WORKSPACE, DIR, 'values.yaml'), `${TEXT}:\n  cpu: "a string"\n`)
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = page.locator('.ant-tree')
+    for (const segment of ['deployments', TEXT]) {
+      const node = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${segment}$`) }).first()
+      await expect(node).toBeVisible({ timeout: 8000 })
+      const switcher = node.locator('.ant-tree-switcher_close')
+      if (await switcher.count() > 0) await switcher.click()
+    }
+    await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
+      .first().locator('.ant-tree-node-content-wrapper').click()
+    await page.getByText('cpu', { exact: true }).first().click()
+    await expect(page.getByTestId('values-read-notes')).toContainText('cpu: must be a list of rows, not "a string"', { timeout: 8000 })
+    await expect(page.getByRole('button', { name: 'Add instance' })).toBeVisible()
   })
 })

@@ -4,7 +4,7 @@ import path from 'path'
 import { walk, childEntries } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { createLimit } from '../../lib/limit.js'
-import { resolveStack } from '../../lib/stack.js'
+import { resolveStack, STACK_LINK } from '../../lib/stack.js'
 import { folderCommonOf, folderCommons, inheritsFromOf } from '../../lib/commonEdit.js'
 import { z } from 'zod'
 import { isName } from '../../repo/paths.js'
@@ -13,8 +13,8 @@ import { loadDeployment, loadOwnValues, deployedRows } from '../../repo/deployme
 
 // One level of the tree: the walk's own folders (repo/walk.js), each with
 // what the tree shows of it.
-// How many of a folder's entries are read at once: far below any open-files limit.
-const NODES_AT_ONCE = 16
+// How many entries are read at once: far below any open-files limit.
+export const NODES_AT_ONCE = 16
 
 async function listChildren(baseDir, parentPath) {
   const repo = openRepo(baseDir)
@@ -54,7 +54,7 @@ async function listChildren(baseDir, parentPath) {
       node.chart = stack.chart || stack.claims || (await repo.helmYaml(`${nodePath}/Chart.yaml`)).value.dependencies[0].name
       // A _common reached through a hand-made link is not followed: marked,
       // as Preview, the editor and Commit say it.
-      const linked = stack.problems.find(p => p.kind === 'stack-link')
+      const linked = stack.problems.find(p => p.kind === STACK_LINK)
       if (linked && !node.unreadable) node.unreadable = linked.description
       // The _common it renders on, and the one its folder has (#103): a sync
       // target follows its source's, which may be another.
@@ -82,23 +82,23 @@ async function listChildren(baseDir, parentPath) {
 // `chart`: the folders' _common is looked up for it — the Sync to dialog's
 // source's Template, which a target renders (#103) — else each one's own.
 async function collectDeployments(baseDir, chartFor = null) {
-  const results = []
   const repo = openRepo(baseDir)
-  for (const e of await walk(repo)) {
-    if (e.kind !== 'deployment') continue
+  const deployments = (await walk(repo)).filter(e => e.kind === 'deployment')
+  // A few at a time, in the walk's order: each one's reads are its own.
+  const limit = createLimit(NODES_AT_ONCE)
+  return Promise.all(deployments.map(e => limit(async () => {
     // Its values as Helm renders them (repo/deployment.js): the rows it
     // deploys, null when that cannot be said (unreadable, Helm stops on it).
     const dep = await loadDeployment(repo, e.rel)
     const stack = dep.state === 'ok' ? dep.value.stack : await resolveStack(baseDir, path.join(baseDir, e.rel), { repo })
-    results.push({
+    return {
       path: e.rel,
       chart: stack.chart,
       alertCount: deployedRows(dep),
       inheritsFrom: inheritsFromOf(stack),
       folderCommon: await folderCommonOf(baseDir, e.rel, chartFor || stack.chart || stack.claims, repo),
-    })
-  }
-  return results
+    }
+  })))
 }
 
 // `?path=`: the folder whose children are listed; left out or empty, the

@@ -197,7 +197,8 @@ export function summarizeGroups({ rendered, possible, groupRows, schema, types =
   const groups = [...keys].map(valuesKey => {
     // A group's own `name:` is what it renders as; else the key's.
     const name = Object.hasOwn(names, valuesKey) ? names[valuesKey] : valuesKey.replace(/_/g, '-')
-    const rowCount = own(groupRows, valuesKey) || 0
+    // null: its rows cannot be told (a null on a _common stack).
+    const rowCount = own(groupRows, valuesKey) === null ? null : own(groupRows, valuesKey) || 0
     const custom = Boolean(own(own(schema?.properties, valuesKey), 'x-custom-template'))
     if (custom) return { name, valuesKey, rowCount, state: 'custom', alerts: [], missing: [] }
 
@@ -227,7 +228,8 @@ export function summarizeGroups({ rendered, possible, groupRows, schema, types =
     let state = 'ok'
     // A once group (#70) takes no rows, so it is never "empty".
     if (rowCount === 0 && !once.has(valuesKey)) state = 'empty'
-    else if (renderedCount === 0 && records === 0) state = 'no-alerts'
+    // Rows not known: not "has N rows but produced no alerts".
+    else if (renderedCount === 0 && records === 0) state = rowCount === null ? 'rows-unknown' : 'no-alerts'
     // A group whose profile is not syntax-checked (`validate: none`, #65, #76)
     // says so on its own row: one "passed" must not read as all of the chart.
     const checked = (profileFor(own(types, valuesKey))?.validate ?? 'promtool') !== 'none'

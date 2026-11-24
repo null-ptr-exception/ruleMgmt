@@ -272,7 +272,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
     const link = !self && !layerPath.startsWith('../') && (await folderEntry(repo, layerPath)).link ? await linkOnTheWay(gitopsDir, layerPath) : null
     if (link) {
       lastLayerFolder = cur
-      problems.push(problem('stack-link', `its _common chart ${layerPath}: ${link.why} — a _common chart is looked at where it is, not through a link: ${link.real && isCommonChartPath(link.real) ? `depend on ${link.real}, or ` : ''}make a _common in this folder`))
+      problems.push(problem(STACK_LINK, `its _common chart ${layerPath}: ${link.why} — a _common reached through a link made by hand is not supported, and nothing is written to it: replace the link with a folder of its own in git${link.real && isCommonChartPath(link.real) ? `, or depend on ${link.real}` : ''}`))
       break walk
     }
     const values = await readValuesDoc(repo, gitopsDir, cur)
@@ -363,6 +363,18 @@ async function templateGroups(repo, chart) {
 }
 
 export { unwrapPath }
+
+/** A `_common` reached through a link made by hand: refused by every entry point. */
+export const STACK_LINK = 'stack-link'
+/**
+ * What a write that touches the deployment at `rel` (its `stack`) says when
+ * it renders on a `_common` reached through a link: 409, nothing written;
+ * null otherwise. The one sentence every write answers it with.
+ */
+export const linkedStackRefusal = (stack, rel) => {
+  const p = stack?.problems.find(x => x.kind === STACK_LINK)
+  return p ? { status: 409, body: { error: `${rel}: ${p.description}`, file: rel } } : null
+}
 
 /** The problem kind that leaves what deploys to Helm: AlertForge cannot tell a layer's values. */
 export const CANNOT_TELL = 'values-cannot-tell'

@@ -23,7 +23,7 @@ beforeEach(async () => {
   const app = express()
   app.use(express.json())
   app.use((req, res, next) => { req.gitopsDir = root; next() })
-  for (const n of ['templates', 'folders', 'render', 'deployments']) app.use(`/api/v2/${n}`, (await import(`../../server/routes/${n}.js`)).default())
+  for (const n of ['templates', 'folders', 'render', 'deployments', 'sync']) app.use(`/api/v2/${n}`, (await import(`../../server/routes/${n}.js`)).default())
   await new Promise(r => { server = app.listen(0, '127.0.0.1', () => { base = `http://127.0.0.1:${server.address().port}`; r() }) })
   await must(api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU, 'up.yaml': UP } }))
   for (const f of ['deployments/t/a', 'deployments/s/x']) await must(api('POST', '/api/v2/folders/init', { folder: f, chart: 'demo' }))
@@ -104,9 +104,31 @@ describe('the folder tree', () => {
 describe('a _common\'s users', () => {
   const users = async () => (await api('GET', '/api/v2/folders/common/users?path=deployments/s/_common/demo')).data
 
+  // One rule with the Sync dialogs' count: no number where Helm stops on the
+  // deployment's values, they cannot be read, or what deploys cannot be told.
+  for (const [name, write] of [
+    ['its values cannot be read', async () => { await put('deployments/s/x/values.yaml', 'common:\n  demo: {}\n'); await fs.chmod(path.join(root, 'deployments/s/x/values.yaml'), 0) }],
+    ['its chart key holds nothing', () => put('deployments/s/x/values.yaml', 'common:\n  demo: null\n')],
+    ['a value Helm stops on', () => put('deployments/s/x/values.yaml', 'common:\n  demo:\n    cpu:\n      - { job: x, thr: abc }\n')],
+    ['a null over the _common\'s rows', () => put('deployments/s/x/values.yaml', 'common:\n  demo:\n    cpu: null\n')],
+  ]) {
+    it.skipIf(process.getuid?.() === 0 && name.includes('read'))(`give no row count when ${name}`, async () => {
+      await put('charts/demo/values.yaml', 'cpu: []\n')
+      await put('deployments/s/_common/demo/values.yaml', 'demo:\n  cpu:\n    - { job: a }\n    - { job: b }\n')
+      await write()
+      try {
+        const x = (await users()).find(u => u.path === 'deployments/s/x')
+        expect(x.groups.cpu).toMatchObject({ rows: null })
+        expect((await listed('deployments/s/x')).alertCount).toBeNull()
+      } finally {
+        await fs.chmod(path.join(root, 'deployments/s/x/values.yaml'), 0o644).catch(() => {})
+      }
+    })
+  }
+
   it('count each group\'s rows as Helm deploys them, a key written twice by the later one', async () => {
     await put('deployments/s/_common/demo/values.yaml', 'demo:\n  cpu:\n    - { job: a }\n')
-    await put('deployments/s/x/values.yaml', 'common:\n  demo:\n    cpu:\n      - { job: x }\n    cpu:\n      - { job: y }\n      - { job: z }\n')
+    await put('deployments/s/x/values.yaml', 'common:\n  demo:\n    cpu:\n      - { job: x1 }\n    cpu:\n      - { job: y1 }\n      - { job: z1 }\n')
     expect((await users()).find(u => u.path === 'deployments/s/x').groups.cpu).toEqual({ from: 'own', rows: 2 })
   })
 })
@@ -125,16 +147,41 @@ describe.skipIf(!HAS_HELM)('a _common AlertForge cannot tell', () => {
     expect(data.summary).toBeNull()
   })
 
+  it('gives its users no row count either', async () => {
+    await put('charts/demo/values.yaml', 'cpu: []\n')
+    await put('deployments/s/_common/demo/values.yaml', LAYER)
+    const users = (await api('GET', '/api/v2/folders/common/users?path=deployments/s/_common/demo')).data
+    // Where the rows come from cannot be told either: only that no number is said.
+    const x = users.find(u => u.path === 'deployments/s/x')
+    expect(x).toMatchObject({ told: false, groups: { cpu: { rows: null } } })
+  })
+
   it('gives the Sync dialogs no row count: what it gives is not known', async () => {
     await put('deployments/s/_common/demo/values.yaml', LAYER)
     expect((await listed('deployments/s/x')).alertCount).toBeNull()
   })
 })
 
+// A null on a _common stack: Helm 3.15 and 3.19 deploy different rows for
+// it, so Preview says no row count for the group (and not "has N rows but
+// produced no alerts").
+describe.skipIf(!HAS_HELM)('Preview of a group nulled over a _common\'s rows', () => {
+  it('gives the group no row count', async () => {
+    await put('charts/demo/values.yaml', 'cpu: []\n')
+    await put('deployments/s/_common/demo/values.yaml', 'demo:\n  cpu:\n    - { job: a }\n    - { job: b }\n')
+    await put('deployments/s/x/values.yaml', 'common:\n  demo:\n    cpu: null\n')
+    const { data } = await api('POST', `/api/v2/render/demo/x?folder=${encodeURIComponent('deployments/s/x')}`)
+    expect(data.ok).toBe(true)
+    const cpu = data.summary.groups.find(g => g.valuesKey === 'cpu')
+    expect(cpu.rowCount).toBeNull()
+    expect(cpu.state).not.toBe('no-alerts')
+  })
+})
+
 // A _common folder shared by a hand-made link is not supported: every
 // entry says so in the same words, none shows what it would inherit.
 describe('a _common reached through a hand-made link', () => {
-  const SAID = 'its _common chart deployments/t/_common/demo: deployments/t/_common is a link to deployments/s/_common — a _common chart is looked at where it is, not through a link: depend on deployments/s/_common/demo, or make a _common in this folder'
+  const SAID = 'its _common chart deployments/t/_common/demo: deployments/t/_common is a link to deployments/s/_common — a _common reached through a link made by hand is not supported, and nothing is written to it: replace the link with a folder of its own in git, or depend on deployments/s/_common/demo'
   beforeEach(async () => {
     await put('deployments/s/_common/demo/values.yaml', 'demo:\n  cpu:\n    - { job: shared }\n')
     await fs.symlink('../s/_common', path.join(root, 'deployments/t/_common'))
@@ -150,6 +197,34 @@ describe('a _common reached through a hand-made link', () => {
   it('gives the Sync dialogs no row count', async () => {
     expect((await listed('deployments/t/a')).alertCount).toBeNull()
   })
+
+  // Every write that touches it: 409, the same sentence, nothing written.
+  const snapshot = async () => Promise.all(['deployments/t/a/values.yaml', 'deployments/t/a/Chart.yaml', 'deployments/s/x/values.yaml', 'deployments/s/x/Chart.yaml', 'deployments/s/_common/demo/values.yaml', 'sync.yaml']
+    .map(f => fs.readFile(path.join(root, f), 'utf-8').catch(() => null)))
+  const REFUSED = { error: `deployments/t/a: ${SAID}`, file: 'deployments/t/a' }
+  it('is opened as the refusal, not as rows of no group', async () => {
+    const r = await api('GET', `/api/v2/deployments/demo/a?folder=${encodeURIComponent('deployments/t/a')}`)
+    expect(r.status).toBe(409)
+    expect(r.data).toMatchObject(REFUSED)
+  })
+  for (const [name, values] of [['as values', { cpu: [{ job: 'b' }] }], ['as text', 'common:\n  demo:\n    cpu:\n      - { job: b }\n']]) {
+    it(`is not saved ${name}`, async () => {
+      const before = await snapshot()
+      const r = await api('POST', `/api/v2/deployments/demo/a?folder=${encodeURIComponent('deployments/t/a')}`, { values })
+      expect(r.status).toBe(409)
+      expect(r.data).toMatchObject(REFUSED)
+      expect(await snapshot()).toEqual(before)
+    })
+  }
+  for (const [name, body] of [['to it', { source: 'deployments/s/x', target: 'deployments/t/a' }], ['from it', { source: 'deployments/t/a', target: 'deployments/s/x' }]]) {
+    it(`is not synced ${name}`, async () => {
+      const before = await snapshot()
+      const r = await api('POST', '/api/v2/sync', body)
+      expect(r.status).toBe(409)
+      expect(r.data).toMatchObject(REFUSED)
+      expect(await snapshot()).toEqual(before)
+    })
+  }
 
   it('is refused by Preview in the same words', async () => {
     const { data } = await api('POST', `/api/v2/render/demo/a?folder=${encodeURIComponent('deployments/t/a')}`)

@@ -25,7 +25,8 @@ import { LEGACY_VALUES_SUFFIX } from '../repo/paths.js'
 // the schema no longer has — orphans left by a migration that didn't finish.
 // `output`: Helm's output as renderedDocuments read it; `values`: what the
 // Template sees as .Values (the repo loader's `effective`).
-async function buildSummary(output, { model, schema }, readValues) {
+// `unknownRows`: the groups whose row count is not said ('*': all of them).
+async function buildSummary(output, { model, schema }, readValues, unknownRows = new Set()) {
   const rendered = tallyRendered(output)
 
   // Possible (alert, severity) pairs per group key, from the chart's rules/
@@ -47,7 +48,7 @@ async function buildSummary(output, { model, schema }, readValues) {
         continue
       }
       if (!Array.isArray(v)) continue
-      groupRows[k] = v.length
+      groupRows[k] = unknownRows.has(k) || unknownRows.has('*') ? null : v.length
       if (schema && !schemaGroups.has(k)) { orphanFields.add(k); continue }
       const groupFields = new Set(Object.keys((schema?.properties && Object.hasOwn(schema.properties, k) ? schema.properties[k] : null)?.items?.properties || {}))
       if (schema) for (const row of v) for (const f of Object.keys(row || {})) if (!groupFields.has(f)) orphanFields.add(f)
@@ -164,9 +165,14 @@ export default function renderRouter() {
         const dep = await loadDeployment(openRepo(gitopsDir), rel, { chart: folder ? undefined : chart })
         if (dep.state !== 'ok') throw new NotLoadedError(dep)
         valueWarnings = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code) || explain(f, 'preview').action === 'warn').map(f => f.message)
+        // A null on the stack: what the two Helm versions deploy differs, so
+        // the rows of the group it is in (every group, for one over all of
+        // them) are not said.
+        for (const f of findingsOf(dep).filter(x => /\.null-on-stack$/.test(x.code))) unknownRows.add(f.at?.path?.[0] ?? '*')
         return dep.value.effective
       }
-      const summary = !rendered || cannotTell.length ? null : await buildSummary(rendered, chartModel, readValues).catch(err => {
+      const unknownRows = new Set()
+      const summary = !rendered || cannotTell.length ? null : await buildSummary(rendered, chartModel, readValues, unknownRows).catch(err => {
         logger.error({ err, chart: template, deployment }, 'buildSummary failed, falling back to raw YAML')
         return null
       })

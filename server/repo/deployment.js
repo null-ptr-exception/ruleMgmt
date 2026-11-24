@@ -215,9 +215,16 @@ async function build(repo, rel, { chart, next }) {
  * dependency is not rendered, null when Helm stops on it or AlertForge
  * cannot tell what Helm makes of it. `dep` is loadDeployment's answer.
  */
+/**
+ * Whether the rows a loaded deployment deploys can be said: it loads, and
+ * nothing in it is one Helm stops on or AlertForge cannot tell Helm's
+ * reading of (a null on a _common stack included). Where not, every place
+ * that counts rows gives no number.
+ */
+export const rowsKnown = dep => dep.state === 'ok' && !dep.findings.some(f => f.helm === 'fails' || f.helm === 'unknown')
+
 export function deployedRows(dep) {
-  if (dep.state !== 'ok') return null
-  if (dep.findings.some(f => f.helm === 'fails' || f.helm === 'unknown')) return null
+  if (!rowsKnown(dep)) return null
   if (dep.findings.some(f => f.code === 'stack.stack-off')) return 0
   const { effective, model } = dep.value
   const groups = model?.groups

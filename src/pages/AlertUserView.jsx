@@ -16,7 +16,7 @@ import { parseRulesDir } from '../utils/rulesFile'
 import { isReservedName, RESERVED_HINT, isCommonChartPath, COMMON_DIR } from '../utils/reservedNames'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import { syncFailedNotice } from '../utils/syncNotice'
-import { valuesInEffect, inheritedFromOf } from '../utils/valuesInEffect'
+import { valuesInEffect, inheritedFromOf, rowsOf } from '../utils/valuesInEffect'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -29,9 +29,13 @@ import {
 
 const { Title, Text } = Typography
 
+// A group's name is the Template's: only an object's own entry is it
+// (`constructor`, `toString` are names like any other).
+const ownOf = (o, k) => (o && Object.hasOwn(o, k) ? o[k] : undefined)
+
 /** The defaults of a group's selector columns, _common's included (#60). */
 function selectorDefaultsOf(model, group) {
-  const entry = model?.groups?.[group]
+  const entry = ownOf(model?.groups, group)
   if (!entry?.selectors) return {}
   const cols = { ...(model.common?.columns || {}), ...(entry.columns || {}) }
   return Object.fromEntries(entry.selectors.filter(l => cols[l]?.default !== undefined).map(l => [l, cols[l].default]))
@@ -202,13 +206,14 @@ export default function AlertUserView() {
       setStackProblems(data.stackProblems || null)
       setLoadedVersion(data.version || null)
       // What Helm reads otherwise than it looks, and values Helm stops on as a whole.
-      setReadNotes((data.findings || []).filter(f => f.code === 'yaml.read-differently' || f.code === 'values.chart-key').map(f => f.message))
+      // A group written as anything but a list of rows is said too (its table shows none).
+      setReadNotes((data.findings || []).filter(f => f.code === 'yaml.read-differently' || f.code === 'values.chart-key' || (f.code === 'values.schema' && f.at?.path?.length === 1)).map(f => f.message))
       const parsed = data.parsed || {}
       const { _common, ...rest } = parsed
       setCommonValues(_common || {})
       setAllValues(rest)
       if (activeAlert && activeAlert !== '__common_vars__') {
-        setRows(rest[activeAlert] || [])
+        setRows(rowsOf(rest, activeAlert))
       }
       setDirty(false)
     })
@@ -274,7 +279,7 @@ export default function AlertUserView() {
   // Sync rows when allValues updates (e.g. after deployment fetch or overview save)
   useEffect(() => {
     if (!activeAlert) return
-    setRows(allValues[activeAlert] || [])
+    setRows(rowsOf(allValues, activeAlert))
   }, [activeAlert, allValues])
 
   // After creating a deployment, if the chart has a required common variable
@@ -286,7 +291,7 @@ export default function AlertUserView() {
     if (!pendingCommonCheckRef.current || !schema) return
     pendingCommonCheckRef.current = false
     const unmet = getCommonVars(schema).some(
-      v => v.required && v.default === undefined && !(v.name in commonValues) && !(v.name in inheritedCommon)
+      v => v.required && v.default === undefined && !Object.hasOwn(commonValues, v.name) && !Object.hasOwn(inheritedCommon, v.name)
     )
     if (unmet) setActiveAlert('__common_vars__')
   }, [schema, commonValues])
@@ -481,8 +486,8 @@ export default function AlertUserView() {
   // A group it inherits is copied here first, as Add instance does (#102):
   // a group is inherited whole, and one row alone would drop the rest.
   function addProposedRow(group, row) {
-    const inheritedHere = !(group in allValues) && inheritedFrom(group)
-    const current = inheritedHere ? (inherited.values?.[group] || []).map(r => ({ ...r })) : (group === activeAlert ? rows : (allValues[group] || []))
+    const inheritedHere = !Object.hasOwn(allValues, group) && inheritedFrom(group)
+    const current = inheritedHere ? rowsOf(inherited.values, group).map(r => ({ ...r })) : (group === activeAlert ? rows : rowsOf(allValues, group))
     const next = [...current, row]
     if (group === activeAlert) setRows(next)
     setAllValues(v => ({ ...v, [group]: next }))
@@ -602,7 +607,7 @@ export default function AlertUserView() {
     if (!selectedChart || !selectedFolder) return
     const isCommon = activeAlert === '__common_vars__'
     // An inherited group is written only once it is overridden here (#102).
-    const ownGroup = !isCommon && (activeAlert in allValues || !inheritedFrom(activeAlert))
+    const ownGroup = !isCommon && (Object.hasOwn(allValues, activeAlert) || !inheritedFrom(activeAlert))
     const merged = ownGroup ? { ...allValues, [activeAlert]: rows } : allValues
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...merged }
@@ -694,8 +699,8 @@ export default function AlertUserView() {
   // A group a _common gives: shown, dimmed; overridden, it is the
   // deployment's own; reset, the key goes and the inherited rows show again.
   const groupFrom = activeAlert && activeAlert !== '__common_vars__' ? inheritedFrom(activeAlert) : null
-  const inheritedRows = groupFrom ? (inherited.values?.[activeAlert] || []) : []
-  const showingInherited = !!groupFrom && !(activeAlert in allValues)
+  const inheritedRows = groupFrom ? rowsOf(inherited.values, activeAlert) : []
+  const showingInherited = !!groupFrom && !Object.hasOwn(allValues, activeAlert)
   const copyRows = list => list.map(r => ({ ...r }))
   function overrideGroup(then = rows => rows) {
     const copied = then(copyRows(inheritedRows))
@@ -866,11 +871,14 @@ export default function AlertUserView() {
                 <ul data-testid="common-users" style={{ margin: '2px 0 0', paddingLeft: 18 }}>
                   {commonUsers.map(u => {
                     const fromHere = Object.values(u.groups).filter(g => g.from === selectedFolder)
-                    const active = activeAlert && activeAlert !== '__common_vars__' ? u.groups[activeAlert] : null
+                    const active = activeAlert && activeAlert !== '__common_vars__' ? ownOf(u.groups, activeAlert) ?? null : null
+                    // No number where Helm's rows cannot be told (rows: null).
+                    const rowsOf = n => (n === null ? 'rows not known' : `${n} row${n === 1 ? '' : 's'}`)
+                    const hereRows = fromHere.some(g => g.rows === null) ? 'rows not known' : `${fromHere.reduce((n, g) => n + (g.rows || 0), 0)} rows`
                     return (
                       <li key={u.path} data-testid={`common-user-${u.path}`}>
-                        <b>{u.path}</b>{!u.direct && ' (through a lower _common)'}: inherits {fromHere.length} group{fromHere.length === 1 ? '' : 's'} ({fromHere.reduce((n, g) => n + (g.rows || 0), 0)} rows) from here
-                        {active && <> — {activeAlert}: {active.from === 'own' ? `its own ${active.rows} row${active.rows === 1 ? '' : 's'}` : active.from === selectedFolder ? `${active.rows} row${active.rows === 1 ? '' : 's'} from here` : `${active.rows ?? 'the Template\'s'} rows from ${active.from}`}</>}
+                        <b>{u.path}</b>{!u.direct && ' (through a lower _common)'}: {u.told === false ? 'what it inherits from here cannot be told' : <>inherits {fromHere.length} group{fromHere.length === 1 ? '' : 's'} ({hereRows}) from here</>}
+                        {active && <> — {activeAlert}: {active.from === 'own' ? `its own ${rowsOf(active.rows)}` : active.from === selectedFolder ? `${rowsOf(active.rows)} from here` : `${active.rows === null ? 'rows not known' : `${active.rows ?? 'the Template\'s'} rows`} from ${active.from}`}</>}
                       </li>
                     )
                   })}
@@ -905,7 +913,7 @@ export default function AlertUserView() {
             deployments={viewedDeployments}
             onOpenDeployment={openViewedDeployment}
             inheritedFrom={multi ? null : inheritedFrom}
-            inheritedRows={group => inherited?.values?.[group] || []}
+            inheritedRows={group => rowsOf(inherited?.values, group)}
           />
         ) : showMain ? (
           <>
@@ -925,8 +933,8 @@ export default function AlertUserView() {
                   {commonVarDefs.map(v => {
                     // A _common may leave a required value to its deployments;
                     // one a deployment inherits is given (#102).
-                    const own = v.name in commonValues
-                    const from = !own && v.name in inheritedCommon ? commonFrom[v.name] : null
+                    const own = Object.hasOwn(commonValues, v.name)
+                    const from = !own && Object.hasOwn(inheritedCommon, v.name) ? ownOf(commonFrom, v.name) : null
                     const missing = !frozenSource && !onCommon && isMissingRequired(v, own ? commonValues[v.name] : inheritedCommon[v.name])
                     const badDuration = !missing && !frozenSource && v.type === 'duration' && commonValues[v.name]
                       ? durationCellFault(commonValues[v.name], null) : null
@@ -970,7 +978,7 @@ export default function AlertUserView() {
                         <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}{v.required && <RequiredMark />}</Text>
                         {missing && v.type !== 'boolean' ? <Tooltip title="Required">{field}</Tooltip> : badDuration ? <Tooltip title={badDuration}>{field}</Tooltip> : field}
                         {from && <Tag data-testid={`inherited-from-${v.name}`} style={{ margin: 0, opacity: 0.7 }}>from {from}</Tag>}
-                        {own && v.name in inheritedCommon && !frozenSource && !syncUnknown && (
+                        {own && Object.hasOwn(inheritedCommon, v.name) && !frozenSource && !syncUnknown && (
                           <Tooltip title={`Remove it here: ${inheritedCommon[v.name]} from ${commonFrom[v.name]} again`}>
                             <Button size="small" type="link" data-testid={`reset-${v.name}`} style={{ padding: 0 }}
                               onClick={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}>Reset</Button>
@@ -1018,9 +1026,9 @@ export default function AlertUserView() {
                 <AlertTable
                   vars={vars}
                   rows={rows}
-                  selectors={rulesModel?.groups?.[activeAlert]?.selectors || null}
+                  selectors={ownOf(rulesModel?.groups, activeAlert)?.selectors || null}
                   selectorDefaults={selectorDefaultsOf(rulesModel, activeAlert)}
-                  selectorLabels={renamedSelectorLabels(rulesModel?.groups?.[activeAlert])}
+                  selectorLabels={renamedSelectorLabels(ownOf(rulesModel?.groups, activeAlert))}
                   commonValues={{ ...inheritedCommon, ...commonValues }}
                   filters={filters}
                   onFiltersChange={setFilters}

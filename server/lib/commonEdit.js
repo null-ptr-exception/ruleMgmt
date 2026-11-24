@@ -726,7 +726,8 @@ export function originsOf(stacked, groupNames = new Set()) {
   const names = new Set([...groupNames, ...Object.keys(stacked.merged || {}).filter(k => Array.isArray(stacked.merged[k]))])
   for (const g of names) {
     if (g === '_common') continue
-    const from = g in own ? 'own' : layerValues.find(l => g in l.values)?.path ?? 'template'
+    // A group's name is the Template's: only an own key counts (`constructor`).
+    const from = Object.hasOwn(own, g) ? 'own' : layerValues.find(l => Object.hasOwn(l.values, g))?.path ?? 'template'
     const rows = Array.isArray(stacked.merged?.[g]) ? stacked.merged[g].length : null
     groups[g] = { from, rows }
   }

@@ -120,7 +120,7 @@ const cases = [
   ['the _common folder is a link', async r => {
     await r.base(1); await fs.rename(r.abs('shop/_common'), r.abs('shop/real-common')); await fs.symlink('real-common', r.abs('shop/_common')); await r.onLayer(1, {})
     // Helm renders through it; a hand-made link is not supported, and said.
-  }, 6, /shop\/_common is a link to shop\/real-common — a _common chart is looked at where it is, not through a link: make a _common in this folder/],
+  }, 6, /shop\/_common is a link to shop\/real-common — a _common reached through a link made by hand is not supported, and nothing is written to it: replace the link with a folder of its own in git$/m],
   ['a _common named as the deployment asks (shared)', async r => {
     await r.base(1); await r.write(`${L1}/Chart.yaml`, { apiVersion: 'v2', name: 'shared', version: '0.1.0', dependencies: [{ name: C, version: '>=0.0.0-0' }] })
     await r.deployment('shop/d', [r.fileDep('shop/d', L1, 'shared')], { shared: { [C]: { _common: { owner: 'mine' } } } })

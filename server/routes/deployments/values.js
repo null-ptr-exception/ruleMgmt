@@ -4,7 +4,7 @@ import { reasonOf } from '../../repo/finding.js'
 import { z } from 'zod'
 import { route, map } from '../../http/route.js'
 import path from 'path'
-import { resolveStack, unwrapPath, readStackValues, stackValues } from '../../lib/stack.js'
+import { resolveStack, unwrapPath, readStackValues, stackValues, linkedStackRefusal } from '../../lib/stack.js'
 import { originsOf, folderCommonOf, inheritsFromOf } from '../../lib/commonEdit.js'
 import { valuesVersion } from '../../lib/deploymentWrite.js'
 import { isTarget } from '../../lib/sync.js'
@@ -54,6 +54,10 @@ export function valuesRoutes(router) {
     if (read.state === 'invalid') throw new UnreadableError(file, { reason: read.findings.map(reasonOf).join('; ') })
     // Only the deployment's own values, under every key of its stack (#100).
     const stack = await resolveStack(gitopsDir, dir, { repo })
+    // On a _common reached through a link made by hand its values are not
+    // shown as rows of no group: the page says why, as a save would.
+    const linked = linkedStackRefusal(stack, path.relative(gitopsDir, dir).replace(/\\/g, '/'))
+    if (linked) return linked
     const parsed = unwrapPath(read.value, stack.keys)
     // What Helm does with them, for the page to say (findings, policy.js: as a save would decide).
     const loadedDep = await loadDeployment(repo, direct ? path.relative(gitopsDir, dir).replace(/\\/g, '/') : rel, { chart })

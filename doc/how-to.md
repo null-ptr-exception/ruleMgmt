@@ -538,9 +538,12 @@ shop/prod/values.yaml                    common: {mariadb-alerts: {...prod's own
 The links AlertForge makes are the ones in a `_common`'s `charts/`. A
 `_common` folder shared by a link made by hand (`team-b/_common →
 ../shop/_common`) is not followed: the tree marks a deployment that
-depends on it, Preview, `check-deployment` and the editor name the link and
-the `_common` to depend on instead, and the Sync dialogs give it no row
-count. `check-deployment` and `check-repo` fail such a deployment (exit 1),
+depends on it, its page, Preview and `check-deployment` name the link, and
+the Sync dialogs give it no row count. Nothing is written to such a
+deployment: saving it, syncing to or from it, a `_common` made or removed
+around it and a Template change that would move its values are refused
+(409) with the same sentence. Replace the link with a folder of its own in
+git, or make the deployment depend on the `_common` where it is. `check-deployment` and `check-repo` fail such a deployment (exit 1),
 as they fail one whose `values.yaml` (or a `_common`'s) is a link out of
 the repo: it is a deployment, and what it renders on is refused. Exit 2 is
 for what is no deployment at all — a deployment folder that is itself a
@@ -636,7 +639,8 @@ not under the chart's name, or when a key is written twice — see
 in what a `_common` above gives is said when you save, not refused: it is
 fixed on that `_common`. A file whose chart key holds nothing
 (`mariadb-alerts: null`) opens as no rows, and the page says Helm stops on
-it, next to the Save button.
+it, next to the Save button; so does a group written as anything but a list
+of rows (`cpu: "a string"`).
 
 In a group with selectors, a row that is `.*` covers everything the rows
 under it do not. **Scope** says which rows a row gives up (*excludes N* —
@@ -659,6 +663,8 @@ group produced, by alert name and severity. It also points out:
 - a group marked *once per deployment*, which needs no rows; recording rules
   are counted next to the alerts, not in the total
 - a group with rows but no alerts, usually a blank cell that drops a rule
+- no row count for a group with a null over what a `_common` gives: Helm
+  3.15 and 3.19 deploy different rows for it
 - an alert of the group that no row produced, greyed with a count of 0; one
   whose severity each row gives (`severity: ${severity}`) is listed only when
   no row produced it at all, without a severity

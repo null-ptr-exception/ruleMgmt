@@ -22,7 +22,7 @@ import fs from 'fs/promises'
 import { createHash } from 'crypto'
 import path from 'path'
 import yaml from 'js-yaml'
-import { resolveStack, wrapPath } from './stack.js'
+import { resolveStack, wrapPath, linkedStackRefusal } from './stack.js'
 import { copyRouting, readRouting, restoreRouting, writeWhole } from './routingFiles.js'
 import { getTargetsForSource, isSafeSyncPath } from './sync.js'
 import { isDeployment } from '../repo/walk.js'
@@ -73,6 +73,9 @@ export async function valuesCheck(gitopsDir, rel, values, { chartName, repo = op
   const now = await repo.file(file)
   if (now.state === 'unreadable') return { file, refusal: { status: 409, body: { error: `${file} cannot be read: ${now.why}`, unreadable: true } } }
   const stack = flat ? null : await resolveStack(gitopsDir, path.join(gitopsDir, rel), { repo })
+  // On a _common reached through a link made by hand: nothing is written.
+  const linked = linkedStackRefusal(stack, rel)
+  if (linked) return { file, refusal: linked }
   const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, stack ? stack.keys : []), { lineWidth: -1 })
   const after = repo.with([[file, text]])
   const loaded = await loadDeployment(after, rel, { chart: chartName })
@@ -306,6 +309,8 @@ export async function syncTargets(repo, registry, source) {
       if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
       const link = await deploymentLinkProblem(repo.root, target)
       if (link) return { refusal: { status: 409, body: { error: `${target} cannot be written: ${link}`, file: target } } }
+      const linkedStack = linkedStackRefusal(await resolveStack(repo.root, path.join(repo.root, target), { repo }), target)
+      if (linkedStack) return { refusal: linkedStack }
       for (const f of ['Chart.yaml', 'values.yaml']) {
         const read = await repo.file(`${target}/${f}`)
         if (read.state === 'unreadable') return { refusal: { status: 409, body: { error: `${target}/${f} cannot be read: ${read.why}`, file: `${target}/${f}`, unreadable: true } } }

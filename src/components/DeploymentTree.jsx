@@ -114,7 +114,7 @@ function toTreeNode(node, registry, handlers) {
       )}
       {node.unreadable && (
         <Tooltip title={node.isDeployment
-          ? `This deployment cannot be read as it is (${node.unreadable}): Preview and Commit refuse it — fix it in git`
+          ? `This deployment cannot be read as it is (${node.unreadable}) — fix it in git`
           : `This folder cannot be read (${node.unreadable}): the deployments in it are not listed, checked or migrated`}>
           <WarningOutlined aria-label="cannot be read" style={{ color: '#dc2626' }} />
         </Tooltip>

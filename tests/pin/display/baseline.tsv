@@ -404,10 +404,10 @@ stack-x-null	S	editor	ok	200	no	values.chart-key	0	-	_common.team="shop"	1	-	-	-
 stack-x-null	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=0 preview=- common-users=-	
 stack-x-null	S	common-users	ok	200	no	-	-	-	cpu from template	1	-	-	-	all-list=- editor=0 preview=- common-users=-	
 stack-x-number-text	S	tree	ok	200	no	-	n/a	-	-	1	-	-	-		
-stack-x-number-text	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=1 preview=- common-users=1	
-stack-x-number-text	S	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold="abc"	1	-	-	-	all-list=- editor=1 preview=- common-users=1	
-stack-x-number-text	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=1 preview=- common-users=1	
-stack-x-number-text	S	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	all-list=- editor=1 preview=- common-users=1	count-while-helm-fails
+stack-x-number-text	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=1 preview=- common-users=-	
+stack-x-number-text	S	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold="abc"	1	-	-	-	all-list=- editor=1 preview=- common-users=-	
+stack-x-number-text	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=1 preview=- common-users=-	
+stack-x-number-text	S	common-users	ok	200	no	-	-	-	cpu from own	1	-	-	-	all-list=- editor=1 preview=- common-users=-	
 stack-x-010	S	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 stack-x-010	S	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 stack-x-010	S	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold=8		
@@ -429,10 +429,10 @@ stack-condition-yes	S	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="x"	
 stack-condition-yes	S	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
 stack-condition-yes	S	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
 stack-missing-link	S	tree	ok	200	no	-	n/a	-	-	0	0	0	-		
-stack-missing-link	S	all-list	ok	200	no	null	-	-	-	0	0	0	-	all-list=- editor=0 preview=- common-users=0	
-stack-missing-link	S	editor	ok	200	no	stack.template-missing,values.required-empty,stackProblems	0	-	-	0	0	0	no-probe	all-list=- editor=0 preview=- common-users=0	
-stack-missing-link	S	preview	failed	200	no	error	-	-	-	0	0	0	w=-; names=-	all-list=- editor=0 preview=- common-users=0	
-stack-missing-link	S	common-users	ok	200	no	-	0	-	cpu from template	0	0	0	-	all-list=- editor=0 preview=- common-users=0	
+stack-missing-link	S	all-list	ok	200	no	null	-	-	-	0	0	0	-	all-list=- editor=0 preview=- common-users=-	
+stack-missing-link	S	editor	ok	200	no	stack.template-missing,values.required-empty,stackProblems	0	-	-	0	0	0	no-probe	all-list=- editor=0 preview=- common-users=-	
+stack-missing-link	S	preview	failed	200	no	error	-	-	-	0	0	0	w=-; names=-	all-list=- editor=0 preview=- common-users=-	
+stack-missing-link	S	common-users	ok	200	no	-	-	-	cpu from template	0	0	0	-	all-list=- editor=0 preview=- common-users=-	
 layer-common-zero	L	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 layer-common-zero	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 layer-common-zero	L	editor	ok	200	no	-	n/a	-	_common.team="shop"; _common.base=0	0	3	1	_common.team="shop"; _common.base=0		
@@ -449,20 +449,20 @@ layer-group-map	L	editor	ok	200	no	values.schema	n/a	-	_common.team="shop"	0	3	1
 layer-group-map	L	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
 layer-group-map	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
 layer-not-yaml	L	tree	ok	200	no	-	n/a	-	-	1	-	-	-		
-layer-not-yaml	L	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- preview=- common-users=1	
+layer-not-yaml	L	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 layer-not-yaml	L	editor	unreadable	409	no	-	n/a	-	-	1	-	-	-		
-layer-not-yaml	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- preview=- common-users=1	
-layer-not-yaml	L	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	all-list=- preview=- common-users=1	count-while-helm-fails
+layer-not-yaml	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
+layer-not-yaml	L	common-users	ok	200	no	-	-	-	cpu from own	1	-	-	-		
 layer-unreadable	L	tree	ok	200	no	-	n/a	-	-	1	-	-	-		
-layer-unreadable	L	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- preview=- common-users=1	
+layer-unreadable	L	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 layer-unreadable	L	editor	unreadable	409	no	-	n/a	-	-	1	-	-	-		
-layer-unreadable	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- preview=- common-users=1	
-layer-unreadable	L	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	all-list=- preview=- common-users=1	count-while-helm-fails
+layer-unreadable	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
+layer-unreadable	L	common-users	ok	200	no	-	-	-	cpu from own	1	-	-	-		
 layer-link-outside	L	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
-layer-link-outside	L	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- preview=- common-users=1	no-count-helm-renders
+layer-link-outside	L	all-list	ok	200	no	null	-	-	-	0	3	1	-		no-count-helm-renders
 layer-link-outside	L	editor	unreadable	409	no	-	n/a	-	-	0	3	1	_common.team="shop"		
-layer-link-outside	L	preview	failed	200	no	error	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- preview=- common-users=1	no-count-helm-renders
-layer-link-outside	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-	all-list=- preview=- common-users=1	
+layer-link-outside	L	preview	failed	200	no	error	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		no-count-helm-renders
+layer-link-outside	L	common-users	ok	200	no	-	-	-	cpu from own	0	3	1	-		no-count-helm-renders
 layer-unwrapped	L	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 layer-unwrapped	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 layer-unwrapped	L	editor	ok	200	no	values.not-under-chart-key	n/a	-	_common.team="shop"	0	3	1	-		value-differs
@@ -484,39 +484,39 @@ layer-common-partial	L	editor	ok	200	no	-	n/a	-	_common.base=5	0	3	1	_common.tea
 layer-common-partial	L	preview	ok	200	no	-	1	3	w=5m	0	3	1	w=5m; names=CpuHigh,CpuRate,Down		
 layer-common-partial	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
 layer-chart-null	L	tree	ok	200	no	-	n/a	-	-	1	-	-	-		
-layer-chart-null	L	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- preview=- common-users=1	
+layer-chart-null	L	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 layer-chart-null	L	editor	ok	200	no	values.chart-key	n/a	-	-	1	-	-	-		
-layer-chart-null	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- preview=- common-users=1	
-layer-chart-null	L	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	all-list=- preview=- common-users=1	count-while-helm-fails
+layer-chart-null	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
+layer-chart-null	L	common-users	ok	200	no	-	-	-	cpu from own	1	-	-	-		
 layer-cannot-tell	L	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
-layer-cannot-tell	L	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- preview=- common-users=1	no-count-helm-renders
+layer-cannot-tell	L	all-list	ok	200	no	null	-	-	-	0	3	1	-		no-count-helm-renders
 layer-cannot-tell	L	editor	unreadable	409	no	-	n/a	-	-	0	3	1	_common.team="shop"		
-layer-cannot-tell	L	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- preview=- common-users=1	no-count-helm-renders
-layer-cannot-tell	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-	all-list=- preview=- common-users=1	
-common-linked	A	tree	ok	200	no	unreadable	n/a	-	its _common chart deployments/t/_common/demo: deployments/t/_common is a link to deployments/s/_common — a _common chart is looked at where it is, not through a link: depend on deployments/s/_common/demo, or make a _common in this folder	0	3	1	-		
-common-linked	A	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- editor=0 preview=-	no-count-helm-renders
-common-linked	A	editor	ok	200	no	stack.stack-link,values.required-empty,stackProblems	0	-	-	0	3	1	_common.team="shop"; cpu.0.job="api"	all-list=- editor=0 preview=-	rows-differ
-common-linked	A	preview	failed	200	no	error	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- editor=0 preview=-	no-count-helm-renders
+layer-cannot-tell	L	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		no-count-helm-renders
+layer-cannot-tell	L	common-users	ok	200	no	-	-	-	cpu from own	0	3	1	-		no-count-helm-renders
+common-linked	A	tree	ok	200	no	unreadable	n/a	-	its _common chart deployments/t/_common/demo: deployments/t/_common is a link to deployments/s/_common — a _common reached through a link made by hand is not supported, and nothing is written to it: replace the link with a folder of its own in git, or depend on deployments/s/_common/demo	0	3	1	-		
+common-linked	A	all-list	ok	200	no	null	-	-	-	0	3	1	-		no-count-helm-renders
+common-linked	A	editor	refused	409	no	-	-	-	-	0	3	1	_common.team="shop"; cpu.0.job="api"		no-count-helm-renders
+common-linked	A	preview	failed	200	no	error	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		no-count-helm-renders
 stack-own-unreadable	S	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be read (permission denied)	1	-	-	-		
-stack-own-unreadable	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=- preview=- common-users=2	
-stack-own-unreadable	S	editor	unreadable	409	no	-	-	-	-	1	-	-	-	all-list=- editor=- preview=- common-users=2	
-stack-own-unreadable	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=- preview=- common-users=2	
-stack-own-unreadable	S	common-users	ok	200	no	-	2	-	cpu from here	1	-	-	-	all-list=- editor=- preview=- common-users=2	count-while-helm-fails
+stack-own-unreadable	S	all-list	ok	200	no	null	-	-	-	1	-	-	-		
+stack-own-unreadable	S	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
+stack-own-unreadable	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
+stack-own-unreadable	S	common-users	ok	200	no	-	-	-	cpu from here	1	-	-	-		
 stack-own-not-yaml	S	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/s/x/values.yaml line 2: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document)	1	-	-	-		
-stack-own-not-yaml	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=- preview=- common-users=2	
-stack-own-not-yaml	S	editor	unreadable	409	no	-	-	-	-	1	-	-	-	all-list=- editor=- preview=- common-users=2	
-stack-own-not-yaml	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=- preview=- common-users=2	
-stack-own-not-yaml	S	common-users	ok	200	no	-	2	-	cpu from here	1	-	-	-	all-list=- editor=- preview=- common-users=2	count-while-helm-fails
+stack-own-not-yaml	S	all-list	ok	200	no	null	-	-	-	1	-	-	-		
+stack-own-not-yaml	S	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
+stack-own-not-yaml	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
+stack-own-not-yaml	S	common-users	ok	200	no	-	-	-	cpu from here	1	-	-	-		
 stack-own-null	S	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/s/x/values.yaml: common.demo must be a map of values, not null: Helm stops on it ("type mismatch on demo") — write {} for no values, or remove the file)	1	-	-	-		
-stack-own-null	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=2 preview=- common-users=2	
-stack-own-null	S	editor	ok	200	no	values.chart-key	2	-	_common.team="shop"; cpu.0.job="l1"	1	-	-	-	all-list=- editor=2 preview=- common-users=2	
-stack-own-null	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=2 preview=- common-users=2	
-stack-own-null	S	common-users	ok	200	no	-	2	-	cpu from here	1	-	-	-	all-list=- editor=2 preview=- common-users=2	count-while-helm-fails
+stack-own-null	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=2 preview=- common-users=-	
+stack-own-null	S	editor	ok	200	no	values.chart-key	2	-	_common.team="shop"; cpu.0.job="l1"	1	-	-	-	all-list=- editor=2 preview=- common-users=-	
+stack-own-null	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=2 preview=- common-users=-	
+stack-own-null	S	common-users	ok	200	no	-	-	-	cpu from here	1	-	-	-	all-list=- editor=2 preview=- common-users=-	
 layer-cannot-tell-rows	L	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
-layer-cannot-tell-rows	L	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- preview=- common-users=1	no-count-helm-renders
+layer-cannot-tell-rows	L	all-list	ok	200	no	null	-	-	-	0	3	1	-		no-count-helm-renders
 layer-cannot-tell-rows	L	editor	unreadable	409	no	-	n/a	-	-	0	3	1	_common.team="shop"		
-layer-cannot-tell-rows	L	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- preview=- common-users=1	no-count-helm-renders
-layer-cannot-tell-rows	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-	all-list=- preview=- common-users=1	
+layer-cannot-tell-rows	L	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		no-count-helm-renders
+layer-cannot-tell-rows	L	common-users	ok	200	no	-	-	-	cpu from own	0	3	1	-		no-count-helm-renders
 tpl-default-rows	T	tree	ok	200	no	-	n/a	-	-	0	5	2	-		
 tpl-default-rows	T	all-list	ok	200	no	-	2	-	-	0	5	2	-	all-list=2 editor=0 preview=2	
 tpl-default-rows	T	editor	ok	200	no	-	0	-	_common.team="shop"	0	5	2	_common.team="shop"; cpu.0.job="t1"	all-list=2 editor=0 preview=2	rows-differ

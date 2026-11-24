@@ -24,6 +24,7 @@ import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { z } from 'zod'
 import { route, declaredRoutes } from '../http/route.js'
 import { parsePath, deploymentLinkProblem } from '../repo/paths.js'
+import { resolveStack, linkedStackRefusal } from '../lib/stack.js'
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -93,6 +94,11 @@ export default function syncRouter() {
     // A target reached through a link is no deployment: said as one (paths.js).
     const linked = await deploymentLinkProblem(gitopsDir, target)
     if (linked) return { status: 400, body: { error: linked } }
+    // Either one on a _common reached through a link made by hand: nothing is written.
+    for (const rel of [source, target]) {
+      const onLink = linkedStackRefusal(await resolveStack(gitopsDir, path.join(gitopsDir, rel)), rel)
+      if (onLink) return onLink
+    }
     const targetDir = path.join(gitopsDir, target)
 
     return withSyncRegistryLock(gitopsDir, async () => {

@@ -3,6 +3,7 @@ import { Button, Input, Select, Tag, Typography } from 'antd'
 import { SaveOutlined, EyeOutlined, CloseOutlined, RightOutlined } from '@ant-design/icons'
 import AlertTable from './AlertTable'
 import { matchesFilter, getFilterOperators, mergeFilters } from '../utils/filterUtils'
+import { rowsOf } from '../utils/valuesInEffect'
 
 const { Text } = Typography
 
@@ -112,7 +113,7 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
 // a group it inherits from a _common (#102) said as such.
 function DeploymentPart({ deployment, alertName, vars, sectionFilters, effectiveFilters, onFiltersChange, onOpen, scrollContainer, stickyOffsetHeader }) {
   const from = deployment.from?.[alertName]
-  const count = (deployment.values[alertName] || []).length
+  const count = rowsOf(deployment.values, alertName).length
   return (
     <div data-testid="deployment-part" style={{ marginBottom: 12 }}>
       <Button type="link" size="small" onClick={() => onOpen(deployment.path)} style={{ padding: 0, fontSize: 12, fontWeight: 500 }}>
@@ -130,7 +131,7 @@ function DeploymentPart({ deployment, alertName, vars, sectionFilters, effective
       )}
       <AlertTable
         vars={vars}
-        rows={deployment.values[alertName] || []}
+        rows={rowsOf(deployment.values, alertName)}
         commonValues={deployment.commonValues}
         filters={sectionFilters}
         effectiveFilters={effectiveFilters}
@@ -158,11 +159,11 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
 
   // Counted over every viewed deployment, each against its own common values.
   const parts = deployments || [{ values: { [alertName]: rows }, commonValues }]
-  const totalRows = parts.reduce((n, d) => n + (d.values[alertName] || []).length, 0)
+  const totalRows = parts.reduce((n, d) => n + rowsOf(d.values, alertName).length, 0)
   const matchCount = useMemo(() => {
     const hasFilters = Object.values(effectiveFilters).some(f => f && f.value !== '' && f.value != null)
     if (!hasFilters) return totalRows
-    return parts.reduce((n, d) => n + (d.values[alertName] || []).filter(row => matchesFilter(row, effectiveFilters, vars, d.commonValues)).length, 0)
+    return parts.reduce((n, d) => n + rowsOf(d.values, alertName).filter(row => matchesFilter(row, effectiveFilters, vars, d.commonValues)).length, 0)
   }, [rows, deployments, effectiveFilters, vars, commonValues])
 
   const activeSectionFilters = Object.values(sectionFilters).filter(f => f && f.value !== '' && f.value != null)
@@ -286,12 +287,12 @@ export default function AlertOverviewWorkspace({
   }
 
   function handleDelete(alertName, realIndex) {
-    const updated = (allValues[alertName] || []).filter((_, i) => i !== realIndex)
+    const updated = rowsOf(allValues, alertName).filter((_, i) => i !== realIndex)
     onAllValuesChange({ ...allValues, [alertName]: updated })
   }
 
   function handleAdd(alertName, newRow) {
-    const updated = [...(allValues[alertName] || []), newRow]
+    const updated = [...rowsOf(allValues, alertName), newRow]
     onAllValuesChange({ ...allValues, [alertName]: updated })
   }
 
@@ -319,8 +320,8 @@ export default function AlertOverviewWorkspace({
       />
       <div ref={setScrollContainer} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {checkedAlerts.map(alertName => {
-          const from = inheritedFrom && !(alertName in allValues) ? inheritedFrom(alertName) : null
-          const shown = from ? inheritedRows(alertName) : (allValues[alertName] || [])
+          const from = inheritedFrom && !Object.hasOwn(allValues, alertName) ? inheritedFrom(alertName) : null
+          const shown = from ? inheritedRows(alertName) : rowsOf(allValues, alertName)
           return (
           <SectionPanel
             key={alertName}

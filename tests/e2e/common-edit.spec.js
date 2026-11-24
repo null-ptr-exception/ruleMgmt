@@ -94,6 +94,41 @@ test.describe.serial('A folder\'s _common', () => {
     await expect(banner.getByTestId(`common-user-${FOLDER}/prod`)).toContainText(`${GROUP}: its own 0 rows`)
   })
 
+  // What a _common gives, written so AlertForge cannot tell Helm's reading
+  // of it: its page says no number for the rows its deployments inherit.
+  test('says no row count where what it gives cannot be told', async ({ page }) => {
+    const file = at(`${COMMON}/values.yaml`)
+    const before = await fs.readFile(file, 'utf-8')
+    await fs.writeFile(file, `${before}  note: |2\n     two spaces more\n`)
+    try {
+      const { tree, folder } = await openFolder(page)
+      await expand(folder)
+      await expand(nodeOf(tree, '_common'))
+      const common = tree.locator('.ant-tree-treenode').filter({ hasText: 'inherited by the folder' })
+      await common.locator('.ant-tree-node-content-wrapper').click()
+      await expect(page.getByTestId(`common-user-${FOLDER}/stg`)).toContainText(`${FOLDER}/stg: what it inherits from here cannot be told`, { timeout: 8000 })
+    } finally {
+      await fs.writeFile(file, before)
+    }
+  })
+
+  // A deployment whose own values Helm stops on: no number for its rows.
+  test('says no row count for a deployment Helm cannot render', async ({ page }) => {
+    const file = at(`${FOLDER}/stg/values.yaml`)
+    const before = await fs.readFile(file, 'utf-8')
+    await fs.writeFile(file, `common:\n  ${CHART}: null\n`)
+    try {
+      const { tree, folder } = await openFolder(page)
+      await expand(folder)
+      await expand(nodeOf(tree, '_common'))
+      const common = tree.locator('.ant-tree-treenode').filter({ hasText: 'inherited by the folder' })
+      await common.locator('.ant-tree-node-content-wrapper').click()
+      await expect(page.getByTestId(`common-user-${FOLDER}/stg`)).toContainText('(rows not known) from here', { timeout: 8000 })
+    } finally {
+      await fs.writeFile(file, before)
+    }
+  })
+
   test('is removed from its menu: each deployment gets what it inherited', async ({ page }) => {
     const { tree, folder } = await openFolder(page)
     await expand(folder)

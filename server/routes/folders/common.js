@@ -3,10 +3,12 @@
 import { withSyncRegistryLock } from '../../lib/sync.js'
 import path from 'path'
 import { planCreate, planDelete, applyPlan, originsOf } from '../../lib/commonEdit.js'
-import { resolveStack, stackValues } from '../../lib/stack.js'
+import { resolveStack, stackValues, CANNOT_TELL } from '../../lib/stack.js'
 import { walk } from '../../repo/walk.js'
+import { createLimit } from '../../lib/limit.js'
+import { NODES_AT_ONCE } from './tree.js'
 import { openRepo } from '../../repo/openRepo.js'
-import { loadDeployment } from '../../repo/deployment.js'
+import { loadDeployment, rowsKnown } from '../../repo/deployment.js'
 import { z } from 'zod'
 import { linkOnTheWay } from '../../repo/paths.js'
 import { withoutPath } from '../../lib/answerPaths.js'
@@ -42,19 +44,25 @@ const USERS_QUERY = z.object({
  */
 async function commonUsers(gitopsDir, commonRel) {
   const repo = openRepo(gitopsDir)
-  const out = []
-  for (const d of await walk(repo)) {
-    if (d.kind !== 'deployment') continue
+  // A few at a time, in the walk's order.
+  const limit = createLimit(NODES_AT_ONCE)
+  const found = await Promise.all((await walk(repo)).filter(d => d.kind === 'deployment').map(d => limit(async () => {
     const stack = await resolveStack(gitopsDir, path.join(gitopsDir, d.rel), { repo })
     const at = stack.layers.findIndex(l => l.path === commonRel)
-    if (at < 0) continue
+    if (at < 0) return null
     const dep = await loadDeployment(repo, d.rel)
     const values = dep.state === 'ok'
       ? { own: dep.value.bare, layers: dep.value.layers, merged: dep.value.effective }
       : stackValues(stack, { own: {} })
-    out.push({ path: d.rel, direct: at === 0, groups: originsOf(values, stack.groups).groups })
-  }
-  return out
+    const { groups } = originsOf(values, stack.groups)
+    // What a _common AlertForge cannot tell Helm's reading of gives is not
+    // known: neither which groups come from where nor how many rows.
+    const told = !stack.problems.some(p => p.kind === CANNOT_TELL)
+    // Rows only where they can be said, as in the Sync dialogs (deployedRows).
+    if (!rowsKnown(dep)) for (const g of Object.values(groups)) g.rows = null
+    return { path: d.rel, direct: at === 0, groups, ...(told ? {} : { told: false }) }
+  })))
+  return found.filter(Boolean)
 }
 
 export function commonRoutes(router) {

@@ -177,6 +177,14 @@ describe('summarizeGroups', () => {
     } })).toEqual({ a: [{ alert: 'A', severity: 'critical' }], b: [{ alert: 'B', severity: 'info' }] })
   })
 
+  // A null on a _common stack: Helm 3.15 and 3.19 deploy different rows of
+  // the group, so its row count is not said, and nothing claims it has rows.
+  it('says no row count, and no "rows but no alerts", for a group whose rows cannot be told', () => {
+    const rendered = tallyRendered(renderedDocuments(CR([])))
+    const { groups } = summarizeGroups({ rendered, possible: { mem: [{ alert: 'MemHigh', severity: 'warning' }] }, groupRows: { mem: null }, schema: null })
+    expect(groups[0]).toMatchObject({ valuesKey: 'mem', rowCount: null, state: 'rows-unknown' })
+  })
+
   // Values keys are the deployment's: one named like an Object property
   // is a group like any other.
   it('summarizes groups named constructor, toString and __proto__', () => {

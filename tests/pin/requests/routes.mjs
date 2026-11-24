@@ -52,6 +52,10 @@ const dep = (mode = 'read') => ({ at: 'param', kind: 'deployment', mode })
 const folder = (mode = 'read') => ({ at: 'query', kind: 'folder', mode, follow: 'deployment' })
 const S = (name, extra = {}) => ({ name, types: ['s'], required: true, ...extra })
 
+// A breaking change's mapping, as the editor's dialog sends it: renamed
+// columns and groups, and dropped columns, each per group.
+const MIGRATION_PARTS = ['columns', 'groups', 'dropped'].map(k => ({ name: `migration.${k}`, types: ['o'], required: false }))
+
 // A deployment route: chart, deployment and folder, as the page asks.
 const depRoute = (id, method, sub, mode, extra = {}) => ({
   id, method, path: `/api/v2/deployments/:chart${sub}`,
@@ -68,7 +72,7 @@ export const ROUTES = [
     inputs: { name: { at: 'body', kind: 'name-new', mode: 'write' } }, fields: [S('name')] },
   { id: 'charts.clone', method: 'POST', path: '/api/v2/charts/:name/clone', params: { name: 'demo' }, body: { newName: 'copy' },
     inputs: { name: { at: 'param', kind: 'chart', mode: 'read' }, newName: { at: 'body', kind: 'name-new', mode: 'write' } },
-    fields: [S('newName'), { name: 'migration', types: ['o'], required: false }] },
+    fields: [S('newName'), { name: 'migration', types: ['o'], required: false }, ...MIGRATION_PARTS] },
   { id: 'charts.delete', method: 'DELETE', path: '/api/v2/charts/:name', params: { name: 'spare' },
     inputs: { name: { at: 'param', kind: 'chart', mode: 'write' } } },
 
@@ -76,10 +80,10 @@ export const ROUTES = [
   { id: 'templates.get', method: 'GET', path: '/api/v2/templates/:chart', params: { chart: 'demo' }, inputs: { chart: chart() } },
   { id: 'templates.rules', method: 'POST', path: '/api/v2/templates/:chart/rules', params: { chart: 'demo' }, body: { files: { 'cpu.yaml': CPU } },
     inputs: { chart: chart('write'), file: { at: 'files-key', kind: 'rules-file', mode: 'write' } },
-    fields: [{ name: 'files', types: ['o'], required: true }, { name: 'confirmBreaking', types: ['b'], required: false }, { name: 'migration', types: ['o'], required: false }] },
+    fields: [{ name: 'files', types: ['o'], required: true }, { name: 'confirmBreaking', types: ['b'], required: false }, { name: 'migration', types: ['o'], required: false }, ...MIGRATION_PARTS] },
   { id: 'templates.migration-preview', method: 'POST', path: '/api/v2/templates/:chart/migration-preview', params: { chart: 'demo' }, body: { files: { 'cpu.yaml': CPU }, migration: {} },
     inputs: { chart: chart(), file: { at: 'files-key', kind: 'rules-file', mode: 'read' } },
-    fields: [{ name: 'files', types: ['o'], required: true }, { name: 'migration', types: ['o'], required: false }] },
+    fields: [{ name: 'files', types: ['o'], required: true }, { name: 'migration', types: ['o'], required: false }, ...MIGRATION_PARTS] },
   { id: 'templates.chart-meta', method: 'POST', path: '/api/v2/templates/:chart/chart-meta', params: { chart: 'demo' }, body: { chartMeta: { description: 'd' } },
     inputs: { chart: chart('write') },
     fields: [{ name: 'chartMeta', types: ['o'], required: true }, { name: 'chartMeta.description', types: ['s', 'z'], required: false, emptyOk: true }] },

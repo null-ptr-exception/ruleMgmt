@@ -92,11 +92,7 @@
     }
   },
   "requestReads": {
-    "total": 34,
-    "byFile": {
-      "server/routes/charts.js": 13,
-      "server/routes/git.js": 5,
-      "server/routes/templates.js": 16
-    }
+    "total": 0,
+    "byFile": {}
   }
 }

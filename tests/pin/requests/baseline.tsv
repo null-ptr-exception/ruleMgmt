@@ -1036,7 +1036,7 @@ body:extra-field	shared.put{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok
 body:extra-field	shared.rename{}	same-as-good	ok	200	same	no	same	no	free	_shared/notification-configs.yaml	-	-	ok	
 body:extra-field	shared.regenerate{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
 body:none	charts.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:none	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+body:none	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	charts.delete{}	good	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 body:none	templates.rules{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	templates.migration-preview{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1060,7 +1060,7 @@ body:none	shared.put{}	bad-named	refused	400	same	no	same	no	free		-	yes	-
 body:none	shared.rename{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	shared.regenerate{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:text-plain	charts.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:text-plain	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+body:text-plain	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	charts.delete{}	good	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 body:text-plain	templates.rules{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	templates.migration-preview{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1108,7 +1108,7 @@ body:not-json	shared.put{}	bad	refused	400	same	no	same	no	free		-	-	-
 body:not-json	shared.rename{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	shared.regenerate{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:array	charts.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:array	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+body:array	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	charts.delete{}	any	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 body:array	templates.rules{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	templates.migration-preview{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1180,13 +1180,22 @@ body:bad-gzip	shared.put{}	bad	refused	400	same	no	same	no	free		-	-	-
 body:bad-gzip	shared.rename{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	shared.regenerate{}	bad	refused	400	same	no	same	no	free		-	-	-	
 field:number	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:number	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
+field:number	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	charts.clone{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	charts.clone{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	charts.clone{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	templates.rules{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:number	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:number	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	templates.rules{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	templates.rules{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	templates.rules{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	templates.rules{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:number	templates.migration-preview{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	templates.migration-preview{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	templates.migration-preview{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	templates.migration-preview{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1208,12 +1217,21 @@ field:number	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	y
 field:number	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	charts.create{name}	any	ok	200	same	no	same	no	free	charts/x/Chart.yaml,charts/x/values.schema.json,charts/x/values.yaml	-	-	-	
 field:text	charts.clone{newName}	any	ok	200	same	no	same	no	free	charts/x/Chart.yaml,charts/x/rules/cpu.yaml,charts/x/templates/cpu.yaml,charts/x/values.schema.json	-	-	-	
-field:text	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
+field:text	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	charts.clone{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	charts.clone{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	charts.clone{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	templates.rules{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:text	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:text	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:text	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	templates.rules{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	templates.rules{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	templates.rules{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	templates.rules{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:text	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:text	templates.migration-preview{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	templates.migration-preview{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	templates.migration-preview{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:text	templates.migration-preview{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
 field:text	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1234,13 +1252,22 @@ field:text	shared.put{shared}	any	refused	400	same	no	same	no	free		-	-	-
 field:text	shared.rename{from}	any	not-found	404	same	no	same	no	free		-	-	-	
 field:text	shared.rename{to}	any	ok	200	same	no	same	no	free	_shared/notification-configs.yaml	-	-	-	
 field:array	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:array	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:array	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
+field:array	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	charts.clone{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	charts.clone{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	charts.clone{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	templates.rules{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:array	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:array	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:array	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:array	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:array	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.rules{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.rules{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.rules{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.rules{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.migration-preview{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.migration-preview{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.migration-preview{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	templates.migration-preview{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1261,13 +1288,22 @@ field:array	shared.put{shared}	bad-named	refused	400	same	no	same	no	free		-	yes
 field:array	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:map	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:map	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	charts.clone{migration}	any	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	
+field:map	charts.clone{migration.columns}	any	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	
+field:map	charts.clone{migration.groups}	any	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	
+field:map	charts.clone{migration.dropped}	any	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	
 field:map	templates.rules{files}	any	conflict	409	same	no	same	no	free		-	-	-	
-field:map	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:map	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	templates.rules{migration}	any	ok	200	same	no	same	no	free		-	-	-	
+field:map	templates.rules{migration.columns}	any	ok	200	same	no	same	no	free		-	-	-	
+field:map	templates.rules{migration.groups}	any	ok	200	same	no	same	no	free		-	-	-	
+field:map	templates.rules{migration.dropped}	any	ok	200	same	no	same	no	free		-	-	-	
 field:map	templates.migration-preview{files}	any	ok	200	same	no	same	no	free		-	-	-	
 field:map	templates.migration-preview{migration}	any	ok	200	same	no	same	no	free		-	-	-	
+field:map	templates.migration-preview{migration.columns}	any	ok	200	same	no	same	no	free		-	-	-	
+field:map	templates.migration-preview{migration.groups}	any	ok	200	same	no	same	no	free		-	-	-	
+field:map	templates.migration-preview{migration.dropped}	any	ok	200	same	no	same	no	free		-	-	-	
 field:map	templates.chart-meta{chartMeta}	any	ok	200	same	no	same	no	free		-	-	-	
 field:map	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	deployments.save{values}	any	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
@@ -1288,13 +1324,22 @@ field:map	shared.put{shared}	any	refused	400	same	no	same	no	free		-	-	-
 field:map	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty-list	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:empty-list	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
+field:empty-list	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	charts.clone{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	charts.clone{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	charts.clone{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	templates.rules{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty-list	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:empty-list	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:empty-list	templates.migration-preview{files}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:empty-list	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:empty-list	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.rules{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.rules{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.rules{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.rules{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.migration-preview{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.migration-preview{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.migration-preview{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	templates.migration-preview{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1315,13 +1360,22 @@ field:empty-list	shared.put{shared}	bad-named	refused	400	same	no	same	no	free		
 field:empty-list	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:null	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:null	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
+field:null	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	charts.clone{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	charts.clone{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	charts.clone{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	templates.rules{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:null	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:null	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:null	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	templates.rules{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	templates.rules{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	templates.rules{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	templates.rules{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:null	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:null	templates.migration-preview{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	templates.migration-preview{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	templates.migration-preview{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	templates.migration-preview{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
 field:null	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1342,13 +1396,22 @@ field:null	shared.put{shared}	bad-named	refused	400	same	no	same	no	free		-	yes	
 field:null	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:bool	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:bool	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
+field:bool	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	charts.clone{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	charts.clone{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	charts.clone{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.rules{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.rules{confirmBreaking}	any	ok	200	same	no	same	no	free		-	-	-	
-field:bool	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:bool	templates.rules{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	templates.rules{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	templates.rules{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	templates.rules{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:bool	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:bool	templates.migration-preview{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	templates.migration-preview{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	templates.migration-preview{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	templates.migration-preview{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1369,13 +1432,22 @@ field:bool	shared.put{shared}	bad-named	refused	400	same	no	same	no	free		-	yes	
 field:bool	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:empty	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
+field:empty	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	charts.clone{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	charts.clone{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	charts.clone{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	templates.rules{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:empty	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:empty	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	templates.rules{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	templates.rules{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	templates.rules{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	templates.rules{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:empty	templates.migration-preview{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	templates.migration-preview{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	templates.migration-preview{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	templates.migration-preview{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
 field:empty	deployments.save{values}	any	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
@@ -1397,12 +1469,21 @@ field:empty	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	ye
 field:empty	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	charts.create{name}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	charts.clone{newName}	any	refused	400	same	no	same	no	free		-	-	-	
-field:long	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
+field:long	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	charts.clone{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	charts.clone{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	charts.clone{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	templates.rules{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:long	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:long	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:long	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	templates.rules{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	templates.rules{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	templates.rules{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	templates.rules{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:long	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:long	templates.migration-preview{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	templates.migration-preview{migration.columns}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	templates.migration-preview{migration.groups}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:long	templates.migration-preview{migration.dropped}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
 field:long	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1423,13 +1504,22 @@ field:long	shared.put{shared}	any	refused	400	same	no	same	no	free		-	-	-
 field:long	shared.rename{from}	any	not-found	404	same	no	same	no	free		-	-	-	
 field:long	shared.rename{to}	any	ok	200	same	no	same	no	free	_shared/notification-configs.yaml	-	-	-	
 field:deep	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:deep	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:deep	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	charts.clone{migration}	any	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	
+field:deep	charts.clone{migration.columns}	any	refused	400	same	no	same	no	free		-	-	-	
+field:deep	charts.clone{migration.groups}	any	refused	400	same	no	same	no	free		-	-	-	
+field:deep	charts.clone{migration.dropped}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.rules{files}	any	refused	400	same	no	same	no	free		-	-	-	
-field:deep	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
+field:deep	templates.rules{confirmBreaking}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	templates.rules{migration}	any	ok	200	same	no	same	no	free		-	-	-	
+field:deep	templates.rules{migration.columns}	any	refused	400	same	no	same	no	free		-	-	-	
+field:deep	templates.rules{migration.groups}	any	refused	400	same	no	same	no	free		-	-	-	
+field:deep	templates.rules{migration.dropped}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.migration-preview{files}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.migration-preview{migration}	any	ok	200	same	no	same	no	free		-	-	-	
+field:deep	templates.migration-preview{migration.columns}	any	refused	400	same	no	same	no	free		-	-	-	
+field:deep	templates.migration-preview{migration.groups}	any	refused	400	same	no	same	no	free		-	-	-	
+field:deep	templates.migration-preview{migration.dropped}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.chart-meta{chartMeta}	any	ok	200	same	no	same	no	free		-	-	-	
 field:deep	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-	

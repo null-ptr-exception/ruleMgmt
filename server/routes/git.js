@@ -1,5 +1,6 @@
 import { Router } from 'express'
-import { route, answerEveryRoute } from '../http/route.js'
+import { z } from 'zod'
+import { route, declaredRoutes } from '../http/route.js'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
@@ -73,12 +74,17 @@ function pathAt(file) {
   return problem ? { ok: false, error: `Invalid file path: ${problem.why}` } : { ok: true, rel: file.split('/').filter(x => x && x !== '.').join('/') }
 }
 
+const COMMIT_MESSAGE = 'message required: the commit message, as text'
+
+// A count in the query, as parseInt reads it, kept between min and max; one
+// left out or not a number is `fallback`.
+const count = (fallback, min, max) => z.any().transform(v => Math.min(max, Math.max(min, parseInt(v, 10) || fallback))).default(fallback)
+
 export default function gitRouter() {
   const router = Router()
   router.use(answersWithoutPaths)
 
-  router.get('/status', async (req, res) => {
-    const cwd = req.gitopsDir
+  router.get('/status', route('git.status', {}, async (input, { gitopsDir: cwd, res }) => {
     try {
       const branch = await getBranch(cwd)
       const raw = await git(cwd, 'status', '--porcelain', '-z')
@@ -97,27 +103,22 @@ export default function gitRouter() {
 
       res.json({ branch, changes, changeCount, behindMain, hasRemote: remote })
     } catch (err) {
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
   // Make every routing resource that is behind again, and copy each sync
   // target's from its source (#179). Writes files, commits nothing: the
   // diff is there to look at before committing.
-  router.post('/routing/regenerate', async (req, res) => {
-    try {
-      res.json(await regenerateRouting(req.gitopsDir))
-    } catch (err) {
-      console.error('Routing regenerate failed', err)
-      res.status(500).json({ error: 'Could not regenerate the routing' })
-    }
-  })
+  router.post('/routing/regenerate', route('git.regenerate', {}, async (input, { gitopsDir }) => (
+    { status: 200, body: await regenerateRouting(gitopsDir) }
+  )))
 
-  router.post('/commit', async (req, res) => {
-    const cwd = req.gitopsDir
-    const { message } = req.body || {}
-    // Text: anything else would be committed as "[object Object]" or "5".
-    if (typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'message required: the commit message, as text' })
+  // The message is text: anything else would be committed as
+  // "[object Object]" or "5".
+  router.post('/commit', route('git.commit', {
+    body: z.object({ message: z.string({ error: COMMIT_MESSAGE }).refine(m => m.trim(), { error: COMMIT_MESSAGE }) }),
+  }, async ({ body: { message } }, { gitopsDir: cwd, res }) => {
 
     try {
       // Add, check, commit in one go: a deployment save or a Regenerate in
@@ -174,12 +175,11 @@ export default function gitRouter() {
       console.error('Commit failed', err)
       res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
   // These change the working tree or the index: they wait for a save in
   // progress, and a save for them, as commit does.
-  router.post('/push', holdSyncRegistryLock, async (req, res) => {
-    const cwd = req.gitopsDir
+  router.post('/push', holdSyncRegistryLock, route('git.push', {}, async (input, { gitopsDir: cwd, res }) => {
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
@@ -204,29 +204,28 @@ export default function gitRouter() {
         return res.status(401).json({ error: 'Authentication failed: token may have expired', code: 'TOKEN_EXPIRED' })
       }
       if (err.message.includes('permission') || err.message.includes('denied')) {
-        return res.status(403).json({ error: await withoutPath(err.message, req.gitopsDir) })
+        return res.status(403).json({ error: await withoutPath(err.message, cwd) })
       }
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.post('/discard', holdSyncRegistryLock, async (req, res) => {
-    const cwd = req.gitopsDir
+  router.post('/discard', holdSyncRegistryLock, route('git.discard', {}, async (input, { gitopsDir: cwd, res }) => {
     try {
       await git(cwd, 'checkout', '--', '.')
       await git(cwd, 'clean', '-fd')
       res.json({ status: 'ok' })
     } catch (err) {
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.get('/log', async (req, res) => {
-    const cwd = req.gitopsDir
-    // git log -n with a negative number lists everything; keep it to a page.
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20))
-    // skip pages back through history (#81): skip=20&limit=20 is commits 21–40.
-    const skip = Math.max(0, parseInt(req.query.skip, 10) || 0)
+  // git log -n with a negative number lists everything: limit is kept to a
+  // page. skip pages back through history (#81): skip=20&limit=20 is
+  // commits 21–40. A number that is not one is the default.
+  router.get('/log', route('git.log', {
+    query: z.object({ limit: count(20, 1, 100), skip: count(0, 0, Infinity) }),
+  }, async ({ query: { limit, skip } }, { gitopsDir: cwd, res }) => {
 
     try {
       // A repository with no commits yet has no history, not a broken one.
@@ -258,14 +257,15 @@ export default function gitRouter() {
 
       res.json(commits)
     } catch (err) {
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.get('/diff', route('git.diff', async (req, res) => {
-    const cwd = req.gitopsDir
-    const file = req.query.file
-    const ref = req.query.ref
+  // The file and the ref are decided below, as a work-tree path or a path
+  // at a commit (paths.js) and a commit (repo/git.js).
+  router.get('/diff', route('git.diff', {
+    query: z.object({ file: z.any().optional(), ref: z.any().optional() }),
+  }, async ({ query: { file, ref } }, { gitopsDir: cwd, res }) => {
 
     // A tracked file, dot-files and dot-folders among them; never git's
     // own (paths.js). At a commit git holds what is shown: only the
@@ -288,8 +288,7 @@ export default function gitRouter() {
     res.json({ file, original, modified })
   }))
 
-  router.post('/pull', holdSyncRegistryLock, async (req, res) => {
-    const cwd = req.gitopsDir
+  router.post('/pull', holdSyncRegistryLock, route('git.pull', {}, async (input, { gitopsDir: cwd, res }) => {
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
@@ -307,12 +306,11 @@ export default function gitRouter() {
       if (isAuthError(err)) {
         return res.status(401).json({ error: 'Authentication failed: token may have expired', code: 'TOKEN_EXPIRED' })
       }
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.post('/sync', holdSyncRegistryLock, async (req, res) => {
-    const cwd = req.gitopsDir
+  router.post('/sync', holdSyncRegistryLock, route('git.sync', {}, async (input, { gitopsDir: cwd, res }) => {
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
@@ -328,11 +326,11 @@ export default function gitRouter() {
       const head = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
       res.json({ status: 'ok', head })
     } catch (err) {
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  return answerEveryRoute(router)
+  return declaredRoutes(router)
 }
 
 function isAuthError(err) {

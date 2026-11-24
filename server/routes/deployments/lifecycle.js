@@ -8,21 +8,22 @@ import { syncAnswer } from '../../repo/sync.js'
 import { folderEntry, isDeployment } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
 
-import { deploymentParamProblem, syncFolder, resolveDeploymentDir, resolveValuesFile, commonRefused } from './resolve.js'
+import { route } from '../../http/route.js'
+import { DEPLOYMENT_REQUEST, deploymentAt, resolveValuesFile, commonRefused } from './resolve.js'
 export function lifecycleRoutes(router) {
-  router.delete('/:chart/:deployment', async (req, res) => {
-    if (commonRefused(req, res, 'deleted as one')) return
-    const { dir, error } = await resolveDeploymentDir(req)
-    if (error) return res.status(400).json({ error })
-    const badName = deploymentParamProblem(req)
-    if (badName) return res.status(400).json({ error: badName })
+  router.delete('/:chart/:deployment', route('deployments.delete', DEPLOYMENT_REQUEST, async (input, { gitopsDir, res }) => {
+    const common = commonRefused(input.query.folder?.rel, 'deleted as one')
+    if (common) return common
+    const at = await deploymentAt(input, gitopsDir)
+    if (at.error) return { status: 400, body: { error: at.error } }
+    const { dir, folder, deployment } = at
+    // A removal that fails is answered with its reason: the user is shown it.
     try {
-      const resolved = await resolveValuesFile(dir, req.params.deployment)
+      const resolved = await resolveValuesFile(dir, deployment)
       const { legacyFile } = resolved
-      const folder = syncFolder(req)
       // A folder with a Chart.yaml and no values.yaml is removed whole too:
       // it renders the Template, and keeps the Template from being deleted.
-      const direct = resolved.direct || (!!folder && req.params.deployment === path.basename(dir) && !!(await folderEntry(openRepo(req.gitopsDir), folder)).chartOnly)
+      const direct = resolved.direct || (!!folder && deployment === path.basename(dir) && !!(await folderEntry(openRepo(gitopsDir), folder)).chartOnly)
       // Deleting a legacy sibling leaves the folder's deployment, and so its
       // sync link, in place. A deleted target leaves its source; a deleted
       // source lets go of its targets, which keep what they have and become
@@ -34,8 +35,8 @@ export function lifecycleRoutes(router) {
         // just one file would leave an orphaned, half-deleted deployment.
         // Removed first, inside the lock: a removal that fails leaves the
         // sync links as they were, and no sync can be made to it meanwhile.
-        const refused = await withSyncRegistryLock(req.gitopsDir, async () => {
-          const repo = openRepo(req.gitopsDir)
+        const refused = await withSyncRegistryLock(gitopsDir, async () => {
+          const repo = openRepo(gitopsDir)
           const { registry, refusal } = await syncAnswer(repo)
           if (refusal) return refusal
           await fs.rm(dir, { recursive: true, force: true })
@@ -51,12 +52,12 @@ export function lifecycleRoutes(router) {
             changed = true
             // Listed as let go: on disk, and not still under another source.
             // Asked of the repo as it is after the delete: one inside the source went with it.
-            const after = openRepo(req.gitopsDir)
+            const after = openRepo(gitopsDir)
             for (const t of new Set(entries.flatMap(e => e.targets))) {
               if (t !== folder && !isTarget(registry, t) && await isDeployment(after, t)) unlinked.push(t)
             }
           }
-          if (changed) await writeSyncRegistry(req.gitopsDir, registry)
+          if (changed) await writeSyncRegistry(gitopsDir, registry)
           return null
         })
         if (refused) return res.status(refused.status).json(refused.body)
@@ -69,7 +70,7 @@ export function lifecycleRoutes(router) {
     } catch (err) {
       // Shown to the user as the reason: without where the repo is.
       console.error('Delete failed', err)
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      res.status(500).json({ error: await withoutPath(err.message, gitopsDir) })
     }
-  })
+  }))
 }

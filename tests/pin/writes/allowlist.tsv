@@ -44,13 +44,11 @@ dir-absent	save-text	changed-unsaid	bug	no issue yet: saving a deployment whose 
 new-refused	save-json	refused-but-changed	bug	no issue yet: a save to a new deployment folder makes the folder before it checks the values; refused, the empty folder stays
 new-refused	save-text	changed-unsaid	bug	no issue yet: a text save to a new deployment folder makes the folder, finds no values.yaml and writes <name>-values.yaml there under the flat-file checks, which take values a folder save refuses; answers 200
 link-outside	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
-dangling-link	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
 dangling-link	deployment-delete	5xx	bug	no issue yet: a deployment whose values.yaml is a link to nothing cannot be deleted: 500 "cannot be read"
 dangling-link	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 dir-link-outside	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 is-folder	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 is-folder	gen-rules	refused-but-changed	bug	no issue yet: gen-rules writes the schema, then exits 2 at a template it cannot write; the schema stays written
-primary-unreadable	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
 primary-unreadable	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 undeployable	save-legacy	accepted-undeployable	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 readonly-repo	save-json	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed

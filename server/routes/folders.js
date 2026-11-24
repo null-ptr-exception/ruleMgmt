@@ -1,7 +1,7 @@
 import express from 'express'
 import { holdSyncRegistryLock } from '../lib/sync.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerEveryRoute } from '../http/route.js'
+import { declaredRoutes } from '../http/route.js'
 
 import { treeRoutes } from './folders/tree.js'
 import { initRoutes } from './folders/create.js'
@@ -21,5 +21,5 @@ export default function foldersRouter() {
   commonRoutes(router)
   initRoutes(router)
 
-  return answerEveryRoute(router)
+  return declaredRoutes(router)
 }

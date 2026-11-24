@@ -2,39 +2,52 @@
 
 import fs from 'fs/promises'
 import path from 'path'
-import { normalizeSyncPath } from '../../lib/sync.js'
+import { z } from 'zod'
 import { isCommonChartPath, COMMON_DIR } from '../../../src/utils/reservedNames.js'
-import { pathProblem, parsePath, realPlace, PLACE_WHY } from '../../repo/paths.js'
+import { pathProblem, realPlace, PLACE_WHY } from '../../repo/paths.js'
+import { repoName, repoPath } from '../../http/route.js'
 import { isAbsent, UnreadableError } from '../../lib/readIfThere.js'
 
-/** Why the deployment name of the request cannot be one, or null (paths.js). */
-export function deploymentParamProblem(req) {
-  const problem = pathProblem(req.params.deployment, req.query.folder ? 'folder-name' : 'name')
-  return problem ? `Invalid deployment name: ${problem.why}` : null
-}
-
-// The folder as sync.yaml spells it: `a/src/`, `a/./src` and `a//src` are
-// `a/src` to the registry, or a target spelled another way is not read-only
-// and a deleted source keeps its sync link (#180).
-export const syncFolder = req => (req.query.folder ? normalizeSyncPath(req.query.folder) : req.query.folder)
+/**
+ * What every deployment route is asked with: the chart and the deployment
+ * in the URL, and the deployment's folder (`?folder=`, a path the
+ * 'deployment' intent takes: no link on the way). Without a folder (or with
+ * an empty one) it is a legacy flat deployment, deployments/<chart>.
+ *   GET /api/v2/deployments/demo/a?folder=deployments/team/a
+ *     → { params: { chart: 'demo', deployment: 'a' },
+ *         query: { folder: { rel: 'deployments/team/a', abs: '<repo>/deployments/team/a' } } }
+ */
+export const DEPLOYMENT_REQUEST = Object.freeze({
+  params: z.object({ chart: repoName('name', { what: 'chart name' }), deployment: z.string() }),
+  query: z.object({
+    folder: z.preprocess(v => (v === '' ? undefined : v), repoPath('deployment', { what: 'folder path' }).optional()),
+  }),
+})
 
 /**
- * The deployment's folder, `{ dir }`, or why the request cannot have it,
- * `{ error }`: a path in the repo, staying in it; a folder that is a link
- * (or is reached through one) is no deployment, and the answer says which
- * path to ask for instead (paths.js).
+ * The deployment a request names: `{ dir, folder, chart, deployment }`
+ * (folder: the path in the repo as sync.yaml spells it, `a/./b/` is `a/b`;
+ * undefined for a legacy flat one), or why it cannot be one, `{ error }`.
+ * The deployment's name is one name: in a folder, a file name; else a
+ * chart's name (paths.js).
  */
-export async function resolveDeploymentDir(req) {
-  const folder = req.query.folder
+export async function deploymentAt({ params, query }, gitopsDir) {
+  const { chart, deployment } = params
+  const folder = query.folder?.rel
+  let dir
   if (folder) {
-    const p = await parsePath(folder, 'deployment', { root: req.gitopsDir, what: 'folder path' })
-    return p.ok ? { dir: p.abs } : { error: p.error }
+    dir = query.folder.abs
+  } else {
+    // A legacy flat deployment's folder: never through a link out of the
+    // repo or into git's own folder either.
+    const rel = path.posix.join(process.env.DEPLOYMENTS_DIR || 'deployments', chart)
+    const { target, why } = await realPlace(gitopsDir, rel)
+    if (why) return { error: `${rel}: ${PLACE_WHY[why]}` }
+    dir = target
   }
-  // A legacy flat deployment's folder: never through a link out of the
-  // repo or into git's own folder either.
-  const rel = path.posix.join(process.env.DEPLOYMENTS_DIR || 'deployments', req.params.chart)
-  const { target, why } = await realPlace(req.gitopsDir, rel)
-  return why ? { error: `${rel}: ${PLACE_WHY[why]}` } : { dir: target }
+  const problem = pathProblem(deployment, folder ? 'folder-name' : 'name')
+  if (problem) return { error: `Invalid deployment name: ${problem.why}` }
+  return { dir, folder, chart, deployment }
 }
 
 // Which file holds a deployment's values. The folder's own deployment —
@@ -65,9 +78,9 @@ export async function exists(file) {
 
 // A folder's _common chart (#101) opens in the editor and is saved there,
 // and nothing else: it is removed with its plan (POST /api/v2/folders/common),
-// which gives the deployments on it what they inherited first.
-export function commonRefused(req, res, what) {
-  if (!req.query.folder || !isCommonChartPath(req.query.folder)) return false
-  res.status(400).json({ error: `${normalizeSyncPath(req.query.folder)} is a ${COMMON_DIR} chart, not a deployment: it cannot be ${what} — remove it with "Remove this ${COMMON_DIR}" in the tree` })
-  return true
+// which gives the deployments on it what they inherited first. The answer
+// that says so, or null.
+export function commonRefused(folder, what) {
+  if (!folder || !isCommonChartPath(folder)) return null
+  return { status: 400, body: { error: `${folder} is a ${COMMON_DIR} chart, not a deployment: it cannot be ${what} — remove it with "Remove this ${COMMON_DIR}" in the tree` } }
 }

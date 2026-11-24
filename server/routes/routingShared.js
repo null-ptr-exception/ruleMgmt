@@ -4,10 +4,17 @@ import { regenerateRouting } from '../lib/commitChecks.js'
 import {
   routingUsers, usageOf, overlapsOf, unreadableOf, staleUsers, writeShared, renameShared, SHARED_FILE,
 } from '../lib/sharedConfigs.js'
-import { openRepo } from '../repo/openRepo.js'
 import { loadShared, loadSharedDir, sharedDirProblemOf, sharedForBuild } from '../repo/shared.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerEveryRoute } from '../http/route.js'
+import { z } from 'zod'
+import { route, declaredRoutes } from '../http/route.js'
+
+// `shared` is the file's text, kept as written, or `{ configs }`.
+const PUT_BODY = z.object({
+  shared: z.union([z.string(), z.record(z.string(), z.unknown())], { error: iss => (iss.input === undefined ? 'shared is required: the text of the shared configs, or { configs }' : 'shared must be the text of the shared configs, or { configs }') }),
+})
+// A config's name now and the one it is given (checked by renameShared).
+const RENAME_BODY = z.object({ from: z.string().min(1), to: z.string().min(1) })
 
 /**
  * The repo's shared notification configs (#123): read them with who uses
@@ -25,64 +32,47 @@ export default function routingSharedRouter() {
   // dirProblem }
   // A sync.yaml that cannot be read is named (409): who is whose target,
   // and so who uses what, cannot be told without it.
-  router.get('/', async (req, res) => {
-    try {
-      const repo = openRepo(req.gitopsDir)
-      const shared = sharedForBuild(await loadShared(repo))
-      const { users, refusal } = await routingUsers(repo)
-      if (refusal) return res.status(refusal.status).json(refusal.body)
-      res.json({
-        file: SHARED_FILE,
-        exists: !!shared,
-        text: shared?.text ?? null,
-        configs: shared?.configs ?? {},
-        errors: shared?.errors ?? [],
-        warnings: shared?.warnings ?? [],
-        usage: usageOf(users),
-        overlaps: overlapsOf(users, shared),
-        stale: staleUsers(users),
-        unreadable: unreadableOf(users),
-        dirProblem: sharedDirProblemOf(await loadSharedDir(repo)),
-      })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+  router.get('/', route('shared.get', {}, async (_, { repo }) => {
+    const shared = sharedForBuild(await loadShared(repo))
+    const { users, refusal } = await routingUsers(repo)
+    if (refusal) return refusal
+    return { status: 200, body: {
+      file: SHARED_FILE,
+      exists: !!shared,
+      text: shared?.text ?? null,
+      configs: shared?.configs ?? {},
+      errors: shared?.errors ?? [],
+      warnings: shared?.warnings ?? [],
+      usage: usageOf(users),
+      overlaps: overlapsOf(users, shared),
+      stale: staleUsers(users),
+      unreadable: unreadableOf(users),
+      dirProblem: sharedDirProblemOf(await loadSharedDir(repo)),
+    } }
+  }))
 
-  // `shared` is the file's text, kept as written, or `{ configs }`.
-  router.put('/', async (req, res) => {
-    const input = req.body?.shared
-    if (typeof input !== 'string' && (input === null || typeof input !== 'object' || Array.isArray(input))) {
-      return res.status(400).json({ error: 'shared is required: the text of the shared configs, or { configs }' })
-    }
+  // A write that fails says why: the error's code (EACCES, EROFS …).
+  const saysWhy = write => async (input, ctx) => {
     try {
-      // Text or the page's { configs }: one write, one answer (writeShared).
-      const { status, body } = await withSyncRegistryLock(req.gitopsDir, () => writeShared(req.gitopsDir, input))
-      res.status(status).json(body)
+      return await write(input, ctx)
     } catch (err) {
-      res.status(500).json({ error: err.code || err.message })
+      return { status: 500, body: { error: err.code || err.message } }
     }
-  })
+  }
 
-  router.post('/rename', async (req, res) => {
-    const { from, to } = req.body || {}
-    if (typeof from !== 'string' || typeof to !== 'string') return res.status(400).json({ error: 'from and to are required' })
-    try {
-      const { status, body } = await withSyncRegistryLock(req.gitopsDir, () => renameShared(req.gitopsDir, from, to))
-      res.status(status).json(body)
-    } catch (err) {
-      res.status(500).json({ error: err.code || err.message })
-    }
-  })
+  // Text or the page's { configs }: one write, one answer (writeShared).
+  router.put('/', route('shared.put', { body: PUT_BODY }, saysWhy(({ body }, { gitopsDir }) => (
+    withSyncRegistryLock(gitopsDir, () => writeShared(gitopsDir, body.shared))
+  ))))
+
+  router.post('/rename', route('shared.rename', { body: RENAME_BODY }, saysWhy(({ body }, { gitopsDir }) => (
+    withSyncRegistryLock(gitopsDir, () => renameShared(gitopsDir, body.from, body.to))
+  ))))
 
   // Every resource behind — the shared file edited with git, say — made again.
-  router.post('/regenerate', async (req, res) => {
-    try {
-      res.json(await regenerateRouting(req.gitopsDir))
-    } catch (err) {
-      res.status(500).json({ error: err.code || err.message })
-    }
-  })
+  router.post('/regenerate', route('shared.regenerate', {}, saysWhy(async (_, { gitopsDir }) => (
+    { status: 200, body: await regenerateRouting(gitopsDir) }
+  ))))
 
-  return answerEveryRoute(router)
+  return declaredRoutes(router)
 }

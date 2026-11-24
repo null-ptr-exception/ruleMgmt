@@ -8,7 +8,8 @@
 import express from 'express'
 import { MOUNTS } from './routes.mjs'
 import { jsonBody } from '../../../server/http/body.js'
-import { answerUncaught, answerUnknownApi } from '../../../server/http/route.js'
+import { answerUncaught } from '../../../server/http/route.js'
+import { userRoute, unknownApiRoute } from '../../../server/routes/own.js'
 
 const dir = process.argv[2]
 const routers = await Promise.all(MOUNTS.map(([, file]) => import(`../../../server/routes/${file}.js`)))
@@ -16,11 +17,11 @@ const app = express()
 app.use(jsonBody())
 const setGitopsDir = (req, res, next) => { req.gitopsDir = dir; next() }
 MOUNTS.forEach(([at], i) => app.use(at, setGitopsDir, routers[i].default()))
-// server.js answers this one itself; it reads no request value.
-app.get('/api/v2/user', (req, res) => res.json({ user: process.env.JUPYTERHUB_USER || null, logoutUrl: null }))
-// server.js answers any other /api path with a JSON 404, any other GET
-// with the page (the SPA fallback).
-app.use('/api', answerUnknownApi)
+// server.js answers these itself (server/routes/own.js): who is signed in,
+// a JSON 404 for any other /api path; any other GET is the page (the SPA
+// fallback).
+app.get('/api/v2/user', userRoute)
+app.use('/api', unknownApiRoute)
 app.get('*', (req, res) => res.send('<!doctype html><title>page</title>'))
 app.use(answerUncaught)
 const server = app.listen(0, '127.0.0.1', () => process.stdout.write(`${server.address().port}\n`))

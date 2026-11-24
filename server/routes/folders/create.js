@@ -12,8 +12,9 @@ import { newReservedSegment, reservedError } from '../../lib/reservedNames.js'
 import { dumpForHelm } from '../../../src/utils/yamlScalar.js'
 import { deploymentOnCommon, ANY_VERSION } from '../../lib/commonEdit.js'
 import { writeWhole } from '../../lib/routingFiles.js'
+import { z } from 'zod'
 import { parseIfThere, errorAnswer } from '../../lib/readIfThere.js'
-import { pathProblem, isName, parsePath } from '../../repo/paths.js'
+import { route, repoPath, repoName } from '../../http/route.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadDeployment } from '../../repo/deployment.js'
 import { findingsOf } from '../../repo/loaded.js'
@@ -40,39 +41,39 @@ function isSafeFolderPath(candidate, gitopsDir) {
   return !isSameOrChild
 }
 
+// The folder made, and its Template: named like one (paths.js), not
+// `.cache`, not a path.
+const INIT_BODY = z.object({
+  folder: repoPath('create', { what: 'folder path' }),
+  chart: repoName('name', { what: 'chart name' }),
+})
+
 export function initRoutes(router) {
-  router.post('/init', async (req, res) => {
-    const { folder, chart } = req.body
-    const folderWhy = pathProblem(folder, 'create')
-    if (folderWhy) return res.status(400).json({ error: `Invalid folder path: ${folderWhy.why}` })
-    if (!isSafeFolderPath(folder, req.gitopsDir)) {
+  router.post('/init', route('folders.init', { body: INIT_BODY }, async ({ body }, { gitopsDir, res }) => {
+    const folder = body.folder.rel
+    const { chart } = body
+    if (!isSafeFolderPath(folder, gitopsDir)) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
-    // A Template is named like one (paths.js): not `.cache`, not a path.
-    if (!isName(chart)) {
-      return res.status(400).json({ error: 'Invalid chart name' })
-    }
 
-    const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
-    const deployDir = path.join(req.gitopsDir, folder)
-    const where = await parsePath(folder, 'create', { root: req.gitopsDir, what: 'folder path' })
-    if (!where.ok) return res.status(400).json({ error: where.error })
-
+    const chartsDir = getChartsDir(gitopsDir, process.env.CHARTS_DIR)
+    const deployDir = body.folder.abs
+    // A write that fails says why, naming the file (answersWithoutPaths).
     try {
-      const reserved = await newReservedSegment(req.gitopsDir, folder)
+      const reserved = await newReservedSegment(gitopsDir, folder)
       if (reserved) return res.status(400).json({ error: reservedError(reserved) })
-      const here = openRepo(req.gitopsDir)
+      const here = openRepo(gitopsDir)
       const misplaced = await newDeploymentProblem(here, folder)
       if (misplaced) return res.status(400).json({ error: misplaced })
       // A deployment already there is never written over, whatever it
       // depends on: its Chart.yaml and values.yaml are someone's.
       if (await isDeployment(here, folder)) {
         const existing = (await here.helmYaml(`${folder}/Chart.yaml`)).value || {}
-        const { chart: template } = await resolveStack(req.gitopsDir, deployDir)
+        const { chart: template } = await resolveStack(gitopsDir, deployDir)
         return res.json({ status: 'existing', chart: template ?? existing.dependencies?.[0]?.name ?? null })
       }
       // Asked before any folder is made: a refusal leaves the repo as it was.
-      const onCommon = await deploymentOnCommon(req.gitopsDir, folder, chart)
+      const onCommon = await deploymentOnCommon(gitopsDir, folder, chart)
       if (onCommon?.error) return res.status(409).json({ error: onCommon.error })
 
       // A Chart.yaml there without a values.yaml: someone's. Read as it is,
@@ -93,14 +94,14 @@ export function initRoutes(router) {
 
       // The Template has to be there, readable, and render (chartDiscovery.js);
       // its version is not copied (below). Its values.yaml is read below.
-      const template = await templateForNewDeployment(req.gitopsDir, chart, folder)
+      const template = await templateForNewDeployment(gitopsDir, chart, folder)
       if (template.error) return res.status(template.status).json({ error: template.error, ...(template.problems ? { problems: template.problems } : {}) })
 
       // The Template's groups, from its values.yaml: none when it has none;
       // one that cannot be read or parsed is said, not taken for none.
       // The Template's values, as Helm reads them: a group it has starts empty.
       const valuesFile = `${chartsRel()}/${chart}/values.yaml`
-      const tplValues = await openRepo(req.gitopsDir).helmYaml(valuesFile)
+      const tplValues = await openRepo(gitopsDir).helmYaml(valuesFile)
       if (tplValues.state === 'unreadable') return res.status(409).json({ error: `Not made: ${valuesFile} cannot be read: ${tplValues.why}`, file: valuesFile })
       if (tplValues.state === 'invalid') {
         const what = findingsOf(tplValues).some(f => f.code === 'yaml.not-yaml') ? 'not valid YAML' : 'not values Helm reads'
@@ -116,7 +117,7 @@ export function initRoutes(router) {
       // What is there now, to put back as it was: only what this request
       // made is removed.
       const was = {}
-      const before = openRepo(req.gitopsDir)
+      const before = openRepo(gitopsDir)
       for (const f of ['Chart.yaml', 'values.yaml']) {
         const read = await before.file(`${folder}/${f}`)
         if (read.state === 'unreadable') return res.status(409).json({ error: `Not made: ${folder}/${f} cannot be read: ${read.why}`, file: `${folder}/${f}` })
@@ -133,7 +134,7 @@ export function initRoutes(router) {
       // Loaded as Helm reads it, once written: what the Template or the
       // _common gives that Helm fails on is said, and nothing is kept.
       const notMade = async () => {
-        const dep = await loadDeployment(openRepo(req.gitopsDir), folder)
+        const dep = await loadDeployment(openRepo(gitopsDir), folder)
         const problems = dep.state === 'unreadable' ? [`${dep.file} cannot be read: ${dep.why}`] : decide(findingsOf(dep), 'init').refuse.map(f => f.message)
         if (!problems.length) return false
         await takeBack()
@@ -177,8 +178,8 @@ export function initRoutes(router) {
 
       res.json({ status: 'created', chart, folder })
     } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
+      const answer = errorAnswer(err)
+      res.status(answer.status).json(answer.body)
     }
-  })
+  }))
 }

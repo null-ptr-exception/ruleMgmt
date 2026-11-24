@@ -13,9 +13,9 @@ import { derivedTable, groupName } from '../../src/utils/rulesFile.js'
 import { logger } from '../lib/logger.js'
 import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerEveryRoute } from '../http/route.js'
+import { route, declaredRoutes } from '../http/route.js'
 import { UnreadableError } from '../lib/readIfThere.js'
-import { pathProblem, parsePath } from '../repo/paths.js'
+import { DEPLOYMENT_REQUEST, deploymentAt } from './deployments/resolve.js'
 
 // The Preview summary the rule owner sees instead of raw YAML: per group, how
 // many alerts it actually produced (by name and severity, never merged), which
@@ -77,29 +77,19 @@ export default function renderRouter() {
   const router = express.Router()
   router.use(answersWithoutPaths)
 
-  router.post('/:chart/:deployment', async (req, res) => {
-    const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
-    const { chart, deployment } = req.params
-    const folder = req.query.folder
-    const badName = pathProblem(chart, 'name') || pathProblem(deployment, folder ? 'folder-name' : 'name')
-    if (badName) {
-      return res.status(400).json({ error: `Invalid chart or deployment name: ${badName.why}` })
-    }
-
-    let deploymentsDir
-    if (folder) {
-      const p = await parsePath(folder, 'deployment', { root: req.gitopsDir, what: 'folder path' })
-      if (!p.ok) return res.status(400).json({ error: p.error })
-      deploymentsDir = p.abs
-    } else {
-      deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments', chart)
-    }
+  // The deployment as every deployment route takes it; the body the page
+  // sends ('{}') holds nothing.
+  router.post('/:chart/:deployment', route('render.preview', DEPLOYMENT_REQUEST, async (input, { gitopsDir, res }) => {
+    const chartsDir = path.join(gitopsDir, process.env.CHARTS_DIR || 'charts')
+    const at = await deploymentAt(input, gitopsDir)
+    if (at.error) return res.status(400).json({ error: at.error })
+    const { chart, deployment, folder, dir: deploymentsDir } = at
 
     // A folder deployment renders the Template at the bottom of its stack
     // (#100): through a `_common`, the dependency it names is not it.
     let template = chart
     try {
-      const stack = folder ? await resolveStack(req.gitopsDir, deploymentsDir) : null
+      const stack = folder ? await resolveStack(gitopsDir, deploymentsDir) : null
       template = stack?.chart || chart
       const chartDir = path.join(chartsDir, template)
       const releaseName = `${template}-${deployment}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
@@ -127,7 +117,7 @@ export default function renderRouter() {
       // same (Helm said so): shown without them.
       let tmpl = null
       try {
-        tmpl = await readTemplate(req.gitopsDir, template)
+        tmpl = await readTemplate(gitopsDir, template)
       } catch (err) {
         // Optional, like the summary and drift below: Helm rendered, so a
         // Template AlertForge cannot read (or a fault reading it) does not
@@ -158,8 +148,8 @@ export default function renderRouter() {
       // null on the stack is said beside the render.
       let valueWarnings = []
       const readValues = async () => {
-        const rel = folder ? String(folder).replace(/\\/g, '/').replace(/\/+$/, '') : `${process.env.DEPLOYMENTS_DIR || 'deployments'}/${chart}/${deployment}-values.yaml`
-        const dep = await loadDeployment(openRepo(req.gitopsDir), rel, { chart: folder ? undefined : chart })
+        const rel = folder || `${process.env.DEPLOYMENTS_DIR || 'deployments'}/${chart}/${deployment}-values.yaml`
+        const dep = await loadDeployment(openRepo(gitopsDir), rel, { chart: folder ? undefined : chart })
         if (dep.state !== 'ok') throw new NotLoadedError(dep)
         valueWarnings = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code) || explain(f, 'preview').action === 'warn').map(f => f.message)
         return dep.value.effective
@@ -177,7 +167,7 @@ export default function renderRouter() {
     } catch (err) {
       res.json({ ok: false, error: err.stderr || err.stdout || err.message })
     }
-  })
+  }))
 
-  return answerEveryRoute(router)
+  return declaredRoutes(router)
 }

@@ -16,7 +16,8 @@ import routingSharedRouter from './server/routes/routingShared.js'
 import { getChartsDir, getDeploymentsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
 import { logger, httpLogger } from './server/lib/logger.js'
 import { jsonBody } from './server/http/body.js'
-import { answerUncaught, answerUnknownApi } from './server/http/route.js'
+import { answerUncaught } from './server/http/route.js'
+import { userRoute, unknownApiRoute } from './server/routes/own.js'
 import { objectMetaFromEnv } from './src/utils/objectMeta.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -95,13 +96,9 @@ baseRouter.use('/api/v2/folders', setGitopsDir, foldersRouter())
 baseRouter.use('/api/v2/sync', setGitopsDir, syncRouter())
 baseRouter.use('/api/v2/routing/shared', setGitopsDir, routingSharedRouter())
 
-baseRouter.get('/api/v2/user', (req, res) => {
-  const user = process.env.JUPYTERHUB_USER || null
-  const logoutUrl = process.env.JUPYTERHUB_BASE_URL ? `${process.env.JUPYTERHUB_BASE_URL}hub/logout` : null
-  res.json({ user, logoutUrl })
-})
+baseRouter.get('/api/v2/user', userRoute)
 // Any other /api path is no page: a JSON 404.
-baseRouter.use('/api', answerUnknownApi)
+baseRouter.use('/api', unknownApiRoute)
 
 // Static assets + SPA fallback with base path injection
 const indexHtml = readFileSync(path.join(__dirname, 'dist', 'index.html'), 'utf-8')

@@ -1,6 +1,7 @@
 /** A deployment's values: open and save. */
 
 import { reasonOf } from '../../repo/finding.js'
+import { z } from 'zod'
 import { route } from '../../http/route.js'
 import fs from 'fs/promises'
 import path from 'path'
@@ -15,7 +16,7 @@ import { UnreadableError, errorAnswer } from '../../lib/readIfThere.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadDeployment } from '../../repo/deployment.js'
 
-import { deploymentParamProblem, syncFolder, resolveDeploymentDir, resolveValuesFile, exists, commonRefused } from './resolve.js'
+import { DEPLOYMENT_REQUEST, deploymentAt, resolveValuesFile, exists, commonRefused } from './resolve.js'
 /**
  * What a deployment on a `_common` stack inherits (#102): the values its
  * layers give one that writes nothing (`values`), and which layer gives each
@@ -29,65 +30,65 @@ async function inheritedOf(gitopsDir, dir, stack) {
   return { values: bare.merged, from: { groups, common } }
 }
 
+// The text of values.yaml, or the values as a map: anything else (left
+// out, null, a number, a list) would be written as a file of no rows.
+// `version`: what the page was loaded from (#102), left out by a page that
+// has none.
+const SAVE_BODY = z.object({
+  values: z.union([z.string(), z.record(z.string(), z.unknown())], { error: iss => (iss.input === undefined ? 'values is required: the text of values.yaml, or the values as a map' : 'values must be the text of values.yaml, or the values as a map') }),
+  version: z.string().optional(),
+})
+
 export function valuesRoutes(router) {
-  router.get('/:chart/:deployment', route('deployments.get', async (req, res) => {
-    const { dir, error } = await resolveDeploymentDir(req)
-    if (error) return res.status(400).json({ error })
-    const badName = deploymentParamProblem(req)
-    if (badName) return res.status(400).json({ error: badName })
-    const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
+  router.get('/:chart/:deployment', route('deployments.get', DEPLOYMENT_REQUEST, async (input, { gitopsDir, repo }) => {
+    const at = await deploymentAt(input, gitopsDir)
+    if (at.error) return { status: 400, body: { error: at.error } }
+    const { dir, folder, chart } = at
+    const { file, direct, legacyFile } = await resolveValuesFile(dir, at.deployment)
     // Not there: not found. There and unreadable (no permission, a
     // folder, a link to nothing, not YAML): said, naming the file.
     // Read as Helm reads it (`010` is 8): the values shown are the ones deployed.
-    const repo = openRepo(req.gitopsDir)
-    const rel = path.relative(req.gitopsDir, file).replace(/\\/g, '/')
+    const rel = path.relative(gitopsDir, file).replace(/\\/g, '/')
     const read = await repo.helmYaml(rel)
-    if (read.state === 'absent') return res.status(404).json({ error: 'Not found' })
+    if (read.state === 'absent') return { status: 404, body: { error: 'Not found' } }
     if (read.state === 'unreadable') throw new UnreadableError(file, { reason: read.why })
     if (read.state === 'invalid') throw new UnreadableError(file, { reason: read.findings.map(reasonOf).join('; ') })
     const content = (await repo.file(rel)).value.text
     // Only the deployment's own values, under every key of its stack (#100).
-    const stack = await resolveStack(req.gitopsDir, dir, { repo })
+    const stack = await resolveStack(gitopsDir, dir, { repo })
     const parsed = unwrapPath(read.value, stack.keys)
     // What Helm does with them, for the page to say (findings, policy.js: as a save would decide).
-    const loadedDep = await loadDeployment(repo, direct ? path.relative(req.gitopsDir, dir).replace(/\\/g, '/') : rel, { chart: req.params.chart })
+    const loadedDep = await loadDeployment(repo, direct ? path.relative(gitopsDir, dir).replace(/\\/g, '/') : rel, { chart })
     const findings = loadedDep.state === 'ok' ? loadedDep.findings.map(f => ({ code: f.code, message: f.message, helm: f.helm, ...(f.at ? { at: f.at } : {}) })) : []
     // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
     // anything; say so, or it looks like the file being edited.
     const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
     // The _common it renders on and the one its folder has (#103), for a
     // sync target's page: it follows its source's.
-    const stackOf = req.query.folder && direct
-      ? { stack: { inheritsFrom: inheritsFromOf(stack), folderCommon: await folderCommonOf(req.gitopsDir, syncFolder(req), stack.chart || stack.claims) } }
+    const stackOf = folder && direct
+      ? { stack: { inheritsFrom: inheritsFromOf(stack), folderCommon: await folderCommonOf(gitopsDir, folder, stack.chart || stack.claims) } }
       : {}
     // What it was loaded from: its save sends it back (#102).
-    const version = req.query.folder && direct ? { version: await valuesVersion(req.gitopsDir, dir, stack) } : {}
+    const version = folder && direct ? { version: await valuesVersion(gitopsDir, dir, stack) } : {}
     // A _common that cannot be read, a link gone: the deployment still
     // opens, and says what keeps Helm from rendering it.
     const problems = stack.problems.length ? { stackProblems: stack.problems.map(p => p.description) } : {}
     let inherited = {}
     if (direct && stack.layers.length) {
       try {
-        inherited = { inherited: await inheritedOf(req.gitopsDir, dir, stack) }
+        inherited = { inherited: await inheritedOf(gitopsDir, dir, stack) }
       } catch (err) {
         problems.stackProblems = [...(problems.stackProblems || []), `what it inherits cannot be read (${err.code || err.message})`]
       }
     }
-    res.json({ content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited, ...(findings.length ? { findings } : {}) })
+    return { status: 200, body: { content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited, ...(findings.length ? { findings } : {}) } }
   }))
 
-  router.post('/:chart/:deployment', async (req, res) => {
-    const { dir, error } = await resolveDeploymentDir(req)
-    if (error) return res.status(400).json({ error })
-    const badName = deploymentParamProblem(req)
-    if (badName) return res.status(400).json({ error: badName })
-    // The text of values.yaml, or the values as a map: anything else (left
-    // out, null, a number, a list) would be written as a file of no rows.
-    const given = req.body?.values
-    if (typeof given !== 'string' && (!given || typeof given !== 'object' || Array.isArray(given))) {
-      return res.status(400).json({ error: 'values is required: the text of values.yaml, or the values as a map' })
-    }
-    const folder = syncFolder(req)
+  router.post('/:chart/:deployment', route('deployments.save', { ...DEPLOYMENT_REQUEST, body: SAVE_BODY }, async (input, { gitopsDir, res }) => {
+    const at = await deploymentAt(input, gitopsDir)
+    if (at.error) return res.status(400).json({ error: at.error })
+    const { dir, folder, chart, deployment } = at
+    const { body: given } = input
     try {
       const readOnly = () => ({ status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } })
       if (folder) {
@@ -95,36 +96,37 @@ export function valuesRoutes(router) {
         // the frontend's freeze can race (see AlertUserView's getSyncSource
         // call), so this must be enforced here too, not only by disabling
         // Save. Checked again under the lock below.
-        const read = await syncAnswer(openRepo(req.gitopsDir))
+        const read = await syncAnswer(openRepo(gitopsDir))
         if (read.refusal) return res.status(read.refusal.status).json(read.refusal.body)
         if (isTarget(read.registry, folder)) {
           const { status, body } = readOnly()
           return res.status(status).json(body)
         }
-        const reserved = await newReservedSegment(req.gitopsDir, folder)
+        const reserved = await newReservedSegment(gitopsDir, folder)
         if (reserved) return res.status(400).json({ error: reservedError(reserved) })
       }
 
       await fs.mkdir(dir, { recursive: true })
-      const { file, direct } = await resolveValuesFile(dir, req.params.deployment)
+      const { file, direct } = await resolveValuesFile(dir, deployment)
 
       // The folder's own deployment: check, write, copy to its sync targets
       // and report the ones that could not be written (#180), all under the
       // registry lock.
       if (folder && direct) {
-        const outcome = await withSyncRegistryLock(req.gitopsDir, async () => {
-          const { registry, refusal } = await syncAnswer(openRepo(req.gitopsDir))
+        const outcome = await withSyncRegistryLock(gitopsDir, async () => {
+          const { registry, refusal } = await syncAnswer(openRepo(gitopsDir))
           if (refusal) return refusal
           if (isTarget(registry, folder)) return readOnly()
-          return saveValues(req.gitopsDir, registry, folder, req.body.values, { chartName: req.params.chart, version: req.body.version })
+          return saveValues(gitopsDir, registry, folder, given.values, { chartName: chart, version: given.version })
         })
         return res.status(outcome.status).json(outcome.body)
       }
 
       // A legacy `<name>-values.yaml`: the same checks, and no sync.
-      if (commonRefused(req, res, 'given another values file')) return
-      const rel = path.relative(req.gitopsDir, file).replace(/\\/g, '/')
-      const answer = await valuesWrite(req.gitopsDir, direct ? path.relative(req.gitopsDir, dir).replace(/\\/g, '/') : rel, req.body.values, { chartName: req.params.chart })
+      const common = commonRefused(folder, 'given another values file')
+      if (common) return res.status(common.status).json(common.body)
+      const rel = path.relative(gitopsDir, file).replace(/\\/g, '/')
+      const answer = await valuesWrite(gitopsDir, direct ? path.relative(gitopsDir, dir).replace(/\\/g, '/') : rel, given.values, { chartName: chart })
       if (answer.refusal) return res.status(answer.refusal.status).json(answer.refusal.body)
       await writeWhole(file, answer.text)
 
@@ -133,5 +135,5 @@ export function valuesRoutes(router) {
       const { status, body } = errorAnswer(err)
       res.status(status).json(body)
     }
-  })
+  }))
 }

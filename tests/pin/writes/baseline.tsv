@@ -285,7 +285,7 @@ dangling-link	save-json	refused	409	deployments/t/a/values.yaml	no	-	-	-	T deplo
 dangling-link	save-text	refused	409	deployments/t/a/values.yaml	no	-	-	-	T deployments/t/a/values.yaml	released	answered	-	
 dangling-link	save-legacy	refused	409	deployments/demo/old-values.yaml	no	-	-	-	T deployments/demo/old-values.yaml	released	answered	-	
 dangling-link	save-layer	refused	409	deployments/s/_common/demo/values.yaml	no	-	-	-	T deployments/s/_common/demo/values.yaml	released	answered	-	
-dangling-link	sync-create	error	500	-	no	-	-	-	T deployments/t/d/values.yaml	released	answered	-	5xx
+dangling-link	sync-create	refused	409	deployments/t/d/values.yaml	no	-	-	-	T deployments/t/d/values.yaml	released	answered	-	
 dangling-link	sync-unlink	refused	409	sync.yaml	no	-	-	-	T sync.yaml	released	answered	-	
 dangling-link	common-create	refused	409	deployments/u/p	no	-	-	-	T deployments/u/p/values.yaml	released	answered	-	
 dangling-link	common-remove	refused	409	deployments/s/x	no	-	-	-	T deployments/s/x/values.yaml	released	answered	-	
@@ -387,7 +387,7 @@ primary-unreadable	save-json	refused	409	deployments/t/a	no	-	-	-	-	released	ans
 primary-unreadable	save-text	refused	409	deployments/t/a	no	-	-	-	-	released	answered	-	
 primary-unreadable	save-legacy	refused	409	deployments/demo/old-values.yaml	no	-	-	-	-	released	answered	-	
 primary-unreadable	save-layer	refused	409	deployments/s/_common/demo	no	-	-	-	-	released	answered	-	
-primary-unreadable	sync-create	error	500	-	no	-	-	-	-	released	answered	-	5xx
+primary-unreadable	sync-create	refused	409	deployments/t/d/values.yaml	no	-	-	-	-	released	answered	-	
 primary-unreadable	sync-unlink	refused	409	sync.yaml	no	-	-	-	-	released	answered	-	
 primary-unreadable	common-create	refused	409	deployments/u/p	no	-	-	-	-	released	answered	-	
 primary-unreadable	common-remove	refused	409	deployments/s/x	no	-	-	-	-	released	answered	-	

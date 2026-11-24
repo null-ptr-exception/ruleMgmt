@@ -92,21 +92,10 @@
     }
   },
   "requestReads": {
-    "total": 82,
+    "total": 34,
     "byFile": {
       "server/routes/charts.js": 13,
-      "server/routes/deployments.js": 1,
-      "server/routes/deployments/lifecycle.js": 2,
-      "server/routes/deployments/resolve.js": 10,
-      "server/routes/deployments/routing.js": 2,
-      "server/routes/deployments/values.js": 11,
-      "server/routes/folders/common.js": 4,
-      "server/routes/folders/create.js": 1,
-      "server/routes/folders/tree.js": 3,
       "server/routes/git.js": 5,
-      "server/routes/render.js": 2,
-      "server/routes/routingShared.js": 2,
-      "server/routes/sync.js": 10,
       "server/routes/templates.js": 16
     }
   }

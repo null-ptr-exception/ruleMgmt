@@ -189,7 +189,7 @@ hidden-deployment	W	tree	absent	200	-	no	-	folder	renders	0	1	-	not shown	misses
 hidden-deployment	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 hidden-deployment	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 hidden-deployment	W	routing-get	absent	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
-hidden-deployment	W	preview	refused	400	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-deployment	W	preview	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 hidden-deployment	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 hidden-deployment	W	sync-to	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 hidden-deployment	W	sync-from	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders

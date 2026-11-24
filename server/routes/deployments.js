@@ -1,7 +1,6 @@
 import express from 'express'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { answerEveryRoute } from '../http/route.js'
-import { parsePath } from '../repo/paths.js'
+import { declaredRoutes } from '../http/route.js'
 
 import { valuesRoutes } from './deployments/values.js'
 import { routingRoutes } from './deployments/routing.js'
@@ -11,15 +10,11 @@ export default function deploymentsRouter() {
   const router = express.Router()
   router.use(answersWithoutPaths)
 
-  router.use('/:chart', async (req, res, next) => {
-    const chart = await parsePath(req.params.chart, 'name', { what: 'chart name' })
-    if (!chart.ok) return res.status(400).json({ error: chart.error })
-    next()
-  })
-
+  // Every route takes the chart, the deployment and its folder as
+  // deployments/resolve.js's DEPLOYMENT_REQUEST declares them.
   valuesRoutes(router)
   routingRoutes(router)
   lifecycleRoutes(router)
 
-  return answerEveryRoute(router)
+  return declaredRoutes(router)
 }

@@ -7,7 +7,9 @@ import { walk, childEntries } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { resolveStack } from '../../lib/stack.js'
 import { folderCommonOf, folderCommons, inheritsFromOf } from '../../lib/commonEdit.js'
-import { isName, parsePath } from '../../repo/paths.js'
+import { z } from 'zod'
+import { isName } from '../../repo/paths.js'
+import { route, repoPath } from '../../http/route.js'
 import { loadValues } from '../../../src/utils/valuesText.js'
 
 // One level of the tree: the walk's own folders (repo/walk.js), each with
@@ -94,25 +96,21 @@ async function collectDeployments(baseDir, chartFor = null) {
   return results
 }
 
-export function treeRoutes(router) {
-  router.get('/tree', async (req, res) => {
-    try {
-      const parentPath = req.query.path || ''
-      const where = parentPath ? await parsePath(parentPath, 'list', { root: req.gitopsDir, what: 'path' }) : { ok: true }
-      if (!where.ok) return res.status(400).json({ error: where.error })
-      const children = await listChildren(req.gitopsDir, parentPath)
-      res.json(children)
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+// `?path=`: the folder whose children are listed; left out or empty, the
+// repo's top.
+const TREE_QUERY = z.object({
+  path: z.preprocess(v => (v === '' ? undefined : v), repoPath('list', { what: 'path' }).optional()),
+})
+// `?chart=`: the Template whose _common is looked up; one that is no
+// Template's name is none, as the dialogs ask before they have one.
+const DEPLOYMENTS_QUERY = z.object({ chart: z.unknown().optional().transform(v => (isName(v) ? v : null)) })
 
-  router.get('/deployments', async (req, res) => {
-    try {
-      const chart = isName(req.query.chart) ? req.query.chart : null
-      res.json(await collectDeployments(req.gitopsDir, chart))
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+export function treeRoutes(router) {
+  router.get('/tree', route('folders.tree', { query: TREE_QUERY }, async ({ query }, { gitopsDir }) => (
+    { status: 200, body: await listChildren(gitopsDir, query.path?.rel ?? '') }
+  )))
+
+  router.get('/deployments', route('folders.deployments', { query: DEPLOYMENTS_QUERY }, async ({ query }, { gitopsDir }) => (
+    { status: 200, body: await collectDeployments(gitopsDir, query.chart) }
+  )))
 }

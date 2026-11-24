@@ -1190,19 +1190,19 @@ field:number	templates.migration-preview{migration}	bad-named	ok	200	same	no	sam
 field:number	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
+field:number	deployments.save{version}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:number	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
+field:number	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	folders.common{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:number	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:number	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:number	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:number	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	shared.put{shared}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1244,19 +1244,19 @@ field:array	templates.migration-preview{migration}	bad-named	ok	200	same	no	same
 field:array	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:array	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
+field:array	deployments.save{version}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:array	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:array	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
+field:array	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	folders.common{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:array	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:array	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:array	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:array	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:array	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	shared.put{shared}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1271,19 +1271,19 @@ field:map	templates.migration-preview{migration}	any	ok	200	same	no	same	no	free
 field:map	templates.chart-meta{chartMeta}	any	ok	200	same	no	same	no	free		-	-	-	
 field:map	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	deployments.save{values}	any	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
-field:map	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
+field:map	deployments.save{version}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
 field:map	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.common{expected}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:map	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:map	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:map	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
+field:map	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:map	folders.common{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:map	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:map	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:map	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:map	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:map	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:map	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	shared.put{shared}	any	refused	400	same	no	same	no	free		-	-	-	
 field:map	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1298,19 +1298,19 @@ field:empty-list	templates.migration-preview{migration}	bad-named	ok	200	same	no
 field:empty-list	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty-list	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
+field:empty-list	deployments.save{version}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty-list	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:empty-list	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
+field:empty-list	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	folders.common{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty-list	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:empty-list	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:empty-list	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:empty-list	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty-list	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	shared.put{shared}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1325,14 +1325,14 @@ field:null	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	
 field:null	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
 field:null	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:null	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
+field:null	deployments.save{version}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:null	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:null	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
+field:null	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:null	folders.common{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1352,19 +1352,19 @@ field:bool	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	
 field:bool	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:bool	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
+field:bool	deployments.save{version}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:bool	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:bool	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
+field:bool	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	folders.common{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:bool	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:bool	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:bool	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:bool	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:bool	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	shared.put{shared}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1385,16 +1385,16 @@ field:empty	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	ye
 field:empty	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:empty	folders.common{path}	any	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	
+field:empty	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	folders.common{path}	any	refused	400	same	no	same	no	free		-	-	-	
 field:empty	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	shared.put{shared}	any	refused	400	same	no	same	no	free		-	-	-	
-field:empty	shared.rename{from}	bad-named	not-found	404	same	no	same	no	free		-	no	-	unnamed-field
-field:empty	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:empty	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:empty	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	charts.create{name}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	charts.clone{newName}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	charts.clone{migration}	bad-named	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	accepts-bad-body
@@ -1433,19 +1433,19 @@ field:deep	templates.migration-preview{migration}	any	ok	200	same	no	same	no	fre
 field:deep	templates.chart-meta{chartMeta}	any	ok	200	same	no	same	no	free		-	-	-	
 field:deep	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-	
-field:deep	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
+field:deep	deployments.save{version}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{expected}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:deep	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:deep	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:deep	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
+field:deep	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:deep	folders.common{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:deep	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:deep	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:deep	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:deep	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:deep	sync.create{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
+field:deep	sync.delete{target}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	shared.put{shared}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	shared.rename{from}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	shared.rename{to}	bad-named	refused	400	same	no	same	no	free		-	yes	-	

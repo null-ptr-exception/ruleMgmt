@@ -19,8 +19,8 @@ const shown = v => (v === null ? 'null' : Array.isArray(v) ? 'a list' : typeof v
 const said = (code, where, why, detail) => finding({ code, file: FILE, helm: 'n/a', message: `${FILE} ${where}: ${why}`, ...(detail ? { detail } : {}) })
 
 export async function syncFindings(repo, data) {
-  if (data?.syncs === undefined || data?.syncs === null) return []
-  if (!Array.isArray(data.syncs)) return [said('sync.syncs-not-list', 'syncs', 'is not a list')]
+  // A file that is no map, or whose syncs is no list, is invalid (sync.js).
+  if (!Array.isArray(data?.syncs)) return []
   const isDep = async p => (await folderEntry(repo, p)).kind === 'deployment'
   const out = []
   const sourcesOf = new Map() // target → the sources that list it

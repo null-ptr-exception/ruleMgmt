@@ -570,26 +570,56 @@ sync-not-yaml	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=syn
 sync-not-yaml	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
 sync-not-yaml	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
 sync-not-yaml	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
-sync-top-list	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
-sync-top-list	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 0 findings	
-sync-top-list	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
-sync-top-list	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
-sync-top-list	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
-sync-top-list	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
-sync-top-list	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
-sync-top-list	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
-sync-top-list	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
-sync-top-list	Y	commit	ok	200	-	no	-	-	-	-	-	-	-	
-syncs-not-list	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
-syncs-not-list	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 1 findings	
-syncs-not-list	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
-syncs-not-list	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
-syncs-not-list	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
-syncs-not-list	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
-syncs-not-list	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
-syncs-not-list	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
-syncs-not-list	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+sync-top-list	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+sync-top-list	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml is not a map (it is a list): write syncs: [{ source, targets: [...] }]	
+sync-top-list	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+sync-top-list	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+syncs-not-list	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+syncs-not-list	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml syncs: is not a list	
+syncs-not-list	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+syncs-not-list	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
 syncs-not-list	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+sync-scalar	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+sync-scalar	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml is not a map (it is a single value): write syncs: [{ source, targets: [...] }]	
+sync-scalar	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+sync-scalar	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+sync-comments-only	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
+sync-comments-only	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 0 findings	
+sync-comments-only	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+sync-comments-only	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+sync-comments-only	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+sync-comments-only	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+sync-comments-only	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+sync-comments-only	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
+sync-comments-only	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+sync-comments-only	Y	commit	ok	200	-	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+syncs-scalar	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml syncs: is not a list	
+syncs-scalar	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+syncs-scalar	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
 syncs-null	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
 syncs-null	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 0 findings	
 syncs-null	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	

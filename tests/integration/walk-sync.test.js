@@ -206,6 +206,43 @@ describe('deleting a sync source', () => {
   })
 })
 
+// Every file of the repo but .git, with its bytes: what a refused write leaves as it was.
+async function treeSnapshot(dir, rel = '') {
+  const out = {}
+  for (const e of await fs.readdir(path.join(dir, rel), { withFileTypes: true })) {
+    const p = path.posix.join(rel, e.name)
+    if (p === '.git') continue
+    if (e.isDirectory()) Object.assign(out, await treeSnapshot(dir, p))
+    else out[p] = await fs.readFile(path.join(dir, p), 'utf-8').catch(err => `<${err.code}>`)
+  }
+  return out
+}
+
+describe('sync.yaml that is YAML but not a registry', () => {
+  it('a list, a scalar, or syncs that is not a list is invalid; an empty or comments-only file is no syncs', async () => {
+    const at = async text => { await fs.writeFile(path.join(tmpDir, 'sync.yaml'), text); return loadSync(openRepo(tmpDir)) }
+    for (const [text, code] of [[`- source: ${A}\n`, 'sync.not-map'], ['just text\n', 'sync.not-map'], ['syncs: none\n', 'sync.syncs-not-list'], [`syncs:\n  source: ${A}\n`, 'sync.syncs-not-list']]) {
+      const loaded = await at(text)
+      expect(loaded.state, text).toBe('invalid')
+      expect(loaded.findings.map(f => f.code), text).toEqual([code])
+    }
+    for (const text of ['', '# no syncs yet\n', 'syncs:\n']) {
+      const loaded = await at(text)
+      expect(loaded.state, text).toBe('ok')
+      expect(loaded.value.syncs, text).toEqual([])
+    }
+  })
+
+  it('a sync made on a repo whose sync.yaml is a list is refused (409), and nothing changes', async () => {
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), `- source: ${A}\n  targets: [${B}]\n`)
+    const before = await treeSnapshot(tmpDir)
+    const res = await api('POST', '/api/v2/sync', { source: A, target: B })
+    expect(res.status).toBe(409)
+    expect(res.data).toMatchObject({ file: 'sync.yaml', error: expect.stringMatching(/^sync\.yaml is not a map/) })
+    expect(await treeSnapshot(tmpDir)).toEqual(before)
+  })
+})
+
 describe('sync.yaml, read once for everyone', () => {
   it('read and not YAML is invalid, with a finding; one that cannot be read is unreadable', async () => {
     await fs.writeFile(path.join(tmpDir, 'sync.yaml'), 'syncs: [\n')

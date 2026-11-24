@@ -887,13 +887,14 @@ copied to it.
   and the response lists them as `unlinked`. Those marked to be deleted go
   first: when the source then cannot be deleted, the message says why and
   names the ones already gone; the source keeps the rest.
-- A `sync.yaml` that cannot be read (not YAML, no permission, a folder in
-  its place) is named, with 409 and `unreadable: true`, by everything that
+- A `sync.yaml` that cannot be read (no permission, a folder in its place)
+  or is no registry (not YAML, not a map, `syncs:` not a list) is named, with 409 and `unreadable: true`, by everything that
   needs to know who syncs from whom: the sync list, sync and unlink, a
   save, deleting a deployment, the Routing page, the shared configs, a
   Template change that checks or migrates its deployments (and its
   preview), and making or removing a `_common`.
-  It is never taken for "no syncs", and nothing rewrites it.
+  It is never taken for "no syncs", and nothing rewrites it. An empty
+  `sync.yaml`, or one with only comments, is no syncs yet.
 - A sync to a target whose `values.yaml` is a folder is refused (409)
   naming the file; one whose `Chart.yaml` is a folder (or cannot be read)
   is no deployment, and is refused (400, "exists but is not a valid

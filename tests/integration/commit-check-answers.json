@@ -1333,7 +1333,7 @@
       "valueWarnings": [],
       "unreadable": [],
       "regenerable": 0,
-      "readable": true
+      "readable": false
     },
     "commit": {
       "status": 409,

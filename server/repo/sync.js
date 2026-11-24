@@ -15,7 +15,9 @@
  *               naming (findings/sync.js)
  *     unreadable  it cannot be read (no permission, a folder, a link to
  *               nothing or out of the repo)
- *     invalid   it was read and is not YAML (`sync.not-yaml`)
+ *     invalid   it was read and is not YAML (`sync.not-yaml`), not a map
+ *               (`sync.not-map`), or its syncs is not a list
+ *               (`sync.syncs-not-list`); empty or only comments is no syncs
  *               either way no sync relation is known, and none is taken
  *               for "none"
  *
@@ -52,6 +54,12 @@ export function loadSync(repo) {
       // Read, and no registry can be made of it.
       return invalidOwn(SYNC_FILE, [finding({ code: 'sync.not-yaml', file: SYNC_FILE, helm: 'n/a', message: `${SYNC_FILE} is not valid YAML (${err.reason || err.message})` })])
     }
+    // Empty, or only comments: no syncs yet (a new repo). Anything else but
+    // a map, or syncs that is not a list, is no registry: never taken for
+    // none, which the next sync change would write over.
+    const notRegistry = (code, why) => invalidOwn(SYNC_FILE, [finding({ code, file: SYNC_FILE, helm: 'n/a', message: `${SYNC_FILE} ${why}` })])
+    if (data !== null && data !== undefined && (typeof data !== 'object' || Array.isArray(data))) return notRegistry('sync.not-map', `is not a map (it is ${Array.isArray(data) ? 'a list' : 'a single value'}): write syncs: [{ source, targets: [...] }]`)
+    if (data?.syncs !== undefined && data?.syncs !== null && !Array.isArray(data.syncs)) return notRegistry('sync.syncs-not-list', 'syncs: is not a list')
     const rows = Array.isArray(data?.syncs) ? data.syncs : []
     const syncs = rows.filter(usable).map(s => ({
       source: normalizeSyncPath(s.source),

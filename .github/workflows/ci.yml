@@ -15,11 +15,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
-      - run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest
       - run: git config --global user.email "ci@test.com"
       - run: git config --global user.name "CI"
+      # promtool, vmalert, amtool, and helm at the image's version.
       - run: sudo scripts/install-checkers.sh
+      - name: helm is the image's version
+        run: |
+          command -v helm && helm version
+          test "$(helm version --template '{{.Version}}')" = "v$(sed -n 's/^ARG HELM_VERSION=//p' Dockerfile)"
+      - run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.2
       - run: npm ci
       # Runtime dependencies only: these ship in the image. Dev-tool advisories
       # still reach Dependabot but do not block a PR.
@@ -39,6 +43,10 @@ jobs:
       - run: git config --global user.email "ci@test.com"
       - run: git config --global user.name "CI"
       - run: sudo scripts/install-checkers.sh
+      - name: helm is the image's version
+        run: |
+          command -v helm && helm version
+          test "$(helm version --template '{{.Version}}')" = "v$(sed -n 's/^ARG HELM_VERSION=//p' Dockerfile)"
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium

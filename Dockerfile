@@ -4,6 +4,11 @@ ARG PROMETHEUS_VERSION=v2.54.1
 ARG GO_VERSION=1.26.11
 # vmalert -dryRun checks LogsQL (vlogs groups) offline, which promtool cannot read (#76).
 ARG VMALERT_VERSION=v1.156.0
+# Helm renders every Preview and check: the image, CI and a developer's
+# machine run this one version (scripts/install-checkers.sh), so what
+# Preview shows is what the same chart renders elsewhere. Alpine's package
+# of it, built with Alpine's Go; a base image without it fails the build.
+ARG HELM_VERSION=3.19.0
 
 FROM node:22-alpine AS builder
 
@@ -42,8 +47,10 @@ FROM victoriametrics/vmalert:${VMALERT_VERSION} AS vmalert
 # CI rebuilds this stage without the build cache (no-cache-filters in ci.yml):
 # a cached `apk add` layer kept shipping a libexpat with a fixed CVE (#105).
 FROM node:22-alpine AS runtime
+ARG HELM_VERSION
 
-RUN apk add --no-cache git helm tini
+RUN apk add --no-cache git "helm~${HELM_VERSION}" tini \
+ && test "$(helm version --template '{{.Version}}')" = "v${HELM_VERSION}"
 
 WORKDIR /app
 

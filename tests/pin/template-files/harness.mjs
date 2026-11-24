@@ -19,6 +19,7 @@ import { judgeObjects } from '../lib/profileCheck.mjs'
 import { parseRulesDir, schemaToModel, modelToFiles } from '../../../src/utils/rulesFile.js'
 import { generateProducts } from '../../../src/utils/drift.js'
 import { objectMetaFromEnv } from '../../../src/utils/objectMeta.js'
+import { checkRepoCell, aboutPaths } from '../lib/checkRepo.mjs'
 
 const WT = path.resolve(import.meta.dirname, '../../..')
 const CLI = name => path.join(WT, 'scripts', `${name}.mjs`)
@@ -29,7 +30,7 @@ const snapshot = root => snapshotAll(root, rel => rel === 'marker.txt')
 export const ENTRIES = [
   'open', 'list', 'usage', 'file-get', 'file-save', 'file-rename', 'file-delete',
   'save-rules', 'migration-preview', 'save-values', 'chart-meta', 'clone', 'delete', 'init',
-  'preview', 'commit', 'check-deployment', 'gen-rules-check', 'gen-rules', 'gen-chart-check', 'gen-chart', 'import-rules',
+  'preview', 'commit', 'check-deployment', 'check-repo', 'gen-rules-check', 'gen-rules', 'gen-chart-check', 'gen-chart', 'import-rules',
   'products-current',
 ]
 // How each is judged (compare.mjs):
@@ -41,7 +42,7 @@ export const KIND = {
   open: 'reader', list: 'reader', usage: 'reader', 'file-get': 'reader', 'migration-preview': 'reader',
   'file-save': 'writer', 'file-rename': 'writer', 'file-delete': 'writer', 'chart-meta': 'writer', clone: 'writer', delete: 'writer',
   'save-rules': 'source', 'save-values': 'source', 'gen-rules': 'source', 'gen-chart': 'source', 'import-rules': 'source',
-  init: 'checker', preview: 'checker', commit: 'checker', 'check-deployment': 'checker', 'gen-rules-check': 'checker', 'gen-chart-check': 'checker',
+  init: 'checker', preview: 'checker', commit: 'checker', 'check-deployment': 'checker', 'check-repo': 'checker', 'gen-rules-check': 'checker', 'gen-chart-check': 'checker',
   'products-current': 'agreement',
 }
 
@@ -432,6 +433,9 @@ export async function runRow(ws, c) {
     const out = await cli('check-deployment', ['--repo', root, depDir], { argPaths: [[depDir, '<dep>'], [root, '<repo>']] })
     return { ...cliAnswer(out, { warnings: false }), appValue: '-', note: out.out.trim().split('\n').slice(0, 3).join(' ') }
   })
+  // The whole repo checked as CI checks it: what it says about this
+  // Template (where it is kept, a link's folder included) and its deployment.
+  await record('check-repo', () => checkRepoCell(root, aboutPaths(chartRel, c.setup === 'link-inside' ? 'vendor/p2' : null, dep)))
   const genArgs = [[chartDir, '<T>']]
   const behindOf = out => (/^(DIFFERS|MISSING|ORPHANED|REPEATS)/m.test(out) ? 'behind' : null)
   await record('gen-rules-check', async () => {

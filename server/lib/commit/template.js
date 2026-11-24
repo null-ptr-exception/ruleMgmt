@@ -9,7 +9,7 @@ import yaml from 'js-yaml'
 import { COMMON_DIR, isCommonChartPath } from '../../../src/utils/reservedNames.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { parseVersion } from '../../repo/findings/template.js'
-import { fact, notCheckedCode } from './facts.js'
+import { fact } from './facts.js'
 
 // A constraint that is one version and nothing else — `2.1.0`, `=2.1.0`,
 // `v2.1.0` — all three parts written: `2.1` and every range are not judged.
@@ -68,12 +68,12 @@ async function fileDependencyProblem(gitopsDir, dir, dep, loader) {
     if (rel.startsWith('../')) return missing()
     const read = await loader.helmYaml(rel)
     if (read.state === 'absent') return missing()
-    if (read.state === 'unreadable') return problem(`its ${noun}'s Chart.yaml cannot be read (${read.why})`, { code: 'deployment.template-unreadable', file: rel, notChecked: true })
+    if (read.state === 'unreadable') return problem(`its ${noun}'s Chart.yaml cannot be read (${read.why})`, { code: 'deployment.template-unreadable', file: rel })
     if (read.state === 'invalid') {
       const [f] = read.findings
       const said = f.message.replace(`${rel} `, '')
       // AlertForge cannot tell how Helm reads it: said so, naming the line.
-      if (f.helm === 'unknown') return { kind: 'template-version', description: `${dep}: its ${noun}'s Chart.yaml: ${said} — write it as plain YAML`, said: `${said} — write it as plain YAML`, code: 'deployment.template-cannot-tell', file: rel, notChecked: true }
+      if (f.helm === 'unknown') return { kind: 'template-version', description: `${dep}: its ${noun}'s Chart.yaml: ${said} — write it as plain YAML`, said: `${said} — write it as plain YAML`, code: 'deployment.template-cannot-tell', file: rel }
       return problem(`its ${noun}'s Chart.yaml is not valid YAML (${said.replace('not valid YAML: ', '')})`, { file: rel })
     }
     const template = read.value
@@ -101,9 +101,9 @@ async function fileDependencyProblem(gitopsDir, dir, dep, loader) {
 export async function templateFindings(gitopsDir, dep, stack) {
   const template = await templateProblem(gitopsDir, dep, stack)
   if (!template) return { findings: [], facts: [] }
-  const { said, code, file, notChecked, ...shown } = template
+  const { said, code, file, ...shown } = template
   return {
     findings: [{ severity: 'commit', deployment: dep, ...shown }],
-    facts: [fact('refuse', { code, file, message: said }, dep, { blocksRender: true, notChecked: !!notChecked || notCheckedCode(code) })],
+    facts: [fact('refuse', { code, file, message: said }, dep, { blocksRender: true })],
   }
 }

@@ -18,6 +18,7 @@ import yaml from 'js-yaml'
 import Ajv from 'ajv'
 import { BASE, DIRS, SHARED } from './cases.mjs'
 import { run, oneLine, tools } from '../lib/tools.mjs'
+import { checkRepoCell, aboutPaths } from '../lib/checkRepo.mjs'
 import { snapshot as snapshotAll, changed, put } from '../lib/repoState.mjs'
 import { referenceOf, tableOf, readText } from './reference.mjs'
 
@@ -99,15 +100,15 @@ export async function baseFiles(ws) {
 }
 
 // The entry points, in the order a row's cells are listed.
-export const ENTRIES = ['get', 'put-text', 'put-json', 'delete', 'shared-get', 'shared-put', 'shared-rename', 'regenerate', 'sync', 'commit', 'preview', 'check-deployment', 'schema']
+export const ENTRIES = ['get', 'put-text', 'put-json', 'delete', 'shared-get', 'shared-put', 'shared-rename', 'regenerate', 'sync', 'commit', 'preview', 'check-deployment', 'check-repo', 'schema']
 // The ones that write: their reference is the repo after the write.
 export const WRITERS = new Set(['put-text', 'put-json', 'delete', 'shared-put', 'shared-rename', 'regenerate', 'sync'])
 const APPLIES = {
-  A: ['get', 'put-text', 'put-json', 'delete', 'shared-get', 'shared-put', 'regenerate', 'sync', 'commit', 'preview', 'check-deployment', 'schema'],
-  S: ['get', 'put-text', 'delete', 'shared-get', 'regenerate', 'commit', 'preview', 'check-deployment', 'schema'],
-  B: ['get', 'put-text', 'delete', 'regenerate', 'commit', 'preview', 'check-deployment'],
-  SH: ['get', 'shared-get', 'shared-put', 'shared-rename', 'regenerate', 'commit', 'preview', 'check-deployment'],
-  L: ['get', 'regenerate', 'commit', 'preview', 'check-deployment'],
+  A: ['get', 'put-text', 'put-json', 'delete', 'shared-get', 'shared-put', 'regenerate', 'sync', 'commit', 'preview', 'check-deployment', 'check-repo', 'schema'],
+  S: ['get', 'put-text', 'delete', 'shared-get', 'regenerate', 'commit', 'preview', 'check-deployment', 'check-repo', 'schema'],
+  B: ['get', 'put-text', 'delete', 'regenerate', 'commit', 'preview', 'check-deployment', 'check-repo'],
+  SH: ['get', 'shared-get', 'shared-put', 'shared-rename', 'regenerate', 'commit', 'preview', 'check-deployment', 'check-repo'],
+  L: ['get', 'regenerate', 'commit', 'preview', 'check-deployment', 'check-repo'],
 }
 
 let schemaCheck
@@ -297,6 +298,13 @@ export async function runRow(ws, c) {
     const routing = out.split('\n').filter(l => /^Routing|^ {2}/.test(l)).join(' ')
     const cls = r.status === 0 ? (/warning:/.test(out) ? 'warned' : 'ok') : r.status === 1 ? 'refused' : 'cannot-check'
     return { cls, status: `exit ${r.status}`, file: firstPath(out.split(root).join('')), note: oneLine(out).slice(0, 300), raw: out.split(path.join(root, sub.dep)).join('<arg>').split(`--repo ${root}`).join(''), appValue: oneLine(routing).slice(0, 120) }
+  })
+  // The whole repo checked as CI checks it: what it says about this
+  // deployment and the file the row is about; a warning passes, as
+  // check-deployment's does.
+  await record('check-repo', async () => {
+    const r = await checkRepoCell(root, aboutPaths(sub.dep, sub.file))
+    return { ...r, cls: r.cls === 'listed' ? 'warned' : r.cls }
   })
   // routing.yaml written by hand, checked by an editor with the JSON Schema.
   await record('schema', async () => {

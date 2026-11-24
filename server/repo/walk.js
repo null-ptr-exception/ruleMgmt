@@ -20,7 +20,8 @@
  *                ('absent' from folderEntry only: nothing there, or a file)
  *     why?:      for 'unreadable', and for a link: in words
  *     cause?:    for 'unreadable': 'folder' (it cannot be listed), 'chart'
- *                (its Chart.yaml cannot be read or used), 'link' (out of the repo)
+ *                (its Chart.yaml cannot be read or used), 'link' (out of
+ *                the repo), 'circle' (a link round in a circle)
  *     chartOnly?: a Chart.yaml naming a dependency and no values.yaml (Helm
  *                deploys the Template's example rows)
  *     link?:     'inside' | 'outside' | 'nowhere' | 'circle': the folder, or
@@ -37,8 +38,11 @@
  * right inside a `_common/` with a Chart.yaml is that folder's `_common`
  * chart, never a deployment. A Chart.yaml that is there and cannot be read
  * or used (no permission, a folder, a link to nothing or out of the repo,
- * not YAML, not a map) makes the folder 'unreadable': named, never taken
- * for no deployment.
+ * not YAML, not a map, empty, dependencies that are not a list) makes the
+ * folder 'unreadable': named, never taken for no deployment; so does a
+ * folder that is a link round in a circle (cause 'circle'). A Chart.yaml
+ * naming no Template beside a values.yaml that writes values is a folder
+ * with `valuesWithoutTemplate`: its rows deploy nothing, and that is said.
  */
 import fs from 'fs/promises'
 import path from 'path'
@@ -136,6 +140,12 @@ const chartWhy = c => (c.state === 'unreadable'
   ? `its Chart.yaml cannot be read (${c.why})`
   : `its Chart.yaml cannot be used (${c.findings.map(f => f.message).join('; ')})`)
 
+// A values.yaml that writes something: a map with a key in it.
+async function holdsValues(repo, rel) {
+  const v = await repo.helmYaml(rel)
+  return v.state === 'ok' && !!v.value && typeof v.value === 'object' && !Array.isArray(v.value) && Object.keys(v.value).length > 0
+}
+
 // The folder itself, links on the way already looked at.
 async function classify(repo, rel) {
   const dir = await repo.dir(rel)
@@ -147,8 +157,16 @@ async function classify(repo, rel) {
   if (isCommonChartPath(rel) && there) return { rel, kind: 'common' }
   if (!there) return { rel, kind: 'folder' }
   if (chart.state !== 'ok') return { rel, kind: 'unreadable', why: chartWhy(chart), cause: 'chart' }
-  const deps = chart.value?.dependencies
-  if (!Array.isArray(deps) || !deps.length) return { rel, kind: 'folder' }
+  // Read, and of no use as a chart's: Helm stops on it as on one that
+  // cannot be read.
+  const unusable = !chart.value || (typeof chart.value === 'object' && !Object.keys(chart.value).length) ? 'it is empty'
+    : chart.value.dependencies !== undefined && chart.value.dependencies !== null && !Array.isArray(chart.value.dependencies) ? 'its dependencies are not a list' : null
+  if (unusable) return { rel, kind: 'unreadable', why: `its Chart.yaml cannot be used (${unusable})`, cause: 'chart' }
+  const deps = chart.value.dependencies
+  if (!Array.isArray(deps) || !deps.length) {
+    // No Template, and values with rows: what they promise deploys nothing.
+    return entries.has('values.yaml') && await holdsValues(repo, `${rel}/values.yaml`) ? { rel, kind: 'folder', valuesWithoutTemplate: true } : { rel, kind: 'folder' }
+  }
   if (!entries.has('values.yaml')) return { rel, kind: 'folder', chartOnly: true }
   return { rel, kind: 'deployment' }
 }
@@ -163,7 +181,10 @@ export function folderEntry(repo, rel) {
     const link = await linkOnTheWay(repo, key)
     if (link) {
       const why = `${link.at === key ? 'it' : link.at} is ${LINK_WHY[link.link](link.to)}`
-      return { rel: key, kind: link.link === 'outside' ? 'unreadable' : 'folder', link: link.link, why, ...(link.link === 'outside' ? { cause: 'link' } : {}), ...(link.real ? { real: link.real } : {}) }
+      // One leading out of the repo is not followed, one round in a circle
+      // cannot be (Helm stops on it): named, as unreadable.
+      const cause = link.link === 'outside' ? 'link' : link.link === 'circle' && link.at === key ? 'circle' : null
+      return { rel: key, kind: cause ? 'unreadable' : 'folder', link: link.link, why, ...(cause ? { cause } : {}), ...(link.real ? { real: link.real } : {}) }
     }
     return classify(repo, key)
   })
@@ -173,11 +194,21 @@ const CODES = {
   folder: ['walk.folder-unreadable', 'unknown', 'nothing in it is known: its deployments are not checked'],
   chart: ['walk.chart-unreadable', 'fails', 'Helm cannot render it'],
   link: ['walk.link-outside', 'unknown', 'what Helm renders through it is not in the repo'],
+  circle: ['walk.link-circle', 'fails', 'Helm cannot read it'],
 }
+const NO_TEMPLATE_WHY = 'its Chart.yaml names no Template'
 
-/** The walk's facts: each entry it could not read, as a finding (policy.js `walk.*`). */
+/**
+ * The walk's facts (policy.js `walk.*`): each entry it could not read,
+ * and each values.yaml with rows in a folder whose Chart.yaml names no
+ * Template (walk.values-no-template: the rows deploy nothing).
+ */
 export function walkFindings(entries) {
-  return entries.filter(e => e.kind === 'unreadable').map(e => {
+  return entries.filter(e => e.kind === 'unreadable' || e.valuesWithoutTemplate).map(e => {
+    if (e.valuesWithoutTemplate) {
+      const file = `${e.rel}/values.yaml`
+      return finding({ code: 'walk.values-no-template', file, helm: 'renders-differently', message: `${file}: ${NO_TEMPLATE_WHY}, so none of the rows it writes is deployed — add the Template to its dependencies, or remove the values`, detail: { why: NO_TEMPLATE_WHY } })
+    }
     const [code, helm, then] = CODES[e.cause] ?? CODES.folder
     return finding({ code, file: e.rel || '.', helm, message: `${e.rel || '.'}: ${e.why}: ${then}`, detail: { why: e.why } })
   })
@@ -212,7 +243,8 @@ async function subfolders(repo, rel, { inChart, hidden }) {
   const out = []
   for (const [name, kind] of dir.value.entries) {
     const link = dir.value.links.get(name)
-    if (kind !== 'dir') continue
+    // A link round in a circle is neither a folder nor a file: looked at, to be named.
+    if (kind !== 'dir' && link !== 'circle') continue
     const child = rel ? `${rel}/${name}` : name
     if (await excludedFolder(repo, child, { inChart, hidden })) continue
     out.push({ name, child, link })
@@ -236,7 +268,7 @@ export function walk(repo, { from = '', hidden = false } = {}) {
           if (e.kind === 'unreadable' || link === 'inside') found.push(placed(e, nestedIn))
           return
         }
-        if (e.kind !== 'folder' || e.chartOnly) found.push(placed(e, nestedIn))
+        if (e.kind !== 'folder' || e.chartOnly || e.valuesWithoutTemplate) found.push(placed(e, nestedIn))
         await into(child, { inChart: isChart(e), nestedIn: e.kind === 'deployment' ? (nestedIn ?? child) : nestedIn })
       }))
     }

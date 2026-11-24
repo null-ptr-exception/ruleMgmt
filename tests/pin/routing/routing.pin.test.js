@@ -2,7 +2,7 @@
 // notification routing — routing.yaml, the AlertmanagerConfig generated from
 // it, the shared notification configs — (open, save as text and as a table,
 // remove, the shared configs' page, their save and rename, Regenerate,
-// sync, Commit, Preview, check-deployment, the JSON Schema) on every input
+// sync, Commit, Preview, check-deployment, check-repo, the JSON Schema) on every input
 // of cases.mjs, each answer next to what Helm deploys and what the
 // operator's CRD and amtool make of it (reference.mjs).
 // It fails when

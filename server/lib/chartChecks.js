@@ -94,7 +94,7 @@ export async function collectChartChecks(gitopsDir, { policy = 'commit', repo = 
     templates.push(`${base}/${name}`)
     if (bad) {
       findings.push({ severity: 'commit', kind: 'chart-unreadable', chart: name, description: `${name}: ${bad.file} cannot be read (${bad.why}) — fix it before committing` })
-      facts.push(fact('refuse', { code: 'template.unreadable', file: bad.file, message: `cannot be read (${bad.why})` }, `${base}/${name}`, { notChecked: true }))
+      facts.push(fact('refuse', { code: 'template.unreadable', file: bad.file, message: `cannot be read (${bad.why})` }, `${base}/${name}`))
       continue
     }
     const t = loaded.value

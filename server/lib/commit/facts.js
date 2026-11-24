@@ -8,15 +8,22 @@
  *     notChecked?, blocksRender? }
  *
  * `owner`: the deployment, Template folder or repo file it is said under.
- * `notChecked`: the file could not be read, or what Helm makes of it cannot
- * be told: what is behind it was not checked. `blocksRender`: Helm cannot
+ * `notChecked`: what is behind it was not looked at (notCheckedCode). `blocksRender`: Helm cannot
  * render the deployment, so it is not rendered to check its rules.
  */
 
-const CANNOT_TELL = new Set(['yaml.cannot-read', 'template.values-cannot-tell', 'template.chart-cannot-tell', 'template.schema-unchecked', 'template.schema-unusable'])
+// What keeps a check from looking, as check-deployment's exit 2 says it: a
+// folder the walk cannot read (whether its deployments are there cannot be
+// told), sync.yaml or the shared configs that cannot be read (whom each
+// deployment follows, or sends to, cannot be told). A file of a deployment
+// or a Template that cannot be read, or values whose reading by Helm
+// cannot be told, is not here: Helm decides, and the deployment would not
+// deploy as written (exit 1).
+const NOT_CHECKED = new Set(['sync.unreadable', 'shared.unreadable', 'template.folder-unreadable'])
 
-/** Whether a finding code says the file was not read, or cannot be told. */
-export const notCheckedCode = code => /(^|[.-])unreadable$/.test(code) || code.startsWith('walk.') || CANNOT_TELL.has(code)
+/** Whether a finding code says what is behind it was not looked at. */
+// Values whose Chart.yaml names no Template were looked at: they deploy nothing (exit 1).
+export const notCheckedCode = code => (code.startsWith('walk.') && code !== 'walk.values-no-template') || NOT_CHECKED.has(code)
 
 export function fact(action, f, owner, more = {}) {
   const out = { action, code: f.code, file: f.file || owner, owner, message: f.message }

@@ -117,7 +117,7 @@ export async function collectDeploymentChecks(gitopsDir, { policy = 'commit', re
   routingProblems.push(...sharedFile.problems)
   facts.push(...sharedFacts(sharedLoaded, unresolved, policy))
 
-  const targets = await syncTargetFindings(repo, deployments, registry, brokenSources)
+  const targets = await syncTargetFindings(repo, deployments, registry, brokenSources, { policy })
   findings.push(...targets.findings)
   facts.push(...targets.facts)
   for (const f of targets.fixes) fixes.add(f)

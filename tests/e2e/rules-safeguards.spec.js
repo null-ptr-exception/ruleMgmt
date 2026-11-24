@@ -323,6 +323,27 @@ test.describe('A commit refused for routing that is behind', () => {
   })
 })
 
+// A sync target whose values are not its source's refuses the commit,
+// naming the target, its source and the file; Regenerate (routing only) is
+// not offered for it. Stubbed: nothing touches the shared gitops repo.
+test.describe('A commit refused for a sync target that is not its source\'s copy', () => {
+  test('names the target and its source, and offers no Regenerate for it', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({ json: { branch: 'main', changes: { modified: ['deployments/shop/b/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false } }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ status: 409, json: {
+      error: 'Commit refused', regenerable: 0,
+      findings: [{ severity: 'commit', kind: 'sync-target-differs', deployment: 'deployments/shop/b', regenerable: false, description: 'deployments/shop/b/values.yaml is not its source\'s (deployments/shop/a): demo.cpu differs — sync it again from deployments/shop/a (in AlertForge: save the source, or Sync from…), or unlink it' }],
+    } }))
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: refused for a sync target')
+    await page.locator('button:has-text("Commit")').click()
+    const dialog = page.locator('.ant-modal-confirm').filter({ hasText: 'Commit refused' })
+    await expect(dialog).toBeVisible({ timeout: 8000 })
+    await expect(dialog.getByTestId('commit-findings')).toContainText('deployments/shop/b/values.yaml is not its source\'s (deployments/shop/a): demo.cpu differs — sync it again from deployments/shop/a')
+    await expect(dialog.getByRole('button', { name: /Regenerate/ })).toHaveCount(0)
+  })
+})
+
 // #179: a commit that goes through names a routing.yaml with problems, and
 // the charts still in the old format, both at once. Stubbed: nothing is
 // committed into the shared gitops repo.
@@ -348,8 +369,10 @@ test.describe('A commit that goes through with things to fix', () => {
 })
 
 // A commit lists the deployment values Helm would not render as written
-// (#202, #203): committed, not refused, under a heading that says check-repo
-// refuses them. Stubbed: nothing is committed into the shared gitops repo.
+// (#202, #203): committed, not refused, under a heading that says what
+// check-repo does with them (refuses what Helm stops on or reads otherwise,
+// warns about the rest, as its table does). Stubbed: nothing is committed
+// into the shared gitops repo.
 test.describe('A commit that lists deployment values to look at', () => {
   test('names each deployment and what is wrong, as committed', async ({ page }) => {
     await page.route('**/api/v2/git/status', route => route.fulfill({
@@ -367,7 +390,7 @@ test.describe('A commit that lists deployment values to look at', () => {
 
     const dialog = page.getByRole('dialog').filter({ hasText: 'Changes committed' })
     await expect(dialog).toContainText('Deployment values to look at', { timeout: 8000 })
-    await expect(dialog).toContainText('check-repo')
+    await expect(dialog).toContainText('check-repo refuses what Helm stops on or reads otherwise, and warns about the rest')
     await expect(dialog.getByTestId('commit-value-warnings')).toContainText('deployments/shop/prod: deployments/shop/prod/values.yaml line 4: Helm reads 010 as 8')
   })
 })

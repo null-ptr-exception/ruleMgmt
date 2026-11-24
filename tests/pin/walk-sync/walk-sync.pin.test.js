@@ -1,10 +1,10 @@
 // The walk / sync pin: every entry point that walks the repo for
 // deployments or decides whether a folder is one (the tree, the flat list,
 // a folder's list, who uses a Template, the migration check, the Routing
-// page, Preview, check-deployment, sync to and from it, Commit), and every
+// page, Preview, check-deployment, sync to and from it, Commit, check-repo), and every
 // one that reads or writes sync.yaml or copies a source to its targets
 // (its list, its two readers, sync, unlink, a save, a routing save,
-// Regenerate, deleting the source, a target's read-only save, Commit), on
+// Regenerate, deleting the source, a target's read-only save, Commit, check-repo), on
 // every input of cases.mjs, each answer next to what Helm renders.
 // It fails when
 //   - an answer changes and baseline.tsv does not say so, or

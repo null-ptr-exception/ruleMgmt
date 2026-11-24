@@ -1,7 +1,7 @@
 // The deployment-values pin: every entry point that reads or writes a
 // deployment's values (open, list, save as text and as JSON, sync, a
 // _common's plan and its write, a new deployment, the migration check and a
-// migration, Commit, Preview, check-deployment, gen-rules) on every input of
+// migration, Commit, Preview, check-deployment, check-repo, gen-rules) on every input of
 // cases.mjs, each answer next to what real Helm does with the same files.
 // It fails when
 //   - an answer changes and baseline.tsv does not say so, or

@@ -771,7 +771,8 @@ itself. Opening a deployment shows the values as Helm reads them, and says
 which ones it reads otherwise than they are written (`010` shows
 as 8). Commit does not refuse these: it lists them under the deployment, and
 `check-repo` refuses them. A key written twice, a required cell written
-`''` and a value a label cannot take are listed by Commit too. A
+`''` and a value a label cannot take are listed by Commit too; Helm renders
+them as written, and `check-repo` says them as warnings. A
 `values.yaml` that cannot be read at all — not YAML, a folder, a link out
 of the repo — still blocks the commit.
 

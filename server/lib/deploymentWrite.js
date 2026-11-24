@@ -107,6 +107,16 @@ function dependencyKey(d, dir) {
   return JSON.stringify(Object.keys(resolved).sort().map(k => [k, resolved[k]]))
 }
 
+/**
+ * Whether a target's Chart.yaml (`dst`, read; `dstDir` its folder) depends
+ * on what its source's (`srcDeps` from `srcDir`) does, as Helm sees it:
+ * what copyChartDependencies leaves as it is.
+ */
+export function sameDependencies(srcDeps, srcDir, dst, dstDir) {
+  return !!dst && isPlainObject(dst) && Array.isArray(dst.dependencies ?? []) && (dst.dependencies ?? []).length === srcDeps.length &&
+    (dst.dependencies ?? []).every((d, i) => dependencyKey(d, dstDir) === dependencyKey(srcDeps[i], srcDir))
+}
+
 export async function copyChartDependencies(srcDir, dstDir) {
   const src = yaml.load(await fs.readFile(path.join(srcDir, 'Chart.yaml'), 'utf-8')) || {}
   const srcDeps = Array.isArray(src.dependencies) ? src.dependencies : []
@@ -132,9 +142,7 @@ export async function copyChartDependencies(srcDir, dstDir) {
   } catch (err) {
     if (err.code !== 'ENOENT') throw err
   }
-  const same = dst && Array.isArray(dst.dependencies ?? []) && (dst.dependencies ?? []).length === srcDeps.length &&
-    (dst.dependencies ?? []).every((d, i) => dependencyKey(d, dstDir) === dependencyKey(srcDeps[i], srcDir))
-  if (same) return false
+  if (sameDependencies(srcDeps, srcDir, dst, dstDir)) return false
   const doc = dst ? { ...dst, dependencies } : { ...src, name: path.basename(dstDir), dependencies }
   // Whole or not at all: a Preview rendering the target meanwhile reads
   // either file, never half of one.

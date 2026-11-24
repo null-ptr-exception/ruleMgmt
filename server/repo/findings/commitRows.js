@@ -33,6 +33,7 @@ export const ROUTING_CHECK_REPO_ROWS = Object.freeze({
 })
 
 const LISTED_WALK = 'a folder whose deployments cannot be read, or a deployment whose Chart.yaml cannot be, is named, not a reason to refuse a commit of everything else; check-repo refuses it'
+const TARGET_DIFFERS = 'a sync target is its source\'s copy (read-only in the app): values or a Template changed on it deploy something else than its source, until it is synced again or unlinked'
 const SYNC_WRONG = 'a sync.yaml row the app cannot use, or that cannot be right (a path that is no deployment, a target with two sources, a chain), leaves targets that are no copy of their source'
 
 export const WALK_SYNC_ROWS = Object.freeze({
@@ -41,11 +42,13 @@ export const WALK_SYNC_ROWS = Object.freeze({
     'sync.*': { action: 'refuse', why: SYNC_WRONG },
     'sync.backslash': { action: 'ignore', why: 'a \\ in a path is read as /, as sync.yaml has always been read: the same deployment' },
     'sync.duplicate-target': { action: 'ignore', why: 'a target listed twice under one source is the same link' },
+    'sync.target-differs': { action: 'refuse', why: TARGET_DIFFERS },
   },
   checkRepo: {
     'walk.*': { action: 'refuse', why: 'what cannot be read cannot be said to deploy as written' },
     'sync.*': { action: 'refuse', why: SYNC_WRONG },
     'sync.backslash': { action: 'warn', why: 'read as /: said, so it can be written as the app writes it' },
     'sync.duplicate-target': { action: 'warn', why: 'the same link twice: said, so it can be written once' },
+    'sync.target-differs': { action: 'refuse', why: TARGET_DIFFERS },
   },
 })

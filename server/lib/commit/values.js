@@ -35,8 +35,10 @@ export async function valuesFindings(gitopsDir, dep, stack, { repo = openRepo(gi
     description: f.code === 'values.unreadable' ? f.message
       : loaded.state === 'invalid' ? `${dep}: values.yaml cannot be read (${f.message.replace(/^\S+ (line (\d+): )?/, (_, l, n) => (n ? `line ${n}: ` : ''))}), so Helm cannot render it`
         : /^\S+\.yaml( line \d+)?: /.test(f.message) ? `${dep}: ${f.message}` : `${dep}: values.yaml: ${f.message}` }))
-  // Values that cannot be read as Helm reads them: Helm is not run on them.
-  const blocksRender = loaded.state !== 'ok'
+  // Values that cannot be read, or that Helm stops on as a whole: Helm is
+  // not run on them. Values AlertForge cannot tell Helm's reading of are
+  // Helm's to decide, as check-deployment leaves them.
+  const blocksRender = loaded.state === 'unreadable' || (loaded.state === 'invalid' && !loaded.findings.every(f => f.helm === 'unknown'))
   return { findings, warnings: [...d.list, ...d.warn].map(f => f.message),
     facts: [...factsOf({ ...d, warn: [], list: [] }, dep, { blocksRender }), ...factsOf({ ...d, refuse: [] }, dep)] }
 }

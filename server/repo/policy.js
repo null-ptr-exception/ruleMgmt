@@ -120,6 +120,11 @@ export const POLICIES = Object.freeze({
       'values.selector': { action: 'warn', why: EDITOR },
       'yaml.duplicate-key': { action: 'warn', why: 'Helm keeps the last of two keys: it renders, the text should say it once' },
       'stack.duplicate-key': { action: 'warn', why: 'a key a _common writes twice deploys the later one, which may not be the one meant' },
+      // The same rules in a _common above (or the Template's values): said
+      // with every deployment under it, as in the deployment's own values.
+      'stack.required-empty': { action: 'warn', why: `${EDITOR}; in a _common above, fixed there` },
+      'stack.cell': { action: 'warn', why: `${EDITOR}; in a _common above, fixed there` },
+      'stack.selector': { action: 'warn', why: `${EDITOR}; in a _common above, fixed there` },
     },
   }),
   preview: definePolicy('preview', {

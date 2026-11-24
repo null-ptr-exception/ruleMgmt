@@ -147,7 +147,7 @@ Create an OAuth application in GitLab (**Admin > Applications** or group-level):
 | `GITOPS_DIR` | Workspace path inside the container | No (default: `/data/gitops`) |
 | `CHARTS_DIR` | Subdirectory for chart templates | No (default: `charts/`) |
 | `DEPLOYMENTS_DIR` | Subdirectory for deployments | No (default: `deployments/`) |
-| `MAX_VALUES_BYTES` | The largest values file AlertForge reads, in bytes. A larger one is named and refused as one AlertForge cannot check. At most 5 MiB (Helm's own limit for a chart file; a larger setting is used as 5 MiB); a setting that is not a positive whole number is the default. The server, `check-deployment` and `gen-rules` read it alike, and say at start when it is not used as written | No (default: `1048576`, 1 MiB) |
+| `MAX_VALUES_BYTES` | The largest values file AlertForge reads, in bytes. A larger one is named and refused as one AlertForge cannot check. At most 5 MiB (Helm's own limit for a chart file; a larger setting is used as 5 MiB); a setting that is not a positive whole number is the default. The server, `check-deployment`, `check-repo` and `gen-rules` read it alike, and say at start when it is not used as written | No (default: `1048576`, 1 MiB) |
 | `PORT` | Server listen port | No (default: `3001`) |
 | `LOG_LEVEL` | Pino log level (`debug`, `info`, `warn`, `error`) | No (default: `info`) |
 

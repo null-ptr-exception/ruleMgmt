@@ -20,6 +20,7 @@ import { clusterReads } from '../lib/alertmanager.mjs'
 import { syncAnswer } from '../../../server/repo/sync.js'
 import { openRepo } from '../../../server/repo/openRepo.js'
 import { syncRegistryFindings } from '../../../server/lib/commit/sync.js'
+import { checkRepoCell } from '../lib/checkRepo.mjs'
 
 // sync.yaml as the routes read it: the registry, or a throw when it cannot be read.
 async function readSyncRegistry(root) {
@@ -122,13 +123,13 @@ export const ENTRIES = [
   'tree', 'list', 'folder-list', 'users', 'migration', 'routing-get', 'preview', 'check-deployment', 'sync-to', 'sync-from',
   // sync.yaml
   'sync-get', 'parsers', 'sync-post', 'sync-unlink', 'save-copy', 'routing-copy', 'regenerate', 'delete-source', 'target-readonly',
-  'commit',
+  'commit', 'check-repo',
 ]
 export const FINDERS = new Set(['tree', 'list', 'folder-list', 'users', 'migration', 'routing-get'])
 export const COPIERS = new Set(['sync-post', 'save-copy', 'routing-copy', 'regenerate'])
 const APPLIES = {
-  W: ['tree', 'list', 'folder-list', 'users', 'migration', 'routing-get', 'preview', 'check-deployment', 'sync-to', 'sync-from', 'commit'],
-  Y: ['sync-get', 'parsers', 'sync-post', 'sync-unlink', 'save-copy', 'routing-copy', 'regenerate', 'delete-source', 'target-readonly', 'commit'],
+  W: ['tree', 'list', 'folder-list', 'users', 'migration', 'routing-get', 'preview', 'check-deployment', 'sync-to', 'sync-from', 'commit', 'check-repo'],
+  Y: ['sync-get', 'parsers', 'sync-post', 'sync-unlink', 'save-copy', 'routing-copy', 'regenerate', 'delete-source', 'target-readonly', 'commit', 'check-repo'],
 }
 
 const helmEnv = home => ({ ...process.env, HELM_CACHE_HOME: path.join(home, 'c'), HELM_CONFIG_HOME: path.join(home, 'g'), HELM_DATA_HOME: path.join(home, 'd') })
@@ -387,6 +388,16 @@ export async function runRow(ws, c) {
     const cls = res.status === 'no-answer' ? 'no-answer' : res.status >= 500 ? 'error' : res.status === 409 && findings.length ? 'refused' : res.status === 409 ? 'refused-other' : res.status === 200 && listed.length ? 'listed' : res.status === 200 ? 'ok' : 'refused'
     return { cls, status: res.status, file: firstPath(JSON.stringify(findings[0] || listed[0] || '')), note: [...findings.map(f => `${f.kind}: ${f.description}`), ...listed.map(w => JSON.stringify(w))].join(' / ') || message(d), raw: res.text,
       appValue: findings.map(f => f.kind).join(',') || (listed.length ? 'listed' : '-') }
+  })
+  // The whole repo checked as CI checks it: what it says about the folder
+  // (or a folder above it that cannot be read), or about sync.yaml and the
+  // target.
+  await record('check-repo', async () => {
+    const under = (x, p) => x === p || x.startsWith(`${p}/`)
+    const about = folder
+      ? p => under(p.file, folder) || under(p.group, folder) || folder.startsWith(`${p.file}/`)
+      : p => p.file === 'sync.yaml' || under(p.group, B)
+    return checkRepoCell(root, about)
   })
   await reset()
   return cells

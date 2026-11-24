@@ -1250,7 +1250,7 @@ body:good	deployments.clone{}	good	ok	200	same	no	same	no	free	deployments/team/
 body:good	deployments.delete{}	good	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 body:good	render.preview{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:good	git.regenerate{}	good	ok	200	same	no	same	no	free		-	-	-	
-body:good	git.commit{}	good	ok	200	same	no	same	no	free		-	-	-	
+body:good	git.commit{}	good	conflict	409	same	no	same	no	free		-	-	-	
 body:good	git.push{}	good	not-found	404	same	no	same	no	free		-	-	-	
 body:good	git.discard{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:good	git.pull{}	good	not-found	404	same	no	same	no	free		-	-	-	
@@ -1280,7 +1280,7 @@ body:extra-field	deployments.clone{}	same-as-good	ok	200	same	no	same	no	free	de
 body:extra-field	deployments.delete{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	ok	
 body:extra-field	render.preview{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
 body:extra-field	git.regenerate{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
-body:extra-field	git.commit{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
+body:extra-field	git.commit{}	same-as-good	conflict	409	same	no	same	no	free		-	-	conflict	
 body:extra-field	git.push{}	same-as-good	not-found	404	same	no	same	no	free		-	-	not-found	
 body:extra-field	git.discard{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
 body:extra-field	git.pull{}	same-as-good	not-found	404	same	no	same	no	free		-	-	not-found	
@@ -1491,7 +1491,7 @@ field:text	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-
 field:text	deployments.save{version}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:text	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	deployments.clone{newName}	any	ok	200	same	no	same	no	free	deployments/team/a/x-values.yaml	-	-	-	
-field:text	git.commit{message}	any	ok	200	same	no	same	no	free		-	-	-	
+field:text	git.commit{message}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:text	folders.common{action}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	folders.common{folder}	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1708,7 +1708,7 @@ field:long	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-
 field:long	deployments.save{version}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:long	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	deployments.clone{newName}	any	error	500	same	no	same	no	free		-	-	-	5xx
-field:long	git.commit{message}	any	ok	200	same	no	same	no	free		-	-	-	
+field:long	git.commit{message}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:long	folders.common{action}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	folders.common{folder}	any	refused	400	same	no	same	no	free		-	-	-	

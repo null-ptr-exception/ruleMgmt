@@ -378,7 +378,8 @@ Two more kinds of folder are flagged in the tree:
 | Folder | What it means | Counts as using its Template |
 |---|---|---|
 | A `Chart.yaml` and no `values.yaml` | Helm deploys the Template's example rows | Yes: listed for a breaking change (nothing is written in it), and the Template cannot be deleted while it is there. Delete it like a deployment, or add a `values.yaml` |
-| One AlertForge cannot read (permissions), a deployment whose `Chart.yaml` cannot be read or used (no permission, a folder, a link to nothing or out of the repo, not YAML), or a folder that is a link leading outside the repo | The deployments in it (or it) are not listed for sync, checked or migrated | Not known: named in the tree, in the list of who uses a Template, when a commit goes through, when a breaking change is confirmed and when the Template is deleted, and blocks none of them (`check-deployment` cannot check it: exit 2) |
+| One AlertForge cannot read (permissions), a deployment whose `Chart.yaml` cannot be read or used (no permission, a folder, a link to nothing or out of the repo, not YAML, empty, `dependencies` that is not a list), a folder that is a link leading outside the repo, or one that is a link round in a circle | The deployments in it (or it) are not listed for sync, checked or migrated | Not known: named in the tree, in the list of who uses a Template, when a commit goes through, when a breaking change is confirmed and when the Template is deleted, and blocks none of them (`check-deployment` and `check-repo` cannot check it: exit 2) |
+| A `Chart.yaml` that names no Template beside a `values.yaml` that writes values | Not a deployment: none of its rows is deployed | Named when a commit goes through (not refused); `check-repo` refuses it (exit 1) |
 
 A folder that is a link — or is reached through one — is never a
 deployment, wherever it leads: the tree does not show it (one leading out
@@ -899,6 +900,15 @@ copied to it.
   naming the file; one whose `Chart.yaml` is a folder (or cannot be read)
   is no deployment, and is refused (400, "exists but is not a valid
   deployment"). Nothing is written.
+- A target is its source's copy, and Commit holds it to that: a target
+  whose `values.yaml`, or the Template its `Chart.yaml` depends on, is not
+  what a sync of the source writes (edited with git, or in the Gitea web
+  editor) refuses the commit, naming the target, its source and the file
+  (for values, the first key that differs). Sync it again from the source
+  (save the source, or **Sync from...** on the target), or unlink it. Its
+  routing is held to its source's the same way (**Regenerate** copies it
+  again). `check-repo` refuses it too. A source whose files cannot be read
+  is named as such, not the target.
 - When a save cannot write a target (a permission error, or a `sync.yaml`
   entry that is not a deployment on disk), the source is still saved and the
   page names the target, which may not match the source. Fix the cause and
@@ -993,7 +1003,10 @@ on a cell, a value Helm reads otherwise (`010`), values not under the
 chart's name, a key written twice (in its own values, or in a `_common` it
 renders on: Helm deploys the later one, which may not be the one meant). They are
 listed under the deployment after the commit, as rows the row identity label
-cannot tell apart are; `check-repo` refuses them.
+cannot tell apart are, and as a required cell written `''`, a value a label
+cannot take and selector rows that cannot be told apart are. `check-repo`
+refuses what Helm stops on or reads otherwise than written (the first three);
+the rest Helm renders as written, and `check-repo` says them as warnings.
 
 and while `sync.yaml` has an entry that cannot be right: one deployment
 following another that follows a third, a target with two sources, a path
@@ -1022,18 +1035,17 @@ while committing — try again**. Nothing was committed; commit again. What woul
 symlink pointing nowhere, a git `index.lock` left by a git that is gone, a
 commit hook that fails — is reported as a failure, naming it, instead.
 
-These checks are AlertForge's commit button only. A commit made with git, or
-in the Gitea web editor, is left to CI: `check-deployment` (see below) fails
-a deployment whose routing resource is behind or left without its
-`routing.yaml`, whose `routing.yaml` has problems (which AlertForge's commit
-only names), which gets an AlertmanagerConfig from a `_common` chart, or
-whose Template does not render; `sync.yaml` is not checked there.
+These checks are AlertForge's commit button only: a commit made with git, or
+in the Gitea web editor, does not go through them. `check-repo` (see
+[Check the whole repo](#check-the-whole-repo)) makes every one of them on
+the whole repo, refuses what Commit only names, and renders every
+deployment with Helm.
 
 ---
 
 ## Command line
 
-`gen-rules`, `import-rules` and `check-deployment` ship in the AlertForge
+`gen-rules`, `import-rules`, `check-deployment` and `check-repo` ship in the AlertForge
 image, which is the way to run them from a gitops repo: it has no `scripts/`.
 The commands below are written short, as run from an AlertForge source
 checkout (after `npm ci`), with `charts/<name>` standing for the chart's
@@ -1292,44 +1304,85 @@ It exits:
   `routing.yaml` that is a link is read wherever it leads, as Helm reads it
   (with a root, a link leading out of it is not read).
 
-In the gitops repo's CI, check every deployment a change touches. A changed
-file belongs to the nearest folder above it with both `Chart.yaml` and
-`values.yaml`. A change under `charts/` changes a chart that deployments
-render, so then every deployment is checked (if the site sets `CHARTS_DIR`,
-use that folder instead of `charts`). For example, run from the repo's
-root, with the base branch fetched (`actions/checkout` with `fetch-depth: 0`):
+To check every deployment, and the rest of the repo, at once, use
+`check-repo` (below).
+
+### Check the whole repo
+
+`check-repo.mjs` checks the whole gitops repo the way AlertForge's Commit
+checks it — every Template's files, `sync.yaml`, the shared notification
+configs, and each deployment's values, Template, `_common` stack and
+routing, with the same checks — then renders every deployment with Helm and
+runs `promtool` (or `vmalert`) on each rule object, as `check-deployment`
+does:
 
 ```bash
-set -euo pipefail
-base=origin/main
-git rev-parse --verify --quiet "$base^{commit}" >/dev/null || { echo "fetch $base first" >&2; exit 2; }
-list=$(mktemp)
-
-# The deployment folder a file is in, if any.
-deployment_of() {
-  local dir
-  dir=$(dirname -- "$1")
-  while [ "$dir" != . ]; do
-    if [ -f "$dir/Chart.yaml" ] && [ -f "$dir/values.yaml" ]; then printf '%s\0' "$dir"; return 0; fi
-    dir=$(dirname -- "$dir")
-  done
-}
-
-if git diff --quiet "$base"... -- charts; then
-  git diff -z --name-only "$base"... -- . ':!charts' |
-    while IFS= read -r -d '' file; do deployment_of "$file"; done | sort -zu > "$list"
-else
-  git ls-files -z -- '*Chart.yaml' ':!charts' |
-    while IFS= read -r -d '' file; do deployment_of "$file"; done | sort -zu > "$list"
-fi
-
-status=0
-while IFS= read -r -d '' dir; do
-  docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
-    node scripts/check-deployment.mjs --repo /work "/work/$dir" || status=1
-done < "$list"
-exit "$status"
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" \
+  -e RULE_OBJECT_LABELS -e RULE_OBJECT_ANNOTATIONS \
+  -e RULE_OBJECT_LABELS_BY_PROFILE -e RULE_OBJECT_ANNOTATIONS_BY_PROFILE \
+  "$IMAGE" node scripts/check-repo.mjs /work
 ```
+
+`node scripts/check-repo.mjs [[--repo] <repo>] [--jobs N] [--json]`: `<repo>`
+(or `--repo <repo>`, as `check-deployment` takes it) is the gitops repo's
+root (without it, the git checkout the current folder is in;
+in a container pass it, as above: git there refuses a checkout another uid
+owns). `--jobs` is how many deployments are rendered at once (4). `--json`
+prints the same as data: `problems`, each with `group` (the Template,
+deployment or file it is said under), `action` (`refuse` or `warn`),
+`notChecked`, `code`, `file` and `message`, and the counts.
+
+It writes nothing into the repo: Helm renders in a copy of it, so the mount
+may be read-only (`-v "$PWD:/work:ro"`).
+
+What it does not walk into is said as a warning (`not checked: …`), and
+does not change the exit code: a deployment in a hidden folder, a
+`Chart.yaml` and `values.yaml` at the repo's root, and a deployment kept
+as a `<name>-values.yaml` file (not supported: move it to a folder
+deployment).
+
+It refuses everything Commit refuses, and what Commit only names: a value
+Helm stops on or reads otherwise than written (`010`), values not under the
+chart's name, a `routing.yaml` with problems, a shared configs file with
+problems, an AlertmanagerConfig a `_common` chart hands to its deployments,
+a Template with a generated file missing, a deployment Helm cannot render or
+whose rules the checker refuses. What Helm renders as written is said as a
+warning and does not fail: a key written twice, a required cell written
+`''`, a value a label cannot take, rows the row identity label cannot tell
+apart, a chart not converted to `rules/` yet, a Template's missing
+`values.schema.json`, a lint finding of promtool, what a routing's configs
+will do that is worth saying.
+
+| Exit | When |
+|---|---|
+| 0 | nothing refused; warnings do not count; a repo with no deployments is 0 (a folder with no `charts/` and no deployment says `nothing found to check` first, so a wrong path shows in the log) |
+| 1 | something refused: a deployment or Template that would not deploy as written — Helm fails on it, a rule check fails, a file of its own cannot be read, or what Commit refuses (values AlertForge cannot tell Helm's reading of included: Helm renders them, and what it renders is checked) |
+| 2 | something was not looked at: wrong arguments, a repo that is not there, a folder that is not the repo's root (one inside a git checkout, which names the checkout's root; one with deployments and no `charts/` folder, such as `deployments/`), site settings it cannot read, helm or a checker missing, a folder it cannot list or a `Chart.yaml` it cannot read (whether a deployment is there cannot be told), `sync.yaml` or the shared configs that cannot be read, a file outside every deployment and Template that cannot be read |
+
+It prints one line per problem, under the Template or deployment it belongs
+to, refusals before warnings, and the counts last:
+
+```text
+charts/mariadb-alerts
+  refused      charts/mariadb-alerts: mariadb-alerts: products are out of date (templates/mariadb-traffic-qps-low.yaml) — regenerate before committing
+deployments/mariadb-2/production
+  refused      deployments/mariadb-2/production/values.yaml: mariadb_latency_slow_queries row 1, "warn_threshold": "abc" is not a number
+  refused      deployments/mariadb-2/production: Helm could not render it: Error: values don't meet the specifications of the schema(s) in the following chart(s): | mariadb-alerts: | - at '/mariadb_latency_slow_queries/0/warn_threshold': got string, want number
+check-repo: 1 Template, 3 deployments: 3 refused, 0 not checked, 0 warnings
+```
+
+A clean repo prints the last line alone. 300 deployments take about a minute
+with `--jobs 4`, nearly all of it Helm and the rule checker; more jobs do not
+make it faster, since the checker runs at most four at once.
+
+Limits:
+
+- A deployment that depends on a chart from a remote repository
+  (`https://…`, not `file://`) is refused: Helm renders with
+  `--skip-refresh`, as Preview and `check-deployment` do, and does not fetch
+  it.
+- It checks the files as they are in the folder it is given, not a git
+  commit: what is not committed is checked too.
 
 ---
 

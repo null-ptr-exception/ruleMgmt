@@ -19,6 +19,7 @@ import { HELM, run, oneLine, tools } from '../lib/tools.mjs'
 import { snapshot as snapshotAll, changed, put } from '../lib/repoState.mjs'
 import { judge, helmFailed } from '../lib/deployable.mjs'
 import { readHelmYaml } from '../../../server/repo/helmYaml.js'
+import { checkRepoCell, aboutPaths } from '../lib/checkRepo.mjs'
 
 const WT = path.resolve(import.meta.dirname, '../../..')
 // The commit entry point writes marker.txt to have something to commit.
@@ -162,7 +163,7 @@ export async function baseFiles(ws) {
 }
 
 // The entry points, in the order a row's cells are listed.
-export const ENTRIES = ['get', 'list', 'save-text', 'save-json', 'sync', 'common-plan', 'common-apply', 'init', 'migration-preview', 'migration-apply', 'commit', 'preview', 'check-deployment', 'gen-rules']
+export const ENTRIES = ['get', 'list', 'save-text', 'save-json', 'sync', 'common-plan', 'common-apply', 'init', 'migration-preview', 'migration-apply', 'commit', 'preview', 'check-deployment', 'check-repo', 'gen-rules']
 // The ones that write what they were given (or a copy of it).
 export const WRITERS = new Set(['save-text', 'save-json', 'sync', 'init', 'common-apply', 'migration-apply'])
 
@@ -315,6 +316,8 @@ export async function runRow(ws, c) {
       return { cls: r.status === 0 ? 'ok' : r.status === 1 ? 'refused' : 'cannot-check', status: `exit ${r.status}`, file: firstPath(out), note: out.trim().split('\n').slice(0, 3).join(' '), raw: out.split(path.join(root, sub.dep)).join('<arg>') }
     })
   }
+  // The whole repo checked as CI checks it: what it says about this deployment.
+  if (sub.dep) await record('check-repo', () => checkRepoCell(root, aboutPaths(sub.dep, sub.file, sub.layer)))
   // gen-rules reads the Template's own values.yaml.
   if (c.target === 'T') {
     await record('gen-rules', async () => {

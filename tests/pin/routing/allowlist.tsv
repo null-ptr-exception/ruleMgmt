@@ -10,6 +10,7 @@ top-unknown-key	get	refuses-what-tool-accepts	policy	an unknown top-level key in
 top-unknown-key	put-text	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
 top-unknown-key	sync	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
 top-unknown-key	check-deployment	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
+top-unknown-key	check-repo	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
 top-unknown-key	schema	refuses-what-tool-accepts	policy	an unknown top-level key in routing.yaml is refused, though nothing reads it
 url-credential	put-text	refuses-what-tool-accepts	policy	a webhook address carrying a credential is refused: it belongs in a Secret (urlSecret)
 url-credential	sync	refuses-what-tool-accepts	policy	a webhook address carrying a credential is refused: it belongs in a Secret (urlSecret)
@@ -34,6 +35,7 @@ cr-extra	get	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig 
 cr-extra	delete	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig written by hand into templates/ is deployed too; AlertForge only knows the file it generates
 cr-extra	commit	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig written by hand into templates/ is deployed too; AlertForge only knows the file it generates
 cr-extra	check-deployment	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig written by hand into templates/ is deployed too; AlertForge only knows the file it generates
+cr-extra	check-repo	accepts-what-tool-refuses	out-of-scope	a second AlertmanagerConfig written by hand into templates/ is deployed too; AlertForge only knows the file it generates
 common-has-routing	get	accepts-what-tool-refuses	policy	the Routing page shows the deployment's own routing.yaml; an AlertmanagerConfig in a _common chart it renders on is named by Commit and check-deployment
 target-ok	delete	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
 target-hand-edited	get	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
@@ -41,6 +43,7 @@ target-hand-edited	put-text	refuses-what-tool-accepts	policy	a sync target is he
 target-hand-edited	delete	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
 target-hand-edited	commit	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
 target-hand-edited	check-deployment	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
+target-hand-edited	check-repo	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
 target-cr-deleted	delete	refuses-what-tool-accepts	policy	a sync target is held to its source's files and is read-only (#180); what it deploys is its source's routing
 shared-dir-holds-more	shared-get	refuses-what-tool-accepts	policy	a _shared/ folder holding other files is the repo's own folder, not the shared configs' (#123)
 shared-dir-holds-more	shared-put	refuses-what-tool-accepts	policy	a _shared/ folder holding other files is the repo's own folder, not the shared configs' (#123)
@@ -54,6 +57,7 @@ link-outside	regenerate	refuses-what-tool-accepts	policy	a routing.yaml that is 
 link-outside	sync	refuses-what-tool-accepts	policy	a routing.yaml that is a link leading out of the repo is not read: the server reads only the repo, and a deploy from a checkout of it has no file at that path
 link-outside	commit	refuses-what-tool-accepts	policy	a routing.yaml that is a link leading out of the repo is not read: the server reads only the repo, and a deploy from a checkout of it has no file at that path
 link-outside	check-deployment	refuses-what-tool-accepts	policy	a routing.yaml that is a link leading out of the repo is not read: the server reads only the repo, and a deploy from a checkout of it has no file at that path
+link-outside	check-repo	refuses-what-tool-accepts	policy	a routing.yaml that is a link leading out of the repo is not read: the server reads only the repo, and a deploy from a checkout of it has no file at that path
 shared-unreadable	shared-put	refuses-what-tool-accepts	policy	a shared configs file with no permission (or a folder in its place) is not saved over: it could not be put back if a later write failed, and a read-only file is not replaced
 sync-yaml-unreadable	get	refuses-what-tool-accepts	policy	a sync.yaml that cannot be read stops the Routing page: whether the deployment is a read-only sync target, held to its source, cannot be told
 sync-yaml-unreadable	shared-get	refuses-what-tool-accepts	policy	a sync.yaml that cannot be read stops the shared configs page, save and rename: which deployment is whose target, and so whose resource a change reaches, cannot be told

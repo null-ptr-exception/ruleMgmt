@@ -72,7 +72,7 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
                 )}
                 {data.valueWarnings?.length > 0 && (
                   <>
-                    <div style={{ marginTop: 8 }}>Deployment values to look at (committed; <code>check-repo</code> refuses all but rows that look alike):</div>
+                    <div style={{ marginTop: 8 }}>Deployment values to look at (committed; <code>check-repo</code> refuses what Helm stops on or reads otherwise, and warns about the rest):</div>
                     <ul data-testid="commit-value-warnings" style={{ paddingLeft: 18, margin: '4px 0 8px' }}>
                       {data.valueWarnings.map(w => <li key={w.deployment}>{w.deployment}: {w.warnings.join('; ')}</li>)}
                     </ul>

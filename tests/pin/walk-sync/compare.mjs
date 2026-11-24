@@ -37,7 +37,8 @@ export function vsHelm(cell) {
   const SHOWS = { 'save-copy': ['differs', 'differs-values'], 'routing-copy': ['differs', 'differs-routing'], regenerate: ['differs', 'differs-routing'] }
   const shows = SHOWS[cell.entry] || ['differs', 'differs-values', 'differs-routing']
   if (COPIERS.has(cell.entry) && cell.cls === 'ok' && [...shows, 'target-fails'].includes(cell.copy)) return 'not-a-copy-after'
-  if (cell.entry === 'commit' && cell.cls === 'ok' && ['differs', 'differs-values', 'differs-routing', 'target-fails'].includes(cell.copy)) return 'accepts-a-target-not-its-copy'
+  // The two that check a commit: AlertForge's, and check-repo's in CI.
+  if ((cell.entry === 'commit' || cell.entry === 'check-repo') && cell.cls === 'ok' && ['differs', 'differs-values', 'differs-routing', 'target-fails'].includes(cell.copy)) return 'accepts-a-target-not-its-copy'
   return ''
 }
 

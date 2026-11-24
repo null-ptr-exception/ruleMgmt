@@ -2,7 +2,7 @@
 // (open, the Template list, which deployments use it, one file of
 // templates/ read, saved, renamed and deleted, Save of rules/ and of the
 // Template's values, the migration check, the description's save, clone,
-// delete, a new deployment, Preview, Commit, check-deployment, gen-rules and
+// delete, a new deployment, Preview, Commit, check-deployment, check-repo, gen-rules and
 // gen-chart with and without --check, import-rules) on every input of
 // cases.mjs, each answer next to what real Helm does with a deployment of
 // that Template, each rule object checked by promtool, promtool3 or vmalert

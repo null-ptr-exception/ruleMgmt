@@ -65,6 +65,18 @@ describe('check-repo against Commit', () => {
     expect(wrong).toEqual([])
   })
 
+  // What a _common above gives is said as the same kinds in a deployment's
+  // own values are: the editor's rules, which Helm renders as written.
+  it('warns about the editor\'s rules in a _common above as in the deployment\'s own values', () => {
+    for (const kind of ['cell', 'required-empty', 'selector']) {
+      const own = explain({ code: `values.${kind}`, helm: 'renders', file: 'f', message: 'm' }, 'checkRepo')
+      const above = explain({ code: `stack.${kind}`, helm: 'renders', file: 'f', message: 'm' }, 'checkRepo')
+      expect(own.action, kind).toBe('warn')
+      expect(above.action, kind).toBe('warn')
+      expect(above.why, kind).toBeTruthy()
+    }
+  })
+
   it('lists nothing: what it does not refuse is a warning or nothing', () => {
     expect(facts().filter(f => explain(f, 'checkRepo').action === 'list').map(said)).toEqual([])
   })

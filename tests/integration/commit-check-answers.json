@@ -739,6 +739,13 @@
         },
         {
           "severity": "commit",
+          "kind": "sync-target-differs",
+          "deployment": "deployments/team/d",
+          "regenerable": false,
+          "description": "deployments/team/d/values.yaml is not its source's (deployments/team/a): its text differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
+        },
+        {
+          "severity": "commit",
           "kind": "routing-target-differs",
           "deployment": "deployments/team/d",
           "regenerable": true,
@@ -811,6 +818,13 @@
           },
           {
             "severity": "commit",
+            "kind": "sync-target-differs",
+            "deployment": "deployments/team/d",
+            "regenerable": false,
+            "description": "deployments/team/d/values.yaml is not its source's (deployments/team/a): its text differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
+          },
+          {
+            "severity": "commit",
             "kind": "routing-target-differs",
             "deployment": "deployments/team/d",
             "regenerable": true,
@@ -864,6 +878,13 @@
             "deployment": "deployments/team/e",
             "regenerable": false,
             "description": "deployments/team/e: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-target-differs",
+            "deployment": "deployments/team/d",
+            "regenerable": false,
+            "description": "deployments/team/d/values.yaml is not its source's (deployments/team/a): its text differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
           }
         ],
         "routingProblems": [
@@ -915,6 +936,13 @@
               "deployment": "deployments/team/e",
               "regenerable": false,
               "description": "deployments/team/e: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-target-differs",
+              "deployment": "deployments/team/d",
+              "regenerable": false,
+              "description": "deployments/team/d/values.yaml is not its source's (deployments/team/a): its text differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
             }
           ],
           "regenerable": 0
@@ -1109,10 +1137,24 @@
         },
         {
           "severity": "commit",
+          "kind": "sync-target-differs",
+          "deployment": "deployments/team/d",
+          "regenerable": false,
+          "description": "deployments/team/d/values.yaml is not its source's (deployments/team/b): demo.cpu differs — sync it again from deployments/team/b (in AlertForge: save the source, or Sync from…), or unlink it"
+        },
+        {
+          "severity": "commit",
           "kind": "routing-target-differs",
           "deployment": "deployments/team/d",
           "regenerable": true,
           "description": "deployments/team/d: its routing is not its source's (deployments/team/b) — use Regenerate to copy it again"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-target-differs",
+          "deployment": "deployments/team/e",
+          "regenerable": false,
+          "description": "deployments/team/e/values.yaml is not its source's (deployments/team/a): demo.cpu differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
         },
         {
           "severity": "commit",
@@ -1181,10 +1223,24 @@
           },
           {
             "severity": "commit",
+            "kind": "sync-target-differs",
+            "deployment": "deployments/team/d",
+            "regenerable": false,
+            "description": "deployments/team/d/values.yaml is not its source's (deployments/team/b): demo.cpu differs — sync it again from deployments/team/b (in AlertForge: save the source, or Sync from…), or unlink it"
+          },
+          {
+            "severity": "commit",
             "kind": "routing-target-differs",
             "deployment": "deployments/team/d",
             "regenerable": true,
             "description": "deployments/team/d: its routing is not its source's (deployments/team/b) — use Regenerate to copy it again"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-target-differs",
+            "deployment": "deployments/team/e",
+            "regenerable": false,
+            "description": "deployments/team/e/values.yaml is not its source's (deployments/team/a): demo.cpu differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
           },
           {
             "severity": "commit",
@@ -1254,6 +1310,20 @@
             "severity": "commit",
             "kind": "sync-registry",
             "description": "sync.yaml : deployments/team/b follows deployments/team/a and is a source itself: sync does not chain"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-target-differs",
+            "deployment": "deployments/team/d",
+            "regenerable": false,
+            "description": "deployments/team/d/values.yaml is not its source's (deployments/team/b): demo.cpu differs — sync it again from deployments/team/b (in AlertForge: save the source, or Sync from…), or unlink it"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-target-differs",
+            "deployment": "deployments/team/e",
+            "regenerable": false,
+            "description": "deployments/team/e/values.yaml is not its source's (deployments/team/a): demo.cpu differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
           }
         ],
         "routingProblems": [],
@@ -1312,6 +1382,20 @@
               "severity": "commit",
               "kind": "sync-registry",
               "description": "sync.yaml : deployments/team/b follows deployments/team/a and is a source itself: sync does not chain"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-target-differs",
+              "deployment": "deployments/team/d",
+              "regenerable": false,
+              "description": "deployments/team/d/values.yaml is not its source's (deployments/team/b): demo.cpu differs — sync it again from deployments/team/b (in AlertForge: save the source, or Sync from…), or unlink it"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-target-differs",
+              "deployment": "deployments/team/e",
+              "regenerable": false,
+              "description": "deployments/team/e/values.yaml is not its source's (deployments/team/a): demo.cpu differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
             }
           ],
           "regenerable": 0
@@ -1706,6 +1790,13 @@
           "deployment": "deployments/team/d",
           "regenerable": false,
           "description": "deployments/team/d: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-target-differs",
+          "deployment": "deployments/team/b",
+          "regenerable": false,
+          "description": "deployments/team/b/values.yaml is not its source's (deployments/team/a): demo.cpu differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
         }
       ],
       "routingProblems": [],
@@ -1740,6 +1831,13 @@
             "deployment": "deployments/team/d",
             "regenerable": false,
             "description": "deployments/team/d: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-target-differs",
+            "deployment": "deployments/team/b",
+            "regenerable": false,
+            "description": "deployments/team/b/values.yaml is not its source's (deployments/team/a): demo.cpu differs — sync it again from deployments/team/a (in AlertForge: save the source, or Sync from…), or unlink it"
           }
         ],
         "regenerable": 0

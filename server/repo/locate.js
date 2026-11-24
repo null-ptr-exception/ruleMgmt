@@ -36,6 +36,12 @@ export function openRepoAt(dir) {
   return { repo: openRepo(root), root, rel: path.relative(root, abs).split(path.sep).join('/') }
 }
 
+/** The git checkout `dir` is in (the nearest folder up from it, itself included, with a .git), or null. */
+export function gitCheckoutOf(dir) {
+  const abs = path.resolve(dir)
+  return fs.existsSync(path.join(abs, '.git')) ? abs : gitRoot(abs)
+}
+
 /** Where a path leads, through links; null when it leads nowhere. */
 export function realFolder(p) {
   try { return fs.realpathSync(p) } catch { return null }

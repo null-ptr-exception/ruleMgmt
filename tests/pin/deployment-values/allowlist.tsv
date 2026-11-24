@@ -94,28 +94,36 @@ layer-dup-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refu
 layer-link-outside	commit	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 layer-link-outside	preview	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 layer-link-outside	check-deployment	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-link-outside	check-repo	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 y11-octal-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-octal-010	check-repo	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it), naming the value and what to write (#202); Commit lists it
 y11-octal-010	sync	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
 y11-underscore	save-text	refuses-what-helm-renders	policy	Helm reads 1_000 as 1000 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-underscore	check-repo	refuses-what-helm-renders	policy	Helm reads 1_000 as 1000 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it), naming the value and what to write (#202); Commit lists it
 y11-underscore	sync	refuses-what-helm-renders	policy	Helm reads 1_000 as 1000 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
 y11-0_7	save-text	refuses-what-helm-renders	policy	Helm reads 0_7 as 7 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-0_7	check-repo	refuses-what-helm-renders	policy	Helm reads 0_7 as 7 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it), naming the value and what to write (#202); Commit lists it
 y11-0_7	sync	refuses-what-helm-renders	policy	Helm reads 0_7 as 7 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
 y11-key	save-text	refuses-what-helm-renders	policy	Helm reads the key y as "true" (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it (#202); Commit lists it
+y11-key	check-repo	refuses-what-helm-renders	policy	Helm reads the key y as "true" (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it) (#202); Commit lists it
 y11-key	sync	refuses-what-helm-renders	policy	Helm reads the key y as "true" (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it (#202); Commit lists it
 unreadable-dir	sync	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo
 link-outside	save-text	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 link-outside	sync	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 link-outside	commit	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 stack-x-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
+stack-x-010	check-repo	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it) (#202)
 layer-link-outside	save-text	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 layer-unwrapped	save-text	refuses-what-helm-renders	policy	values not under the chart's name reach no Template: Helm renders only the Template's own, so a save refuses them (#203)
 layer-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
 flat-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
 unreadable-dir	migration-apply	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo
 unreadable-dir	check-deployment	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
+unreadable-dir	check-repo	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
 link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 link-outside	common-plan	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 link-outside	check-deployment	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	check-repo	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 layer-link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 layer-chart-null	migration-preview	accepts-what-helm-fails	bug	no issue yet: a migration does not stop for, or list, a _common above whose chart key is null (Helm stops on it for every deployment below); Commit refuses it
 layer-chart-null	migration-apply	accepts-what-helm-fails	bug	no issue yet: a migration does not stop for, or list, a _common above whose chart key is null (Helm stops on it for every deployment below); Commit refuses it

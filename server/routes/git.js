@@ -8,7 +8,7 @@ import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
 import { blocksCommit } from '../../src/utils/drift.js'
 import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
 import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
-import { withSyncRegistryLock } from '../lib/sync.js'
+import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 
 /**
  * Reasons a commit should be refused, across every chart in the gitops repo —
@@ -228,7 +228,9 @@ export default function gitRouter() {
     }
   })
 
-  router.post('/push', async (req, res) => {
+  // These change the working tree or the index: they wait for a save in
+  // progress, and a save for them, as commit does.
+  router.post('/push', holdSyncRegistryLock, async (req, res) => {
     const cwd = req.gitopsDir
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
@@ -260,7 +262,7 @@ export default function gitRouter() {
     }
   })
 
-  router.post('/discard', async (req, res) => {
+  router.post('/discard', holdSyncRegistryLock, async (req, res) => {
     const cwd = req.gitopsDir
     try {
       await git(cwd, 'checkout', '--', '.')
@@ -339,7 +341,7 @@ export default function gitRouter() {
     }
   })
 
-  router.post('/pull', async (req, res) => {
+  router.post('/pull', holdSyncRegistryLock, async (req, res) => {
     const cwd = req.gitopsDir
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
@@ -362,7 +364,7 @@ export default function gitRouter() {
     }
   })
 
-  router.post('/sync', async (req, res) => {
+  router.post('/sync', holdSyncRegistryLock, async (req, res) => {
     const cwd = req.gitopsDir
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })

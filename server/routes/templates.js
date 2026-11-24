@@ -1,9 +1,10 @@
 import express from 'express'
+import { holdSyncRegistryLock } from '../lib/sync.js'
 import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
-import { readSyncRegistry, isTarget, getSourceForTarget } from '../lib/sync.js'
+import { readSyncRegistry, isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates } from '../../src/utils/drift.js'
@@ -64,6 +65,7 @@ async function withSources(gitopsDir, refused) {
 
 export default function templatesRouter() {
   const router = express.Router()
+  router.use(holdSyncRegistryLock)
 
   router.use('/:chart', (req, res, next) => {
     if (!NAME_RE.test(req.params.chart)) {
@@ -105,17 +107,27 @@ export default function templatesRouter() {
       // Reading a chart that does not exist must not create it — a typo or a
       // stale saved selection would leave a directory under charts/.
       try { await fs.access(chartDir) } catch { return res.status(404).json({ error: 'Chart not found' }) }
-      try {
-        await fs.access(chartYamlFile)
-      } catch {
-        const { text } = ensureChartYaml(null, req.params.chart)
-        await fs.writeFile(chartYamlFile, text, 'utf-8')
-      }
-
+      // A GET is not held by the commit's lock (holdSyncRegistryLock lets
+      // reads through), but these two write: they take it themselves, so a
+      // commit does not stage half the products.
       let drift = await chartDrift(chartDir)
-      if (drift.state === 'missing') {
-        await regenerateProducts(chartDir)
-        drift = await chartDrift(chartDir)
+      let chartYamlMissing = false
+      try { await fs.access(chartYamlFile) } catch { chartYamlMissing = true }
+      if (chartYamlMissing || drift.state === 'missing') {
+        drift = await withSyncRegistryLock(req.gitopsDir, async () => {
+          try {
+            await fs.access(chartYamlFile)
+          } catch {
+            const { text } = ensureChartYaml(null, req.params.chart)
+            await fs.writeFile(chartYamlFile, text, 'utf-8')
+          }
+          let d = await chartDrift(chartDir)
+          if (d.state === 'missing') {
+            await regenerateProducts(chartDir)
+            d = await chartDrift(chartDir)
+          }
+          return d
+        })
       }
 
       let templateFiles = []

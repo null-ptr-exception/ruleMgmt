@@ -133,6 +133,39 @@ rules:
     await request.delete(`/api/v2/deployments/${CHART}/prod`)
   })
 
+  // A preview whose answer is cut off left the
+  // dialog on "Working it out…" with Change in place off, for good.
+  test('a preview that cannot be read goes back a step and says so', async ({ page, request }) => {
+    const orphanWarn = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number}
+rules:
+  - alert: A
+    expr: cpu{ns="\${namespace}"} > 1
+`
+    await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': orphanWarn }, confirmBreaking: true } })
+    await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p', warn: 90 }] } } })
+    try {
+      await page.route('**/migration-preview', async route => {
+        const res = await route.fetch()
+        const body = await res.text()
+        await route.fulfill({ response: res, body: body.slice(0, Math.floor(body.length / 2)) })
+      })
+      await openChart(page)
+      await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
+      await page.getByRole('button', { name: 'Save' }).first().click()
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+      await dialog.getByRole('button', { name: 'Continue' }).click()   // step 1 -> map
+      await dialog.getByRole('button', { name: 'Continue' }).click()   // step 2 -> preview, cut off
+      await expect(page.locator('.ant-message')).toContainText('The preview could not be worked out', { timeout: 8000 })
+      await expect(dialog.getByRole('button', { name: 'Continue' })).toBeVisible()
+    } finally {
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+      await request.delete(`/api/v2/deployments/${CHART}/prod`)
+    }
+  })
+
   // #176: a change that leaves a deployment with values a save refuses — here
   // a column made required that a row leaves empty — is not applied.
   test('the breaking dialog will not change in place what a save would refuse', async ({ page, request }) => {

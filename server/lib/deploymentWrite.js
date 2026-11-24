@@ -19,7 +19,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues } from './subchart.js'
 import { readChartModel } from './chartFiles.js'
-import { copyRouting } from './routingFiles.js'
+import { copyRouting, writeWhole } from './routingFiles.js'
 import { getTargetsForSource, isSafeSyncPath, isDeploymentDir } from './sync.js'
 import { valueProblems } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
@@ -109,7 +109,9 @@ export async function copyChartDependencies(srcDir, dstDir) {
     (dst.dependencies ?? []).every((d, i) => dependencyKey(d, dstDir) === dependencyKey(srcDeps[i], srcDir))
   if (same) return false
   const doc = dst ? { ...dst, dependencies } : { ...src, name: path.basename(dstDir), dependencies }
-  await fs.writeFile(file, yaml.dump(doc, { lineWidth: -1 }), 'utf-8')
+  // Whole or not at all: a Preview rendering the target meanwhile reads
+  // either file, never half of one.
+  await writeWhole(file, yaml.dump(doc, { lineWidth: -1 }))
   return true
 }
 
@@ -123,7 +125,7 @@ export async function copyToTarget(srcDir, dstDir, { chart = true, values = true
   if (chart) await copyChartDependencies(srcDir, dstDir)
   if (values) {
     const content = valuesContent ?? await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8')
-    await fs.writeFile(path.join(dstDir, 'values.yaml'), content, 'utf-8')
+    await writeWhole(path.join(dstDir, 'values.yaml'), content)
   }
   // Notification routing (#92) follows values.yaml: the target gets the
   // source's, or loses its own when the source has none.

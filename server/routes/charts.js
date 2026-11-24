@@ -1,4 +1,5 @@
 import express from 'express'
+import { holdSyncRegistryLock } from '../lib/sync.js'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
@@ -9,6 +10,7 @@ const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
 export default function chartsRouter() {
   const router = express.Router()
+  router.use(holdSyncRegistryLock)
 
   router.get('/', async (req, res) => {
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)

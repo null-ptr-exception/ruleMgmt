@@ -477,9 +477,11 @@ commit stays refused.
 A `routing.yaml` with problems does not stop a commit: the commit goes
 through and names it, to fix on its Routing page.
 
-A commit made while files are changing — a save in another tab, a chart
-being deleted — may answer **Files changed while committing — try again**.
-Nothing was committed; commit again. What would fail every time — a
+A commit waits for a save in progress — of a Template, a chart, a folder
+or a deployment, in this tab or another — and a save waits for a commit,
+so what is committed is never half of a save. A commit made while files
+change some other way (a terminal, a git pull) may answer **Files changed
+while committing — try again**. Nothing was committed; commit again. What would fail every time — a
 symlink pointing nowhere, a git `index.lock` left by a git that is gone, a
 commit hook that fails — is reported as a failure, naming it, instead.
 

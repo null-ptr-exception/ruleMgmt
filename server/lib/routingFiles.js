@@ -8,6 +8,7 @@
  * is a values file beside others and has nowhere to put one.
  */
 
+import { constants as fsConstants } from 'fs'
 import fs from 'fs/promises'
 import { randomBytes } from 'crypto'
 import path from 'path'
@@ -114,7 +115,14 @@ export const restoreRouting = (dir, before) => putRouting(dir, before)
 // breaks `helm template` for the deployment. The temp name starts with `_`:
 // Helm renders every other file in templates/. Each write has its own temp
 // file: two writers sharing one would find it gone at the second rename.
-async function writeWhole(abs, content) {
+export async function writeWhole(abs, content) {
+  // A file that is there and read-only stays a refusal (EACCES), as a plain
+  // write would be: a rename alone would quietly replace it.
+  try {
+    await fs.access(abs, fsConstants.W_OK)
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
+  }
   const tmp = path.join(path.dirname(abs), `_${path.basename(abs)}.${randomBytes(4).toString('hex')}.tmp`)
   try {
     await fs.writeFile(tmp, content, 'utf-8')

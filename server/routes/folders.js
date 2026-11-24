@@ -1,4 +1,5 @@
 import express from 'express'
+import { holdSyncRegistryLock } from '../lib/sync.js'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
@@ -134,6 +135,7 @@ async function collectDeployments(baseDir, parentPath, chartsDirName, results) {
 
 export default function foldersRouter() {
   const router = express.Router()
+  router.use(holdSyncRegistryLock)
 
   router.get('/tree', async (req, res) => {
     try {

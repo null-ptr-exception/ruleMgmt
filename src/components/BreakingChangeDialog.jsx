@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Steps, Typography, Select, Table, Tag, Input, Button, Alert, Space } from 'antd'
+import { Modal, Steps, Typography, Select, Table, Tag, Input, Button, Alert, Space, message } from 'antd'
 import { migrationPreview } from '../utils/chartApi'
 
 const { Text, Paragraph } = Typography
@@ -45,10 +45,17 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
     return m
   }, [decisions, colMap, groupMap])
 
+  // A preview that cannot be worked out (an answer cut off) goes back a step
+  // and says so: it used to stay on "Working it out…", Change in place off.
   async function goToPreview() {
     setPreview(null)
     setStep(2)
-    setPreview(await migrationPreview(chart, files, migration))
+    try {
+      setPreview(await migrationPreview(chart, files, migration))
+    } catch (err) {
+      setStep(hasDecisions ? 1 : 0)
+      message.error(`The preview could not be worked out (${err.message}). Try Continue again.`)
+    }
   }
 
   const hasDecisions = decisions.length > 0

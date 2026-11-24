@@ -22,6 +22,16 @@ export const ROUTING_COMMIT_ROWS = Object.freeze({
   'shared.warning': { action: 'warn', why: 'what its configs will do that is worth saying' },
 })
 
+// check-repo: Commit's refusals (policy.js), and what Commit only lists is
+// refused too: the gate outside the app is where a hand-edited file is
+// caught, as check-deployment catches it.
+export const ROUTING_CHECK_REPO_ROWS = Object.freeze({
+  'routing.problem': { action: 'refuse', why: 'the resource deployed is not made from this routing.yaml: it stays what was made before (check-deployment fails on it too)' },
+  'routing.warning': { action: 'warn', why: 'what its configs will do that is worth saying' },
+  'shared.problem': { action: 'refuse', why: 'the shared configs file is AlertForge\'s own: with problems, no routing.yaml can use it' },
+  'shared.warning': { action: 'warn', why: 'what its configs will do that is worth saying' },
+})
+
 const LISTED_WALK = 'a folder whose deployments cannot be read, or a deployment whose Chart.yaml cannot be, is named, not a reason to refuse a commit of everything else; check-repo refuses it'
 const SYNC_WRONG = 'a sync.yaml row the app cannot use, or that cannot be right (a path that is no deployment, a target with two sources, a chain), leaves targets that are no copy of their source'
 

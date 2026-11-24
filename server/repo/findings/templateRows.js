@@ -58,6 +58,8 @@ export const TEMPLATE_ROWS = Object.freeze({
     'template.rule-check': { action: 'refuse', why: RULES_SOURCE },
     'template.values-unreadable': { action: 'refuse', why: FOLDER },
     'template.legacy': { action: 'warn', why: LEGACY },
+    'template.schema-absent': { action: 'warn', why: 'only the generated schema missing: Helm renders the same, without checking the values; opening the Template or regenerating writes it back' },
+    'template.rules-gone': { action: 'warn', why: 'what is on disk renders; a save or gen-rules would write no rules, and refuses' },
   },
 })
 

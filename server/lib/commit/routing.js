@@ -5,6 +5,7 @@ import { SHARED_FILE } from '../../repo/shared.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadRouting, routingFiles, commonResource } from '../../repo/routing.js'
 import { decide } from '../../repo/policy.js'
+import { fact, factsOf } from './facts.js'
 
 // Both files of a deployment; one that cannot be read is like no other.
 const filesOf = async (repo, dep) => {
@@ -42,12 +43,14 @@ const KIND = {
  * behind and its targets again (`fixes`).
  * Not for a sync target: it is held to its source's files.
  * `layers`: the _common charts it renders on (resolveStack's layers).
- * @returns { findings, problems, warnings, unresolved, broken, fixes }
+ * `policy`: the table (Commit's, or check-repo's); `facts` as facts.js.
+ * @returns { findings, problems, warnings, unresolved, broken, fixes, facts }
  */
-export async function routingFindings(repo, dep, { registry, layers = [] }) {
-  const out = { findings: [], problems: [], warnings: [], unresolved: false, broken: false, fixes: [] }
+export async function routingFindings(repo, dep, { registry, layers = [], policy = 'commit' }) {
+  const out = { findings: [], problems: [], warnings: [], unresolved: false, broken: false, fixes: [], facts: [] }
   const common = (await Promise.all(layers.map(l => commonResource(repo, l.path)))).filter(Boolean)
-  const said = decide(common, 'commit')
+  const said = decide(common, policy)
+  out.facts.push(...factsOf(said, dep))
   // One entry per deployment: the Commit dialog lists them by deployment.
   const listed = said.list.map(f => f.message)
   const done = () => {
@@ -58,11 +61,15 @@ export async function routingFindings(repo, dep, { registry, layers = [] }) {
 
   const loaded = await loadRouting(repo, dep)
   if (loaded.state === 'unreadable') {
-    out.findings.push({ severity: 'commit', kind: 'file-unreadable', deployment: dep, regenerable: false, description: `${loaded.file} cannot be read (${loaded.why})` })
+    const description = `${loaded.file} cannot be read (${loaded.why})`
+    out.findings.push({ severity: 'commit', kind: 'file-unreadable', deployment: dep, regenerable: false, description })
+    out.facts.push(fact('refuse', { code: 'routing.unreadable', file: loaded.file, message: description }, dep))
     return done()
   }
   if (loaded.state === 'absent') return done()
-  const { refuse, list, warn } = decide(loaded.findings, 'commit')
+  const d = decide(loaded.findings, policy)
+  const { refuse, list, warn } = d
+  out.facts.push(...factsOf(d, dep))
   // Every refusal is said at once; a shared config the file does not give
   // is a routing.yaml problem too, which is then not listed again.
   const unresolved = refuse.filter(f => f.code === 'routing.shared-unresolved')
@@ -76,6 +83,9 @@ export async function routingFindings(repo, dep, { registry, layers = [] }) {
     out.unresolved = true
     return done()
   }
+  // Refused (check-repo) it is said with the refusals above; either way
+  // its targets cannot be copied from it.
+  if (refuse.some(f => f.code === 'routing.problem')) out.broken = true
   if (list.some(f => f.code === 'routing.problem')) {
     listed.push(...loaded.value.errors)
     out.broken = true

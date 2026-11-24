@@ -9,6 +9,7 @@ import yaml from 'js-yaml'
 import { COMMON_DIR, isCommonChartPath } from '../../../src/utils/reservedNames.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { parseVersion } from '../../repo/findings/template.js'
+import { fact, notCheckedCode } from './facts.js'
 
 // A constraint that is one version and nothing else — `2.1.0`, `=2.1.0`,
 // `v2.1.0` — all three parts written: `2.1` and every range are not judged.
@@ -33,7 +34,7 @@ async function templateProblem(gitopsDir, dep, stack) {
   // Its `_common` stack (#100): what Helm renders nothing from, or stops
   // on. Below the deployment Helm fetches nothing, so a version or a
   // repository a `_common` asks for is not checked: Helm does not read it.
-  if (stack.problems.length) return { ...stack.problems[0], description: `${dep}: ${stack.problems[0].description}` }
+  if (stack.problems.length) return { ...stack.problems[0], description: `${dep}: ${stack.problems[0].description}`, said: stack.problems[0].description, code: `stack.${stack.problems[0].kind}`, file: `${dep}/Chart.yaml` }
   return null
 }
 
@@ -56,22 +57,24 @@ async function fileDependencyProblem(gitopsDir, dir, dep, loader) {
     const common = isCommonChartPath(at)
     const what = common ? `${COMMON_DIR} chart` : 'Template'
     const noun = `${what} ${common ? path.relative(gitopsDir, at).replace(/\\/g, '/') : d.name || repo}`
-    const problem = description => ({ kind: 'template-version', description: `${dep}: ${description}, so Helm cannot render it` })
+    const chartFile = `${dep}/Chart.yaml`
+    const problem = (description, more = {}) => ({ kind: 'template-version', description: `${dep}: ${description}, so Helm cannot render it`, said: `${description}, so Helm cannot render it`, code: 'deployment.template-version', file: chartFile, ...more })
+    const missing = () => ({ kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo`, said: `its ${noun} is not in the repo`, code: 'deployment.template-missing', file: chartFile })
     // Read as Helm reads it, through the repo loader. There and not
     // readable: its real reason, not "not YAML".
     const rel = path.relative(gitopsDir, path.join(at, 'Chart.yaml')).split(path.sep).join('/')
     // Outside the repo: not in it, for whoever renders the commit (Helm's
     // `dependency build` there fails), as before.
-    if (rel.startsWith('../')) return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
+    if (rel.startsWith('../')) return missing()
     const read = await loader.helmYaml(rel)
-    if (read.state === 'absent') return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
-    if (read.state === 'unreadable') return problem(`its ${noun}'s Chart.yaml cannot be read (${read.why})`)
+    if (read.state === 'absent') return missing()
+    if (read.state === 'unreadable') return problem(`its ${noun}'s Chart.yaml cannot be read (${read.why})`, { code: 'deployment.template-unreadable', file: rel, notChecked: true })
     if (read.state === 'invalid') {
       const [f] = read.findings
       const said = f.message.replace(`${rel} `, '')
       // AlertForge cannot tell how Helm reads it: said so, naming the line.
-      if (f.helm === 'unknown') return { kind: 'template-version', description: `${dep}: its ${noun}'s Chart.yaml: ${said} — write it as plain YAML` }
-      return problem(`its ${noun}'s Chart.yaml is not valid YAML (${said.replace('not valid YAML: ', '')})`)
+      if (f.helm === 'unknown') return { kind: 'template-version', description: `${dep}: its ${noun}'s Chart.yaml: ${said} — write it as plain YAML`, said: `${said} — write it as plain YAML`, code: 'deployment.template-cannot-tell', file: rel, notChecked: true }
+      return problem(`its ${noun}'s Chart.yaml is not valid YAML (${said.replace('not valid YAML: ', '')})`, { file: rel })
     }
     const template = read.value
     const has = template && typeof template === 'object' ? parseVersion(template.version ?? '') : null
@@ -90,11 +93,17 @@ async function fileDependencyProblem(gitopsDir, dir, dep, loader) {
 
 /**
  * One deployment's Template, as a commit checks it: what keeps Helm from
- * finding it (templateProblem), as the deployment's blocking finding.
+ * finding it (templateProblem), as the deployment's blocking finding —
+ * in every table: Helm renders none of the deployment.
  * `stack` is the deployment's resolveStack.
- * @returns [finding] — none, or one
+ * @returns { findings: [finding] (none, or one), facts }
  */
 export async function templateFindings(gitopsDir, dep, stack) {
   const template = await templateProblem(gitopsDir, dep, stack)
-  return template ? [{ severity: 'commit', deployment: dep, ...template }] : []
+  if (!template) return { findings: [], facts: [] }
+  const { said, code, file, notChecked, ...shown } = template
+  return {
+    findings: [{ severity: 'commit', deployment: dep, ...shown }],
+    facts: [fact('refuse', { code, file, message: said }, dep, { blocksRender: true, notChecked: !!notChecked || notCheckedCode(code) })],
+  }
 }

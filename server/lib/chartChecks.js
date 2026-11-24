@@ -8,6 +8,7 @@
 import { openRepo } from '../repo/openRepo.js'
 import { chartsDir } from '../repo/template.js'
 import { decide } from '../repo/policy.js'
+import { fact, factsOf } from './commit/facts.js'
 
 const KIND = {
   'template.drift-stale': 'drift-stale',
@@ -54,18 +55,32 @@ async function isTemplate(repo, dir) {
  * when there is no charts directory.
  */
 export async function chartCommitBlockers(gitopsDir) {
-  const repo = openRepo(gitopsDir)
+  const { facts: _facts, templates: _templates, ...answer } = await collectChartChecks(gitopsDir)
+  return answer
+}
+
+/**
+ * Every Template's checks, by one table: Commit's (chartCommitBlockers) or
+ * check-repo's. Besides Commit's answer, `facts` is every fact found with
+ * what the table does with it (commit/facts.js), and `templates` the
+ * Template folders checked.
+ */
+export async function collectChartChecks(gitopsDir, { policy = 'commit', repo = openRepo(gitopsDir) } = {}) {
   const base = chartsDir()
   const listed = base === null ? null : await repo.dir(base)
   if (listed === null || listed.state === 'unreadable') {
     const why = listed?.why ?? 'CHARTS_DIR is no folder of the repo'
-    return { findings: [{ severity: 'commit', kind: 'chart-unreadable', chart: '', description: `${base ?? process.env.CHARTS_DIR} cannot be read (${why}) — fix it before committing` }], unconverted: [], warnings: [] }
+    const where = base ?? process.env.CHARTS_DIR
+    return { findings: [{ severity: 'commit', kind: 'chart-unreadable', chart: '', description: `${where} cannot be read (${why}) — fix it before committing` }], unconverted: [], warnings: [],
+      facts: [fact('refuse', { code: 'template.folder-unreadable', file: where, message: `cannot be read (${why})` }, where, { notChecked: true })], templates: [] }
   }
-  if (listed.state === 'absent') return { findings: [], unconverted: [], warnings: [] }
+  if (listed.state === 'absent') return { findings: [], unconverted: [], warnings: [], facts: [], templates: [] }
 
   const findings = []
   const unconverted = []
   const warnings = []
+  const facts = []
+  const templates = []
   for (const [name, kind] of [...listed.value.entries].sort(([a], [b]) => a.localeCompare(b))) {
     if (kind !== 'dir') continue
     if (!(await isTemplate(repo, `${base}/${name}`))) continue
@@ -76,8 +91,10 @@ export async function chartCommitBlockers(gitopsDir) {
     // not taken for a chart without rules (a legacy one is no reason to
     // stop a commit).
     const bad = loaded.state === 'unreadable' ? loaded : loaded.value.unreadable
+    templates.push(`${base}/${name}`)
     if (bad) {
       findings.push({ severity: 'commit', kind: 'chart-unreadable', chart: name, description: `${name}: ${bad.file} cannot be read (${bad.why}) — fix it before committing` })
+      facts.push(fact('refuse', { code: 'template.unreadable', file: bad.file, message: `cannot be read (${bad.why})` }, `${base}/${name}`, { notChecked: true }))
       continue
     }
     const t = loaded.value
@@ -85,7 +102,9 @@ export async function chartCommitBlockers(gitopsDir) {
     // migrated chart's rules are checked from rules/*.yaml (rebuilt in the
     // old x-rules-per-group shape the checks expect, without writing it).
     for (const f of t.ruleChecks) findings.push({ ...f, chart: name, description: `${name}/${f.group}: ${f.message}` })
-    const { refuse, list, warn } = decide(loaded.findings, 'commit')
+    const d = decide(loaded.findings, policy)
+    const { refuse, list, warn } = d
+    facts.push(...factsOf(d, `${base}/${name}`))
     for (const f of refuse) {
       if (f.code === 'template.rule-check') continue
       const description = f.code === 'template.rules-invalid'
@@ -100,5 +119,5 @@ export async function chartCommitBlockers(gitopsDir) {
       else warnings.push({ kind: kindOf(f.code), chart: name, description: f.message })
     }
   }
-  return { findings, unconverted: [...new Set(unconverted)], warnings }
+  return { findings, unconverted: [...new Set(unconverted)], warnings, facts, templates }
 }

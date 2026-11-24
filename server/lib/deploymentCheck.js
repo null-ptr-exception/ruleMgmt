@@ -169,6 +169,22 @@ export async function checkRuleObjects(dir, repo) {
     return { ok: false, lines: [`Rules: not checked — its _common stack cannot be read (${err.code || err.message})`] }
   }
   if (stack.problems.length) return { ok: false, lines: ['Rules: not checked — Helm would not render it as it reads:', ...stack.problems.map(p => `  ${p.description}`)] }
+  const rules = await renderAndCheck(dir, stack)
+  if (!rules.rendered) return { ok: false, lines: ['helm could not render the deployment:', rules.output, ...(cannotTell ? [cannotTell] : [])] }
+  const lines = [`Rules: ${rules.title}`, rules.output, cannotTell].filter(Boolean)
+  if (twice.length) lines.push(...twice.map(t => `Values: warning: ${t}`))
+  if (nulls.length) lines.push('Values: some are null — Helm versions read a null differently:', ...nulls.map(n => `  ${n}`))
+  return { ok: rules.ok && !nulls.length, lines }
+}
+
+/**
+ * The deployment folder `dir` rendered with Helm as Preview renders it
+ * (`stack` its resolveStack), and each rule object it renders checked by
+ * the checker for its type. Helm or a checker missing: CannotCheck.
+ * @returns { rendered, ok, warned, title, output } — rendered false: Helm
+ *   failed, and output is what it said
+ */
+export async function renderAndCheck(dir, stack) {
   let rendered
   try {
     rendered = await renderChart(dir, ['template', releaseName(dir, stack), dir])
@@ -176,17 +192,14 @@ export async function checkRuleObjects(dir, repo) {
     if (err.code === 'ENOENT') throw new CannotCheck(`helm is not available: ${process.env.HELM_BIN || 'helm'}`)
     // A template error, or helm unable to write Chart.lock and charts/ into
     // the folder: the mount must be writable by the uid it runs as.
-    return { ok: false, lines: ['helm could not render the deployment:', (err.stderr || err.message).trim(), ...(cannotTell ? [cannotTell] : [])] }
+    return { rendered: false, ok: false, warned: false, title: 'not rendered', output: (err.stderr || err.message).trim() }
   }
   const check = await checkRules(rendered)
   if (check.missing) throw new CannotCheck(check.output)
   const tools = check.tools?.length ? ` (${check.tools.join(', ')})` : ''
   // A lint finding passes, as in Preview, but is not a clean pass.
   const title = !check.passed ? `failed${tools}` : check.warned ? `passed with warnings${tools}` : `passed${tools}`
-  const lines = [`Rules: ${title}`, check.output, cannotTell].filter(Boolean)
-  if (twice.length) lines.push(...twice.map(t => `Values: warning: ${t}`))
-  if (nulls.length) lines.push('Values: some are null — Helm versions read a null differently:', ...nulls.map(n => `  ${n}`))
-  return { ok: check.passed && !nulls.length, lines }
+  return { rendered: true, ok: check.passed, warned: !!check.warned, skipped: !!check.skipped, title, output: check.output || '' }
 }
 
 // The shared notification configs (#123) are at the gitops repo's root, the

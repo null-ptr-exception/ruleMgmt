@@ -25,7 +25,7 @@
  *   explain(finding, policy) → { action, why }
  */
 import { TEMPLATE_ROWS } from './findings/templateRows.js'
-import { ROUTING_COMMIT_ROWS, WALK_SYNC_ROWS } from './findings/commitRows.js'
+import { ROUTING_COMMIT_ROWS, ROUTING_CHECK_REPO_ROWS, WALK_SYNC_ROWS } from './findings/commitRows.js'
 
 export const ACTIONS = Object.freeze(['refuse', 'warn', 'list', 'ignore'])
 
@@ -74,6 +74,30 @@ const SAVE_ROWS = {
 const LISTED = why => ({ action: 'list', why })
 const MOVED = { action: 'ignore', why: 'moved as written, and rendered by Helm before and after the move: the same values deploy the same way' }
 
+// Commit's rows: what blocks a commit in the app.
+const COMMIT_ROWS = {
+  'values.unreadable': { action: 'refuse', why: 'a values file that cannot be read is not committed as if fine: Helm renders something other than the repo holds' },
+  'yaml.not-yaml': { action: 'refuse', why: 'a values file that is not YAML stops every render of the deployment, as it did before' },
+  'yaml.not-map': { action: 'refuse', why: 'a values file that is not a map stops every render of the deployment' },
+  'values.chart-key': { action: 'refuse', why: 'a chart key that is not a map stops every render of the deployment' },
+  'stack.chart-key': { action: 'refuse', why: 'a _common whose chart key is not a map stops every render of the deployments below it' },
+  'values.rows-alike': LISTED('rows the row identity label cannot tell apart are said'),
+  'values.required-empty': LISTED(EDITOR),
+  'values.cell': LISTED(EDITOR),
+  'values.selector': LISTED(EDITOR),
+  'yaml.duplicate-key': LISTED('Helm keeps the last of two keys; said so it can be written once'),
+  'values.null-on-stack': { action: 'refuse', why: 'a null on a _common stack deploys differently on the two supported Helm versions (one keeps it, the other removes the key and falls back to the layer above or the default): what deploys would depend on the Helm version' },
+  'stack.null-on-stack': { action: 'refuse', why: 'a null in a _common above, or in the Template\'s values.yaml, on a stack deploys differently on the two supported Helm versions (measured: 3.15.4 keeps the key as null, 3.19.0 drops it): what deploys would depend on the Helm version' },
+  'stack.duplicate-key': LISTED('a key a _common writes twice deploys the later one, which may not be the one meant: said'),
+  ...TEMPLATE_ROWS.commit,
+  ...ROUTING_COMMIT_ROWS,
+  ...WALK_SYNC_ROWS.commit,
+}
+
+// check-repo refuses whatever Commit refuses, whatever Helm does with it:
+// Commit's refusing rows, with Commit's reasons, under check-repo's own.
+const refusedBy = rows => Object.fromEntries(Object.entries(rows).filter(([, r]) => r.action === 'refuse'))
+
 /** The tables, one per entry point. */
 export const POLICIES = Object.freeze({
   save: definePolicy('save', { rows: SAVE_ROWS }),
@@ -81,29 +105,14 @@ export const POLICIES = Object.freeze({
   sync: definePolicy('sync', { rows: SAVE_ROWS }),
   commit: definePolicy('commit', {
     default: { refuse: 'list', why: 'Commit lists what Helm stops on in values; check-repo refuses it' },
-    rows: {
-      'values.unreadable': { action: 'refuse', why: 'a values file that cannot be read is not committed as if fine: Helm renders something other than the repo holds' },
-      'yaml.not-yaml': { action: 'refuse', why: 'a values file that is not YAML stops every render of the deployment, as it did before' },
-      'yaml.not-map': { action: 'refuse', why: 'a values file that is not a map stops every render of the deployment' },
-      'values.chart-key': { action: 'refuse', why: 'a chart key that is not a map stops every render of the deployment' },
-      'stack.chart-key': { action: 'refuse', why: 'a _common whose chart key is not a map stops every render of the deployments below it' },
-      'values.rows-alike': LISTED('rows the row identity label cannot tell apart are said'),
-      'values.required-empty': LISTED(EDITOR),
-      'values.cell': LISTED(EDITOR),
-      'values.selector': LISTED(EDITOR),
-      'yaml.duplicate-key': LISTED('Helm keeps the last of two keys; said so it can be written once'),
-      'values.null-on-stack': { action: 'refuse', why: 'a null on a _common stack deploys differently on the two supported Helm versions (one keeps it, the other removes the key and falls back to the layer above or the default): what deploys would depend on the Helm version' },
-      'stack.null-on-stack': { action: 'refuse', why: 'a null in a _common above, or in the Template\'s values.yaml, on a stack deploys differently on the two supported Helm versions (measured: 3.15.4 keeps the key as null, 3.19.0 drops it): what deploys would depend on the Helm version' },
-      'stack.duplicate-key': LISTED('a key a _common writes twice deploys the later one, which may not be the one meant: said'),
-      ...TEMPLATE_ROWS.commit,
-      ...ROUTING_COMMIT_ROWS,
-      ...WALK_SYNC_ROWS.commit,
-    },
+    rows: COMMIT_ROWS,
   }),
   checkRepo: definePolicy('checkRepo', {
     rows: {
+      ...refusedBy(COMMIT_ROWS),
       ...TEMPLATE_ROWS.checkRepo,
       ...WALK_SYNC_ROWS.checkRepo,
+      ...ROUTING_CHECK_REPO_ROWS,
       'values.unreadable': { action: 'refuse', why: 'Helm renders something other than the repo holds' },
       'values.rows-alike': { action: 'warn', why: 'rows the row identity label cannot tell apart are said' },
       'values.required-empty': { action: 'warn', why: EDITOR },

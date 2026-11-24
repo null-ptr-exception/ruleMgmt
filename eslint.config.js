@@ -327,7 +327,7 @@ const ALLOWED = [
   // The repo loader, being written on its own branch.
   { files: ['server/repo/**'], allow: Object.keys(MESSAGES) },
   // The read helpers and path checks it starts from.
-  { files: ['server/lib/readIfThere.js', 'server/lib/safePath.js'], allow: ['fs', 'fsUse'] },
+  { files: ['server/lib/readIfThere.js'], allow: ['fs', 'fsUse'] },
   // The git wrapper, and the runner of helm, promtool and vmalert.
   { files: ['server/lib/git.js', 'server/lib/ruleCheck.js'], allow: ['childProcess'] },
   // Write the app's own schema/ files, not the gitops repo.

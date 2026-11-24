@@ -1,10 +1,10 @@
 {
   "lint": {
-    "total": 200,
+    "total": 199,
     "byKind": {
       "childProcess": 1,
       "fs": 32,
-      "fsUse": 133,
+      "fsUse": 132,
       "helper": 6,
       "yaml": 12,
       "yamlParse": 16
@@ -19,7 +19,7 @@
       "server/lib/chartFiles.js": 3,
       "server/lib/chartUsage.js": 2,
       "server/lib/commit/template.js": 4,
-      "server/lib/commonEdit.js": 29,
+      "server/lib/commonEdit.js": 28,
       "server/lib/deploymentCheck.js": 10,
       "server/lib/deploymentWrite.js": 11,
       "server/lib/helmCheck.js": 2,
@@ -58,16 +58,15 @@
     }
   },
   "swallowingCatches": {
-    "total": 36,
+    "total": 34,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
       "server/lib/chartDiscovery.js": 3,
-      "server/lib/commonEdit.js": 8,
+      "server/lib/commonEdit.js": 7,
       "server/lib/deploymentCheck.js": 3,
       "server/lib/deploymentWrite.js": 1,
       "server/lib/migrate.js": 1,
-      "server/lib/safePath.js": 1,
       "server/lib/stack.js": 3,
       "server/lib/subchart.js": 1,
       "server/routes/charts.js": 2,
@@ -81,7 +80,7 @@
     }
   },
   "ownEnoentChecks": {
-    "total": 13,
+    "total": 12,
     "byFile": {
       "server/lib/chartUsage.js": 1,
       "server/lib/commit/template.js": 1,
@@ -89,7 +88,6 @@
       "server/lib/deploymentWrite.js": 1,
       "server/lib/routingFiles.js": 2,
       "server/lib/ruleCheck.js": 1,
-      "server/lib/safePath.js": 1,
       "server/lib/sharedConfigs.js": 1,
       "server/lib/stack.js": 1,
       "server/routes/deployments/resolve.js": 1,

@@ -2,15 +2,6 @@
 id	entry	kind	category	reason
 encoded-slash	deployments.clone:folder	5xx	bug	no issue yet: cloning a deployment whose values file is not there is a 500, not a 404
 empty	deployments.clone:folder	5xx	bug	no issue yet: cloning a deployment whose values file is not there is a 500, not a 404
-long	charts.create:name	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-long	charts.clone:newName	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-long	charts.delete:name	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-long	templates.deployments:chart	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-long	templates.rename:newName	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-long	deployments.clone:deployment	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-long	deployments.clone:newName	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-long	deployments.delete:deployment	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-long	folders.create:path	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
 long-twin	templates.values:chart	5xx	bug	no issue yet: saving the values of a Template that is not there is a 500, not a 404
 long-twin	templates.rename:chart	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
 long-twin	templates.rename:template	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
@@ -159,15 +150,10 @@ field:empty	templates.migration-preview{migration}	accepts-bad-body	bug	no issue
 field:empty	folders.common{chart}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
 field:empty	shared.rename{from}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
 field:empty	shared.rename{to}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
-field:long	charts.create{name}	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-field:long	charts.clone{newName}	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
 field:long	charts.clone{migration}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
 field:long	templates.rules{confirmBreaking}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
 field:long	templates.rules{migration}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
 field:long	templates.migration-preview{migration}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
-field:long	templates.rename{newName}	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-field:long	deployments.clone{newName}	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
-field:long	folders.create{path}	5xx	bug	no issue yet: a name longer than the file system allows is not refused; the file system's error is answered as a 500
 field:deep	charts.clone{newName}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
 field:deep	templates.rules{confirmBreaking}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
 field:deep	deployments.save{version}	unnamed-field	bug	no issue yet: a version of the wrong type is taken as an old one: 409 "changed since you opened it", not a refusal naming the field
@@ -187,3 +173,15 @@ link-in	folders.init:folder	refuses-legit	policy	a folder that is a link (or is 
 link-in	render.preview:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	sync.create:source	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	sync.create:target	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	deployments.clone:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	deployments.delete:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	deployments.get:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	deployments.list:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	deployments.routing-delete:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	deployments.routing-get:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	deployments.routing-put:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	deployments.save:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	render.preview:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+link-via-in	sync.create:source	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+ref:tree	git.diff:ref	accepts-what-git-refuses	bug	no issue yet: an object that is no commit (a tree) is answered with an empty diff, not refused
+ref:past-root	git.diff:ref	accepts-what-git-refuses	bug	no issue yet: a commit further back than the history goes is answered with an empty diff, not refused

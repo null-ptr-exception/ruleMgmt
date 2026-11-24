@@ -1224,6 +1224,23 @@ link-via	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-
 link-via	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
+link-via-in	deployments.list:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	deployments.get:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	deployments.save:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	deployments.routing-get:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	deployments.routing-put:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	deployments.routing-delete:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	deployments.clone:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	deployments.delete:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	render.preview:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-	
+link-via-in	git.diff:file@HEAD	legit	ok	200	same	no	same	no	free		-	-	-	
+link-via-in	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
+link-via-in	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
+link-via-in	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
+link-via-in	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
+link-via-in	sync.create:source	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
+link-via-in	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
 ref:full	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	
 ref:short	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	
 ref:HEAD	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	
@@ -1231,6 +1248,9 @@ ref:HEAD~1	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-
 ref:HEAD^	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	
 ref:branch	git.diff:ref	git	refused	400	same	no	same	no	free		accepts	-	-	refuses-what-git-accepts
 ref:missing	git.diff:ref	git	ok	200	same	no	same	no	free		refuses	-	-	accepts-what-git-refuses
+ref:tree	git.diff:ref	git	ok	200	same	no	same	no	free		refuses	-	-	accepts-what-git-refuses
+ref:past-root	git.diff:ref	git	ok	200	same	no	same	no	free		refuses	-	-	accepts-what-git-refuses
+ref:HEAD~	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	
 ref:dash	git.diff:ref	git	refused	400	same	no	same	no	free		refuses	-	-	
 ref:option	git.diff:ref	git	refused	400	same	no	same	no	free		refuses	-	-	
 body:good	charts.create{}	good	ok	200	same	no	same	no	free	charts/fresh/Chart.yaml,charts/fresh/values.schema.json,charts/fresh/values.yaml	-	-	-	

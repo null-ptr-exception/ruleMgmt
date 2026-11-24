@@ -60,16 +60,17 @@ async function removalRefusal(repo, dep) {
   return null
 }
 
-import { isValidDeploymentParam, syncFolder, resolveDeploymentDir, resolveValuesFile, commonRefused } from './resolve.js'
+import { deploymentParamProblem, syncFolder, resolveDeploymentDir, resolveValuesFile, commonRefused } from './resolve.js'
 export function routingRoutes(router) {
   // A deployment's notification routing (#92): routing.yaml and the
   // AlertmanagerConfig generated from it, always written together. Only the
   // folder's own deployment has one — see routingFiles.js.
   async function routingTarget(req, res, { write = true } = {}) {
     if (commonRefused(req, res, 'given notification routing')) return null
-    const dir = await resolveDeploymentDir(req)
-    if (!dir) { res.status(400).json({ error: 'Invalid folder path' }); return null }
-    if (!isValidDeploymentParam(req)) { res.status(400).json({ error: 'Invalid deployment name' }); return null }
+    const { dir, error } = await resolveDeploymentDir(req)
+    if (error) { res.status(400).json({ error }); return null }
+    const badName = deploymentParamProblem(req)
+    if (badName) { res.status(400).json({ error: badName }); return null }
     const folder = syncFolder(req)
     const { direct } = folder ? await resolveValuesFile(dir, req.params.deployment) : { direct: false }
     if (!direct) {

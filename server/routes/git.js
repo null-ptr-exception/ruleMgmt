@@ -8,7 +8,7 @@ import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
-import { isRepoPath } from '../lib/safePath.js'
+import { pathProblem } from '../repo/paths.js'
 
 export { withoutPath }
 
@@ -261,7 +261,7 @@ export default function gitRouter() {
     const ref = req.query.ref
 
     // A tracked file, dot-files and dot-folders among them; never git's own.
-    if (!isRepoPath(file, { hidden: true })) {
+    if (pathProblem(file, 'read')) {
       return res.status(400).json({ error: 'Invalid file path' })
     }
     // A commit as git log names it (or HEAD, HEAD~1), never an option or an

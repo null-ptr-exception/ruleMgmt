@@ -19,7 +19,7 @@
  * entry points need it: the editor, Commit, the command line tools.
  */
 import path from 'path'
-import { isName } from '../lib/safePath.js'
+import { isName } from './paths.js'
 import { finding } from './finding.js'
 import { absent, invalid, ok, unreadable } from './loaded.js'
 import { repoRel } from './readRepoFile.js'

@@ -98,7 +98,7 @@ describe('a folder that is a link', () => {
 
   it('is refused by sync, Preview and the deployment routes, naming what it leads to', async () => {
     const from = await api('POST', '/api/v2/sync', { source: 'deployments/alias', target: 'deployments/t/c' })
-    expect(from).toEqual({ status: 400, data: { error: `deployments/alias: it is a link to ${A} — a folder that is a link is no deployment` } })
+    expect(from).toEqual({ status: 400, data: { error: `deployments/alias: it is a link to ${A} — a folder that is a link is no deployment: ask for ${A}` } })
     const preview = await api('POST', '/api/v2/render/demo/alias?folder=deployments/alias')
     expect(preview.status).toBe(400)
     expect(preview.data.error).toContain(`it is a link to ${A}`)

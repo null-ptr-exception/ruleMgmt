@@ -105,6 +105,12 @@ const PATH_CASES = [
     folder: 'deployments/outdir/dep', 'folder-new': 'deployments/outdir/new', 'folder-parent': 'deployments/outdir',
     common: 'deployments/outdir/dep', tree: 'deployments/outdir', file: 'deployments/outdir/secret.txt',
   })[k] ?? null },
+  // A folder on the way that is a link to a place in the repo: what is
+  // there is read through it; a deployment is not opened through it (the
+  // refusal names the path to ask for instead).
+  { id: 'link-via-in', legit: 'all', v: k => ({
+    folder: 'deployments/inteam/a', tree: 'deployments/inteam/a', file: 'deployments/inteam/a/values.yaml',
+  })[k] ?? null },
 ]
 
 // What git makes of each ref is asked of git itself (harness.mjs).
@@ -116,6 +122,11 @@ const REF_CASES = [
   { id: 'ref:HEAD^', v: () => 'HEAD^' },
   { id: 'ref:branch', v: () => 'main' },
   { id: 'ref:missing', v: () => 'deadbeefdeadbeef' },
+  // An object that is there and is no commit; a commit further back than
+  // the history goes.
+  { id: 'ref:tree', v: ctx => ctx.tree },
+  { id: 'ref:past-root', v: () => 'HEAD~9' },
+  { id: 'ref:HEAD~', v: () => 'HEAD~' },
   { id: 'ref:dash', v: () => '-x' },
   { id: 'ref:option', v: ctx => `--output=${ctx.work}/out-x` },
 ]

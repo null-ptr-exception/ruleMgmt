@@ -11,8 +11,8 @@ import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
+import { pathProblem } from '../repo/paths.js'
 
-const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
 // "2 deployments and 1 _common chart": a _common is not a deployment.
 function usedBy(found) {
@@ -42,8 +42,9 @@ export default function chartsRouter() {
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
     const { name } = req.body || {}
     // Text only: RegExp#test turns 5 or ["x"] into a name that passes.
-    if (typeof name !== 'string' || !NAME_RE.test(name)) {
-      return res.status(400).json({ error: 'Invalid chart name. Must match ^[a-z0-9][a-z0-9_-]*$' })
+    const bad = pathProblem(name, 'name')
+    if (bad) {
+      return res.status(400).json({ error: `Invalid chart name: ${bad.why}` })
     }
     const chartDir = path.join(chartsDir, name)
     // Creating over an existing chart reset its Chart.yaml, values.yaml and
@@ -79,8 +80,9 @@ export default function chartsRouter() {
   router.post('/:name/clone', async (req, res) => {
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
     const { newName, migration } = req.body || {}
-    if (!NAME_RE.test(req.params.name) || typeof newName !== 'string' || !NAME_RE.test(newName)) {
-      return res.status(400).json({ error: 'Invalid chart name' })
+    const bad = pathProblem(req.params.name, 'name') || pathProblem(newName, 'name')
+    if (bad) {
+      return res.status(400).json({ error: `Invalid chart name: ${bad.why}` })
     }
 
     const source = path.join(chartsDir, req.params.name)
@@ -142,8 +144,9 @@ export default function chartsRouter() {
 
   router.delete('/:name', async (req, res) => {
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
-    if (!NAME_RE.test(req.params.name)) {
-      return res.status(400).json({ error: 'Invalid chart name' })
+    const bad = pathProblem(req.params.name, 'name')
+    if (bad) {
+      return res.status(400).json({ error: `Invalid chart name: ${bad.why}` })
     }
     const chartDir = path.join(chartsDir, req.params.name)
     try {

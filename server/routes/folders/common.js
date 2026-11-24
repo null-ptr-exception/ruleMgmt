@@ -1,10 +1,11 @@
 /** A folder's _common (#101): its plan, making or removing it, and who uses it. */
 
 import { withSyncRegistryLock } from '../../lib/sync.js'
-import { planCreate, planDelete, applyPlan, commonUsers, linkOnPath } from '../../lib/commonEdit.js'
+import { planCreate, planDelete, applyPlan, commonUsers } from '../../lib/commonEdit.js'
 import { withoutPath } from '../../lib/answerPaths.js'
-import { isRepoPath } from '../../lib/safePath.js'
 import { errorAnswer } from '../../lib/readIfThere.js'
+import { pathProblem, linkOnTheWay } from '../../repo/paths.js'
+import { COMMON_DIR } from '../../../src/utils/reservedNames.js'
 
 export function commonRoutes(router) {
   // A folder's _common (#101): what making or removing one changes, listed
@@ -48,8 +49,9 @@ export function commonRoutes(router) {
   router.get('/common/users', async (req, res) => {
     try {
       const rel = String(req.query.path || '')
-      if (rel && !isRepoPath(rel, { hidden: true })) return res.status(400).json({ error: 'Invalid path' })
-      if (await linkOnPath(req.gitopsDir, rel)) return res.status(400).json({ error: `${rel} goes through a link` })
+      if (rel && pathProblem(rel, 'list')) return res.status(400).json({ error: 'Invalid path' })
+      const link = rel ? await linkOnTheWay(req.gitopsDir, rel) : null
+      if (link) return res.status(400).json({ error: `${rel}: ${link.why} — a ${COMMON_DIR} chart is looked at where it is, not through a link${link.use}` })
       res.json(await commonUsers(req.gitopsDir, rel.replace(/\/+$/, '')))
     } catch (err) {
       res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })

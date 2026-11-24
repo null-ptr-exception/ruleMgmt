@@ -4,19 +4,13 @@ import fs from 'fs/promises'
 import path from 'path'
 import { normalizeSyncPath } from '../../lib/sync.js'
 import { isCommonChartPath, COMMON_DIR } from '../../../src/utils/reservedNames.js'
-import { NAME_RE, isRepoPath, insideReal } from '../../lib/safePath.js'
+import { pathProblem, parsePath } from '../../repo/paths.js'
 import { isAbsent, UnreadableError } from '../../lib/readIfThere.js'
-import { linkRefusal } from '../../repo/walk.js'
-import { openRepo } from '../../repo/openRepo.js'
 
-// One segment of a file name: not a path, not hidden.
-const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
-
-export function isValidDeploymentParam(req) {
-  const deployment = req.params.deployment
-  return req.query.folder
-    ? FOLDER_DEPLOYMENT_SEGMENT_RE.test(deployment)
-    : NAME_RE.test(deployment)
+/** Why the deployment name of the request cannot be one, or null (paths.js). */
+export function deploymentParamProblem(req) {
+  const problem = pathProblem(req.params.deployment, req.query.folder ? 'folder-name' : 'name')
+  return problem ? `Invalid deployment name: ${problem.why}` : null
 }
 
 // The folder as sync.yaml spells it: `a/src/`, `a/./src` and `a//src` are
@@ -24,17 +18,20 @@ export function isValidDeploymentParam(req) {
 // and a deleted source keeps its sync link (#180).
 export const syncFolder = req => (req.query.folder ? normalizeSyncPath(req.query.folder) : req.query.folder)
 
+/**
+ * The deployment's folder, `{ dir }`, or why the request cannot have it,
+ * `{ error }`: a path in the repo, staying in it; a folder that is a link
+ * (or is reached through one) is no deployment, and the answer says which
+ * path to ask for instead (paths.js).
+ */
 export async function resolveDeploymentDir(req) {
   const folder = req.query.folder
   if (folder) {
-    // A path in the repo, staying in it (safePath.js).
-    if (!isRepoPath(folder)) return null
-    // A folder that is a link (or is reached through one) is no deployment.
-    if (await linkRefusal(openRepo(req.gitopsDir), folder)) return null
-    return insideReal(req.gitopsDir, folder)
+    const p = await parsePath(folder, 'deployment', { root: req.gitopsDir, what: 'folder path' })
+    return p.ok ? { dir: p.abs } : { error: p.error }
   }
   const deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments')
-  return path.join(deploymentsDir, req.params.chart)
+  return { dir: path.join(deploymentsDir, req.params.chart) }
 }
 
 // Which file holds a deployment's values. The folder's own deployment —

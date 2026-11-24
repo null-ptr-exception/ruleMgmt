@@ -9,7 +9,7 @@
  *   writeProblems(root, rels) → the first problem among them, or null
  */
 import path from 'path'
-import { insideReal } from '../lib/safePath.js'
+import { insideReal } from './paths.js'
 import { repoRel } from './readRepoFile.js'
 
 export async function writeProblem(root, rel) {

@@ -176,10 +176,14 @@ describe.skipIf(!HAS_HELM)('links and the deployment routes', { timeout: 60000 }
       await fs.symlink(outside, abs('ext'))
       await init('real/a')
       await fs.symlink('real', abs('linked'))
-      for (const folder of ['ext', 'linked']) {
+      // Why, in words; for a link in the repo, the folder to ask for instead.
+      for (const [folder, why] of [
+        ['ext', 'it is a link that leads outside the repo — AlertForge makes no _common through a link'],
+        ['linked', 'it is a link to real — AlertForge makes no _common through a link: ask for real'],
+      ]) {
         const shown = await plan({ action: 'create', folder, chart: C })
         expect(shown.status).toBe(400)
-        expect(shown.data.error).toBe(`${folder}: ${folder} is a link, which may lead outside the repo — AlertForge makes no _common through one`)
+        expect(shown.data.error).toBe(`${folder}: ${why}`)
       }
       expect(await fs.readdir(outside)).toEqual([])
       await make('real')

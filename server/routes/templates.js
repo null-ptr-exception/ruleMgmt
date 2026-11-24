@@ -20,7 +20,7 @@ import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
-import { NAME_RE, isFileName, insideReal } from '../lib/safePath.js'
+import { pathProblem, parsePath } from '../repo/paths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { decide } from '../repo/policy.js'
 import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
@@ -36,8 +36,7 @@ const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
 // A rules/ filename: a group file, or _common.yaml. Guards path traversal in
 // the keys of the POST /:chart/rules body, and keeps a group key a name Helm
-// can read (the same rule as GROUP_KEY_RE in rulesFile.js).
-const RULES_FILE_RE = /^(_common|[a-z][a-z0-9_]*)\.yaml$/
+// can read (the same rule as GROUP_KEY_RE in rulesFile.js): paths.js.
 
 /** Groups and per-group columns that are new in `after` vs `before` — mapping
  *  targets for a disappearing column or group in the breaking-change dialog. */
@@ -88,18 +87,21 @@ export default function templatesRouter() {
   router.use(holdSyncRegistryLock)
 
   router.use('/:chart', (req, res, next) => {
-    if (!NAME_RE.test(req.params.chart)) {
-      return res.status(400).json({ error: 'Invalid chart name' })
-    }
+    const chart = pathProblem(req.params.chart, 'name')
+    if (chart) return res.status(400).json({ error: `Invalid chart name: ${chart.why}` })
     next()
   })
-  // A template file is named like a file, never a path (safePath.js).
+  // A template file is named like a file, never a path (paths.js).
   router.use('/:chart/:template', (req, res, next) => {
-    if (!isFileName(req.params.template)) return res.status(400).json({ error: 'Invalid template name' })
+    const template = pathProblem(req.params.template, 'file', { suffix: '.yaml' })
+    if (template) return res.status(400).json({ error: `Invalid template name: ${template.why}` })
     next()
   })
   // Where the file really is, through a link: in the repo.
-  const templateFile = req => insideReal(chartPaths(req, req.params.chart).tmplDir, `${req.params.template}.yaml`)
+  const templateFile = async req => {
+    const p = await parsePath(req.params.template, 'file', { under: chartPaths(req, req.params.chart).tmplDir, suffix: '.yaml' })
+    return p.ok ? p.abs : null
+  }
   // A template file as the repo names it: charts/<chart>/templates/<name>.yaml.
   const templateRel = (req, name) => path.relative(req.gitopsDir, path.join(chartPaths(req, req.params.chart).tmplDir, `${name}.yaml`)).replace(/\\/g, '/')
   // A write to a template file never lands outside the repo: a chart folder
@@ -217,7 +219,7 @@ export default function templatesRouter() {
       return res.status(400).json({ error: 'files object required' })
     }
     for (const name of Object.keys(files)) {
-      if (!RULES_FILE_RE.test(name) || typeof files[name] !== 'string') {
+      if (pathProblem(name, 'rules-file') || typeof files[name] !== 'string') {
         return res.status(400).json({ error: `Invalid rules file name: ${name}` })
       }
     }
@@ -517,8 +519,9 @@ export default function templatesRouter() {
   router.post('/:chart/:template/rename', async (req, res) => {
     const { tmplDir } = chartPaths(req, req.params.chart)
     const { newName } = req.body || {}
-    if (typeof newName !== 'string' || !NAME_RE.test(newName)) {
-      return res.status(400).json({ error: 'Invalid newName' })
+    const badNew = pathProblem(newName, 'name')
+    if (badNew) {
+      return res.status(400).json({ error: `Invalid newName: ${badNew.why}` })
     }
     try {
       const refused = await outsideRefusal(req, [req.params.template, newName])

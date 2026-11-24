@@ -1,7 +1,7 @@
 import express from 'express'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
-import { NAME_RE } from '../lib/safePath.js'
+import { parsePath } from '../repo/paths.js'
 
 import { listRoutes } from './deployments/list.js'
 import { valuesRoutes } from './deployments/values.js'
@@ -12,10 +12,9 @@ export default function deploymentsRouter() {
   const router = express.Router()
   router.use(answersWithoutPaths)
 
-  router.use('/:chart', (req, res, next) => {
-    if (!NAME_RE.test(req.params.chart)) {
-      return res.status(400).json({ error: 'Invalid chart name' })
-    }
+  router.use('/:chart', async (req, res, next) => {
+    const chart = await parsePath(req.params.chart, 'name', { what: 'chart name' })
+    if (!chart.ok) return res.status(400).json({ error: chart.error })
     next()
   })
 

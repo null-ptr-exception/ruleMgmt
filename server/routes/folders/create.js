@@ -13,7 +13,7 @@ import { dumpForHelm } from '../../../src/utils/yamlScalar.js'
 import { deploymentOnCommon, ANY_VERSION } from '../../lib/commonEdit.js'
 import { writeWhole } from '../../lib/routingFiles.js'
 import { parseIfThere, errorAnswer } from '../../lib/readIfThere.js'
-import { repoPathProblem, isName, insideReal } from '../../lib/safePath.js'
+import { pathProblem, isName, parsePath } from '../../repo/paths.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadDeployment } from '../../repo/deployment.js'
 import { findingsOf } from '../../repo/loaded.js'
@@ -43,8 +43,8 @@ function isSafeFolderPath(candidate, gitopsDir) {
 export function createFolderRoutes(router) {
   router.post('/', async (req, res) => {
     const { path: folderPath } = req.body
-    const pathWhy = repoPathProblem(folderPath)
-    if (pathWhy) return res.status(400).json({ error: `Invalid folder path: ${pathWhy}` })
+    const pathWhy = pathProblem(folderPath, 'create')
+    if (pathWhy) return res.status(400).json({ error: `Invalid folder path: ${pathWhy.why}` })
     if (!isSafeFolderPath(folderPath, req.gitopsDir)) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
@@ -52,7 +52,8 @@ export function createFolderRoutes(router) {
       const reserved = await newReservedSegment(req.gitopsDir, folderPath)
       if (reserved) return res.status(400).json({ error: reservedError(reserved) })
       // Where it really is, through a link: in the repo.
-      if (!(await insideReal(req.gitopsDir, folderPath))) return res.status(400).json({ error: 'Invalid folder path: it leads outside the repo' })
+      const where = await parsePath(folderPath, 'create', { root: req.gitopsDir, what: 'folder path' })
+      if (!where.ok) return res.status(400).json({ error: where.error })
       await fs.mkdir(path.join(req.gitopsDir, folderPath), { recursive: true })
       res.json({ ok: true })
     } catch (err) {
@@ -64,19 +65,20 @@ export function createFolderRoutes(router) {
 export function initRoutes(router) {
   router.post('/init', async (req, res) => {
     const { folder, chart } = req.body
-    const folderWhy = repoPathProblem(folder)
-    if (folderWhy) return res.status(400).json({ error: `Invalid folder path: ${folderWhy}` })
+    const folderWhy = pathProblem(folder, 'create')
+    if (folderWhy) return res.status(400).json({ error: `Invalid folder path: ${folderWhy.why}` })
     if (!isSafeFolderPath(folder, req.gitopsDir)) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
-    // A Template is named like one (safePath.js): not `.cache`, not a path.
+    // A Template is named like one (paths.js): not `.cache`, not a path.
     if (!isName(chart)) {
       return res.status(400).json({ error: 'Invalid chart name' })
     }
 
     const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
     const deployDir = path.join(req.gitopsDir, folder)
-    if (!(await insideReal(req.gitopsDir, folder))) return res.status(400).json({ error: 'Invalid folder path: it leads outside the repo' })
+    const where = await parsePath(folder, 'create', { root: req.gitopsDir, what: 'folder path' })
+    if (!where.ok) return res.status(400).json({ error: where.error })
 
     try {
       const reserved = await newReservedSegment(req.gitopsDir, folder)

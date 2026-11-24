@@ -6,7 +6,7 @@
 // go; no path of the server's machine is in the answer. And by what the
 // cell asked (`expect`):
 //   legit         a legitimate value: not refused (400) — a not-found is fine
-//   git           a ref: taken exactly when git itself takes it
+//   git           a ref: taken exactly when git itself takes it as a commit
 //   good          a legitimate body: not refused
 //   same-as-good  an extra field: answered as the same body without it (`twin`)
 //   bad           a bad body: refused (4xx), and nothing written

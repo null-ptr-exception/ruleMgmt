@@ -39,7 +39,7 @@ import { loadMap, wrapEntry, liftEntry, addMissing, setDependency } from '../rep
 import { helmAvailable, renderAll, sameRender } from './helmCheck.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
-import { isRepoPath } from './safePath.js'
+import { pathProblem, linkOnTheWay } from '../repo/paths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment } from '../repo/deployment.js'
 import { findingsOf } from '../repo/loaded.js'
@@ -184,28 +184,12 @@ async function repoint(gitopsDir, item, fromAbs, toAbs, name, key) {
   return set.why ? set : { writes: [{ rel: chartFile, content: set.text }] }
 }
 
-/**
- * The first folder of `rel` (in the repo) that is a link, or null. A link
- * may lead anywhere, outside the repo too: nothing is made or removed
- * through one.
- */
-export async function linkOnPath(gitopsDir, rel) {
-  const segments = segmentsOf(rel)
-  for (let i = 1; i <= segments.length; i++) {
-    const at = segments.slice(0, i).join('/')
-    const stat = await fs.lstat(path.join(gitopsDir, at)).catch(() => null)
-    if (!stat) return null
-    if (stat.isSymbolicLink()) return at
-  }
-  return null
-}
-
 // Why no `_common` can be made in `folder`, or null.
 async function folderProblem(gitopsDir, folder) {
   const segments = segmentsOf(folder)
   if (!segments.length) return 'Name a folder: a _common is made in a folder, for the deployments under it'
-  const link = await linkOnPath(gitopsDir, folder)
-  if (link) return `${folder}: ${link} is a link, which may lead outside the repo — AlertForge makes no ${COMMON_DIR} through one`
+  const link = await linkOnTheWay(gitopsDir, folder)
+  if (link) return `${folder}: ${link.why} — AlertForge makes no ${COMMON_DIR} through a link${link.use}`
   const stat = await fs.stat(path.join(gitopsDir, ...segments)).catch(() => null)
   if (!stat?.isDirectory()) return `${folder} is not a folder of the repo`
   let inChart = false
@@ -282,11 +266,11 @@ async function moveProblems(repo, y, text, { ontoStack = false } = {}) {
  * they are, with why.
  */
 export async function planCreate(gitopsDir, folderIn, chart) {
-  if (typeof folderIn !== 'string' || typeof chart !== 'string' || !chart || chart.includes('/') || chart.includes('\\') || chart.includes('..')) {
-    return refuse(400, 'A folder and a Template are needed')
-  }
+  if (typeof folderIn !== 'string' || typeof chart !== 'string' || !chart) return refuse(400, 'A folder and a Template are needed')
+  const name = pathProblem(chart, 'name')
+  if (name) return refuse(400, `Invalid Template name: ${name.why}`)
   const folder = segmentsOf(normalizeSyncPath(folderIn)).join('/')
-  if (!isRepoPath(folderIn)) return refuse(400, 'Invalid folder path')
+  if (pathProblem(folderIn, 'create')) return refuse(400, 'Invalid folder path')
   const why = await folderProblem(gitopsDir, folder)
   if (why) return refuse(400, why)
   if (!(await isAlertTemplate(gitopsDir, chart))) return refuse(400, `${chart} is not an alert Template of this repo`)
@@ -487,12 +471,12 @@ async function expectedOf(gitopsDir, writes, removed) {
  * those loses one level of wrapping.
  */
 export async function planDelete(gitopsDir, commonRelIn) {
-  if (!isRepoPath(commonRelIn)) return refuse(400, 'Invalid path')
+  if (pathProblem(commonRelIn, 'deployment')) return refuse(400, 'Invalid path')
   const commonRel = segmentsOf(normalizeSyncPath(commonRelIn)).join('/')
   if (!isCommonChartPath(commonRel)) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
   // A link is no _common chart to the walk: said as a link, not as none.
-  const link = await linkOnPath(gitopsDir, commonRel)
-  if (link) return refuse(409, `Not removed: ${link} is a link, which may lead outside the repo — remove it by hand`)
+  const link = await linkOnTheWay(gitopsDir, commonRel)
+  if (link) return refuse(409, `Not removed: ${link.why} — remove it by hand${link.real ? `, or ask for ${link.real}` : ''}`)
   if (!(await isCommonChart(openRepo(gitopsDir), commonRel))) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
   const { items, byPath, unreadable } = await loadItems(gitopsDir)
   // A folder that cannot be read may hold a deployment on it, which would

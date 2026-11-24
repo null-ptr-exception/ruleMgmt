@@ -7,7 +7,7 @@ import { walk, childEntries } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { resolveStack } from '../../lib/stack.js'
 import { folderCommonOf, folderCommons, inheritsFromOf } from '../../lib/commonEdit.js'
-import { isRepoPath } from '../../lib/safePath.js'
+import { isName, pathProblem } from '../../repo/paths.js'
 import { loadValues } from '../../../src/utils/valuesText.js'
 
 // One level of the tree: the walk's own folders (repo/walk.js), each with
@@ -98,7 +98,7 @@ export function treeRoutes(router) {
   router.get('/tree', async (req, res) => {
     try {
       const parentPath = req.query.path || ''
-      if (parentPath && !isRepoPath(parentPath, { hidden: true })) {
+      if (parentPath && pathProblem(parentPath, 'list')) {
         return res.status(400).json({ error: 'Invalid path' })
       }
       const children = await listChildren(req.gitopsDir, parentPath)
@@ -110,7 +110,7 @@ export function treeRoutes(router) {
 
   router.get('/deployments', async (req, res) => {
     try {
-      const chart = typeof req.query.chart === 'string' && /^[a-z0-9][a-z0-9_-]*$/.test(req.query.chart) ? req.query.chart : null
+      const chart = isName(req.query.chart) ? req.query.chart : null
       res.json(await collectDeployments(req.gitopsDir, chart))
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -120,7 +120,7 @@ export function treeRoutes(router) {
   router.get('/', async (req, res) => {
     try {
       const parentPath = req.query.path || ''
-      if (parentPath && !isRepoPath(parentPath, { hidden: true })) {
+      if (parentPath && pathProblem(parentPath, 'list')) {
         return res.status(400).json({ error: 'Invalid path' })
       }
       const children = await listChildren(req.gitopsDir, parentPath)

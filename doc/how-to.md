@@ -386,7 +386,16 @@ deployment, wherever it leads: the tree does not show it (one leading out
 of the repo is shown as one that cannot be read), sync, Preview, the
 Routing page and the deployment routes refuse it (400), and
 `check-deployment` names it and what it leads to (exit 2). The deployment
-it leads to is found, listed and checked where it is.
+it leads to is found, listed and checked where it is. Each refusal says
+which folder is the link and, when it stays in the repo, the path to ask
+for instead: with `deployments/in-link` a link to `deployments/team`,
+`deployments/in-link/a` is refused with "ask for deployments/team/a" (a new
+deployment or `_common` there: "make it in …"). One leading out of the
+repo is said to do so, without where.
+
+A name — of a Template, a deployment, a template file, a folder — is at
+most 255 bytes, what the file system and git take for one name; a longer
+one is refused (400) naming the limit.
 
 A deployment in a hidden folder (`.something/…`) is not in the tree, but
 counts as using its Template, and a breaking change migrates it: ArgoCD

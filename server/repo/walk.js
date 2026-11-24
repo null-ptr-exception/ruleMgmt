@@ -111,8 +111,8 @@ const LINK_WHY = {
 }
 
 // The first folder on the way to `rel` (or `rel` itself) that is a link:
-// { at, link, real } or null.
-async function linkOnTheWay(repo, rel) {
+// { at, link, real } or null (`real`: where an 'inside' one leads).
+export async function linkOnTheWay(repo, rel) {
   const segments = segmentsOf(rel)
   for (let i = 0; i < segments.length; i++) {
     const parent = segments.slice(0, i).join('/')
@@ -337,7 +337,11 @@ export async function newDeploymentProblem(repo, rel) {
   const here = await folderEntry(repo, where)
   if (here.kind === 'deployment') return null
   // Made through a link, it would be somewhere else, or outside the repo.
-  if (here.link) return `${where}: ${here.why} — a deployment is made in a folder of the repo, not through a link`
+  if (here.link) {
+    const { at, real } = await linkOnTheWay(repo, where)
+    const instead = real ? `: make it in ${real}${where.slice(at.length)}` : ''
+    return `${where}: ${here.why} — a deployment is made in a folder of the repo, not through a link${instead}`
+  }
   let inChart = false
   for (let i = 1; i <= segments.length; i++) {
     const prefix = segments.slice(0, i).join('/')
@@ -361,14 +365,4 @@ export async function newDeploymentProblem(repo, rel) {
 
 export async function isCommonChart(repo, rel) {
   return (await folderEntry(repo, rel)).kind === 'common'
-}
-
-/**
- * Why a deployment route is not given `rel`: it is a link, or a folder
- * above it is (never a deployment, at any entry point) — or null.
- *   deployments/w/ln → 'deployments/w/ln: it is a link to deployments/t/a — a folder that is a link is no deployment'
- */
-export async function linkRefusal(repo, rel) {
-  const e = await folderEntry(repo, rel)
-  return e.link ? `${e.rel}: ${e.why} — a folder that is a link is no deployment` : null
 }

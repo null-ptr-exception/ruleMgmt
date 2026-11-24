@@ -13,8 +13,8 @@ import { folderEntry } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
 export function listRoutes(router) {
   router.get('/:chart', async (req, res) => {
-    const dir = await resolveDeploymentDir(req)
-    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
+    const { dir, error } = await resolveDeploymentDir(req)
+    if (error) return res.status(400).json({ error })
     try {
       if (req.query.folder) {
         const reserved = await newReservedSegment(req.gitopsDir, req.query.folder)

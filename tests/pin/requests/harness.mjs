@@ -209,13 +209,14 @@ export async function makeWorkspace() {
   await put('deployments/team/a/values.yaml', `${await fs.readFile(path.join(root, 'deployments/team/a/values.yaml'), 'utf-8')}# second\n`)
   git('commit', '-qam', 'second')
   const head = git('rev-parse', 'HEAD').trim()
+  const tree = git('rev-parse', 'HEAD^{tree}').trim()
   await put('.git/info/pin-note', `${GITDIR_TOKEN}\n`)
   // A plan's `expected`, from the base repo.
   const plans = {
     create: (await must('GET', '/api/v2/folders/common/plan?folder=deployments/c&chart=demo')).expected,
     delete: (await must('GET', '/api/v2/folders/common/plan?action=delete&path=deployments/s/_common/demo')).expected,
   }
-  const ws = { work, root, outside, home, app, git, head, plans, realWork: await fs.realpath(work) }
+  const ws = { work, root, outside, home, app, git, head, tree, plans, realWork: await fs.realpath(work) }
   ws.outside0 = await outsideHash(work)
   ws.git0 = await gitFiles(root)
   ws.close = async () => {
@@ -368,9 +369,9 @@ async function pathCell(ws, slot, value, expect) {
   return { entry: slot.entry, expect, ...NONE, ...out }
 }
 
-// What git makes of a ref in the base repo.
+// What git makes of a ref in the base repo: whether it names a commit.
 async function gitTakes(ws, ref) {
-  const r = await run('git', ['rev-parse', '-q', '--verify', '--end-of-options', ref], { cwd: ws.root })
+  const r = await run('git', ['rev-parse', '-q', '--verify', '--end-of-options', `${ref}^{commit}`], { cwd: ws.root })
   return r.status === 0 ? 'accepts' : 'refuses'
 }
 
@@ -424,7 +425,7 @@ async function bodyCell(ws, slot, c) {
 /** A row's cells: one per slot the row has a value for. */
 export async function runRow(ws, c) {
   const cells = []
-  const ctx = { outside: ws.outside, work: ws.work, head: ws.head }
+  const ctx = { outside: ws.outside, work: ws.work, head: ws.head, tree: ws.tree }
   if (c.kind === 'path') {
     for (const slot of PATH_SLOTS) {
       if (slot.kind === 'ref') continue

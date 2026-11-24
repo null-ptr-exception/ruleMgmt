@@ -13,7 +13,7 @@ import { UnreadableError, errorAnswer } from '../../lib/readIfThere.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadDeployment } from '../../repo/deployment.js'
 
-import { isValidDeploymentParam, syncFolder, resolveDeploymentDir, resolveValuesFile, exists, commonRefused } from './resolve.js'
+import { deploymentParamProblem, syncFolder, resolveDeploymentDir, resolveValuesFile, exists, commonRefused } from './resolve.js'
 /**
  * What a deployment on a `_common` stack inherits (#102): the values its
  * layers give one that writes nothing (`values`), and which layer gives each
@@ -29,11 +29,10 @@ async function inheritedOf(gitopsDir, dir, stack) {
 
 export function valuesRoutes(router) {
   router.get('/:chart/:deployment', async (req, res) => {
-    const dir = await resolveDeploymentDir(req)
-    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!isValidDeploymentParam(req)) {
-      return res.status(400).json({ error: 'Invalid deployment name' })
-    }
+    const { dir, error } = await resolveDeploymentDir(req)
+    if (error) return res.status(400).json({ error })
+    const badName = deploymentParamProblem(req)
+    if (badName) return res.status(400).json({ error: badName })
     try {
       const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
       // Not there: not found. There and unreadable (no permission, a
@@ -81,11 +80,10 @@ export function valuesRoutes(router) {
   })
 
   router.post('/:chart/:deployment', async (req, res) => {
-    const dir = await resolveDeploymentDir(req)
-    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!isValidDeploymentParam(req)) {
-      return res.status(400).json({ error: 'Invalid deployment name' })
-    }
+    const { dir, error } = await resolveDeploymentDir(req)
+    if (error) return res.status(400).json({ error })
+    const badName = deploymentParamProblem(req)
+    if (badName) return res.status(400).json({ error: badName })
     // The text of values.yaml, or the values as a map: anything else (left
     // out, null, a number, a list) would be written as a file of no rows.
     const given = req.body?.values

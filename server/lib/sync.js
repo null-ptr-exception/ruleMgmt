@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
-import { isRepoPath } from './safePath.js'
+import { pathProblem } from '../repo/paths.js'
 import { normalizeSyncPath } from '../repo/sync.js'
 
 const SYNC_FILE = 'sync.yaml'
@@ -116,9 +116,9 @@ export function isSafeSyncPath(candidate, chartsDirName) {
   if (!candidate || typeof candidate !== 'string') return false
   if (path.isAbsolute(candidate)) return false
   // As sync.yaml may spell it (`apps\\prod`, `a/./b`), then checked: no
-  // `..`, no folder starting with a dot, no NUL (safePath.js).
+  // `..`, no folder starting with a dot, no NUL (paths.js).
   const normalized = normalizeSyncPath(candidate)
-  if (!isRepoPath(normalized)) return false
+  if (pathProblem(normalized, 'create')) return false
   if (normalized === '.' || normalized === '' || normalized === '..' || normalized.startsWith('../')) return false
   const firstSegment = normalized.split('/')[0]
   if (firstSegment === chartsDirName) return false

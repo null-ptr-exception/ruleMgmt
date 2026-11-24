@@ -15,11 +15,7 @@ import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
 import { UnreadableError } from '../lib/readIfThere.js'
-import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
-import { linkRefusal } from '../repo/walk.js'
-
-// One segment of a file name: not a path, not hidden.
-const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
+import { pathProblem, parsePath } from '../repo/paths.js'
 
 // The Preview summary the rule owner sees instead of raw YAML: per group, how
 // many alerts it actually produced (by name and severity, never merged), which
@@ -85,19 +81,16 @@ export default function renderRouter() {
     const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
     const { chart, deployment } = req.params
     const folder = req.query.folder
-    const deploymentValid = folder
-      ? FOLDER_DEPLOYMENT_SEGMENT_RE.test(deployment)
-      : NAME_RE.test(deployment)
-    if (!NAME_RE.test(chart) || !deploymentValid) {
-      return res.status(400).json({ error: 'Invalid chart or deployment name' })
+    const badName = pathProblem(chart, 'name') || pathProblem(deployment, folder ? 'folder-name' : 'name')
+    if (badName) {
+      return res.status(400).json({ error: `Invalid chart or deployment name: ${badName.why}` })
     }
 
     let deploymentsDir
     if (folder) {
-      const link = isRepoPath(folder) ? await linkRefusal(openRepo(req.gitopsDir), folder) : null
-      if (link) return res.status(400).json({ error: link })
-      deploymentsDir = isRepoPath(folder) ? await insideReal(req.gitopsDir, folder) : null
-      if (!deploymentsDir) return res.status(400).json({ error: 'Invalid folder path' })
+      const p = await parsePath(folder, 'deployment', { root: req.gitopsDir, what: 'folder path' })
+      if (!p.ok) return res.status(400).json({ error: p.error })
+      deploymentsDir = p.abs
     } else {
       deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments', chart)
     }

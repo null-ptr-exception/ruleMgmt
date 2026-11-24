@@ -17,7 +17,7 @@
  */
 import fs from 'fs/promises'
 import path from 'path'
-import { inside, insideReal } from '../lib/safePath.js'
+import { inside, insideReal } from './paths.js'
 import { absent, ok, unreadable } from './loaded.js'
 import { repoRel } from './readRepoFile.js'
 

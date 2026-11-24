@@ -22,7 +22,7 @@ import fs from 'fs/promises'
 import { constants } from 'fs'
 import path from 'path'
 import { Buffer } from 'node:buffer'
-import { inside, insideReal } from '../lib/safePath.js'
+import { inside, insideReal } from './paths.js'
 import { absent, ok, unreadable } from './loaded.js'
 
 /** Helm refuses a chart file larger than this (5 MiB, Helm 3.19); AlertForge reads no file larger. */

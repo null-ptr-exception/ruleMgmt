@@ -235,3 +235,76 @@ describe('a sync target through a link', () => {
     await fs.rm(path.join(repo, 'sync.yaml'))
   })
 })
+
+// A folder reached through a link is no deployment at any route that takes
+// one: each says why, and for a link that stays in the repo which path to
+// ask for instead; for one leading out, that it does, and no path of the
+// machine.
+describe('a deployment folder reached through a link', () => {
+  const IN = 'deployments/in-link/a'
+  const OUT = 'deployments/out-link/a'
+  const calls = folder => [
+    ['GET', `/api/v2/deployments/demo?folder=${q(folder)}`],
+    ['GET', `/api/v2/deployments/demo/a?folder=${q(folder)}`],
+    ['POST', `/api/v2/deployments/demo/a?folder=${q(folder)}`, { values: { cpu: [{ namespace: 'p' }] } }],
+    ['GET', `/api/v2/deployments/demo/a/routing?folder=${q(folder)}`],
+    ['PUT', `/api/v2/deployments/demo/a/routing?folder=${q(folder)}`, { routing: 'labels: {}\nconfigs: {}\ncells: []\n' }],
+    ['DELETE', `/api/v2/deployments/demo/a/routing?folder=${q(folder)}`],
+    ['POST', `/api/v2/deployments/demo/a/clone?folder=${q(folder)}`, { newName: 'copy' }],
+    ['DELETE', `/api/v2/deployments/demo/a?folder=${q(folder)}`],
+    ['POST', `/api/v2/render/demo/a?folder=${q(folder)}`],
+    ['POST', '/api/v2/sync', { source: folder, target: 'deployments/team/z' }],
+  ]
+
+  it.each(calls(IN))('%s %s → 400 naming the path to ask for', async (method, url, body) => {
+    const { status, text } = await api(method, url, body)
+    expect(status, text).toBe(400)
+    const { error } = JSON.parse(text)
+    expect(error).toContain('deployments/in-link is a link to deployments/team')
+    expect(error).toContain('ask for deployments/team/a')
+  })
+
+  it.each(calls(OUT))('%s %s → 400 saying it leads outside, without a path of the machine', async (method, url, body) => {
+    const { status, text } = await api(method, url, body)
+    expect(status, text).toBe(400)
+    expect(JSON.parse(text).error).toContain('deployments/out-link is a link that leads outside the repo')
+    expect(text).not.toContain(root)
+  })
+
+  it('a new deployment or _common through a link says where to make it instead', async () => {
+    const init = await api('POST', '/api/v2/folders/init', { folder: 'deployments/in-link/new', chart: 'demo' })
+    expect(init.status, init.text).toBe(400)
+    expect(JSON.parse(init.text).error).toContain('make it in deployments/team/new')
+    const plan = await api('GET', `/api/v2/folders/common/plan?action=create&chart=demo&folder=${q('deployments/in-link')}`)
+    expect(plan.status, plan.text).toBe(400)
+    expect(JSON.parse(plan.text).error).toContain('ask for deployments/team')
+  })
+})
+
+// A name longer than one file name may be is refused naming the limit,
+// wherever a name is taken: not the file system's error as a 500.
+describe('a name longer than 255 bytes', () => {
+  const LONG = 'x'.repeat(300)
+  it.each([
+    ['POST', '/api/v2/charts', { name: LONG }],
+    ['POST', '/api/v2/charts/demo/clone', { newName: LONG }],
+    ['DELETE', `/api/v2/charts/${LONG}`],
+    ['GET', `/api/v2/templates/${LONG}/deployments`],
+    ['GET', `/api/v2/templates/demo/${LONG}`],
+    ['POST', `/api/v2/templates/demo/${LONG}`, { content: 'x: 1\n' }],
+    ['POST', '/api/v2/folders', { path: `deployments/${LONG}` }],
+    ['POST', '/api/v2/folders/init', { folder: `deployments/${LONG}`, chart: 'demo' }],
+    ['DELETE', `/api/v2/deployments/demo/${LONG}?folder=${q('deployments/team/a')}`],
+    ['POST', `/api/v2/deployments/demo/a/clone?folder=${q('deployments/team/a')}`, { newName: LONG }],
+    ['GET', `/api/v2/deployments/demo/a?folder=${q(`deployments/${LONG}`)}`],
+  ])('%s %s → 400 naming the limit', async (method, url, body) => {
+    const { status, text } = await api(method, url, body)
+    expect(status, text).toBe(400)
+    expect(JSON.parse(text).error).toContain('at most 255 bytes')
+  })
+
+  it('a name of 255 bytes is taken', async () => {
+    const { status, text } = await api('POST', '/api/v2/folders', { path: `deployments/${'y'.repeat(255)}` })
+    expect(status, text).toBe(200)
+  })
+})

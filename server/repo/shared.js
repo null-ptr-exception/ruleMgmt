@@ -30,7 +30,7 @@ import yaml from 'js-yaml'
 import { checkSharedConfigs, sharedConfigWarnings, SHARED_DIR, SHARED_FILE } from '../../src/utils/routingGenerator.js'
 import { finding } from './finding.js'
 import { absent, ok, unreadable } from './loaded.js'
-import { insideReal } from '../lib/safePath.js'
+import { insideReal } from './paths.js'
 
 export { SHARED_DIR, SHARED_FILE }
 

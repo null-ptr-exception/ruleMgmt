@@ -7,20 +7,20 @@ import { writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink } from '
 import { syncAnswer } from '../../repo/sync.js'
 import { folderEntry, isDeployment } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
-import { NAME_RE } from '../../lib/safePath.js'
+import { pathProblem } from '../../repo/paths.js'
 import { errorAnswer } from '../../lib/readIfThere.js'
 
-import { isValidDeploymentParam, syncFolder, resolveDeploymentDir, resolveValuesFile, commonRefused } from './resolve.js'
+import { deploymentParamProblem, syncFolder, resolveDeploymentDir, resolveValuesFile, commonRefused } from './resolve.js'
 export function lifecycleRoutes(router) {
   router.post('/:chart/:deployment/clone', async (req, res) => {
     if (commonRefused(req, res, 'cloned')) return
-    const dir = await resolveDeploymentDir(req)
-    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!isValidDeploymentParam(req)) {
-      return res.status(400).json({ error: 'Invalid deployment name' })
-    }
-    if (typeof req.body?.newName !== 'string' || !NAME_RE.test(req.body.newName)) {
-      return res.status(400).json({ error: 'Invalid newName' })
+    const { dir, error } = await resolveDeploymentDir(req)
+    if (error) return res.status(400).json({ error })
+    const badName = deploymentParamProblem(req)
+    if (badName) return res.status(400).json({ error: badName })
+    const badNew = pathProblem(req.body?.newName, 'name')
+    if (badNew) {
+      return res.status(400).json({ error: `Invalid newName: ${badNew.why}` })
     }
     const dstFile = path.join(dir, `${req.body.newName}-values.yaml`)
     try {
@@ -35,11 +35,10 @@ export function lifecycleRoutes(router) {
 
   router.delete('/:chart/:deployment', async (req, res) => {
     if (commonRefused(req, res, 'deleted as one')) return
-    const dir = await resolveDeploymentDir(req)
-    if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
-    if (!isValidDeploymentParam(req)) {
-      return res.status(400).json({ error: 'Invalid deployment name' })
-    }
+    const { dir, error } = await resolveDeploymentDir(req)
+    if (error) return res.status(400).json({ error })
+    const badName = deploymentParamProblem(req)
+    if (badName) return res.status(400).json({ error: badName })
     try {
       const resolved = await resolveValuesFile(dir, req.params.deployment)
       const { legacyFile } = resolved

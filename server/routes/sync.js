@@ -17,12 +17,12 @@ import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { openRepo } from '../repo/openRepo.js'
 import { writeProblems, writeRefusal } from '../repo/writePath.js'
 import { valuesWrite, copyToTarget } from '../lib/deploymentWrite.js'
-import { newDeploymentProblem, isDeployment, linkRefusal } from '../repo/walk.js'
+import { newDeploymentProblem, isDeployment } from '../repo/walk.js'
 import { syncAnswer } from '../repo/sync.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
-import { insideReal } from '../lib/safePath.js'
+import { parsePath } from '../repo/paths.js'
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -33,8 +33,8 @@ async function validateSyncPath(gitopsDir, candidate) {
     return `Invalid path: ${candidate}`
   }
   if (await inSharedDir(gitopsDir, candidate)) return `${candidate}: ${SHARED_DIR}/ holds the shared notification configs, and no deployment`
-  const link = await linkRefusal(openRepo(gitopsDir), candidate)
-  if (link) return link
+  const where = await parsePath(candidate, 'deployment', { root: gitopsDir })
+  if (!where.ok) return where.error
   if (!(await isDeployment(openRepo(gitopsDir), candidate))) {
     return `${candidate} is not a valid deployment`
   }
@@ -76,7 +76,7 @@ export default function syncRouter() {
     if (sourceError) return res.status(400).json({ error: sourceError })
 
     // Through a link, still in the repo: a copy is written there.
-    if (!isSafeSyncPath(target, chartsDirName()) || !(await insideReal(req.gitopsDir, target))) {
+    if (!isSafeSyncPath(target, chartsDirName()) || !(await parsePath(target, 'create', { root: req.gitopsDir })).ok) {
       return res.status(400).json({ error: `Invalid path: ${target}` })
     }
     // Unlike source, target is allowed not to exist yet (it gets created as

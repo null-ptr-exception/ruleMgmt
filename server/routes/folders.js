@@ -9,6 +9,8 @@ import { isDeploymentDir, isSafeSyncPath } from '../lib/sync.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
+// What a new deployment asks of its Template's version: any.
+export const ANY_TEMPLATE_VERSION = '>=0.0.0-0'
 
 function isExcluded(name) {
   return EXCLUDED_DIRS.has(name) || name.startsWith('.')
@@ -220,7 +222,9 @@ export default function foldersRouter() {
       } catch { /* no existing Chart.yaml */ }
 
       const chartDir = path.join(chartsDir, chart)
-      const chartMeta = yaml.load(await fs.readFile(path.join(chartDir, 'Chart.yaml'), 'utf-8'))
+      // The Template has to be there, and readable; its version is not
+      // copied (below).
+      yaml.load(await fs.readFile(path.join(chartDir, 'Chart.yaml'), 'utf-8'))
       // Helm reads this as a URL, and the file is committed and rendered on
       // Linux even when it was written on Windows, so the separator has to be
       // a forward slash regardless of the platform that produced it.
@@ -230,9 +234,13 @@ export default function foldersRouter() {
         apiVersion: 'v2',
         name: path.basename(folder),
         version: '0.1.0',
+        // Any version of the Template, pre-releases too: there is one
+        // copy of it, so an exact version only breaks every deployment the
+        // day the Template's changes, by hand or by a pull. Read the same by
+        // Helm 3.12 and 3.15 (one semver library).
         dependencies: [{
           name: chart,
-          version: chartMeta.version || '0.1.0',
+          version: ANY_TEMPLATE_VERSION,
           repository: `file://${relPath}`,
         }]
       }

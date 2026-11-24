@@ -232,6 +232,12 @@ export default function TemplateDevEditor() {
   const [charts, setCharts] = useState([])
   const [activeChart, setActiveChart] = useSessionState('templates:chart', null)
   const [chartMeta, setChartMeta] = useState({})
+  // The description as loaded: a Save sends it only when it was edited here,
+  // so a tab left open does not write back an old one over a newer (pulled).
+  const loadedDescription = useRef(undefined)
+  const saveDescriptionIfChanged = () => ((chartMeta.description || '') === (loadedDescription.current || '')
+    ? Promise.resolve()
+    : saveChartMeta(activeChart, { description: chartMeta.description || '' }))
   // The chart as { common: { columns }, groups: { <key>: { group, columns, rules, vars?, custom? } } }
   const [model, setModel] = useState({ common: { columns: {} }, groups: {} })
   const [order, setOrder] = useState([])
@@ -288,6 +294,7 @@ export default function TemplateDevEditor() {
   const loadChart = useCallback(async (chart) => {
     const info = await getChartInfo(chart)
     setChartMeta(info.chartMeta || {})
+    loadedDescription.current = info.chartMeta?.description
     setDrift(info.drift || null)
 
     let m, ord, errors = []
@@ -437,7 +444,7 @@ export default function TemplateDevEditor() {
     }
     reportNotices(result.notices)
 
-    await saveChartMeta(activeChart, chartMeta)
+    await saveDescriptionIfChanged()
     await loadChart(activeChart)
   }
 
@@ -478,7 +485,7 @@ export default function TemplateDevEditor() {
     setBreaking(null)
     const notice = syncFailedNotice(result.syncFailed, 'Changed')
     if (notice) message.warning(notice, 10)
-    await saveChartMeta(activeChart, chartMeta)
+    await saveDescriptionIfChanged()
     await loadChart(activeChart)
   }
 

@@ -66,14 +66,17 @@ describe('Templates write API', () => {
     expect(info.values.env).toBe('production')
   })
 
-  it('saves Chart.yaml metadata and reflects in GET /:chart', async () => {
+  // Only the description is written: the version every deployment asks
+  // for stays as it is on disk.
+  it('saves Chart.yaml\'s description and reflects in GET /:chart', async () => {
+    const { data: before } = await api('GET', '/api/v2/templates/test-chart')
     const chartMeta = { apiVersion: 'v2', name: 'test-chart', version: '1.2.3', description: 'Updated chart' }
     const { status, data } = await api('POST', '/api/v2/templates/test-chart/chart-meta', { chartMeta })
     expect(status).toBe(200)
     expect(data.ok).toBe(true)
 
     const { data: info } = await api('GET', '/api/v2/templates/test-chart')
-    expect(info.chartMeta.version).toBe('1.2.3')
+    expect(info.chartMeta.version).toBe(before.chartMeta.version)
     expect(info.chartMeta.description).toBe('Updated chart')
   })
 

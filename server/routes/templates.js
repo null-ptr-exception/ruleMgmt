@@ -381,11 +381,35 @@ export default function templatesRouter() {
   })
 
   // Save Chart.yaml metadata (name, description, version)
+  // The editor's Save writes the description, and only that: the rest
+  // of Chart.yaml is read from disk, so a page loaded before a pull cannot
+  // write back the version it loaded — every deployment asks for one.
   router.post('/:chart/chart-meta', async (req, res) => {
     const { chartYamlFile } = chartPaths(req, req.params.chart)
-    const { chartMeta } = req.body
+    const chartMeta = req.body?.chartMeta
+    if (!chartMeta || typeof chartMeta !== 'object' || Array.isArray(chartMeta)) {
+      return res.status(400).json({ error: 'chartMeta must be { description }' })
+    }
+    // Left out, the description stays as it is; null or '' removes it.
+    const { description } = chartMeta
+    if (description !== undefined && description !== null && typeof description !== 'string') {
+      return res.status(400).json({ error: 'description must be text' })
+    }
+    let onDisk
     try {
-      await fs.writeFile(chartYamlFile, yaml.dump(chartMeta, { lineWidth: -1 }), 'utf-8')
+      onDisk = yaml.load(await fs.readFile(chartYamlFile, 'utf-8'))
+    } catch (err) {
+      if (err.code === 'ENOENT') return res.status(404).json({ error: `${req.params.chart} has no Chart.yaml` })
+      return res.status(400).json({ error: `Chart.yaml is not valid YAML (${err.reason || err.message}) — fix it by hand; Save would lose what it holds` })
+    }
+    if (!onDisk || typeof onDisk !== 'object' || Array.isArray(onDisk)) {
+      return res.status(400).json({ error: 'Chart.yaml is not a map — fix it by hand; Save would lose what it holds' })
+    }
+    const next = { ...onDisk }
+    if (description) next.description = description
+    else if (description !== undefined) delete next.description
+    try {
+      await fs.writeFile(chartYamlFile, yaml.dump(next, { lineWidth: -1 }), 'utf-8')
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

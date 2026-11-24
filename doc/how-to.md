@@ -232,6 +232,12 @@ not checked.
 **Alerts** → **+** → type the folder path (e.g. `shop/prod`) and pick the
 chart → **Create**.
 
+Its `Chart.yaml` asks for any version of the chart (`">=0.0.0-0"`): there
+is one copy of each chart, and a new version of one is a clone of it under
+another name.
+The chart's own version is not changed in the editor; Save writes its
+description and keeps the rest of its `Chart.yaml` as it is on disk.
+
 A folder or deployment name cannot start with `_`: those are reserved for
 AlertForge's own folders. A folder that already has such a name is marked with
 a warning in the tree and keeps working — rename it when you can.
@@ -463,6 +469,13 @@ A commit is refused, too, while any deployment:
   `routing.yaml` back
 - follows another through sync, and its routing is not its source's
 - uses a Template that is no longer in the repo (deleted outside AlertForge)
+- asks in its `Chart.yaml` for one exact version of its Template (e.g.
+  `"2.0.0"`) that the Template is not at, or for no version — or its
+  Template's `Chart.yaml` has no version Helm reads: Helm then renders none
+  of it. A range other than that is not checked. A deployment AlertForge
+  creates asks for `">=0.0.0-0"`, any version, so changing the Template's
+  version by hand (or pulling a change to it) breaks nothing; an older one
+  with an exact version is fixed by writing `">=0.0.0-0"` there
 
 and while `sync.yaml` has an entry that cannot be right: one deployment
 following another that follows a third, a target with two sources, a path

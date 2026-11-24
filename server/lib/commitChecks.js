@@ -1,7 +1,7 @@
 /**
  * What a commit has to clear outside charts/ (#179): every folder
  * deployment's notification routing, the sync registry, and the Template
- * each deployment renders.
+ * each deployment renders (there, and at the version it asks for).
  *
  *   deploymentCommitBlockers  { findings, routingProblems } for a commit
  *   regenerateRouting         make every resource that is behind again
@@ -51,8 +51,28 @@ export async function listFolderDeployments(gitopsDir) {
   return found.sort()
 }
 
-/** The Template a deployment renders is not in the repo (deleted with git). */
-async function missingTemplate(gitopsDir, dep) {
+// A version as Helm's semver library reads one: a leading v, a part left
+// out read as 0 (`2.0` is 2.0.0), build metadata ignored when it compares.
+const VERSION = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+const parseVersion = v => {
+  const m = VERSION.exec(String(v).trim())
+  return m ? { at: [m[1], m[2] ?? '0', m[3] ?? '0'].map(Number).join('.') + (m[4] ? `-${m[4]}` : '') } : null
+}
+// A constraint that is one version and nothing else — `2.1.0`, `=2.1.0`,
+// `v2.1.0` — all three parts written: `2.1` and every range are not judged.
+const exactWanted = v => {
+  const text = String(v).trim().replace(/^=\s*/, '')
+  return /^v?\d+\.\d+\.\d+(?:[-+]\S*)?$/.test(text) ? parseVersion(text) : null
+}
+
+/**
+ * What stops the Template a deployment renders from being found, so Helm
+ * renders none of the deployment: not in the repo (deleted with git), a
+ * Chart.yaml with no version Helm reads, or (changed by hand, or pulled)
+ * at another version than the one exact version the deployment asks for.
+ * A range (`>=0.0.0-0`, which AlertForge writes) is not judged.
+ */
+async function templateProblem(gitopsDir, dep) {
   const dir = path.join(gitopsDir, dep)
   let chart
   try {
@@ -66,10 +86,24 @@ async function missingTemplate(gitopsDir, dep) {
     const repo = typeof d?.repository === 'string' ? d.repository : ''
     const at = repo.startsWith('file://') ? path.resolve(dir, repo.slice('file://'.length)) : null
     if (!at) continue
+    const name = d.name || repo
+    const problem = description => ({ kind: 'template-version', description: `${dep}: ${description}, so Helm cannot render it` })
+    let template
     try {
-      await fs.access(path.join(at, 'Chart.yaml'))
-    } catch {
-      return d.name || repo
+      template = yaml.load(await fs.readFile(path.join(at, 'Chart.yaml'), 'utf-8'))
+    } catch (err) {
+      if (err.code === 'ENOENT') return { kind: 'template-missing', description: `${dep}: its Template ${name} is not in the repo` }
+      return problem(`its Template ${name}'s Chart.yaml is not valid YAML (${err.reason || err.message})`)
+    }
+    const has = template && typeof template === 'object' ? parseVersion(template.version ?? '') : null
+    if (!has) return problem(`its Template ${name}'s Chart.yaml has no version Helm reads (${JSON.stringify(template?.version ?? null)})`)
+    const wants = d.version
+    if (wants === undefined || wants === null || wants === false || String(wants).trim() === '') {
+      return problem(`its Chart.yaml gives no version for the Template ${name} — write version: ">=0.0.0-0" (any version)`)
+    }
+    const exact = exactWanted(wants)
+    if (exact && exact.at !== has.at) {
+      return problem(`its Chart.yaml asks for the Template ${name} at version ${wants}, but the Template is ${template.version} — write version: ">=0.0.0-0" (any version), or ${template.version}`)
     }
   }
   return null
@@ -150,10 +184,8 @@ export async function deploymentCommitBlockers(gitopsDir) {
   const fixes = new Set()
   const brokenSources = new Set()
   for (const dep of deployments) {
-    const missing = await missingTemplate(gitopsDir, dep)
-    if (missing) {
-      findings.push({ severity: 'commit', kind: 'template-missing', deployment: dep, description: `${dep}: its Template ${missing} is not in the repo` })
-    }
+    const template = await templateProblem(gitopsDir, dep)
+    if (template) findings.push({ severity: 'commit', deployment: dep, ...template })
     if (getSourceForTarget(registry, dep)) continue
 
     const { text, cr } = await readRouting(path.join(gitopsDir, dep))

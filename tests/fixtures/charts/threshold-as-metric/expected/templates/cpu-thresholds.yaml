@@ -14,7 +14,7 @@ spec:
         {{- range $rows }}
         - record: cpu_threshold
           expr: |-
-            vector({{ dig "threshold" 80 . }})
+            vector({{ dig "threshold" 80 . | toJson }})
           labels:
             namespace: "{{ .namespace }}"
             workload: "{{ .workload }}"

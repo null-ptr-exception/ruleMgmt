@@ -445,6 +445,16 @@ with no escaping. So a save is refused — naming the row and column — and
 - **`"` or `\`, in a column a label reads.** A label value is a quoted YAML
   string (see [what gets generated](#what-gets-generated)).
 
+**A number** (a `number` or `integer` column, `_common`'s included) is
+written into `expr`, a label, an annotation and a selector as JSON writes
+it: `1000000`, `0.5`, `-3`, `12345678901`; with an exponent only from
+`1e21` up or under `1e-6` (`1e-7`), which PromQL reads the same. Helm reads
+every number in `values.yaml` as a float64 and would print it with Go's
+`%v` (`1000000` as `1e+06`), so a matcher `port="${port}"` would match
+nothing. `1e3` written in `values.yaml` is the number 1000. A whole number
+past 2^53 is not kept exactly: Helm reads it as a float64. A legacy
+`x-promql` group renders as it always has.
+
 `expr` and annotations take anything else, which is where a regex like
 `web-\\d+` usually goes. A `raw` entry is quoted by hand and is not checked.
 A selector column has rules of its own, see

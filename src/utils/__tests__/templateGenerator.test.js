@@ -466,7 +466,7 @@ describe('empty cells (#57)', () => {
 
   it('writes a default into the template, since Helm ignores the schema one', () => {
     const out = render([{ alert: 'A', expr: 'cpu > ${warn}', labels: { severity: 'warning' } }])
-    expect(out).toContain('expr: |-\n            cpu > {{ dig "warn" 80 . }}\n')
+    expect(out).toContain('expr: |-\n            cpu > {{ dig "warn" 80 . | toJson }}\n')
   })
 
   it('quotes a string default with a raw literal, which survives inside YAML quotes', () => {
@@ -557,8 +557,8 @@ describe('vars (#57)', () => {
   const out = renderAll(schema, 'rel')
 
   it('substitutes the text before anything else happens', () => {
-    expect(out).toContain('expr: |-\n            rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .warn }}\n')
-    expect(out).toContain('expr: |-\n            rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .crit }}\n')
+    expect(out).toContain('expr: |-\n            rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .warn | toJson }}\n')
+    expect(out).toContain('expr: |-\n            rate(cpu_seconds_total{ns="{{ .namespace }}"}[5m]) > {{ .crit | toJson }}\n')
   })
 
   it('leaves no placeholder of its own behind', () => {

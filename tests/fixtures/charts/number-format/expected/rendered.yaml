@@ -1,0 +1,23 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# Every number as written in values.yaml (as JSON writes it): Helm's own
+# %v would print 1000000 as 1e+06 and 1234567 as 1.234567e+06.
+blind-svc-1-1:
+  - name: svc
+    rules:
+      - alert: SvcHigh
+        expr: 'max_over_time(req{port="1000000", code="1234567"}[60000000s]) > 1000000'
+        labels: { warn: '1000000', cluster: '1000000' }
+        annotations: { summary: 'port 1000000 over 1000000' }
+      - alert: SvcHigh
+        expr: 'max_over_time(req{port="8080", code="500"}[300s]) > 0.5'
+        labels: { warn: '0.5', cluster: '1000000' }
+        annotations: { summary: 'port 8080 over 0.5' }
+      - alert: SvcHigh
+        expr: 'max_over_time(req{port="9090", code="1000"}[300s]) > -3'
+        labels: { warn: '-3', cluster: '1000000' }
+        annotations: { summary: 'port 9090 over -3' }
+      # JSON writes a number under 1e-6 with an exponent; PromQL reads it
+      - alert: SvcHigh
+        expr: 'max_over_time(req{port="1234567", code="12345678901"}[300s]) > 1e-7'
+        labels: { warn: '1e-7', cluster: '1000000' }
+        annotations: { summary: 'port 1234567 over 1e-7' }

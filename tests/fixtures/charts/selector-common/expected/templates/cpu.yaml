@@ -60,7 +60,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: CpuHigh
           expr: |-
-            cpu_usage{ {{- include "alertforge.selector.cpu" (dict "self" $row "rows" ($.Values.cpu | default list) "common" ($.Values._common | default dict)) -}} } > {{ dig "threshold" 80 $row }}
+            cpu_usage{ {{- include "alertforge.selector.cpu" (dict "self" $row "rows" ($.Values.cpu | default list) "common" ($.Values._common | default dict)) -}} } > {{ dig "threshold" 80 $row | toJson }}
           for: 1m
           labels:
             severity: warning

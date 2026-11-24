@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbSaturationBufferPool_WarnPct
           expr: |-
-            (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "warn_pct" 85 $row }}
+            (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "warn_pct" 85 $row | toJson }}
           for: 10m
           labels:
             severity: warning
@@ -27,7 +27,7 @@ spec:
               MariadbSaturationBufferPool_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationBufferPool_CriticalPct
           expr: |-
-            (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "critical_pct" 95 $row }}
+            (1 - mysql_global_status_innodb_buffer_pool_pages_free{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_status_innodb_buffer_pool_pages_total{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "critical_pct" 95 $row | toJson }}
           for: 10m
           labels:
             severity: critical

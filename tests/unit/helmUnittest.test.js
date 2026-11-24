@@ -107,7 +107,7 @@ describe('helm-unittest via generated tests', () => {
 // number too; a group too large for one object, split into two
 // shards; alert names holding {{ }}, which Helm must not run; a group with
 // `rules: []`, which has no template to test. The suite generated for each has to pass.
-describe.each(['multiline', 'vlogs', 'vm', 'prometheus3', 'group-labels-p3', 'group-fields-vm', 'group-fields', 'mixed', 'recording-once', 'threshold-as-metric', 'once-zero-rows', 'vlogs-once', 'selector-basic', 'selector-common', 'selector-labels', 'for-omitted', 'derived', 'yaml11-names', 'sharding', 'literal-braces-names', 'empty-rules', 'row-identity'])('helm-unittest for the %s blind case', name => {
+describe.each(['multiline', 'vlogs', 'vm', 'prometheus3', 'group-labels-p3', 'group-fields-vm', 'group-fields', 'mixed', 'recording-once', 'threshold-as-metric', 'once-zero-rows', 'vlogs-once', 'selector-basic', 'selector-common', 'selector-labels', 'for-omitted', 'derived', 'yaml11-names', 'sharding', 'literal-braces-names', 'empty-rules', 'row-identity', 'number-format'])('helm-unittest for the %s blind case', name => {
   let dir
 
   beforeAll(async () => {

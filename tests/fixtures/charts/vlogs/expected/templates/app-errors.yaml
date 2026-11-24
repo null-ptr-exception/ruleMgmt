@@ -16,7 +16,7 @@ spec:
         {{- range $rows }}
         - alert: AppErrors
           expr: |-
-            _time:5m service:"{{ .service }}" level:error | stats count() as errors | filter errors:>{{ dig "warn" 10 . }}
+            _time:5m service:"{{ .service }}" level:error | stats count() as errors | filter errors:>{{ dig "warn" 10 . | toJson }}
           for: 5m
           labels:
             severity: warning
@@ -26,7 +26,7 @@ spec:
         {{- if hasKey . "crit" }}
         - alert: AppErrors
           expr: |-
-            _time:5m service:"{{ .service }}" level:error | stats count() as errors | filter errors:>{{ .crit }}
+            _time:5m service:"{{ .service }}" level:error | stats count() as errors | filter errors:>{{ .crit | toJson }}
           for: 5m
           labels:
             severity: critical

@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbSaturationMemory_WarnPct
           expr: |-
-            (container_memory_working_set_bytes{namespace="{{ dig "namespace" `default` $row }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ dig "namespace" `default` $row }}", resource="memory"}) * 100 > {{ dig "warn_pct" 80 $row }}
+            (container_memory_working_set_bytes{namespace="{{ dig "namespace" `default` $row }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ dig "namespace" `default` $row }}", resource="memory"}) * 100 > {{ dig "warn_pct" 80 $row | toJson }}
           for: 5m
           labels:
             severity: warning
@@ -27,7 +27,7 @@ spec:
               MariadbSaturationMemory_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationMemory_CriticalPct
           expr: |-
-            (container_memory_working_set_bytes{namespace="{{ dig "namespace" `default` $row }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ dig "namespace" `default` $row }}", resource="memory"}) * 100 > {{ dig "critical_pct" 95 $row }}
+            (container_memory_working_set_bytes{namespace="{{ dig "namespace" `default` $row }}"} / on(namespace, pod) kube_pod_container_resource_limits{namespace="{{ dig "namespace" `default` $row }}", resource="memory"}) * 100 > {{ dig "critical_pct" 95 $row | toJson }}
           for: 5m
           labels:
             severity: critical

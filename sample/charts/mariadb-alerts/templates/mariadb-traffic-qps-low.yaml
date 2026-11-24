@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbTrafficQpsLow_MinQps
           expr: |-
-            rate(mysql_global_status_questions{namespace="{{ dig "namespace" `default` $row }}"}[5m]) < {{ dig "min_qps" 10 $row }}
+            rate(mysql_global_status_questions{namespace="{{ dig "namespace" `default` $row }}"}[5m]) < {{ dig "min_qps" 10 $row | toJson }}
           for: 10m
           labels:
             severity: warning

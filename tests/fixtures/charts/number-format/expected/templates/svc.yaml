@@ -1,0 +1,47 @@
+{{- define "alertforge.selector.svc" -}}
+{{- $common := .common | default dict -}}
+{{- $self := merge (dict) .self $common -}}
+{{- $rows := list -}}
+{{- range .rows }}{{ $rows = append $rows (merge (dict) . $common) }}{{ end -}}
+{{- $parts := list -}}
+{{- $m0 := (trimAll "\"" (toJson (dig "port" "" $self))) -}}
+{{- if ne $m0 ".*" -}}
+{{- $parts = append $parts (printf "%s=%q" "port" $m0) -}}
+{{- else -}}
+{{- $ex := list -}}
+{{- range $r := $rows -}}
+{{- if and (ne (trimAll "\"" (toJson (dig "port" "" $r))) ".*") -}}
+{{- $ex = append $ex (regexQuoteMeta (trimAll "\"" (toJson (dig "port" "" $r)))) -}}
+{{- end -}}
+{{- end -}}
+{{- if $ex -}}{{- $parts = append $parts (printf "%s!~`%s`" "port" (join "|" ($ex | uniq | sortAlpha))) -}}{{- end -}}
+{{- end -}}
+{{- join ", " $parts -}}
+{{- end }}
+{{- $chunks := chunk 100 ($.Values.svc | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-svc-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: svc
+      rules:
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
+        {{- $row := merge . $common }}
+        - alert: SvcHigh
+          expr: |-
+            max_over_time(req{ {{- include "alertforge.selector.svc" (dict "self" $row "rows" ($.Values.svc | default list) "common" ($.Values._common | default dict)) -}} , code="{{ $row.code | toJson }}"}[{{ mul (int64 (dig "mins" 5 $row)) 60 }}s]) > {{ dig "warn" 80 $row | toJson }}
+          labels:
+            warn: "{{ dig "warn" 80 $row | toJson }}"
+            cluster: "{{ $row.cluster_id | toJson }}"
+          annotations:
+            summary: |-
+              port {{ $row.port | toJson }} over {{ dig "warn" 80 $row | toJson }}
+        {{- end }}
+{{- end }}

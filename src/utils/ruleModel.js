@@ -98,15 +98,27 @@ export function helmLiteral(value) {
 // parameter threaded through each one.
 export const DERIVED = Symbol('derived')
 
+/**
+ * The number columns of a group, riding on the defaults object as DERIVED
+ * does. Helm reads every number in values.yaml as a float64 and prints one
+ * with %v: 1000000 as 1e+06, 1234567 as 1.234567e+06 — a matcher
+ * `port="1e+06"` matches nothing, a label or a summary says 1e+06. toJson
+ * prints the number as JSON does: 1000000, 0.5, -3; only past 1e21 or
+ * under 1e-6 with an exponent (1e+21, 1e-7), which PromQL reads the same.
+ */
+export const NUMERIC = Symbol('numeric')
+
 export function substituteVars(str, ref = '.', defaults) {
   const dict = ref === '.' ? '.' : ref.replace(/\.$/, '')
   const derived = defaults?.[DERIVED]
+  const numeric = defaults?.[NUMERIC]
   return String(str).replace(VAR_RE, (_, name) => {
     if (derived && Object.hasOwn(derived, name)) return derived[name].helm
     const fallback = defaults?.[name]
+    const asNumber = numeric?.has(name) ? ' | toJson' : ''
     return fallback === undefined
-      ? `{{ ${ref}${name} }}`
-      : `{{ dig "${name}" ${helmLiteral(fallback)} ${dict} }}`
+      ? `{{ ${ref}${name}${asNumber} }}`
+      : `{{ dig "${name}" ${helmLiteral(fallback)} ${dict}${asNumber} }}`
   })
 }
 

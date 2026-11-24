@@ -523,6 +523,18 @@ The one thing not kept is trailing whitespace at the end of a value — a
 summary ending in a column that was empty used to render with a trailing
 space. It means nothing to PromQL or an annotation.
 
+### Upgrading to number columns written as JSON
+
+A reference to a `number` or `integer` column now renders through Helm's
+`toJson`: `1000000` renders as `1000000`, not `1e+06`, so a matcher
+`port="${port}"` on a large port matches again. This changes the template
+text of every chart with such a column, so each of those charts turns
+`stale` once, and commits are refused until it is regenerated — regenerate
+every chart as in
+[how-to](how-to.md#regenerate-every-chart-after-an-upgrade). An ordinary
+number (`3`, `0.5`, `90`) renders as before; only one Helm used to print
+with an exponent changes in the cluster.
+
 ### Upgrading to the four group types
 
 Group `type` now has four values — `prometheus2`, `prometheus3`, `vm`,
@@ -542,7 +554,8 @@ Group `type` now has four values — `prometheus2`, `prometheus3`, `vm`,
   `prometheus3` group's Preview says promtool 3 is not available, and
   `check-deployment` exits 2. A machine running the tests installs it with
   `scripts/install-checkers.sh`.
-- **`scripts/render_and_check.py`** checks every rule object with its
+- **`scripts/render_and_check.py`**, a development script in a source
+  checkout (not in the image), checks every rule object with its
   type's checker, as Preview does — promtool 3 (`PROMTOOL3_BIN` or `promtool3`)
   for `prometheus3`, vmalert (`VMALERT_BIN` or `vmalert`) for `vm` and
   `vlogs` — instead of skipping all but `prometheus2`. It exits 1 when one
@@ -583,6 +596,10 @@ when they are ready: see
 [Move a deployment to a cloned chart](how-to.md#move-a-deployment-to-a-cloned-chart).
 
 ## Command line
+
+The scripts ship in the AlertForge image; from a gitops repo, run them with
+`docker run` as in [how-to](how-to.md#run-them-from-the-image). As written
+here, they run from an AlertForge source checkout.
 
 ```bash
 # migrate a chart to rules/, or regenerate the schema and templates from rules/

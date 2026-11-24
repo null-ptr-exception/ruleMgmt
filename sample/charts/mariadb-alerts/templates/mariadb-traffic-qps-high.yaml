@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbTrafficQpsHigh_MaxQps
           expr: |-
-            rate(mysql_global_status_questions{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "max_qps" 10000 $row }}
+            rate(mysql_global_status_questions{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "max_qps" 10000 $row | toJson }}
           for: 5m
           labels:
             severity: warning

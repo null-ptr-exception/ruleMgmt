@@ -1,0 +1,16 @@
+# Numbers from values.yaml as written, not as Helm's %v prints a float64
+# (1000000 as 1e+06): in a selector, a matcher, a threshold, a label, an
+# annotation, a _common column and a derived window.
+selectors: [port]
+columns:
+  port: { type: integer, required: true }
+  code: { type: integer, required: true }
+  warn: { type: number, default: 80 }
+  mins: { type: integer, default: 5 }
+derived:
+  win: { expr: mins * 60, unit: s }
+rules:
+  - alert: SvcHigh
+    expr: max_over_time(req{${selector}, code="${code}"}[${win}]) > ${warn}
+    labels: { warn: '${warn}', cluster: '${cluster_id}' }
+    annotations: { summary: 'port ${port} over ${warn}' }

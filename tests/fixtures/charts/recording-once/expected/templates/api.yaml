@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: ApiErrors
           expr: |-
-            job:errors:rate5m{job="{{ $row.job }}"} > {{ dig "warn" 5 $row }}
+            job:errors:rate5m{job="{{ $row.job }}"} > {{ dig "warn" 5 $row | toJson }}
           for: 5m
           labels:
             severity: warning

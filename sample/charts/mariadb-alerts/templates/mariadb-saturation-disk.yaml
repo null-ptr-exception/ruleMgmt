@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbSaturationDisk_WarnPct
           expr: |-
-            (kubelet_volume_stats_used_bytes{namespace="{{ dig "namespace" `default` $row }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "warn_pct" 75 $row }}
+            (kubelet_volume_stats_used_bytes{namespace="{{ dig "namespace" `default` $row }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "warn_pct" 75 $row | toJson }}
           for: 10m
           labels:
             severity: warning
@@ -27,7 +27,7 @@ spec:
               MariadbSaturationDisk_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationDisk_CriticalPct
           expr: |-
-            (kubelet_volume_stats_used_bytes{namespace="{{ dig "namespace" `default` $row }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "critical_pct" 90 $row }}
+            (kubelet_volume_stats_used_bytes{namespace="{{ dig "namespace" `default` $row }}"} / kubelet_volume_stats_capacity_bytes{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "critical_pct" 90 $row | toJson }}
           for: 10m
           labels:
             severity: critical

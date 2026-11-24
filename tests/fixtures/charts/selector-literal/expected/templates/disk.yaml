@@ -34,7 +34,7 @@ spec:
         {{- range $rows }}
         - alert: DiskFull
           expr: |-
-            disk_used_percent{ {{- include "alertforge.selector.disk" (dict "self" . "rows" ($.Values.disk | default list) "common" ($.Values._common | default dict)) -}} } > {{ dig "threshold" 80 . }}
+            disk_used_percent{ {{- include "alertforge.selector.disk" (dict "self" . "rows" ($.Values.disk | default list) "common" ($.Values._common | default dict)) -}} } > {{ dig "threshold" 80 . | toJson }}
           for: 1m
           labels:
             severity: warning

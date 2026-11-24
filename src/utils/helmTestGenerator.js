@@ -64,9 +64,9 @@ export function goFloat(value) {
  * ruleModel.js): an integer literal is a Go int and prints as written; any
  * other number is a float64 like a value.
  */
+// A number column renders through toJson, as JSON writes it: as JavaScript does.
 function defaultText(value) {
-  if (typeof value !== 'number') return String(value)
-  return Number.isInteger(value) ? String(value) : goFloat(value)
+  return String(value)
 }
 
 
@@ -254,7 +254,7 @@ export function generateHelmUnittestSuite(model) {
     const ownValues = testValues(ownColumns)
     const text = Object.fromEntries(
       Object.entries({ ...commonValues, ...ownValues })
-        .map(([name, v]) => [name, typeof v === 'number' ? goFloat(v) : String(v)])
+        .map(([name, v]) => [name, String(v)])
     )
     // A derived value (#118) renders as what it computes to for these cells.
     const withDerived = (into, cells) => {

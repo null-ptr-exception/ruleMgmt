@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbTrafficNetworkTransmit_WarnBytes
           expr: |-
-            rate(container_network_transmit_bytes_total{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_bytes" 104857600 $row }}
+            rate(container_network_transmit_bytes_total{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_bytes" 104857600 $row | toJson }}
           for: 5m
           labels:
             severity: warning

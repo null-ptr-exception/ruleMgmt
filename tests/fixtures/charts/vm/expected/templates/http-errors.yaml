@@ -16,7 +16,7 @@ spec:
         {{- range $rows }}
         - alert: HTTPErrors
           expr: |-
-            WITH (errs = rate(http_errors_total{job="{{ .job }}"}[5m])) errs > {{ dig "warn" 5 . }}
+            WITH (errs = rate(http_errors_total{job="{{ .job }}"}[5m])) errs > {{ dig "warn" 5 . | toJson }}
           for: 5m
           labels:
             severity: warning
@@ -25,7 +25,7 @@ spec:
               {{ `{{ $labels.job }}` }}: {{ `{{ $value }}` }} errors/s
         - alert: HTTPErrorsShifted
           expr: |-
-            rollup_rate(http_errors_total{job="{{ .job }}"}[1h] offset {{ dig "shift" `0s` . }}) > {{ dig "warn" 5 . }}
+            rollup_rate(http_errors_total{job="{{ .job }}"}[1h] offset {{ dig "shift" `0s` . }}) > {{ dig "warn" 5 . | toJson }}
           labels:
             severity: info
         {{- end }}

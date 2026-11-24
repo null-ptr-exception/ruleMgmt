@@ -48,7 +48,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: CpuHigh
           expr: |-
-            avg_over_time(cpu_usage{ {{- include "alertforge.selector.cpu" (dict "self" $row "rows" ($.Values.cpu | default list) "common" ($.Values._common | default dict)) -}} }[{{ dig "window" `5m` $row }}]) > {{ dig "threshold" 80 $row }}
+            avg_over_time(cpu_usage{ {{- include "alertforge.selector.cpu" (dict "self" $row "rows" ($.Values.cpu | default list) "common" ($.Values._common | default dict)) -}} }[{{ dig "window" `5m` $row }}]) > {{ dig "threshold" 80 $row | toJson }}
           for: 1m
           labels:
             severity: warning

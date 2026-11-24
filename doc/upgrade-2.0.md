@@ -58,18 +58,27 @@ rather than 2.0.0, #79.)
 ## Converting
 
 Do this on a copy of your gitops repository first, then for real.
-`gen-rules` is in this repository: run it from a checkout of the 2.0 release
-(after `npm ci`), pointing it at each chart in the gitops repository.
+`gen-rules` ships in the AlertForge image: run the image of the release you
+are upgrading to from the gitops repo's root, mounted at `/work`, as
+yourself so the files it writes stay yours. `-e RULE_OBJECT_LABELS` passes
+on the value set in your shell:
 
 ```bash
 export RULE_OBJECT_LABELS='{"release":"kube-prometheus-stack"}'   # step 1
+IMAGE=ghcr.io/null-ptr-exception/rulemgmt:<version>
 
-node scripts/gen-rules.mjs /path/to/gitops/charts/<name>     # one chart
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -e RULE_OBJECT_LABELS \
+  "$IMAGE" node scripts/gen-rules.mjs /work/charts/<name>       # one chart
 
-for chart in /path/to/gitops/charts/*/; do                    # or all of them
-  node scripts/gen-rules.mjs "$chart"
+for chart in charts/*/; do                                     # or all of them
+  docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -e RULE_OBJECT_LABELS \
+    "$IMAGE" node scripts/gen-rules.mjs "/work/$chart"
 done
 ```
+
+Pass the other `RULE_OBJECT_*` variables the same way if the site sets them.
+From a checkout of this repository at that release (after `npm ci`), it is
+`node scripts/gen-rules.mjs /path/to/gitops/charts/<name>` instead.
 
 `gen-rules` writes `rules/`, then regenerates `values.schema.json` and
 `templates/` from it, and removes the chart's old rule file

@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbLatencySlowQueries_WarnThreshold
           expr: |-
-            rate(mysql_global_status_slow_queries{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_threshold" 1 $row }}
+            rate(mysql_global_status_slow_queries{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_threshold" 1 $row | toJson }}
           for: 5m
           labels:
             severity: warning
@@ -27,7 +27,7 @@ spec:
               MariadbLatencySlowQueries_WarnThreshold triggered on {{ $row.owner }}
         - alert: MariadbLatencySlowQueries_CriticalThreshold
           expr: |-
-            rate(mysql_global_status_slow_queries{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "critical_threshold" 5 $row }}
+            rate(mysql_global_status_slow_queries{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "critical_threshold" 5 $row | toJson }}
           for: 5m
           labels:
             severity: critical

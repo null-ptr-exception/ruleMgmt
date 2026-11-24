@@ -14,7 +14,7 @@ spec:
         {{- range $rows }}
         - alert: ErrorRateHigh
           expr: |-
-            sum(rate(errors_total{job="{{ .job }}"}[{{ dig "window" `5m` . }}])) / sum(rate(requests_total{job="{{ .job }}"}[{{ dig "window" `5m` . }}])) > {{ dig "threshold" 0.05 . }}
+            sum(rate(errors_total{job="{{ .job }}"}[{{ dig "window" `5m` . }}])) / sum(rate(requests_total{job="{{ .job }}"}[{{ dig "window" `5m` . }}])) > {{ dig "threshold" 0.05 . | toJson }}
           for: {{ dig "window" `5m` . }}
           labels:
             severity: "{{ dig "severity" `warning` . }}"

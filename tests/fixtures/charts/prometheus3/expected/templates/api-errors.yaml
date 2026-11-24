@@ -19,7 +19,7 @@ spec:
         {{- range $rows }}
         - alert: ApiErrors
           expr: |-
-            rate(http_errors_total{job="{{ .job }}"}[5m] offset {{ dig "shift" `0s` . }}) > {{ dig "warn" 1 . }}
+            rate(http_errors_total{job="{{ .job }}"}[5m] offset {{ dig "shift" `0s` . }}) > {{ dig "warn" 1 . | toJson }}
           for: 2m
           labels:
             severity: warning

@@ -16,6 +16,6 @@ spec:
         {{- $row := merge . $common }}
         - alert: MemHigh
           expr: |-
-            mem_used_ratio{env="{{ $row.env }}"} > {{ $row.threshold }}
+            mem_used_ratio{env="{{ $row.env }}"} > {{ $row.threshold | toJson }}
         {{- end }}
 {{- end }}

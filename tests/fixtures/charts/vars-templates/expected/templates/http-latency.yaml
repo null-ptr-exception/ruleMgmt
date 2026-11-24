@@ -14,7 +14,7 @@ spec:
         {{- range $rows }}
         - alert: LatencyHigh
           expr: |-
-            histogram_quantile(0.99, sum by (le, pod) (rate(http_request_duration_seconds_bucket{namespace="{{ .namespace }}"}[5m]))) > {{ .warn_seconds }}
+            histogram_quantile(0.99, sum by (le, pod) (rate(http_request_duration_seconds_bucket{namespace="{{ .namespace }}"}[5m]))) > {{ .warn_seconds | toJson }}
           for: 10m
           labels:
             severity: warning
@@ -23,7 +23,7 @@ spec:
             summary: |-
               p99 is {{ `{{ $value | humanizeDuration }}` }} on {{ `{{ $labels.pod }}` }}
             description: |-
-              {{ `{{ printf "%.2f" $value }}` }}s over {{ .warn_seconds }}s in {{ .namespace }}
+              {{ `{{ printf "%.2f" $value }}` }}s over {{ .warn_seconds | toJson }}s in {{ .namespace }}
             pods: |-
               pods matching web-\d+ in {{ `{{ $labels.namespace }}` }}
         {{- end }}

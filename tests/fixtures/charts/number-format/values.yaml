@@ -1,0 +1,8 @@
+_common:
+  cluster_id: 1000000
+svc:
+  - { port: 1000000, code: 1234567, warn: 1000000, mins: 1000000 }
+  - { port: 8080, code: 500, warn: 0.5 }
+  # 1e3 as written: Helm reads it as the number 1000
+  - { port: 9090, code: 1e3, warn: -3 }
+  - { port: 1234567, code: 12345678901, warn: 0.0000001 }

@@ -16,7 +16,7 @@
  * }
  */
 
-import { renderValue, expandVars, varsIn, helmLiteral, DERIVED } from './ruleModel.js'
+import { renderValue, expandVars, varsIn, helmLiteral, DERIVED, NUMERIC } from './ruleModel.js'
 import { parseDerived, derivedColumns, compileSprig } from './derived.js'
 import { emitRuleObjects, groupShards } from './crConverter.js'
 import { needsQuote, durationScalar, nameScalar, keyScalar } from './yamlScalar.js'
@@ -394,10 +394,14 @@ function attachGuards(rules, mayBeAbsent, derived = {}) {
  * name but read from the call's `labels`, so each rule can pass its own.
  * Without it the helper is exactly what it was before selectorLabels.
  */
-export function selectorHelper(alertGroup, levels, defaults, withLabels = false) {
+export function selectorHelper(alertGroup, levels, defaults, withLabels = false, numeric = new Set()) {
   const name = `alertforge.selector.${alertGroup}`
   const lit = l => (defaults[l] === undefined ? '""' : JSON.stringify(String(defaults[l])))
-  const cell = (l, v) => `(toString (dig "${l}" ${lit(l)} ${v}))`
+  // A number column's cell as JSON writes it (NUMERIC in ruleModel.js): toString
+  // would give 1e+06 for 1000000. An empty one stays "".
+  const cell = (l, v) => (numeric.has(l)
+    ? `(trimAll "\\"" (toJson (dig "${l}" ${lit(l)} ${v})))`
+    : `(toString (dig "${l}" ${lit(l)} ${v}))`)
   const lines = [
     `{{- define "${name}" -}}`,
     `{{- $common := .common | default dict -}}`,
@@ -428,6 +432,9 @@ export function selectorHelper(alertGroup, levels, defaults, withLabels = false)
   lines.push(`{{- join ", " $parts -}}`, `{{- end }}`)
   return { name, text: lines.join('\n') + '\n' }
 }
+
+/** The columns Helm reads as numbers: number and integer. */
+const numberColumns = props => new Set(Object.entries(props).filter(([, p]) => p?.type === 'number' || p?.type === 'integer').map(([n]) => n))
 
 function buildGroupParts(alertGroup, alertDef, commonVars) {
   if (!alertDef['x-promql'] && !Array.isArray(alertDef['x-rules'])) return null
@@ -470,7 +477,7 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
     // renders as it did before selectorLabels.
     const labelsFor = rule => selectorLabelsFor(alertDef, rule)
     const withLabels = rules.some(rule => Object.entries(labelsFor(rule)).some(([l, n]) => l !== n))
-    const helper = selectorHelper(alertGroup, levels, levelDefaults, withLabels)
+    const helper = selectorHelper(alertGroup, levels, levelDefaults, withLabels, numberColumns(cols))
     preamble = helper.text
     const args = `"self" ${refVar} "rows" ($.Values.${alertGroup} | default list) "common" ($.Values._common | default dict)`
     selectorCall = rule => (withLabels
@@ -488,7 +495,11 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
       derived[name] = { columns: derivedColumns(tree), helm: `{{ ${compileSprig(tree, cell)} }}${def.unit || ''}` }
     }
   }
-  const renderDefaults = Object.keys(derived).length ? { ...defaults, [DERIVED]: derived } : defaults
+  // Number columns print as JSON writes them, not as Helm's %v (NUMERIC).
+  const numeric = legacy ? new Set() : numberColumns({ ...commonProps, ...(alertDef?.items?.properties || {}) })
+  const renderDefaults = Object.keys(derived).length || numeric.size
+    ? { ...defaults, ...(Object.keys(derived).length ? { [DERIVED]: derived } : {}), ...(numeric.size ? { [NUMERIC]: numeric } : {}) }
+    : defaults
 
   // The row identity label, when the chart turns it on: on the alerting
   // rules of a group with rows and something to tell them apart by. Not on

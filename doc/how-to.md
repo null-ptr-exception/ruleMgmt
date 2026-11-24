@@ -858,6 +858,13 @@ render; `sync.yaml` is not checked there.
 
 ## Command line
 
+`gen-rules`, `import-rules` and `check-deployment` ship in the AlertForge
+image, which is the way to run them from a gitops repo: it has no `scripts/`.
+The commands below are written short, as run from an AlertForge source
+checkout (after `npm ci`), with `charts/<name>` standing for the chart's
+folder in the gitops repo. From the image, put the `docker run` in front and
+the paths under `/work` — see [Run them from the image](#run-them-from-the-image).
+
 ### Migrate a chart
 
 ```bash
@@ -906,16 +913,43 @@ Worth wiring into CI or a pre-commit hook if files are ever committed by hand
 ### Regenerate every chart after an upgrade
 
 When a release changes the generated format (moving `expr` and annotations
-to block scalars was one such change), every migrated chart turns `stale` and
+to block scalars was one such change, and writing number columns through
+`toJson`, so `1000000` no longer renders as `1e+06`, another), every migrated
+chart turns `stale` and
 commits are refused until its products are regenerated. Coming from 1.x, see
 [upgrade-2.0.md](upgrade-2.0.md) instead. A change to the routing resource's
 format, or to the object labels, turns every deployment's routing behind the
 same way: commit, and use **Regenerate** in the refusal (see
 [Commit](#commit)).
 
+Run it from the gitops repo's root with the new release's image (see
+[Run them from the image](#run-them-from-the-image)), with the site's
+`RULE_OBJECT_*` variables set in your shell to what the editor runs with:
+`-e NAME` passes each one on, and one not set is left out.
+
 ```bash
-for c in charts/*/; do [ -d "$c/rules" ] && node scripts/gen-rules.mjs "$c"; done
-node scripts/gen-rules.mjs charts/<name> --check   # spot-check: no DIFFERS
+IMAGE=ghcr.io/null-ptr-exception/rulemgmt:<version>
+
+for c in charts/*/; do
+  [ -d "$c/rules" ] || continue
+  docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" \
+    -e RULE_OBJECT_LABELS -e RULE_OBJECT_ANNOTATIONS \
+    -e RULE_OBJECT_LABELS_BY_PROFILE -e RULE_OBJECT_ANNOTATIONS_BY_PROFILE \
+    "$IMAGE" node scripts/gen-rules.mjs "/work/$c"
+done
+```
+
+Then spot-check one chart the same way with `--check`: no `DIFFERS`.
+
+From an AlertForge source checkout of the same release (after `npm ci`,
+with the same variables exported), it is the same loop over the gitops
+repo's path:
+
+```bash
+for c in /path/to/gitops/charts/*/; do
+  [ -d "$c/rules" ] || continue
+  node scripts/gen-rules.mjs "$c"
+done
 ```
 
 Commit that on its own, with nothing else in it. The rendered rules are the
@@ -926,11 +960,26 @@ A release can also refuse a value it used to accept — a rules file with
 `interval: 30m1h`, or a column with `type: strng`
 ([durations](rules-format.md#durations)). Such a chart cannot be regenerated
 until the file is corrected, and commits are refused meanwhile, naming the
-file and the value. Find them before upgrading, with the new release's script:
+file and the value. Find them before upgrading, with the new release's image
+(`IMAGE` set to the new version, the same variables as above). A chart it
+lists as `ERROR` needs correcting; one only listed as `DIFFERS` is what
+regenerating fixes. The loop exits non-zero when any chart is either:
 
 ```bash
-for c in charts/*/; do [ -d "$c/rules" ] && node scripts/gen-rules.mjs "$c" --check; done
+status=0
+for c in charts/*/; do
+  [ -d "$c/rules" ] || continue
+  docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" \
+    -e RULE_OBJECT_LABELS -e RULE_OBJECT_ANNOTATIONS \
+    -e RULE_OBJECT_LABELS_BY_PROFILE -e RULE_OBJECT_ANNOTATIONS_BY_PROFILE \
+    "$IMAGE" node scripts/gen-rules.mjs "/work/$c" --check || status=1
+done
+echo "exit $status"
 ```
+
+From a source checkout of the new release, run
+`node scripts/gen-rules.mjs /path/to/gitops/charts/<name> --check` the same
+way for each chart.
 
 A chart still in the old schema-only format is checked when it is converted:
 a column of a type other than `string`, `number`, `integer`, `boolean` or `duration`
@@ -953,7 +1002,7 @@ the UI first, or run `gen-rules.mjs --init` afterwards, so it has a
 
 ### Run them from the image
 
-The AlertForge image carries both tools, so no checkout or Node install is
+The AlertForge image carries these tools, so no checkout or Node install is
 needed — only the same image version that will run the editor. Mount the
 gitops repo and run as yourself, so the files it writes stay yours:
 
@@ -1084,7 +1133,8 @@ profile: `RULE_OBJECT_LABELS_BY_PROFILE='{"vlogs":{"release":"vm-logs"}}'`
 Values are literal; one containing `{{ }}` is dropped with a warning. Existing
 templates are not rewritten — they turn stale, and commits are refused until
 they are regenerated. Opening and saving each chart does it, or
-`gen-rules.mjs` per chart.
+`gen-rules` per chart (see
+[Regenerate every chart](#regenerate-every-chart-after-an-upgrade)).
 
 ### Let Alertmanager load the notification routing
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ruleColumns, columnUsage, commonColumnUsage, escapePrometheusTemplates, hasUnclosedTemplate } from '../ruleModel'
+import { ruleColumns, columnUsage, commonColumnUsage, escapePrometheusTemplates, hasUnclosedTemplate, substituteVars, NUMERIC } from '../ruleModel'
 
 describe('ruleColumns', () => {
   const selectors = ['namespace', 'workload']
@@ -86,5 +86,20 @@ describe('escapePrometheusTemplates', () => {
 describe('hasUnclosedTemplate', () => {
   it.each([['a {{', true], ['{{ a }} {{', true], ['}}{{', true], ['{{ a }}', false], ['a }}', false], ['{{ "}}" }}', false]])('%j', (text, out) => {
     expect(hasUnclosedTemplate(text)).toBe(out)
+  })
+})
+
+// Helm prints a float64 from values.yaml with %v (1000000 as 1e+06): a
+// number column goes through toJson, as JSON writes it.
+describe('a number column in substituteVars', () => {
+  it('is printed through toJson, with or without a default', () => {
+    const defaults = { warn: 80, [NUMERIC]: new Set(['warn', 'port']) }
+    expect(substituteVars('x{port="${port}"} > ${warn}', '$row.', defaults))
+      .toBe('x{port="{{ $row.port | toJson }}"} > {{ dig "warn" 80 $row | toJson }}')
+  })
+
+  it('leaves every other column as it was', () => {
+    expect(substituteVars('${ns} ${warn}', '.', { warn: 80, [NUMERIC]: new Set(['other']) })).toBe('{{ .ns }} {{ dig "warn" 80 . }}')
+    expect(substituteVars('${ns} ${warn}', '.', { warn: 80 })).toBe('{{ .ns }} {{ dig "warn" 80 . }}')
   })
 })

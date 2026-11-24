@@ -928,7 +928,7 @@
         {
           "severity": "commit",
           "kind": "sync-registry",
-          "description": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
+          "description": "sync.yaml is not valid YAML (unexpected end of the stream within a flow collection)"
         }
       ],
       "routingProblems": [],
@@ -946,7 +946,7 @@
           {
             "severity": "commit",
             "kind": "sync-registry",
-            "description": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
+            "description": "sync.yaml is not valid YAML (unexpected end of the stream within a flow collection)"
           }
         ],
         "regenerable": 0
@@ -959,7 +959,7 @@
         "failed": [
           {
             "deployment": "sync.yaml",
-            "error": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
+            "error": "sync.yaml is not valid YAML (unexpected end of the stream within a flow collection)"
           }
         ]
       }
@@ -970,7 +970,7 @@
           {
             "severity": "commit",
             "kind": "sync-registry",
-            "description": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
+            "description": "sync.yaml is not valid YAML (unexpected end of the stream within a flow collection)"
           }
         ],
         "routingProblems": [],
@@ -988,7 +988,7 @@
             {
               "severity": "commit",
               "kind": "sync-registry",
-              "description": "sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))"
+              "description": "sync.yaml is not valid YAML (unexpected end of the stream within a flow collection)"
             }
           ],
           "regenerable": 0

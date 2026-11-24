@@ -132,11 +132,10 @@ export default function syncRouter() {
         // The target's routing files would land outside the repo: nothing is written.
         const outside = await writeProblems(req.gitopsDir, [`${target}/routing.yaml`, `${target}/templates/alertmanagerconfig.yaml`])
         if (outside) return writeRefusal(outside)
-        // A file the copy replaces that is a folder is named, not a 500.
-        for (const f of ['values.yaml', 'Chart.yaml']) {
-          const there = await here.file(`${target}/${f}`)
-          if (there.state === 'unreadable' && there.kind === 'folder') return writeRefusal({ file: there.file, why: there.why })
-        }
+        // A values.yaml the copy replaces that is a folder is named, not a
+        // 500. (A Chart.yaml that is one makes the target no deployment: refused above.)
+        const there = await here.file(`${target}/values.yaml`)
+        if (there.state === 'unreadable' && there.kind === 'folder') return writeRefusal({ file: there.file, why: there.why })
         if (refusal || routing.errors) {
           const reasons = [refusal?.error, routing.errors && 'its routing.yaml has problems'].filter(Boolean)
           return { status: 400, body: {

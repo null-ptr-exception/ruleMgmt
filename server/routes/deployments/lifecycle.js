@@ -74,8 +74,10 @@ export function lifecycleRoutes(router) {
             registry.syncs = registry.syncs.filter(s => !entries.includes(s))
             changed = true
             // Listed as let go: on disk, and not still under another source.
+            // Asked of the repo as it is after the delete: one inside the source went with it.
+            const after = openRepo(req.gitopsDir)
             for (const t of new Set(entries.flatMap(e => e.targets))) {
-              if (t !== folder && !isTarget(registry, t) && await isDeployment(repo, t)) unlinked.push(t)
+              if (t !== folder && !isTarget(registry, t) && await isDeployment(after, t)) unlinked.push(t)
             }
           }
           if (changed) await writeSyncRegistry(req.gitopsDir, registry)

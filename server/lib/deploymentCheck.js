@@ -11,7 +11,7 @@ import { checkRules, renderChart, runCommand } from './ruleCheck.js'
 import { ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
 import { resolveStack } from './stack.js'
 import { openRepo } from '../repo/openRepo.js'
-import { openRepoAt } from '../repo/locate.js'
+import { openRepoAt, inRealRoot } from '../repo/locate.js'
 import { folderEntry } from '../repo/walk.js'
 import { loadRouting, commonResource } from '../repo/routing.js'
 import { decide } from '../repo/policy.js'
@@ -26,15 +26,29 @@ export class CannotCheck extends Error {}
 const exists = file => fs.access(file).then(() => true, () => false)
 
 /**
- * The folder as given, with any link above it resolved (a repo reached
- * through a linked path is that repo), but not the folder itself: a
- * folder that is a link is not a deployment.
- *   /home/me/gitops-link/deployments/t/a → /work/gitops/deployments/t/a
+ * The folder as given, in the repo as it really is: a link at or above the
+ * repo's root is resolved (a repo reached through a linked path is that
+ * repo), a link inside the repo is not (a folder reached through one is no
+ * deployment: notADeployment says so). `{ dir, root }`, root null when the
+ * folder is in no git checkout and no root is given (no repo boundary: its
+ * folder is taken where it really is); `outside` says why when a root is
+ * given and the folder is not in it.
+ *   /home/me/gitops-link/deployments/t/a → { dir: '/work/gitops/deployments/t/a', root: '/work/gitops' }
+ *   /work/gitops/deployments/k/tl/a (tl → ../t) → { dir: '/work/gitops/deployments/k/tl/a', … }
  */
-export async function deploymentPath(dir) {
-  const abs = path.resolve(dir)
-  const parent = await fs.realpath(path.dirname(abs)).catch(() => path.dirname(abs))
-  return path.join(parent, path.basename(abs))
+export async function locateDeployment(arg, given) {
+  const abs = path.resolve(arg)
+  const asWritten = given ? path.resolve(given) : openRepoAt(abs).root
+  const root = await realRoot(asWritten)
+  const dir = await inRealRoot(root, abs)
+  if (dir) return { dir, root }
+  // Given a repo, a folder outside it is none of its deployments.
+  if (given) return { dir: abs, root, outside: `${abs} is not inside the repo ${path.resolve(given)}` }
+  if (!given && !(await exists(path.join(root, '.git')))) {
+    const parent = await fs.realpath(path.dirname(abs)).catch(() => path.dirname(abs))
+    return { dir: path.join(parent, path.basename(abs)), root: null }
+  }
+  return { dir: abs, root }
 }
 
 /** The repo's root as it really is, through any link. */
@@ -47,8 +61,8 @@ export const realRoot = given => fs.realpath(path.resolve(given)).catch(() => pa
 export async function notADeployment(dir, given) {
   const link = await fs.lstat(dir).catch(() => null)
   if (!link) return `${dir} does not exist`
-  // The repo it is in: given, or the one its folder is in.
-  const at = given ? { repo: openRepo(await realRoot(given)) } : openRepoAt(path.dirname(dir))
+  // The repo it is in: given (as it really is), or the one its folder is in.
+  const at = given ? { repo: openRepo(given) } : openRepoAt(path.dirname(dir))
   const rel = path.relative(at.repo.root, dir).split(path.sep).join('/')
   const entry = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? await folderEntry(at.repo, rel) : null
   if (link.isSymbolicLink()) {
@@ -60,7 +74,7 @@ export async function notADeployment(dir, given) {
   if (isCommonChartPath(dir)) return `${dir} is a ${COMMON_DIR} chart — what the deployments beside its ${COMMON_DIR}/ inherit — not a deployment: check one of them`
   if (entry?.kind === 'deployment') return null
   if (entry?.kind === 'unreadable') return `${dir} cannot be checked: ${entry.why}`
-  if (entry?.link) return `${dir}: ${entry.why} — a folder reached through a link is no deployment`
+  if (entry?.link) return `${dir}: ${entry.why} — a folder reached through a link is no deployment${entry.real ? `: check ${entry.real}` : ''}`
   if (!entry && await exists(path.join(dir, 'Chart.yaml')) && await exists(path.join(dir, 'values.yaml'))) return null
   const legacy = (await fs.readdir(dir)).filter(f => f.endsWith('-values.yaml'))
   if (legacy.length) {
@@ -103,6 +117,8 @@ export async function checkRuleObjects(dir, repo) {
   let root = path.dirname(dir)
   let stack, nulls
   let twice
+  // Values AlertForge cannot tell Helm's reading of: Helm, at hand, decides.
+  let cannotTell = null
   try {
     stack = await resolveStack(root, dir)
     if (stack.firstLayerPath !== undefined) {
@@ -137,13 +153,17 @@ export async function checkRuleObjects(dir, repo) {
       // The file is named once: each finding's message starts with it.
       const own = m => (m.startsWith(`${dep.file} `) || m.startsWith(`${dep.file}:`) ? m.slice(dep.file.length).replace(/^:? /, '') : m)
       const why = dep.state === 'unreadable' ? dep.why : findingsOf(dep).map(f => own(f.message)).join('; ')
-      // What AlertForge cannot tell Helm's reading of is not checked (exit
-      // 2); a file Helm stops on, or one that cannot be read, fails it.
-      if (dep.state === 'invalid' && findingsOf(dep).every(f => f.helm === 'unknown')) throw new CannotCheck(`Values: ${dep.file} is not checked: ${why}`)
-      return { ok: false, lines: [`Values: not checked — ${dep.file} cannot be read: ${why}`] }
+      // What AlertForge cannot tell Helm's reading of is rendered by Helm:
+      // what it renders is checked, what it fails on fails the deployment.
+      // A file Helm stops on, or one that cannot be read, fails it.
+      if (dep.state === 'invalid' && findingsOf(dep).every(f => f.helm === 'unknown')) {
+        cannotTell = `Values: AlertForge cannot tell how Helm reads ${dep.file} (${why}): the editor and Commit refuse it, so it is checked as Helm renders it`
+      } else {
+        return { ok: false, lines: [`Values: not checked — ${dep.file} cannot be read: ${why}`] }
+      }
     }
-    nulls = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code)).map(f => f.message)
-    twice = findingsOf(dep).filter(f => f.code === 'stack.duplicate-key').map(f => f.message)
+    nulls = cannotTell ? [] : findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code)).map(f => f.message)
+    twice = cannotTell ? [] : findingsOf(dep).filter(f => f.code === 'stack.duplicate-key').map(f => f.message)
   } catch (err) {
     if (err instanceof CannotCheck) throw err
     return { ok: false, lines: [`Rules: not checked — its _common stack cannot be read (${err.code || err.message})`] }
@@ -156,14 +176,14 @@ export async function checkRuleObjects(dir, repo) {
     if (err.code === 'ENOENT') throw new CannotCheck(`helm is not available: ${process.env.HELM_BIN || 'helm'}`)
     // A template error, or helm unable to write Chart.lock and charts/ into
     // the folder: the mount must be writable by the uid it runs as.
-    return { ok: false, lines: ['helm could not render the deployment:', (err.stderr || err.message).trim()] }
+    return { ok: false, lines: ['helm could not render the deployment:', (err.stderr || err.message).trim(), ...(cannotTell ? [cannotTell] : [])] }
   }
   const check = await checkRules(rendered)
   if (check.missing) throw new CannotCheck(check.output)
   const tools = check.tools?.length ? ` (${check.tools.join(', ')})` : ''
   // A lint finding passes, as in Preview, but is not a clean pass.
   const title = !check.passed ? `failed${tools}` : check.warned ? `passed with warnings${tools}` : `passed${tools}`
-  const lines = [`Rules: ${title}`, check.output].filter(Boolean)
+  const lines = [`Rules: ${title}`, check.output, cannotTell].filter(Boolean)
   if (twice.length) lines.push(...twice.map(t => `Values: warning: ${t}`))
   if (nulls.length) lines.push('Values: some are null — Helm versions read a null differently:', ...nulls.map(n => `  ${n}`))
   return { ok: check.passed && !nulls.length, lines }
@@ -193,8 +213,8 @@ async function repoRoot(dir, given) {
 
 /**
  * The routing check, by the checkDeployment policy (routingPolicy.js):
- * what deploys is what routing.yaml says, or it fails. A file that cannot
- * be read is a reason the deployment cannot be checked (exit 2).
+ * what deploys is what routing.yaml says, or it fails. A file of its own
+ * that cannot be read fails it too (exit 1): it would not deploy as written.
  */
 export async function checkRouting(dir, given) {
   // The repo's root matters to a routing.yaml using a shared config, and to
@@ -213,7 +233,8 @@ export async function checkRouting(dir, given) {
   if (!dep || dep.startsWith('..') || path.isAbsolute(dep)) throw new CannotCheck(`Routing: ${dir} is not a deployment folder inside the repo ${root}`)
   const repo = openRepo(root)
   const loaded = await loadRouting(repo, dep)
-  if (loaded.state === 'unreadable') throw new CannotCheck(`Routing: ${path.basename(loaded.file)} cannot be read (${loaded.why})`)
+  // A file of its own that cannot be read: it would not deploy as the repo says (exit 1).
+  if (loaded.state === 'unreadable') return { ok: false, lines: [`Routing: ${path.basename(loaded.file)} cannot be read (${loaded.why})`] }
   if (loaded.state === 'ok' && loaded.value.uses.length && !found.root) {
     if (found.refused) throw found.refused
     throw new CannotCheck(`${ROUTING_FILE} uses shared configs (${loaded.value.uses.join(', ')}), and the repo's root cannot be told — git says: ${found.why}. ${NO_ROOT_HINT}`)
@@ -229,7 +250,7 @@ export async function checkRouting(dir, given) {
   const findings = [...common, ...(loaded.state === 'ok' ? loaded.findings : [])]
   const { refuse, warn } = decide(findings, ROUTING_POLICIES.checkDeployment)
   const unreadable = loaded.state === 'ok' && refuse.some(f => f.code === 'routing.cr-unreadable') && loaded.value.crUnreadable
-  if (unreadable) throw new CannotCheck(`Routing: ${ROUTING_CR_FILE} cannot be read (${unreadable.why})`)
+  if (unreadable) return { ok: false, lines: [`Routing: ${ROUTING_CR_FILE} cannot be read (${unreadable.why})`] }
   const lines = []
   const said = f => f.code === 'routing.problem'
     ? [`Routing: ${ROUTING_FILE} has problems`, ...loaded.value.errors.map(e => `  ${e}`)]

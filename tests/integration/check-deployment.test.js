@@ -145,11 +145,40 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
     }
   })
 
-  it('values AlertForge cannot tell Helm\'s reading of are not checked (exit 2), naming the file once', async () => {
-    await fs.writeFile(path.join(dir, 'values.yaml'), 'tiny:\n  a: !!binary aGk=\n')
+  // Values AlertForge cannot tell Helm's reading of: Helm, at hand, decides.
+  // Named by its place in the repo, or (no git, no --repo) in its folder's parent.
+  const CANNOT_TELL = 'Values: AlertForge cannot tell how Helm reads prod/values.yaml'
+  it('values AlertForge cannot tell Helm\'s reading of, which Helm renders, are checked as rendered, and said once', async () => {
+    await deployment('  expr: up == 0\n  a: !!binary aGk=\n')
     const { code, out } = check()
-    expect(code).toBe(2)
+    expect(out).toContain('Rules: passed')
+    expect(out).toContain(CANNOT_TELL)
     expect(out.split('values.yaml').length - 1).toBe(1)
+    expect(code).toBe(0)
+  })
+
+  it('a |2 block Helm renders is checked as rendered', async () => {
+    await deployment('  expr: up == 0\n  note: |2\n     two spaces more\n')
+    const { code, out } = check()
+    expect(out).toContain(CANNOT_TELL)
+    expect(code).toBe(0)
+  })
+
+  it('values larger than MAX_VALUES_BYTES that Helm renders are checked, naming the limit', async () => {
+    await deployment(`  expr: up == 0\n  pad: "${'x'.repeat(1_150_000)}"\n`)
+    const { code, out } = check()
+    expect(out).toContain('Rules: passed')
+    expect(out).toContain(CANNOT_TELL)
+    expect(out).toContain('MAX_VALUES_BYTES')
+    expect(code).toBe(0)
+  })
+
+  it('values it cannot tell that Helm fails on: the deployment would not deploy (exit 1), Helm\'s error and the file named', async () => {
+    await deployment('  expr: up == 0\n  _common: [\n')
+    const { code, out } = check()
+    expect(out).toContain('helm could not render the deployment')
+    expect(out).toContain(CANNOT_TELL)
+    expect(code).toBe(1)
   })
 
   it('passes with warnings on a lint finding, and says it', async () => {
@@ -203,7 +232,8 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
     try {
       const { code, out } = check(dir, {}, ['--repo', gitops])
       expect(out).toContain('Routing: templates/alertmanagerconfig.yaml cannot be read (permission denied)')
-      expect(code).toBe(2)
+      // A file of its own that cannot be read: it would not deploy as written.
+      expect(code).toBe(1)
     } finally {
       await fs.chmod(cr, 0o644)
     }
@@ -320,7 +350,7 @@ describe.skipIf(!CAN_RUN)('check-deployment when it cannot check', () => {
       expect(out).toContain('helm could not render the deployment')
       expect(out).toContain('Routing: routing.yaml cannot be read (permission denied)')
       expect(out).not.toContain('    at ')
-      expect(code).toBe(2)
+      expect(code).toBe(1)
     } finally {
       await fs.chmod(file, 0o644)
     }
@@ -536,17 +566,18 @@ describe.skipIf(!CAN_RUN)('check-deployment on a _common stack', () => {
     expect(r.code).toBe(2)
   })
 
-  it('a deployment on no _common does not read --repo, wherever it points', async () => {
+  it('a deployment on no _common does not read --repo when it is inside it; outside it, it is not checked', async () => {
     const plain = path.join(gitops, 'deployments', 'tiny', 'dev')
     await fs.mkdir(plain, { recursive: true })
     await fs.writeFile(path.join(plain, 'Chart.yaml'),
       'apiVersion: v2\nname: dev\nversion: 0.1.0\ndependencies:\n  - name: tiny\n    version: 0.1.0\n    repository: file://../../../charts/tiny\n')
     await fs.writeFile(path.join(plain, 'values.yaml'), 'tiny:\n  expr: up == 0\n')
-    for (const elsewhere of [os.tmpdir(), path.join(gitops, 'charts')]) {
-      const r = check(plain, {}, ['--repo', elsewhere])
-      expect(r.out, elsewhere).toContain('Rules: passed')
-      expect(r.code, elsewhere).toBe(0)
-    }
+    const r = check(plain, {}, ['--repo', os.tmpdir()])
+    expect(r.out).toContain('Rules: passed')
+    expect(r.code).toBe(0)
+    const outside = check(plain, {}, ['--repo', path.join(gitops, 'charts')])
+    expect(outside.code).toBe(2)
+    expect(outside.out).toContain('is not inside the repo')
   })
 
   it('a deployment on no _common is checked without git, as before', async () => {

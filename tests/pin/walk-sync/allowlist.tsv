@@ -8,7 +8,7 @@ inside-deployment-templates	migration	misses-what-helm-renders	policy	a chart's 
 inside-deployment-templates	sync-to	not-a-copy-after	bug	no issue yet: sync accepts a target inside its source's templates/ (a folder there that is a deployment) and writes into it: the source then fails to render
 in-common-folder	tree	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
 in-common-folder	list	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
-in-common-folder	folder-list	count-differs	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
+in-common-folder	folder-list	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
 in-common-folder	users	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
 in-common-folder	migration	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
 in-common-folder	routing-get	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one

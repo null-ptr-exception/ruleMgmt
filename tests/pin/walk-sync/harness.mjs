@@ -280,6 +280,7 @@ export async function runRow(ws, c) {
     const res = await api('GET', flat ? '/api/v2/deployments/demo' : `/api/v2/deployments/demo${q(folder)}`)
     if (res.status !== 200) return http(res)
     const mine = Array.isArray(res.data) ? res.data.find(d => d.name === name) : null
+    if (mine?.unreadable) return { cls: 'unreadable', status: 200, appValue: 'unreadable', raw: res.text }
     return { ...seen(mine, mine ? ` alertCount=${mine.alertCount}` : ''), raw: res.text }
   })
   await record('users', async () => {

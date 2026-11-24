@@ -61,6 +61,19 @@ export function invalid(file, findings) {
   return noValue({ state: 'invalid', file, findings: Object.freeze([...findings]) })
 }
 
+/**
+ * Invalid, for a file of AlertForge's own that Helm never reads (sync.yaml):
+ * its findings are `helm: 'n/a'`, with no default to refuse them by, so
+ * callers answer by the state (every one refuses it) and the tables that
+ * list its findings have rows for them.
+ */
+export function invalidOwn(file, findings) {
+  if (!Array.isArray(findings) || !findings.length) throw new TypeError('an invalid file says what is wrong with it')
+  const other = findings.find(f => f.helm !== 'n/a')
+  if (other) throw new TypeError(`${other.code} (helm: ${other.helm}) is about what Helm does: use invalid()`)
+  return noValue({ state: 'invalid', file, findings: Object.freeze([...findings]) })
+}
+
 export function ok(value, findings = []) {
   return Object.freeze({ state: 'ok', value, findings: Object.freeze([...findings]) })
 }

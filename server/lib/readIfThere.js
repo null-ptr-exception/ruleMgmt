@@ -12,6 +12,7 @@
  *   charts/demo/rules cannot be read: permission denied
  */
 import fs from 'fs/promises'
+import { NotLoadedError } from '../repo/loaded.js'
 
 const WHY = {
   EACCES: 'permission denied',
@@ -82,9 +83,20 @@ export async function parseIfThere(abs, parse, absent = null) {
  * A route's answer to an error: a file of the repo that cannot be read is
  * the repo's state, not the server failing — 409, naming the file (the
  * routers take the workspace's path out), `unreadable: true` for the page.
- * Anything else is a 500.
+ * So is a file the repo loader could not read (a NotLoadedError of an
+ * unreadable state: sync.yaml as a folder, say), named by its place in the
+ * repo. Anything else is a 500.
  */
 export function errorAnswer(err) {
+  if (err instanceof NotLoadedError && err.loaded.state === 'unreadable') {
+    const { file, why } = err.loaded
+    return { status: 409, body: { error: `${file} cannot be read (${why})`, file, unreadable: true } }
+  }
+  // Read, and nothing can be made of it (not YAML): its findings say why.
+  if (err instanceof NotLoadedError && err.loaded.state === 'invalid') {
+    const { file, findings } = err.loaded
+    return { status: 409, body: { error: findings.map(f => f.message).join('; '), file, unreadable: true } }
+  }
   return err instanceof UnreadableError
     ? { status: 409, body: { error: err.message, unreadable: true } }
     : { status: 500, body: { error: err.message } }

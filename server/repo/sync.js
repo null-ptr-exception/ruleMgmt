@@ -14,8 +14,10 @@
  *               findings: what is wrong with a row, or right but worth
  *               naming (findings/sync.js)
  *     unreadable  it cannot be read (no permission, a folder, a link to
- *               nothing or out of the repo), or is not YAML: no sync
- *               relation is known, and none is taken for "none"
+ *               nothing or out of the repo)
+ *     invalid   it was read and is not YAML (`sync.not-yaml`)
+ *               either way no sync relation is known, and none is taken
+ *               for "none"
  *
  *   readRegistry(repo) → the registry, or a NotLoadedError naming sync.yaml
  *   syncAnswer(repo) → { registry } | { refusal }: the registry to change
@@ -24,7 +26,8 @@
  */
 import yaml from 'js-yaml'
 import path from 'path'
-import { NotLoadedError, ok, unreadable } from './loaded.js'
+import { NotLoadedError, invalidOwn, ok } from './loaded.js'
+import { finding } from './finding.js'
 import { syncFindings } from './findings/sync.js'
 
 export const SYNC_FILE = 'sync.yaml'
@@ -46,7 +49,8 @@ export function loadSync(repo) {
     try {
       data = yaml.load(f.value.text)
     } catch (err) {
-      return unreadable(SYNC_FILE, `it is not valid YAML (${err.reason || err.message})`)
+      // Read, and no registry can be made of it.
+      return invalidOwn(SYNC_FILE, [finding({ code: 'sync.not-yaml', file: SYNC_FILE, helm: 'n/a', message: `${SYNC_FILE} is not valid YAML (${err.reason || err.message})` })])
     }
     const rows = Array.isArray(data?.syncs) ? data.syncs : []
     const syncs = rows.filter(usable).map(s => ({
@@ -59,8 +63,10 @@ export function loadSync(repo) {
 
 const copyOf = syncs => ({ syncs: syncs.map(s => ({ source: s.source, targets: [...s.targets] })) })
 
-/** The answer naming a sync.yaml that cannot be read: 409, never a 500, never "no syncs". */
-export const syncRefusal = loaded => ({ status: 409, body: { error: `${SYNC_FILE} cannot be read (${loaded.why})`, file: SYNC_FILE, unreadable: true } })
+/** The answer naming a sync.yaml that cannot be read or is not YAML: 409, never a 500, never "no syncs". */
+export const syncRefusal = loaded => ({ status: 409, body: {
+  error: loaded.state === 'invalid' ? loaded.findings.map(f => f.message).join('; ') : `${SYNC_FILE} cannot be read (${loaded.why})`,
+  file: SYNC_FILE, unreadable: true } })
 
 export async function syncAnswer(repo) {
   const loaded = await loadSync(repo)

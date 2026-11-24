@@ -7,6 +7,7 @@ import { UnreadableError, errorAnswer } from '../lib/readIfThere.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
 import { readRegistry } from '../repo/sync.js'
+import { NotLoadedError } from '../repo/loaded.js'
 import { parseRulesDir, modelToSchema, genSchema, valueChecksKey } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates, replacedByConversion } from '../../src/utils/drift.js'
@@ -299,6 +300,8 @@ export default function templatesRouter() {
           migrationWrites = plan.writes.filter(w => !w[2]).map(([file, text]) => [file, text])
           targetWrites = plan.writes.filter(w => w[2])
         } catch (err) {
+          // A file it could not read is named (errorAnswer, below).
+          if (err instanceof NotLoadedError) throw err
           return res.status(500).json({ error: `Deployment migration failed: ${err.message}` })
         }
         // What a values save would refuse is not written by a migration

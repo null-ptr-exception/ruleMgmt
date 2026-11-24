@@ -225,7 +225,7 @@ describe('sync API', () => {
       const res = await request(app).get('/api/v2/sync')
       expect(res.status).toBe(409)
       expect(res.body).toMatchObject({ file: 'sync.yaml', unreadable: true })
-      expect(res.body.error).toMatch(/^sync\.yaml cannot be read \(it is not valid YAML/)
+      expect(res.body.error).toMatch(/^sync\.yaml is not valid YAML \(/)
     })
 
     it('a sync.yaml that cannot be read is named by every sync route (409), and left as it is', async () => {

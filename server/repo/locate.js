@@ -10,6 +10,7 @@
  * as the app's names): the tools refuse it.
  */
 import fs from 'fs'
+import fsp from 'fs/promises'
 import path from 'path'
 import { openRepo } from './openRepo.js'
 
@@ -38,4 +39,20 @@ export function openRepoAt(dir) {
 /** Where a path leads, through links; null when it leads nowhere. */
 export function realFolder(p) {
   try { return fs.realpathSync(p) } catch { return null }
+}
+
+/**
+ * `abs` as a path under `realRoot` (the repo's root as it really is), or
+ * null when it is not under it: the highest folder on the way that is the
+ * root stands for it (a link at or above the root is resolved), and the
+ * rest of the path is the repo's, links and all.
+ *   inRealRoot('/work/gitops', '/home/me/gitops-link/deployments/k/tl/a') → '/work/gitops/deployments/k/tl/a'
+ */
+export async function inRealRoot(realRoot, abs) {
+  const parts = path.resolve(abs).split(path.sep)
+  for (let i = 1; i <= parts.length; i++) {
+    const up = parts.slice(0, i).join(path.sep) || path.sep
+    if (await fsp.realpath(up).catch(() => null) === realRoot) return path.join(realRoot, ...parts.slice(i))
+  }
+  return null
 }

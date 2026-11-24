@@ -528,7 +528,7 @@ unreadable-perm	A	regenerate	refused	200	deployments/t/a	no	-	unreadable	fails	1
 unreadable-perm	A	sync	unreadable	409	deployments/t/a/routing.yaml	no	-	unreadable	renders	0	1	unjudged	-	
 unreadable-perm	A	commit	refused	409	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	file-unreadable	
 unreadable-perm	A	preview	refused	200	routing.yaml	no	-	unreadable	fails	1	-	helm-fails	-	
-unreadable-perm	A	check-deployment	cannot-check	exit 2	routing.yaml	no	-	unreadable	fails	1	-	helm-fails	Routing: routing.yaml cannot be read (permission denied)	
+unreadable-perm	A	check-deployment	refused	exit 1	routing.yaml	no	-	unreadable	fails	1	-	helm-fails	Routing: routing.yaml cannot be read (permission denied)	
 unreadable-perm	A	schema	cannot-check	EACCES	-	no	-	unreadable	fails	1	-	helm-fails	-	
 unreadable-dir	A	get	unreadable	409	deployments/t/a/routing.yaml	no	-	unreadable	renders	0	1	unjudged	-	
 unreadable-dir	A	delete	unreadable	409	deployments/t/a/routing.yaml	no	-	unreadable	renders	0	1	unjudged	-	
@@ -538,7 +538,7 @@ unreadable-dir	A	regenerate	refused	200	deployments/t/a	no	-	unreadable	renders	
 unreadable-dir	A	sync	unreadable	409	deployments/t/a/routing.yaml	no	-	unreadable	renders	0	1	unjudged	-	
 unreadable-dir	A	commit	refused	409	deployments/t/a	no	-	unreadable	renders	0	1	unjudged	file-unreadable	
 unreadable-dir	A	preview	ok	200	-	no	-	unreadable	renders	0	1	unjudged	amc=1	
-unreadable-dir	A	check-deployment	cannot-check	exit 2	routing.yaml	no	-	unreadable	renders	0	1	unjudged	Routing: routing.yaml cannot be read (it is a folder, not a file)	
+unreadable-dir	A	check-deployment	refused	exit 1	routing.yaml	no	-	unreadable	renders	0	1	unjudged	Routing: routing.yaml cannot be read (it is a folder, not a file)	
 unreadable-dir	A	schema	cannot-check	EISDIR	-	no	-	unreadable	renders	0	1	unjudged	-	
 dangling-link	A	get	unreadable	409	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	-	
 dangling-link	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
@@ -548,7 +548,7 @@ dangling-link	A	regenerate	refused	200	deployments/t/a	no	-	unreadable	fails	1	-
 dangling-link	A	sync	unreadable	409	deployments/t/a/routing.yaml	no	-	unreadable	renders	0	1	unjudged	-	
 dangling-link	A	commit	refused	409	deployments/t/a	no	-	unreadable	fails	1	-	helm-fails	file-unreadable	
 dangling-link	A	preview	refused	200	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	-	
-dangling-link	A	check-deployment	cannot-check	exit 2	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	Routing: routing.yaml cannot be read (a link to a file that is not there)	
+dangling-link	A	check-deployment	refused	exit 1	deployments/t/a/routing.yaml	no	-	unreadable	fails	1	-	helm-fails	Routing: routing.yaml cannot be read (a link to a file that is not there)	
 dangling-link	A	schema	cannot-check	dangling link	-	no	-	unreadable	fails	1	-	helm-fails	-	
 link-outside	A	get	unreadable	409	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
 link-outside	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
@@ -558,7 +558,7 @@ link-outside	A	regenerate	refused	200	deployments/t/a	no	-	ok	renders	0	1	routes
 link-outside	A	sync	unreadable	409	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
 link-outside	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	routes	file-unreadable	refuses-what-tool-accepts
 link-outside	A	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
-link-outside	A	check-deployment	cannot-check	exit 2	routing.yaml	no	-	ok	renders	0	1	routes	Routing: routing.yaml cannot be read (it is a link that leads outside the repo)	refuses-what-tool-accepts
+link-outside	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	routes	Routing: routing.yaml cannot be read (it is a link that leads outside the repo)	refuses-what-tool-accepts
 link-outside	A	schema	ok	valid	-	no	-	ok	renders	0	1	routes	-	
 link-inside	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
 link-inside	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
@@ -612,7 +612,7 @@ cr-unreadable	A	regenerate	refused	200	deployments/t/a	no	-	ok	fails	1	-	helm-fa
 cr-unreadable	A	sync	ok	200	-	no	-	ok	renders	0	1	routes	-	
 cr-unreadable	A	commit	refused	409	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	file-unreadable	
 cr-unreadable	A	preview	refused	200	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	-	
-cr-unreadable	A	check-deployment	cannot-check	exit 2	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	Routing: templates/alertmanagerconfig.yaml cannot be read (permission denied)	
+cr-unreadable	A	check-deployment	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	fails	1	-	helm-fails	Routing: templates/alertmanagerconfig.yaml cannot be read (permission denied)	
 cr-unreadable	A	schema	ok	valid	-	no	-	ok	fails	1	-	helm-fails	-	
 routing-hand-edited	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
 routing-hand-edited	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	

@@ -16,8 +16,11 @@ export { SYNC_FILE }
  */
 export async function syncRegistryFindings(repo) {
   const loaded = await loadSync(repo)
-  if (loaded.state !== 'ok') {
+  if (loaded.state === 'unreadable') {
     return { findings: [{ severity: 'commit', kind: 'sync-registry', description: `${SYNC_FILE} cannot be read (${loaded.why})` }], readable: false, registry: { syncs: [] } }
+  }
+  if (loaded.state === 'invalid') {
+    return { findings: decide(loaded.findings, 'commit').refuse.map(f => ({ severity: 'commit', kind: 'sync-registry', description: f.message })), readable: false, registry: { syncs: [] } }
   }
   const { refuse } = decide(loaded.findings, 'commit')
   return { findings: refuse.map(f => ({ severity: 'commit', kind: 'sync-registry', description: f.message })), readable: true, registry: loaded.value }

@@ -4,6 +4,7 @@ import { withSyncRegistryLock } from '../../lib/sync.js'
 import { planCreate, planDelete, applyPlan, commonUsers, linkOnPath } from '../../lib/commonEdit.js'
 import { withoutPath } from '../../lib/answerPaths.js'
 import { isRepoPath } from '../../lib/safePath.js'
+import { errorAnswer } from '../../lib/readIfThere.js'
 
 export function commonRoutes(router) {
   // A folder's _common (#101): what making or removing one changes, listed
@@ -16,7 +17,8 @@ export function commonRoutes(router) {
       if (!out.plan) return res.status(out.status).json(out.body)
       res.json(out.plan)
     } catch (err) {
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(status === 500 ? { error: await withoutPath(err.message, req.gitopsDir) } : body)
     }
   })
 
@@ -38,7 +40,8 @@ export function commonRoutes(router) {
       })
       res.status(status).json(body)
     } catch (err) {
-      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+      const answer = errorAnswer(err)
+      res.status(answer.status).json(answer.status === 500 ? { error: await withoutPath(err.message, req.gitopsDir) } : answer.body)
     }
   })
 

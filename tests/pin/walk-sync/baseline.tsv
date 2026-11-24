@@ -92,7 +92,7 @@ inside-deployment-templates	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,d
 inside-deployment-templates	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 in-common-folder	W	tree	common	200	-	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
 in-common-folder	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-in-common-folder	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=0	count-differs
+in-common-folder	W	folder-list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 in-common-folder	W	users	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 in-common-folder	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 in-common-folder	W	routing-get	absent	400	deployments/s/_common/d	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
@@ -345,7 +345,7 @@ unreadable-folder	W	sync-from	refused	400	deployments/w/d	no	-	absent	fails	1	-	
 unreadable-folder	W	commit	listed	200	deployments/w	no	-	absent	fails	1	-	-	listed	
 unreadable-chart	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (permission denied)	
 unreadable-chart	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-unreadable-chart	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=0	
+unreadable-chart	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
 unreadable-chart	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 unreadable-chart	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 unreadable-chart	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
@@ -356,7 +356,7 @@ unreadable-chart	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-
 unreadable-chart	W	commit	refused	409	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	file-unreadable	
 chart-not-yaml	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be used (deployments/w/d/Chart.yaml line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the firs	
 chart-not-yaml	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-not-yaml	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=0	
+chart-not-yaml	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
 chart-not-yaml	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 chart-not-yaml	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-not-yaml	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
@@ -367,7 +367,7 @@ chart-not-yaml	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-
 chart-not-yaml	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
 chart-no-dependencies	W	tree	folder	200	-	no	-	folder	renders-empty	0	0	-	-	
 chart-no-dependencies	W	list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
-chart-no-dependencies	W	folder-list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=0	
+chart-no-dependencies	W	folder-list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
 chart-no-dependencies	W	users	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
 chart-no-dependencies	W	migration	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
 chart-no-dependencies	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
@@ -400,7 +400,7 @@ chart-two-templates	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deploymen
 chart-two-templates	W	commit	refused	409	deployments/w/d	no	-	folder	renders	0	1	-	stack-unsupported	refuses-what-helm-renders
 chart-is-folder	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (it is a folder, not a file)	
 chart-is-folder	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-is-folder	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=0	
+chart-is-folder	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
 chart-is-folder	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 chart-is-folder	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-is-folder	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
@@ -411,7 +411,7 @@ chart-is-folder	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	
 chart-is-folder	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
 chart-empty	W	tree	folder	200	-	no	-	folder	fails	1	-	-	-	
 chart-empty	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-empty	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=0	
+chart-empty	W	folder-list	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-empty	W	users	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-empty	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-empty	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
@@ -422,7 +422,7 @@ chart-empty	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-
 chart-empty	W	commit	ok	200	-	no	-	folder	fails	1	-	-	-	accepts-what-helm-fails
 chart-deps-not-list	W	tree	folder	200	-	no	-	folder	fails	1	-	-	-	
 chart-deps-not-list	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-deps-not-list	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=0	
+chart-deps-not-list	W	folder-list	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-deps-not-list	W	users	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-deps-not-list	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-deps-not-list	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
@@ -433,7 +433,7 @@ chart-deps-not-list	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	
 chart-deps-not-list	W	commit	ok	200	-	no	-	folder	fails	1	-	-	-	accepts-what-helm-fails
 chart-dangling-link	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (a link to a file that is not there)	
 chart-dangling-link	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-dangling-link	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=0	
+chart-dangling-link	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
 chart-dangling-link	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 chart-dangling-link	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-dangling-link	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
@@ -455,7 +455,7 @@ no-values	W	sync-from	refused	400	deployments/w/d	no	-	folder	renders-empty	0	0	
 no-values	W	commit	ok	200	-	no	-	folder	renders-empty	0	0	-	-	
 values-only	W	tree	folder	200	-	no	-	folder	no-chart	-	-	-	-	
 values-only	W	list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
-values-only	W	folder-list	deployment	200	-	no	-	folder	no-chart	-	-	-	found alertCount=0	
+values-only	W	folder-list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
 values-only	W	users	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
 values-only	W	migration	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
 values-only	W	routing-get	deployment	404	-	no	-	folder	no-chart	-	-	-	-	
@@ -566,7 +566,7 @@ sync-not-yaml	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-
 sync-not-yaml	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
 sync-not-yaml	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
 sync-not-yaml	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
-sync-not-yaml	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml cannot be read (it is not valid YAML (unexpected end of the stream within a flow collection))	
+sync-not-yaml	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml is not valid YAML (unexpected end of the stream within a flow collection)	
 sync-not-yaml	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
 sync-not-yaml	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
 sync-not-yaml	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	

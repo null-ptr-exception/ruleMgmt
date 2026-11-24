@@ -277,8 +277,8 @@ describe('more that a commit checks', () => {
     await write('sync.yaml', 'syncs: [\n')
     const { status, data } = await commit()
     expect(status).toBe(409)
-    expect(data.findings.map(f => f.description)).toContainEqual(expect.stringMatching(/^sync\.yaml cannot be read \(it is not valid YAML/))
-    expect(await regenerate()).toEqual({ status: 200, data: { regenerated: [], failed: [{ deployment: 'sync.yaml', error: expect.stringMatching(/^sync\.yaml cannot be read \(it is not valid YAML/) }] } })
+    expect(data.findings.map(f => f.description)).toContainEqual(expect.stringMatching(/^sync\.yaml is not valid YAML \(/))
+    expect(await regenerate()).toEqual({ status: 200, data: { regenerated: [], failed: [{ deployment: 'sync.yaml', error: expect.stringMatching(/^sync\.yaml is not valid YAML \(/) }] } })
   })
 
   it('an empty syncs: is no sync at all', async () => {

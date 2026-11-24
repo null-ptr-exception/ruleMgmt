@@ -886,10 +886,14 @@ copied to it.
 - A `sync.yaml` that cannot be read (not YAML, no permission, a folder in
   its place) is named, with 409 and `unreadable: true`, by everything that
   needs to know who syncs from whom: the sync list, sync and unlink, a
-  save, deleting a deployment, the Routing page and the shared configs.
+  save, deleting a deployment, the Routing page, the shared configs, a
+  Template change that checks or migrates its deployments (and its
+  preview), and making or removing a `_common`.
   It is never taken for "no syncs", and nothing rewrites it.
-- A sync to a target whose `values.yaml` or `Chart.yaml` is a folder is
-  refused (409) naming the file; nothing is written.
+- A sync to a target whose `values.yaml` is a folder is refused (409)
+  naming the file; one whose `Chart.yaml` is a folder (or cannot be read)
+  is no deployment, and is refused (400, "exists but is not a valid
+  deployment"). Nothing is written.
 - When a save cannot write a target (a permission error, or a `sync.yaml`
   entry that is not a deployment on disk), the source is still saved and the
   page names the target, which may not match the source. Fix the cause and
@@ -1236,22 +1240,25 @@ whether a `_common` chart it renders on has one of its own. It reads the
 deployment's `values.yaml` as the editor does, within the same size limit
 (`MAX_VALUES_BYTES`): one that cannot be read — a folder, a link leading
 outside the repo — fails the check, naming it; one AlertForge cannot tell
-Helm's reading of (larger than the limit, a tag like `!!binary`) is not
-checked (exit 2).
+Helm's reading of (larger than the limit, a tag like `!!binary`, a `|2`
+block, an unclosed `[`) is left to Helm: if Helm fails on it the check
+fails (exit 1) with Helm's error, and if Helm renders it the rest is
+checked on what Helm rendered, with a line saying AlertForge cannot tell
+how Helm reads the file (the editor and Commit refuse it, though it
+deploys).
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
   node scripts/check-deployment.mjs --repo /work /work/deployments/<chart>/<env>
 ```
 
-It exits 0 when both pass, 1 when the deployment has a problem (printed) —
-Helm failing to render it included — and 2 when it could not check: wrong
-arguments, a folder that is not a folder deployment (its own `Chart.yaml`
-and `values.yaml`, its `Chart.yaml` naming a Template; a folder that is a
-link is none, and is named with what it leads to), site settings it cannot read, helm or a checker missing,
-a file it cannot read (a `routing.yaml` or routing resource included: no
-permission, a folder in its place, a link to nothing or out of the repo), or
-a repo root it cannot tell (below).
+It exits:
+
+| Exit | When | Example |
+|---|---|---|
+| 0 | it is a deployment, and every check passes | `deployments/shop/prod` renders, its rules load, its routing is current (values AlertForge cannot tell Helm's reading of, which Helm renders, are checked as rendered and said) |
+| 1 | it is a deployment, and it would not deploy as written or is wrong: Helm fails to render it, a rule check fails, or a file of its own cannot be read (its `values.yaml`, `routing.yaml` or routing resource: no permission, a folder in its place, a link to nothing or out of the repo) | `values.yaml` is a link to a file that is not there |
+| 2 | it is not a deployment, or AlertForge cannot tell: wrong arguments; a folder that is not a folder deployment (its own `Chart.yaml` naming a Template, and a `values.yaml`); a folder that is a link, or is reached through one (named, with the folder to check instead); a folder outside the repo given with `--repo`; a `Chart.yaml` that cannot be read or used (whether it is a deployment cannot be told); site settings it cannot read; helm or a checker missing; a repo root it cannot tell (below) | `deployments/shop/old` has a `Chart.yaml` with no `dependencies` |
 
 - Mount the gitops repo whole: the deployment finds its chart through
   `file://../../../charts/<chart>`.

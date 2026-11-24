@@ -845,7 +845,7 @@ not-yaml	A	migration-preview	listed	200	-	no	-	fails	1	-	-	-	-	-
 not-yaml	A	migration-apply	refused	409	-	no	-	fails	1	-	-	-	-	-	
 not-yaml	A	commit	refused	409	deployments/t/a	no	-	fails	1	-	-	-	-	-	
 not-yaml	A	preview	refused	200	values.yaml	no	-	fails	1	-	-	-	-	-	
-not-yaml	A	check-deployment	cannot-check	exit 2	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	-	
+not-yaml	A	check-deployment	refused	exit 1	values.yaml	no	-	fails	1	-	-	-	-	-	
 top-scalar	A	get	unreadable	409	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	null	
 top-scalar	A	list	ok	200	-	no	-	fails	1	-	-	-	-	alertCount=0	
 top-scalar	A	save-text	refused	400	values.yaml	no	-	fails	1	-	-	-	-	-	

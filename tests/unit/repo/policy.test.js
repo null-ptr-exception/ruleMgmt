@@ -39,6 +39,12 @@ describe('the default', () => {
     expect(invalid('a', [f('values.derived', 'renders', { deploy: 'fails' })]).state).toBe('invalid')
   })
 
+  it('a file of AlertForge\'s own is made invalid by its n/a findings only', async () => {
+    const { invalidOwn } = await import('../../../server/repo/loaded.js')
+    expect(invalidOwn('sync.yaml', [f('sync.not-yaml', 'n/a')]).state).toBe('invalid')
+    expect(() => invalidOwn('sync.yaml', [f('values.schema', 'fails')])).toThrow(/use invalid\(\)/)
+  })
+
   it('what Helm fails on is refused by every table (Commit lists it), unless a row of the table says why not', () => {
     const facts = [f('values.schema', 'fails'), f('yaml.cannot-read', 'unknown'), f('values.not-under-chart-key', 'renders-differently'), f('values.derived', 'renders', { deploy: 'fails' })]
     for (const [name, table] of Object.entries(POLICIES)) {

@@ -24,7 +24,8 @@
  *     chartOnly?: a Chart.yaml naming a dependency and no values.yaml (Helm
  *                deploys the Template's example rows)
  *     link?:     'inside' | 'outside' | 'nowhere' | 'circle': the folder, or
- *                one above it, is a link. A link is never a deployment and
+ *                one above it, is a link; `real`: where the whole path
+ *                leads in the repo (the folder to use instead). A link is never a deployment and
  *                never walked into: what it leads to is found where it is.
  *                One leading outside the repo is 'unreadable', and named.
  *     nestedIn:  the deployment it is inside, or null (walk, childEntries)
@@ -116,13 +117,17 @@ async function linkOnTheWay(repo, rel) {
     const link = dir.value.links.get(segments[i])
     if (!link) continue
     const at = segments.slice(0, i + 1).join('/')
+    // Where the link leads, and where the whole path does: in the repo.
+    let to = null
     let real = null
     if (link === 'inside') {
-      const abs = await fs.realpath(path.join(repo.root, at)).catch(() => null)
       const base = await fs.realpath(repo.root).catch(() => repo.root)
-      real = abs ? path.relative(base, abs).split(path.sep).join('/') || '.' : null
+      const inRepo = abs => (abs ? path.relative(base, abs).split(path.sep).join('/') || '.' : null)
+      to = inRepo(await fs.realpath(path.join(repo.root, at)).catch(() => null))
+      const whole = inRepo(await fs.realpath(path.join(repo.root, rel)).catch(() => null))
+      real = whole && !whole.startsWith('..') ? whole : null
     }
-    return { at, link, real }
+    return { at, link, to, real }
   }
   return null
 }
@@ -157,7 +162,7 @@ export function folderEntry(repo, rel) {
     try { repoRel(key) } catch { return { rel: key, kind: 'absent' } }
     const link = await linkOnTheWay(repo, key)
     if (link) {
-      const why = `${link.at === key ? 'it' : link.at} is ${LINK_WHY[link.link](link.real)}`
+      const why = `${link.at === key ? 'it' : link.at} is ${LINK_WHY[link.link](link.to)}`
       return { rel: key, kind: link.link === 'outside' ? 'unreadable' : 'folder', link: link.link, why, ...(link.link === 'outside' ? { cause: 'link' } : {}), ...(link.real ? { real: link.real } : {}) }
     }
     return classify(repo, key)
@@ -268,7 +273,8 @@ export async function childEntries(repo, rel) {
     let hasFolders = false
     if (!dir.value.links.get(name)) {
       const sub = await repo.dir(e.rel)
-      if (sub.state === 'ok') hasFolders = [...sub.value.entries].some(([n, k]) => k === 'dir' && !sub.value.links.has(n) && !skippedDir(n, { inChart: isChart(e) }))
+      // What the tree shows in it: a folder, or a link leading out of the repo (named).
+      if (sub.state === 'ok') hasFolders = [...sub.value.entries].some(([n, k]) => k === 'dir' && (!sub.value.links.has(n) || sub.value.links.get(n) === 'outside') && !skippedDir(n, { inChart: isChart(e) }))
     }
     return { ...e, name, hasFolders }
   })))

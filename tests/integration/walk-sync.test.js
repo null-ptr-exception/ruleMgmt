@@ -73,6 +73,18 @@ describe('a deployment whose Chart.yaml cannot be read or used', () => {
   })
 })
 
+describe('a folder\'s deployment list', () => {
+  it('lists the folder\'s own deployment by the walk\'s rule: not a values.yaml alone, nor a Chart.yaml naming no Template', async () => {
+    const list = async rel => (await api('GET', `/api/v2/deployments/demo?folder=${rel}`)).data.map(d => d.name)
+    expect(await list(A)).toEqual(['a'])
+    await fs.mkdir(path.join(tmpDir, 'deployments/w/vo'), { recursive: true })
+    await fs.writeFile(path.join(tmpDir, 'deployments/w/vo/values.yaml'), 'demo: {}\n')
+    expect(await list('deployments/w/vo')).toEqual([])
+    await fs.writeFile(path.join(tmpDir, 'deployments/w/vo/Chart.yaml'), 'apiVersion: v2\nname: vo\nversion: 0.1.0\n')
+    expect(await list('deployments/w/vo')).toEqual([])
+  })
+})
+
 describe('a folder that is a link', () => {
   beforeEach(async () => {
     await fs.symlink('t/a', path.join(tmpDir, 'deployments', 'alias'))
@@ -128,6 +140,37 @@ describe('check-deployment on a repo reached through a linked path', () => {
   })
 })
 
+describe('check-deployment on a folder reached through a link inside the repo', () => {
+  it('is not checked (exit 2), naming the link and the folder to check, with or without --repo', async () => {
+    await fs.symlink('t', path.join(tmpDir, 'deployments', 'tl'))
+    for (const args of [[], ['--repo', tmpDir]]) {
+      let out = '', code = 0
+      try {
+        await run('node', [path.join(ROOT, 'scripts/check-deployment.mjs'), ...args, path.join(tmpDir, 'deployments', 'tl', 'a')])
+      } catch (err) { ({ code } = err); out = err.stderr + err.stdout }
+      expect(code).toBe(2)
+      expect(out).toContain('deployments/tl is a link to deployments/t — a folder reached through a link is no deployment: check deployments/t/a')
+    }
+  })
+})
+
+describe('check-deployment given --repo and a folder outside it', () => {
+  it('does not check it (exit 2), saying it is not in that repo', async () => {
+    const elsewhere = await fs.mkdtemp(path.join(os.tmpdir(), 'walk-sync-else-'))
+    try {
+      for (const f of ['Chart.yaml', 'values.yaml']) await fs.copyFile(path.join(tmpDir, A, f), path.join(elsewhere, f))
+      let out = '', code = 0
+      try {
+        await run('node', [path.join(ROOT, 'scripts/check-deployment.mjs'), '--repo', tmpDir, elsewhere])
+      } catch (err) { ({ code } = err); out = err.stderr + err.stdout }
+      expect(code).toBe(2)
+      expect(out).toContain(`${elsewhere} is not inside the repo ${tmpDir}`)
+    } finally {
+      await fs.rm(elsewhere, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('a folder that is a link leading outside the repo', () => {
   it('is named in the tree and by Commit, and holds none of the repo\'s deployments for who uses a Template', async () => {
     const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'walk-sync-out-'))
@@ -140,19 +183,60 @@ describe('a folder that is a link leading outside the repo', () => {
       expect((await deploymentCommitBlockers(tmpDir)).unreadable).toEqual([{ path: 'deployments/out', error: 'it is a link that leads outside the repo' }])
       expect((await api('GET', '/api/v2/templates/demo/deployments')).data.unreadable).toEqual([])
       expect((await api('GET', '/api/v2/folders/tree?path=deployments/out')).data).toEqual([])
+      // In a folder of its own, the folder opens to show it.
+      await fs.mkdir(path.join(tmpDir, 'deployments', 'only'))
+      await fs.symlink(outside, path.join(tmpDir, 'deployments', 'only', 'out'))
+      expect((await api('GET', '/api/v2/folders/tree?path=deployments')).data.find(n => n.name === 'only')).toMatchObject({ isLeaf: false })
+      expect((await api('GET', '/api/v2/folders/tree?path=deployments/only')).data.map(n => n.unreadable)).toEqual(['it is a link that leads outside the repo'])
     } finally {
       await fs.rm(outside, { recursive: true, force: true })
     }
   })
 })
 
+describe('deleting a sync source', () => {
+  it('lets go only of the targets still on disk: one inside it went with it', async () => {
+    const inner = `${A}/inner`
+    expect((await api('POST', '/api/v2/folders/init', { folder: B, chart: 'demo' })).status).toBe(200)
+    await fs.mkdir(path.join(tmpDir, inner), { recursive: true })
+    for (const f of ['Chart.yaml', 'values.yaml']) await fs.copyFile(path.join(tmpDir, B, f), path.join(tmpDir, inner, f))
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), `syncs:\n  - source: ${A}\n    targets: [${B}, ${inner}]\n`)
+    const del = await api('DELETE', `/api/v2/deployments/demo/a?folder=${A}`)
+    expect(del).toEqual({ status: 200, data: { ok: true, unlinked: [B] } })
+  })
+})
+
 describe('sync.yaml, read once for everyone', () => {
+  it('read and not YAML is invalid, with a finding; one that cannot be read is unreadable', async () => {
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), 'syncs: [\n')
+    const notYaml = await loadSync(openRepo(tmpDir))
+    expect(notYaml.state).toBe('invalid')
+    expect(notYaml.findings.map(f => f.code)).toEqual(['sync.not-yaml'])
+    const get = await api('GET', '/api/v2/sync')
+    expect(get.status).toBe(409)
+    expect(get.data).toMatchObject({ file: 'sync.yaml', error: expect.stringMatching(/^sync\.yaml is not valid YAML \(/) })
+    await fs.rm(path.join(tmpDir, 'sync.yaml'))
+    await fs.mkdir(path.join(tmpDir, 'sync.yaml'))
+    expect(await loadSync(openRepo(tmpDir))).toMatchObject({ state: 'unreadable', kind: 'folder' })
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ error: 'sync.yaml cannot be read (it is a folder, not a file)', file: 'sync.yaml', unreadable: true })
+  })
+
   it('a backslash and a target listed twice are read as one link, said as facts Commit lets through', async () => {
     await fs.writeFile(path.join(tmpDir, 'sync.yaml'), `syncs:\n  - source: ${A}\n    targets: ['deployments\\t\\b', ${B}]\n`)
     const loaded = await loadSync(openRepo(tmpDir))
     expect(loaded.value.syncs).toEqual([{ source: A, targets: [B, B] }])
     expect(loaded.findings.map(f => f.code)).toEqual(['sync.backslash', 'sync.duplicate-target'])
     expect((await deploymentCommitBlockers(tmpDir)).findings.filter(f => f.kind === 'sync-registry')).toEqual([])
+  })
+
+  it('one that is a folder is named (409) by a breaking change, its preview and a _common\'s plan', async () => {
+    await fs.mkdir(path.join(tmpDir, 'sync.yaml'))
+    const BREAKING = CPU.replace('job: {type: string, required: true}', 'job: {type: string, required: true}\n  team: {type: string, required: true}')
+    const named = { error: 'sync.yaml cannot be read (it is a folder, not a file)', file: 'sync.yaml', unreadable: true }
+    expect(await api('POST', '/api/v2/templates/demo/migration-preview', { files: { 'cpu.yaml': BREAKING }, migration: {} })).toEqual({ status: 409, data: named })
+    expect(await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': BREAKING } })).toEqual({ status: 409, data: named })
+    expect(await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': BREAKING }, confirmBreaking: true, migration: { columns: {} } })).toEqual({ status: 409, data: named })
+    expect(await api('GET', '/api/v2/folders/common/plan?folder=deployments/t&chart=demo')).toEqual({ status: 409, data: named })
   })
 
   it('one that is a folder is named by Commit (409), not a 500', async () => {

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Typography, Badge } from 'antd'
 import { RightOutlined, SettingOutlined } from '@ant-design/icons'
 import { buildTree } from '../utils/treeGrouping'
+import GroupMark from './GroupMark'
 
 const { Text } = Typography
 
@@ -10,7 +11,7 @@ function countLeaves(node) {
   return node.children.reduce((sum, child) => sum + countLeaves(child), 0)
 }
 
-function TreeNode({ node, activeTemplate, onSelect }) {
+function TreeNode({ node, activeTemplate, onSelect, marks }) {
   const [expanded, setExpanded] = useState(true)
 
   if (node.children && node.children.length > 0) {
@@ -39,6 +40,7 @@ function TreeNode({ node, activeTemplate, onSelect }) {
                 node={child}
                 activeTemplate={activeTemplate}
                 onSelect={onSelect}
+                marks={marks}
               />
             ))}
           </div>
@@ -50,22 +52,27 @@ function TreeNode({ node, activeTemplate, onSelect }) {
   const isActive = node.fullName === activeTemplate
   return (
     <div
+      data-testid={`group-${node.fullName}`}
       onClick={() => onSelect(node.fullName)}
       style={{
         padding: '5px 12px 5px 30px',
         cursor: 'pointer',
         fontSize: 13,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
         background: isActive ? '#e6f4ff' : undefined,
         fontWeight: isActive ? 600 : undefined,
         color: isActive ? '#1677ff' : '#262626',
       }}
     >
-      {node.label}
+      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{node.label}</span>
+      <GroupMark mark={marks?.[node.fullName]} name={node.fullName} />
     </div>
   )
 }
 
-export default function TemplateTree({ templates, activeTemplate, onSelect, showCommonVars, commonVarsLabel = 'Common Variables' }) {
+// `marks`: per group, what a deployment under a `_common` does with it
+// (groupMark); `commonMark`: the same word for its Common Values.
+export default function TemplateTree({ templates, activeTemplate, onSelect, showCommonVars, commonVarsLabel = 'Common Variables', marks = null, commonMark = null }) {
   const names = (templates || []).map((t) => (typeof t === 'string' ? t : t.name))
   const tree = buildTree(names)
 
@@ -89,7 +96,13 @@ export default function TemplateTree({ templates, activeTemplate, onSelect, show
           }}
         >
           <SettingOutlined style={{ fontSize: 12 }} />
-          {commonVarsLabel}
+          <span style={{ flex: 1 }}>{commonVarsLabel}</span>
+          {commonMark && (
+            <span data-testid="group-mark-common-values" title={commonMark.title}
+              style={{ color: '#ad4e00', background: '#fff7e6', border: '1px solid #ffd591', fontSize: 10, fontWeight: 400, lineHeight: '14px', padding: '0 5px', borderRadius: 8 }}>
+              {commonMark.word}
+            </span>
+          )}
         </div>
       )}
       {tree.map((node) => (
@@ -98,6 +111,7 @@ export default function TemplateTree({ templates, activeTemplate, onSelect, show
           node={node}
           activeTemplate={activeTemplate}
           onSelect={onSelect}
+          marks={marks}
         />
       ))}
     </div>

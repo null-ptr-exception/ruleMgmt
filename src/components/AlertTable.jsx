@@ -82,6 +82,15 @@ export default function AlertTable({
   // Selector columns some rule matches under another label (#121, #133):
   // { column: [[rule, label], …] }, from renamedSelectorLabels.
   selectorLabels = {},
+  // An overridden group's rows against its `_common`'s (groupMark's `rows`,
+  // one per row) and that `_common`: a row that differs or is added is
+  // marked, and a cell that differs shows the value there.
+  rowMarks = null,
+  marksFrom = null,
+  // The Common Values a `_common` gives (commonValueMarks): one the
+  // deployment sets itself is marked in its column's heading, with the
+  // `_common`'s value; one inherited stays grey.
+  commonMarks = null,
 }) {
   const [exception, setException] = useState(null)
   const activeFilters = effectiveFilters ?? filters
@@ -201,7 +210,56 @@ export default function AlertTable({
     <SelectorLabelsHint column={name} pairs={selectorLabels[name]} />
   )
 
+  const shownThere = v => (v === undefined ? 'not set' : typeof v === 'object' ? JSON.stringify(v) : String(v))
+  // Under a cell that differs: what the `_common` has there.
+  const thereNote = (name, i) => {
+    const there = rowMarks?.[i]?.there
+    if (!there || !Object.hasOwn(there, name)) return null
+    return (
+      <div data-testid={`cell-common-${i}-${name}`} title={`${marksFrom} has ${shownThere(there[name])}`}
+        style={{ fontSize: 11, lineHeight: '14px', color: '#ad4e00', padding: '1px 7px 0', whiteSpace: 'nowrap' }}>
+        _common: {shownThere(there[name])}
+      </div>
+    )
+  }
+  const MARK_WORDS = { differs: 'differs', added: 'added here' }
+  const markColumn = rowMarks ? [{
+    title: <span title={`Each row against ${marksFrom}`} style={{ fontWeight: 400, color: '#8c8c8c' }}>vs _common</span>,
+    key: 'common-mark',
+    width: 96,
+    render: (_, row) => {
+      const i = row.__realIndex
+      const m = rowMarks[i]
+      if (!m || !MARK_WORDS[m.mark]) return null
+      const cells = Object.entries(m.there || {}).map(([c, v]) => `${c}: ${shownThere(v)}`).join(', ')
+      const title = (m.mark === 'differs' ? `${marksFrom} has ${cells}` : `${marksFrom} has no such row`)
+        + (m.repeated ? '. Several rows are told by the same cells: paired with the one they equal, then in order' : '')
+      return (
+        <span data-testid={`row-mark-${i}`} title={title}
+          style={{ fontSize: 11, lineHeight: '16px', padding: '0 6px', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'help',
+            ...(m.mark === 'differs' ? { color: '#ad4e00', background: '#fff7e6', border: '1px solid #ffd591' } : { color: '#0958d9', background: '#e6f4ff', border: '1px solid #91caff' }) }}>
+          {MARK_WORDS[m.mark]}
+        </span>
+      )
+    },
+  }] : []
+
+  const commonHint = name => {
+    const m = commonMarks && Object.hasOwn(commonMarks, name) && name in commonValues ? commonMarks[name] : null
+    if (!m) return null
+    return m.state === 'overrides' ? (
+      <span data-testid={`common-set-here-${name}`} title={`Set by this deployment: ${m.from} gives ${shownThere(m.value)}`}
+        style={{ fontSize: 10, fontWeight: 400, lineHeight: '14px', padding: '0 5px', borderRadius: 8, whiteSpace: 'nowrap', cursor: 'help', color: '#ad4e00', background: '#fff7e6', border: '1px solid #ffd591' }}>
+        overrides
+      </span>
+    ) : (
+      <span data-testid={`common-inherited-${name}`} title={`Inherited from ${m.from}`} style={{ fontSize: 10, fontWeight: 400, color: '#8c8c8c', whiteSpace: 'nowrap', cursor: 'help' }}>inherited</span>
+    )
+  }
+  const setHere = name => !!commonMarks && Object.hasOwn(commonMarks, name) && commonMarks[name].state === 'overrides'
+
   const columns = [
+    ...markColumn,
     ...vars.map(v => {
       const isCommon = v.name in commonValues
       return {
@@ -211,14 +269,14 @@ export default function AlertTable({
               varDef={v}
               filter={filters[v.name]}
               onChange={f => onFiltersChange({ ...filters, [v.name]: f })}
-              hint={labelsHint(v.name)}
+              hint={<>{labelsHint(v.name)}{commonHint(v.name)}</>}
             />
-          : <span>{v.name}{v.required && !v.common && <RequiredMark />} {labelsHint(v.name)}</span>,
+          : <span>{v.name}{v.required && !v.common && <RequiredMark />} {labelsHint(v.name)} {commonHint(v.name)}</span>,
         dataIndex: v.name,
         key: v.name,
         render: (_, row) => isCommon
-          ? <span style={{ fontSize: 13, color: '#8c8c8c', padding: '0 7px' }}>{commonValues[v.name]}</span>
-          : renderInput(v, row, row.__realIndex),
+          ? <span style={{ fontSize: 13, color: setHere(v.name) ? '#262626' : '#8c8c8c', padding: '0 7px' }}>{commonValues[v.name]}</span>
+          : <>{renderInput(v, row, row.__realIndex)}{thereNote(v.name, row.__realIndex)}</>,
       }
     }),
     ...(scope ? [{

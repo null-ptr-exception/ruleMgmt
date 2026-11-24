@@ -4,6 +4,7 @@ import { SaveOutlined, EyeOutlined, CloseOutlined, RightOutlined } from '@ant-de
 import AlertTable from './AlertTable'
 import { matchesFilter, getFilterOperators, mergeFilters } from '../utils/filterUtils'
 import { rowsOf } from '../utils/valuesInEffect'
+import CommonRowNotes, { OverrideNote } from './CommonRowNotes'
 
 const { Text } = Typography
 
@@ -114,6 +115,8 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
 function DeploymentPart({ deployment, alertName, vars, sectionFilters, effectiveFilters, onFiltersChange, onOpen, scrollContainer, stickyOffsetHeader }) {
   const from = deployment.from?.[alertName]
   const count = rowsOf(deployment.values, alertName).length
+  // What it writes itself against its _common (groupMark), when it is under one.
+  const mark = deployment.marks && Object.hasOwn(deployment.marks, alertName) ? deployment.marks[alertName] : null
   return (
     <div data-testid="deployment-part" style={{ marginBottom: 12 }}>
       <Button type="link" size="small" onClick={() => onOpen(deployment.path)} style={{ padding: 0, fontSize: 12, fontWeight: 500 }}>
@@ -129,23 +132,30 @@ function DeploymentPart({ deployment, alertName, vars, sectionFilters, effective
           Inherited from <b>{from}</b>: {count} row{count === 1 ? '' : 's'}
         </div>
       )}
-      <AlertTable
-        vars={vars}
-        rows={rowsOf(deployment.values, alertName)}
-        commonValues={deployment.commonValues}
-        filters={sectionFilters}
-        effectiveFilters={effectiveFilters}
-        onFiltersChange={onFiltersChange}
-        readOnly
-        plain
-        scrollContainer={scrollContainer}
-        stickyOffsetHeader={stickyOffsetHeader}
-      />
+      <OverrideNote mark={mark} group={alertName} testid="part" />
+      <div data-testid={from ? `part-dimmed-${alertName}` : undefined} style={from ? { opacity: 0.55 } : undefined}>
+        <AlertTable
+          vars={vars}
+          rows={rowsOf(deployment.values, alertName)}
+          commonValues={deployment.commonValues}
+          filters={sectionFilters}
+          effectiveFilters={effectiveFilters}
+          onFiltersChange={onFiltersChange}
+          readOnly
+          plain
+          scrollContainer={scrollContainer}
+          stickyOffsetHeader={stickyOffsetHeader}
+          rowMarks={mark?.state === 'overrides' && mark.aligned ? mark.rows : null}
+          marksFrom={mark?.from}
+          commonMarks={deployment.commonMarks}
+        />
+      </div>
+      <CommonRowNotes mark={mark} group={alertName} />
     </div>
   )
 }
 
-function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer, deployments, onOpenDeployment, note = null }) {
+function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer, deployments, onOpenDeployment, note = null, mark = null, commonMarks = null }) {
   const [collapsed, setCollapsed] = useState(false)
   const [headerHeight, setHeaderHeight] = useState(0)
 
@@ -223,20 +233,27 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
       )}
       {!collapsed && !deployments && (
         <div style={{ padding: '10px 12px' }}>
-          <AlertTable
-            vars={vars}
-            rows={rows}
-            commonValues={commonValues}
-            filters={sectionFilters}
-            effectiveFilters={effectiveFilters}
-            onFiltersChange={onFiltersChange}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
-            onAdd={onAdd}
-            readOnly={readOnly}
-            scrollContainer={scrollContainer}
-            stickyOffsetHeader={headerHeight}
-          />
+          <OverrideNote mark={mark} group={alertName} testid="overview" />
+          <div data-testid={mark?.state === 'inherited' ? `overview-dimmed-${alertName}` : undefined} style={mark?.state === 'inherited' ? { opacity: 0.55 } : undefined}>
+            <AlertTable
+              vars={vars}
+              rows={rows}
+              commonValues={commonValues}
+              filters={sectionFilters}
+              effectiveFilters={effectiveFilters}
+              onFiltersChange={onFiltersChange}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              onAdd={onAdd}
+              readOnly={readOnly}
+              scrollContainer={scrollContainer}
+              stickyOffsetHeader={headerHeight}
+              rowMarks={mark?.state === 'overrides' && mark.aligned ? mark.rows : null}
+              marksFrom={mark?.from}
+              commonMarks={commonMarks}
+            />
+          </div>
+          <CommonRowNotes mark={mark} group={alertName} />
         </div>
       )}
     </div>
@@ -255,8 +272,10 @@ export default function AlertOverviewWorkspace({
   getVars,
   readOnly = false,
   // Two or more deployments of the chart, viewed read-only (#91):
-  // [{ path, values, commonValues, from, stackProblems? }] in the order they
-  // were checked, each its values in effect (valuesInEffect).
+  // [{ path, values, commonValues, from, stackProblems?, marks?, commonMarks? }]
+  // in the order they were checked, each its values in effect
+  // (valuesInEffect) and, under a _common, what it writes itself against it
+  // (`marks`: groupMark per group; `commonMarks`: commonValueMarks).
   deployments = null,
   onOpenDeployment,
   // A group the deployment inherits from a _common (#102): its rows shown,
@@ -264,6 +283,10 @@ export default function AlertOverviewWorkspace({
   // copied first. `inheritedFrom(group)` is the _common, or null.
   inheritedFrom = null,
   inheritedRows = () => [],
+  // The one deployment against its _common: groupMark per group, and
+  // commonValueMarks. Left out for a deployment under none.
+  groupMarks = null,
+  commonMarks = null,
 }) {
   const multi = deployments && deployments.length > 1
   const [wsFilters, setWsFilters] = useState({})
@@ -346,6 +369,8 @@ export default function AlertOverviewWorkspace({
             scrollContainer={scrollContainer}
             deployments={multi ? deployments : null}
             onOpenDeployment={onOpenDeployment}
+            mark={!multi && groupMarks && Object.hasOwn(groupMarks, alertName) ? groupMarks[alertName] : null}
+            commonMarks={multi ? null : commonMarks}
           />
           )
         })}

@@ -18,6 +18,8 @@ import { isCommonChartPath, COMMON_DIR } from '../utils/reservedNames'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import { syncFailedNotice } from '../utils/syncNotice'
 import { valuesInEffect, inheritedFromOf, rowsOf } from '../utils/valuesInEffect'
+import { groupMark, commonValueMarks, identityColumnsOf } from '../utils/commonMarks'
+import CommonRowNotes, { marksSummary, sameWord } from '../components/CommonRowNotes'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
@@ -247,7 +249,8 @@ export default function AlertUserView() {
         // A stack Helm cannot render as shown (a _common that cannot be
         // read): said, and nothing inherited is shown as what deploys.
         if (data.stackProblems?.length) return [p, { ...valuesInEffect(data.parsed, null), stackProblems: data.stackProblems }]
-        return [p, valuesInEffect(data.parsed, data.inherited)]
+        // Its own values and what it inherits are kept: the marks against its _common are worked out from them.
+        return [p, { ...valuesInEffect(data.parsed, data.inherited), parsed: data.parsed, inherited: data.inherited || null }]
       })
       .catch(() => [p, null])))
       .then(entries => {
@@ -704,6 +707,23 @@ export default function AlertUserView() {
     overrideGroup(list => [...list, newRow])
     message.info(`The ${inheritedRows.length} inherited row${inheritedRows.length === 1 ? ' was' : 's were'} copied here first: this deployment's ${activeAlert} replaces the one of ${groupFrom} whole`)
   }
+  // The dimmed inherited rows take no edit: a click or a key on them says
+  // how to change them, and points at the button for a moment.
+  const [overrideHint, setOverrideHint] = useState(false)
+  function explainInherited() {
+    const n = inheritedRows.length
+    const readOnly = !!frozenSource || !!syncUnknown
+    message.info({
+      key: 'inherited-rows-hint',
+      duration: 6,
+      content: readOnly
+        ? `These rows are inherited from ${groupFrom}, and this deployment is read-only here.`
+        : `These rows are inherited from ${groupFrom}. To change one, click "Override here": the ${n} row${n === 1 ? ' is' : 's are'} copied into this deployment to edit.`,
+    })
+    if (readOnly) return
+    setOverrideHint(true)
+    setTimeout(() => setOverrideHint(false), 2500)
+  }
   const rowText = r => Object.entries(r).map(([k, v]) => `${k}=${v}`).join(', ') || '(empty row)'
   function resetGroup() {
     Modal.confirm({
@@ -728,6 +748,18 @@ export default function AlertUserView() {
   }
 
   const isCommonView = activeAlert === '__common_vars__'
+  // The group list's marks: what this deployment does with each group a
+  // _common gives, as the page stands (the open group's rows as edited).
+  const ownNow = mode === 'single' && activeAlert && Object.hasOwn(allValues, activeAlert) ? { ...allValues, [activeAlert]: rows } : allValues
+  const identityOf = group => identityColumnsOf(rulesModel, schema, group)
+  const groupMarks = Object.fromEntries(alertNames.map(g => [g, groupMark(ownNow, inherited, g, identityOf(g))]).filter(([, m]) => m))
+  // The open group against its _common, row by row.
+  const activeMark = !isCommonView && activeAlert ? ownOf(groupMarks, activeAlert) ?? null : null
+  const commonMarks = commonValueMarks(commonValues, inherited)
+  const commonSetHere = Object.keys(commonMarks).filter(k => commonMarks[k].state === 'overrides')
+  const commonMark = commonSetHere.length
+    ? { word: 'overrides', title: `Sets ${commonSetHere.join(', ')} here, over what ${[...new Set(commonSetHere.map(k => commonMarks[k].from))].join(', ')} gives` }
+    : null
   // Nothing to edit: a sync target, values that cannot be read, or
   // sync.yaml that cannot be read (whether it is a target is not known).
   const locked = !!frozenSource || !!loadError || !!syncUnknown || saving
@@ -793,6 +825,8 @@ export default function AlertUserView() {
                     onSelect={setActiveAlert}
                     showCommonVars={getCommonVars(schema).length > 0}
                     commonVarsLabel="Common Values"
+                    marks={groupMarks}
+                    commonMark={commonMark}
                   />
                 </div>
               ) : (
@@ -800,6 +834,7 @@ export default function AlertUserView() {
                   templates={alertNames.filter(n => !onceGroups.includes(n))}
                   checked={checkedAlerts}
                   onCheckedChange={setCheckedAlerts}
+                  marks={multi ? null : groupMarks}
                 />
               )}
             </div>
@@ -902,8 +937,14 @@ export default function AlertUserView() {
             saveStatus={saving ? 'Saving…' : saveStatus}
             getVars={getVars}
             readOnly={locked}
-            deployments={viewedDeployments}
+            deployments={viewedDeployments && viewedDeployments.map(({ parsed, inherited: theirs, ...d }) => (theirs ? {
+              ...d,
+              marks: Object.fromEntries(alertNames.map(g => [g, groupMark(parsed, theirs, g, identityOf(g))]).filter(([, m]) => m)),
+              commonMarks: commonValueMarks(parsed?._common, theirs),
+            } : d))}
             onOpenDeployment={openViewedDeployment}
+            groupMarks={multi ? null : groupMarks}
+            commonMarks={multi || !inherited ? null : commonMarks}
             inheritedFrom={multi ? null : inheritedFrom}
             inheritedRows={group => rowsOf(inherited?.values, group)}
           />
@@ -993,8 +1034,8 @@ export default function AlertUserView() {
                   <Alert data-testid="inherited-group" type="info" showIcon style={{ marginBottom: 12 }}
                     message={<>Inherited from <b>{groupFrom}</b>: {inheritedRows.length} row{inheritedRows.length === 1 ? '' : 's'}</>}
                     description={`A group is inherited whole. To change any of its rows here, override it: the ${inheritedRows.length} rows are copied into this deployment, and later changes to ${groupFrom}'s ${activeAlert} no longer reach it.`}
-                    action={!frozenSource && !syncUnknown && <Button size="small" onClick={() => overrideGroup()}>Override here</Button>} />
-                  <div style={{ opacity: 0.55 }}>
+                    action={!frozenSource && !syncUnknown && <Button size="small" type={overrideHint ? 'primary' : 'default'} onClick={() => overrideGroup()}>Override here</Button>} />
+                  <div data-testid="inherited-rows" style={{ opacity: 0.55, cursor: 'help' }} onClick={explainInherited} onKeyDown={explainInherited}>
                     <AlertTable vars={vars} rows={inheritedRows} plain readOnly commonValues={{ ...inheritedCommon, ...commonValues }}
                       filters={filters} onFiltersChange={setFilters} onUpdate={() => {}} onDelete={() => {}} onAdd={() => {}}
                       scrollContainer={mainScrollContainer} />
@@ -1012,7 +1053,12 @@ export default function AlertUserView() {
                   <Alert data-testid="overrides-group" type="warning" showIcon style={{ marginBottom: 12 }}
                     message={rows.length === 0 && inheritedRows.length > 0
                       ? <>This deployment clears {activeAlert} (it writes no rows): <b>{groupFrom}</b> gives {inheritedRows.length}</>
-                      : <>Overrides <b>{groupFrom}</b> ({inheritedRows.length} row{inheritedRows.length === 1 ? '' : 's'} there)</>}
+                      : <>Overrides <b>{groupFrom}</b> ({inheritedRows.length} row{inheritedRows.length === 1 ? '' : 's'} there){activeMark?.state === 'overrides' && <> · {sameWord(activeMark)}</>}</>}
+                    description={activeMark?.state === 'overrides' && (
+                      <span data-testid="overrides-summary">
+                        {marksSummary(activeMark, activeAlert)} This group no longer follows {groupFrom}: a later change there does not reach this deployment{frozenSource || syncUnknown ? '.' : <> until <b>Reset to inherited</b>.</>}
+                      </span>
+                    )}
                     action={!frozenSource && !syncUnknown && <Button size="small" onClick={resetGroup}>Reset to inherited</Button>} />
                 )}
                 <AlertTable
@@ -1029,7 +1075,11 @@ export default function AlertUserView() {
                   onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
                   readOnly={locked}
                   scrollContainer={mainScrollContainer}
+                  rowMarks={activeMark?.state === 'overrides' && activeMark.aligned ? activeMark.rows : null}
+                  marksFrom={groupFrom}
+                  commonMarks={inherited ? commonMarks : null}
                 />
+                <CommonRowNotes mark={activeMark} group={activeAlert} />
                 </>
               )}
             </div>

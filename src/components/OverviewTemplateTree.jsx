@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { Input } from 'antd'
 import { RightOutlined } from '@ant-design/icons'
 import { buildTree } from '../utils/treeGrouping'
+import GroupMark from './GroupMark'
 
 function getLeaves(node) {
   if (!node.children) return [node.fullName]
   return node.children.flatMap(getLeaves)
 }
 
-function TreeNode({ node, checked, onToggle, searchActive }) {
+function TreeNode({ node, checked, onToggle, searchActive, marks }) {
   const [expanded, setExpanded] = useState(true)
 
   if (node.children) {
@@ -47,7 +48,7 @@ function TreeNode({ node, checked, onToggle, searchActive }) {
         {(expanded || searchActive) && (
           <div style={{ paddingLeft: 12 }}>
             {node.children.map(child => (
-              <TreeNode key={child.fullName || child.label} node={child} checked={checked} onToggle={onToggle} searchActive={searchActive} />
+              <TreeNode key={child.fullName || child.label} node={child} checked={checked} onToggle={onToggle} searchActive={searchActive} marks={marks} />
             ))}
           </div>
         )}
@@ -65,11 +66,14 @@ function TreeNode({ node, checked, onToggle, searchActive }) {
         style={{ width: 13, height: 13, flexShrink: 0, cursor: 'pointer' }}
       />
       <span style={{ color: isChecked ? '#1677ff' : '#262626' }}>{node.label}</span>
+      <span style={{ flex: 1 }} />
+      <GroupMark mark={marks?.[node.fullName]} name={node.fullName} />
     </div>
   )
 }
 
-export default function OverviewTemplateTree({ templates = [], checked, onCheckedChange }) {
+// `marks`: per group, what the selected deployment does with a group its `_common` gives (groupMark).
+export default function OverviewTemplateTree({ templates = [], checked, onCheckedChange, marks = null }) {
   const [search, setSearch] = useState('')
 
   const names = templates.map(t => typeof t === 'string' ? t : t.name)
@@ -111,6 +115,7 @@ export default function OverviewTemplateTree({ templates = [], checked, onChecke
             checked={checkedSet}
             onToggle={handleToggle}
             searchActive={!!search}
+            marks={marks}
           />
         ))}
       </div>

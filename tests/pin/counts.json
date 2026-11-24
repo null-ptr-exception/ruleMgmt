@@ -1,39 +1,33 @@
 {
   "lint": {
-    "total": 126,
+    "total": 82,
     "byKind": {
       "childProcess": 1,
-      "fs": 23,
-      "fsUse": 77,
-      "helper": 3,
+      "fs": 15,
+      "fsUse": 43,
+      "helper": 1,
       "yaml": 11,
       "yamlParse": 11
     },
     "byFile": {
-      "scripts/gen-chart.mjs": 3,
-      "scripts/gen-rules.mjs": 6,
-      "scripts/import-rules.mjs": 4,
+      "scripts/import-rules.mjs": 2,
       "server.js": 5,
       "server/lib/answerPaths.js": 2,
       "server/lib/chartDiscovery.js": 9,
-      "server/lib/chartFiles.js": 3,
-      "server/lib/chartUsage.js": 2,
       "server/lib/commit/template.js": 4,
       "server/lib/commonEdit.js": 8,
       "server/lib/deploymentCheck.js": 10,
-      "server/lib/deploymentWrite.js": 10,
+      "server/lib/deploymentWrite.js": 3,
       "server/lib/helmCheck.js": 2,
       "server/lib/reservedNames.js": 2,
-      "server/lib/routingFiles.js": 7,
       "server/lib/ruleCheck.js": 6,
-      "server/lib/sharedConfigs.js": 9,
+      "server/lib/sharedConfigs.js": 4,
       "server/lib/stack.js": 8,
       "server/lib/subchart.js": 4,
       "server/lib/sync.js": 1,
-      "server/routes/charts.js": 9,
+      "server/routes/charts.js": 2,
       "server/routes/deployments/resolve.js": 4,
-      "server/routes/git.js": 6,
-      "server/routes/templates.js": 2
+      "server/routes/git.js": 6
     }
   },
   "yamlParseSites": {
@@ -51,7 +45,7 @@
     }
   },
   "swallowingCatches": {
-    "total": 20,
+    "total": 18,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
@@ -60,21 +54,16 @@
       "server/lib/deploymentCheck.js": 3,
       "server/lib/stack.js": 3,
       "server/lib/subchart.js": 1,
-      "server/routes/charts.js": 2,
       "server/routes/deployments/resolve.js": 1,
       "src/utils/schemaCompat.js": 1
     }
   },
   "ownEnoentChecks": {
-    "total": 11,
+    "total": 7,
     "byFile": {
-      "server/lib/chartUsage.js": 1,
       "server/lib/commit/template.js": 1,
       "server/lib/deploymentCheck.js": 2,
-      "server/lib/deploymentWrite.js": 1,
-      "server/lib/routingFiles.js": 1,
       "server/lib/ruleCheck.js": 1,
-      "server/lib/sharedConfigs.js": 1,
       "server/lib/stack.js": 1,
       "server/routes/deployments/resolve.js": 1,
       "server/routes/git.js": 1

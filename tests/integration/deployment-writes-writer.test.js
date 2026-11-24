@@ -392,6 +392,26 @@ describe.skipIf(IS_ROOT)('deleting a deployment whose folder became a link to an
 // The order a change is written in decides what a server killed midway
 // leaves: for a sync link, sync.yaml first — a target listed and not yet
 // its source's copy is what Commit refuses.
+describe('a sync link to a target whose templates/ is a link made by hand', () => {
+  it('is refused naming the link, as a routing save to it is: nothing is written through it', async () => {
+    await setup()
+    // TGT/templates → notes/tpl, a folder of the repo holding what it held.
+    await fs.mkdir(path.join(tmpDir, 'notes'), { recursive: true })
+    await fs.rename(path.join(tmpDir, TGT, 'templates'), path.join(tmpDir, 'notes/tpl'))
+    await fs.symlink('../../../notes/tpl', path.join(tmpDir, TGT, 'templates'))
+    const was = await tree()
+    const res = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+    expect(res.status).toBe(409)
+    expect(res.data).toEqual({ error: `${TGT}/templates/alertmanagerconfig.yaml cannot be written: ${TGT}/templates is a link: a folder reached through a link is not written to`, file: `${TGT}/templates/alertmanagerconfig.yaml` })
+    expect(await tree()).toEqual(was)
+    // The routing save of a deployment whose templates/ is such a link says the same.
+    const saved = await api('PUT', route(TGT), { routing: ROUTING('other') })
+    expect(saved.status).toBe(409)
+    expect(saved.data.error).toBe(res.data.error)
+    expect(await tree()).toEqual(was)
+  })
+})
+
 describe('a sync link writes sync.yaml first', () => {
   it('to an existing target and to a new one', async () => {
     await setup()

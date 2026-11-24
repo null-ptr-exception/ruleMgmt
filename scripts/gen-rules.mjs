@@ -32,7 +32,6 @@
  * a name with a dot) is an ERROR line and exit 1, before anything is written.
  */
 
-import fs from 'fs/promises'
 import path from 'path'
 import {
   schemaToModel, modelToFiles, parseRulesDir, validateValues, genSchema,
@@ -41,7 +40,7 @@ import { checkRules } from '../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates, replacedByConversion, repeatingTemplates, repeatsText, REPEATS_FIX } from '../src/utils/drift.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { ensureChartYaml } from '../src/utils/chartYaml.js'
-import { readTemplateAt } from '../server/lib/chartFiles.js'
+import { readTemplateAt, writeToolFiles } from '../server/lib/chartFiles.js'
 import { decide } from '../server/repo/policy.js'
 import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 import { valuesLimitNote } from '../server/repo/limits.js'
@@ -64,7 +63,6 @@ if (!chartDir) {
 // process.exit() does not wait for output still going to a pipe, which on
 // some platforms cut the error short (`gen-rules … | tee log`).
 async function main() {
-  const rulesDir = path.join(chartDir, 'rules')
   const schemaFile = path.join(chartDir, 'values.schema.json')
 
   // The whole chart, read once. rules/ or a file in it that cannot be read
@@ -148,12 +146,15 @@ async function main() {
     return 1
   }
   const products = generateProducts(model, schema, objectMeta)
-  const tmplDir = path.join(chartDir, 'templates')
 
   for (const w of warnings) console.log(`note   ${w}`)
 
   const results = []
   let failed = 0
+  // Every file this run writes or removes, written together at the end,
+  // each whole: a run stopped part-way leaves no file cut off.
+  const pending = []
+  const inChart = relPath => `${t.dir}/${relPath.split(path.sep).join('/')}`
 
   // What is on disk, as the loader read it: null when it is not there.
   const have = rel => (rel === 'values.schema.json' ? t.schemaText
@@ -168,9 +169,7 @@ async function main() {
       return
     }
     if (was === want) { results.push(['unchanged', relPath]); return }
-    const abs = path.join(chartDir, relPath)
-    await fs.mkdir(path.dirname(abs), { recursive: true })
-    await fs.writeFile(abs, want, 'utf-8')
+    pending.push({ rel: inChart(relPath), text: want })
     results.push([was === null ? 'created' : 'updated', relPath])
   }
 
@@ -188,7 +187,6 @@ async function main() {
     // name no group has, and is replaced by what is generated now (#190).
     for (const name of replacedByConversion(texts, products.templates)) stale.add(name)
   }
-  if (migrating && !check) await fs.mkdir(rulesDir, { recursive: true })
   // On a converted chart such a file is left to the user, as a commit is:
   // reported, never removed. Regenerating does not fix it.
   const repeats = repeatingTemplates(Object.fromEntries(Object.entries(texts).filter(([n]) => !stale.has(n))), products.templates)
@@ -208,7 +206,7 @@ async function main() {
       failed++
       continue
     }
-    await fs.rm(path.join(tmplDir, name), { force: true })
+    pending.push({ rel: inChart(path.join('templates', name)), text: null })
     results.push(['removed', path.join('templates', name)])
   }
 
@@ -234,13 +232,14 @@ async function main() {
   }
 
   if (init) {
-    const chartYamlFile = path.join(chartDir, 'Chart.yaml')
     // Made only when it is not there, or holds nothing: its text as read.
     const read = await t.repo.file(`${t.dir}/Chart.yaml`)
     const { text, created } = ensureChartYaml(read.state === 'ok' ? read.value.text : null, path.basename(chartDir))
-    if (created && !check) { await fs.writeFile(chartYamlFile, text, 'utf-8'); results.push(['created', 'Chart.yaml']) }
+    if (created && !check) { pending.push({ rel: inChart('Chart.yaml'), text }); results.push(['created', 'Chart.yaml']) }
     else if (created && check) { results.push(['MISSING', 'Chart.yaml']); failed++ }
   }
+
+  if (pending.length) await writeToolFiles(t.root, pending)
 
   // Validate the chart's own values.yaml against the converted model — Helm does
   // the real check from the schema, this is the early warning. Read as Helm

@@ -1,4 +1,4 @@
-import fs from 'fs/promises'
+import { UnreadableError } from './readIfThere.js'
 import path from 'path'
 import { getDeploymentsDir } from './chartDiscovery.js'
 import { walk } from '../repo/walk.js'
@@ -14,29 +14,24 @@ import { resolveStack } from './stack.js'
  * path, and a deployment in a folder names it in a Chart.yaml dependency.
  */
 
-// Only an absent directory is empty. Any other error has to surface: an
-// empty result here reads as "no deployment uses this chart", which lets a
-// breaking change through without the dialog.
-async function readDir(dir) {
-  try {
-    return await fs.readdir(dir, { withFileTypes: true })
-  } catch (err) {
-    if (err?.code === 'ENOENT') return []
-    throw err
-  }
-}
-
-/** deployments/<chart>/<name>-values.yaml */
-async function fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv) {
+/**
+ * deployments/<chart>/<name>-values.yaml, listed through the snapshot (so a
+ * writer sees one made or removed before it writes). Only an absent folder
+ * is empty; one that cannot be read throws, naming it: an empty result
+ * reads as "no deployment uses this chart", which lets a breaking change
+ * through without the dialog.
+ */
+async function fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv, repo) {
   const dir = path.join(getDeploymentsDir(gitopsDir, deploymentsDirEnv), chart)
-  const entries = await readDir(dir)
-  return entries
-    .filter(e => e.isFile() && e.name.endsWith('-values.yaml'))
-    .map(e => ({
-      chart,
-      deployment: e.name.replace(/-values\.yaml$/, ''),
-      path: path.relative(gitopsDir, path.join(dir, e.name)).replace(/\\/g, '/')
-    }))
+  const rel = path.relative(gitopsDir, dir).split(path.sep).join('/')
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return []
+  const listed = await repo.dir(rel)
+  if (listed.state === 'absent') return []
+  if (listed.state !== 'ok') throw new UnreadableError(dir, { reason: listed.why })
+  return [...listed.value.entries]
+    .filter(([name, kind]) => kind === 'file' && name.endsWith('-values.yaml'))
+    .map(([name]) => ({ chart, deployment: name.replace(/-values\.yaml$/, ''), path: `${rel}/${name}` }))
+    .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 }
 
 /**
@@ -80,7 +75,7 @@ async function fromFolders(gitopsDir, chart, repo) {
  */
 export async function findChartUsage(gitopsDir, chart, deploymentsDirEnv, { repo = openRepo(gitopsDir) } = {}) {
   const [byPath, byDependency] = await Promise.all([
-    fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv),
+    fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv, repo),
     fromFolders(gitopsDir, chart, repo)
   ])
   const seen = new Set()

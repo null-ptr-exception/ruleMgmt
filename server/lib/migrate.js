@@ -9,7 +9,6 @@
  * values save makes, so the two stay identical (#175).
  */
 
-import path from 'path'
 import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
 import { unwrapPath, wrapPath, replaceAtPath } from './stack.js'
 import { isTarget, getSourceForTarget } from './sync.js'
@@ -17,7 +16,6 @@ import { readRegistry } from '../repo/sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'
 import { syncTargets } from './deploymentWrite.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
-import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment, isFlatFile } from '../repo/deployment.js'
 import { findingsOf } from '../repo/loaded.js'
 import { decide } from '../repo/policy.js'
@@ -83,35 +81,26 @@ async function locate(repo, relPath, keys) {
 }
 
 /**
- * Writes nothing itself: a caller that ignores `writes` gets a preview —
- * every entry has `rowsChanged` and `losses` for the dialog.
- * With `model` (the new Template's) each migrated file is checked as a
- * values save would check it (#176): `problems` lists what a save would
- * refuse. One the file had already, against `beforeModel`, before this
- * change is marked `before: true` — reported, but no reason to refuse it
- * (see problemKey for what counts as the same one); with no `beforeModel`
- * every one is. `checkOnly` leaves out a deployment whose values cannot be
- * read instead of failing the whole plan. A copied follower lists none: its
- * problems are its source's.
- * @returns { deployments: [{ deployment, path, readonly, copiedFrom, rowsChanged, losses, orphaned, problems: [{ message, before }] }], writes: [[file, text, isTarget, path]] }
- *          `copiedFrom` is the source a sync follower's file is copied from,
- *          or null when the follower is migrated on its own (its source is
- *          not among the deployments using this chart, or has no values.yaml
- *          to copy). A copied follower's `rowsChanged` compares its own rows
- *          with the source's migrated rows, which is what it ends up with;
- *          its `losses` and `orphaned` are the source's.
- */
-export async function planDeploymentMigration(gitopsDir, chart, targetSchema, migration, { deploymentsDirEnv, model, beforeModel, checkOnly = false } = {}) {
-  const m = await planMigration(openRepo(gitopsDir), { chart, targetSchema, migration, deploymentsDirEnv, model, beforeModel, checkOnly })
-  return { deployments: m.deployments, writes: m.writes.map(([rel, text, readonly, dep]) => [path.join(gitopsDir, rel), text, readonly, dep]) }
-}
-
-/**
  * The migration of every deployment of `chart`, planned on the snapshot
  * `repo` for a writer's change (the Template's save writes these with its
- * own files, all or none). Every file is read through `repo`.
- *   { deployments, files, strict, syncSkipped, refusal, writes }
- *   deployments  as planDeploymentMigration's
+ * own files, all or none) and for the dialog's preview. Every file is read
+ * through `repo`; nothing is written here.
+ *   { deployments, files, strict, syncSkipped, refusal }
+ *   deployments  [{ deployment, path, readonly, copiedFrom, rowsChanged,
+ *                losses, orphaned, problems: [{ message, before }] }]: the
+ *                dialog's preview. With `model` (the new Template's) each
+ *                migrated file is checked as a values save would check it
+ *                (#176): `problems` lists what a save would refuse. One the
+ *                file had already, against `beforeModel`, is marked
+ *                `before: true` — reported, no reason to refuse it (see
+ *                problemKey); with no `beforeModel` every one is.
+ *                `copiedFrom` is the source a sync follower's file is
+ *                copied from, or null when the follower is migrated on its
+ *                own (its source is not among the deployments using this
+ *                chart, or has no values.yaml to copy). A copied follower's
+ *                `rowsChanged` compares its own rows with the source's
+ *                migrated rows, which is what it ends up with; its `losses`
+ *                and `orphaned` are the source's, and it lists no problems
  *   files        [{ rel, text }]: each values file whose text changes,
  *                sources first, then the sync followers (their source's text)
  *   strict       the values files it rewrites: a save of one meanwhile is
@@ -122,7 +111,9 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
  *                cannot be used: its values.yaml or Chart.yaml cannot be
  *                read, or it is reached through a link (never when only
  *                checking)
- *   writes       [[rel, text, readonly, deployment]] every file, changed or not
+ * `checkOnly` (a change that writes no deployment) leaves out a deployment
+ * whose values cannot be read instead of failing the whole plan, and
+ * gives no files.
  */
 export async function planMigration(repo, { chart, targetSchema, migration, deploymentsDirEnv, model, beforeModel, checkOnly = false }) {
   const gitopsDir = repo.root
@@ -260,5 +251,5 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
       if (now.state !== 'ok' || now.value.text !== text) out.push({ rel, text })
     }
   }
-  return { deployments, writes, files: out, strict: new Set(out.map(f => f.rel)), syncSkipped, refusal }
+  return { deployments, files: out, strict: new Set(out.map(f => f.rel)), syncSkipped, refusal }
 }

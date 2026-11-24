@@ -300,7 +300,8 @@ describe.skipIf(IS_ROOT)('a target that cannot be written', () => {
     expect(await Promise.all([SRC, TGT, T2].map(d => read(`${d}/values.yaml`)))).toEqual(before)
   })
 
-  // A routing save still saves the source and reports the target.
+  // A routing save or removal, too: the source and its targets' copies,
+  // all or none.
 
   it.each([
     ['saving the routing', async () => api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: await routingFixture() })],
@@ -309,16 +310,17 @@ describe.skipIf(IS_ROOT)('a target that cannot be written', () => {
     await setup()
     expect((await api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: (await routingFixture()).replace('4h', '3h') })).status).toBe(200)
     const before = await read(`${TGT}/routing.yaml`)
+    const srcBefore = await read(`${SRC}/routing.yaml`)
     await fs.chmod(path.join(tmpDir, TGT, 'templates'), 0o555)
     await fs.chmod(path.join(tmpDir, TGT), 0o555)
 
     const { status, data } = await act()
 
-    expect(status).toBe(200)
-    expect(data).toEqual({ ok: true, syncFailed: [{ target: TGT, error: 'EACCES' }] })
-    expect(await read(`${SRC}/routing.yaml`).catch(() => null)).not.toBe(before)
+    expect(status).toBe(409)
+    expect(data.file).toMatch(new RegExp(`^${TGT}/`))
+    expect(data.error).toBe(`${data.file} cannot be ${_.startsWith('deleting') ? 'removed' : 'written'}: permission denied`)
+    expect(await read(`${SRC}/routing.yaml`)).toBe(srcBefore)
     expect(await read(`${TGT}/routing.yaml`)).toBe(before)
-    expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not be copied to ${TGT}`), expect.anything())
   })
 })
 

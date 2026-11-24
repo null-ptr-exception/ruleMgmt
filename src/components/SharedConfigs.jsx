@@ -74,8 +74,10 @@ export default function SharedConfigs() {
     })
   }
 
-  async function done(result, what) {
-    if (!result.ok) return refused(result)
+  // `again` opens the dialog the change came from once more, with what was
+  // typed in it: a refusal does not lose it.
+  async function done(result, what, again) {
+    if (!result.ok) { again?.(); return refused(result) }
     message.success(`${what}: ${result.written.length} file${result.written.length > 1 ? 's' : ''} written — commit them from the Git panel`)
     if (result.syncFailed?.length) message.warning(`Not copied to ${result.syncFailed.map(f => f.target).join(', ')}`)
     if (result.warnings?.length) message.warning({ content: result.warnings.join(' '), duration: 10 })
@@ -104,7 +106,8 @@ export default function SharedConfigs() {
     setEditing(null)
     const configs = Object.fromEntries(Object.entries(state.configs).map(([n, c]) => (n === was ? [n, config] : [n, c])))
     if (!was) configs[name] = config
-    confirmFor(was ? usersOf(was) : [], `Change ${was}?`, () => oneAtATime(async () => done(await saveSharedConfigs({ configs }), was ? `${was} saved` : `${name} added`)))
+    const again = () => setEditing({ was, form: toForm(name, config) })
+    confirmFor(was ? usersOf(was) : [], `Change ${was}?`, () => oneAtATime(async () => done(await saveSharedConfigs({ configs }), was ? `${was} saved` : `${name} added`, again)))
   }
 
   async function remove(name) {
@@ -120,7 +123,7 @@ export default function SharedConfigs() {
   async function rename() {
     const { from, to } = renaming
     setRenaming(null)
-    confirmFor(usersOf(from), `Rename ${from} to ${to}?`, () => oneAtATime(async () => done(await renameSharedConfig(from, to), `${from} renamed to ${to}`)))
+    confirmFor(usersOf(from), `Rename ${from} to ${to}?`, () => oneAtATime(async () => done(await renameSharedConfig(from, to), `${from} renamed to ${to}`, () => setRenaming({ from, to }))))
   }
 
   const regenerate = () => oneAtATime(regenerateNow)

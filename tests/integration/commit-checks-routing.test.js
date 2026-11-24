@@ -176,17 +176,19 @@ describe('Regenerate', () => {
     }
   })
 
-  it('one that cannot be written is listed, the others are made, and the commit is still refused', async () => {
+  it('one that cannot be written refuses it all, naming the file: none is made, and the commit is still refused', async () => {
     expect((await api('POST', '/api/v2/folders/init', { folder: OTHER, chart: 'demo' })).status).toBe(200)
     expect((await api('PUT', `/api/v2/deployments/demo/other/routing${q(OTHER)}`, { routing: ROUTING })).status).toBe(200)
     await newLabels('{"release":"kps"}')
     await fs.chmod(path.join(tmpDir, OTHER, 'templates'), 0o555)
     try {
-      const { data } = await regenerate()
+      const before = await fs.readFile(path.join(tmpDir, SRC, CR), 'utf-8')
+      const { status, data } = await regenerate()
       if (process.getuid?.() !== 0) {
-        expect(data.failed).toEqual([{ deployment: OTHER, error: 'EACCES' }])
-        expect(data.regenerated).toEqual([SRC, TGT])
-        expect(kinds((await commit()).data)).toEqual([`routing-stale ${OTHER}`])
+        expect(status).toBe(409)
+        expect(data).toEqual({ error: `${OTHER}/${CR} cannot be written: permission denied`, file: `${OTHER}/${CR}` })
+        expect(await fs.readFile(path.join(tmpDir, SRC, CR), 'utf-8')).toBe(before)
+        expect(kinds((await commit()).data)).toEqual([`routing-stale ${OTHER}`, `routing-stale ${SRC}`])
       }
     } finally {
       await fs.chmod(path.join(tmpDir, OTHER, 'templates'), 0o755)

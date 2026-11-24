@@ -180,7 +180,7 @@ describe('a deployment broken before the migration', () => {
 })
 
 describe('a migration whose sync target cannot be written', () => {
-  it.skipIf(IS_ROOT)('changes the Template and the source, and names the target', async () => {
+  it.skipIf(IS_ROOT)('changes nothing — not the Template, not the source — and names the target\'s file', async () => {
     await start(WARN, [{ namespace: 'p', warn: 1 }])
     await fs.chmod(path.join(tmpDir, TGT, 'values.yaml'), 0o444)
     const errors = console.error
@@ -191,10 +191,10 @@ describe('a migration whose sync target cannot be written', () => {
     } finally {
       console.error = errors
     }
-    expect(m.status).toBe(200)
-    expect(m.data.syncFailed).toEqual([{ target: TGT, error: 'EACCES' }])
-    expect(await read('charts/demo/rules/cpu.yaml')).toContain('threshold')
-    expect(await read(`${SRC}/values.yaml`)).toContain('threshold: 1')
+    expect(m.status).toBe(409)
+    expect(m.data).toEqual({ error: `${TGT}/values.yaml cannot be written: permission denied`, file: `${TGT}/values.yaml` })
+    expect(await read('charts/demo/rules/cpu.yaml')).not.toContain('threshold')
+    expect(await read(`${SRC}/values.yaml`)).toContain('warn: 1')
     expect(await read(`${TGT}/values.yaml`)).toContain('warn: 1')
   })
 })
@@ -215,8 +215,10 @@ describe('a sync target migrated on its own', () => {
   })
 })
 
-describe('a flat sync target that cannot be written', () => {
-  it.skipIf(IS_ROOT)('is named by its file, not its folder', async () => {
+// A flat values file listed as a sync target is no deployment folder: the
+// migration names it and writes nothing.
+describe('a flat sync target', () => {
+  it.skipIf(IS_ROOT)('is refused, named, and nothing is written', async () => {
     await start(WARN, [{ namespace: 'p', warn: 1 }])
     const flat = 'deployments/demo/y-values.yaml'
     await fs.mkdir(path.join(tmpDir, 'deployments/demo'), { recursive: true })
@@ -231,8 +233,9 @@ describe('a flat sync target that cannot be written', () => {
       console.error = errors
       await fs.chmod(path.join(tmpDir, flat), 0o644)
     }
-    expect(m.status).toBe(200)
-    expect(m.data.syncFailed).toEqual([{ target: flat, error: 'EACCES' }])
+    expect(m.status).toBe(409)
+    expect(m.data).toEqual({ error: `${flat}/Chart.yaml cannot be read: a file is where a folder should be`, file: `${flat}/Chart.yaml`, unreadable: true })
+    expect(await read('charts/demo/rules/cpu.yaml')).not.toContain('threshold')
   })
 })
 

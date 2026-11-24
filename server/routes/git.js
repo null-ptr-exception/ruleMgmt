@@ -1,11 +1,13 @@
 import { Router } from 'express'
+import { planChange, applyChange } from '../repo/changes/index.js'
+import { openRepo } from '../repo/openRepo.js'
 import { z } from 'zod'
 import { route, declaredRoutes } from '../http/route.js'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import git from '../lib/git.js'
-import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
+import { deploymentCommitBlockers } from '../lib/commitChecks.js'
 import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { TEMP_PATHSPEC_EXCLUDE, parkedItems } from '../repo/write.js'
@@ -86,7 +88,7 @@ const count = (fallback, min, max) => z.any().transform(v => Math.min(max, Math.
 async function parkedRefusal(cwd) {
   const parked = await parkedItems(cwd)
   if (!parked.length) return null
-  return { status: 409, body: { error: 'Commit refused', findings: parked.map(p => ({ severity: 'commit', kind: 'parked', regenerable: false,
+  return { status: 409, body: { error: 'Commit refused', findings: parked.map(p => ({ severity: 'commit', kind: 'parked', regenerable: false, file: p.rel,
     description: `${p.rel} is ${p.original} as it was, moved aside by a write that did not finish: ${p.free ? `rename it back to ${p.original} to keep it` : `${p.original} is there again: keep one of the two`}, or remove it, then commit` })) } }
 }
 
@@ -121,7 +123,7 @@ export default function gitRouter() {
   // target's from its source (#179). Writes files, commits nothing: the
   // diff is there to look at before committing.
   router.post('/routing/regenerate', route('git.regenerate', {}, async (input, { gitopsDir }) => (
-    { status: 200, body: await regenerateRouting(gitopsDir) }
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'regenerate-routing' }))
   )))
 
   // The message is text: anything else would be committed as

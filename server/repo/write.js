@@ -11,16 +11,21 @@
  * A Plan (frozen):
  *   kind, change, root
  *   refusal   null, or the { status, body } answered without writing (a file
- *             that cannot be read, a read-only sync target)
+ *             that cannot be read, a read-only sync target); the kind's,
+ *             or — for every kind — a file to write whose folder is
+ *             reached through a link (409 naming the link: a link made by
+ *             hand is never written through)
  *   files     [{ rel, text }]: every file to write, whole, in the order
  *             written (text a string or a Buffer; null removes the file);
  *             also { rel, link } (a link, made new, leading to `link`)
+ *             and { rel, makeFolder: true } (a folder made when it is not
+ *             there: one git keeps no file in yet)
  *             and { rel, removeFolder: true } (a folder removed: empty by
  *             then, its files removed before it in the same list)
  *             and { rel, removeWhole: true } (a folder removed with all it
  *             holds, nothing in it read: moved aside in one rename to a
- *             temp name beside it, removed once every file is written;
- *             put back by the rename back)
+ *             parked name beside it (PARKED_NAME), removed once every file
+ *             is written; put back by the rename back)
  *   after     the snapshot as it will be after the write (repo.with(files)):
  *             the facts after the write, read without the disk
  *   findings  what the loaders found in `after`; applyChange's policy decides
@@ -54,7 +59,7 @@
  *      it was, removes the folders the write made, and answers 409 naming
  *      that file in the repo — never a 5xx, never a path of the machine.
  *      Only when putting back fails too is it a 500, naming the files left
- *      changed
+ *      changed, and where content that was moved aside is now (`left`)
  *   5. the lock is let go; 200 with the kind's answer
  * A caller already holding the lock (a request held by holdSyncRegistryLock)
  * applies under it, not after it.
@@ -97,7 +102,7 @@ import { openRepo } from './openRepo.js'
 import { decide } from './policy.js'
 import { realPlace } from './paths.js'
 import { withSyncRegistryLock, holdsLock } from './lock.js'
-import { writeRefusal } from './writePath.js'
+import { writeRefusal, placeProblem } from './writePath.js'
 import { repoRel } from './readRepoFile.js'
 import { logger } from '../lib/logger.js'
 
@@ -163,6 +168,7 @@ async function expectedFolder(root, dirRel) {
 // a folder removed.
 const entryOf = f => (f.removeWhole ? { rel: repoRel(f.rel), removeWhole: true }
   : f.removeFolder ? { rel: repoRel(f.rel), removeFolder: true }
+  : f.makeFolder ? { rel: repoRel(f.rel), makeFolder: true }
   : f.link !== undefined ? { rel: repoRel(f.rel), link: String(f.link) }
   : { rel: repoRel(f.rel), text: f.text })
 
@@ -177,7 +183,7 @@ async function makePlan(repo, change) {
   // under the lock.
   const log = repo.readLog()
   const reads = new Map()
-  for (const rel of new Set([...log.files, ...(made.reads ?? []).map(repoRel), ...files.filter(f => !f.removeFolder && !f.removeWhole).map(f => f.rel)])) {
+  for (const rel of new Set([...log.files, ...(made.reads ?? []).map(repoRel), ...files.filter(f => !f.removeFolder && !f.removeWhole && !f.makeFolder).map(f => f.rel)])) {
     reads.set(rel, stateOf(await repo.file(rel)))
   }
   const dirs = new Map()
@@ -186,9 +192,13 @@ async function makePlan(repo, change) {
   for (const rel of log.dirs) dirs.set(rel, dirStateOf(await (log.dirsAsRead?.get(rel) ?? openRepo(repo.root).dir(rel))))
   const places = new Map()
   for (const f of files) places.set(f.rel, await expectedFolder(repo.root, path.posix.dirname(f.rel)))
+  // No kind writes through a link made by hand: a file whose folder, or a
+  // folder above it, is a link — to a folder of the repo or out of it — is
+  // refused, whatever the kind, in the same words (writePath.js placeProblem).
+  const linked = made.refusal ? null : await placeProblem(repo.root, files.map(f => f.rel))
   return Object.freeze({
     kind: change.kind, change, root: repo.root,
-    refusal: made.refusal ?? null,
+    refusal: made.refusal ?? (linked ? writeRefusal(linked) : null),
     files: Object.freeze(files),
     after: repo.with(files.filter(f => f.text !== undefined).map(f => [f.rel, f.text])),
     findings: made.findings ?? [],
@@ -336,7 +346,7 @@ const parkName = (dir, base) => path.join(dir, `_${base}.${randomBytes(4).toStri
 const tempName = (dir, base) => path.join(dir, `_${base}.${randomBytes(4).toString('hex')}.tmp`)
 
 // One file; `step` records what it did, for writeFiles to take back.
-async function writeOne(root, { rel, text, link, removeFolder, removeWhole }, made, step, expected, asides) {
+async function writeOne(root, { rel, text, link, removeFolder, removeWhole, makeFolder }, made, step, expected, asides) {
   const dirRel = path.posix.dirname(rel)
   const base = path.posix.basename(rel)
   const dir = await realFolder(root, dirRel, made, expected)
@@ -345,6 +355,7 @@ async function writeOne(root, { rel, text, link, removeFolder, removeWhole }, ma
   step.abs = path.join(dir, base)
   if (removeFolder) return removeOneFolder(root, step, asides)
   if (removeWhole) return moveAside(root, step)
+  if (makeFolder) return makeOneFolder(root, rel, made)
   if (text === null) return removeOne(root, step)
   step.before = await before(step.abs)
   // A file that is there and read-only stays a refusal, as a plain write
@@ -365,6 +376,15 @@ async function writeOne(root, { rel, text, link, removeFolder, removeWhole }, ma
   await samePlace(root, dirRel, dir)
 }
 
+// A folder made when it is not there (each folder on the way checked, as
+// a file's are; removed again when a later file cannot be written); one
+// that is there as a folder is nothing to do.
+async function makeOneFolder(root, rel, made) {
+  await realFolder(root, rel, made, null)
+  const st = await fs.lstat(path.join(root, rel))
+  if (!st.isDirectory()) throw Object.assign(new Error('not a folder'), { code: 'ENOTDIR', why: 'it is not a folder' })
+}
+
 // A folder removed: one that is there as a folder of its own (not a
 // link), and empty — what was in it removed by the steps before. One not
 // there is nothing to do.
@@ -383,7 +403,7 @@ async function removeOneFolder(root, step, asides) {
 }
 
 // A file removed (anything but a folder: a file of any mode, a link, a
-// pipe), moved aside in one rename to a temp name beside it: nothing of it
+// pipe), moved aside in one rename to a parked name beside it: nothing of it
 // is read, and it is put back by the rename back. Removed by writeFiles
 // once every file is written. One not there is nothing to do.
 async function removeOne(root, step) {
@@ -398,9 +418,9 @@ async function removeOne(root, step) {
   await samePlace(root, step.dirRel, step.dir)
 }
 
-// A folder moved aside whole, in one rename, to a temp name beside it
-// (TEMP_FILE: Commit never adds it, the start-up sweep removes it): what
-// is in it is not read. One that is a link, or no folder, is refused; one
+// A folder moved aside whole, in one rename, to a parked name beside it
+// (parkName: never swept, shown by git, Commit refuses while it is there):
+// what is in it is not read. One that is a link, or no folder, is refused; one
 // not there is nothing to do. Removed by writeFiles once every file is
 // written; put back by the rename back.
 async function moveAside(root, step) {
@@ -465,12 +485,15 @@ async function putBack(root, step) {
 
 /**
  * Write `files` ([{ rel, text }], text null to remove; { rel, link } a
- * link; { rel, removeFolder: true } an emptied folder) into the repo at
+ * link; { rel, makeFolder: true } a folder; { rel, removeFolder: true }
+ * an emptied folder) into the repo at
  * `root`, all or none; `places` (rel → real folder) the folders they must
  * be written in. The caller holds the commit lock.
  *   → { ok: true, written: [rel] }
  *   → { ok: false, answer: { status: 409, body: { error, file } } }   nothing changed
- *   → { ok: false, answer: { status: 500, body: { error, file, notRestored } } }
+ *   → { ok: false, answer: { status: 500, body: { error, file, notRestored, left? } } }
+ *     left: [{ file, at }] content moved aside that could not be moved back,
+ *     and where it is now (a parked name, never swept)
  */
 export async function writeFiles(root, files, { places } = {}) {
   const made = []
@@ -485,21 +508,40 @@ export async function writeFiles(root, files, { places } = {}) {
       const notRestored = await takeBack(root, steps, made)
       // A removal is said as one: "cannot be removed".
       const removal = f.text === null || f.removeFolder || f.removeWhole
+      const verb = removal ? 'removed' : 'written'
       if (!notRestored.length) return { ok: false, answer: removal ? { status: 409, body: { error: `${f.rel} cannot be removed: ${whyOf(err)}`, file: f.rel } } : writeRefusal({ file: f.rel, why: whyOf(err) }) }
-      logger.error(`${f.rel} could not be written (${err.code || err.message}), and ${notRestored.join(', ')} could not be put back as they were`)
+      logger.error(`${f.rel} could not be ${verb} (${err.code || err.message}), and ${notRestored.join(', ')} could not be put back as they were`)
+      // What was moved aside and could not be moved back is said where it is now.
+      const at = parkedLeft(root, steps)
+      const where = at.length ? `; what was in ${at.map(a => `${a.file} is now ${a.at}`).join(', ')} — move it back to keep it` : ''
       return { ok: false, answer: { status: 500, body: {
-        error: `${f.rel} cannot be written: ${whyOf(err)}; and ${notRestored.join(', ')} could not be put back as ${notRestored.length > 1 ? 'they were' : 'it was'}: look at ${notRestored.length > 1 ? 'them' : 'it'} before saving again`,
-        file: f.rel, notRestored } } }
+        error: `${f.rel} cannot be ${verb}: ${whyOf(err)}; and ${notRestored.join(', ')} could not be put back as ${notRestored.length > 1 ? 'they were' : 'it was'}${where}: look at ${notRestored.length > 1 ? 'them' : 'it'} before saving again`,
+        file: f.rel, notRestored, ...(at.length ? { left: at } : {}) } } }
     }
   }
   // Written: what was moved aside goes. One that cannot be removed is
-  // no failed write (the change is made); it is logged, and swept later.
+  // no failed write (the change is made); it is logged and stays parked:
+  // never swept, and Commit names it until it is renamed back or removed.
   for (const step of steps) {
     if (step.before?.kind !== 'moved') continue
     await removeAside(step.before.aside)
       .catch(err => logger.error(`${step.rel}: what was moved aside to remove it could not be removed (${err.code || err.message}): ${path.basename(step.before.aside)}`))
   }
   return { ok: true, written: files.map(f => f.rel) }
+}
+
+// Content moved aside that takeBack could not move back, and where it is
+// now, in the repo: [{ file, at }]. One moved aside inside a folder that
+// was then moved aside whole, and is still aside, is in that folder.
+function parkedLeft(root, steps) {
+  const still = steps.filter(s => s.notBack && s.before?.kind === 'moved')
+  return still.map(s => {
+    let at = s.before.aside
+    for (const f of still) {
+      if (f !== s && at.startsWith(f.abs + path.sep)) at = path.join(f.before.aside, at.slice(f.abs.length + 1))
+    }
+    return { file: s.rel, at: path.relative(root, at).split(path.sep).join('/') }
+  })
 }
 
 // Every step put back, last first, then the folders made, deepest first.
@@ -515,8 +557,8 @@ async function takeBack(root, steps, made) {
       await putBack(root, step)
     } catch (err) {
       logger.error(`${step.rel} could not be put back as it was (${err.code || err.message})`)
-      // Content moved aside is where it was moved to: said, so it is found.
-      left.push(step.before?.kind === 'moved' ? `${step.rel} (it is at ${path.posix.join(step.dirRel, path.basename(step.before.aside))})` : step.rel)
+      step.notBack = true
+      left.push(step.rel)
     }
   }
   for (const m of [...made].reverse()) {

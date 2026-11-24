@@ -7,32 +7,26 @@
  *                   policy table
  *   valuesVersion   what a deployment's page was loaded from
  *   chartCopyText   a target's Chart.yaml with its source's dependencies
- *   copyChartDependencies  the target's Chart.yaml depends on what the source's does
  *   targetCopy      what making one target a copy of its source writes,
  *                   planned on a snapshot (a writer's change writes it)
- *   copyToTarget    make one target a copy of its source's files, by itself
- *   copyToTargets   every target of a source; returns the ones that failed
- *                   (for the routing save and the shared configs, until
- *                   they plan with targetCopy too)
- *   syncTargets     the targets a source's values save writes to
+ *   syncTargets     the targets a source's save writes to
  *
- * A values save and a sync link are changes of the writer
- * (repo/changes/set-values.js, sync.js). copyToTargets takes no lock: its
- * routes hold it around the whole read-registry → write → copy sequence.
+ * Nothing here writes: every copy to a sync target — a values save, a sync
+ * link, a routing save or removal, the shared configs, Regenerate, a
+ * migration — is planned with these and written by the writer
+ * (repo/changes/*.js), all or none.
  */
 
-import fs from 'fs/promises'
 import { createHash } from 'crypto'
 import path from 'path'
 import yaml from 'js-yaml'
 import { resolveStack, wrapPath, linkedStackRefusal } from './stack.js'
-import { copyRouting, readRouting, restoreRouting, writeWhole, routingToCopy, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
+import { routingToCopy, routingEntries, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
 import { writeRefusal } from '../repo/writePath.js'
 import { getTargetsForSource, isSafeSyncPath } from './sync.js'
 import { isDeployment } from '../repo/walk.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
-import { readTextIfThere } from './readIfThere.js'
 import { insideReal, deploymentLinkProblem } from '../repo/paths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment, isFlatFile } from '../repo/deployment.js'
@@ -137,28 +131,11 @@ function dependencyKey(d, dir) {
 /**
  * Whether a target's Chart.yaml (`dst`, read; `dstDir` its folder) depends
  * on what its source's (`srcDeps` from `srcDir`) does, as Helm sees it:
- * what copyChartDependencies leaves as it is.
+ * what chartCopyText leaves as it is.
  */
 export function sameDependencies(srcDeps, srcDir, dst, dstDir) {
   return !!dst && isPlainObject(dst) && Array.isArray(dst.dependencies ?? []) && (dst.dependencies ?? []).length === srcDeps.length &&
     (dst.dependencies ?? []).every((d, i) => dependencyKey(d, dstDir) === dependencyKey(srcDeps[i], srcDir))
-}
-
-export async function copyChartDependencies(srcDir, dstDir) {
-  const src = sourceChart(await fs.readFile(path.join(srcDir, 'Chart.yaml'), 'utf-8'))
-  const file = path.join(dstDir, 'Chart.yaml')
-  let dstText = null
-  try {
-    dstText = await fs.readFile(file, 'utf-8')
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err
-  }
-  const text = chartCopyText(src, srcDir, dstText, dstDir)
-  if (text === null) return false
-  // Whole or not at all: a Preview rendering the target meanwhile reads
-  // either file, never half of one.
-  await writeWhole(file, text)
-  return true
 }
 
 /**
@@ -178,7 +155,7 @@ export function sourceChart(text) {
 /**
  * The target's Chart.yaml (`dstText`, null when there is none) given the
  * dependencies of its source's (`sourceChart`), or null when it already
- * depends on the same (copyChartDependencies, without the disk).
+ * depends on the same.
  */
 export function chartCopyText({ src, deps: srcDeps }, srcDir, dstText, dstDir) {
   const dependencies = srcDeps.map(d => {
@@ -202,51 +179,8 @@ export function chartCopyText({ src, deps: srcDeps }, srcDir, dstText, dstDir) {
 }
 
 /**
- * Throws when a file cannot be written. `chart`, `values` and `routing` pick
- * the files; `valuesContent` and `routingContent` are what to write, when
- * the caller has already read and checked them.
- */
-// `chart` follows `values` unless said otherwise: the Template a target
-// renders and the values wrapped under that Template's name change together.
-// A routing-only save that moved the target to the source's Template, its
-// values still under the old one, dropped every alert of the target.
-export async function copyToTarget(srcDir, dstDir, { values = true, chart = values, routing = true, valuesContent, routingContent } = {}) {
-  await fs.mkdir(dstDir, { recursive: true })
-  const chartFile = path.join(dstDir, 'Chart.yaml')
-  const valuesFile = path.join(dstDir, 'values.yaml')
-  // A copy that fails leaves the target as it was: every file it was to
-  // write, put back, and one it made removed. Half a copy is worse than none
-  // — the source's Template over values under the old one's name renders
-  // none of its alerts, and values without their routing notify the wrong
-  // people.
-  const before = {
-    chart: chart ? await readOrNull(chartFile) : undefined,
-    values: values ? await readOrNull(valuesFile) : undefined,
-    routing: routing ? await readRouting(dstDir) : undefined,
-  }
-  try {
-    if (chart) await copyChartDependencies(srcDir, dstDir)
-    if (values) await writeWhole(valuesFile, valuesContent ?? await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8'))
-    // Notification routing (#92) follows values.yaml: the target gets the
-    // source's, or loses its own when the source has none.
-    if (routing) await copyRouting(srcDir, dstDir, routingContent)
-  } catch (err) {
-    const undo = []
-    if (before.chart !== undefined) undo.push(putBack(chartFile, before.chart))
-    if (before.values !== undefined) undo.push(putBack(valuesFile, before.values))
-    if (before.routing !== undefined) {
-      undo.push(readRouting(dstDir).then(now => (now.text === before.routing.text && now.cr === before.routing.cr ? null : restoreRouting(dstDir, before.routing))))
-    }
-    for (const r of await Promise.allSettled(undo)) {
-      if (r.status === 'rejected') console.error(`Sync: ${dstDir} could not be put back as it was`, r.reason)
-    }
-    throw err
-  }
-}
-
-/**
- * What making `target` a copy of `source` writes (copyToTarget, planned on
- * the snapshot `repo`, nothing written): `{ files: [{ rel, text } |
+ * What making `target` a copy of `source` writes, planned on the snapshot
+ * `repo` (nothing written here: a writer's change writes it, all or none): `{ files: [{ rel, text } |
  * { rel, removeFolder }] }` in the order to write them — Chart.yaml (when
  * its Template is not the source's), values.yaml, routing.yaml, its
  * AlertmanagerConfig, the templates/ folder those leave empty — each only
@@ -254,8 +188,12 @@ export async function copyToTarget(srcDir, dstDir, { values = true, chart = valu
  * cannot be read is refused naming it (it could not be put back), one that
  * is a folder as a file that cannot be written; so is a source whose
  * Chart.yaml names no Template or cannot be read. `chart`, `values` and
- * `routing` pick the files as copyToTarget's do; `valuesContent` and
- * `routingContent` ({ text, cr }) are what to write, already checked.
+ * `routing` pick the files; `chart` follows `values` unless said otherwise:
+ * the Template a target renders and the values wrapped under that
+ * Template's name change together (a routing-only copy that moved the
+ * target to the source's Template, its values still under the old one,
+ * dropped every alert of the target). `valuesContent` and `routingContent`
+ * ({ text, cr }) are what to write, already checked.
  */
 export async function targetCopy(repo, source, target, { values = true, chart = values, routing = true, valuesContent, routingContent } = {}) {
   const root = repo.root
@@ -301,55 +239,9 @@ export async function targetCopy(repo, source, target, { values = true, chart = 
       if (read.errors) return { refusal: { status: 400, body: { error: `${source} cannot be copied: its routing.yaml has problems`, problems: read.errors.map(message => ({ message })) } } }
       r = read
     }
-    put(ROUTING_FILE, r.text)
-    put(ROUTING_CR_FILE, r.cr)
-    if (r.text === null && r.cr === null) {
-      // templates/ was made for the resource; one holding anything else stays.
-      const tpl = await repo.dir(`${target}/templates`)
-      const cr = path.posix.basename(ROUTING_CR_FILE)
-      if (tpl.state === 'ok' && !tpl.value.links.size && [...tpl.value.entries.keys()].every(n => n === cr)) files.push({ rel: `${target}/templates`, removeFolder: true })
-    }
+    files.push(...await routingEntries(repo, target, r))
   }
   return { files }
-}
-
-// null when not there; there and unreadable is an error naming it.
-const readOrNull = readTextIfThere
-
-// A file as it was before: written again only when it changed, removed
-// when it was not there.
-async function putBack(file, text) {
-  if (await readOrNull(file) === text) return
-  if (text === null) await fs.rm(file, { force: true })
-  else await writeWhole(file, text)
-}
-
-/**
- * Every target of `source` gets `what`. One target that fails does not stop
- * the others or undo the source: it is logged and returned, `[{ target,
- * error }]`. sync.yaml can be hand-edited or arrive by `git pull`, so an
- * entry is not trusted: an unsafe path, the source itself, a repeat, or a
- * folder that is not a deployment on disk is reported and never written.
- */
-export async function copyToTargets(gitopsDir, registry, source, what) {
-  const failed = []
-  const seen = new Set()
-  const srcDir = path.join(gitopsDir, source)
-  for (const target of getTargetsForSource(registry, source)) {
-    if (seen.has(target)) continue
-    seen.add(target)
-    try {
-      const problem = await targetProblem(openRepo(gitopsDir), source, target)
-      if (problem) throw new Error(problem)
-      await copyToTarget(srcDir, path.join(gitopsDir, target), what)
-    } catch (err) {
-      // A file error's message carries the server's absolute path; the
-      // response gets only its code.
-      console.error(`Sync: ${source} could not be copied to ${target}`, err)
-      failed.push({ target, error: err.code || err.message })
-    }
-  }
-  return failed
 }
 
 // Why sync may not write to `target` of `source`, or null. sync.yaml can be
@@ -365,9 +257,8 @@ async function targetProblem(repo, source, target) {
 
 /**
  * The targets of `source` a values save writes to, in sync.yaml's order,
- * each once; the entries it may not write to (as copyToTargets refuses
- * them: not a path sync writes to, a folder that is no deployment or is
- * gone) are logged and returned, `failed: [{ target, error }]`. A target
+ * each once; the entries it may not write to (not a path sync writes to,
+ * a folder that is no deployment or is gone) are logged and returned, `failed: [{ target, error }]`. A target
  * that is there and cannot be used fails the whole save instead
  * (`refusal`): one reached through a link (in the repo or out of it: a
  * hand-made link is not followed), or whose Chart.yaml or values.yaml

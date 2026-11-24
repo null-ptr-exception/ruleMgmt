@@ -4,7 +4,6 @@
  * each deployment renders (there, and at the version it asks for).
  *
  *   deploymentCommitBlockers  { findings, routingProblems } for a commit
- *   regenerateRouting         make every resource that is behind again
  *
  * A finding blocks the commit and names the deployment or sync.yaml entry.
  * `regenerable` on it says Regenerate fixes it. A routing.yaml with errors
@@ -14,25 +13,18 @@
  */
 
 import path from 'path'
-import { writeRouting, routingToCopy, copyRouting, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
-import { writeProblems } from '../repo/writePath.js'
-import { isSafeSyncPath, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
-import { syncAnswer } from '../repo/sync.js'
-import { walk, walkFindings, isDeployment } from '../repo/walk.js'
+import { getSourceForTarget } from './sync.js'
+import { walk, walkFindings } from '../repo/walk.js'
 import { decide } from '../repo/policy.js'
 import { openRepo } from '../repo/openRepo.js'
-import { loadRouting } from '../repo/routing.js'
 import { loadShared, sharedForBuild, SHARED_FILE } from '../repo/shared.js'
 import { resolveStack } from './stack.js'
-import { insideReal } from '../repo/paths.js'
 import { templateFindings } from './commit/template.js'
 import { valuesFindings } from './commit/values.js'
-import { syncRegistryFindings, syncTargetFindings, SYNC_FILE } from './commit/sync.js'
-import { routingFindings, sharedFileFindings, sameRoutingAs } from './commit/routing.js'
+import { syncRegistryFindings, syncTargetFindings } from './commit/sync.js'
+import { routingFindings, sharedFileFindings } from './commit/routing.js'
 import { factsOf } from './commit/facts.js'
 import { finding } from '../repo/finding.js'
-
-const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
 /**
  * Every folder deployment, relative to the gitops repo, sorted — one inside
@@ -137,71 +129,4 @@ function sharedFacts(loaded, unresolved, policy) {
     d.list = d.list.filter(f => !used(f))
   }
   return factsOf(d, SHARED_FILE)
-}
-
-// A deployment's routing files would land outside the repo (a templates/
-// that is a link leading out): named, nothing written.
-async function refuseOutside(gitopsDir, dep) {
-  const problem = await writeProblems(gitopsDir, [`${dep}/${ROUTING_FILE}`, `${dep}/${ROUTING_CR_FILE}`])
-  if (problem) throw new Error(`${problem.file} cannot be written: ${problem.why}`)
-}
-
-/**
- * Every resource that is behind its routing.yaml is made again from it (the
- * text is left as it is, comments and all); then every target whose routing
- * is not its source's gets its source's. Each one on its own: one that
- * fails is listed, the rest go ahead. Writes files only, commits nothing.
- * @returns { regenerated: [path], failed: [{ deployment, error }] }
- */
-export async function regenerateRouting(gitopsDir) {
-  return withSyncRegistryLock(gitopsDir, async () => {
-    const regenerated = []
-    const failed = []
-    // Who is whose target cannot be told without sync.yaml: named first.
-    const repo = openRepo(gitopsDir)
-    const read = await syncAnswer(repo)
-    if (read.refusal) return { regenerated, failed: [{ deployment: SYNC_FILE, error: read.refusal.body.error }] }
-    const { registry } = read
-    const { findings } = await deploymentCommitBlockers(gitopsDir)
-
-    // One that cannot be read is named, not made again.
-    for (const f of findings.filter(f => f.kind === 'file-unreadable' && f.deployment)) failed.push({ deployment: f.deployment, error: f.description })
-    for (const f of findings.filter(f => f.kind === 'routing-stale')) {
-      try {
-        const loaded = await loadRouting(repo, f.deployment)
-        if (loaded.state !== 'ok' || !loaded.value.made) throw new Error(loaded.state === 'ok' ? loaded.value.errors.join('; ') : `${loaded.file} cannot be read`)
-        await refuseOutside(gitopsDir, f.deployment)
-        await writeRouting(path.join(gitopsDir, f.deployment), { text: loaded.value.text, cr: loaded.value.made })
-        regenerated.push(f.deployment)
-      } catch (err) {
-        failed.push({ deployment: f.deployment, error: err.code || err.message })
-      }
-    }
-
-    // A target is copied from its source, after the source is made again.
-    const targets = new Set(findings.filter(f => f.kind === 'routing-target-differs' && f.regenerable).map(f => f.deployment))
-    for (const source of regenerated) for (const t of getTargetsForSource(registry, source)) targets.add(t)
-    for (const target of [...targets].sort()) {
-      const source = getSourceForTarget(registry, target)
-      try {
-        if (!source) throw new Error('no source')
-        // sync.yaml may be hand-edited or pulled: a target is written only
-        // where sync itself would write it — a safe path inside the
-        // workspace, holding a deployment (as copyToTargets checks).
-        if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
-        if (!(await insideReal(gitopsDir, target))) throw new Error('not a path sync may write to: it leads outside the repo')
-        if (!(await isDeployment(repo, target))) throw new Error('not a deployment on disk')
-        await refuseOutside(gitopsDir, target)
-        // Read before anything is written: the source as it is made now.
-        const routing = await routingToCopy(openRepo(gitopsDir), source)
-        if (routing.errors) throw new Error(`its source ${source} has routing problems`)
-        if (await sameRoutingAs(gitopsDir, target, routing)) continue
-        await copyRouting(path.join(gitopsDir, source), path.join(gitopsDir, target), routing)
-        regenerated.push(target)
-      } catch (err) {
-        failed.push({ deployment: target, error: err.code || err.message })
-      }
-    }
-    return { regenerated, failed }
-  })
 }

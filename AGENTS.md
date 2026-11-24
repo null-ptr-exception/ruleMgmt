@@ -16,7 +16,7 @@ make proxy           # start local proxy (127.0.0.1:12014 → minikube:30080)
 make down            # stop proxy and destroy minikube cluster
 make status          # show proxy and pod status
 npm test             # vitest unit + integration tests (about a minute; no pins)
-STRESS=1 npx vitest run tests/integration/deployment-writes-stress.test.js   # the deployment writes' 20/50-round stress (one round of each in npm test)
+STRESS=1 npx vitest run tests/integration/deployment-writes-stress.test.js tests/integration/template-writes-stress.test.js tests/integration/joined-writes-interaction.test.js   # the writes' 20/50-round stress, each side's and the two beside each other (a round or a few of each in npm test)
 npm run test:pin     # every pin (tests/pin/<slice>/*.pin.test.js): each entry point against real Helm
 npm run test:e2e     # playwright E2E tests
 npm run lint         # eslint

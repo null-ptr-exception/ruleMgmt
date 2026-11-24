@@ -1,17 +1,16 @@
 /** A deployment's notification routing (#92). */
 
-import { copyToTargets, okWith } from '../../lib/deploymentWrite.js'
-import { withSyncRegistryLock, isTarget, getSourceForTarget, getTargetsForSource } from '../../lib/sync.js'
-import { buildRouting, writeRouting, removeRouting, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from '../../lib/routingFiles.js'
+import { isTarget, getSourceForTarget } from '../../lib/sync.js'
+import { unreadableAnswer } from '../../lib/routingFiles.js'
 import { syncAnswer } from '../../repo/sync.js'
-import { isLinkKind } from '../../repo/loaded.js'
-import { writeProblems, writeRefusal, targetWriteProblem } from '../../repo/writePath.js'
 import { openRepo } from '../../repo/openRepo.js'
-import { errorAnswer } from '../../lib/readIfThere.js'
 import { loadRouting, routingFiles } from '../../repo/routing.js'
-import { loadShared, sharedForBuild } from '../../repo/shared.js'
 import { decide } from '../../repo/policy.js'
 import { ROUTING_POLICIES } from '../../repo/routingPolicy.js'
+import { z } from 'zod'
+import { planChange, applyChange } from '../../repo/changes/index.js'
+import { route, map } from '../../http/route.js'
+import { DEPLOYMENT_REQUEST, deploymentAt, resolveValuesFile, commonRefused } from './resolve.js'
 
 // What stops a page, a save or a removal: an answer naming the file, or null.
 function refusalOf(loaded, policy) {
@@ -22,47 +21,6 @@ function refusalOf(loaded, policy) {
   if (first.code === 'routing.cr-unreadable') return { status: 409, body: { error: first.message, file: first.file, unreadable: true } }
   return { status: 409, body: { error: `${loaded.value.dep}: ${first.message}`, file: first.file } }
 }
-
-// The two files of `dep` and of each of its sync targets: a write that
-// would land outside the repo is refused before anything is written.
-const filesOf = dep => [`${dep}/${ROUTING_FILE}`, `${dep}/${ROUTING_CR_FILE}`]
-async function outsideRefusal(repo, dep, targets) {
-  const problem = await writeProblems(repo.root, filesOf(dep)) ?? await targetWriteProblem(repo.root, targets, filesOf)
-  return problem ? writeRefusal(problem) : null
-}
-
-/**
- * What stops a save, by the routingSave table: a file it would replace
- * that cannot be read — no permission, a folder in its place. A link that
- * is the file itself (to nothing, or out of the repo) is replaced by the
- * file saved, as every save replaces one (its folder is the repo's: the
- * outside check runs first).
- */
-async function saveRefusal(repo, dep) {
-  const loaded = await loadRouting(repo, dep)
-  if (loaded.state === 'unreadable') return isLinkKind(loaded.kind) ? null : unreadableAnswer(loaded)
-  if (loaded.state !== 'ok') return null
-  const cr = loaded.value.crUnreadable
-  const { refuse } = decide(loaded.findings, ROUTING_POLICIES.routingSave)
-  const first = refuse.find(f => f.code !== 'routing.cr-unreadable' || !isLinkKind(cr?.kind))
-  if (!first) return null
-  return first.code === 'routing.cr-unreadable' ? unreadableAnswer(cr) : { status: 409, body: { error: `${dep}: ${first.message}`, file: first.file } }
-}
-
-// A removal takes the files away whatever is in them; only a folder where
-// one of them should be, or a file where templates/ should be, stops it —
-// checked before the first file goes, so a refusal changes nothing.
-const BLOCKS_REMOVAL = new Set(['folder', 'not-a-folder'])
-async function removalRefusal(repo, dep) {
-  for (const f of await Promise.all(filesOf(dep).map(rel => repo.file(rel)))) {
-    if (f.state === 'unreadable' && BLOCKS_REMOVAL.has(f.kind)) return unreadableAnswer(f)
-  }
-  return null
-}
-
-import { z } from 'zod'
-import { route, map } from '../../http/route.js'
-import { DEPLOYMENT_REQUEST, deploymentAt, resolveValuesFile, commonRefused } from './resolve.js'
 
 // The body's `routing` is routing.yaml's text, kept as written, or the
 // parsed table.
@@ -93,28 +51,6 @@ export function routingRoutes(router) {
     return { at: { dir, folder, registry } }
   }
 
-  // Save or delete routing for the folder's own deployment, then give each
-  // sync target the source's files and report the ones that could not be
-  // written — under the registry lock, like the values save. A synced target
-  // is read-only.
-  function writeRoutingAndSync(gitopsDir, { dir, folder }, write) {
-    return withSyncRegistryLock(gitopsDir, async () => {
-      const { registry, refusal } = await syncAnswer(openRepo(gitopsDir))
-      if (refusal) return refusal
-      if (isTarget(registry, folder)) {
-        return { status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } }
-      }
-      const repo = openRepo(gitopsDir)
-      const outside = await outsideRefusal(repo, folder, getTargetsForSource(registry, folder).filter(t => t !== folder))
-      if (outside) return outside
-      // A write may refuse what it was given: { status, body }.
-      const refused = await write(dir, repo)
-      if (refused) return refused
-      const syncFailed = await copyToTargets(gitopsDir, registry, folder, { values: false, routing: true })
-      return { status: 200, body: okWith(syncFailed) }
-    })
-  }
-
   // routing.yaml's text, its problems, and whether the AlertmanagerConfig is
   // out of date (`stale`) — saving the text again regenerates it. A synced
   // target can be read like any other.
@@ -143,43 +79,17 @@ export function routingRoutes(router) {
 
   // A routing.yaml that does not pass the checks is refused and neither
   // file is written.
+  // Save or remove routing for the folder's own deployment, and give each
+  // sync target the same files: one change, all or none (changes/routing.js).
   router.put('/:chart/:deployment/routing', route('deployments.routing-put', { ...DEPLOYMENT_REQUEST, body: ROUTING_BODY }, async (input, { gitopsDir }) => {
     const { at, refused: no } = await routingTarget(input, gitopsDir)
     if (no) return no
-    // A config used from the shared configs (#123) is written in full:
-    // read and built under the lock, so a change to them made meanwhile is
-    // never written over with the old one.
-    let warnings = []
-    // A write that fails says why, naming the file (answersWithoutPaths).
-    try {
-      const { status, body } = await writeRoutingAndSync(gitopsDir, at, async (dir, repo) => {
-        const refused = await saveRefusal(repo, at.folder)
-        if (refused) return refused
-        const built = buildRouting(input.body.routing, sharedForBuild(await loadShared(repo)))
-        if (built.errors) return { status: 400, body: { error: 'routing.yaml has problems', problems: built.errors } }
-        await writeRouting(dir, built)
-        // Saved all the same: what the configs will do that is worth saying.
-        warnings = built.warnings
-        return null
-      })
-      return { status, body: status < 300 && warnings.length && body && typeof body === 'object' ? { ...body, warnings } : body }
-    } catch (err) {
-      return errorAnswer(err)
-    }
+    return applyChange(await planChange(openRepo(gitopsDir), { kind: 'routing', dep: at.folder, routing: input.body.routing }))
   }))
 
   router.delete('/:chart/:deployment/routing', route('deployments.routing-delete', DEPLOYMENT_REQUEST, async (input, { gitopsDir }) => {
     const { at, refused: no } = await routingTarget(input, gitopsDir)
     if (no) return no
-    try {
-      return await writeRoutingAndSync(gitopsDir, at, async (dir, repo) => {
-        const refused = await removalRefusal(repo, at.folder)
-        if (refused) return refused
-        await removeRouting(dir)
-        return null
-      })
-    } catch (err) {
-      return errorAnswer(err)
-    }
+    return applyChange(await planChange(openRepo(gitopsDir), { kind: 'routing', dep: at.folder, remove: true }))
   }))
 }

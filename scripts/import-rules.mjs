@@ -27,7 +27,8 @@ import { schemaToModel, modelToFiles, parseRulesDir, groupFileText, genSchema } 
 import { checkRules } from '../src/utils/ruleChecks.js'
 import { generateProducts } from '../src/utils/drift.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
-import { readTemplateAt } from '../server/lib/chartFiles.js'
+import { readTemplateAt, writeToolFiles } from '../server/lib/chartFiles.js'
+import { openRepoAt } from '../server/repo/locate.js'
 import { decide } from '../server/repo/policy.js'
 import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 
@@ -185,14 +186,16 @@ const entries = [
 ]
 const had = rel => (rel === 'values.schema.json' ? chart?.schemaText ?? null
   : rel.startsWith('templates') ? chart?.templateFiles[path.basename(rel)] ?? null : onDisk[path.basename(rel)] ?? null)
-for (const [rel, text] of entries) {
-  const abs = path.join(chartDir, rel)
-  const have = had(rel)
-  if (have === text) continue
-  await fs.mkdir(path.dirname(abs), { recursive: true })
-  await fs.writeFile(abs, text, 'utf-8')
-  console.log(`${have === null ? 'created' : 'updated'}   ${rel}`)
+// Every file written together, each whole: a run stopped part-way leaves
+// no file cut off. Said once written.
+const at = openRepoAt(chartDir)
+const changed = entries.filter(([rel, text]) => had(rel) !== text)
+try {
+  if (changed.length) await writeToolFiles(at.root, changed.map(([rel, text]) => ({ rel: `${at.rel}/${rel.split(path.sep).join('/')}`, text })))
+} catch (err) {
+  cannot(err.message)
 }
+for (const [rel] of changed) console.log(`${had(rel) === null ? 'created' : 'updated'}   ${rel}`)
 
 if (!chart || chart.findings.some(f => f.code === 'template.chart-absent')) {
   console.log('\nnote   no Chart.yaml — create the chart in the UI, or run gen-rules.mjs with --init')

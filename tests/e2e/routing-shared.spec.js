@@ -426,6 +426,23 @@ test('a routing.yaml that cannot be read is named, and no shared config can be c
   expect(await urlIn(A)).toBe(RELAY)
 })
 
+test('a change that is refused opens its dialog again with what was typed', async ({ page, request }) => {
+  expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
+  for (const folder of [A, B]) expect((await request.put(routingUrl(folder), { data: { routing: routing('  relay-webhook: { shared: true }\n') } })).ok()).toBeTruthy()
+  await fs.writeFile(path.join(WORKSPACE, B, 'routing.yaml'), 'cells: [\n')
+
+  await openShared(page)
+  await page.getByRole('button', { name: 'Edit relay-webhook' }).click()
+  await page.getByRole('dialog').getByLabel('Webhook URL').fill('http://relay.example.com:9191')
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await page.locator('.ant-modal-confirm:visible').getByRole('button', { name: 'Save' }).click()
+  const refusal = page.locator('.ant-modal-confirm-error:visible')
+  await expect(refusal).toContainText(`the routing.yaml of ${B} cannot be read`)
+  await refusal.getByRole('button', { name: 'OK' }).click()
+  await expect(page.getByRole('dialog').getByLabel('Webhook URL')).toHaveValue('http://relay.example.com:9191')
+  expect(await urlIn(A)).toBe(RELAY)
+})
+
 test('shared configs that cannot be read are said so on a deployment\'s Routing page', async ({ page, request }) => {
   expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
   expect((await request.put(routingUrl(A), { data: { routing: routing('  relay-webhook: { shared: true }\n') } })).ok()).toBeTruthy()

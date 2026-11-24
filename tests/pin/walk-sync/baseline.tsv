@@ -721,7 +721,7 @@ target-link-outside	Y	parsers	agree	-	-	no	-	-	-	-	-	differs	routes read: deploy
 target-link-outside	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
 target-link-outside	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	differs	-	
 target-link-outside	Y	save-copy	refused	409	deployments/w/out	no	-	-	-	-	-	differs	-	
-target-link-outside	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	differs	syncFailed=deployments/w/out:not a path sync may write to: it leads outside the repo	
+target-link-outside	Y	routing-copy	refused	409	deployments/w/out	no	-	-	-	-	-	differs	-	
 target-link-outside	Y	regenerate	ok	200	-	no	-	-	-	-	-	differs	regenerated=- failed=-	not-a-copy-after
 target-link-outside	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	differs	unlinked=- left=none	
 target-link-outside	Y	target-readonly	ok	200	-	no	-	-	-	-	-	differs	-	
@@ -842,7 +842,7 @@ target-link-inside	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployment
 target-link-inside	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
 target-link-inside	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	copy	-	
 target-link-inside	Y	save-copy	refused	409	deployments/w/ln	no	-	-	-	-	-	copy	-	
-target-link-inside	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	differs-routing	syncFailed=deployments/w/ln:not a deployment on disk	
+target-link-inside	Y	routing-copy	refused	409	deployments/w/ln	no	-	-	-	-	-	copy	-	
 target-link-inside	Y	regenerate	ok	200	-	no	-	-	-	-	-	copy	regenerated=- failed=-	
 target-link-inside	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=- left=none	
 target-link-inside	Y	target-readonly	ok	200	-	no	-	-	-	-	-	copy	-	
@@ -864,7 +864,7 @@ target-chart-unreadable	Y	parsers	agree	-	-	no	-	-	-	-	-	target-fails	routes rea
 target-chart-unreadable	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
 target-chart-unreadable	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	target-fails	-	
 target-chart-unreadable	Y	save-copy	unreadable	409	deployments/t/b/Chart.yaml	no	-	-	-	-	-	target-fails	-	
-target-chart-unreadable	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	target-fails	syncFailed=deployments/t/b:not a deployment on disk	
+target-chart-unreadable	Y	routing-copy	unreadable	409	deployments/t/b/Chart.yaml	no	-	-	-	-	-	target-fails	-	
 target-chart-unreadable	Y	regenerate	ok	200	-	no	-	-	-	-	-	target-fails	regenerated=- failed=-	not-a-copy-after
 target-chart-unreadable	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	target-fails	unlinked=- left=none	
 target-chart-unreadable	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	target-fails	-	

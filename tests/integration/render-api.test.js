@@ -5,7 +5,12 @@ import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
 import { execFileSync } from 'child_process'
-import { regenerateProducts } from '../../server/lib/chartFiles.js'
+import { planChange, applyChange } from '../../server/repo/changes/index.js'
+import { openRepo } from '../../server/repo/openRepo.js'
+
+// The products rules/ makes that are not there, written as opening the
+// Template writes them.
+const regenerateProducts = async (dir, chart) => applyChange(await planChange(openRepo(dir), { kind: 'template-open', chart }))
 
 let server, baseURL, tmpDir, helmOutputFile, helmArgsFile, promtoolCaptureFile, promtoolCaptureDir, fakePromtool
 let vmalertCaptureDir, fakeVmalert

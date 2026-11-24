@@ -11,6 +11,7 @@ import { defineChange, planChange, applyChange, hooks, sweepTempFiles } from '..
 import { openRepo } from '../../../server/repo/openRepo.js'
 import { withSyncRegistryLock, lockWaiters } from '../../../server/repo/lock.js'
 import { finding } from '../../../server/repo/finding.js'
+import { linkedFolderProblem } from '../../../server/repo/writePath.js'
 
 // chmod does not stop root from writing.
 const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0
@@ -242,6 +243,17 @@ describe('a write re-checks its place under the lock', () => {
     expect(await read('a/one.yaml')).toBe('one\n')
   })
 
+  it('a folder on the way that is a link to another folder of the repo: 409 naming the link, nothing written through it', async () => {
+    await fs.mkdir(path.join(root, 'c'))
+    await fs.writeFile(path.join(root, 'c/keep.yaml'), 'c\n')
+    await fs.rm(path.join(root, 'b'), { recursive: true })
+    await fs.symlink('c', path.join(root, 'b'))
+    const answer = await applyChange(await plan({ files: [{ rel: 'a/one.yaml', text: 'new\n' }, { rel: 'b/keep.yaml', text: 'over\n' }] }))
+    expect(answer).toEqual({ status: 409, body: { error: 'b/keep.yaml cannot be written: b is a link: a folder reached through a link is not written to', file: 'b/keep.yaml' } })
+    expect(await read('c/keep.yaml')).toBe('c\n')
+    expect(await read('a/one.yaml')).toBe('one\n')
+  })
+
   it('a folder swapped for a link after the plan, before the lock: 409', async () => {
     const p = await plan({ files: [{ rel: 'b/keep.yaml', text: 'over\n' }] })
     hooks.locked = async () => { await fs.rename(path.join(root, 'b'), path.join(work, 'parked')); await fs.symlink(outside, path.join(root, 'b')) }
@@ -357,19 +369,121 @@ describe('temp files and modes', () => {
     expect(await read('b/two.yaml')).toBe('two\n')
   })
 
-  it('sweepTempFiles removes the writer\'s old temp files, and only those', async () => {
-    // Aged by when they were made (ctime), whatever their mtime says.
-    const old = Date.now() - 2 * 60 * 60 * 1000
-    const put = async rel => { await fs.mkdir(path.dirname(path.join(root, rel)), { recursive: true }); await fs.writeFile(path.join(root, rel), 'x'); await fs.utimes(path.join(root, rel), old / 1000, old / 1000) }
+  it('sweepTempFiles removes the writer\'s old temp files, by when they were made, and never content moved aside', async () => {
+    const put = async rel => { await fs.mkdir(path.dirname(path.join(root, rel)), { recursive: true }); await fs.writeFile(path.join(root, rel), 'x') }
+    // An old mtime (a file renamed keeps it) says nothing: made now, by ctime.
+    const years = Date.now() / 1000 - 3 * 365 * 24 * 3600
     await put('a/_one.yaml.0123abcd.tmp')
     await put('b/deep/_x.yaml.deadbeef.tmp')
     await put('a/_one.yaml.0123abcd.tmp.keep')
     await put('a/_mine.tmp')
     await put('.git/_in-git.yaml.0123abcd.tmp')
-    // Made just now: young, though its mtime is old.
+    await put('a/_kept.yaml.0123abcd.parked')
+    await put('b/_folder.0123abcd.parked/_in.yaml.0123abcd.parked')
+    await put('b/_renamed.yaml.00000000.tmp')
+    await fs.utimes(path.join(root, 'b/_renamed.yaml.00000000.tmp'), years, years)
     expect(await sweepTempFiles(root)).toEqual([])
-    expect((await sweepTempFiles(root, { now: Date.now() + 2 * 60 * 60 * 1000 })).sort()).toEqual(['a/_one.yaml.0123abcd.tmp', 'b/deep/_x.yaml.deadbeef.tmp'])
-    expect(await exists(path.join(root, '.git/_in-git.yaml.0123abcd.tmp'))).toBe(true)
-    expect(await exists(path.join(root, 'a/_mine.tmp'))).toBe(true)
+    // An hour after they were made.
+    const later = Date.now() + 60 * 60 * 1000 + 1000
+    expect((await sweepTempFiles(root, { now: later })).sort()).toEqual(['a/_one.yaml.0123abcd.tmp', 'b/_renamed.yaml.00000000.tmp', 'b/deep/_x.yaml.deadbeef.tmp'])
+    for (const kept of ['.git/_in-git.yaml.0123abcd.tmp', 'a/_mine.tmp', 'a/_kept.yaml.0123abcd.parked', 'b/_folder.0123abcd.parked/_in.yaml.0123abcd.parked']) expect(await exists(path.join(root, kept))).toBe(true)
+  })
+})
+
+describe('a folder made as part of a change', () => {
+  it('is made when it is not there, left alone when it is, and removed again when a later file cannot be written', async () => {
+    expect((await applyChange(await plan({ files: [{ rel: 'n/empty', makeFolder: true }, { rel: 'a', makeFolder: true }] }))).status).toBe(200)
+    expect(await tree(root)).toEqual({ a: 'dir', 'a/one.yaml': 'one\n', b: 'dir', 'b/two.yaml': 'two\n', n: 'dir', 'n/empty': 'dir' })
+    await fs.rm(path.join(root, 'n'), { recursive: true })
+    const before = await tree(root)
+    await fs.rm(path.join(root, 'b/two.yaml')); await fs.mkdir(path.join(root, 'b/two.yaml'))
+    const answer = await applyChange(await plan({ files: [{ rel: 'n/empty', makeFolder: true }, { rel: 'b/two.yaml', text: 'x\n' }] }))
+    expect(answer.status).toBe(409)
+    await fs.rmdir(path.join(root, 'b/two.yaml')); await fs.writeFile(path.join(root, 'b/two.yaml'), 'two\n')
+    expect(await tree(root)).toEqual(before)
+  })
+
+  it('a file in its place: 409 naming it', async () => {
+    const answer = await applyChange(await plan({ files: [{ rel: 'a/one.yaml', makeFolder: true }] }))
+    expect(answer).toEqual({ status: 409, body: { error: 'a/one.yaml cannot be written: it is not a folder', file: 'a/one.yaml' } })
+  })
+})
+
+describe('a file removed as part of a change', () => {
+  it.skipIf(IS_ROOT)('one that cannot be read, or is read-only, is removed as a plain removal would remove it', async () => {
+    await fs.chmod(path.join(root, 'a/one.yaml'), 0)
+    await fs.chmod(path.join(root, 'b/two.yaml'), 0o444)
+    expect((await applyChange(await plan({ files: [{ rel: 'a/one.yaml', text: null }, { rel: 'b/two.yaml', text: null }] }))).status).toBe(200)
+    expect(await tree(root)).toEqual({ a: 'dir', b: 'dir' })
+  })
+
+  it.skipIf(IS_ROOT)('and put back, as it was, when a later file cannot be written', async () => {
+    await fs.chmod(path.join(root, 'a/one.yaml'), 0)
+    await fs.rm(path.join(root, 'b/two.yaml')); await fs.mkdir(path.join(root, 'b/two.yaml'))
+    const answer = await applyChange(await plan({ files: [{ rel: 'a/one.yaml', text: null }, { rel: 'b/two.yaml', text: 'x\n' }] }))
+    expect(answer.status).toBe(409)
+    expect(await modeOf('a/one.yaml')).toBe(0)
+    await fs.chmod(path.join(root, 'a/one.yaml'), 0o644)
+    expect(await read('a/one.yaml')).toBe('one\n')
+    expect((await fs.readdir(path.join(root, 'a'))).sort()).toEqual(['one.yaml'])
+  })
+
+  it('removed with the folder it was in, and both put back when a later step fails', async () => {
+    await fs.mkdir(path.join(root, 'b/sub'))
+    await fs.writeFile(path.join(root, 'b/sub/x.yaml'), 'x\n')
+    const before = await tree(root)
+    const ok = await plan({ files: [{ rel: 'b/sub/x.yaml', text: null }, { rel: 'b/sub', removeFolder: true }] })
+    hooks.beforeRename = null
+    const failing = await plan({ files: [{ rel: 'b/sub/x.yaml', text: null }, { rel: 'b/sub', removeFolder: true }, { rel: 'b/two.yaml', removeFolder: true }] })
+    expect((await applyChange(failing)).status).toBe(409)
+    expect(await tree(root)).toEqual(before)
+    expect((await applyChange(ok)).status).toBe(200)
+    expect(await tree(root)).toEqual({ a: 'dir', 'a/one.yaml': 'one\n', b: 'dir', 'b/two.yaml': 'two\n' })
+  })
+})
+
+describe('content moved aside that cannot be moved back', () => {
+  it.skipIf(IS_ROOT)('the 500 says where it is now', async () => {
+    const p = await plan({ files: [{ rel: 'a/one.yaml', text: null }, { rel: 'b/two.yaml', text: 'x\n' }] })
+    hooks.beforeRename = async rel => {
+      if (rel !== 'b/two.yaml') return
+      // a/ can no longer be written (one.yaml cannot go back), and b/two.yaml becomes a folder.
+      await fs.chmod(path.join(root, 'a'), 0o555)
+      await fs.rm(path.join(root, 'b/two.yaml')); await fs.mkdir(path.join(root, 'b/two.yaml')); await fs.writeFile(path.join(root, 'b/two.yaml/x'), 'x\n')
+    }
+    const answer = await applyChange(p)
+    expect(answer.status).toBe(500)
+    expect(answer.body.left).toEqual([{ file: 'a/one.yaml', at: expect.stringMatching(/^a\/_one\.yaml\.[0-9a-f]{8}\.parked$/) }])
+    expect(answer.body.error).toContain(`what was in a/one.yaml is now ${answer.body.left[0].at} — move it back to keep it`)
+    expect(await fs.readFile(path.join(root, answer.body.left[0].at), 'utf-8')).toBe('one\n')
+  })
+
+  it('a file moved aside in a folder that was then moved aside whole: the 500 names it inside that folder', async () => {
+    // a/one.yaml removed, then a/ (emptied) removed, then a write that fails;
+    // the file system refuses to move a/ back.
+    const p = await plan({ files: [{ rel: 'a/one.yaml', text: null }, { rel: 'a', removeFolder: true }, { rel: 'b/two.yaml/x', text: 'x\n' }] })
+    const realRename = fs.rename
+    fs.rename = async function (from, to, ...rest) { if (String(to) === path.join(root, 'a')) throw Object.assign(new Error('refused'), { code: 'EACCES' }); return realRename.call(this, from, to, ...rest) }
+    let answer
+    try { answer = await applyChange(p) } finally { fs.rename = realRename }
+    expect(answer.status).toBe(500)
+    expect(answer.body.notRestored.sort()).toEqual(['a', 'a/one.yaml'])
+    const at = Object.fromEntries(answer.body.left.map(l => [l.file, l.at]))
+    expect(at.a).toMatch(/^_a\.[0-9a-f]{8}\.parked$/)
+    expect(at['a/one.yaml']).toMatch(new RegExp(`^${at.a}/_one\\.yaml\\.[0-9a-f]{8}\\.parked$`))
+    expect(await fs.readFile(path.join(root, at['a/one.yaml']), 'utf-8')).toBe('one\n')
+  })
+})
+
+describe('linkedFolderProblem', () => {
+  it('names the first file a folder on the way to which is a link, in the repo or out of it', async () => {
+    await fs.symlink('a', path.join(root, 'in'))
+    await fs.symlink(outside, path.join(root, 'out'))
+    expect(await linkedFolderProblem(root, ['a/one.yaml', 'new/deep/f.yaml', 'one.yaml'])).toBe(null)
+    expect(await linkedFolderProblem(root, ['a/one.yaml', 'in/one.yaml'])).toEqual({ file: 'in/one.yaml', why: 'in is a link: a folder reached through a link is not written to' })
+    expect(await linkedFolderProblem(root, ['out/x/keep.yaml'])).toEqual({ file: 'out/x/keep.yaml', why: 'out is a link: a folder reached through a link is not written to' })
+    // The file itself being a link is not this: a save replaces it.
+    await fs.symlink('one.yaml', path.join(root, 'a/link.yaml'))
+    expect(await linkedFolderProblem(root, ['a/link.yaml'])).toBe(null)
   })
 })

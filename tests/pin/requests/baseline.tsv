@@ -817,12 +817,12 @@ reserved-extra	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-
 reserved-extra	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
 reserved-extra	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-	
-link-in	charts.clone:name	legit	ok	200	same	no	same	no	free	charts/copy,charts/demo/Chart.yaml,charts/demo/values.schema.json	-	-	-	
-link-in	charts.delete:name	legit	ok	200	same	no	same	no	free	charts/inchart	-	-	-	
+link-in	charts.clone:name	legit	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	
+link-in	charts.delete:name	legit	conflict	409	same	no	same	no	free		-	-	-	
 link-in	templates.get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	templates.rules:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	templates.migration-preview:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	templates.chart-meta:chart	legit	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
+link-in	templates.chart-meta:chart	legit	conflict	409	same	no	same	no	free		-	-	-	
 link-in	deployments.get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	deployments.get:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.save:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
@@ -853,7 +853,7 @@ link-in	sync.create:source	legit	refused	400	same	no	same	no	free		-	-	-	refuses
 link-in	sync.create:target	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	charts.clone:name	any	conflict	409	same	no	same	no	free		-	-	-	
-link-out	charts.delete:name	any	ok	200	same	no	same	no	free	charts/outchart	-	-	-	
+link-out	charts.delete:name	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.get:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.rules:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.migration-preview:chart	any	conflict	409	same	no	same	no	free		-	-	-	
@@ -907,7 +907,7 @@ link-via	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-
 link-via	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	charts.clone:name	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git	charts.delete:name	any	ok	200	same	no	same	no	free	charts/gitchart	-	-	-	
+link-git	charts.delete:name	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git	templates.get:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git	templates.rules:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git	templates.migration-preview:chart	any	conflict	409	same	no	same	no	free		-	-	-	
@@ -1008,8 +1008,8 @@ body:good	folders.common{}	good	ok	200	same	no	same	no	free	deployments/c/_commo
 body:good	folders.init{}	good	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	-	
 body:good	sync.create{}	good	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	-	
 body:good	sync.delete{}	good	ok	200	same	no	same	no	free	sync.yaml	-	-	-	
-body:good	shared.put{}	good	ok	200	same	no	same	no	free		-	-	-	
-body:good	shared.rename{}	good	ok	200	same	no	same	no	free	_shared/notification-configs.yaml	-	-	-	
+body:good	shared.put{}	good	conflict	409	same	no	same	no	free		-	-	-	
+body:good	shared.rename{}	good	conflict	409	same	no	same	no	free		-	-	-	
 body:good	shared.regenerate{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:extra-field	charts.create{}	same-as-good	ok	200	same	no	same	no	free	charts/fresh/Chart.yaml,charts/fresh/values.schema.json,charts/fresh/values.yaml	-	-	ok	
 body:extra-field	charts.clone{}	same-as-good	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	ok	
@@ -1032,8 +1032,8 @@ body:extra-field	folders.common{}	same-as-good	ok	200	same	no	same	no	free	deplo
 body:extra-field	folders.init{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	ok	
 body:extra-field	sync.create{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	ok	
 body:extra-field	sync.delete{}	same-as-good	ok	200	same	no	same	no	free	sync.yaml	-	-	ok	
-body:extra-field	shared.put{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
-body:extra-field	shared.rename{}	same-as-good	ok	200	same	no	same	no	free	_shared/notification-configs.yaml	-	-	ok	
+body:extra-field	shared.put{}	same-as-good	conflict	409	same	no	same	no	free		-	-	conflict	
+body:extra-field	shared.rename{}	same-as-good	conflict	409	same	no	same	no	free		-	-	conflict	
 body:extra-field	shared.regenerate{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
 body:none	charts.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1250,7 +1250,7 @@ field:text	sync.create{target}	any	ok	200	same	no	same	no	free	sync.yaml,x/Chart
 field:text	sync.delete{target}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	shared.put{shared}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	shared.rename{from}	any	not-found	404	same	no	same	no	free		-	-	-	
-field:text	shared.rename{to}	any	ok	200	same	no	same	no	free	_shared/notification-configs.yaml	-	-	-	
+field:text	shared.rename{to}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:array	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	charts.clone{migration}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1502,7 +1502,7 @@ field:long	sync.create{target}	any	refused	400	same	no	same	no	free		-	-	-
 field:long	sync.delete{target}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	shared.put{shared}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	shared.rename{from}	any	not-found	404	same	no	same	no	free		-	-	-	
-field:long	shared.rename{to}	any	ok	200	same	no	same	no	free	_shared/notification-configs.yaml	-	-	-	
+field:long	shared.rename{to}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:deep	charts.create{name}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	charts.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	charts.clone{migration}	any	refused	400	same	no	same	no	free		-	-	-	

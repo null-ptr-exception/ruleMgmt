@@ -611,7 +611,7 @@ link-inside	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true wa
 link-inside	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
 link-inside	A	shared-get	stale	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=relay overlaps=1 stale=true unreadable=false	
 link-inside	A	shared-put	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	written=3	
-link-inside	A	regenerate	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+link-inside	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
 link-inside	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
 link-inside	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
 link-inside	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
@@ -853,8 +853,8 @@ shared-dangling-link	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unreso
 shared-dangling-link	SH	check-repo	cannot-check	exit 2	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:routing.problem,refuse:shared.unreadable	
 shared-dir-link	SH	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
 shared-dir-link	SH	shared-get	ok	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=relay overlaps=0 stale=false unreadable=false	
-shared-dir-link	SH	shared-put	ok	200	-	no	-	ok	renders	0	1	routes	written=2	
-shared-dir-link	SH	shared-rename	ok	200	-	no	deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,notes/sh/notification-configs.yaml	ok	renders	0	1	routes	-	
+shared-dir-link	SH	shared-put	refused	409	_shared/notification-configs.yaml	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
+shared-dir-link	SH	shared-rename	refused	409	_shared/notification-configs.yaml	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
 shared-dir-link	SH	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
 shared-dir-link	SH	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
 shared-dir-link	SH	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	

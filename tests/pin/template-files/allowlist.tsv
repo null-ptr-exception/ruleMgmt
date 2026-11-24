@@ -161,3 +161,6 @@ tmpl-1x-file-repeats-alerts	save-rules	accepts-what-helm-fails	policy	what Helm 
 tmpl-underscore-file	save-rules	accepts-what-helm-fails	policy	what Helm fails on in a file this save does not write: the save goes through and names that file (decided), Commit still refuses it
 tvalues-not-yaml	save-rules	accepts-what-helm-fails	policy	what Helm fails on in a file this save does not write: the save goes through and names that file (decided), Commit still refuses it
 tvalues-unreadable	save-rules	accepts-what-helm-fails	policy	what Helm fails on in a file this save does not write: the save goes through and names that file (decided), Commit still refuses it
+folder-link-inside	chart-meta	refuses-what-helm-renders	policy	a Template folder reached through a link made by hand is not written to: the write is refused naming the file (links made by hand are not supported)
+folder-link-inside	gen-chart	refuses-what-helm-renders	policy	a Template folder reached through a link made by hand is not written to: the tool stops with one ERROR line naming the file, exit 2 (links made by hand are not supported)
+folder-link-inside	import-rules	refuses-what-helm-renders	policy	a Template folder reached through a link made by hand is not written to: the tool stops with one ERROR line naming the file, exit 2 (links made by hand are not supported)

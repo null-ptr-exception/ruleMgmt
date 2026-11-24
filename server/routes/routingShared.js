@@ -1,12 +1,12 @@
 import express from 'express'
-import { withSyncRegistryLock } from '../lib/sync.js'
-import { regenerateRouting } from '../lib/commitChecks.js'
 import {
-  routingUsers, usageOf, overlapsOf, unreadableOf, staleUsers, writeShared, renameShared, SHARED_FILE,
+  routingUsers, usageOf, overlapsOf, unreadableOf, staleUsers, SHARED_FILE,
 } from '../lib/sharedConfigs.js'
 import { loadShared, loadSharedDir, sharedDirProblemOf, sharedForBuild } from '../repo/shared.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { z } from 'zod'
+import { openRepo } from '../repo/openRepo.js'
+import { planChange, applyChange } from '../repo/changes/index.js'
 import { route, declaredRoutes, map } from '../http/route.js'
 
 // `shared` is the file's text, kept as written, or `{ configs }`.
@@ -60,18 +60,18 @@ export default function routingSharedRouter() {
     }
   }
 
-  // Text or the page's { configs }: one write, one answer (writeShared).
-  router.put('/', route('shared.put', { body: PUT_BODY }, saysWhy(({ body }, { gitopsDir }) => (
-    withSyncRegistryLock(gitopsDir, () => writeShared(gitopsDir, body.shared))
-  ))))
+  // Text or the page's { configs }: one change, all or none (changes/shared.js).
+  router.put('/', route('shared.put', { body: PUT_BODY }, async ({ body }, { gitopsDir }) => (
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'shared', shared: body.shared }))
+  )))
 
-  router.post('/rename', route('shared.rename', { body: RENAME_BODY }, saysWhy(({ body }, { gitopsDir }) => (
-    withSyncRegistryLock(gitopsDir, () => renameShared(gitopsDir, body.from, body.to))
-  ))))
+  router.post('/rename', route('shared.rename', { body: RENAME_BODY }, async ({ body }, { gitopsDir }) => (
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'shared', rename: { from: body.from, to: body.to } }))
+  )))
 
   // Every resource behind — the shared file edited with git, say — made again.
   router.post('/regenerate', route('shared.regenerate', {}, saysWhy(async (_, { gitopsDir }) => (
-    { status: 200, body: await regenerateRouting(gitopsDir) }
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'regenerate-routing' }))
   ))))
 
   return declaredRoutes(router)

@@ -19,11 +19,10 @@
  * converts it. The chart is read as the server reads it (the repo loader).
  */
 
-import fs from 'fs/promises'
 import path from 'path'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { repeatsText, REPEATS_FIX } from '../src/utils/drift.js'
-import { readTemplateAt } from '../server/lib/chartFiles.js'
+import { readTemplateAt, writeToolFiles } from '../server/lib/chartFiles.js'
 import { decide } from '../server/repo/policy.js'
 import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 
@@ -73,11 +72,11 @@ async function main() {
     return 1
   }
 
-  const tmplDir = path.join(chartDir, 'templates')
-  if (!check) await fs.mkdir(tmplDir, { recursive: true })
-
   const results = []
   let failed = 0
+  // Every template this run writes, written together at the end, each
+  // whole: a run stopped part-way leaves no file cut off.
+  const pending = []
 
   const findingsByGroup = new Map()
   for (const finding of t.ruleChecks) {
@@ -117,7 +116,7 @@ async function main() {
       }
       continue
     }
-    await fs.writeFile(path.join(tmplDir, name), content, 'utf-8')
+    pending.push({ rel: `${t.dir}/templates/${name}`, text: content })
     results.push([existing === content ? 'unchanged' : existing === null ? 'created' : 'updated', group, ''])
   }
   // The rest of what the comparison names: a schema behind rules/ (a save or
@@ -130,6 +129,8 @@ async function main() {
     }
     for (const r of t.drift.repeats ?? []) { results.push(['REPEATS', r.file, `${repeatsText(r)} — ${REPEATS_FIX}`]); failed++ }
   }
+
+  if (pending.length) await writeToolFiles(t.root, pending)
 
   const width = Math.max(...results.map(r => r[1].length), 0)
   for (const [status, group, note] of results) {

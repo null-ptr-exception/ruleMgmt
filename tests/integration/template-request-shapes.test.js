@@ -166,15 +166,16 @@ describe('the Template list\'s requests, as the page sends them', () => {
 })
 
 describe('a save the file system refuses', () => {
-  it('names the file it could not write, not only that the server failed', async () => {
+  it('names the file it could not write, in a refusal: nothing is written', async () => {
     expect((await api('POST', '/api/v2/charts', { name: 'ro' })).status).toBe(200)
     expect((await api('POST', '/api/v2/templates/ro/rules', { files: { 'cpu.yaml': cpu('ns') }, confirmBreaking: true })).status).toBe(200)
     const tmpl = path.join(tmpDir, 'charts/ro/templates')
     await fs.chmod(tmpl, 0o555)
     try {
       const r = await api('POST', '/api/v2/templates/ro/rules', { files: { 'cpu.yaml': cpu('team') }, confirmBreaking: true })
-      expect(r.status).toBe(500)
-      expect(r.body.error).toContain('cpu.yaml')
+      expect(r.status).toBe(409)
+      expect(r.body).toEqual({ error: 'charts/ro/templates/cpu.yaml cannot be written: permission denied', file: 'charts/ro/templates/cpu.yaml' })
+      expect(await fs.readFile(path.join(tmpDir, 'charts/ro/rules/cpu.yaml'), 'utf-8')).toBe(cpu('ns'))
       expect(r.text).not.toContain(tmpDir)
     } finally {
       await fs.chmod(tmpl, 0o755)

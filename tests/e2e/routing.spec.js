@@ -293,9 +293,10 @@ test('Remove routing deletes it, after asking', async ({ page, request }) => {
   expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
 })
 
-// #180: the source's routing is removed even when a target cannot be
-// updated, and the page says which target was left behind.
-test('Remove routing names a sync target it could not update', async ({ page, request }) => {
+// The source and its sync targets are written together, or none of them:
+// a target that cannot be updated stops the removal, and the page names
+// the file.
+test('Remove routing is refused, naming the sync target\'s file it could not update, and removes nothing', async ({ page, request }) => {
   test.skip(typeof process.getuid === 'function' && process.getuid() === 0, 'chmod does not stop root')
   const routing = { labels: { severity: ['critical'] }, configs: {}, cells: [] }
   expect((await request.put(routingUrl(FOLDER), { data: { routing } })).ok()).toBeTruthy()
@@ -308,9 +309,9 @@ test('Remove routing names a sync target it could not update', async ({ page, re
     await page.getByRole('button', { name: 'Remove routing' }).click()
     await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
 
-    await expect(page.getByText(`Routing removed, but this sync target could not be updated and may not match the source: ${OTHER} (EACCES)`)).toBeVisible({ timeout: 8000 })
+    await expect(page.locator('.ant-modal-confirm-error')).toContainText(`${OTHER}/routing.yaml cannot be removed: permission denied`, { timeout: 8000 })
     await expect(page.getByText('Routing removed', { exact: true })).toHaveCount(0)
-    expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
+    expect((await request.get(routingUrl(FOLDER))).status()).toBe(200)
     expect((await request.get(routingUrl(OTHER))).status()).toBe(200)
   } finally {
     await fs.chmod(target, 0o755)

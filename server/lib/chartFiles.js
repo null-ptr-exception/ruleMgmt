@@ -1,42 +1,16 @@
 /**
- * A Template's source and products as the repo loader reads them, the drift
- * between them (#57), and writing the products. Shared by the templates,
- * render and git routes.
+ * A Template's source and products as the repo loader reads them, and the
+ * drift between them (#57). Shared by the templates, render and git routes
+ * and the command line tools; the writes are the writer's (repo/changes/).
  */
 
-import fs from 'fs/promises'
 import path from 'path'
-import { writeWhole } from './routingFiles.js'
-import { readTextIfThere, UnreadableError } from './readIfThere.js'
+import { UnreadableError } from './readIfThere.js'
 import { openRepo } from '../repo/openRepo.js'
 import { chartsDir } from '../repo/template.js'
 import { openRepoAt } from '../repo/locate.js'
-
-// null only when the file is not there: one that cannot be read is an error,
-// not a file to write over.
-const readOr = readTextIfThere
-
-/**
- * Write only the entries whose on-disk content differs. Returns their paths.
- *
- * Sequential, not transactional. Callers compute every entry before calling
- * this, so a generation, check or breaking-change failure leaves the chart
- * untouched — that is the "all-or-nothing" the save route promises. An I/O
- * failure partway through (disk full, permissions) is not rolled back and
- * leaves the files before it written; ruling that out would take writing to
- * temp files and renaming them into place.
- */
-export async function writeChanged(entries) {
-  const written = []
-  for (const [abs, content] of entries) {
-    if (await readOr(abs) !== content) {
-      await fs.mkdir(path.dirname(abs), { recursive: true })
-      await writeWhole(abs, content)
-      written.push(abs)
-    }
-  }
-  return written
-}
+import { writeFiles } from '../repo/write.js'
+import { linkedFolderProblem, writeRefusal } from '../repo/writePath.js'
 
 /**
  * The Template folder `<CHARTS_DIR>/<name>`, every file of it read once
@@ -71,26 +45,17 @@ export async function readTemplateAt(chartDir) {
 }
 
 /**
- * Write the products a chart's own `rules/*.yaml` generates that are absent
- * on disk. Used when a chart is opened and some are missing — there is
- * nothing to orphan, so it is not asked. A product that is there but differs
- * (hand-edited, or behind the source) is left alone: that is `stale`, which
- * the editor reports and a Save resolves, not something a read overwrites.
- * Returns null when there is no rules/ source, or { errors } / { written }.
+ * Write a command line tool's files ([{ rel, text }], text null to remove)
+ * into the repo at `root`: each whole, all or none (the writer's
+ * writeFiles), so a run stopped part-way leaves no file cut off and one
+ * that cannot be written leaves the others as they were. A file whose
+ * folder is reached through a link is not written. Throws an Error naming
+ * the file in the repo. It takes no lock: the tool runs in its own
+ * process, beside any server on the same repo, as before.
  */
-export async function regenerateProducts(gitopsDir, name) {
-  const repo = openRepo(gitopsDir)
-  const t = await readTemplate(gitopsDir, name, repo)
-  if (!t?.fromRules) return null
-  if (t.ruleErrors.length) return { errors: t.ruleErrors }
-  const entries = [
-    ['values.schema.json', t.products.schemaText],
-    ...Object.entries(t.products.templates).map(([n, content]) => [`templates/${n}`, content]),
-  ]
-  const absent = []
-  for (const [rel, content] of entries) {
-    if ((await repo.file(`${t.dir}/${rel}`)).state === 'absent') absent.push([path.join(gitopsDir, t.dir, rel), content])
-  }
-  const written = await writeChanged(absent)
-  return { written: written.map(p => path.relative(path.join(gitopsDir, t.dir), p)) }
+export async function writeToolFiles(root, files) {
+  const linked = await linkedFolderProblem(root, files.map(f => f.rel))
+  if (linked) throw new Error(writeRefusal(linked).body.error)
+  const wrote = await writeFiles(root, files)
+  if (!wrote.ok) throw new Error(wrote.answer.body.error)
 }

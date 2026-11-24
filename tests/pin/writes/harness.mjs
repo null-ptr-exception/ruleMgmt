@@ -172,6 +172,10 @@ export async function baseFiles(ws) {
 //                      that folder made read-only)
 //   chartFile          the Chart.yaml of a deployment it rewrites, not asked for
 //   depFolder          a deployment folder it writes in
+//   side: 'template'   a write of the Template side (rows only they get)
+//   last               the last file of the same write
+//   unreadableDir      a folder of what it removes or copies, made unreadable
+//   commitRefusesBefore  Commit refuses the repo as the path finds it
 //   unnamed            the file its answer names is not pinned
 //   cli                a process: args(ws) → [script, ...args]
 const read = (ws, rel) => fs.readFile(path.join(ws.root, rel), 'utf-8')
@@ -241,63 +245,74 @@ export const PATHS = [
     },
     failAt: { first: 'deployments/t/n/Chart.yaml' }, depFolder: 'deployments/t/n',
     files: ['deployments/t/n/'] },
-  { name: 'migration-apply', primary: `${T}/rules/cpu.yaml`, second: `${D.c}/values.yaml`,
+  { name: 'migration-apply', side: 'template', primary: `${T}/rules/cpu.yaml`, second: `${D.c}/values.yaml`, last: `${D.b}/values.yaml`,
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: { job: 'name' } } } } }),
     bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: {} } } } }),
     said: res => [...rel(T, res.data?.written), ...(res.data?.migrated || []).map(m => `${m.path}/values.yaml`)],
     failAt: { first: `${T}/rules/cpu.yaml`, middle: `${D.c}/values.yaml`, last: `${D.b}/values.yaml` }, chartFile: `${D.b}/Chart.yaml`, depFolder: D.c,
     files: [`${T}/`, 'deployments/'] },
-  { name: 'rules-save', primary: `${T}/rules/cpu.yaml`, second: `${T}/templates/cpu.yaml`,
+  { name: 'rules-save', side: 'template', primary: `${T}/rules/cpu.yaml`, second: `${T}/templates/cpu.yaml`,
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(2) } } }),
     alt: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(3) } } }),
     bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(2).replace('columns:\n', 'columns:\n  team: {type: string, required: true}\n') } } }),
     said: res => rel(T, res.data?.written),
     files: [`${T}/`] },
-  { name: 'chart-meta', primary: `${T}/Chart.yaml`,
+  { name: 'chart-meta', side: 'template', primary: `${T}/Chart.yaml`,
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/chart-meta', body: { chartMeta: { description: 'pinned' } } }),
     alt: () => ({ method: 'POST', url: '/api/v2/templates/demo/chart-meta', body: { chartMeta: { description: 'pinned again' } } }),
     files: [`${T}/Chart.yaml`] },
-  { name: 'chart-create', second: 'charts/fresh/values.yaml', secondNew: true,
+  // Opening a Template writes its Chart.yaml and the products that are not there.
+  { name: 'template-open', side: 'template', second: `${T}/templates/cpu.yaml`, secondNew: true, noStale: true, commitRefusesBefore: true,
+    prepare: async ws => { await fs.rm(path.join(ws.root, T, 'Chart.yaml')); await fs.rm(path.join(ws.root, T, 'templates/cpu.yaml')) },
+    req: () => ({ method: 'GET', url: '/api/v2/templates/demo' }),
+    files: [`${T}/Chart.yaml`, `${T}/templates/`] },
+  { name: 'chart-create', side: 'template', second: 'charts/fresh/values.yaml', secondNew: true,
     prepare: async ws => { await fs.mkdir(path.join(ws.root, 'charts/fresh'), { recursive: true }); await fs.writeFile(path.join(ws.root, 'charts/fresh/README.md'), 'fresh\n') },
     req: () => ({ method: 'POST', url: '/api/v2/charts', body: { name: 'fresh' } }),
     newFolder: kind => ({ method: 'POST', url: '/api/v2/charts', body: { name: kind === 'reserved' ? '_new' : '../escape' } }),
     files: ['charts/fresh/'] },
-  { name: 'chart-clone', primary: 'charts/spare/values.schema.json', noStale: true,
+  { name: 'chart-clone', side: 'template', primary: 'charts/spare/values.schema.json', noStale: true, unreadableDir: 'charts/spare/templates',
     req: () => ({ method: 'POST', url: '/api/v2/charts/spare/clone', body: { newName: 'spare2' } }),
     newFolder: kind => ({ method: 'POST', url: '/api/v2/charts/spare/clone', body: { newName: kind === 'reserved' ? '_new' : '../escape' } }),
     files: ['charts/spare2/'] },
-  { name: 'chart-delete', primary: 'charts/spare/Chart.yaml', noStale: true,
+  { name: 'chart-delete', side: 'template', primary: 'charts/spare/Chart.yaml', noStale: true, unreadableDir: 'charts/spare/templates',
     req: () => ({ method: 'DELETE', url: '/api/v2/charts/spare' }),
     files: ['charts/spare/'] },
   { name: 'deployment-delete', primary: `${D.a}/values.yaml`, second: 'sync.yaml', writesRegistry: true, noStale: true,
     req: () => ({ method: 'DELETE', url: `/api/v2/deployments/demo/a${q(D.a)}` }),
     failAt: { first: `dir:${D.a}`, middle: `dir:${D.a}/templates`, last: 'sync.yaml' }, chartFile: `${D.a}/Chart.yaml`, depFolder: D.a,
     files: [`${D.a}/`, 'sync.yaml'] },
-  { name: 'routing-save', primary: `${D.a}/routing.yaml`, second: `${D.b}/routing.yaml`, absent: `${D.a}/templates`,
+  { name: 'routing-save', side: 'template', primary: `${D.a}/routing.yaml`, second: `${D.b}/routing.yaml`, last: `${D.b}/${CR}`, absent: `${D.a}/templates`,
     req: () => ({ method: 'PUT', url: route(D.a), body: { routing: ROUTING('a2') } }),
     alt: () => ({ method: 'PUT', url: route(D.a), body: { routing: ROUTING('a3') } }),
     bad: () => ({ method: 'PUT', url: route(D.a), body: { routing: ROUTING('a2').replace('configs: [ops]', 'configs: [nobody]') } }),
     files: [`${D.a}/routing.yaml`, `${D.a}/${CR}`, `${D.b}/routing.yaml`, `${D.b}/${CR}`] },
-  { name: 'routing-remove', primary: `${D.a}/routing.yaml`, second: `${D.b}/routing.yaml`,
+  { name: 'routing-remove', side: 'template', primary: `${D.a}/routing.yaml`, second: `${D.b}/routing.yaml`, last: `${D.b}/${CR}`,
     req: () => ({ method: 'DELETE', url: route(D.a) }),
     files: [`${D.a}/routing.yaml`, `${D.a}/${CR}`, `${D.b}/routing.yaml`, `${D.b}/${CR}`] },
-  { name: 'regenerate', primary: `${D.a}/${CR}`, second: `${D.b}/${CR}`,
+  { name: 'regenerate', side: 'template', primary: `${D.a}/${CR}`, second: `${D.b}/${CR}`,
     prepare: async ws => { await fs.writeFile(path.join(ws.root, D.a, 'routing.yaml'), ROUTING('a-by-hand')) },
     req: () => ({ method: 'POST', url: '/api/v2/git/routing/regenerate' }),
     said: res => (res.data?.regenerated || []).concat(res.data?.copied || []).map(d => `${d.deployment || d.target || d}/`),
     files: [`${D.a}/`, `${D.b}/`] },
-  { name: 'shared-save', primary: SHARED_FILE, second: `${D.c}/${CR}`, absent: '_shared',
+  // The same Regenerate, from the shared configs' page.
+  { name: 'shared-regenerate', side: 'template', primary: `${D.a}/${CR}`, second: `${D.b}/${CR}`,
+    prepare: async ws => { await fs.writeFile(path.join(ws.root, D.a, 'routing.yaml'), ROUTING('a-by-hand')) },
+    req: () => ({ method: 'POST', url: '/api/v2/routing/shared/regenerate' }),
+    said: res => (res.data?.regenerated || []).concat(res.data?.copied || []).map(d => `${d.deployment || d.target || d}/`),
+    files: [`${D.a}/`, `${D.b}/`] },
+  { name: 'shared-save', side: 'template', primary: SHARED_FILE, second: `${D.c}/${CR}`, absent: '_shared',
     req: () => ({ method: 'PUT', url: '/api/v2/routing/shared', body: { shared: SHARED(9090) } }),
     alt: () => ({ method: 'PUT', url: '/api/v2/routing/shared', body: { shared: SHARED(9191) } }),
     bad: () => ({ method: 'PUT', url: '/api/v2/routing/shared', body: { shared: 'configs:\n  relay: { type: webhook }\n  spare: { type: email, to: spare@example.com }\n' } }),
     said: res => res.data?.written,
     files: [SHARED_FILE, `${D.c}/`] },
-  { name: 'shared-rename', primary: SHARED_FILE, second: `${D.c}/routing.yaml`,
+  { name: 'shared-rename', side: 'template', primary: SHARED_FILE, second: `${D.c}/routing.yaml`, last: `${D.c}/${CR}`,
     req: () => ({ method: 'POST', url: '/api/v2/routing/shared/rename', body: { from: 'relay', to: 'relay2' } }),
     alt: () => ({ method: 'POST', url: '/api/v2/routing/shared/rename', body: { from: 'relay', to: 'relay3' } }),
     said: res => res.data?.written,
     files: [SHARED_FILE, `${D.c}/`] },
-  { name: 'shared-delete', primary: SHARED_FILE,
+  { name: 'shared-delete', side: 'template', primary: SHARED_FILE,
     req: () => ({ method: 'PUT', url: '/api/v2/routing/shared', body: { shared: SHARED(8080, false) } }),
     bad: () => ({ method: 'PUT', url: '/api/v2/routing/shared', body: { shared: 'configs:\n  spare: { type: email, to: spare@example.com }\n' } }),
     said: res => res.data?.written,
@@ -313,15 +328,15 @@ export const PATHS = [
     // which ones depends on what its index thinks changed: not pinned.
     unnamed: true,
     files: ['*'] },
-  { name: 'gen-rules', cli: true, primary: `${T}/templates/cpu.yaml`, second: `${T}/values.schema.json`,
+  { name: 'gen-rules', side: 'template', cli: true, primary: `${T}/templates/cpu.yaml`, second: `${T}/values.schema.json`,
     prepare: async ws => { await append(ws, `${T}/templates/cpu.yaml`, '# by hand\n'); await append(ws, `${T}/values.schema.json`, '\n') },
     args: ws => ['scripts/gen-rules.mjs', path.join(ws.root, T)],
     files: [`${T}/`] },
-  { name: 'gen-chart', cli: true, primary: `${T}/templates/cpu.yaml`,
+  { name: 'gen-chart', side: 'template', cli: true, primary: `${T}/templates/cpu.yaml`,
     prepare: async ws => { await append(ws, `${T}/templates/cpu.yaml`, '# by hand\n') },
     args: ws => ['scripts/gen-chart.mjs', path.join(ws.root, T)],
     files: [`${T}/templates/`] },
-  { name: 'import-rules', cli: true, primary: `${T}/values.schema.json`, second: `${T}/templates/mem.yaml`, secondNew: true,
+  { name: 'import-rules', side: 'template', cli: true, primary: `${T}/values.schema.json`, second: `${T}/templates/mem.yaml`, secondNew: true,
     args: ws => ['scripts/import-rules.mjs', path.join(ws.work, 'import.yaml'), path.join(ws.root, T)],
     files: [`${T}/`] },
 ]
@@ -404,6 +419,15 @@ async function setUp(ws, c, p) {
       if (p.primary) await fs.appendFile(prim, p.primary.endsWith('.json') ? '\n' : '# changed by someone else\n')
       break
     case 'second-readonly-file': await fs.chmod(abs(p.second), 0o444); break
+    case 'last-readonly-file': await fs.chmod(abs(p.last), 0o444); break
+    case 'unreadable-folder': await fs.chmod(abs(p.unreadableDir), 0); break
+    case 'dir-link-inside': {
+      const dir = path.dirname(prim)
+      const there = abs(`notes/linked-dir-${path.basename(dir)}`)
+      await fs.cp(dir, there, { recursive: true, verbatimSymlinks: true })
+      await fs.rm(dir, { recursive: true, force: true }); await fs.symlink(path.relative(path.dirname(dir), there), dir)
+      break
+    }
     case 'second-readonly-dir': await fs.mkdir(path.dirname(abs(p.second)), { recursive: true }); await fs.chmod(path.dirname(abs(p.second)), 0o555); break
     case 'second-is-folder': await fs.rm(abs(p.second), { recursive: true, force: true }); await fs.mkdir(abs(p.second), { recursive: true }); await fs.writeFile(path.join(abs(p.second), 'keep'), 'x\n'); break
     case 'dir-absent': await fs.rm(abs(p.absent), { recursive: true, force: true }); break
@@ -446,7 +470,7 @@ async function setUp(ws, c, p) {
       break
     }
     case 'chart-unreadable': await fs.chmod(abs(p.chartFile), 0); break
-    case 'dir-link-inside': {
+    case 'deployment-link-inside': {
       const dir = abs(p.depFolder)
       const there = abs(`notes/dir-${path.basename(dir)}`)
       await copyOut(dir, there)
@@ -686,7 +710,7 @@ async function runCell(ws, c, p) {
     id: c.id, entry: p.name,
     cls: answers.map(a => a.cls).sort().join('+'), status: answers.map(a => a.status).sort().join('+'),
     file: set('file') || '-', leak: p.cli ? '-' : leaks ? 'yes' : 'no',
-    said: [...new Set(answers.filter(a => a.cls === 'ok' || a.cls === 'listed').flatMap(a => [...a.said, ...(c.id === 'link-inside' ? [linkedOf(p)] : [])]))].sort().join(',') || '-',
+    said: [...new Set(answers.filter(a => a.cls === 'ok' || a.cls === 'listed').flatMap(a => [...a.said, ...(c.id === 'link-inside' ? [linkedOf(p)] : []), ...(c.id === 'dir-link-inside' ? [`notes/linked-dir-${path.basename(path.dirname(p.primary))}/`] : [])]))].sort().join(',') || '-',
     written: unstamped(diff(pre, post).join(',')) || '-',
     outside: diff(preOut, postOut).join(',') || '-',
     // Beside a Commit, what is left uncommitted depends on which of the two

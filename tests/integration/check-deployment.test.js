@@ -8,7 +8,14 @@ import path from 'path'
 import os from 'os'
 import express from 'express'
 import renderRouter from '../../server/routes/render.js'
-import { buildRouting, writeRouting } from '../../server/lib/routingFiles.js'
+import { buildRouting, ROUTING_FILE, ROUTING_CR_FILE } from '../../server/lib/routingFiles.js'
+
+// A deployment's routing.yaml and the resource made from it, as a save writes them.
+async function writeRouting(dir, { text, cr }) {
+  await fs.mkdir(path.join(dir, path.dirname(ROUTING_CR_FILE)), { recursive: true })
+  await fs.writeFile(path.join(dir, ROUTING_FILE), text)
+  await fs.writeFile(path.join(dir, ROUTING_CR_FILE), cr)
+}
 import { openRepo } from '../../server/repo/openRepo.js'
 import { loadRouting } from '../../server/repo/routing.js'
 

@@ -79,11 +79,14 @@ describe('the shared configs', () => {
     expect(outsideFiles()).toEqual(['theirs.yaml'])
   })
 
-  it('_shared/ a link to a folder inside the repo is written through', async () => {
+  // A link made by hand is not a folder AlertForge keeps: not written through.
+  it('_shared/ a link to a folder inside the repo is refused, naming the file, and nothing is written', async () => {
     fs.mkdirSync(abs('notes/sh'), { recursive: true })
     fs.symlinkSync('notes/sh', abs('_shared'))
-    expect((await request(app).put('/api/v2/routing/shared').send({ shared: SHARED })).status).toBe(200)
-    expect(fs.readFileSync(abs('notes/sh/notification-configs.yaml'), 'utf-8')).toBe(SHARED)
+    const res = await request(app).put('/api/v2/routing/shared').send({ shared: SHARED })
+    expect(res.status).toBe(409)
+    expect(res.body).toEqual({ error: '_shared/notification-configs.yaml cannot be written: _shared is a link: a folder reached through a link is not written to', file: '_shared/notification-configs.yaml' })
+    expect(fs.readdirSync(abs('notes/sh'))).toEqual([])
   })
 })
 

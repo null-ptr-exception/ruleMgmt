@@ -7,9 +7,17 @@
  *
  *   writeProblem(root, rel) → null, or { file, why } for an answer
  *   writeProblems(root, rels) → the first problem among them, or null
+ *   placeProblem(root, rels) → both of the above then the below: what
+ *                           the writer refuses of any plan
+ *   linkedFolderProblem(root, rels) → the first file a folder on the way
+ *                           to which is a link (in the repo or out of it),
+ *                           or null: a folder reached through a link is
+ *                           not written to (a link made by hand is no
+ *                           folder AlertForge keeps)
  */
+import fs from 'fs/promises'
 import path from 'path'
-import { insideReal, realPlace } from './paths.js'
+import { realPlace } from './paths.js'
 import { repoRel } from './readRepoFile.js'
 
 export async function writeProblem(root, rel) {
@@ -37,18 +45,31 @@ export async function writeProblems(root, rels) {
 export const writeRefusal = ({ file, why }) => ({ status: 409, body: { error: `${file} cannot be written: ${why}`, file } })
 
 /**
- * The routing files of sync targets, as a write about to copy to them sees
- * them: a target that is no folder of the repo (`..`, a link leading out) is
- * left to the copy, which refuses and reports it; one in the repo whose
- * templates/ leads out refuses the write.
+ * Why one of `rels` may not be written where it is, as { file, why }, or
+ * null — the one rule about links every write is held to (the writer asks
+ * it of every plan): a folder on the way that is a link leading out of the
+ * repo or into git's own folder (writeProblem's words), then one that is a
+ * link to a folder of the repo (linkedFolderProblem's).
  */
-export async function targetWriteProblem(root, targets, files) {
-  for (const t of targets) {
-    let dir
-    try { dir = repoRel(t) } catch { continue }
-    if (!(await insideReal(root, dir).catch(() => null))) continue
-    const problem = await writeProblems(root, files(dir))
-    if (problem) return problem
+export const placeProblem = async (root, rels) => await writeProblems(root, rels) ?? await linkedFolderProblem(root, rels)
+
+/**
+ * The first of `rels` (files of the repo) a folder on the way to which is a
+ * link, as { file, why }, or null. Folders not there yet are not links.
+ *   linkedFolderProblem(root, ['charts/demo/rules/cpu.yaml'])  (charts/demo → charts/real)
+ *     → { file: 'charts/demo/rules/cpu.yaml', why: 'charts/demo is a link: a folder reached through a link is not written to' }
+ */
+export async function linkedFolderProblem(root, rels) {
+  const seen = new Map()
+  for (const rel of rels) {
+    const parts = path.posix.dirname(repoRel(rel)).split('/').filter(p => p !== '.')
+    for (let i = 1; i <= parts.length; i++) {
+      const at = parts.slice(0, i).join('/')
+      if (!seen.has(at)) seen.set(at, await fs.lstat(path.join(root, at)).then(st => st.isSymbolicLink(), () => null))
+      const link = seen.get(at)
+      if (link === null) break
+      if (link) return { file: repoRel(rel), why: `${at} is a link: a folder reached through a link is not written to` }
+    }
   }
   return null
 }

@@ -88,7 +88,7 @@ function firstDifference(a, b, at = []) {
 
 /**
  * A sync target's values.yaml and Chart.yaml against what a sync of its
- * source writes there (deploymentWrite.js copyToTarget): the values as the
+ * source writes there (deploymentWrite.js targetCopy): the values as the
  * source has them, the dependencies as the source's, resolved from the
  * target's folder. One that cannot be read, on either side, is said by its
  * own check, not here. Facts `sync.target-differs`, naming the file.

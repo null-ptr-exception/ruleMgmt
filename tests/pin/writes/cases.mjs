@@ -24,7 +24,9 @@ export const CASES = [
   { id: 'race-same', applies: p => !p.cli },
   // The write and a Commit at once: what the commit took of the write's
   // files (all before, all after, or a mix).
-  { id: 'race-commit', applies: p => !p.cli && p.name !== 'commit' },
+  // (Not a write whose files Commit refuses before it: which one goes
+  // first decides the answer.)
+  { id: 'race-commit', applies: p => !p.cli && p.name !== 'commit' && !p.commitRefusesBefore },
   // Sent while another write holds the commit lock: whether it waits.
   { id: 'while-locked', applies: p => !p.cli },
   // Sent without a version while another write holds the commit lock; the
@@ -45,6 +47,10 @@ export const CASES = [
   { id: 'second-readonly-file', applies: p => !!p.second && !p.secondNew, nonRoot: true },
   { id: 'second-readonly-dir', applies: p => !!p.second, nonRoot: true },
   { id: 'second-is-folder', applies: p => !!p.second },
+  // The last file of a multi-file write cannot be written (read-only).
+  { id: 'last-readonly-file', applies: p => !!p.last, nonRoot: true },
+  // A folder of what the write removes or copies cannot be read.
+  { id: 'unreadable-folder', applies: p => !!p.unreadableDir, nonRoot: true },
   // The folder the write goes into is not there yet.
   { id: 'dir-absent', applies: p => !!p.absent },
   // The new folder is refused: a reserved name, not a valid path.
@@ -61,6 +67,9 @@ export const CASES = [
   { id: 'dir-link-outside', applies: p => !!p.primary && p.primary.includes('/') },
   // A folder on the way is a link into git's own folder.
   { id: 'dir-link-git', applies: p => !!p.primary && p.primary.includes('/') },
+  // A folder on the way is a link to another folder of the repo (a copy of
+  // it): the Template side's writes.
+  { id: 'dir-link-inside', applies: p => p.side === 'template' && !!p.primary && p.primary.includes('/') },
   // A folder where the file should be: the write's rename fails.
   { id: 'is-folder', applies: p => !!p.primary },
   // The file written cannot be read.
@@ -85,5 +94,5 @@ export const CASES = [
   // for) cannot be read.
   { id: 'chart-unreadable', applies: p => !!p.chartFile, nonRoot: true },
   // The deployment's folder is a link to a folder elsewhere in the repo.
-  { id: 'dir-link-inside', applies: p => !!p.depFolder },
+  { id: 'deployment-link-inside', applies: p => !!p.depFolder },
 ]

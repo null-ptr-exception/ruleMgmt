@@ -370,3 +370,21 @@ export async function newDeploymentProblem(repo, rel) {
 export async function isCommonChart(repo, rel) {
   return (await folderEntry(repo, rel)).kind === 'common'
 }
+
+/**
+ * The first folder of the tree that is a link leading out of the repo (or
+ * into git's own folder), as the walk names it, or null: a deployment
+ * behind it cannot be read, so a change that has to reach every
+ * deployment (a migration, the shared configs) is refused naming it
+ * rather than leaving it behind.
+ *   → { rel, why } | null
+ */
+export async function linkOutOfTree(repo) {
+  const e = (await walk(repo, { hidden: true })).find(x => x.kind === 'unreadable' && x.cause === 'link')
+  return e ? { rel: e.rel, why: e.why } : null
+}
+
+/** The refusal of a change that would leave a deployment behind a link out of the repo (linkOutOfTree). */
+export const linkOutRefusal = ({ rel, why }, what) => ({ status: 409, body: {
+  error: `${rel}: ${why} — a deployment behind it would be left ${what}: links made by hand are not followed; remove it in git, or make it a folder of the repo`,
+  file: rel } })

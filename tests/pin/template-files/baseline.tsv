@@ -1269,8 +1269,8 @@ folder-link-inside	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 Cp
 folder-link-inside	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 folder-link-inside	p2	save-rules	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=open	
 folder-link-inside	p2	migration-preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	problems=0	
-folder-link-inside	p2	chart-meta	ok	200	-	no	vendor/p2/Chart.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-inside	p2	clone	ok	200	-	no	charts/p2-copy,vendor/p2/Chart.yaml,vendor/p2/values.schema.json	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+folder-link-inside	p2	chart-meta	refused	409	charts/p2/Chart.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+folder-link-inside	p2	clone	ok	200	-	no	charts/p2-copy/Chart.yaml,charts/p2-copy/rules/_common.yaml,charts/p2-copy/rules/cpu.yaml,charts/p2-copy/rules/mem.yaml,charts/p2-copy/rules/up.yaml,charts/p2-copy/templates/cpu.yaml,charts/p2-copy/templates/mem.yaml,charts/p2-copy/templates/up.yaml,charts/p2-copy/values.schema.json,charts/p2-copy/values.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 folder-link-inside	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 folder-link-inside	p2	init	ok	200	-	no	deployments/p2/n/Chart.yaml,deployments/p2/n/values.yaml	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	new: renders 1	
 folder-link-inside	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6	

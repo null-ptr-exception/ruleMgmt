@@ -243,10 +243,12 @@ already exist. Save opens a dialog instead of saving:
 
 A deployment that follows another through sync gets its source's new file in
 the same step, so the two stay identical; the preview says *copied from* the
-source. One whose source does not use this chart is rewritten on its own. A
-sync target that cannot be written does not stop the change: the chart and
-its source are rewritten, and the editor names the target, which may not
-match its source until the source is saved again.
+source. One whose source does not use this chart is rewritten on its own.
+The chart and every deployment are written together, or none of them: a
+file that cannot be written — a sync target's read-only `values.yaml`, say
+— stops the change with nothing written, and the editor names the file. A folder of the
+deployments that is a link leading out of the repo (made by hand) may hold
+a deployment the change cannot reach: the change is refused, naming it.
 
 A removed rule is found by counting the rules of each name, raw rules
 included (a raw rule is read for the `alert:` or `record:` in it, and one
@@ -324,6 +326,11 @@ In the editor, pick the chart → **Delete**. A chart a deployment still uses is
 not deleted: the deployment would fail to render without it. The refusal lists
 those deployments — delete them, then delete the chart again.
 
+Every file of the chart goes, or none does: a folder of it that cannot be
+read, or a file that cannot be removed, stops the delete before anything
+is gone and the refusal names it. A chart whose folder is a link made by
+hand is not deleted through the link.
+
 This covers the editor. A chart removed by hand or through git is not
 checked.
 
@@ -356,6 +363,14 @@ is one copy of each chart, and a new version of one is a clone of it under
 another name.
 The chart's own version is not changed in the editor; Save writes its
 description and keeps the rest of its `Chart.yaml` as it is on disk.
+
+These writes of a Template — a Save, its description, a new, cloned or
+deleted chart, and opening one whose
+`Chart.yaml` or generated files are not there — write every file or none:
+one that cannot be written (no permission, a folder in its place) stops the
+write with nothing left changed, and the answer names the file. A Template
+folder reached through a link made by hand, even one to another folder of
+the repo, is not written to: the write is refused, naming the file.
 
 A folder or deployment name cannot start with `_`: those are reserved for
 AlertForge's own folders. A folder that already has such a name is marked with
@@ -799,8 +814,9 @@ link — to nothing, or out of the repo — is replaced by the file saved, and
 what it led to is left alone. **Remove routing** removes files it cannot
 read, and is refused, before anything is removed, by a folder where one of
 them should be or a file where `templates/` should be. No save, removal,
-sync or Regenerate writes outside the repo: a `templates/` (or `_shared/`)
-that is a link leading out of it refuses the write, naming the file.
+sync or Regenerate writes outside the repo, nor through a folder that is a
+link made by hand: a `templates/` (or `_shared/`) that is a link — out of
+the repo or to another folder of it — refuses the write, naming the file.
 
 ### Share a config between deployments
 
@@ -820,9 +836,10 @@ name. Open **Routing** → **Shared configs**:
 - **Used by** lists the deployments that use each config, a sync target with
   the source it is copied from. Before a change is saved, the page lists them:
   saving writes the shared file and makes every one of their
-  AlertmanagerConfigs again, all together. If one cannot be made — its
-  `routing.yaml` has a problem — nothing is written, and the page names it.
-  `routing.yaml` files do not change. Commit what it wrote.
+  AlertmanagerConfigs again, all together, with each sync target's copy of
+  a user's routing. If one cannot be made — its `routing.yaml` has a
+  problem — or a file cannot be written, nothing is written, and the page
+  names it. `routing.yaml` files do not change. Commit what it wrote.
 - **Rename** renames the config in the shared file and in every `routing.yaml`
   that uses it (its cells too, comments kept), and makes their resources again.
   It is refused when one of them has a config of its own by the new name.
@@ -833,10 +850,12 @@ name. Open **Routing** → **Shared configs**:
   read (no permission, a folder in its place) is named the same way when it
   is saved or renamed; one that is a link (to nothing, or out of the repo)
   is named on the page and by a rename, and replaced by the file a save
-  writes, from the page or as text alike. A `_shared/` that is a link
-  leading out of the repo refuses every write. A deployment whose
+  writes, from the page or as text alike. A `_shared/` that is a link —
+  out of the repo, or to another folder of it — refuses every write. A deployment whose
   AlertmanagerConfig cannot be read is listed, and stops only a change to a
-  shared config it uses.
+  shared config it uses. A folder of the deployments that is a link leading out of
+  the repo stops a save and a rename, named: a deployment behind it could
+  not be made again.
 - **The same alert twice** — the page lists the cells of different
   deployments that pick one shared config and can match one alert. Two cells
   can when every label both have holds the same value in each; a label only
@@ -934,6 +953,9 @@ copied to it.
   keeps deploying the old one until its routing is saved. A routing
   resource left without its `routing.yaml` refuses the sync too: remove it,
   or put `routing.yaml` back.
+- A save of the source's routing (or its removal) writes the source and
+  every target together, or none of them: a target file that cannot be
+  written stops it, with nothing written, and the page names the file.
 - Deleting a source lets go of its targets: each keeps what it has and can
   be edited again. The **Delete** dialog lists them, and each can be deleted
   along with the source instead. Those marked to be deleted go
@@ -991,9 +1013,6 @@ copied to it.
   of a save, the source and some targets may be written and others not:
   Commit then refuses (a target differs from its source), and saving the
   source again puts it right.
-- A routing save that cannot write a target still saves the source and
-  names the target, which may not match the source until the source is
-  saved again.
 
 ---
 
@@ -1003,6 +1022,14 @@ copied to it.
 
 Saving only writes files. **Git** → **Changes** shows the diff, a commit
 message box, and **Discard all changes** if you would rather start over.
+
+A save, delete or removal that the server is killed in the middle of can
+leave what it was removing moved aside, beside where it was, as
+`_<name>.<8 hex>.parked` (a folder moved aside keeps what it held under
+such names too, so the path each came from is in them). It is your
+content: nothing deletes it, the server's log names it when it starts, git
+shows it, and Commit and Push refuse while it is there, naming it and
+where it came from — rename it back to keep it, or remove it.
 
 Nothing leaves the working tree until you commit, which is why Save is safe to
 experiment with.
@@ -1096,8 +1123,11 @@ deployment or entry. A `\` in a path is read as `/`, and a target listed
 twice under one source is one link: neither refuses a commit. **Regenerate N** makes the routing that is behind again
 from each `routing.yaml` (the text stays as written) and copies each sync
 target's from its source; it writes the files and commits nothing, so look
-at the changes, then commit. One that cannot be made is listed, and the
-commit stays refused.
+at the changes, then commit. One that cannot be made (its `routing.yaml`
+cannot be read, a target that is no deployment) is listed, and the commit
+stays refused; the others are made. What it makes is written together, or
+none of it: a file that cannot be written stops it with nothing written,
+and the answer names the file.
 
 A `routing.yaml` with problems of its own does not stop a commit: the commit
 goes through and names it, to fix on its Routing page. Nor does a shared
@@ -1134,6 +1164,19 @@ The commands below are written short, as run from an AlertForge source
 checkout (after `npm ci`), with `charts/<name>` standing for the chart's
 folder in the gitops repo. From the image, put the `docker run` in front and
 the paths under `/work` — see [Run them from the image](#run-them-from-the-image).
+
+`gen-rules`, `gen-chart` and `import-rules` write what they write together,
+each file whole: a run stopped part-way (killed, the machine gone) leaves
+every file as it was or as the run makes it, never cut off — at most a
+temp file `_<name>.<8 hex>.tmp` beside one, which Commit never adds. A file
+they cannot write (no permission, a folder in its place, a folder that is
+a link made by hand) leaves the others as they were and is one `ERROR`
+line naming it, exit 2. Each file is written to a temp file beside it, so
+the folder it is in must be writable, not only the file. They take no
+lock: a server running on the same repo is not stopped from saving at the
+same time, and a run beside a save of the same Template can leave its
+generated files behind its rules — the editor and Commit say so, and
+saving the Template again puts it right. Run them when no one is saving it.
 
 ### Migrate a chart
 

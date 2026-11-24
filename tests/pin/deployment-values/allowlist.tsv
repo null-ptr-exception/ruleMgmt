@@ -18,8 +18,8 @@ group-not-list	migration-apply	accepts-what-helm-fails	policy	a Template change 
 common-not-map	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 common-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 common-team-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
-y11-yes	migration-apply	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-off-enum	migration-apply	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
+y11-yes	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+y11-off-enum	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 dup-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
@@ -80,7 +80,6 @@ dup-wrapper	common-plan	refuses-what-helm-renders	policy	a duplicate key is refu
 dup-common-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-common-key	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-common-key	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-cond-no	migration-preview	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
 cond-no	migration-apply	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
 cond-true	common-plan	refuses-what-helm-renders	out-of-scope	a dependency with a condition is not re-attached to a new _common (the _common plan is not part of the values checks)
 stack-required-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce

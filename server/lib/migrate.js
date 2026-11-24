@@ -96,6 +96,9 @@ async function locate(repo, relPath, keys) {
  *                file had already, against `beforeModel`, is marked
  *                `before: true` — reported, no reason to refuse it (see
  *                problemKey); with no `beforeModel` every one is.
+ *                A value or key the file writes in a form Helm (YAML 1.1)
+ *                reads otherwise is listed first, `before: true`: the
+ *                migrated file holds Helm's reading of it.
  *                `copiedFrom` is the source a sync follower's file is
  *                copied from, or null when the follower is migrated on its
  *                own (its source is not among the deployments using this
@@ -133,6 +136,7 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
   const befores = new Map() // deployment path → its rows before
   const afters = new Map()  // deployment path → its rows after
   const missing = new Set() // deployments with no values file yet
+  const readOtherwise = new Map() // deployment path → what its file writes that Helm reads otherwise
   let refusal = null
   let linked = null
   for (const dep of found) {
@@ -184,7 +188,15 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
       deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], noValues: true,
         problems: [{ message: `${dep.path}: its values cannot be read (${why}) — fix them first`, before: false }] })
       continue
-    } else parsed = read.value
+    } else {
+      parsed = read.value
+      // A value or key written by hand that Helm reads otherwise (`010` is
+      // 8, `yes` is true): a save refuses the text, and the file written
+      // here holds Helm's reading instead. Said with the deployment, as
+      // there before the change.
+      const said = decide(read.findings, 'migration').refuse.filter(f => f.code === 'yaml.read-differently')
+      if (said.length) readOtherwise.set(dep.path, said.map(f => ({ message: f.message, before: true })))
+    }
     const before = unwrapPath(parsed, keys)
 
     const { values: after, orphaned } = migrateValues(before, migration, targetSchema)
@@ -247,6 +259,9 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
       entry.orphaned = src.orphaned
       entry.problems = []
     }
+    // Its own file is written again from what Helm read of it. Only
+    // checking, nothing is written and the text stays as it is.
+    if (!entry.copiedFrom && !checkOnly && readOtherwise.has(entry.path)) entry.problems = [...readOtherwise.get(entry.path), ...entry.problems]
     writes.push([files.get(entry.path), texts.get(entry.copiedFrom ?? entry.path), entry.readonly, entry.path])
   }
 

@@ -770,7 +770,11 @@ The editor writes none of these: it quotes `'010'`, `'yes'` and the like
 itself. Opening a deployment shows the values as Helm reads them, and says
 which ones it reads otherwise than they are written (`010` shows
 as 8). Commit does not refuse these: it lists them under the deployment, and
-`check-repo` refuses them. A key written twice, a required cell written
+`check-repo` refuses them. A breaking Template change that migrates the
+file does not refuse them either: its preview lists each one with the
+deployment, and the migrated file holds the value as Helm read it (`010`
+becomes `8`, `yes` becomes `true`, a key `y:` becomes `'true':`) — what
+deploys does not change. A key written twice, a required cell written
 `''` and a value a label cannot take are listed by Commit too; Helm renders
 them as written, and `check-repo` says them as warnings. A
 `values.yaml` that cannot be read at all — not YAML, a folder, a link out

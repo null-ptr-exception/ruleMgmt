@@ -237,6 +237,42 @@ rules:
     }
   })
 
+  // A value written by hand that Helm reads otherwise (010 is 8) is said in
+  // the preview as already there before, does not hold the change, and the
+  // migrated file holds what Helm read.
+  test('the breaking dialog lists a hand-written 010 as already there before, and the change writes 8', async ({ page, request }) => {
+    const twoNumbers = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number}
+  crit: {type: number, default: 95}
+rules:
+  - alert: A
+    expr: cpu{ns="\${namespace}"} > \${crit}
+`
+    expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': twoNumbers }, confirmBreaking: true } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p', warn: 90 }] } } })).ok()).toBeTruthy()
+    const file = `deployments/${CHART}/prod-values.yaml`
+    await fs.writeFile(path.join(WORKSPACE, file), 'cpu:\n  - namespace: p\n    warn: 90\n    crit: 010\n')
+    try {
+      await openChart(page)
+      await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
+      await page.getByRole('button', { name: 'Save' }).first().click()
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+      await openedModal(dialog)
+      await dialog.getByRole('button', { name: 'Continue' }).click()   // step 1 -> map
+      await expect(dialog.locator('.ant-steps-item-process')).toContainText('Map')
+      await dialog.getByRole('button', { name: 'Continue' }).click()   // step 2 (warn -> Delete) -> preview
+      await expect(dialog.getByTestId('migration-problems')).toHaveText(`${file} line 4: Helm reads 010 as 8 (YAML 1.1); the editor would write 8. Write 8, or '010' in quotes for the textalready there before`, { timeout: 8000 })
+      await expect(dialog.getByTestId('migration-refused')).toHaveCount(0)
+      await dialog.getByRole('button', { name: 'Change in place' }).click()
+      await expect.poll(() => valuesOnDisk(file), { timeout: 8000 }).toBe('cpu:\n  - namespace: p\n    crit: 8\n')
+    } finally {
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+      await request.delete(`/api/v2/deployments/${CHART}/prod`)
+    }
+  })
+
   // A deployment on a _common reached through a link made by hand is held
   // by the link: its row says the one sentence, and nothing says it "would
   // get values a save refuses" — no mapping changes a link. The preview is

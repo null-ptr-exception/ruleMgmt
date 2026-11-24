@@ -427,7 +427,7 @@ values-only	W	commit	ok	200	-	no	-	folder	no-chart	-	-	-	-
 values-only	W	check-repo	ok	exit 0	-	no	-	folder	no-chart	-	-	-	-	
 values-yaml11	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=null	
-values-yaml11	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found problems=1	
+values-yaml11	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found problems=2	
 values-yaml11	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	check-deployment	refused	exit 1	-	no	-	folder	fails	1	-	-	-	

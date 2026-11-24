@@ -217,6 +217,12 @@ they were, so comments added by hand survive. Four things can stop it:
   and columns, its `_common` and the Template's own values counted, every
   file the change migrates as it will be written. A value of a column the
   change renames counts as new under its new name.
+  A value or key a deployment writes by hand in a form Helm reads otherwise
+  (`010`, `1_000`, `yes`, a key `y:` — see
+  [writing values by hand](rules-format.md#writing-values-by-hand)) is
+  listed with it as already there before: the change writes the file again
+  with what Helm read (`8`, `1000`, `true`), so the same thing deploys and
+  the file now says it. If the text was meant, put it in quotes first.
 
 ### Change a chart people are already using
 

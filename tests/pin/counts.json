@@ -1,10 +1,10 @@
 {
   "lint": {
-    "total": 226,
+    "total": 228,
     "byKind": {
       "childProcess": 1,
       "fs": 34,
-      "fsUse": 145,
+      "fsUse": 147,
       "helper": 7,
       "yaml": 16,
       "yamlParse": 23
@@ -21,7 +21,7 @@
       "server/lib/commit/sync.js": 4,
       "server/lib/commit/template.js": 4,
       "server/lib/commonEdit.js": 29,
-      "server/lib/deploymentCheck.js": 6,
+      "server/lib/deploymentCheck.js": 8,
       "server/lib/deploymentWalk.js": 9,
       "server/lib/deploymentWrite.js": 11,
       "server/lib/helmCheck.js": 2,

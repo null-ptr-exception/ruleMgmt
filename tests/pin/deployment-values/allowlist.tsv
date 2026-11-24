@@ -117,15 +117,11 @@ link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that
 link-outside	common-plan	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 link-outside	check-deployment	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 layer-link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
-layer-chart-null	init	accepts-what-helm-fails	bug	no issue yet: a _common whose chart key is null stops Helm for every deployment below it, and nothing says so
-layer-chart-null	migration-preview	accepts-what-helm-fails	bug	no issue yet: a _common whose chart key is null stops Helm for every deployment below it, and nothing says so
-layer-chart-null	migration-apply	accepts-what-helm-fails	bug	no issue yet: a _common whose chart key is null stops Helm for every deployment below it, and nothing says so
-stack-layer-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+layer-chart-null	migration-preview	accepts-what-helm-fails	bug	no issue yet: a migration does not stop for, or list, a _common above whose chart key is null (Helm stops on it for every deployment below); Commit refuses it
+layer-chart-null	migration-apply	accepts-what-helm-fails	bug	no issue yet: a migration does not stop for, or list, a _common above whose chart key is null (Helm stops on it for every deployment below); Commit refuses it
 tpl-common-partial	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 tpl-common-zero	init	accepts-what-helm-fails	policy	a new deployment is made to be filled in: a required value nothing gives yet (Helm stops on it) is asked for when it is saved, and by Commit
 layer-common-partial	init	accepts-what-helm-fails	policy	a new deployment is made to be filled in: a required value nothing gives yet (Helm stops on it) is asked for when it is saved, and by Commit
 tpl-common-partial	init	accepts-what-helm-fails	policy	a new deployment is made to be filled in: a required value nothing gives yet (Helm stops on it) is asked for when it is saved, and by Commit
 group-null	common-plan	refuses-what-helm-renders	policy	a null moved onto a new _common would deploy differently on Helm 3.15 and 3.19, and its save and Commit would refuse it: the plan refuses it first
 once-group-null	common-plan	refuses-what-helm-renders	policy	a null moved onto a new _common would deploy differently on Helm 3.15 and 3.19, and its save and Commit would refuse it: the plan refuses it first
-stack-layer-null	save-text	accepts-what-helm-fails	policy	a problem of a _common above (here a null) is warned on a save of a deployment below, which cannot fix it; Commit refuses it
-stack-layer-null	migration-preview	accepts-what-helm-fails	policy	a problem of a _common above is the _common's: the migration check lists it there, not for each deployment below

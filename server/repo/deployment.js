@@ -112,6 +112,20 @@ async function build(repo, rel, { chart, next }) {
   // A key a _common above writes twice: Helm takes the later one, and it
   // deploys; which of the two the author meant cannot be told. Said to
   // every entry point that reads the layer (policy.js: warned, listed).
+  // A _common above whose chart key holds anything but a map (`demo: ~`):
+  // Helm stops on it for every deployment below ("type mismatch").
+  for (const l of stack?.layers ?? []) {
+    let v = l.doc
+    for (const [i, k] of (l.keys ?? []).entries()) {
+      if (!isMap(v) || !Object.hasOwn(v, k)) break
+      if (!isMap(v[k])) {
+        const lf = `${l.path}/values.yaml`
+        findings.push(finding({ code: 'stack.chart-key', file: lf, helm: 'fails', message: `${lf}: ${l.keys.slice(0, i + 1).join('.')} must be a map of values, not ${kindOf(v[k])}: Helm stops on it for every deployment below ${l.path}${v[k] === null ? ' — write {} for no values' : ''}` }))
+        break
+      }
+      v = v[k]
+    }
+  }
   for (const l of stack?.layers ?? []) {
     const lf = `${l.path}/values.yaml`
     for (const d of findingsOf(await repo.helmYaml(lf)).filter(f => f.code === 'yaml.duplicate-key')) {

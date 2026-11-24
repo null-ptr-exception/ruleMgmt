@@ -18,9 +18,13 @@ import { openRepo } from '../../repo/openRepo.js'
  */
 export async function valuesFindings(gitopsDir, dep, stack, { repo = openRepo(gitopsDir) } = {}) {
   const loaded = await loadDeployment(repo, dep)
+  // A file its stack already said cannot be read (unreadable, or not
+  // values: resolveStack's values-unreadable) is said once.
+  const stackSaid = stack.problems.some(p => p.kind === 'values-unreadable')
   const facts = loaded.state === 'unreadable'
-    ? (stack.problems.some(p => p.kind === 'values-unreadable') ? [] : [finding({ code: 'values.unreadable', file: loaded.file, helm: 'unknown', message: `${dep}: values.yaml cannot be read (${loaded.why}), so Helm cannot render it` })])
-    : (loaded.findings ?? []).filter(f => !f.detail?.stack && !f.code.startsWith('template.'))
+    ? (stackSaid ? [] : [finding({ code: 'values.unreadable', file: loaded.file, helm: 'unknown', message: `${dep}: values.yaml cannot be read (${loaded.why}), so Helm cannot render it` })])
+    : loaded.state === 'invalid' && stackSaid ? []
+      : (loaded.findings ?? []).filter(f => !f.detail?.stack && !f.code.startsWith('template.'))
   // A file read as no values at all (not YAML, or YAML AlertForge cannot
   // tell Helm's reading of) leaves nothing of the deployment to check: it
   // blocks, as before, whatever its table does with the same fact elsewhere.

@@ -131,6 +131,27 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
   })
 
   // promtool's lint (a duplicate rule) passes, as in Preview, but says so.
+  it('checks the rules of a deployment of a repo reached through a link to it', async () => {
+    const via = `${gitops}-via`
+    await fs.symlink(gitops, via)
+    try {
+      execFileSync('git', ['init', '-q', gitops])
+      const { out } = check(path.join(via, 'deployments', 'tiny', 'prod'))
+      // Its rules and values; the routing part's own reading is the routing check's.
+      expect(out).toContain('Rules: passed (promtool)')
+      expect(out).not.toMatch(/not a path in the repo|cannot be read/)
+    } finally {
+      await fs.rm(via, { force: true })
+    }
+  })
+
+  it('values AlertForge cannot tell Helm\'s reading of are not checked (exit 2), naming the file once', async () => {
+    await fs.writeFile(path.join(dir, 'values.yaml'), 'tiny:\n  a: !!binary aGk=\n')
+    const { code, out } = check()
+    expect(code).toBe(2)
+    expect(out.split('values.yaml').length - 1).toBe(1)
+  })
+
   it('passes with warnings on a lint finding, and says it', async () => {
     await deployment('  expr: up == 0\n  twice: true\n')
     const { code, out } = check()

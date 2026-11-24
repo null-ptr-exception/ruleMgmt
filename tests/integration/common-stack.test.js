@@ -247,6 +247,12 @@ describe('the commit checks', () => {
       .toBe(`shop/inherit: its _common chart ${SHOP} is not in the repo`)
   })
 
+  it('a deployment on a stack whose values.yaml is not YAML is named once', async () => {
+    await write('shop/team-b/dev/values.yaml', 'common: [\n')
+    const { findings } = await deploymentCommitBlockers(tmpDir)
+    expect(findings.filter(f => f.deployment === 'shop/team-b/dev')).toHaveLength(1)
+  })
+
   it('a hand-written null in a layer is said, not refused, when a deployment under it is saved: the deployment cannot fix it', async () => {
     await write(`${TEAM_B}/values.yaml`, `common:\n  ${CHART}:\n    ${DISK}: null\n`)
     const { status, data } = await api('POST', `/api/v2/deployments/${CHART}/dev${q('shop/team-b/dev')}`, { values: {} })

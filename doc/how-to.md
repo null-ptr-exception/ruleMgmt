@@ -1219,7 +1219,9 @@ reads it — including whether `templates/alertmanagerconfig.yaml` is still what
 whether a `_common` chart it renders on has one of its own. It reads the
 deployment's `values.yaml` as the editor does, within the same size limit
 (`MAX_VALUES_BYTES`): one that cannot be read — a folder, a link leading
-outside the repo, a file over the limit — fails the check, naming it.
+outside the repo — fails the check, naming it; one AlertForge cannot tell
+Helm's reading of (larger than the limit, a tag like `!!binary`) is not
+checked (exit 2).
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \

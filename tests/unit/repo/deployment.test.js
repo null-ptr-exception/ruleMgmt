@@ -125,6 +125,16 @@ describe('a Template with no values.schema.json', () => {
   })
 })
 
+describe('the kind of a cell problem', () => {
+  it('is told by the column, not by a word in the message: a column named derived_rate is a cell', async () => {
+    await put('charts/demo/rules/cpu.yaml', 'group: cpu\ncolumns:\n  job: {type: string, required: true}\n  derived_rate: {type: string}\nrules:\n  - alert: CpuHigh\n    expr: cpu{job="${job}",r="${derived_rate}"} > 1\n')
+    await put(`${DEP}/values.yaml`, 'demo:\n  cpu:\n    - {job: api, derived_rate: "a\\nb"}\n')
+    const f = findingsOf(await load()).filter(x => x.code.startsWith('values.'))
+    expect(f.map(x => x.code)).toContain('values.cell')
+    expect(f.map(x => x.code)).not.toContain('values.derived')
+  })
+})
+
 describe('the tables', () => {
   it('checkRepo refuses everything Commit refuses', () => {
     const codesIn = new Set(Object.values(POLICIES).flatMap(t => Object.keys(t.rows)).filter(k => !k.endsWith('.*')))

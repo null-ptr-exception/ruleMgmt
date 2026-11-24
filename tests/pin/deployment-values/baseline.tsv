@@ -845,7 +845,7 @@ not-yaml	A	migration-preview	listed	200	-	no	-	fails	1	-	-	-	-	-
 not-yaml	A	migration-apply	refused	409	-	no	-	fails	1	-	-	-	-	-	
 not-yaml	A	commit	refused	409	deployments/t/a	no	-	fails	1	-	-	-	-	-	
 not-yaml	A	preview	refused	200	values.yaml	no	-	fails	1	-	-	-	-	-	
-not-yaml	A	check-deployment	refused	exit 1	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	-	
+not-yaml	A	check-deployment	cannot-check	exit 2	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	-	
 top-scalar	A	get	unreadable	409	deployments/t/a/values.yaml	no	-	fails	1	-	-	-	-	null	
 top-scalar	A	list	ok	200	-	no	-	fails	1	-	-	-	-	alertCount=0	
 top-scalar	A	save-text	refused	400	values.yaml	no	-	fails	1	-	-	-	-	-	
@@ -1301,21 +1301,12 @@ layer-common-partial	L	preview	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x
 layer-common-partial	L	check-deployment	ok	exit 0	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[5m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
 layer-chart-null	L	get	ok	200	-	no	-	fails	1	-	-	-	-	{"demo":null}	
 layer-chart-null	L	save-text	refused	400	deployments/s/_common/demo/values.yaml	no	-	fails	1	-	-	-	-	-	
-layer-chart-null	L	init	ok	200	-	no	deployments/s/n/Chart.yaml,deployments/s/n/values.yaml	fails	1	-	-	-	-	-	accepts-what-helm-fails
+layer-chart-null	L	init	refused	409	deployments/s/n	no	-	-	-	-	-	-	-	-	
 layer-chart-null	L	migration-preview	ok	200	-	no	-	fails	1	-	-	-	-	-	accepts-what-helm-fails
 layer-chart-null	L	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/s/_common/demo/values.yaml,deployments/t/a/values.yaml,deployments/t/b/values.yaml	fails	1	-	-	-	-	after: renders 3	accepts-what-helm-fails
-layer-chart-null	L	commit	listed	200	deployments/s/x	no	-	fails	1	-	-	-	-	-	
+layer-chart-null	L	commit	refused	409	deployments/s/x	no	-	fails	1	-	-	-	-	-	
 layer-chart-null	L	preview	refused	200	-	no	-	fails	1	-	-	-	-	-	
 layer-chart-null	L	check-deployment	refused	exit 1	-	no	-	fails	1	-	-	-	-	-	
-stack-layer-null	S	get	ok	200	-	no	-	fails	1	-	-	-	-	{"job":"x"}	
-stack-layer-null	S	list	ok	200	-	no	-	fails	1	-	-	-	-	alertCount=1	
-stack-layer-null	S	save-text	listed	200	-	no	-	fails	1	-	-	-	-	-	accepts-what-helm-fails
-stack-layer-null	S	init	refused	409	deployments/s/n	no	-	-	-	-	-	-	-	-	
-stack-layer-null	S	migration-preview	ok	200	-	no	-	fails	1	-	-	-	-	-	accepts-what-helm-fails
-stack-layer-null	S	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/s/_common/demo/values.yaml,deployments/t/a/values.yaml,deployments/t/b/values.yaml	fails	1	-	-	-	-	after: fails -	accepts-what-helm-fails
-stack-layer-null	S	commit	refused	409	deployments/s/x	no	-	fails	1	-	-	-	-	-	
-stack-layer-null	S	preview	refused	200	-	no	-	fails	1	-	-	-	-	-	
-stack-layer-null	S	check-deployment	refused	exit 1	-	no	-	fails	1	-	-	-	-	-	
 tpl-common-partial	T	get	ok	200	-	no	-	fails	1	-	-	-	-	{"job":"api"}	
 tpl-common-partial	T	list	ok	200	-	no	-	fails	1	-	-	-	-	alertCount=1	
 tpl-common-partial	T	save-text	refused	400	-	no	-	fails	1	-	-	-	-	-	

@@ -507,6 +507,8 @@ export default function AlertUserView() {
     const notice = syncFailedNotice(result.syncFailed)
     if (notice) message.warning({ content: notice, duration: 10 })
     setSaveWarnings(result.warnings || [])
+    // The editor wrote what Helm reads: the note on how it read the file is done.
+    setReadNotes([])
   }
 
   async function handleSave() {

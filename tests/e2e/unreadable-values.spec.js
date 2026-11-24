@@ -75,5 +75,11 @@ test.describe('a deployment whose values hold 010', () => {
     await page.getByText('cpu', { exact: true }).first().click()
     await expect(page.locator('.ant-table-tbody').getByRole('spinbutton').first()).toHaveValue('8', { timeout: 8000 })
     await expect(page.getByTestId('values-read-notes')).toContainText('Helm reads 010 as 8 (YAML 1.1)', { timeout: 8000 })
+    // Saved, the file holds 8: nothing is read otherwise any more.
+    const cell = page.locator('.ant-table-tbody').getByRole('textbox').first()
+    await cell.fill('shop2')
+    await page.getByRole('button', { name: 'Save' }).click()
+    await expect.poll(() => fs.readFile(path.join(WORKSPACE, DIR, 'values.yaml'), 'utf-8'), { timeout: 8000 }).toContain('thr: 8')
+    await expect(page.getByTestId('values-read-notes')).toHaveCount(0)
   })
 })

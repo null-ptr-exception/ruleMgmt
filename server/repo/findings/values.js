@@ -120,7 +120,9 @@ export function valueFindings(dep, { every = false } = {}) {
     // A required Common Value left empty is the deployment's to fill,
     // whoever left it so; a cell of a row a _common gives is the _common's.
     const own = (p.required && p.group === '_common') || mine(p.group, p.column)
-    const kind = p.required ? 'required-empty' : /derived/.test(p.message) ? 'derived' : 'cell'
+    // A derived value's problem is on a name the group's derived: declares.
+    const derived = model.groups?.[p.group]?.derived
+    const kind = p.required ? 'required-empty' : derived && Object.hasOwn(derived, p.column) ? 'derived' : 'cell'
     out.push(finding({
       code: `${own ? 'values' : 'stack'}.${kind}`, file, helm: 'renders',
       ...(kind === 'derived' ? { deploy: 'fails' } : {}),

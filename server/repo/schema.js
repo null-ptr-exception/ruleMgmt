@@ -212,7 +212,9 @@ function forAjv(s) {
   if (!isObj(s)) return s
   const out = {}
   for (const [k, v] of Object.entries(s)) {
-    if (k === '$schema') continue
+    // The keyword AlertForge gives ajv for `pattern`: written in a file, it
+    // is an annotation, as for Helm (both versions measured), never a check.
+    if (k === '$schema' || k === PATTERN) continue
     if (k === 'pattern') out[PATTERN] = v
     else if (k === 'properties') out[k] = Object.fromEntries(Object.entries(v).map(([n, sub]) => [KEY(n), forAjv(sub)]))
     else if (k === 'required') out[k] = v.map(KEY)

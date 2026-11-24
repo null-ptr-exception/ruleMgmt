@@ -115,3 +115,14 @@ describe('the network', () => {
     }
   })
 })
+
+describe('the keyword AlertForge uses inside', () => {
+  it('written in a schema file, is an annotation as for Helm: neither a pattern nor a failure', async () => {
+    const { schemaValidator: make } = await import('../../../server/repo/schema.js')
+    const bad = { type: 'object', properties: { a: { type: 'string', 'x-af-pattern': '[' } } }
+    const good = { type: 'object', properties: { a: { type: 'string', 'x-af-pattern': '^z$' } } }
+    expect(() => make(bad, 'f')({ a: 'y' })).not.toThrow()
+    expect(make(bad, 'f')({ a: 'y' })).toEqual([])
+    expect(make(good, 'f')({ a: 'y' })).toEqual([])
+  })
+})

@@ -92,9 +92,20 @@ export async function checkRuleObjects(dir, repo) {
       const found = await repoRoot(dir, repo).catch(err => { if (err instanceof CannotCheck) return {}; throw err })
       if (found.root) valuesRoot = found.root
     }
-    const dep = await loadDeployment(openRepo(valuesRoot), path.relative(valuesRoot, dir).split(path.sep).join('/'))
+    // Related as real paths: a repo reached through a link (or a root given
+    // one way and the folder another) is still the same repo. The folder's
+    // own name stays as given: a deployment folder that is a link is read
+    // through it, as Helm reads it.
+    const realRoot = await fs.realpath(valuesRoot)
+    const realDir = path.join(await fs.realpath(path.dirname(dir)), path.basename(dir))
+    const dep = await loadDeployment(openRepo(realRoot), path.relative(realRoot, realDir).split(path.sep).join('/'))
     if (dep.state !== 'ok') {
-      const why = dep.state === 'unreadable' ? dep.why : findingsOf(dep).map(f => f.message).join('; ')
+      // The file is named once: each finding's message starts with it.
+      const own = m => (m.startsWith(`${dep.file} `) || m.startsWith(`${dep.file}:`) ? m.slice(dep.file.length).replace(/^:? /, '') : m)
+      const why = dep.state === 'unreadable' ? dep.why : findingsOf(dep).map(f => own(f.message)).join('; ')
+      // What AlertForge cannot tell Helm's reading of is not checked (exit
+      // 2); a file Helm stops on, or one that cannot be read, fails it.
+      if (dep.state === 'invalid' && findingsOf(dep).every(f => f.helm === 'unknown')) throw new CannotCheck(`Values: ${dep.file} is not checked: ${why}`)
       return { ok: false, lines: [`Values: not checked — ${dep.file} cannot be read: ${why}`] }
     }
     nulls = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code)).map(f => f.message)

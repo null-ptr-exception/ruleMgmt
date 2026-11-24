@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Installs promtool and vmalert as the image has them — promtool built by the
-# Dockerfile's promtool stage (#105), vmalert copied out of the same image —
+# Installs promtool, promtool3 and vmalert as the image has them — promtool
+# and promtool3 built by the Dockerfile's promtool and promtool3 stages (#105),
+# vmalert copied out of the same image —
 # so CI runs the checker tests instead of skipping them; amtool, which only the tests use (#92), so its version is pinned
 # here; and helm at the image's HELM_VERSION, the upstream release checked
 # against its checksum below. Usage: scripts/install-checkers.sh [bin-dir] (default /usr/local/bin)
@@ -11,6 +12,7 @@ DOCKERFILE="$(dirname "$0")/../Dockerfile"
 
 arg() { sed -n "s/^ARG $1=//p" "$DOCKERFILE"; }
 PROMETHEUS_VERSION="$(arg PROMETHEUS_VERSION)"
+PROMETHEUS3_VERSION="$(arg PROMETHEUS3_VERSION)"
 VMALERT_VERSION="$(arg VMALERT_VERSION)"
 ALERTMANAGER_VERSION=v0.27.0
 HELM_VERSION="$(arg HELM_VERSION)"
@@ -42,6 +44,9 @@ copy_out() { # image, path in image, installed name
 docker build -q --target promtool -t "alertforge-promtool:$PROMETHEUS_VERSION" \
   -f "$DOCKERFILE" "$(dirname "$DOCKERFILE")" > /dev/null
 copy_out "alertforge-promtool:$PROMETHEUS_VERSION" /promtool promtool
+docker build -q --target promtool3 -t "alertforge-promtool:$PROMETHEUS3_VERSION" \
+  -f "$DOCKERFILE" "$(dirname "$DOCKERFILE")" > /dev/null
+copy_out "alertforge-promtool:$PROMETHEUS3_VERSION" /promtool promtool3
 copy_out "victoriametrics/vmalert:$VMALERT_VERSION" /vmalert-prod vmalert
 copy_out "prom/alertmanager:$ALERTMANAGER_VERSION" /bin/amtool amtool
 
@@ -55,6 +60,7 @@ install -m 0755 "$HELM_TMP/linux-amd64/helm" "$BIN_DIR/helm"
 test "$("$BIN_DIR/helm" version --template '{{.Version}}')" = "v$HELM_VERSION"
 
 "$BIN_DIR/promtool" --version | head -1
+"$BIN_DIR/promtool3" --version | head -1
 "$BIN_DIR/vmalert" -version
 "$BIN_DIR/amtool" --version | head -1
 "$BIN_DIR/helm" version --short

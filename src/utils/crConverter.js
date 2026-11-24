@@ -115,7 +115,9 @@ function objectHead({ profile, name, objectMeta, groupName, groupFields }) {
     `metadata:\n` +
     `  name: ${name}\n` +
     renderMetaMap('labels', meta.labels) +
-    renderMetaMap('annotations', meta.annotations) +
+    // The profile's own annotations last (prometheus3's mark), so nothing a
+    // site sets can change them.
+    renderMetaMap('annotations', { ...meta.annotations, ...profile.annotations }) +
     `spec:\n` +
     `  groups:\n` +
     // A group key such as `yes` or `on` is a boolean to Kubernetes written bare.

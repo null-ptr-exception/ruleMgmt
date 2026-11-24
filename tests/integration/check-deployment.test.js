@@ -15,6 +15,9 @@ const has = (bin, args) => { try { execFileSync(bin, args, { stdio: 'ignore' });
 const HAS_HELM = has('helm', ['version'])
 const HAS_PROMTOOL = has('promtool', ['--version'])
 const HAS_VMALERT = has('vmalert', ['-version'])
+const PROMTOOL3 = process.env.PROMTOOL3_BIN || 'promtool3'
+const HAS_PROMTOOL3 = has(PROMTOOL3, ['--version'])
+if (!HAS_PROMTOOL3) console.warn(`check-deployment: promtool 3 (${PROMTOOL3}) not found — its case is skipped`)
 const CAN_RUN = HAS_HELM && HAS_PROMTOOL
 if (!CAN_RUN) console.warn('check-deployment: helm or promtool not found — the cases are skipped')
 
@@ -32,6 +35,23 @@ spec:
 {{- if .Values.twice }}
         - alert: TinyDown
           expr: {{ .Values.expr | quote }}
+{{- end }}
+{{- if .Values.p3 }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}-p3
+  annotations:
+    alertforge.io/profile: prometheus3
+spec:
+  groups:
+    - name: p3
+      rules:
+        - alert: P3
+          expr: {{ .Values.p3 | quote }}
+          labels:
+            service.name: api
 {{- end }}
 {{- if .Values.logs }}
 ---
@@ -263,6 +283,23 @@ describe.skipIf(!CAN_RUN)('check-deployment when it cannot check', () => {
     const bad = spawnSync('node', [SCRIPT, dir], { encoding: 'utf-8', env: { ...process.env, PROMTOOL_BIN: '/nope/promtool' } })
     expect(bad.stderr).toContain('not available')
     expect(bad.stdout).not.toContain('not available')
+  })
+
+  // 3.x reads a UTF-8 label name and offset 0s, which 2.x refuses.
+  it.skipIf(!HAS_PROMTOOL3)('checks a prometheus3 object with promtool 3, and says when it is missing', async () => {
+    await deployment('  expr: up == 0\n  p3: "up offset 0s == 0"\n')
+    const ok = check(dir, { PROMTOOL3_BIN: PROMTOOL3 })
+    expect(ok.out).toContain('Rules: passed (promtool, promtool3)')
+    expect(ok.code).toBe(0)
+
+    await deployment('  expr: up == 0\n  p3: "up offset == 0"\n')
+    const bad = check(dir, { PROMTOOL3_BIN: PROMTOOL3 })
+    expect(bad.out).toContain('Rules: failed (promtool, promtool3)')
+    expect(bad.code).toBe(1)
+
+    const missing = check(dir, { PROMTOOL3_BIN: '/nope/promtool3' })
+    expect(missing.out).toContain('Promtool 3 is not available: /nope/promtool3')
+    expect(missing.code).toBe(2)
   })
 
   it('says a missing helm or promtool is missing', () => {

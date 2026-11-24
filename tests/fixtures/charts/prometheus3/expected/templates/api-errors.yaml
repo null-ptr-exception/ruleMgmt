@@ -1,0 +1,31 @@
+{{- $chunks := chunk 100 ($.Values.api_errors | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-api-errors-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    release: kps3
+  annotations:
+    example.com/team: shop
+    alertforge.io/profile: prometheus3
+spec:
+  groups:
+    - name: api-errors
+      interval: 1m
+      rules:
+        {{- range $rows }}
+        - alert: ApiErrors
+          expr: |-
+            rate(http_errors_total{job="{{ .job }}"}[5m] offset {{ dig "shift" `0s` . }}) > {{ dig "warn" 1 . }}
+          for: 2m
+          labels:
+            severity: warning
+            service.name: "{{ .job }}"
+          annotations:
+            summary: |-
+              {{ `{{ $labels.job }}` }}: {{ `{{ $value }}` }} errors/s
+        {{- end }}
+{{- end }}

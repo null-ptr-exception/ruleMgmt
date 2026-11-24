@@ -194,13 +194,16 @@ const DESCRIPTIONS = {
   'group-once-changed': c => c.to === 'once'
     ? `${c.group}: now renders once per deployment — its objects are renamed (no chunk index): the old ones are deleted and new ones created, and its rows are no longer read`
     : `${c.group}: now renders once per row — its objects are renamed (with a chunk index): the old ones are deleted and new ones created`,
-  'group-type-changed': c => `${c.group}: type changed from ${c.from} to ${c.to} — its objects become ${c.toKind} instead of ${c.fromKind}: the old ones are deleted and new ones created, and the alerts are reloaded`
+  'group-type-changed': c => c.toKind === c.fromKind
+    ? `${c.group}: type changed from ${c.from} to ${c.to} — its objects stay ${c.toKind} with the same names and are updated in place; their rules are now read and checked as ${c.to}`
+    : `${c.group}: type changed from ${c.from} to ${c.to} — its objects become ${c.toKind} instead of ${c.fromKind}: the old ones are deleted and new ones created, and the alerts are reloaded`
 }
 
 /**
  * Groups whose `type` (output profile, #65) changed between two rules models.
  * Not breaking — no row loses anything — but every object of the group is
- * replaced by one of another kind, so it is always said.
+ * replaced by one of another kind, or, within a kind (vlogs and vm are both
+ * VMRule), read as another language: it is always said.
  */
 export function groupTypeChanges(beforeModel, afterModel) {
   const changes = []

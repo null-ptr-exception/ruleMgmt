@@ -1,0 +1,7 @@
+api_errors:
+  # warn and shift from their defaults: offset 0s
+  - job: api
+  # both set
+  - job: web
+    warn: 2
+    shift: 10m

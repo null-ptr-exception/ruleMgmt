@@ -83,6 +83,15 @@ describe('a deployment\'s values', () => {
     expect(valueProblems({ spc: [{ job: 'a', win: '1m' }] }, m)).toEqual([])
   })
 
+  // Measured: vmalert takes offset 0s (an offset of 0 is no offset); a range
+  // of 0 is still refused.
+  it('0s may be an offset in a vm group, not a range', () => {
+    const vm = text => parse(text.replace('group: spc\n', 'group: spc\ntype: vm\n')).model
+    const offset = vm(WIN.replace('rate(x{job="${job}"}[${win}]) > 0', 'up offset ${win} > 0'))
+    expect(valueProblems({ spc: [{ job: 'a', win: '0s' }] }, offset)).toEqual([])
+    expect(valueProblems({ spc: [{ job: 'a', win: '0s' }] }, vm(WIN)).map(p => p.message)).toEqual(['spc row 1, "win": "0s" is 0, and a range has to be more than 0'])
+  })
+
   // The issue asks to say what to write.
   it('"21" written as text says which unit to add, as 21 does', () => {
     expect(problems([{ job: 'a', win: '21' }])).toEqual(['spc row 1, "win": "21" has no unit — write it with one, e.g. 21s or 21m'])
@@ -112,6 +121,12 @@ describe('the save checks', () => {
     const zero = WIN.replace('win: {type: duration, required: true}', 'win: {type: duration, default: 0s}')
     expect(findings(zero)).toEqual([expect.stringContaining('${win}\'s default "0s" is 0, and a range has to be more than 0')])
     expect(findings(zero.replace('[${win}]', '[5m] offset ${win}'))).toEqual([expect.stringContaining('an offset cannot be 0')])
+  })
+
+  it('a 0s default in an offset is fine in a vm group', () => {
+    const zero = WIN.replace('win: {type: duration, required: true}', 'win: {type: duration, default: 0s}').replace('group: spc\n', 'group: spc\ntype: vm\n')
+    expect(findings(zero.replace('[${win}]', '[5m] offset ${win}'))).toEqual([])
+    expect(findings(zero)).toEqual([expect.stringContaining('a range has to be more than 0')])
   })
 
   it('a 0s default for a `for` is fine', () => {

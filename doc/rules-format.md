@@ -79,7 +79,7 @@ the query lives in `vars` so there is only ever one copy of it.
 |---|---|---|
 | `group` | no | Must equal the filename if present |
 | `once` | no | `true`: the rules render **once per deployment** instead of once per row — see [once groups](#once-groups). A once group has no `columns` |
-| `type` | no | Which kind of rules these are, and so what they are wrapped in: `prometheus` (the default — `expr` is PromQL, emitted as a `PrometheusRule`) or `vlogs` (`expr` is LogsQL, evaluated against VictoriaLogs, emitted as a `VMRule`). The choices are the profiles in `config/outputs.json` — see [output profiles](#output-profiles) |
+| `type` | no | Which kind of rules these are, and so what they are wrapped in: `prometheus2` (the default — `expr` is PromQL for Prometheus 2.x, emitted as a `PrometheusRule`; `prometheus` is the same), `prometheus3` (PromQL for Prometheus 3.13 or later, a `PrometheusRule` marked with the annotation `alertforge.io/profile: prometheus3`, checked with promtool 3), `vm` (`expr` is MetricsQL, evaluated by VMAlert against VictoriaMetrics, emitted as a `VMRule` with `type: prometheus` on the group) or `vlogs` (`expr` is LogsQL, evaluated against VictoriaLogs, emitted as a `VMRule`). The choices are the profiles in `config/outputs.json` — see [output profiles](#output-profiles) |
 | `interval` | no | How often the group is evaluated — a [duration](#durations) such as `30s`, `1m`, `1h30m`. Left out, the evaluator's own default applies |
 | `limit` | no | Maximum series the group may produce — a whole number, `0` or more. Left out, there is no limit |
 | `selectors` | no | The selector columns, coarsest first — see [selectors](#selectors-a-default-with-exceptions) |
@@ -171,7 +171,7 @@ rules:
 | `"21"` | refused: no unit — write `21s` or `21m` |
 | `10.5m`, `21 m`, `30m1h`, `$__interval` | refused: not a duration |
 | `0` | refused: no unit — write `0s` |
-| `0s` | fine for `for`; refused in a range (it has to be more than 0) and in a PromQL `offset` (promtool refuses `offset 0s`) |
+| `0s` | fine for `for`; refused in a range (it has to be more than 0) and, in a `prometheus2` group, in an `offset` (promtool 2 refuses `offset 0s`; promtool 3 and vmalert take it, so a `prometheus3` or `vm` group may) |
 
 - The cell is checked in the table as it is typed, when the deployment is
   saved (naming the row and the column), and by Helm itself: the schema
@@ -179,7 +179,8 @@ rules:
 - The rule writes the column with no unit after it: `[${win}m]` is refused
   at save time, since a `5m` cell would render `[5mm]`.
 - Its `default` stands in for every empty cell, so a `0s` default is refused
-  at save time where `0s` is: in a range or an offset.
+  at save time where `0s` is: in a range, or an offset of a `prometheus2`
+  group.
 - It has no `enum`. For a fixed list of durations, use `type: string` with
   the `enum`: the values are yours, so they are checked when you write them.
 - Turning a `string` column into a `duration` is a
@@ -192,8 +193,8 @@ rules:
   `_time:${w}` — belongs in a duration column too: vmalert, which evaluates
   these groups, does not check `for` at all (`for: 21`, `-5m` and `30m1h`
   pass it and act as 0 or less), so this column's check is the only one.
-  `0s` is fine anywhere in such a group: only a PromQL range or offset
-  refuses it.
+  `0s` is fine anywhere in such a group: only a range, or an offset in a
+  `prometheus2` group, refuses it.
 
 ### Once groups
 
@@ -630,9 +631,16 @@ rule evaluator selects objects by, come from the environment (see
 ```json
 {
   "outputs": {
-    "prometheus": { "apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule", "validate": "promtool" },
+    "prometheus2": { "aliases": ["prometheus"],
+                     "apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
+                     "validate": "promtool", "query": "promql" },
+    "prometheus3": { "apiVersion": "monitoring.coreos.com/v1", "kind": "PrometheusRule",
+                     "annotations": { "alertforge.io/profile": "prometheus3" },
+                     "validate": "promtool3", "query": "promql" },
+    "vm": { "apiVersion": "operator.victoriametrics.com/v1beta1", "kind": "VMRule",
+            "groupFields": { "type": "prometheus" }, "validate": "vmalert", "query": "metricsql" },
     "vlogs": { "apiVersion": "operator.victoriametrics.com/v1beta1", "kind": "VMRule",
-               "groupFields": { "type": "vlogs" }, "validate": "vmalert" }
+               "groupFields": { "type": "vlogs" }, "validate": "vmalert", "query": "logsql" }
   },
   "routing": { "apiVersion": "monitoring.coreos.com/v1alpha1", "kind": "AlertmanagerConfig" }
 }
@@ -640,13 +648,20 @@ rule evaluator selects objects by, come from the environment (see
 
 | Field | Required | Meaning |
 |---|---|---|
-| `outputs.<name>` | — | A profile; `<name>` is what a group's `type` says. Lower-case letters, digits, `_`, `-`. `prometheus` must exist: it is the profile of a group with no `type` |
+| `outputs.<name>` | — | A profile; `<name>` is what a group's `type` says. Lower-case letters, digits, `_`, `-`. `prometheus2` must exist: it is the profile of a group with no `type` |
+| `aliases` | no | Other names a group's `type` (and a site's `RULE_OBJECT_*_BY_PROFILE` key) may give the profile. `prometheus` is `prometheus2`'s: the profile's name before Prometheus 3 had one, so a rules file or site setting that says it keeps its meaning. A rules file keeps the name it was written with |
+| `annotations` | no | Annotations written on every object of the profile, after the site's — what tells it from another profile of the same kind (`prometheus3`'s `alertforge.io/profile`). A site cannot set one of these keys |
 | `apiVersion`, `kind` | yes | The resource the group's objects are |
 | `groupFields` | no | Fields written as they are onto every `spec.groups[]` entry of the profile's objects — strings, numbers or booleans. Not `name` or `rules` (the generator's) nor `interval` or `limit` (the template owner's) |
-| `validate` | yes | How Preview checks the rendered rules: `promtool` (`promtool check rules`, for PromQL); `vmalert` (`vmalert -dryRun`, for LogsQL, which promtool cannot read); or `none` — Preview then marks the group as not syntax-checked. There is no default |
+| `validate` | yes | How Preview checks the rendered rules: `promtool` (`promtool check rules`, Prometheus 2.x's, `PROMTOOL_BIN`); `promtool3` (the same with Prometheus 3.x's, `PROMTOOL3_BIN`, default `promtool3`); `vmalert` (`vmalert -dryRun`, for MetricsQL and LogsQL, which promtool cannot read); or `none` — Preview then marks the group as not syntax-checked. There is no default |
+| `query` | yes | The language the group's `expr` is written in: `promql`, `metricsql` or `logsql`. With `promql` and `metricsql` the save checks that read the query itself apply — a range of 0, a duration column or derived value in a range or offset, [selectors](#selectors-a-default-with-exceptions) — and the editor helps with PromQL; with `logsql` they do not. There is no default |
 | `routing` | yes | Not a profile: the resource a deployment's [notification routing](#notification-routing-routingyaml) is generated as. `apiVersion` and `kind` only. No profile may be named `routing`, so no group can have `type: routing` |
 
-Any other key is an error. The file is checked when the server starts and
+Two profiles may share a kind (`vm` and `vlogs` are both `VMRule`;
+`prometheus2` and `prometheus3` both `PrometheusRule`): what tells their
+objects apart is the fields each writes on its groups, or the annotations it
+writes on its objects. Any other
+key is an error. The file is checked when the server starts and
 when the frontend is built, and a mistake stops both. Changing a profile's
 `kind`, or `routing.kind`, replaces every object it emits — they are deleted
 and created again — so it is a release-level change.

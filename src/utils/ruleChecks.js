@@ -16,7 +16,7 @@
  * still gets is reference integrity, which the CLI has always run on it.
  */
 
-import { profileFor } from './outputs.js'
+import { profileFor, isPromQLType, refusesZeroOffset } from './outputs.js'
 import { parseDerived, derivedColumns, derivedPosition, withoutStrings } from './derived.js'
 import { durationCellFault } from './duration.js'
 import { normalizeRules, columnFallbacks } from './templateGenerator.js'
@@ -120,7 +120,8 @@ export function checkRules(schema) {
       return [n, { ...d, columns }]
     }))
     const columnsOf = name => (Object.hasOwn(derived, name) ? derived[name].columns : [name])
-    const promql = profileFor(alertDef.groupType)?.validate === 'promtool'
+    const promql = isPromQLType(alertDef.groupType)
+    const zeroOffsetRefused = refusesZeroOffset(alertDef.groupType)
     const zeroDefaults = new Set()
 
     for (const rule of rules) {
@@ -234,7 +235,7 @@ export function checkRules(schema) {
         const prop = alertDef?.items?.properties?.[name] || commonProps[name]
         const key = `${group}|${name}`
         if (!rule.raw && prop?.default !== undefined && !zeroDefaults.has(key)) {
-          const why = durationCellFault(prop.default, derivedPosition(name, [rule], promql))
+          const why = durationCellFault(prop.default, derivedPosition(name, [rule], promql, zeroOffsetRefused))
           if (why) {
             zeroDefaults.add(key)
             findings.push({ severity: 'save', kind: 'duration-default', group, alert: rule.alert,
@@ -246,9 +247,16 @@ export function checkRules(schema) {
       // A range of a bare 0 (`rate(x[0])`, `x[0:1m]`): promtool 2.x takes
       // it when checking, but evaluation prints it back as [0s] and fails —
       // the rule never fires, and Preview stays green.
+      // MetricsQL takes it too, as no range at all: the window becomes
+      // vmalert's -datasource.queryStep (5m by default) — another query than
+      // the one written. Refused there as well.
       if (promql && !rule.raw && /\[\s*0+\s*[\]:]/.test(withoutStrings(rule.expr || ''))) {
+        const zero = (withoutStrings(rule.expr).match(/\[\s*0+\s*[\]:]/) || [''])[0]
+        const why = profileFor(alertDef.groupType)?.query === 'metricsql'
+          ? 'is read by VictoriaMetrics as no range at all: the window becomes vmalert\'s -datasource.queryStep (5m by default)'
+          : 'is never evaluated: Prometheus fails the rule every time'
         findings.push({ severity: 'save', kind: 'zero-range', group, alert: rule.alert,
-          message: `${where}: a range of 0 (${(withoutStrings(rule.expr).match(/\[\s*0+\s*[\]:]/) || [''])[0]}…) is never evaluated: Prometheus fails the rule every time — give it a length, e.g. [5m]` })
+          message: `${where}: a range of 0 (${zero}…) ${why} — give it a length, e.g. [5m]` })
       }
 
       if (!rule.raw) findings.push(...derivedPositionProblems(rule, derived, promql, group, where))

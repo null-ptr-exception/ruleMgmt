@@ -32,8 +32,8 @@ export function runCommand(command, args, options = {}) {
 }
 
 // Which checker reads an object is the output profile's call (#65, #76), not
-// a literal kind here: `validate: promtool` (PromQL) and `validate: vmalert`
-// (LogsQL, which promtool cannot read) are checked; one marked `none` is
+// a literal kind here: `validate: promtool` (Prometheus 2.x), `promtool3`
+// (Prometheus 3.x) and `vmalert` (MetricsQL and LogsQL) are checked; one marked `none` is
 // counted and reported as not syntax-checked.
 export function objectsByValidator(renderedYaml, profileOf = profileOfObject) {
   const objects = []
@@ -104,6 +104,14 @@ const VALIDATORS = {
     args: file => ['check', 'rules', file],
     clean: cleanPromtoolOutput,
   },
+  // Prometheus 3.x's promtool, for the prometheus3 profile: it reads group
+  // labels, UTF-8 names and `offset 0s`, which 2.x refuses.
+  promtool3: {
+    label: 'Promtool 3',
+    bin: () => process.env.PROMTOOL3_BIN || 'promtool3',
+    args: file => ['check', 'rules', file],
+    clean: cleanPromtoolOutput,
+  },
   vmalert: {
     label: 'vmalert',
     bin: () => process.env.VMALERT_BIN || 'vmalert',
@@ -171,7 +179,7 @@ export async function checkRules(renderedYaml) {
       try {
         const { stdout, stderr } = await checkerLimit(() => runCommand(v.bin(), v.args(file), { timeout: 120000, maxBuffer: MAX_BUFFER }))
         const output = v.clean(`${stdout || ''}${stderr || ''}`, file)
-        return { objName, passed: true, warned: validator === 'promtool' && LINT_FAILED.test(output), output }
+        return { objName, passed: true, warned: v.clean === cleanPromtoolOutput && LINT_FAILED.test(output), output }
       } catch (err) {
         if (err.code === 'ENOENT') return { objName, missing: `${v.label} is not available: ${v.bin()}` }
         const output = v.clean(`${err.stdout || ''}${err.stderr || ''}${err.message || ''}`, file)

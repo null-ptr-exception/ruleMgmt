@@ -18,10 +18,12 @@
  *   object-meta.json         optional input — the site's RULE_OBJECT_* for
  *                                this case, as {labels, labelsByProfile, …}
  *   promtool-tests.yaml      (3) optional — `promtool test rules` against the
- *                                rendered rules
+ *                                rendered rules, with the promtool the case's
+ *                                groups are checked by: Prometheus 2.x's, or
+ *                                3.x's (PROMTOOL3_BIN) for prometheus3 groups
  *
  * Layer (3) also runs `vmalert -dryRun` on every rendered object whose
- * profile says `validate: vmalert` (LogsQL, #76) — no file needed: the case's
+ * profile says `validate: vmalert` (LogsQL and MetricsQL) — no file needed: the case's
  * rules must parse.
  *
  * Layer (1) may be (re)written with `node tests/blind/update.mjs`, and then
@@ -217,13 +219,34 @@ export function renderedMeta(renderedYaml) {
   return out
 }
 
-/** Object name → spec.groups, for the objects whose profile promtool can check. */
-export function promtoolGroups(renderedYaml) {
+/**
+ * Object name → spec.groups, for the objects whose profile is checked by
+ * `validator`: promtool (Prometheus 2.x) or promtool3 (Prometheus 3.x).
+ */
+export function promtoolGroups(renderedYaml, validator = 'promtool') {
   const out = {}
   for (const doc of loadRendered(renderedYaml)) {
-    if (profileOfObject(doc)?.validate === 'promtool') out[doc.metadata.name] = doc.spec.groups
+    if (profileOfObject(doc)?.validate === validator) out[doc.metadata.name] = doc.spec.groups
   }
   return out
+}
+
+/** The binary each promtool checker runs, found as the server finds it. */
+export const PROMTOOL_BINS = {
+  promtool: process.env.PROMTOOL_BIN || 'promtool',
+  promtool3: process.env.PROMTOOL3_BIN || 'promtool3',
+}
+
+/**
+ * Which promtool a case's promtool-tests.yaml runs with: the one its groups'
+ * profile is checked by. A case with groups of both is refused — one test
+ * file cannot be read by two Prometheus versions' rules at once; split it.
+ */
+export function casePromtool(name) {
+  const { model } = parseRulesDir(readDir(path.join(CASES_DIR, name, 'rules')))
+  const used = new Set(Object.values(model.groups).map(g => profileFor(g.type)?.validate).filter(v => Object.hasOwn(PROMTOOL_BINS, v)))
+  if (used.size > 1) throw new Error(`${name}: has groups checked by both ${[...used].join(' and ')} — give each its own case`)
+  return used.size ? [...used][0] : 'promtool'
 }
 
 /** Whether any of the case's groups has an output profile checked by `validator`. */
@@ -266,7 +289,7 @@ export function vmalertDryRun(name, groupsByObject) {
  * gets its own rule file — the operator loads one object per file, and the
  * same group name legitimately repeats across a group's objects.
  */
-export function promtoolTest(name, groupsByObject) {
+export function promtoolTest(name, groupsByObject, bin = 'promtool') {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `blind-promtool-${name}-`))
   try {
     const ruleFiles = Object.entries(groupsByObject).map(([obj, groups]) => {
@@ -278,7 +301,7 @@ export function promtoolTest(name, groupsByObject) {
     const testFile = path.join(tmp, 'tests.yaml')
     fs.writeFileSync(testFile, yaml.dump({ ...tests, rule_files: ruleFiles }))
     try {
-      execFileSync('promtool', ['test', 'rules', testFile], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], cwd: tmp })
+      execFileSync(bin, ['test', 'rules', testFile], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], cwd: tmp })
       return { passed: true, output: '' }
     } catch (err) {
       return { passed: false, output: `${err.stdout || ''}${err.stderr || ''}` }

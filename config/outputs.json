@@ -1,15 +1,32 @@
 {
   "outputs": {
-    "prometheus": {
+    "prometheus2": {
+      "aliases": ["prometheus"],
       "apiVersion": "monitoring.coreos.com/v1",
       "kind": "PrometheusRule",
-      "validate": "promtool"
+      "validate": "promtool",
+      "query": "promql"
+    },
+    "prometheus3": {
+      "apiVersion": "monitoring.coreos.com/v1",
+      "kind": "PrometheusRule",
+      "annotations": { "alertforge.io/profile": "prometheus3" },
+      "validate": "promtool3",
+      "query": "promql"
+    },
+    "vm": {
+      "apiVersion": "operator.victoriametrics.com/v1beta1",
+      "kind": "VMRule",
+      "groupFields": { "type": "prometheus" },
+      "validate": "vmalert",
+      "query": "metricsql"
     },
     "vlogs": {
       "apiVersion": "operator.victoriametrics.com/v1beta1",
       "kind": "VMRule",
       "groupFields": { "type": "vlogs" },
-      "validate": "vmalert"
+      "validate": "vmalert",
+      "query": "logsql"
     }
   },
   "routing": {

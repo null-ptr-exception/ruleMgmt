@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import {
   CASES_DIR, listCases, generateCase, readExpectedTemplates, readExpectedRendered,
-  readExpectedMeta, renderCase, renderedGroups, renderedMeta, promtoolGroups, promtoolTest, vmalertGroups, vmalertDryRun, caseChecksWith, hasBinary,
+  readExpectedMeta, renderCase, renderedGroups, renderedMeta, promtoolGroups, promtoolTest, casePromtool, PROMTOOL_BINS, vmalertGroups, vmalertDryRun, caseChecksWith, hasBinary,
 } from '../blind/harness.js'
 
 /**
@@ -12,12 +12,16 @@ import {
  */
 
 const HAS_HELM = hasBinary('helm', ['version'])
-const HAS_PROMTOOL = hasBinary('promtool')
+const HAS = {
+  promtool: hasBinary(PROMTOOL_BINS.promtool),
+  promtool3: hasBinary(PROMTOOL_BINS.promtool3),
+}
 const HAS_VMALERT = hasBinary('vmalert', ['-version'])
 
 if (!HAS_HELM) console.warn('generator-blind: helm not found — layers (2) and (3) are skipped')
-if (!HAS_PROMTOOL) console.warn('generator-blind: promtool not found — layer (3) is skipped')
-if (!HAS_VMALERT) console.warn('generator-blind: vmalert not found — layer (3) for LogsQL is skipped')
+if (!HAS.promtool) console.warn('generator-blind: promtool not found — layer (3) is skipped')
+if (!HAS.promtool3) console.warn(`generator-blind: promtool 3 (PROMTOOL3_BIN, ${PROMTOOL_BINS.promtool3}) not found — layer (3) for prometheus3 groups is skipped`)
+if (!HAS_VMALERT) console.warn('generator-blind: vmalert not found — layer (3) for vlogs and vm groups is skipped')
 
 const cases = listCases()
 
@@ -48,13 +52,14 @@ describe.each(cases)('%s', name => {
   }
 
   const hasTests = fs.existsSync(path.join(CASES_DIR, name, 'promtool-tests.yaml'))
-  it.skipIf(!HAS_HELM || !HAS_PROMTOOL || !hasTests)('(3) promtool test rules passes', () => {
-    const result = promtoolTest(name, promtoolGroups(renderCase(name, products)))
+  const promtool = casePromtool(name)
+  it.skipIf(!HAS_HELM || !HAS[promtool] || !hasTests)(`(3) ${promtool === 'promtool3' ? 'promtool 3' : 'promtool'} test rules passes`, () => {
+    const result = promtoolTest(name, promtoolGroups(renderCase(name, products), promtool), PROMTOOL_BINS[promtool])
     expect(result.passed, result.output).toBe(true)
   })
 
   if (caseChecksWith(name, 'vmalert')) {
-    it.skipIf(!HAS_HELM || !HAS_VMALERT)('(3) vmalert -dryRun passes for the LogsQL objects', () => {
+    it.skipIf(!HAS_HELM || !HAS_VMALERT)('(3) vmalert -dryRun passes for the objects vmalert checks', () => {
       const result = vmalertDryRun(name, vmalertGroups(renderCase(name, products)))
       expect(result.passed, result.output).toBe(true)
     })

@@ -116,9 +116,16 @@ You never write the escaping yourself.
 ## Log alerts: groups of another type
 
 A group's `type` says what kind of rules it holds. Left out it is
-`prometheus`: `expr` is PromQL, and the group is emitted as a
-`PrometheusRule`. `type: vlogs` makes `expr` LogsQL, evaluated against
-VictoriaLogs, and the group is emitted as a `VMRule` with `type: vlogs` on it:
+`prometheus2` (`type: prometheus` is the same): `expr` is PromQL for
+Prometheus 2.x, and the group is emitted as a `PrometheusRule`.
+`type: prometheus3` is PromQL for Prometheus 3.13 or later: a `PrometheusRule`
+too, marked with the annotation `alertforge.io/profile: prometheus3`, and
+checked with Prometheus 3's promtool, which takes UTF-8 label names such as
+`service.name` and `offset 0s`. `type: vm` makes `expr` MetricsQL, evaluated by VMAlert
+against VictoriaMetrics, and the group is emitted as a `VMRule` with
+`type: prometheus` on it (vmalert's name for its metrics source). `type: vlogs`
+makes `expr` LogsQL, evaluated against VictoriaLogs, and the group is emitted
+as a `VMRule` with `type: vlogs` on it:
 
 ```yaml
 # rules/app_errors.yaml
@@ -140,16 +147,25 @@ log alerts share its Common Values.
 
 What each type is wrapped in lives in `config/outputs.json`
 ([rules-format.md](rules-format.md#output-profiles)), part of the release.
-Two things differ for a `vlogs` group:
+What differs for a `vm` or `vlogs` group:
 
 - **vmalert checks its syntax, not promtool.** promtool reads PromQL only, so
-  Preview runs `vmalert -dryRun` on this group's objects instead: a LogsQL
-  typo is a failed check naming the group and rule. vmalert reports the first
-  bad rule of each group, so fix and check again. The editor drops PromQL's
-  highlighting for its `expr`.
-- **Changing a group's type replaces its objects.** A `PrometheusRule`
-  becomes a `VMRule` (or back): the old object is deleted, a new one
-  created, and the alerts reload. Saving says so.
+  Preview runs `vmalert -dryRun` on these groups' objects instead: a
+  MetricsQL or LogsQL typo is a failed check naming the group and rule.
+  vmalert reports the first bad rule of each group, so fix and check again.
+  The editor drops PromQL's highlighting for a `vlogs` group's `expr`.
+- **A `vm` group is MetricsQL.** `WITH` templates and `rollup_*` functions
+  are fine; selectors, duration columns and derived values work as in a
+  `prometheus2` group. A range of 0 is refused (VictoriaMetrics would read it
+  as no range at all, a window of vmalert's `-datasource.queryStep`); an
+  `offset` of 0 is not, since vmalert takes it.
+- **Changing a group's type between kinds replaces its objects.** A
+  `PrometheusRule` becomes a `VMRule` (or back): the old object is deleted, a
+  new one created, and the alerts reload. Between `vm` and `vlogs` the
+  objects stay `VMRule` with the same names and are updated in place. Saving
+  says which.
+- **Importing a `VMRule`** reads its groups' `type` as vmalert does:
+  `type: prometheus`, or none, is a `vm` group; `type: vlogs` a `vlogs` one.
 
 ## Recording rules and once groups
 
@@ -371,7 +387,8 @@ that never appears. An empty value omits its key.
 ### Different values per output profile
 
 A chart's objects are not all loaded by the same evaluator: a group with no
-`type` becomes a PrometheusRule, loaded by Prometheus; a `type: vlogs` group a
+`type` (or `type: prometheus3`) becomes a PrometheusRule, loaded by Prometheus; a `type: vm` group a
+VMRule, loaded by the VMAlert that reads VictoriaMetrics; a `type: vlogs` group a
 VMRule, loaded by the VMAlert that reads VictoriaLogs. Each selects on its own
 `ruleSelector`:
 
@@ -391,7 +408,13 @@ RULE_OBJECT_ANNOTATIONS_BY_PROFILE='{"vlogs":{"alertforge.io/source":"logs"}}'
 ```
 
 The keys are profile names — what a group's `type` says (see
-[output profiles](rules-format.md#output-profiles)), not a resource kind. A
+[output profiles](rules-format.md#output-profiles)), not a resource kind.
+`prometheus` is `prometheus2`; naming one profile under both is an error.
+`prometheus3` is a profile of its own: a group moved to it takes its
+`prometheus3` key, not `prometheus`'s — set both when the two Prometheus
+select their rules alike. The annotation `alertforge.io/profile` is
+AlertForge's own, and a site setting it in `RULE_OBJECT_ANNOTATIONS` or
+`RULE_OBJECT_ANNOTATIONS_BY_PROFILE` stops the server at startup. A
 profile's value replaces the site-wide one for the same key, an empty value
 removes the site-wide key from that profile's objects, and its other keys are
 added. They also take `routing`, for a deployment's

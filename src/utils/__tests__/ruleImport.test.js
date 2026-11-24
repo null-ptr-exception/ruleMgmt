@@ -121,7 +121,25 @@ spec:
   it('refuses a group whose type has no output profile, and says why', () => {
     const { groups, warnings } = importRules(vmrule.replace('type: vlogs', 'type: graphite'))
     expect(groups).toEqual([])
-    expect(warnings.join()).toMatch(/panics: type "graphite" has no output profile \(prometheus, vlogs\) — group skipped/)
+    expect(warnings.join()).toMatch(/panics: a VMRule group of type "graphite" has no output profile \(prometheus2, prometheus3, vm, vlogs\) — group skipped/)
+  })
+
+  // A VMRule's `type: prometheus` is vmalert's: MetricsQL, the vm profile —
+  // not AlertForge's PrometheusRule.
+  it('takes a VMRule of metric rules in as vm, with or without the evaluator type', () => {
+    for (const text of [vmrule.replace('type: vlogs', 'type: prometheus'), vmrule.replace('      type: vlogs\n', '')]) {
+      const { groups, warnings } = importRules(text)
+      expect(warnings).toEqual([])
+      expect(groups[0]).toMatchObject({ key: 'panics', type: 'vm', interval: '30s', limit: 5 })
+      expect(modelGroupFromImport(groups[0])).toMatchObject({ type: 'vm' })
+    }
+  })
+
+  it('takes a PrometheusRule in as the default type, and a rules file\'s type as written', () => {
+    const pr = vmrule.replace('operator.victoriametrics.com/v1beta1', 'monitoring.coreos.com/v1').replace('VMRule', 'PrometheusRule').replace('      type: vlogs\n', '')
+    expect(importRules(pr).groups[0]).not.toHaveProperty('type')
+    const file = 'groups:\n  - name: g\n    type: vm\n    rules:\n      - alert: A\n        expr: up == 0\n'
+    expect(importRules(file).groups[0]).toMatchObject({ type: 'vm' })
   })
 })
 

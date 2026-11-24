@@ -270,7 +270,7 @@ rules:
 
   it('refuses a type that is no output profile', () => {
     expect(parseGroupFile(withFields('type: graphite'), 'cpu').errors.join())
-      .toMatch(/type "graphite" is not an output profile — one of prometheus, vlogs/)
+      .toMatch(/type "graphite" is not an output profile — one of prometheus2, prometheus3, vm, vlogs, prometheus/)
     // The routing resource (#92) is not a group's output.
     expect(parseGroupFile(withFields('type: routing'), 'cpu').errors.join())
       .toMatch(/type "routing" is not an output profile/)

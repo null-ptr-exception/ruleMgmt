@@ -305,6 +305,56 @@ spec:
     }
   })
 
+  // A PrometheusRule marked prometheus3 goes to promtool 3, an unmarked one
+  // to promtool 2; a missing promtool 3 is said, never a pass.
+  it('checks a prometheus3 object with promtool 3 and a prometheus2 one with promtool', async () => {
+    const p3Dir = path.join(tmpDir, 'promtool3-invocations')
+    await fs.rm(p3Dir, { recursive: true, force: true })
+    await fs.mkdir(p3Dir, { recursive: true })
+    const fakePromtool3 = path.join(tmpDir, 'fake-promtool3')
+    await fs.writeFile(fakePromtool3, `#!/bin/sh\nPROMTOOL_CAPTURE_DIR="${p3Dir}" exec "${fakePromtool}" "$@"\n`, { mode: 0o755 })
+    process.env.PROMTOOL3_BIN = fakePromtool3
+    try {
+      await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-two-1-1
+spec:
+  groups:
+    - name: two
+      rules:
+        - alert: Two
+          expr: up == 0
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-three-1-1
+  annotations:
+    alertforge.io/profile: prometheus3
+spec:
+  groups:
+    - name: three
+      rules:
+        - alert: Three
+          expr: up offset 0s == 0
+`)
+      const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+      expect(status).toBe(200)
+      expect((await readPromtoolInvocations()).map(inv => inv.groups[0].name)).toEqual(['two'])
+      expect((await readInvocations(p3Dir)).map(inv => inv.groups[0].name)).toEqual(['three'])
+      expect(data.check).toMatchObject({ passed: true, tools: ['promtool', 'promtool3'] })
+
+      process.env.PROMTOOL3_BIN = path.join(tmpDir, 'missing-promtool3')
+      const missing = (await api('POST', '/api/v2/render/test-chart/staging')).data
+      expect(missing.check.passed).toBe(false)
+      expect(missing.check.output).toContain(`Promtool 3 is not available: ${path.join(tmpDir, 'missing-promtool3')}`)
+    } finally {
+      delete process.env.PROMTOOL3_BIN
+    }
+  })
+
   // #70: a once group with zero rows still renders, is checked like any
   // other object, and the summary marks it once — not empty — with its
   // recording rules counted apart from the alerts.
@@ -894,6 +944,38 @@ spec:
     await fs.writeFile(helmOutputFile, VLOGS_ONLY.replace('count( as n', 'count() as n'))
     const ok = (await api('POST', '/api/v2/render/test-chart/staging')).data
     expect(ok.check).toMatchObject({ passed: true, output: 'SUCCESS' })
+  })
+
+  // A vm group is MetricsQL: WITH and rollup_* are fine (promtool refuses
+  // both), and a broken expression still fails, naming the rule.
+  const VM_ONLY = `---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: rel-http-1-1
+spec:
+  groups:
+    - name: http
+      type: prometheus
+      rules:
+        - alert: Errors
+          expr: 'WITH (e = rate(http_errors_total[5m])) e > 1'
+        - alert: Shifted
+          expr: 'rollup_rate(http_errors_total[1h] offset 0s) > 1'
+`
+
+  it.skipIf(!HAS_VMALERT)('with the real vmalert: a vm group\'s MetricsQL passes, and a broken one fails naming the rule', async () => {
+    await fs.writeFile(helmOutputFile, VM_ONLY)
+    process.env.VMALERT_BIN = 'vmalert'
+
+    const ok = (await api('POST', '/api/v2/render/test-chart/staging')).data
+    expect(ok.check).toMatchObject({ passed: true, output: 'SUCCESS', tools: ['vmalert'] })
+    expect(await readPromtoolInvocations()).toEqual([])
+
+    await fs.writeFile(helmOutputFile, VM_ONLY.replace('[5m]))', '[5m])'))
+    const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+    expect(data.check.passed).toBe(false)
+    expect(data.check.output).toMatch(/^rel-http-1-1:\ninvalid group "http": invalid expression for rule "Errors": bad MetricsQL expr/)
   })
 
   it('returns 400 for invalid chart name', async () => {

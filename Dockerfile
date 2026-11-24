@@ -2,6 +2,9 @@ ARG PROMETHEUS_VERSION=v2.54.1
 # promtool is built from PROMETHEUS_VERSION's source with a newer Go and
 # modules: the prom/prometheus 2.x images carry critical CVEs (#105).
 ARG GO_VERSION=1.26.11
+# promtool3 checks prometheus3 groups — group labels, UTF-8 names and
+# `offset 0s`, which 2.x refuses. Built the same way, from source.
+ARG PROMETHEUS3_VERSION=v3.13.5
 # vmalert -dryRun checks LogsQL (vlogs groups) offline, which promtool cannot read (#76).
 ARG VMALERT_VERSION=v1.156.0
 # Helm renders every Preview and check: the image, CI and a developer's
@@ -46,6 +49,25 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w \
       -X github.com/prometheus/common/version.Revision=$(git rev-parse HEAD) \
       -X github.com/prometheus/common/version.Branch=HEAD" \
     -o /promtool ./cmd/promtool
+
+FROM golang:${GO_VERSION}-alpine AS promtool3
+ARG PROMETHEUS3_VERSION
+RUN apk add --no-cache git
+RUN git clone --depth 1 --branch ${PROMETHEUS3_VERSION} https://github.com/prometheus/prometheus /src
+WORKDIR /src
+# The same module upgrades as promtool's, where 3.x's are older.
+RUN go get \
+      golang.org/x/crypto@v0.58.0 \
+      golang.org/x/net@v0.62.0 \
+      golang.org/x/text@v0.43.0 \
+      google.golang.org/grpc@v1.83.2 \
+ && go mod tidy
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w \
+      -X github.com/prometheus/common/version.Version=${PROMETHEUS3_VERSION#v} \
+      -X github.com/prometheus/common/version.Revision=$(git rev-parse HEAD) \
+      -X github.com/prometheus/common/version.Branch=HEAD" \
+    -o /promtool ./cmd/promtool
+
 FROM victoriametrics/vmalert:${VMALERT_VERSION} AS vmalert
 
 # CI rebuilds this stage without the build cache (no-cache-filters in ci.yml):
@@ -66,6 +88,7 @@ RUN npm ci --omit=dev \
 
 COPY --from=builder /app/dist ./dist
 COPY --from=promtool /promtool /usr/local/bin/promtool
+COPY --from=promtool3 /promtool /usr/local/bin/promtool3
 COPY --from=vmalert /vmalert-prod /usr/local/bin/vmalert
 COPY server.js ./
 COPY server/ ./server/

@@ -1,0 +1,30 @@
+# rule_files is filled in by the harness: one file per rendered object.
+# Run with promtool 3 (the group is prometheus3): 2.x refuses both the
+# service.name label and offset 0s.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # 2 errors/s
+      - series: 'http_errors_total{job="api"}'
+        values: '0+120x30'
+      # 3 errors/s
+      - series: 'http_errors_total{job="web"}'
+        values: '0+180x30'
+    alert_rule_test:
+      # api is over 1 from its first rate; web looks 10m back, so it has no
+      # data yet.
+      - eval_time: 8m
+        alertname: ApiErrors
+        exp_alerts:
+          - exp_labels: { severity: warning, job: api, service.name: api }
+            exp_annotations: { summary: 'api: 2 errors/s' }
+      # By 20m web's 10m-old rate (3) is over its 2 too.
+      - eval_time: 20m
+        alertname: ApiErrors
+        exp_alerts:
+          - exp_labels: { severity: warning, job: api, service.name: api }
+            exp_annotations: { summary: 'api: 2 errors/s' }
+          - exp_labels: { severity: warning, job: web, service.name: web }
+            exp_annotations: { summary: 'web: 3 errors/s' }

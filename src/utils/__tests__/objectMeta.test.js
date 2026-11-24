@@ -171,6 +171,45 @@ describe('values for one output profile', () => {
     expect(metaForProfile(meta, 'prometheus').labels.owner).toBe('platform')
   })
 
+  // prometheus2 was called prometheus before Prometheus 3 had a profile: a
+  // site's setting written then still reaches the same objects.
+  it('reads the prometheus key as prometheus2, its alias, and not as prometheus3', () => {
+    const meta = parseObjectMeta({
+      labels: '{"release":"kps"}',
+      labelsByProfile: '{"prometheus":{"release":"kps2"},"prometheus3":{"release":"kps3"}}',
+      annotationsByProfile: '{"prometheus":{"note":"two"}}',
+    })
+    expect(meta.errors).toEqual([])
+    expect(Object.keys(meta.byProfile).sort()).toEqual(['prometheus2', 'prometheus3'])
+    expect(metaForProfile(meta, 'prometheus2')).toEqual({ labels: { ...BUILT_IN_LABELS, release: 'kps2' }, annotations: { note: 'two' } })
+    expect(metaForProfile(meta, 'prometheus')).toEqual(metaForProfile(meta, 'prometheus2'))
+    expect(metaForProfile(meta, 'prometheus3')).toEqual({ labels: { ...BUILT_IN_LABELS, release: 'kps3' }, annotations: {} })
+    const [p, opts] = parts(meta)
+    expect(emitRuleObjects(p, opts)).toContain('    release: kps2')
+  })
+
+  it('is an error to set one profile under its name and its alias both', () => {
+    const { errors } = parseObjectMeta({ labelsByProfile: '{"prometheus":{"a":"1"},"prometheus2":{"a":"2"}}' })
+    expect(errors).toEqual(['RULE_OBJECT_LABELS_BY_PROFILE: "prometheus2" names the prometheus2 profile, which another key already sets — write it once'])
+  })
+
+  // prometheus3's objects are told apart by it (Preview, import).
+  it('is an error for a site to set the annotation a profile is told apart by', () => {
+    const site = parseObjectMeta({ annotations: '{"alertforge.io/profile":"prometheus2"}' })
+    expect(site.errors).toEqual(['RULE_OBJECT_ANNOTATIONS: "alertforge.io/profile" is written by AlertForge to tell output profiles apart — a site cannot set it'])
+    const own = parseObjectMeta({ annotationsByProfile: '{"prometheus3":{"alertforge.io/profile":""}}' })
+    expect(own.errors).toEqual(['RULE_OBJECT_ANNOTATIONS_BY_PROFILE.prometheus3: "alertforge.io/profile" is written by AlertForge to tell output profiles apart — a site cannot set it'])
+  })
+
+  it('marks a prometheus3 object with its annotation, after the site\'s', () => {
+    const meta = parseObjectMeta({ annotations: '{"owner":"sre"}' })
+    const [p, opts] = parts(meta)
+    const text = emitRuleObjects({ ...p, profile: profileFor('prometheus3') }, opts)
+    expect(text).toContain('  annotations:\n    owner: sre\n    alertforge.io/profile: prometheus3\n')
+    expect(text).toContain('kind: PrometheusRule')
+    expect(emitRuleObjects(p, opts)).not.toContain('alertforge.io/profile')
+  })
+
   it('is an error to name a profile that does not exist', () => {
     const { errors, byProfile } = parseObjectMeta({ labelsByProfile: '{"vlog":{"release":"vm-logs"}}' })
     expect(errors[0]).toMatch(/RULE_OBJECT_LABELS_BY_PROFILE: "vlog" is not an output profile/)

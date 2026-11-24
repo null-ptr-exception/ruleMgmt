@@ -157,6 +157,8 @@ describe('the template owner\'s checks', () => {
   it('refuses selectors on a once group and on a non-PromQL group', () => {
     expect(kinds(group({ once: true }))).toContain('selectors-once')
     expect(kinds(group({ type: 'vlogs' }))).toContain('selectors-type')
+    // MetricsQL has PromQL's label matchers.
+    expect(kinds(group({ type: 'vm' }))).not.toContain('selectors-type')
   })
 })
 

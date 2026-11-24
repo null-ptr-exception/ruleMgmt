@@ -1,0 +1,23 @@
+# MetricsQL: `type: vm` wraps the group in a VMRule with `type: prometheus`
+# on the group (vmalert's name for its metrics datasource). WITH templates
+# and the rollup_* functions are MetricsQL only — promtool refuses both —
+# and vmalert takes an offset of 0, so a duration column whose default is 0s
+# may go into one here.
+type: vm
+interval: 1m
+
+columns:
+  job:   { type: string, required: true }
+  warn:  { type: number, default: 5 }
+  shift: { type: duration, default: 0s }
+
+rules:
+  - alert: HTTPErrors
+    expr: 'WITH (errs = rate(http_errors_total{job="${job}"}[5m])) errs > ${warn}'
+    for: 5m
+    labels: { severity: warning }
+    annotations: { summary: '{{ $labels.job }}: {{ $value }} errors/s' }
+
+  - alert: HTTPErrorsShifted
+    expr: 'rollup_rate(http_errors_total{job="${job}"}[1h] offset ${shift}) > ${warn}'
+    labels: { severity: info }

@@ -30,7 +30,7 @@
  */
 
 import { varsIn, expandVars } from './ruleModel.js'
-import { profileFor } from './outputs.js'
+import { isPromQLType } from './outputs.js'
 
 export const ANY = '.*'
 
@@ -370,7 +370,7 @@ export function selectorTemplateProblems(group, commonCols = {}) {
     return [{ kind: 'selectors-shape', message: 'selectors must be a list of column names' }]
   }
   if (group.once) out.push({ kind: 'selectors-once', message: 'a once group has no rows, so it has no selectors to arrange them by' })
-  if (profileFor(group.type)?.validate !== 'promtool') {
+  if (!isPromQLType(group.type)) {
     out.push({ kind: 'selectors-type', message: `selectors work through PromQL label matchers — a ${group.type} group cannot have them` })
   }
   const dup = levels.filter((l, i) => levels.indexOf(l) !== i)

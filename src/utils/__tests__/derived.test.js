@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parseDerived, derivedColumns, compileSprig, evalDerived } from '../derived.js'
+import { parseDerived, derivedColumns, compileSprig, evalDerived, derivedPosition, mergePosition } from '../derived.js'
+import { durationCellFault } from '../duration.js'
 
 const cell = name => `.${name}`
 const compile = text => compileSprig(parseDerived(text), cell)
@@ -107,5 +108,37 @@ describe('evalDerived', () => {
     expect(value('a', { a: 293 }, { unit: 'y', position: 'range' })).toEqual({ problem: 'it comes to 293y, longer than a duration can be (about 292 years)' })
     // Outside a time position the unit is not a duration.
     expect(value('a', { a: 293 }, { unit: 'y' })).toEqual({ value: '293' })
+  })
+})
+
+describe('an offset whose checker takes 0', () => {
+  const rules = [{ alert: 'A', expr: 'rate(x[5m] offset ${w}) > 1' }]
+  it('is an offset where 0 is refused, a time position where it is not', () => {
+    expect(derivedPosition('w', rules, true)).toBe('offset')
+    expect(derivedPosition('w', rules, true, true)).toBe('offset')
+    expect(derivedPosition('w', rules, true, false)).toBe('time')
+    // A range still refuses 0 everywhere.
+    expect(derivedPosition('w', [{ alert: 'A', expr: 'rate(x[${w}])' }], true, false)).toBe('range')
+  })
+
+  it('takes 0 and a negative value there, but not one past a duration', () => {
+    const tree = parseDerived('a - b')
+    expect(evalDerived(tree, { a: 1, b: 1 }, { unit: 'm', position: 'time' })).toEqual({ value: '0' })
+    expect(evalDerived(tree, { a: 1, b: 3 }, { unit: 'm', position: 'time' })).toEqual({ value: '-2' })
+    expect(evalDerived(parseDerived('a'), { a: 9007199254740991 }, { unit: 'y', position: 'time' }).problem).toMatch(/longer than a duration/)
+    expect(evalDerived(tree, { a: 1, b: 1 }, { unit: 'm', position: 'offset' }).problem).toMatch(/offset cannot be 0/)
+  })
+
+  it('takes a 0s duration cell there', () => {
+    expect(durationCellFault('0s', 'time')).toBeNull()
+    expect(durationCellFault('0s', 'offset')).toMatch(/offset cannot be 0/)
+  })
+
+  it('merges with the other positions as the weakest time position', () => {
+    expect(mergePosition('time', null)).toBe('time')
+    expect(mergePosition(null, 'time')).toBe('time')
+    expect(mergePosition('time', 'duration')).toBe('duration')
+    expect(mergePosition('time', 'offset')).toBe('offset')
+    expect(mergePosition('time', 'range')).toBe('range')
   })
 })

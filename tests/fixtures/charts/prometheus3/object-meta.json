@@ -1,0 +1,5 @@
+{
+  "labels": { "release": "kps" },
+  "annotations": { "example.com/team": "shop" },
+  "labelsByProfile": { "prometheus": { "release": "kps2" }, "prometheus3": { "release": "kps3" } }
+}

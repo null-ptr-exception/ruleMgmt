@@ -187,7 +187,7 @@ describe('POST /:chart/rules — a group changing type', () => {
     await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': 'type: vlogs\n' + CPU } })
     expect(status).toBe(200)
-    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-type-changed', group: 'cpu', from: 'prometheus', to: 'vlogs' })])
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-type-changed', group: 'cpu', from: 'prometheus2', to: 'vlogs' })])
     expect(data.notices[0].description).toMatch(/VMRule instead of PrometheusRule/)
     expect(await read('templates/cpu.yaml')).toContain('kind: VMRule')
   })

@@ -32,6 +32,15 @@ describe('a range of 0', () => {
     expect(found).toEqual([expect.objectContaining({ severity: 'save', message: expect.stringContaining('a range of 0') })])
   })
 
+  // VictoriaMetrics reads [0] as no range: the window becomes vmalert's
+  // -datasource.queryStep, another query than the one written.
+  it('is refused in a vm group too, saying what VictoriaMetrics makes of it', () => {
+    const schema = chart([{ alert: 'A', expr: 'rate(cpu[0]) > ${warn}' }])
+    schema.properties.cpu.groupType = 'vm'
+    const found = checkRules(schema).filter(f => f.kind === 'zero-range')
+    expect(found.map(f => f.message)).toEqual(['rule "A": a range of 0 ([0]…) is read by VictoriaMetrics as no range at all: the window becomes vmalert\'s -datasource.queryStep (5m by default) — give it a length, e.g. [5m]'])
+  })
+
   it.each(['rate(cpu[5m]) > ${warn}', 'max_over_time(cpu[5m:0]) > ${warn}', 'cpu offset 0 > ${warn}', 'cpu{le="[0]"} > ${warn}'])('%s is not', expr => {
     expect(checkRules(chart([{ alert: 'A', expr }])).filter(f => f.kind === 'zero-range')).toEqual([])
   })

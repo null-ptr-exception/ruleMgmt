@@ -8,7 +8,7 @@ const { Text } = Typography
 // with promtool alone.
 function checkLabel(check) {
   const tools = check.tools?.length ? check.tools : ['promtool']
-  const names = tools.map(t => (t === 'promtool' ? 'Promtool' : t))
+  const names = tools.map(t => ({ promtool: 'Promtool', promtool3: 'Promtool 3' }[t] || t))
   return `${names.join(' + ')} check`
 }
 

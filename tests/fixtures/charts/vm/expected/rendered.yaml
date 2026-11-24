@@ -1,0 +1,24 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# A key "<kind> <name>" is an object of that kind; a bare name is a PrometheusRule.
+# No promtool-tests.yaml: promtool cannot read MetricsQL; layer (3) runs vmalert -dryRun instead.
+VMRule blind-http-errors-1-1:
+  - name: http-errors
+    type: prometheus
+    interval: 1m
+    rules:
+      - alert: HTTPErrors
+        expr: 'WITH (errs = rate(http_errors_total{job="api"}[5m])) errs > 5'
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: '{{ $labels.job }}: {{ $value }} errors/s' }
+      - alert: HTTPErrorsShifted
+        expr: 'rollup_rate(http_errors_total{job="api"}[1h] offset 0s) > 5'
+        labels: { severity: info }
+      - alert: HTTPErrors
+        expr: 'WITH (errs = rate(http_errors_total{job="web"}[5m])) errs > 2'
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: '{{ $labels.job }}: {{ $value }} errors/s' }
+      - alert: HTTPErrorsShifted
+        expr: 'rollup_rate(http_errors_total{job="web"}[1h] offset 1w) > 2'
+        labels: { severity: info }

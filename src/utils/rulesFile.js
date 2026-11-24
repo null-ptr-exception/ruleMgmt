@@ -37,13 +37,12 @@
 
 import yaml from 'js-yaml'
 import { normalizeRules, columnsInQuotedValues } from './templateGenerator.js'
-import { profileNames } from './outputs.js'
+import { typeNames, isPromQLType, refusesZeroOffset } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { SELECTOR_PATTERN } from './selectorContract.js'
 import { durationFault, durationCellFault, DURATION_COLUMN_PATTERN } from './duration.js'
 import { varsIn, expandVars, withoutVars } from './ruleModel.js'
 import { parseDerived, derivedColumns, DERIVED_UNITS, evalDerived, derivedPosition, mergePosition } from './derived.js'
-import { profileFor } from './outputs.js'
 
 const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
 const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
@@ -612,8 +611,8 @@ export function parseGroupFile(text, filename) {
   // profile (config/outputs.json, #65); the other two are Prometheus's own
   // and were never checked — a bad one only surfaced in promtool, or not at
   // all under a profile promtool does not check.
-  if (doc.type !== undefined && !profileNames().includes(doc.type)) {
-    errors.push(`${filename}.yaml: type "${doc.type}" is not an output profile — one of ${profileNames().join(', ')}`)
+  if (doc.type !== undefined && !typeNames().includes(doc.type)) {
+    errors.push(`${filename}.yaml: type "${doc.type}" is not an output profile — one of ${typeNames().join(', ')}`)
   }
   if (doc.interval !== undefined) {
     const why = ruleDurationProblem('interval', doc.interval)
@@ -778,8 +777,9 @@ export function valueProblems(values, model) {
     const expanded = (entry.rules || []).map(r => ({
       ...r, ...Object.fromEntries(['expr', 'for', 'keep_firing_for'].filter(k => r[k] !== undefined).map(k => [k, expandVars(r[k], entry.vars)])),
     }))
-    const promql = profileFor(entry.type)?.validate === 'promtool'
-    return name => derivedPosition(name, expanded, promql)
+    const promql = isPromQLType(entry.type)
+    const zeroOffsetRefused = refusesZeroOffset(entry.type)
+    return name => derivedPosition(name, expanded, promql, zeroOffsetRefused)
   }
   const commonPosition = name => Object.values(model.groups || {}).filter(g => !g.custom)
     .map(g => positionOf(g)(name)).reduce(mergePosition, null)

@@ -226,8 +226,9 @@ export function generateHelmUnittestSuite(model) {
     withDerived(text, { ...commonValues, ...ownValues })
 
     // The resource is the group's output profile (#65): a vlogs group is a
-    // VMRule with `type: vlogs`, and a suite expecting PrometheusRule would
-    // fail a correct chart.
+    // VMRule with `type: vlogs`, a prometheus3 group a PrometheusRule with its
+    // annotation, and a suite expecting PrometheusRule alone would fail a
+    // correct chart or pass a wrong one.
     const profile = profileFor(group.type)
     tests.push({
       it: group.once ? `renders ${key} once, with no rows` : `renders ${key} with every column set`,
@@ -242,6 +243,8 @@ export function generateHelmUnittestSuite(model) {
           { equal: { path: 'metadata.name', value: doc.name } },
           { equal: { path: 'spec.groups[0].name', value: base } },
           ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
+          // The mark a profile is told apart by (prometheus3's annotation).
+          ...Object.entries(profile.annotations).map(([k, v]) => ({ equal: { path: `metadata.annotations["${k}"]`, value: v } })),
           { lengthEqual: { path: 'spec.groups[0].rules', count: doc.rules.length } },
           ...ruleAsserts(group, doc.rules, text, bareKeys),
         ]),

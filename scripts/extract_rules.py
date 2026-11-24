@@ -3,8 +3,9 @@
 
 Which rendered resources those are is decided by the output profiles in
 config/outputs.json (#65) — the same file the generator wraps groups with:
-a resource whose profile says `validate: promtool` is extracted, one whose
-profile says `none` (LogsQL, for instance) is skipped and counted.
+a resource whose profile says `validate: promtool` (Prometheus 2.x) is
+extracted; one checked by another tool (promtool 3, vmalert) or by none is
+skipped and counted.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ def load_profiles(path: Path = OUTPUTS_FILE) -> list[dict]:
             "apiVersion": profile["apiVersion"],
             "kind": profile["kind"],
             "groupFields": profile.get("groupFields", {}),
+            "annotations": profile.get("annotations", {}),
             "validate": profile["validate"],
         }
         for name, profile in outputs.items()
@@ -40,13 +42,18 @@ def profile_of(document: dict, profiles: list[dict]) -> dict | None:
 
     groups = (document.get("spec") or {}).get("groups")
     first = groups[0] if isinstance(groups, list) and groups and isinstance(groups[0], dict) else {}
+    annotations = (document.get("metadata") or {}).get("annotations")
+    annotations = annotations if isinstance(annotations, dict) else {}
     matches = [
         p for p in profiles
         if document.get("apiVersion") == p["apiVersion"]
         and document.get("kind") == p["kind"]
         and all(first.get(k) == v for k, v in p["groupFields"].items())
+        and all(annotations.get(k) == v for k, v in p.get("annotations", {}).items())
     ]
-    matches.sort(key=lambda p: -len(p["groupFields"]))
+    # The most specific match wins: a PrometheusRule marked prometheus3 is
+    # not prometheus2.
+    matches.sort(key=lambda p: -(len(p["groupFields"]) + len(p.get("annotations", {}))))
     return matches[0] if matches else None
 
 

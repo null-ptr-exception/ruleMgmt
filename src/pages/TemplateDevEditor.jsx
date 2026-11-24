@@ -13,7 +13,7 @@ import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import SelectorLabelsList, { SelectorLabelsHint } from '../components/SelectorLabelsList'
-import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
+import { profileNames, isPromQLType, canonicalType, DEFAULT_TYPE } from '../utils/outputs'
 import { renameSelectorColumn } from '../utils/selectorContract'
 import { repeatsText, REPEATS_FIX } from '../utils/drift'
 import {
@@ -117,7 +117,8 @@ function GroupSettings({ group, commonColumns = {}, onChange }) {
       <span>
         <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Type</Text>
         <Select size="small" aria-label="Group type" style={{ width: 130 }}
-          value={group.type ?? DEFAULT_TYPE}
+          // `type: prometheus` is prometheus2's alias: shown as what it is.
+          value={canonicalType(group.type) ?? group.type}
           options={profileNames().map(name => ({ value: name, label: name }))}
           onChange={v => set('type', v === DEFAULT_TYPE ? undefined : v)} />
       </span>
@@ -139,10 +140,10 @@ function GroupSettings({ group, commonColumns = {}, onChange }) {
         <InputNumber size="small" aria-label="Group limit" style={{ width: 90 }} placeholder="none" min={0} precision={0}
           value={group.limit ?? null} onChange={v => set('limit', v)} />
       </span>
-      {!group.once && profileFor(group.type)?.validate === 'promtool' && (
+      {!group.once && isPromQLType(group.type) && (
         <SelectorsEditor group={group} commonColumns={commonColumns} onChange={onChange} />
       )}
-      {profileFor(group.type)?.validate !== 'promtool' && (
+      {!isPromQLType(group.type) && (
         <Text type="secondary" style={{ fontSize: 12 }}>
           expr is not PromQL here — Preview cannot syntax-check it
         </Text>
@@ -842,7 +843,7 @@ export default function TemplateDevEditor() {
                           onRemove={() => setRules(group.rules.filter((_, idx) => idx !== i))}
                           onAddColumn={(name, sample) => addColumnTo(activeGroup, name, sample)}
                           // PromQL editing help only where expr is PromQL (#65)
-                          exprLanguage={profileFor(group.type)?.validate === 'promtool' ? 'promql' : 'text'}
+                          exprLanguage={isPromQLType(group.type) ? 'promql' : 'text'}
                         />
                       ))}
                       {group.rules.length === 0 && <Empty description="No rules yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />}

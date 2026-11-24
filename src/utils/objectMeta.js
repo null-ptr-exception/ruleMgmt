@@ -34,7 +34,7 @@
  */
 
 import { readsAsNonString, keyScalar } from './yamlScalar.js'
-import { PROFILES, ROUTING_KIND } from './outputs.js'
+import { ROUTING_KIND, typeNames, canonicalType, PROFILE_ANNOTATION_KEYS } from './outputs.js'
 
 /** Always present: this is the product's own statement about the resource. */
 export const BUILT_IN_LABELS = { 'app.kubernetes.io/managed-by': 'Helm' }
@@ -99,13 +99,18 @@ function parseByProfile(json, source, warnings, errors) {
   }
   const out = {}
   for (const [profile, pairs] of Object.entries(parsed)) {
-    // An own key: a name such as "constructor" is not a profile.
-    if (!Object.hasOwn(PROFILES, profile) && profile !== ROUTING_KIND) {
-      errors.push(`${source}: "${profile}" is not an output profile (${[...Object.keys(PROFILES), ROUTING_KIND].join(', ')})`)
+    // An own key: a name such as "constructor" is not a profile. An alias
+    // (`prometheus`, prometheus2's name before Prometheus 3 had a profile)
+    // is the profile it names, so a setting written before keeps reaching
+    // the same objects.
+    if (!typeNames().includes(profile) && profile !== ROUTING_KIND) {
+      errors.push(`${source}: "${profile}" is not an output profile (${[...typeNames(), ROUTING_KIND].join(', ')})`)
     } else if (!isMap(pairs)) {
       errors.push(`${source}: "${profile}" must be a JSON object of key/value pairs`)
     } else {
-      out[profile] = cleanMap(pairs, `${source}.${profile}`, warnings, true)
+      const name = profile === ROUTING_KIND ? profile : canonicalType(profile)
+      if (Object.hasOwn(out, name)) errors.push(`${source}: "${profile}" names the ${name} profile, which another key already sets — write it once`)
+      else out[name] = cleanMap(pairs, `${source}.${profile}`, warnings, true)
     }
   }
   return out
@@ -121,13 +126,24 @@ export function parseObjectMeta({ labels, annotations, labelsByProfile, annotati
   const errors = []
   const byLabels = parseByProfile(labelsByProfile, 'RULE_OBJECT_LABELS_BY_PROFILE', warnings, errors)
   const byAnnotations = parseByProfile(annotationsByProfile, 'RULE_OBJECT_ANNOTATIONS_BY_PROFILE', warnings, errors)
+  // The annotation a profile tells its objects apart by (prometheus3's) is
+  // AlertForge's: a site's value would make Preview and import read the
+  // object as another profile, or take the mark off.
+  const siteAnnotations = parseMap(annotations, 'RULE_OBJECT_ANNOTATIONS', warnings)
+  const marked = [['RULE_OBJECT_ANNOTATIONS', siteAnnotations],
+    ...Object.entries(byAnnotations).map(([name, map]) => [`RULE_OBJECT_ANNOTATIONS_BY_PROFILE.${name}`, map])]
+  for (const [source, map] of marked) {
+    for (const key of PROFILE_ANNOTATION_KEYS) {
+      if (Object.hasOwn(map, key)) errors.push(`${source}: "${key}" is written by AlertForge to tell output profiles apart — a site cannot set it`)
+    }
+  }
   const byProfile = {}
   for (const name of new Set([...Object.keys(byLabels), ...Object.keys(byAnnotations)])) {
     byProfile[name] = { labels: byLabels[name] || {}, annotations: byAnnotations[name] || {} }
   }
   return {
     labels: { ...BUILT_IN_LABELS, ...parseMap(labels, 'RULE_OBJECT_LABELS', warnings) },
-    annotations: parseMap(annotations, 'RULE_OBJECT_ANNOTATIONS', warnings),
+    annotations: siteAnnotations,
     byProfile,
     warnings,
     errors
@@ -148,7 +164,8 @@ export function objectMetaFromEnv(env = process.env) {
  * on top. A profile's empty value (null here) removes the site-wide key.
  */
 export function metaForProfile(objectMeta, profileName) {
-  const own = objectMeta?.byProfile?.[profileName]
+  // An alias reads the profile it names, as the variables do.
+  const own = objectMeta?.byProfile?.[profileName === ROUTING_KIND ? profileName : (canonicalType(profileName) ?? profileName)]
   const merge = (base, mine) => Object.fromEntries(
     Object.entries({ ...base, ...mine }).filter(([, value]) => value !== null))
   return {

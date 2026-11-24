@@ -148,12 +148,23 @@ describe('groupTypeChanges', () => {
 
   it('reports a group whose type changed, with both kinds', () => {
     const [change] = groupTypeChanges(model(undefined), model('vlogs'))
-    expect(change).toEqual({ kind: 'group-type-changed', group: 'app', from: 'prometheus', to: 'vlogs', fromKind: 'PrometheusRule', toKind: 'VMRule' })
-    expect(describeChange(change)).toMatch(/app: type changed from prometheus to vlogs — its objects become VMRule instead of PrometheusRule/)
+    expect(change).toEqual({ kind: 'group-type-changed', group: 'app', from: 'prometheus2', to: 'vlogs', fromKind: 'PrometheusRule', toKind: 'VMRule' })
+    expect(describeChange(change)).toMatch(/app: type changed from prometheus2 to vlogs — its objects become VMRule instead of PrometheusRule/)
+  })
+
+  // vlogs and vm are both VMRule: the objects keep their names and kind.
+  it('says a type change within one kind updates the objects in place', () => {
+    expect(describeChange(groupTypeChanges(model(undefined), model('prometheus3'))[0])).toMatch(/^app: type changed from prometheus2 to prometheus3 — its objects stay PrometheusRule with the same names and are updated in place/)
+    const [change] = groupTypeChanges(model('vlogs'), model('vm'))
+    expect(change).toMatchObject({ from: 'vlogs', to: 'vm', fromKind: 'VMRule', toKind: 'VMRule' })
+    expect(describeChange(change)).toBe('app: type changed from vlogs to vm — its objects stay VMRule with the same names and are updated in place; their rules are now read and checked as vm')
+    expect(describeChange(groupTypeChanges(model('vm'), model(undefined))[0])).toMatch(/its objects become PrometheusRule instead of VMRule: the old ones are deleted/)
   })
 
   it('says nothing when the type is the same, spelled out or left out', () => {
     expect(groupTypeChanges(model(undefined), model('prometheus'))).toEqual([])
+    // prometheus is prometheus2's alias: the same profile.
+    expect(groupTypeChanges(model('prometheus'), model('prometheus2'))).toEqual([])
     expect(groupTypeChanges(model('vlogs'), model('vlogs'))).toEqual([])
   })
 

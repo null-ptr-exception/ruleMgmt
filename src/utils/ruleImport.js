@@ -1,6 +1,6 @@
 import yaml from 'js-yaml'
 import { varsIn, danglingRefs } from './ruleModel.js'
-import { profileNames } from './outputs.js'
+import { profileNames, typeNames, profileOfObject, PROFILES, DEFAULT_TYPE } from './outputs.js'
 
 /**
  * Import Prometheus alerting rules into an editor schema — see issue #57.
@@ -23,6 +23,32 @@ import { profileNames } from './outputs.js'
 const RULE_FIELDS = ['alert', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations']
 // What Prometheus gives a recording rule, and so all the model carries (#70).
 const RECORD_FIELDS = ['record', 'expr', 'labels']
+
+// vmalert reads a group with no `type` as `type: prometheus`.
+const EVALUATOR_DEFAULT_TYPE = 'prometheus'
+
+/**
+ * The AlertForge type of a group taken from a rendered object (#65): what
+ * its kind, its group's fields and its annotations say, as Preview reads
+ * the object — the group's own `type` there is the evaluator's (vmalert's
+ * `prometheus` or `vlogs`), not a profile name. `undefined` is the default
+ * profile; null, no profile writes such a group. A VMRule group with no
+ * `type` is vmalert's default, so it reads as one that says it.
+ */
+function objectGroupType(doc, group) {
+  const one = { apiVersion: doc.apiVersion, kind: doc.kind, metadata: doc.metadata, spec: { groups: [group] } }
+  let profile = profileOfObject(one)
+  const kindReadsType = Object.values(PROFILES).some(p => p.kind === doc.kind && p.apiVersion === doc.apiVersion && 'type' in p.groupFields)
+  if (!profile && group?.type === undefined && kindReadsType) {
+    profile = profileOfObject({ ...one, spec: { groups: [{ ...group, type: EVALUATOR_DEFAULT_TYPE }] } })
+  }
+  if (!profile) return null
+  return profile.name === DEFAULT_TYPE ? undefined : profile.name
+}
+
+/** Whether a document is a rendered object of a kind some profile writes. */
+const isProfileObject = doc => Array.isArray(doc?.spec?.groups) &&
+  Object.values(PROFILES).some(p => p.kind === doc.kind && p.apiVersion === doc.apiVersion)
 
 function asGroups(doc) {
   if (Array.isArray(doc)) return [{ name: null, rules: doc }]
@@ -114,13 +140,27 @@ export function importRules(yamlText) {
       warnings.push('A document held no rule groups and was skipped')
       continue
     }
-    for (const group of found) {
-      const where = group.name || `group ${groups.length + 1}`
+    const fromObject = isProfileObject(doc)
+    for (const source of found) {
+      const where = source.name || `group ${groups.length + 1}`
       // A group's type decides what its expr is (#65): a vlogs group taken in
       // as prometheus would carry LogsQL as PromQL, silently broken. One with
-      // no output profile is refused rather than guessed at.
-      if (group.type !== undefined && !profileNames().includes(group.type)) {
-        warnings.push(`${where}: type "${group.type}" has no output profile (${profileNames().join(', ')}) — group skipped`)
+      // no output profile is refused rather than guessed at. In a rendered
+      // object the type is read off the object (a VMRule's `type:
+      // prometheus` is MetricsQL, the vm profile); in a rules file it is
+      // AlertForge's own.
+      let group = source
+      if (fromObject) {
+        const type = objectGroupType(doc, source)
+        if (type === null) {
+          warnings.push(`${where}: a ${doc.kind} group${source.type !== undefined ? ` of type "${source.type}"` : ''} has no output profile (${profileNames().join(', ')}) — group skipped`)
+          continue
+        }
+        group = { ...source }
+        if (type === undefined) delete group.type
+        else group.type = type
+      } else if (group.type !== undefined && !typeNames().includes(group.type)) {
+        warnings.push(`${where}: type "${group.type}" has no output profile (${typeNames().join(', ')}) — group skipped`)
         continue
       }
       const rules = (group.rules || [])

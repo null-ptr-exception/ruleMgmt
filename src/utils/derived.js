@@ -119,8 +119,9 @@ export function compileSprig(tree, cell) {
  *
  * `position` is where the value goes (see derivedPosition): 'range' (more
  * than 0), 'offset' (not 0; may be negative), 'duration' (0 or more),
- * 'offset+duration' (both), or nothing (a label or annotation). In a time position the value with its unit must fit
- * a Go duration, about 292 years.
+ * 'offset+duration' (both), 'time' (an offset whose evaluator takes 0: any
+ * value), or nothing (a label or annotation). In a time position the value
+ * with its unit must fit a Go duration, about 292 years.
  *
  * @returns { value: <decimal string> } | { problem }
  */
@@ -161,23 +162,24 @@ export const zeroRefused = position => position === 'range' || !!position?.inclu
 /**
  * Two places a value goes, as one: the stricter of both. A range is the
  * strictest; an offset (not 0) and a `for` (not negative) make
- * 'offset+duration'.
+ * 'offset+duration'; 'time' only says it is a duration at all.
  */
 export function mergePosition(a, b) {
   if (a === 'range' || b === 'range') return 'range'
   const offset = !!(a?.includes('offset') || b?.includes('offset'))
   const duration = !!(a?.includes('duration') || b?.includes('duration'))
-  return offset && duration ? 'offset+duration' : offset ? 'offset' : duration ? 'duration' : null
+  const time = a === 'time' || b === 'time'
+  return offset && duration ? 'offset+duration' : offset ? 'offset' : duration ? 'duration' : time ? 'time' : null
 }
 
 /**
  * Where a group's rules put a value: 'range' if any range selector holds it
- * (PromQL only); else 'offset' for an offset (PromQL only: promtool refuses
- * `offset 0s`), 'duration' for a `for` or `keep_firing_for`, or
- * 'offset+duration' for both; else null (a label, an annotation, a LogsQL
- * query).
+ * (PromQL and MetricsQL only); else 'offset' for an offset where the checker
+ * refuses `offset 0s` (promtool 2.x), 'time' for one where it does not,
+ * 'duration' for a `for` or `keep_firing_for`, or 'offset+duration' for both;
+ * else null (a label, an annotation, a LogsQL query).
  */
-export function derivedPosition(name, rules, promql) {
+export function derivedPosition(name, rules, promql, zeroOffsetRefused = true) {
   const ref = `\\$\\{\\s*${name}\\s*\\}`
   let position = null
   for (const rule of rules || []) {
@@ -185,7 +187,7 @@ export function derivedPosition(name, rules, promql) {
     const expr = withoutStrings(rule.expr || '')
     if (promql && new RegExp(`\\[[^\\]]*${ref}[^\\]]*\\]`).test(expr)) return 'range'
     if (new RegExp(ref).test(`${rule.for || ''} ${rule.keep_firing_for || ''}`)) position = mergePosition(position, 'duration')
-    if (promql && new RegExp(`\\boffset\\s+-?\\s*${ref}`, 'i').test(expr)) position = mergePosition(position, 'offset')
+    if (promql && new RegExp(`\\boffset\\s+-?\\s*${ref}`, 'i').test(expr)) position = mergePosition(position, zeroOffsetRefused ? 'offset' : 'time')
   }
   return position
 }

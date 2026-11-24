@@ -151,3 +151,13 @@ layer-cannot-tell-rows	save-text	refuses-what-helm-renders	policy	the editor and
 layer-cannot-tell-rows	migration-apply	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
 layer-cannot-tell-rows	commit	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
 layer-cannot-tell-rows	check-repo	refuses-what-helm-renders	policy	check-repo renders a deployment on a _common AlertForge cannot tell Helm's reading of, and refuses it as Commit does, as it refuses such values of the deployment's own
+stack-tpl-chart-link-outside	save-text	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-outside	commit	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-outside	preview	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-outside	check-deployment	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-outside	check-repo	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	save-text	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	commit	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	preview	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	check-deployment	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	check-repo	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo

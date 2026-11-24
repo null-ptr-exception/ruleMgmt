@@ -11,7 +11,8 @@
 // json:   the bare values the editor would send for a JSON save (optional)
 // init:   true: a new deployment is asked for beside the subject too (deployments/t/n)
 // files:  other files of the repo to change, same forms as text, or
-//         { remove: true } / { dirMode: 0 }
+//         { remove: true } / { dirMode: 0 }; a path starting `../` is a file
+//         beside the repo, one under `.git/` a file in git's own folder
 
 const W = body => `demo:\n${body}`
 const C = '  _common:\n    team: shop\n'
@@ -26,6 +27,8 @@ const L_CHART = 'deployments/s/_common/demo/Chart.yaml'
 // The layer's values with two cpu rows.
 const L_VALUES = 'deployments/s/_common/demo/values.yaml'
 const L_ROWS = 'demo:\n  _common:\n    team: shop\n  cpu:\n    - { job: l1 }\n    - { job: l2 }\n'
+// The Template's Chart.yaml, as a file put elsewhere for a link to lead to.
+const TPL_CHART = 'apiVersion: v2\nname: demo\nversion: 0.1.0\nannotations:\n  app: alertforge\n'
 const withCondition = (name, extra) => `apiVersion: v2\nname: ${name}\nversion: 0.1.0\ndependencies:\n  - name: demo\n    version: '>=0.0.0-0'\n${extra}    condition: demo.enabled\n`
 
 export const BASE = {
@@ -153,6 +156,10 @@ export const CASES = [
   { id: 'stack-condition-no', target: 'S', text: BASE.X, files: { [L_CHART]: withCondition('common', ''), 'deployments/s/_common/demo/values.yaml': 'demo:\n  enabled: no\n  _common:\n    team: shop\n' } },
   { id: 'stack-condition-yes', target: 'S', text: BASE.X, files: { [L_CHART]: withCondition('common', ''), 'deployments/s/_common/demo/values.yaml': 'demo:\n  enabled: yes\n  _common:\n    team: shop\n' } },
   { id: 'stack-missing-link', target: 'S', text: BASE.X, files: { 'deployments/s/_common/demo/charts/demo': { remove: true } } },
+  // The Template's Chart.yaml is a link to the same file outside the repo,
+  // or in git's own folder; the _common's link to the Template is in place.
+  { id: 'stack-tpl-chart-link-outside', target: 'S', text: BASE.X, files: { '../outside-Chart.yaml': TPL_CHART, 'charts/demo/Chart.yaml': { link: '../../../outside-Chart.yaml' } } },
+  { id: 'stack-tpl-chart-link-git', target: 'S', text: BASE.X, files: { '.git/pin-Chart.yaml': TPL_CHART, 'charts/demo/Chart.yaml': { link: '../../.git/pin-Chart.yaml' } } },
   { id: 'layer-common-zero', target: 'L', text: 'demo:\n  _common:\n    team: shop\n    base: 0\n' },
   { id: 'layer-team-missing', target: 'L', text: 'demo:\n  cpu: []\n' },
   { id: 'layer-group-map', target: 'L', text: 'demo:\n  _common:\n    team: shop\n  cpu: { job: x }\n' },

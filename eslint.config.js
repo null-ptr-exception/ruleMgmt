@@ -83,6 +83,20 @@ function analyse(context) {
       return up.type === 'VariableDeclarator' && up.init === at ? up : null
     }
   }
+  // `(await import('fs')).readdirSync(d)`: the function taken straight off
+  // the load ('readdirSync'; `.default` is passed over), or null when it is
+  // used some other way (`import('fs').then(m => …)` is 'then').
+  const memberAbove = node => {
+    let at = node
+    for (;;) {
+      const up = parents.get(at)
+      if (up?.type === 'AwaitExpression' || up?.type === 'ChainExpression') { at = up; continue }
+      if (up?.type !== 'MemberExpression' || up.object !== at || up.computed) return null
+      if (up.property.name !== 'default') return up.property.name
+      at = up
+    }
+  }
+  const unbound = [] // loads used where they are, in no variable: { node, kind, what, fn }
   const dynamicLoad = (node, arg, how) => {
     const name = literalOf(arg)
     if (name === null) { loads.push({ node, kind: 'unknownImport', what: how }); return }
@@ -91,6 +105,7 @@ function analyse(context) {
     loads.push({ node, kind, what: `${how} ${name}` })
     const declarator = declaratorAbove(node)
     if (declarator) bindVariables(declarator, kind, { imported: null })
+    else unbound.push({ node, kind, what: `${how} ${name}`, fn: memberAbove(node) })
   }
 
   walk(sourceCode.ast, keys, (node, parent) => {
@@ -146,6 +161,11 @@ function analyse(context) {
       }
     }
   }
+  // A load used where it is made is a use too, of the function taken off it.
+  for (const { node, kind, what, fn } of unbound) {
+    if (kind === 'fs') uses.push({ node, kind: 'fsUse', read: FS_READ.test(fn || ''), what: fn ? `fs ${fn}` : what, fn, load: node })
+    else if (kind === 'yaml' && fn && YAML_PARSE.has(fn)) uses.push({ node, kind: 'yamlParse', read: true, what: fn, load: node })
+  }
   return { rel, loads, uses, parents, keys }
 }
 
@@ -171,11 +191,13 @@ const disk = {
     return {
       'Program:exit'() {
         const { loads, uses } = analyse(context)
+        const reported = new Set()
         for (const { node, kind, what } of loads) {
           if (kind === 'fs' && fsCalls) continue // loaded for the calls listed; any other use is reported below
-          if (!allow.has(kind)) context.report({ node, messageId: kind, data: { what } })
+          if (!allow.has(kind)) { context.report({ node, messageId: kind, data: { what } }); reported.add(node) }
         }
-        for (const { node, kind, what, fn } of uses) {
+        for (const { node, kind, what, fn, load } of uses) {
+          if (reported.has(load)) continue // a load used where it is made, said once
           if (kind === 'fsUse' && fsCalls?.has(fn)) continue
           if (!allow.has(kind)) context.report({ node, messageId: kind, data: { what } })
         }

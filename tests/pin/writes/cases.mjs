@@ -99,4 +99,10 @@ export const CASES = [
   { id: 'chart-unreadable', applies: p => !!p.chartFile, nonRoot: true },
   // The deployment's folder is a link to a folder elsewhere in the repo.
   { id: 'deployment-link-inside', applies: p => !!p.depFolder },
+  // The Chart.yaml of the _common the write removes is there and is not
+  // read: a link leading outside the repo, a link into git's own folder,
+  // a file larger than Helm reads.
+  { id: 'common-chart-link-outside', applies: p => !!p.commonChart },
+  { id: 'common-chart-link-git', applies: p => !!p.commonChart },
+  { id: 'common-chart-too-big', applies: p => !!p.commonChart },
 ]

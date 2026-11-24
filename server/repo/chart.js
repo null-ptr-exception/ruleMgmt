@@ -7,6 +7,10 @@
  *                          through the snapshot: the document, undefined
  *                          when there is none, null when it cannot be read
  *                          or is not YAML
+ *   chartNotRead(repo, dir) why the Chart.yaml of `dir` is there and is
+ *                          not read — a link that leads outside the repo or
+ *                          into git's own folder, a file larger than Helm
+ *                          reads — or null
  *
  * This is the YAML 1.2 reading these callers have always had (a key
  * written twice is not YAML here; `yes` is the text "yes"), not Helm's.
@@ -34,4 +38,14 @@ export function chartDoc(repo, dir) {
       return null // not YAML: said by whoever asked, as a chart that cannot be read
     }
   })
+}
+
+// A file that is there, with a chart in it for all anyone can tell, which
+// the reader does not read: chartDoc answers null for it, as for a text
+// that is not YAML.
+const NOT_READ = new Set(['outside-link', 'too-big'])
+
+export async function chartNotRead(repo, dir) {
+  const f = await repo.file(dir ? `${dir}/Chart.yaml` : 'Chart.yaml')
+  return f.state === 'unreadable' && NOT_READ.has(f.kind) ? f.why : null
 }

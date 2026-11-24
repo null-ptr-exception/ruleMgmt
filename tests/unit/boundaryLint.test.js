@@ -32,7 +32,10 @@ describe('boundary/disk catches the ways around it', () => {
       // a file given some fs calls may make those
       { code: "import fs from 'fs/promises'\nawait fs.mkdtemp('x')\nawait fs.rm('x')", filename: ROUTE, options: [{ fsCalls: ['mkdtemp', 'rm'] }] },
       { code: "import { readFileSync } from 'fs'\nreadFileSync('x')", filename: SCRIPT, options: [{ fsCalls: ['readFileSync'] }] },
-      // Not caught (known limits): a module of ours that reads for its caller
+      // … also straight off the load, in no variable
+      { code: "(await import('fs')).readFileSync('x')", filename: SCRIPT, options: [{ fsCalls: ['readFileSync'] }] },
+      { code: "(await import('node:fs')).default.readFileSync('x')", filename: SCRIPT, options: [{ fsCalls: ['readFileSync'] }] },
+            // Not caught (known limits): a module of ours that reads for its caller
       // and is not listed as a helper; git through the wrapper; a computed name.
       { code: "import { readChart } from '../lib/chartFiles.js'\nreadChart('x')", filename: ROUTE },
       { code: "import git from '../lib/git.js'\ngit('.', 'show', 'HEAD:values.yaml')", filename: ROUTE },
@@ -47,6 +50,13 @@ describe('boundary/disk catches the ways around it', () => {
       // a file given some fs calls may make no other, nor hand fs on
       { code: "import fs from 'fs/promises'\nawait fs.mkdtemp('x')\nawait fs.readFile('y')", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
       { code: "import fs from 'fs/promises'\nconst { readFile } = fs", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
+      // … nor straight off the load, in no variable
+      { code: "(await import('fs')).readdirSync('d')", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
+      { code: "import('fs').then(m => m.readdirSync('d'))", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
+      { code: "(await import('fs')).default.readdirSync('d')", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
+      { code: "(await import('fs/promises'))['readdir']('d')", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
+      { code: "read(await import('fs'))", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
+      { code: "(await import('js-yaml')).load('a: 1')", filename: ROUTE, options: [{ allow: ['yaml'] }], errors: kinds('yamlParse') },
       // yaml.dump allowed is not a parse allowed
       { code: "import yaml from 'js-yaml'\nyaml.load('a: 1')", filename: ROUTE, options: [{ allow: ['yaml'] }], errors: kinds('yamlParse') },
       // and more of the same
@@ -136,6 +146,13 @@ describe('npm run lint fails on a new use', () => {
     'server/lib/deploymentCheck.js', 'server/lib/git.js', 'server.js',
   ])('a read of a file in %s is an error', async file => {
     expect(await errorsOf(READ, file)).toContain('boundary/disk:fsUse')
+  })
+
+  // A file given some fs calls: fs loaded and used in one expression, in
+  // no variable, is held to the same calls.
+  it.each(['server/lib/git.js', 'server/lib/ruleCheck.js', 'server/lib/deploymentCheck.js', 'server.js', 'scripts/import-rules.mjs'])('a read straight off a loaded fs in %s is an error', async file => {
+    expect(await errorsOf("export const list = async d => (await import('fs')).readdirSync(d)\n", file)).toEqual(['boundary/disk:fsUse'])
+    expect(await errorsOf("export const list = d => import('fs').then(m => m.readdirSync(d))\n", file)).toEqual(['boundary/disk:fsUse'])
   })
 
   it.each(['server/lib/planted.js', 'server/routes/planted.js', 'scripts/planted.mjs', 'server/lib/sync.js', 'server/lib/sharedConfigs.js'])('a YAML parse in %s is an error', async file => {

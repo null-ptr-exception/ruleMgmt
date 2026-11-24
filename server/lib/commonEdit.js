@@ -50,7 +50,7 @@ import { findingsOf } from '../repo/loaded.js'
 import { decide } from '../repo/policy.js'
 import { chartsDir } from '../repo/template.js'
 import { coalesce } from '../repo/coalesce.js'
-import { parseChart } from '../repo/chart.js'
+import { parseChart, chartNotRead } from '../repo/chart.js'
 import { stateOf, folderState } from '../repo/diskState.js'
 
 /** The name every `_common` chart has: the key its deployments' values are under. */
@@ -538,6 +538,10 @@ export async function planDelete(repo, commonRelIn) {
   if (link && link.at.length > inFolder.length) return linkedCommonRefusal(inFolder, commonRel, link)
   if (link) return refuse(409, `Not removed: ${link.why} — remove it by hand${link.real ? `, or ask for ${link.real}` : ''}`)
   if (!(await isCommonChart(repo, commonRel))) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
+  // Its own Chart.yaml is there and is not read: which charts are on it is
+  // told from that file, and they would be left depending on nothing.
+  const notRead = await chartNotRead(repo, commonRel)
+  if (notRead) return refuse(409, `Not removed: ${commonRel}/Chart.yaml cannot be read (${notRead})`, { problems: [{ path: `${commonRel}/Chart.yaml`, message: notRead }] })
   const { items, byPath, unreadable } = await loadItems(repo)
   // One that reaches it through a link made by hand would be left on
   // nothing: not removed from under it.

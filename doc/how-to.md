@@ -513,7 +513,10 @@ dialog lists each deployment that inherits from it: what it inherited is
 copied into its own values as written in the `_common` (Helm's way: Common
 Values key by key, a group whole — a group it wrote itself stays its own),
 and it depends on the Template again (or on the `_common` above). It is
-checked with Helm the same way.
+checked with Helm the same way. A `_common` whose own `Chart.yaml` cannot be
+read — a link leading outside the repo or into git's own folder, a file
+larger than Helm reads — is not removed: the dialog names the file and why,
+since which deployments inherit from it is told from that file.
 
 **A deployment under it** — made with **+** in a folder under the
 `_common` — depends on the nearest `_common` of its Template and writes

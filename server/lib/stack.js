@@ -33,7 +33,7 @@ import { unwrapPath } from './subchart.js'
 import { openRepo } from '../repo/openRepo.js'
 import { linkOnTheWay } from '../repo/paths.js'
 import { folderEntry } from '../repo/walk.js'
-import { chartDoc } from '../repo/chart.js'
+import { chartDoc, chartNotRead } from '../repo/chart.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 // More hops than this is a loop of links, not a stack.
@@ -109,8 +109,9 @@ function enabledBy(dep, seen) {
 /**
  * The charts in a chart folder's own charts/, as Helm loads them: each
  * `{ name, at, packed }`, `at` where a link leads (as written, so a
- * `_common` is still one), `name` its Chart.yaml's. Helm's own `.tgz`
- * downloads in a deployment's charts/ are not read here.
+ * `_common` is still one), `name` its Chart.yaml's, `notRead` why that
+ * file is there and is not read. Helm's own `.tgz` downloads in a
+ * deployment's charts/ are not read here.
  */
 async function chartsIn(repo, gitopsDir, dir) {
   const folder = path.join(dir, 'charts')
@@ -140,7 +141,10 @@ async function chartsIn(repo, gitopsDir, dir) {
     const to = link ? listed.value.targets.get(name) ?? null : null
     const target = to !== null ? path.resolve(folder, to) : abs
     const chart = await readChart(repo, gitopsDir, abs)
-    out.push({ name: typeof chart?.name === 'string' ? chart.name : null, at: target, file: name })
+    // A Chart.yaml that is there and is not read: no name to know it by.
+    const where = placeIn(repo, gitopsDir, abs)
+    const notRead = chart === null ? await chartNotRead(await where.repo, where.rel) : null
+    out.push({ name: typeof chart?.name === 'string' ? chart.name : null, at: target, file: name, ...(notRead ? { notRead } : {}) })
   }
   return out
 }
@@ -320,6 +324,15 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
       const offOne = usable.find(c => c.kind !== 'other' && !c.enabled.on)
       if (offOne) {
         problems.push(problem('stack-off', `the _common chart ${layerPath} does not render charts/${offOne.file}: ${offOne.enabled.why}`))
+        break walk
+      }
+      // A chart is in charts/, with a Chart.yaml that is not read: said as
+      // that file, where the link leads when that is in the repo.
+      const unread = usable.find(c => c.notRead)
+      if (unread) {
+        const to = rel(gitopsDir, unread.at)
+        const file = to.startsWith('../') ? `${layerPath}/charts/${unread.file}/Chart.yaml` : `${to}/Chart.yaml`
+        problems.push(problem('template-missing', `the _common chart ${layerPath}: ${file} cannot be read (${unread.notRead}), so Helm cannot render it`))
         break walk
       }
       // Nothing in charts/ to pass the values to: Helm renders nothing.

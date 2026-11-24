@@ -172,6 +172,7 @@ export async function baseFiles(ws) {
 //                      that folder made read-only)
 //   chartFile          the Chart.yaml of a deployment it rewrites, not asked for
 //   depFolder          a deployment folder it writes in
+//   commonChart        the Chart.yaml of the _common it removes
 //   side: 'template'   a write of the Template side (rows only they get)
 //   last               the last file of the same write
 //   unreadableDir      a folder of what it removes or copies, made unreadable
@@ -233,7 +234,7 @@ export const PATHS = [
     version: async ws => (await commonPlan(ws, `action=delete&path=${D.layer}`)).expected,
     req: (ws, ctx) => ({ method: 'POST', url: '/api/v2/folders/common', body: { action: 'delete', path: D.layer, ...(ctx.version ? { expected: ctx.version } : {}) } }),
     said: res => [...(res.data?.files || []), `${D.s}/_common/`],
-    failAt: { first: `${D.x}/Chart.yaml`, middle: `${D.x}/values.yaml`, last: `dir:${D.layer}` }, chartFile: `${D.x}/Chart.yaml`, depFolder: D.x,
+    failAt: { first: `${D.x}/Chart.yaml`, middle: `${D.x}/values.yaml`, last: `dir:${D.layer}` }, chartFile: `${D.x}/Chart.yaml`, depFolder: D.x, commonChart: `${D.layer}/Chart.yaml`,
     files: [`${D.s}/`] },
   { name: 'init', primary: 'deployments/t/n/Chart.yaml', second: 'deployments/t/n/values.yaml', secondNew: true, absent: 'deployments/t',
     req: () => ({ method: 'POST', url: '/api/v2/folders/init', body: { folder: 'deployments/t/n', chart: 'demo' } }),
@@ -480,6 +481,19 @@ async function setUp(ws, c, p) {
       await fs.rm(dir, { recursive: true, force: true }); await fs.symlink(path.relative(path.dirname(dir), there), dir)
       break
     }
+    case 'common-chart-link-outside': {
+      const there = path.join(outside, 'common-Chart.yaml')
+      await fs.copyFile(abs(p.commonChart), there)
+      await fs.rm(abs(p.commonChart)); await fs.symlink(there, abs(p.commonChart))
+      break
+    }
+    case 'common-chart-link-git': {
+      const there = path.join(root, '.git', GIT_PIN_DIR, 'common-Chart.yaml')
+      await copyOut(abs(p.commonChart), there)
+      await fs.rm(abs(p.commonChart)); await fs.symlink(there, abs(p.commonChart))
+      break
+    }
+    case 'common-chart-too-big': await fs.appendFile(abs(p.commonChart), `# ${'x'.repeat(1022)}\n`.repeat(5 * 1024 + 2)); break
     case 'registry-tmp-blocked': await fs.mkdir(abs('sync.yaml.tmp')); await fs.writeFile(abs('sync.yaml.tmp/keep'), 'x\n'); break
   }
 }

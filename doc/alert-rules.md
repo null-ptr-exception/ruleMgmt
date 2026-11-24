@@ -359,7 +359,11 @@ on serving the next one.
 A Template folder that is a link leading outside the repo, or a file in it
 that does, is read as one that cannot be read, everywhere; a link to a
 folder of the repo is read as that folder (the Template list shows it, a
-commit checks it). The Template's `values.yaml` is read as Helm reads it
+commit checks it). A deployment on a `_common` says so of the Template's
+`Chart.yaml` too — a link leading outside the repo or into git's own
+folder, a file larger than Helm reads: the file is named with why
+(`charts/demo/Chart.yaml cannot be read (it is a link that leads outside
+the repo)`), where the `_common`'s link to the Template is in place. The Template's `values.yaml` is read as Helm reads it
 (`010` is 8, `yes` is true), and opening the Template shows it so. A text
 AlertForge cannot tell Helm's reading of — a tag such as `!custom`, a block
 text with an indentation digit (`|2`), a `[` list not closed — is named by

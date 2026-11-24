@@ -433,6 +433,16 @@ stack-missing-link	S	all-list	ok	200	no	null	-	-	-	0	0	0	-	all-list=- editor=0 p
 stack-missing-link	S	editor	ok	200	no	stack.template-missing,values.required-empty,stackProblems	0	-	-	0	0	0	no-probe	all-list=- editor=0 preview=- common-users=-	
 stack-missing-link	S	preview	failed	200	no	error	-	-	-	0	0	0	w=-; names=-	all-list=- editor=0 preview=- common-users=-	
 stack-missing-link	S	common-users	ok	200	no	-	-	-	cpu from template	0	0	0	-	all-list=- editor=0 preview=- common-users=-	
+stack-tpl-chart-link-outside	S	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
+stack-tpl-chart-link-outside	S	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- editor=0 preview=- common-users=-	no-count-helm-renders
+stack-tpl-chart-link-outside	S	editor	ok	200	no	stack.template-missing,template.unusable,stackProblems	0	-	-	0	3	1	_common.team="shop"; cpu.0.job="x"	all-list=- editor=0 preview=- common-users=-	rows-differ
+stack-tpl-chart-link-outside	S	preview	failed	200	no	error	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- editor=0 preview=- common-users=-	no-count-helm-renders
+stack-tpl-chart-link-outside	S	common-users	ok	200	no	-	-	-	-	0	3	1	-	all-list=- editor=0 preview=- common-users=-	no-count-helm-renders
+stack-tpl-chart-link-git	S	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
+stack-tpl-chart-link-git	S	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- editor=0 preview=- common-users=-	no-count-helm-renders
+stack-tpl-chart-link-git	S	editor	ok	200	no	stack.template-missing,template.unusable,stackProblems	0	-	-	0	3	1	_common.team="shop"; cpu.0.job="x"	all-list=- editor=0 preview=- common-users=-	rows-differ
+stack-tpl-chart-link-git	S	preview	failed	200	no	error	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- editor=0 preview=- common-users=-	no-count-helm-renders
+stack-tpl-chart-link-git	S	common-users	ok	200	no	-	-	-	-	0	3	1	-	all-list=- editor=0 preview=- common-users=-	no-count-helm-renders
 layer-common-zero	L	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 layer-common-zero	L	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 layer-common-zero	L	editor	ok	200	no	-	n/a	-	_common.team="shop"; _common.base=0	0	3	1	_common.team="shop"; _common.base=0		

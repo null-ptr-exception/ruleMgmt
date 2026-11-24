@@ -113,6 +113,8 @@ rules:
 
     const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
     await expect(dialog).toBeVisible({ timeout: 5000 })
+    // Clone moves no deployment (#178): said by the button.
+    await expect(dialog.getByTestId('clone-by-hand')).toContainText('A deployment moves to the clone by hand')
     await dialog.getByRole('button', { name: 'Continue' }).click()   // step 1 -> map
     await dialog.getByRole('button', { name: 'Continue' }).click()   // step 2 (warn -> Delete) -> preview
     await expect(dialog.getByText(/prod-values/)).toBeVisible({ timeout: 5000 })

@@ -215,6 +215,9 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     setExpandedKeys(keys)
   }
 
+  // The refreshKey the tree was last fetched for (#145).
+  const handledRefreshKey = useRef(refreshKey)
+
   // Load root on mount and when refreshKey changes. When a folder is
   // selected, the effect below already does a full refresh that also
   // expands its ancestors — skip the duplicate here so two concurrent
@@ -222,6 +225,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // staler expansion set).
   useEffect(() => {
     if (selectedFolder) return
+    handledRefreshKey.current = refreshKey
     refreshAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, selectedFolder])
@@ -232,10 +236,22 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // loaded children of every other expanded branch on each selection — and
   // antd's internal loadedKeys then blocked loadData from refetching them,
   // so those branches re-expanded empty until a full reload.
+  //
+  // A click on the tree (#145) changes only selectedFolder, and its node is
+  // already there under expanded, loaded parents: nothing to fetch. The tree
+  // is fetched again when refreshKey changes (sync, delete, create), or when
+  // the node or a parent is not in the tree yet (a session restored on an
+  // empty tree, a deployment just created in a new folder).
   useEffect(() => {
     if (!selectedFolder) return
     const parts = selectedFolder.split('/')
-    refreshAll(parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join('/')))
+    const ancestors = parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join('/'))
+    const refreshed = handledRefreshKey.current !== refreshKey
+    handledRefreshKey.current = refreshKey
+    const shown = !!findNode(treeData, selectedFolder) && ancestors.every(key =>
+      expandedKeysRef.current.includes(key) && Array.isArray(findNode(treeData, key)?.children))
+    if (!refreshed && shown) return
+    refreshAll(ancestors)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFolder, refreshKey])
 

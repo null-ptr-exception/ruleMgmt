@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  // Empty e2e-* folders left by earlier runs (#168).
+  globalSetup: './tests/e2e/global-setup.js',
   timeout: 30000,
   retries: 0,
   use: {

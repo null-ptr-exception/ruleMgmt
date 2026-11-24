@@ -483,8 +483,10 @@ Nothing is guessed: `warn_pct → warn_ratio` could be a rename or a delete plus
 an add, and only the person making the change knows which, so every mapping
 starts as delete. When the change should not reach existing deployments yet,
 **Clone to a new chart** instead: the copy carries the edits and the declared
-mapping as `x-migrated-from`, the original is untouched, and each rule owner
-moves over when they are ready.
+mapping as `x-migrated-from`, the original is untouched, and no deployment
+moves to the copy by itself. Each rule owner moves theirs by hand, two files,
+when they are ready: see
+[Move a deployment to a cloned chart](how-to.md#move-a-deployment-to-a-cloned-chart).
 
 ## Command line
 

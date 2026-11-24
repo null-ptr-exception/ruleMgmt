@@ -160,13 +160,20 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
   // are shown, but are no reason to hold the change up.
   const refused = (preview?.deployments || []).filter(d => d.problems?.some(p => !p.before))
 
+  // No deployment moves to the clone by itself (#57, #178): it is said here,
+  // where the choice is made.
   const cloneControl = (
-    <Space.Compact>
-      <Input size="small" placeholder="new-chart-name" value={cloneName} onChange={e => setCloneName(e.target.value)} style={{ width: 200 }} />
-      <Button size="small" disabled={!/^[a-z0-9][a-z0-9_-]*$/.test(cloneName)} onClick={() => onClone(cloneName, migration)}>
-        Clone to a new chart
-      </Button>
-    </Space.Compact>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <Space.Compact>
+        <Input size="small" placeholder="new-chart-name" value={cloneName} onChange={e => setCloneName(e.target.value)} style={{ width: 200 }} />
+        <Button size="small" disabled={!/^[a-z0-9][a-z0-9_-]*$/.test(cloneName)} onClick={() => onClone(cloneName, migration)}>
+          Clone to a new chart
+        </Button>
+      </Space.Compact>
+      <Text type="secondary" data-testid="clone-by-hand" style={{ fontSize: 12 }}>
+        This chart and its deployments stay as they are. A deployment moves to the clone by hand: its Chart.yaml and values.yaml (see the how-to, “Move a deployment to a cloned chart”).
+      </Text>
+    </div>
   )
 
   return (

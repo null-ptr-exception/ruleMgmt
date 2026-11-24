@@ -197,7 +197,51 @@ of the same name in the same save is not listed.
 
 If existing deployments should not change yet, use **Clone to a new chart** on
 the first step instead. The copy gets your edits and the mapping; the original
-keeps working, and each rule owner moves over when they are ready.
+keeps working, and no deployment moves to the copy by itself: each rule owner
+moves theirs by hand when they are ready — see
+[Move a deployment to a cloned chart](#move-a-deployment-to-a-cloned-chart).
+
+### Move a deployment to a cloned chart
+
+AlertForge has no button for this: it is two files in the deployment's folder,
+edited by hand and committed. Say `mariadb-alerts` was cloned to
+`mariadb-alerts-v2`, which renamed `warn_pct` to `warn_ratio` in the
+`mariadb_cpu` group and dropped `crit_pct`. The clone's `values.schema.json`
+says so under `x-migrated-from`:
+
+```json
+"x-migrated-from": {
+  "chart": "mariadb-alerts",
+  "columns": { "mariadb_cpu": { "warn_pct": "warn_ratio" } },
+  "dropped": { "mariadb_cpu": ["crit_pct"] },
+  "groups": {}
+}
+```
+
+1. **`Chart.yaml`**: in `dependencies`, the old chart's entry gets the new
+   name, and in its `repository` only the last part changes — the `../`
+   before it depend on how deep the deployment's folder is, and stay as they
+   are:
+
+   ```yaml
+   dependencies:
+     - name: mariadb-alerts-v2                              # was mariadb-alerts
+       version: ">=0.0.0-0"
+       repository: file://../../../charts/mariadb-alerts-v2   # was …/charts/mariadb-alerts
+   ```
+
+2. **`values.yaml`**: the top-level key is the chart's name, so
+   `mariadb-alerts:` becomes `mariadb-alerts-v2:`, everything under it
+   (`_common` too) moving with it. Then, in each group `x-migrated-from`
+   names, rename the columns it renames (`warn_pct:` → `warn_ratio:`) and
+   delete the ones it drops (`crit_pct:` lines). `columns` and `dropped` name
+   a group by its **old** name; rename the groups under `groups` last. A
+   column it does not name keeps its name.
+3. Open the deployment on **Alerts**: the table shows the new chart's columns,
+   and **Preview** renders it. Commit both files.
+
+A deployment that follows another through sync gets its source's files on the
+next save of the source; move the source.
 
 ### Remove a group
 
@@ -455,6 +499,12 @@ message box, and **Discard all changes** if you would rather start over.
 
 Nothing leaves the working tree until you commit, which is why Save is safe to
 experiment with.
+
+If the page says **the server's answer could not be read**, the answer was
+cut off on its way, or was not one (a proxy's sign-in page when the session
+ran out). After a save or a delete the server may well have made the change:
+reload the page to see what it has — signing in again if asked — before
+doing it again. **Changes** shows what is on disk either way.
 
 A commit is refused while any chart:
 

@@ -4,6 +4,7 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import chartsRouter from './server/routes/charts.js'
+import { valuesLimitNote } from './server/repo/limits.js'
 import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
 import renderRouter from './server/routes/render.js'
@@ -57,6 +58,12 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
     await git(GITOPS_DIR_V2, 'commit', '--allow-empty', '-m', 'initial')
     logger.info(`Git initialized in ${GITOPS_DIR_V2}`)
   }
+}
+
+// A MAX_VALUES_BYTES that is not used as written is said once.
+{
+  const note = valuesLimitNote()
+  if (note) logger.warn(note)
 }
 
 // Scaffold sample chart templates if none exist

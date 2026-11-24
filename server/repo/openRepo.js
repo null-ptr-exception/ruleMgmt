@@ -4,7 +4,11 @@
  * is built from files (a Template) is built once.
  *
  *   repo.file(rel)        → Promise<Loaded<{ bytes, text }>>
- *   repo.helmYaml(rel)    → Promise<Loaded<HelmValues>>: as Helm reads it
+ *   repo.helmYaml(rel)    → Promise<Loaded<HelmValues>>: as Helm reads it,
+ *                           with a finding for each value or key Helm (YAML
+ *                           1.1) reads otherwise than a YAML 1.2 reader would
+ *                           (yaml.read-differently: `010` is 8 to Helm) and
+ *                           each key written twice (yaml.duplicate-key)
  *   repo.json(rel)        → Promise<Loaded<unknown>>
  *   repo.template(name)   → Promise<Loaded<Template>>
  *   repo.memo(kind, key, build) → the one build of (kind, key) in this
@@ -24,6 +28,24 @@ import { finding } from './finding.js'
 import { invalid, ok } from './loaded.js'
 import { readRepoFile, repoRel } from './readRepoFile.js'
 import { loadTemplate } from './template.js'
+
+const shown = v => (typeof v === 'string' ? JSON.stringify(v) : String(v))
+
+/** The reader's notes on a text it read, as findings. */
+export function readerNotes(file, r) {
+  const where = line => [file, line && `line ${line}`].filter(Boolean).join(' ')
+  const out = []
+  for (const f of r.forms ?? []) {
+    const at = { path: f.path, ...(f.line ? { line: f.line } : {}) }
+    out.push(f.kind === 'key'
+      ? finding({ code: 'yaml.read-differently', file, helm: 'renders-differently', at, message: `${where(f.line)}: Helm reads the key ${f.text} as ${shown(f.helm)} (YAML 1.1). Write '${f.text}' in quotes for the key ${f.text}` })
+      : finding({ code: 'yaml.read-differently', file, helm: 'renders-differently', at, message: `${where(f.line)}: Helm reads ${f.text} as ${shown(f.helm)} (YAML 1.1); the editor would write ${shown(f.helm)}. Write ${shown(f.helm)}, or '${f.text}' in quotes for the text` }))
+  }
+  for (const d of r.duplicates ?? []) {
+    out.push(finding({ code: 'yaml.duplicate-key', file, helm: 'renders', ...(d.line ? { at: { line: d.line } } : {}), message: `${where(d.line)}: the key ${d.key} is written twice: Helm keeps the last one. Write each key once` }))
+  }
+  return out
+}
 
 export function openRepo(root, { overlay } = {}) {
   return makeRepo(root, normalizeOverlay(overlay), new Map())
@@ -69,7 +91,7 @@ function makeRepo(root, overlay, sharedFiles) {
         const f = await repo.file(key)
         if (f.state !== 'ok') return f
         const r = readHelmYaml(f.value.bytes, { file: key })
-        return r.ok ? ok(r.value) : invalid(key, [r.finding])
+        return r.ok ? ok(r.value, readerNotes(key, r)) : invalid(key, [r.finding])
       })
     },
     json(rel) {

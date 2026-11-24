@@ -3,7 +3,8 @@
 // run the reader against Helm itself). Every refusal has a row beside it
 // that is read.
 import { describe, it, expect } from 'vitest'
-import { readHelmYaml, float32Text, lineOf, MAX_BYTES, MAX_DEPTH } from '../../../server/repo/helmYaml.js'
+import { readHelmYaml, float32Text, lineOf, MAX_BYTES, MAX_DEPTH, read12 } from '../../../server/repo/helmYaml.js'
+import jsyaml from 'js-yaml'
 
 const read = text => readHelmYaml(text, { file: 'deployments/a/values.yaml' })
 const plain = v => JSON.parse(JSON.stringify(v))
@@ -178,7 +179,7 @@ describe('where AlertForge cannot tell what Helm reads, it says so and gives no 
 describe('limits: size, depth, time', () => {
   it(`a text larger than ${MAX_BYTES} bytes is not read`, () => {
     const big = `a: "${'x'.repeat(MAX_BYTES)}"\n`
-    expect(read(big).finding).toMatchObject({ helm: 'unknown', message: expect.stringMatching(/larger than 5 MiB/) })
+    expect(read(big).finding).toMatchObject({ helm: 'unknown', message: expect.stringMatching(/larger than 1 MiB/) })
     expect(read(Buffer.from(big)).finding.helm).toBe('unknown')
   })
 
@@ -198,8 +199,16 @@ describe('limits: size, depth, time', () => {
     expect(read(lines.join('\n')).finding).toMatchObject({ helm: 'unknown', message: expect.stringMatching(/with the aliases followed/) })
   })
 
-  it('returns soon on 1 MiB of each odd shape (the limit is 5 MiB; measured times are in the commit)', () => {
-    const MiB = 1024 * 1024
+  it('a text of exactly the limit is read', () => {
+    const body = 'a: ""\n'
+    const text = `a: "${'x'.repeat(MAX_BYTES - body.length)}"\n`
+    expect(Buffer.byteLength(text)).toBe(MAX_BYTES)
+    expect(read(text).ok).toBe(true)
+    expect(read(`${text} `).finding.helm).toBe('unknown')
+  })
+
+  it('returns soon on each odd shape just under the limit (measured times are in the commit)', () => {
+    const MiB = MAX_BYTES - 4096
     const fill = unit => unit.repeat(Math.floor(MiB / unit.length))
     for (const text of [
       `demo:\n  cpu:\n${fill('  - {job: api, threshold: 90, severity: warning}\n')}`,
@@ -211,7 +220,8 @@ describe('limits: size, depth, time', () => {
       `a: ${'['.repeat(90)}${']'.repeat(90)}\n`.repeat(Math.floor(MiB / 200)),
     ]) {
       const t0 = performance.now()
-      read(text)
+      expect(Buffer.byteLength(text)).toBeLessThanOrEqual(MAX_BYTES)
+      expect(read(text).finding?.message ?? '').not.toMatch(/larger than/)
       expect(performance.now() - t0).toBeLessThan(20000)
     }
   }, 180000)
@@ -249,4 +259,47 @@ describe('a number key written as Go writes a float32', () => {
     [1e-5, '1e-05'], [0.0001, '0.0001'], [1234567, '1.234567e+06'], [123456, '123456'], [-0, '-0'], [NaN, '.nan'],
     [-Infinity, '-.inf'], [18446744073709551616, '1.8446744e+19'], [16777217, '1.6777216e+07'], [0.5, '0.5'],
   ])('%s → %s', (f, want) => expect(float32Text(f)).toBe(want))
+})
+
+describe('what a YAML 1.2 reader reads instead (#202)', () => {
+  // The editor's own parser is js-yaml (YAML 1.2): read12 says what it reads,
+  // a date left as its text (Helm keeps the text too).
+  const SCALARS = ['010', '-010', '+010', '0777', '08', '09', '00', '0', '-0', '0_7', '1_000', '1_0.5', '0o10', '0O10', '0x10', '0X10', '0b101', '0x_1F',
+    '1:30', 'yes', 'no', 'on', 'off', 'y', 'n', 'Y', 'Yes', 'YES', 'ON', '+3', '3.0', '3.', '.5', '1e3', '1E3', '1e+3', '685.230_15e+03',
+    '.inf', '-.inf', '+.inf', '.Inf', '.NaN', '~', 'null', 'Null', 'NULL', 'nUll', 'true', 'True', 'TRUE', 'tRue', 'false', '1__0', 'abc', '0.1', '-1.5']
+  it('reads as js-yaml does', () => {
+    for (const t of SCALARS) {
+      const js = jsyaml.load(`v: ${t}`).v
+      const mine = read12(t)
+      expect(Number.isNaN(js) ? Number.isNaN(mine) : mine, t).toEqual(Number.isNaN(js) ? true : js)
+    }
+  })
+
+  it('names each value and key Helm reads otherwise, with where it is and both readings', () => {
+    const r = read('demo:\n  cpu:\n    - {job: api, threshold: 010, flag: yes, y: 1, d: 2024-01-01, q: \'010\', h: 0x10, e: 1e3}\n')
+    expect(r.forms).toEqual([
+      { kind: 'key', path: ['demo', 'cpu', 0, 'true'], text: 'y', helm: 'true', read12: 'y', line: 3 },
+      { kind: 'value', path: ['demo', 'cpu', 0, 'threshold'], text: '010', helm: 8, read12: 10, line: 3 },
+      { kind: 'value', path: ['demo', 'cpu', 0, 'flag'], text: 'yes', helm: true, read12: 'yes', line: 3 },
+    ])
+    expect(read('a: 1_000\nb: "1_000"\nc: !!str 010\n').forms.map(f => f.path)).toEqual([['a']])
+  })
+
+  it('names a key written twice in one map, not one a << merge overrides', () => {
+    expect(read('a: 1\na: 2\nb: {c: 1, c: 2}\n').duplicates).toEqual([{ key: 'a', line: 2 }, { key: 'c', line: 3 }])
+    expect(read('x: &r {job: api}\nz:\n  <<: *r\n  job: web\n').duplicates).toEqual([])
+  })
+})
+
+describe('the reader\'s notes as findings', () => {
+  it('a value or key Helm reads otherwise, and a key written twice, each name the line and what to write', async () => {
+    const { readerNotes } = await import('../../../server/repo/openRepo.js')
+    const f = readerNotes('deployments/a/values.yaml', read('a: {t: 010, n: 1, c: 1, c: 2}\n'))
+    expect(f.map(x => [x.code, x.helm, x.message])).toEqual([
+      ['yaml.read-differently', 'renders-differently', 'deployments/a/values.yaml line 1: Helm reads the key n as "false" (YAML 1.1). Write \'n\' in quotes for the key n'],
+      ['yaml.read-differently', 'renders-differently', 'deployments/a/values.yaml line 1: Helm reads 010 as 8 (YAML 1.1); the editor would write 8. Write 8, or \'010\' in quotes for the text'],
+      ['yaml.duplicate-key', 'renders', 'deployments/a/values.yaml line 1: the key c is written twice: Helm keeps the last one. Write each key once'],
+    ])
+    expect(f[1].at).toEqual({ path: ['a', 't'], line: 1 })
+  })
 })

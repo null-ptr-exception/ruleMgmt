@@ -35,6 +35,11 @@
 import path from 'path'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { CannotCheck, notADeployment, helmHome, checkRuleObjects, checkRouting } from '../server/lib/deploymentCheck.js'
+import { valuesLimitNote } from '../server/repo/limits.js'
+
+// The same values size limit as the server's (MAX_VALUES_BYTES): a setting
+// not used as written is said, as the server says it.
+if (valuesLimitNote()) console.error(`warn: ${valuesLimitNote()}`)
 
 const USAGE = 'usage: node scripts/check-deployment.mjs [--repo <gitops repo root>] <deployment folder>'
 

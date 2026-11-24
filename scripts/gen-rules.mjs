@@ -35,6 +35,11 @@ import { generateProducts, staleTemplates, replacedByConversion, repeatingTempla
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { ensureChartYaml } from '../src/utils/chartYaml.js'
 import { loadValues } from '../src/utils/valuesText.js'
+import { valuesLimitNote } from '../server/repo/limits.js'
+
+// The same values size limit as the server's (MAX_VALUES_BYTES): a setting
+// not used as written is said, as the server says it.
+if (valuesLimitNote()) console.error(`warn: ${valuesLimitNote()}`)
 
 const args = process.argv.slice(2)
 const check = args.includes('--check')

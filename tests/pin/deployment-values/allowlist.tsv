@@ -217,3 +217,72 @@ flat-unreadable	migration-apply	5xx	out-of-scope	legacy flat <name>-values.yaml:
 flat-wrapped	migration-apply	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-wrapped	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-wrapped	preview	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
+common-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+common-empty	save-json	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+common-empty	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+common-wrong-type	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
+common-wrong-type	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
+common-wrong-type	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
+common-wrong-type	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+common-wrong-type	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+common-wrong-type	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
+cell-map	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+cell-map	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+cell-map	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
+two-bad-cells	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
+two-bad-cells	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
+two-bad-cells	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
+two-bad-cells	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+two-bad-cells	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+two-bad-cells	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
+y11-octal-string	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
+y11-octal-string	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
+y11-octal-string	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+y11-octal-string	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+y11-octal-string	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
+dup-key-block	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-key-block	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-key-block	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-key-block	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+dup-key-block	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+dup-key-block	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-group	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-group	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-group	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-group	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+dup-group	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+dup-group	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-wrapper	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-wrapper	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-wrapper	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-wrapper	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+dup-wrapper	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+dup-wrapper	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-common-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-common-key	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-common-key	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-common-key	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+dup-common-key	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+dup-common-key	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+cond-no	save-text	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+cond-no	sync	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+cond-no	migration-preview	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+cond-no	migration-apply	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+cond-no	commit	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+cond-no	preview	accepts-what-helm-fails	bug	no issue yet: Preview and check-deployment say passed when Helm renders none of the rows written (a condition that is false)
+cond-no	check-deployment	accepts-what-helm-fails	bug	no issue yet: Preview and check-deployment say passed when Helm renders none of the rows written (a condition that is false)
+cond-true	common-plan	refuses-what-helm-renders	out-of-scope	a dependency with a condition is not re-attached to a new _common (the _common plan is not part of the values checks)
+stack-required-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+stack-condition-no	save-text	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+stack-condition-no	init	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+stack-condition-no	migration-preview	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+stack-condition-no	migration-apply	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+stack-condition-no	commit	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+stack-condition-no	preview	accepts-what-helm-fails	bug	no issue yet: Preview and check-deployment say passed when Helm renders none of the rows written (a condition that is false)
+stack-condition-no	check-deployment	accepts-what-helm-fails	bug	no issue yet: Preview and check-deployment say passed when Helm renders none of the rows written (a condition that is false)
+layer-dup-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+layer-dup-key	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+layer-dup-key	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
+layer-dup-key	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+layer-dup-key	preview	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+layer-dup-key	check-deployment	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)

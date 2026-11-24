@@ -21,7 +21,7 @@
  *   - a tab anywhere Helm's reading of it depends on more than the line
  *   - %YAML / %TAG directives; NEL, LS, PS, or a CR without LF; a --- or
  *     ... line that does not start or end a document
- *   - nesting deeper than MAX_DEPTH, a text larger than MAX_BYTES
+ *   - nesting deeper than MAX_DEPTH, a text larger than MAX_VALUES_BYTES (limits.js)
  *   - any YAML error the parser reports except the few kinds measured to
  *     stop Helm too
  *
@@ -55,11 +55,19 @@ import YAML from 'yaml'
 import { Buffer } from 'node:buffer'
 import { TextDecoder } from 'node:util'
 import { finding } from './finding.js'
+import { DEFAULT_VALUES_BYTES, VALUES_LIMIT_ENV, HELM_FILE_BYTES, maxValuesBytes, sizeText } from './limits.js'
 
-/** Helm 3.19 refuses a chart file larger than this (3.15 reads it): above it, AlertForge cannot tell. */
-export const MAX_BYTES = 5 * 1024 * 1024
+/**
+ * A values file larger than the limit (limits.js: MAX_VALUES_BYTES, 1 MiB
+ * unless set) is not read: AlertForge cannot tell (Helm reads up to 5 MiB).
+ * Reading the worst text of 1 MiB takes seconds, and the server answers no
+ * one meanwhile; a values file is a few kB.
+ */
+export const MAX_BYTES = DEFAULT_VALUES_BYTES
 /** Deeper nesting than this (an estimate made before parsing, then the real depth) is not read. */
 export const MAX_DEPTH = 100
+/** How many values read otherwise, and keys written twice, are named at most. */
+export const MAX_NOTES = 100
 
 const Y = 'tag:yaml.org,2002:'
 const STR = `${Y}str`, INT = `${Y}int`, FLOAT = `${Y}float`, BOOL = `${Y}bool`, NULL = `${Y}null`
@@ -79,14 +87,26 @@ class Stop extends Error {
 const fails = (message, offset, code = 'yaml.not-yaml') => new Stop(code, 'fails', message, offset)
 const cannotTell = (message, offset) => new Stop('yaml.cannot-read', 'unknown', `AlertForge cannot tell how Helm reads this: ${message}`, offset)
 
-export function readHelmYaml(input, { file = '' } = {}) {
+export function readHelmYaml(input, { file = '', maxBytes = maxValuesBytes() } = {}) {
   let text = ''
   try {
     const size = typeof input === 'string' ? Buffer.byteLength(input) : input.length
-    if (size > MAX_BYTES) throw cannotTell(`the file is larger than ${MAX_BYTES / 1024 / 1024} MiB (Helm 3.19 refuses a chart file that large, 3.15 reads it)`)
+    if (size > maxBytes) throw cannotTell(`the file is ${sizeText(size)}, larger than ${sizeText(maxBytes)}, the most AlertForge reads in a values file. Write it shorter${maxBytes < HELM_FILE_BYTES ? `, or raise the limit with ${VALUES_LIMIT_ENV} (up to ${sizeText(HELM_FILE_BYTES)}, Helm's own)` : ''}`)
     const decoded = decode(input)
     text = decoded.text
-    return { ok: true, value: read(decoded) }
+    const notes = { forms: [], duplicates: [] }
+    const value = read(decoded, notes)
+    // The first MAX_NOTES of each, with their lines counted in one pass.
+    const forms = notes.forms.slice(0, MAX_NOTES)
+    const duplicates = notes.duplicates.slice(0, MAX_NOTES)
+    const lines = linesOf(text, [...forms, ...duplicates].map(n => n.offset))
+    const at = o => (o === undefined ? undefined : lines.get(o))
+    return {
+      ok: true,
+      value,
+      forms: forms.map(({ offset, ...f }) => ({ ...f, line: at(offset) })),
+      duplicates: duplicates.map(({ offset, ...d }) => ({ ...d, line: at(offset) })),
+    }
   } catch (caught) {
     let err = caught
     // A safety net only: the depth is checked before parsing.
@@ -101,6 +121,22 @@ export function readHelmYaml(input, { file = '' } = {}) {
       finding: finding({ code: err.code, file, helm: err.helm, message: where ? `${where}: ${why}` : why, ...(line ? { at: { line } } : {}) }),
     }
   }
+}
+
+/** Offset → line for each offset, in one pass over the text. */
+function linesOf(text, offsets) {
+  const want = [...new Set(offsets.filter(o => o !== undefined))].sort((a, b) => a - b)
+  const out = new Map()
+  let line = 1
+  let i = 0
+  for (const o of want) {
+    for (; i < o && i < text.length; i++) {
+      const c = text[i]
+      if (c === '\n' || c === '\u0085' || c === '\u2028' || c === '\u2029' || (c === '\r' && text[i + 1] !== '\n')) line++
+    }
+    out.set(o, line)
+  }
+  return out
 }
 
 /** The line of an offset, counting each line break go-yaml counts (LF, CRLF, CR, NEL, LS, PS). */
@@ -212,7 +248,7 @@ function before(text) {
 
 // --- the document -----------------------------------------------------------
 
-function read({ text, bad }) {
+function read({ text, bad }, notes = { forms: [], duplicates: [] }) {
   before(text)
   const tokens = [...new YAML.Parser().parse(text)]
   const first = tokens.findIndex(t => t.type === 'document')
@@ -246,7 +282,10 @@ function read({ text, bad }) {
     yamlErrors(doc, next === -1 ? Infinity : end, shape.tabFail, plainLayout(text, end, leaves, shape))
     if (shape.tabFail) throw shape.tabFail
     if (tokens[next]?.type === 'doc-end') endWithoutStart(doc, tokens[first], tokens[next])
-    value = toJson(new Decoder(doc).document(doc.contents))
+    const decoder = new Decoder(doc)
+    const go = decoder.document(doc.contents)
+    notes.duplicates.push(...decoder.duplicates)
+    value = toJson(go, [], notes.forms)
   } else {
     // Comments and blank lines only: the parser's complaints, if any, still count.
     const errs = tokens.filter(t => t.type === 'error')
@@ -688,6 +727,42 @@ function resolve(tag, text, offset) {
   throw fails(`cannot read ${short(TAG_OF[r.t])} \`${text}\` as a ${short(tag)}`, offset)
 }
 
+/**
+ * A plain scalar as a YAML 1.2 reader reads it — the editor's own parser
+ * (js-yaml) and most writers' idea of the text — for telling where Helm's
+ * YAML 1.1 reads something else: `010` is 10 there and 8 to Helm, `yes`
+ * the text "yes" there and true to Helm. A date stays its text (Helm keeps
+ * the text too). tests/unit/repo/helmYaml.test.js holds it to js-yaml.
+ */
+export function read12(text) {
+  if (/^(~|null|Null|NULL|)$/.test(text)) return null
+  if (/^(true|True|TRUE)$/.test(text)) return true
+  if (/^(false|False|FALSE)$/.test(text)) return false
+  let m
+  if ((m = /^([-+]?)(0b[01]+|0x[0-9a-fA-F]+|0o[0-7]+|[0-9]+)$/.exec(text))) {
+    const body = m[2]
+    const n = /^0[box]/.test(body) ? Number(body) : Number(body.replace(/^0+(?=\d)/, ''))
+    return m[1] === '-' ? 0 - n : n
+  }
+  if (/^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$/.test(text)) return Number(text)
+  if (/^[-+]?\.(inf|Inf|INF)$/.test(text)) return text.startsWith('-') ? -Infinity : Infinity
+  if (/^\.(nan|NaN|NAN)$/.test(text)) return NaN
+  return text
+}
+
+const sameReading = (r, v12) => {
+  switch (r.t) {
+    case 'null': return v12 === null
+    case 'bool': return v12 === r.v
+    case 'int': case 'uint': return typeof v12 === 'number' && Number(r.v) === v12
+    case 'float': return typeof v12 === 'number' && (Object.is(r.v, v12) || r.v === v12 || (Number.isNaN(r.v) && Number.isNaN(v12)))
+    default: return typeof v12 === 'string'
+  }
+}
+
+/** A key as a YAML 1.2 reader turns it into text. */
+const keyText12 = v => (typeof v === 'string' ? v : String(v))
+
 const ALIAS_LOW = 400000, ALIAS_HIGH = 4000000
 const allowedAliasRatio = n => (n <= ALIAS_LOW ? 0.99 : n >= ALIAS_HIGH ? 0.10 : 0.99 - 0.89 * ((n - ALIAS_LOW) / (ALIAS_HIGH - ALIAS_LOW)))
 
@@ -701,6 +776,8 @@ class Decoder {
     this.aliasDepth = 0
     this.depth = 0
     this.active = new Set()
+    // Keys written twice in one map (not those a << merge overrides).
+    this.duplicates = []
   }
 
   count(node) {
@@ -759,15 +836,22 @@ class Decoder {
     const offset = node.range?.[0]
     const text = node.type === 'QUOTE_DOUBLE' ? dq(node.srcToken.source, offset) : String(node.value ?? '')
     if (tag === '' && node.type !== 'PLAIN') return { t: 'str', v: text }
-    return resolve(tag, text, offset)
+    const r = resolve(tag, text, offset)
+    if (tag !== '') return r
+    const other = read12(text)
+    return sameReading(r, other) ? r : { ...r, form: { offset, text, read12: other } }
   }
 
   into(node, m) {
+    const mine = new Set()
     for (const pair of node.items) {
       if (isMergeKey(pair.key)) { this.merge(pair.value, m); continue }
       const key = this.value(pair.key)
       if (key.t === 'map' || key.t === 'seq') throw fails('a key cannot be a map or a list', pair.key?.range?.[0])
-      m.set(identity(key), { key, value: this.value(pair.value), offset: pair.key?.range?.[0] })
+      const id = identity(key)
+      if (mine.has(id)) this.duplicates.push({ offset: pair.key?.range?.[0], key: key.t === 'str' ? key.v : String(key.v) })
+      mine.add(id)
+      m.set(id, { key, value: this.value(pair.value), offset: pair.key?.range?.[0] })
     }
   }
 
@@ -813,7 +897,13 @@ const identity = k => (k.t === 'float' && Number.isNaN(k.v) ? `nan${nanKeys++}` 
 
 // --- Go → JSON, as sigs.k8s.io/yaml and encoding/json do ---------------------
 
-function toJson(v) {
+function toJson(v, at = [], forms = []) {
+  const json = toJsonValue(v, at, forms)
+  if (v.form) forms.push({ kind: 'value', path: at, offset: v.form.offset, text: v.form.text, helm: json, read12: v.form.read12 })
+  return json
+}
+
+function toJsonValue(v, at, forms) {
   switch (v.t) {
     case 'map': {
       // The keys first: which of two colliding keys Helm keeps decides
@@ -822,6 +912,7 @@ function toJson(v) {
       const keys = []
       for (const [id, { key, offset }] of v.m) {
         const k = keyText(key, offset)
+        if (key.form && k !== keyText12(key.form.read12)) forms.push({ kind: 'key', path: [...at, k], offset, text: key.form.text, helm: k, read12: keyText12(key.form.read12) })
         if (seen.has(k) && seen.get(k) !== id) {
           throw new Stop('yaml.key-collision', 'renders-differently', `two keys both read as "${k}": Helm keeps one of them, not always the same one. Write each key once`, offset)
         }
@@ -830,10 +921,10 @@ function toJson(v) {
       }
       const out = Object.create(null)
       let i = 0
-      for (const { value } of v.m.values()) out[keys[i++]] = toJson(value)
+      for (const { value } of v.m.values()) { const k = keys[i++]; out[k] = toJson(value, [...at, k], forms) }
       return out
     }
-    case 'seq': return v.v.map(toJson)
+    case 'seq': return v.v.map((x, i) => toJson(x, [...at, i], forms))
     case 'int':
     case 'uint': return Number(v.v)
     case 'float':

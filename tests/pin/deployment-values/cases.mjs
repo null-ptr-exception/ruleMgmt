@@ -19,6 +19,10 @@ const OK = W(C + ROW('{ job: api }'))
 const okJ = { _common: { team: 'shop' }, cpu: [{ job: 'api' }] }
 const withRow = row => ({ _common: { team: 'shop' }, cpu: [row] })
 const TPL = 'charts/demo/values.yaml'
+// A deployment's or a layer's Chart.yaml whose dependency has a condition.
+const A_CHART = 'deployments/t/a/Chart.yaml'
+const L_CHART = 'deployments/s/_common/demo/Chart.yaml'
+const withCondition = (name, extra) => `apiVersion: v2\nname: ${name}\nversion: 0.1.0\ndependencies:\n  - name: demo\n    version: '>=0.0.0-0'\n${extra}    condition: demo.enabled\n`
 
 export const BASE = {
   A: OK,
@@ -60,6 +64,10 @@ export const CASES = [
   { id: 'common-team-null', target: 'A', text: W('  _common:\n    team: null\n' + ROW('{ job: api }')) },
   { id: 'once-group-map', target: 'A', text: W(C + ROW('{ job: api }') + '  up: {}\n'), json: { ...okJ, up: {} } },
   { id: 'once-group-null', target: 'A', text: W(C + ROW('{ job: api }') + '  up: null\n') },
+  { id: 'common-empty', target: 'A', text: W("  _common:\n    team: ''\n" + ROW('{ job: api }')), json: { _common: { team: '' }, cpu: [{ job: 'api' }] } },
+  { id: 'common-wrong-type', target: 'A', text: W('  _common:\n    team: 5\n' + ROW('{ job: api }')), json: { _common: { team: 5 }, cpu: [{ job: 'api' }] } },
+  { id: 'cell-map', target: 'A', text: W(C + ROW('{ job: api, threshold: { a: 1 } }')), json: withRow({ job: 'api', threshold: { a: 1 } }) },
+  { id: 'two-bad-cells', target: 'A', text: W(C + '  cpu:\n    - { job: api, threshold: abc }\n    - { job: web, severity: fatal }\n'), json: { _common: { team: 'shop' }, cpu: [{ job: 'api', threshold: 'abc' }, { job: 'web', severity: 'fatal' }] } },
   // undeclared keys
   { id: 'undeclared-cell', target: 'A', text: W(C + ROW('{ job: api, foo: 1 }')), json: withRow({ job: 'api', foo: 1 }) },
   { id: 'undeclared-cell-list', target: 'A', text: W(C + ROW('{ job: api, foo: [1] }')), json: withRow({ job: 'api', foo: [1] }) },
@@ -80,8 +88,15 @@ export const CASES = [
   { id: 'y11-0_7', target: 'A', text: W(C + ROW('{ job: api, threshold: 0_7 }')) },
   { id: 'y11-hex', target: 'A', text: W(C + ROW('{ job: api, threshold: 0x10 }')) },
   { id: 'y11-exp', target: 'A', text: W(C + ROW('{ job: api, threshold: 1e3 }')) },
+  { id: 'y11-octal-string', target: 'A', text: W(C + ROW('{ job: 010 }')) },
+  { id: 'y11-quoted-ok', target: 'A', text: W(C + ROW("{ job: '010', threshold: 8 }")) },
+  { id: 'y11-key', target: 'A', text: W(C + ROW('{ job: api, y: 1 }')) },
   { id: 'quoted-number', target: 'A', text: W(C + ROW("{ job: api, threshold: '10' }")), json: withRow({ job: 'api', threshold: '10' }) },
   { id: 'dup-key', target: 'A', text: W(C + ROW('{ job: api, job: web }')) },
+  { id: 'dup-key-block', target: 'A', text: W(C + '  cpu:\n    - job: api\n      threshold: 70\n      threshold: 90\n') },
+  { id: 'dup-group', target: 'A', text: W(C + ROW('{ job: api }') + ROW('{ job: web }')) },
+  { id: 'dup-wrapper', target: 'A', text: `${OK}demo:\n  cpu: []\n` },
+  { id: 'dup-common-key', target: 'A', text: W('  _common:\n    team: shop\n    team: web\n' + ROW('{ job: api }')) },
   { id: 'merge-key', target: 'A', text: 'x: &r { job: api }\n' + W(C + '  cpu:\n    - <<: *r\n      threshold: 70\n') },
   // documents
   { id: 'comment-only', target: 'A', text: '# nothing yet\n' },
@@ -111,6 +126,8 @@ export const CASES = [
   { id: 'dangling-link', target: 'A', text: { link: 'nowhere.yaml' } },
   { id: 'link-outside', target: 'A', text: { link: '__OUTSIDE__' } },
   { id: 'link-loop', target: 'A', text: { link: 'values.yaml' } },
+  { id: 'cond-no', target: 'A', text: W('  enabled: no\n' + C + ROW('{ job: api }')), files: { [A_CHART]: withCondition('a', '    repository: file://../../../charts/demo\n') } },
+  { id: 'cond-true', target: 'A', text: W('  enabled: true\n' + C + ROW('{ job: api }')), files: { [A_CHART]: withCondition('a', '    repository: file://../../../charts/demo\n') } },
   { id: 'chart-link-missing', target: 'A', text: OK, files: { 'deployments/t/a/charts/demo': { remove: true } } },
   { id: 'link-inside', target: 'A', text: { link: '../b/values.yaml' } },
   // the Template's own values.yaml underneath
@@ -128,6 +145,9 @@ export const CASES = [
   { id: 'stack-x-null', target: 'S', text: 'common:\n  demo: null\n' },
   { id: 'stack-x-number-text', target: 'S', text: 'common:\n  demo:\n    cpu:\n      - { job: x, threshold: abc }\n' },
   { id: 'stack-x-010', target: 'S', text: 'common:\n  demo:\n    cpu:\n      - { job: x, threshold: 010 }\n' },
+  { id: 'stack-required-empty', target: 'S', text: "common:\n  demo:\n    cpu:\n      - job: ''\n" },
+  { id: 'stack-condition-no', target: 'S', text: BASE.X, files: { [L_CHART]: withCondition('common', ''), 'deployments/s/_common/demo/values.yaml': 'demo:\n  enabled: no\n  _common:\n    team: shop\n' } },
+  { id: 'stack-condition-yes', target: 'S', text: BASE.X, files: { [L_CHART]: withCondition('common', ''), 'deployments/s/_common/demo/values.yaml': 'demo:\n  enabled: yes\n  _common:\n    team: shop\n' } },
   { id: 'stack-missing-link', target: 'S', text: BASE.X, files: { 'deployments/s/_common/demo/charts/demo': { remove: true } } },
   { id: 'layer-common-zero', target: 'L', text: 'demo:\n  _common:\n    team: shop\n    base: 0\n' },
   { id: 'layer-team-missing', target: 'L', text: 'demo:\n  cpu: []\n' },
@@ -135,6 +155,8 @@ export const CASES = [
   { id: 'layer-not-yaml', target: 'L', text: 'demo:\n  _common: [\n' },
   { id: 'layer-unreadable', target: 'L', text: { mode: 0, content: BASE.L } },
   { id: 'layer-link-outside', target: 'L', text: { link: '__OUTSIDE__' } },
+  { id: 'layer-unwrapped', target: 'L', text: '_common:\n  team: shop\n' },
+  { id: 'layer-dup-key', target: 'L', text: 'demo:\n  _common:\n    team: shop\n    team: web\n' },
   { id: 'layer-010', target: 'L', text: 'demo:\n  _common:\n    team: shop\n    base: 010\n' },
   // flat legacy file (bare values)
   { id: 'flat-ok', target: 'F', text: BASE.F, json: { _common: { team: 'shop' }, cpu: [{ job: 'f' }] } },

@@ -60,7 +60,10 @@ export async function startServer(tmp, env = {}, { baseEnv = process.env } = {})
   const stop = async () => { if (child.exitCode === null && child.signalCode === null) { child.kill(); await ended } }
   const handle = { base, app, child, output: () => output, ended, stop, up: false }
   for (let i = 0; i < 400; i++) {
-    if (await fetch(`${base}/api/v2/user`).then(() => true, () => false)) return { ...handle, up: true }
+    // The port was free a moment ago, not reserved: another test's server may
+    // answer on it. Up means this process said it listens, and an answer came.
+    const listening = output.includes(`API server listening on port ${port}`)
+    if (listening && await fetch(`${base}/api/v2/user`).then(() => true, () => false)) return { ...handle, up: true }
     if (child.exitCode !== null || child.signalCode !== null) return handle
     await new Promise(r => setTimeout(r, 50))
   }

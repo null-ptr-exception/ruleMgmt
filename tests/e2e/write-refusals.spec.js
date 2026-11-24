@@ -2,6 +2,7 @@
 // (a file or folder that is read-only): the file, by its path in the repo,
 // and nothing changed.
 import { test, expect } from '@playwright/test'
+import { openMenu } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
@@ -31,18 +32,6 @@ async function openTree(page, ...folders) {
 }
 const deploymentNode = (page, name) =>
   page.locator('.ant-tree .ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: new RegExp(`^${name}${CHART}`) })
-// A node's right-click menu. The node is brought into view first, and the
-// page left to finish scrolling: a scroll closes a context menu, and the
-// scroll a click does by itself is seen by the page after the menu opened.
-// These folders are the last of the tree, below the window once the other
-// specs have left theirs in it.
-async function openMenu(page, node) {
-  const target = node.locator('.ant-tree-node-content-wrapper')
-  await target.scrollIntoViewIfNeeded()
-  await page.evaluate(() => new Promise(done => window.requestAnimationFrame(() => window.requestAnimationFrame(done))))
-  await target.click({ button: 'right' })
-}
-
 test.describe.serial('a write the repo refuses', () => {
   test.skip(IS_ROOT, 'chmod does not stop root')
 

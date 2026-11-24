@@ -567,7 +567,10 @@ depends on it, its page, Preview and `check-deployment` name the link, and
 the Sync dialogs give it no row count. Nothing is written to such a
 deployment: saving it, syncing to or from it, a `_common` made or removed
 around it and a Template change that would move its values are refused
-(409) with the same sentence. So are a new deployment in a folder whose
+(409) with the same sentence, and so are its routing saved or removed (or
+copied to it as a sync target) and a change to the shared configs while it
+uses one. **Regenerate** makes no file of it and lists it with that
+sentence, the other deployments made again. So are a new deployment in a folder whose
 `_common` is such a link, making or removing a `_common` through the link,
 and removing the `_common` the link leads to while a deployment still
 reaches it that way. Replace the link with a folder of its own in
@@ -809,7 +812,10 @@ A link to a file elsewhere in the repo is read through. An
 AlertmanagerConfig left without its `routing.yaml` — still deployed, with
 no table saying so — is named too: remove it (**Remove routing**), or put
 `routing.yaml` back. A save is refused only when a file it would replace
-cannot be read (no permission, a folder in its place); a file that is a
+cannot be read (no permission, a folder in its place) — its own, or a sync
+target's copy of the two: the answer names it (`<file> cannot be read`,
+409) before anything is written, for a save, **Remove routing**, a change
+to the shared configs and **Regenerate** alike; a file that is a
 link — to nothing, or out of the repo — is replaced by the file saved, and
 what it led to is left alone. **Remove routing** removes files it cannot
 read, and is refused, before anything is removed, by a folder where one of
@@ -952,10 +958,14 @@ copied to it.
   the target the resource made from it, not the old one; the source itself
   keeps deploying the old one until its routing is saved. A routing
   resource left without its `routing.yaml` refuses the sync too: remove it,
-  or put `routing.yaml` back.
+  or put `routing.yaml` back. A source with no routing takes the target's
+  away: its `routing.yaml`, its resource (a link there is removed as the
+  link, what it led to left alone) and the `templates/` folder made for it,
+  when nothing else is in it.
 - A save of the source's routing (or its removal) writes the source and
   every target together, or none of them: a target file that cannot be
-  written stops it, with nothing written, and the page names the file.
+  written, or one it would replace that cannot be read (`… cannot be
+  read`), stops it, with nothing written, and the page names the file.
 - Deleting a source lets go of its targets: each keeps what it has and can
   be edited again. The **Delete** dialog lists them, and each can be deleted
   along with the source instead. Those marked to be deleted go

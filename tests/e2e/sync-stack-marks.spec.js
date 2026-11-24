@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { intoView } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
@@ -56,7 +57,9 @@ test.describe.serial('Sync across folders with different _commons', () => {
   test('the Sync to dialog says which _common the target will inherit; the tree says it after', async ({ page }) => {
     const tree = await openTree(page)
     await expandFolder(tree, SHOP)
-    await deployment(tree, page, 'prod').getByRole('button', { name: 'Actions for prod' }).click()
+    const actions = deployment(tree, page, 'prod').getByRole('button', { name: 'Actions for prod' })
+    await intoView(page, actions)
+    await actions.click()
     await page.locator('.ant-dropdown-menu-item', { hasText: 'Sync to...' }).click()
     const modal = page.getByRole('dialog')
     await expect(modal.getByTestId(`stack-note-${CART}/prod`)).toHaveText(`will inherit ${SHOP_COMMON}, its source's — not ${CART_COMMON}`, { timeout: 8000 })

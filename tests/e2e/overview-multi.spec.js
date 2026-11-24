@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { openMenu } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { removeChart } from './charts.js'
@@ -164,7 +165,7 @@ test.describe('Overview with several deployments', () => {
     await check(page, 'mdev')
     await expect(page.getByTestId('multi-deployment-banner')).toContainText('Viewing 3 deployments')
 
-    await node(page, 'mdel').locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+    await openMenu(page, node(page, 'mdel'))
     await page.locator('.ant-dropdown-menu-item', { hasText: 'Delete' }).click()
     await page.getByRole('dialog').filter({ hasText: 'Delete mdel?' }).getByRole('button', { name: 'OK' }).click()
 

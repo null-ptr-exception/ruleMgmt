@@ -2,6 +2,7 @@
 // (#180): the dialog says so, and how many of its alert rows go, before
 // the overwrite is confirmed.
 import { test, expect } from '@playwright/test'
+import { openMenu } from './menu.js'
 import { pickOption, removeChart } from './charts.js'
 
 const SRC_CHART = 'mariadb-alerts'
@@ -53,7 +54,7 @@ test.describe.serial('sync to another Template', () => {
 
     await openTree(page)
     const node = page.locator('.ant-tree .ant-tree-treenode').filter({ hasText: new RegExp(`^src${SRC_CHART}`) })
-    await node.locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+    await openMenu(page, node)
     await page.locator('.ant-dropdown-menu-item:visible', { hasText: 'Sync to...' }).click()
     const modal = page.getByRole('dialog')
     const row = modal.locator('.ant-list-item').filter({ hasText: TGT })
@@ -69,7 +70,7 @@ test.describe.serial('sync to another Template', () => {
 
     await openTree(page)
     const node = page.locator('.ant-tree .ant-tree-treenode').filter({ hasText: new RegExp(`^redis${OTHER}`) })
-    await node.locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+    await openMenu(page, node)
     await page.locator('.ant-dropdown-menu-item:visible', { hasText: 'Sync from...' }).click()
     const modal = page.getByRole('dialog')
     await expect(modal.getByTestId('template-change')).toHaveCount(0)

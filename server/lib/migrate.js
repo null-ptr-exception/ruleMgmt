@@ -85,7 +85,7 @@ async function locate(repo, relPath, keys) {
  * `repo` for a writer's change (the Template's save writes these with its
  * own files, all or none) and for the dialog's preview. Every file is read
  * through `repo`; nothing is written here.
- *   { deployments, files, strict, syncSkipped, refusal }
+ *   { deployments, files, strict, syncSkipped, refusal, linked }
  *   deployments  [{ deployment, path, readonly, copiedFrom, rowsChanged,
  *                losses, orphaned, problems: [{ message, before }] }]: the
  *                dialog's preview. With `model` (the new Template's) each
@@ -107,7 +107,11 @@ async function locate(repo, relPath, keys) {
  *                someone else's change, never migrated over
  *   syncSkipped  [{ target, error }]: sync.yaml entries of a migrated source
  *                that are no deployment folder (gone): listed, not written
- *   refusal      null, or the 409 of a sync target of a migrated source that
+ *   linked       null, or the 409 of a deployment on a `_common` reached
+ *                through a link made by hand (stack.js linkedStackRefusal:
+ *                nothing is written for it, so nothing is migrated); it is
+ *                the `refusal` too, and is answered before any other
+ *   refusal      null, `linked`, or the 409 of a sync target of a migrated source that
  *                cannot be used: its values.yaml or Chart.yaml cannot be
  *                read, or it is reached through a link (never when only
  *                checking)
@@ -127,8 +131,19 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
   const befores = new Map() // deployment path → its rows before
   const afters = new Map()  // deployment path → its rows after
   const missing = new Set() // deployments with no values file yet
+  let refusal = null
+  let linked = null
   for (const dep of found) {
     const readonly = isTarget(registry, dep.path)
+    // On a _common reached through a link made by hand: no write touches
+    // it, so the migration is refused whole (only checking, it is left out).
+    // The preview lists it with the sentence, as a deployment not migrated.
+    if (dep.linked) {
+      if (!checkOnly) linked ??= dep.linked
+      deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], noValues: true,
+        problems: [{ message: dep.linked.body.error, before: checkOnly }] })
+      continue
+    }
     // A Chart.yaml with no values.yaml: Helm renders the Template's own
     // values, which the Template change carries. Listed, nothing written —
     // a values.yaml made here would make it a deployment.
@@ -238,11 +253,10 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
   // naming the file; one that is gone is listed and left.
   const out = []
   const syncSkipped = []
-  let refusal = null
   if (!checkOnly) {
     for (const source of new Set(writes.filter(w => !w[2]).map(w => w[3]))) {
       const t = await syncTargets(repo, registry, source)
-      if (t.refusal) { refusal = t.refusal; break }
+      if (t.refusal) { refusal ??= t.refusal; break }
       syncSkipped.push(...t.failed)
     }
     for (const [rel, text] of [...writes].sort((a, b) => Number(a[2]) - Number(b[2]))) {
@@ -251,5 +265,5 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
       if (now.state !== 'ok' || now.value.text !== text) out.push({ rel, text })
     }
   }
-  return { deployments, files: out, strict: new Set(out.map(f => f.rel)), syncSkipped, refusal }
+  return { deployments, files: out, strict: new Set(out.map(f => f.rel)), syncSkipped, refusal: linked ?? refusal, linked }
 }

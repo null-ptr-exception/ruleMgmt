@@ -127,6 +127,9 @@ async function migrationFiles(repo, { chart, newSchema, migration, model, before
     if (err instanceof NotLoadedError) return { refusal: errorAnswer(err) }
     return no(500, { error: `Deployment migration failed: ${err.message}` })
   }
+  // A deployment on a _common reached through a link made by hand: the
+  // one sentence every write answers, before anything else is said of it.
+  if (m.linked) return { refusal: m.linked }
   // What a values save would refuse is not written by a migration either
   // (#176). A problem a deployment had already is not this change's doing:
   // it is shown in the preview, not a reason to refuse.

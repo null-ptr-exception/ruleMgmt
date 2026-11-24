@@ -22,7 +22,7 @@ import { defineChange } from '../write.js'
 import { SHARED_FILE } from '../shared.js'
 import { planShared, planRename } from '../../lib/sharedConfigs.js'
 import { syncTargets } from '../../lib/deploymentWrite.js'
-import { copyRoutingToTargets, placeRefusal } from './routing.js'
+import { copyRoutingToTargets, placeRefusal, linkedStack } from './routing.js'
 
 defineChange('shared', {
   policy: 'save',
@@ -33,6 +33,10 @@ defineChange('shared', {
     const files = [...planned.files]
     const syncFailed = []
     for (const { deployment, routing } of planned.sources) {
+      // A deployment whose resource this writes, on a _common reached
+      // through a link made by hand: nothing of it is written, so none of it.
+      const onLink = await linkedStack(repo, deployment)
+      if (onLink) return { refusal: onLink }
       const { targets, failed, refusal } = await syncTargets(repo, planned.registry, deployment)
       if (refusal) return { refusal }
       syncFailed.push(...failed)

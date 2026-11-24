@@ -279,6 +279,28 @@ describe('a routing save and its sync targets: all or none', () => {
     expect(await tree()).toEqual(before)
   })
 
+  it.skipIf(IS_ROOT)('a sync target\'s routing.yaml that cannot be read: a save, a removal and Regenerate are refused naming it as a file that cannot be read, before anything is written', async () => {
+    // What the copy replaces could not be put back: said when it is planned, as a sync link says it.
+    await fs.chmod(path.join(root, B, 'routing.yaml'), 0)
+    const cannotRead = { error: `${B}/routing.yaml cannot be read: permission denied`, file: `${B}/routing.yaml`, unreadable: true }
+    let before = await tree()
+    const saved = await api('PUT', route(A), { routing: ROUTING('a2') })
+    expect(saved.status).toBe(409)
+    expect(saved.data).toEqual(cannotRead)
+    expect(await tree()).toEqual(before)
+    const removed = await api('DELETE', route(A))
+    expect(removed.status).toBe(409)
+    expect(removed.data).toEqual(cannotRead)
+    expect(await tree()).toEqual(before)
+    // Regenerate, the source's routing.yaml edited by hand: the copy to the target is a write that cannot be made.
+    await fs.writeFile(path.join(root, A, 'routing.yaml'), ROUTING('by-hand'))
+    before = await tree()
+    const made = await api('POST', '/api/v2/git/routing/regenerate')
+    expect(made.status).toBe(409)
+    expect(made.data).toEqual(cannotRead)
+    expect(await tree()).toEqual(before)
+  })
+
   it.skipIf(IS_ROOT)('removed, a target that cannot be written: 409, nothing removed', async () => {
     await fs.chmod(path.join(root, B, 'templates'), 0o555)
     const before = await tree()

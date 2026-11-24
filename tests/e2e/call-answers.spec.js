@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { openMenu } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
@@ -71,7 +72,7 @@ test.describe.serial('what the page says for an answer it used to misread', () =
       const res = await route.fetch()
       await route.fulfill({ response: res, body: '' })
     })
-    await target.locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+    await openMenu(page, target)
     await page.locator('.ant-dropdown-menu-item', { hasText: 'Unlink sync' }).click()
     await expect(page.locator('.ant-message')).toContainText('whether the change was made is not known', { timeout: 8000 })
     await expect(page.locator('.ant-message')).not.toContainText('Unlink failed')

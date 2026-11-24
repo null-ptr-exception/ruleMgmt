@@ -392,6 +392,23 @@ describe.skipIf(IS_ROOT)('deleting a deployment whose folder became a link to an
 // The order a change is written in decides what a server killed midway
 // leaves: for a sync link, sync.yaml first — a target listed and not yet
 // its source's copy is what Commit refuses.
+describe('a sync link from a source with no routing', () => {
+  it('takes the target\'s routing away with the templates/ made for it, also when its resource was a link', async () => {
+    await setup()
+    expect((await api('DELETE', route(SRC))).status).toBe(200)
+    // TGT's resource is a link to a file of the repo: removed as the link it is.
+    await fs.mkdir(path.join(tmpDir, 'notes'), { recursive: true })
+    await fs.rename(path.join(tmpDir, TGT, 'templates/alertmanagerconfig.yaml'), path.join(tmpDir, 'notes/cr.yaml'))
+    await fs.symlink('../../../../notes/cr.yaml', path.join(tmpDir, TGT, 'templates/alertmanagerconfig.yaml'))
+    const kept = await read('notes/cr.yaml')
+    const res = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+    expect(res.status).toBe(200)
+    expect(await exists(`${TGT}/routing.yaml`)).toBe(false)
+    expect(await exists(`${TGT}/templates`)).toBe(false)
+    expect(await read('notes/cr.yaml')).toBe(kept)
+  })
+})
+
 describe('a sync link to a target whose templates/ is a link made by hand', () => {
   it('is refused naming the link, as a routing save to it is: nothing is written through it', async () => {
     await setup()

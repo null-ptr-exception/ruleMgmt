@@ -6,6 +6,7 @@
 // sync.yaml is the whole workspace's: this spec runs on its own, after the
 // rest (playwright.config.js).
 import { test, expect } from '@playwright/test'
+import { openMenu } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
@@ -34,7 +35,7 @@ const deploymentNode = (page, name) =>
   page.locator('.ant-tree .ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: new RegExp(`^${name}${CHART}`) })
 
 async function menu(page, name, item) {
-  await deploymentNode(page, name).locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+  await openMenu(page, deploymentNode(page, name))
   await page.locator('.ant-dropdown-menu-item:visible', { hasText: item }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible({ timeout: 5000 })

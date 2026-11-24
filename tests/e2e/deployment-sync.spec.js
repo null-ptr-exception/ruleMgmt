@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { openMenu } from './menu.js'
 
 const CHART = 'mariadb-alerts'
 const ROOT = 'e2e-sync-test'
@@ -29,7 +30,7 @@ function deploymentNode(page, name) {
 }
 
 async function rightClickMenuItem(page, node, itemLabel) {
-  await node.locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+  await openMenu(page, node)
   const menuItem = page.locator('.ant-dropdown-menu-item', { hasText: itemLabel })
   await expect(menuItem).toBeVisible({ timeout: 3000 })
   await menuItem.click()

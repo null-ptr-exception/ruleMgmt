@@ -3,7 +3,7 @@ import path from 'path'
 import { getDeploymentsDir } from './chartDiscovery.js'
 import { walk } from '../repo/walk.js'
 import { openRepo } from '../repo/openRepo.js'
-import { resolveStack } from './stack.js'
+import { resolveStack, linkedStackRefusal } from './stack.js'
 
 /**
  * Which deployments are using a chart — see issue #57.
@@ -63,7 +63,9 @@ async function fromFolders(gitopsDir, chart, repo) {
     const hidden = d.path.split('/').some(s => s.startsWith('.'))
     found.push({ chart, deployment: path.basename(d.path), path: d.path, keys,
       ...(d.kind === 'deployment' ? {} : { kind: d.kind }), ...(hidden ? { hidden: true } : {}),
-      ...(!stack.chart && stack.problems.length ? { broken: stack.problems[0].description } : {}) })
+      ...(!stack.chart && stack.problems.length ? { broken: stack.problems[0].description } : {}),
+      // On a _common reached through a link made by hand: what a write that touches it answers.
+      ...(linkedStackRefusal(stack, d.path) ? { linked: linkedStackRefusal(stack, d.path) } : {}) })
   }
   return { found, unreadable }
 }

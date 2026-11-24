@@ -26,7 +26,9 @@
  * Anything else (the shared configs, a target, sync.yaml) is planned again
  * under the lock.
  */
+import path from 'path'
 import { defineChange } from '../write.js'
+import { resolveStack, linkedStackRefusal } from '../../lib/stack.js'
 import { ROUTING_FILE, ROUTING_CR_FILE, buildRouting, loadRouting } from '../routing.js'
 import { loadShared, sharedForBuild } from '../shared.js'
 import { syncAnswer } from '../sync.js'
@@ -89,6 +91,15 @@ export async function copyRoutingToTargets(repo, source, targets, routing, files
   return null
 }
 
+/**
+ * What a write that touches the deployment `dep` answers when it renders
+ * on a `_common` reached through a link made by hand (stack.js
+ * linkedStackRefusal: 409, the one sentence), or null.
+ */
+export async function linkedStack(repo, dep) {
+  return linkedStackRefusal(await resolveStack(repo.root, path.join(repo.root, dep), { repo }), dep)
+}
+
 /** A refusal for files that would land outside the repo or behind a link, or null. */
 export async function placeRefusal(repo, files) {
   const rels = files.map(f => (f.removeFolder ? `${f.rel}/x` : f.rel))
@@ -103,6 +114,9 @@ defineChange('routing', {
     const { registry, refusal } = await syncAnswer(repo)
     if (refusal) return { refusal }
     if (isTarget(registry, dep)) return { refusal: { status: 409, body: { error: `${dep} is synced from another deployment and is read-only` } } }
+    // On a _common reached through a link made by hand: nothing of it is written.
+    const onLink = await linkedStack(repo, dep)
+    if (onLink) return { refusal: onLink }
     let want
     let warnings = []
     if (remove) {
@@ -189,6 +203,11 @@ defineChange('regenerate-routing', {
         failed.push({ deployment: f.deployment, error: loaded.state === 'ok' ? loaded.value.errors.join('; ') : `${loaded.file} cannot be read` })
         continue
       }
+      // On a _common reached through a link made by hand: not made again,
+      // and said — a deployment that cannot be made, not a file that
+      // cannot be written.
+      const onLink = await linkedStack(repo, f.deployment)
+      if (onLink) { failed.push({ deployment: f.deployment, error: onLink.body.error }); continue }
       const want = { text: loaded.value.text, cr: loaded.value.made }
       files.push(...await routingEntries(repo, f.deployment, want))
       made.set(f.deployment, want)
@@ -207,6 +226,8 @@ defineChange('regenerate-routing', {
       if (!isSafeSyncPath(target, chartsDirName())) { no('not a path sync may write to'); continue }
       if (!(await insideReal(root, target))) { no('not a path sync may write to: it leads outside the repo'); continue }
       if (!(await isDeployment(repo, target))) { no('not a deployment on disk'); continue }
+      const onLink = await linkedStack(repo, target)
+      if (onLink) { failed.push({ deployment: target, error: onLink.body.error }); continue }
       // The source as it is made now.
       const routing = made.get(source) ?? await routingToCopy(repo, source)
       if (routing.errors) { no(`its source ${source} has routing problems`); continue }

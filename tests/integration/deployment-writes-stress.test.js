@@ -15,33 +15,13 @@ import os from 'os'
 import { execFileSync } from 'child_process'
 import express from 'express'
 import { withSyncRegistryLock } from '../../server/repo/lock.js'
-import { defineChange, planChange, applyChange, hooks } from '../../server/repo/write.js'
-import { openRepo } from '../../server/repo/openRepo.js'
-import { planMigration } from '../../server/lib/migrate.js'
+import { hooks } from '../../server/repo/write.js'
 
 let server, baseURL, root, seed, errors
 
 const FULL = !!process.env.STRESS
 const TWO_AT_ONCE = FULL ? 20 : 1
 const BESIDE_COMMIT = FULL ? 50 : 1
-
-// The migration's writes into deployments as the Template's save takes
-// them (a test kind: the save's own files left out), so the seam is tried
-// with the writer as the save will use it.
-defineChange('test-migration', {
-  policy: 'save',
-  async plan(repo, { migration }) {
-    const targetSchema = JSON.parse((await repo.file('charts/demo/values.schema.json')).value.text)
-    const m = await planMigration(repo, { chart: 'demo', targetSchema, migration })
-    if (m.refusal) return { refusal: m.refusal }
-    return { files: m.files, facts: { strict: m.strict } }
-  },
-  strict: plan => plan.facts.strict,
-  table: () => 'save',
-  refused: () => ({ status: 400, body: { error: 'refused' } }),
-  changed: () => ({ status: 409, body: { error: 'changed', changed: true } }),
-  answer: () => ({ ok: true }),
-})
 
 // The repo every test starts from is made once, through the API (a
 // Template, five deployments, committed), and copied for each test.
@@ -184,27 +164,6 @@ describe('stress: two changes at once', () => {
       }
     }
   }, 300_000)
-
-  it('rounds of the migration\'s deployment writes beside a values save: a save is never migrated over', async () => {
-    const migrate = async () => applyChange(await planChange(openRepo(root), { kind: 'test-migration', migration: { columns: {} } }))
-    for (let round = 0; round < TWO_AT_ONCE; round++) {
-      // Each round the migration has something to write, the saved file
-      // too: files in flow style, which it writes in block style.
-      await fs.writeFile(path.join(root, C, 'values.yaml'), `demo:\n  cpu: [{job: c${round}}]\n`)
-      await fs.writeFile(path.join(root, A, 'values.yaml'), `demo:\n  cpu: [{job: a${round}}]\n`)
-      const [m, s] = await Promise.all([migrate(), save(A, `r${round}`)])
-      expect([200, 409]).toContain(m.status)
-      expect([200, 409]).toContain(s.status)
-      // One of the two is written whole; the other, planned on the file
-      // before it, is refused, never written over it.
-      const a = await fs.readFile(path.join(root, A, 'values.yaml'), 'utf-8')
-      if (s.status === 200) expect(a).toContain(`r${round}`)
-      else expect(m.status).toBe(200)
-      if (m.status === 409) expect(s.status).toBe(200)
-      expect(await lockFree()).toBe(true)
-      expect(await noTemp()).toEqual([])
-    }
-  }, 300_000)
 })
 
 describe('stress: each kind beside a Commit', () => {
@@ -250,12 +209,17 @@ describe('stress: each kind beside a Commit', () => {
     }
   }, 300_000)
 
-  it('the migration\'s deployment writes', async () => {
+  // The Template's save with its migration: the rules, what is made from
+  // them and every deployment's values, in one commit or in none. (Beside
+  // a values save it is in template-writes-stress.test.js.)
+  it('a rules save that migrates every deployment', async () => {
     for (let round = 0; round < BESIDE_COMMIT; round++) {
-      await fs.writeFile(path.join(root, C, 'values.yaml'), `demo:\n  cpu: [{job: c${round}}]\n`)
-      await fs.writeFile(path.join(root, P, 'values.yaml'), `demo:\n  cpu: [{job: p${round}}]\n`)
-      git('add', '-A'); git('commit', '-qm', `out of shape ${round}`)
-      await besideCommit(round, async () => applyChange(await planChange(openRepo(root), { kind: 'test-migration', migration: { columns: {} } })))
+      const [from, to] = round % 2 ? ['name', 'job'] : ['job', 'name']
+      await besideCommit(round, () => api('POST', '/api/v2/templates/demo/rules', {
+        files: { 'cpu.yaml': CPU.replaceAll('job: {', `${to}: {`).replaceAll('${job}', `\${${to}}`) },
+        confirmBreaking: true, migration: { columns: { cpu: { [from]: to } } },
+      }))
+      expect(await fs.readFile(path.join(root, C, 'values.yaml'), 'utf-8')).toContain(`${to}: c`)
     }
   }, 300_000)
 })

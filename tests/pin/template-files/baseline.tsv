@@ -1280,8 +1280,8 @@ folder-link-inside	p2	check-repo	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	Cpu
 folder-link-inside	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
 folder-link-inside	p2	gen-rules	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 folder-link-inside	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-inside	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-inside	p2	import-rules	ok	exit 0	-	no	vendor/p2/rules/imported.yaml,vendor/p2/templates/imported.yaml,vendor/p2/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
+folder-link-inside	p2	gen-chart	cannot-check	exit 2	charts/p2/templates/cpu.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+folder-link-inside	p2	import-rules	cannot-check	exit 2	charts/p2/rules/imported.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 folder-link-inside	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current commit=current gen-rules=current gen-chart=current	
 folder-link-outside	p2	open	unreadable	409	charts/p2	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 folder-link-outside	p2	list	not-listed	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	not listed	hides-what-helm-renders

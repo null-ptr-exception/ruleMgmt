@@ -2,6 +2,7 @@
 // says why a source is refused, and a save says which sync target's file it
 // could not write.
 import { test, expect } from '@playwright/test'
+import { openMenu } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { pickOption } from './charts.js'
@@ -59,7 +60,7 @@ test.describe.serial('sync write path', () => {
     const before = await targetFiles()
     try {
       await openTree(page)
-      await deploymentNode(page, 'src').locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+      await openMenu(page, deploymentNode(page, 'src'))
       await page.locator('.ant-dropdown-menu-item:visible', { hasText: 'Sync to...' }).click()
       const modal = page.getByRole('dialog')
       const row = modal.locator('.ant-list-item').filter({ hasText: TGT })
@@ -87,7 +88,7 @@ test.describe.serial('sync write path', () => {
     const before = await targetFiles()
     try {
       await openTree(page)
-      await deploymentNode(page, 'src').locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+      await openMenu(page, deploymentNode(page, 'src'))
       await page.locator('.ant-dropdown-menu-item:visible', { hasText: 'Sync to...' }).click()
       const modal = page.getByRole('dialog')
       const row = modal.locator('.ant-list-item').filter({ hasText: TGT })
@@ -106,7 +107,7 @@ test.describe.serial('sync write path', () => {
 
       // Sync from... on the target says the same, and forgets it once closed.
       const fromMenu = async () => {
-        await deploymentNode(page, 'tgt').locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+        await openMenu(page, deploymentNode(page, 'tgt'))
         await page.locator('.ant-dropdown-menu-item:visible', { hasText: 'Sync from...' }).click()
         return page.getByRole('dialog')
       }

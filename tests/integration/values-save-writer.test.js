@@ -355,6 +355,31 @@ describe('Commit with content a write moved aside and did not put back', () => {
   })
 })
 
+describe('Commit with a parked deployment that sync.yaml still names', () => {
+  // A delete stopped after the folder was moved aside, before sync.yaml was written.
+  const parked = 'deployments/t/_gone.0123abcd.parked'
+  const said = `${parked} is deployments/t/gone as it was, moved aside by a write that did not finish: rename it back to deployments/t/gone to keep it, or remove it, then commit`
+  const refusal = async () => {
+    await fs.mkdir(path.join(root, parked), { recursive: true })
+    await fs.writeFile(path.join(root, parked, 'values.yaml'), 'kept\n')
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'with a folder parked' })
+    expect(status).toBe(409)
+    return data.findings.map(f => f.description)
+  }
+  it('a sync target: removing it is not enough, and the message says to unlink it too', async () => {
+    await fs.writeFile(path.join(root, 'sync.yaml'), `syncs:\n  - source: ${SRC}\n    targets: [deployments/t/gone]\n`)
+    expect(await refusal()).toEqual([`${said} — sync.yaml still lists deployments/t/gone as a sync target of ${SRC}: removed, unlink it too (Unlink sync), or Commit refuses that next`])
+  })
+  it('a sync source: the message names the targets to unlink', async () => {
+    await fs.writeFile(path.join(root, 'sync.yaml'), `syncs:\n  - source: deployments/t/gone\n    targets: [${SRC}, deployments/t/other]\n`)
+    expect(await refusal()).toEqual([`${said} — sync.yaml still lists deployments/t/gone as the sync source of ${SRC}, deployments/t/other: removed, unlink them too (Unlink sync), or Commit refuses that next`])
+  })
+  it('sync.yaml that cannot be read: the message is the plain one', async () => {
+    await fs.writeFile(path.join(root, 'sync.yaml'), 'syncs: [\n')
+    expect(await refusal()).toEqual([said])
+  })
+})
+
 describe('a Commit with nothing but a temp file a write left', () => {
   it('is "no changes to commit", not a failed commit', async () => {
     await fs.writeFile(path.join(root, SRC, '_values.yaml.0123abcd.tmp'), 'half\n')

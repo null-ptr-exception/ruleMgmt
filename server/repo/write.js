@@ -436,19 +436,31 @@ async function moveAside(root, step) {
 }
 
 // A folder moved aside, removed: what is in it is the writer's to remove,
-// so a read-only folder in it is made writable first (never through a link).
+// so the folders in it are made writable first (never through a link) when
+// a removal is refused. A removal that failed may still be taking entries
+// away: one gone meanwhile is nothing to open, and the removal is tried
+// again, a few times, before it is given up (and the folder left parked).
 async function removeAside(abs) {
-  try {
-    await fs.rm(abs, { recursive: true, force: true })
-  } catch (err) {
-    if (err.code !== 'EACCES' && err.code !== 'EPERM') throw err
-    const open = async dir => {
+  const open = async dir => {
+    try {
       await fs.chmod(dir, 0o700)
       for (const e of await fs.readdir(dir, { withFileTypes: true })) if (e.isDirectory()) await open(path.join(dir, e.name))
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err
     }
-    await open(abs)
-    await fs.rm(abs, { recursive: true, force: true })
   }
+  let refused
+  for (let tries = 0; tries < 4; tries++) {
+    try {
+      await fs.rm(abs, { recursive: true, force: true })
+      return
+    } catch (err) {
+      if (err.code !== 'EACCES' && err.code !== 'EPERM' && err.code !== 'ENOTEMPTY') throw err
+      refused = err
+      await open(abs)
+    }
+  }
+  throw refused
 }
 
 // Remove a step's temp file, if it has one; false when it cannot be.

@@ -980,7 +980,9 @@ copied to it.
   moved aside — is kept beside it as `_<name>.<hex>.parked`: it is never
   removed by itself, the server's log names it when it starts, the Git
   panel shows it, and Commit refuses while it is there, saying to rename
-  it back (to keep it) or remove it.
+  it back (to keep it) or remove it. When `sync.yaml` still names that
+  deployment (the server was stopped before it was written), the message
+  says so: removed, it has to be unlinked too.
 - A `sync.yaml` that cannot be read (no permission, a folder in its place)
   or is no registry (not YAML, not a map, `syncs:` not a list) is named, with 409 and `unreadable: true`, by everything that
   needs to know who syncs from whom: the sync list, sync and unlink, a

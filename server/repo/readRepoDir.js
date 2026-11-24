@@ -58,7 +58,22 @@ async function leadsTo(root, rel, to) {
   return why === 'git-dir' ? 'git' : why ? 'outside' : 'inside'
 }
 
-export async function readRepoDir(root, rel, { overlay, realRoot } = {}) {
+// Where an open folder is cannot be told: it was renamed at that instant.
+const AGAIN = Symbol('read again')
+const TRIES = 5
+// Whether this system tells where an open descriptor is at all (Linux's /proc).
+let tellsDescriptors
+const descriptorsTold = () => (tellsDescriptors ??= fs.access('/proc/self/fd').then(() => true, () => false))
+
+export async function readRepoDir(root, rel, opts = {}) {
+  for (let tries = 0; tries < TRIES; tries++) {
+    const listed = await readOnce(root, rel, opts)
+    if (listed !== AGAIN) return listed
+  }
+  return unreadable(rel === '' ? '' : repoRel(rel), 'it changed while it was read', 'other')
+}
+
+async function readOnce(root, rel, { overlay, realRoot } = {}) {
   // '' is the repo's own folder.
   const key = rel === '' ? '' : repoRel(rel)
   const abs = key ? inside(root, key) : root
@@ -90,6 +105,11 @@ export async function readRepoDir(root, rel, { overlay, realRoot } = {}) {
     dh = await fs.open(abs, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0))
     const opened = await openedPlace(dh.fd, realBase)
     if (opened !== null && opened !== 'inside') return unreadable(key, LINK_WORDS[opened === 'git-dir' ? 'git-dir' : 'outside'], 'outside-link')
+    // Not told where it is, on a system that tells: the folder was moved
+    // at that instant. It is read again from the start, never listed by
+    // its path — a link swapped in there would be listed through. (Only a
+    // system with no such look-up lists by the path, as before.)
+    if (opened === null && await descriptorsTold()) return AGAIN
     list = await fs.readdir(opened === null ? abs : `/proc/self/fd/${dh.fd}`, { withFileTypes: true })
   } catch (err) {
     return err.code === 'ENOENT' ? absent(key) : unreadable(key, reason(err), KIND[err.code] ?? 'other')

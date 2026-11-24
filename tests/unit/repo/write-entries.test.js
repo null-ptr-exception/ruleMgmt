@@ -120,6 +120,23 @@ describe('a folder removed whole', () => {
     expect(await tree()).toEqual({ b: 'dir', 'b/keep.yaml': 'changed\n', chart: 'dir' })
   })
 
+  it.skipIf(IS_ROOT)('goes whole when it holds a folder nobody may look into, with files in it: nothing is left parked', async () => {
+    for (const mode of [0o000, 0o555]) {
+      for (let round = 0; round < 5; round++) {
+        await fs.mkdir(path.join(root, 'c/mnt/deep'), { recursive: true })
+        await fs.writeFile(path.join(root, 'c/mnt/data'), 'x\n')
+        await fs.writeFile(path.join(root, 'c/mnt/deep/more'), 'x\n')
+        await fs.chmod(path.join(root, 'c/mnt/deep'), mode)
+        await fs.chmod(path.join(root, 'c/mnt'), mode)
+        const r = await writeFiles(root, [{ rel: 'c', removeWhole: true }])
+        expect(r.ok).toBe(true)
+        expect(await asides(), `mode ${mode.toString(8)}, round ${round}`).toEqual([])
+        expect(await parkedItems(root)).toEqual([])
+        await fs.mkdir(path.join(root, 'c'))
+      }
+    }
+  })
+
   it('is renamed back when a later file cannot be written', async () => {
     if (IS_ROOT) return
     const was = await tree()

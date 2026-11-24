@@ -60,7 +60,7 @@ describe('a delete killed after its folder is moved aside', () => {
     expect(git('status', '--porcelain')).toContain(`${parked[0].rel}/`)
     const commit = await api('POST', '/api/v2/git/commit', { message: 'after the kill' })
     expect(commit.status).toBe(409)
-    expect(commit.data.findings[0].description).toBe(`${parked[0].rel} is deployments/t/b as it was, moved aside by a write that did not finish: rename it back to deployments/t/b to keep it, or remove it, then commit`)
+    expect(commit.data.findings[0].description).toBe(`${parked[0].rel} is deployments/t/b as it was, moved aside by a write that did not finish: rename it back to deployments/t/b to keep it, or remove it, then commit — sync.yaml still lists deployments/t/b as a sync target of deployments/t/a: removed, unlink it too (Unlink sync), or Commit refuses that next`)
     // Put back as it says: the deployment is there again, with the edit.
     await fs.rename(path.join(root, parked[0].rel), path.join(root, 'deployments/t/b'))
     expect(await parkedItems(root)).toEqual([])

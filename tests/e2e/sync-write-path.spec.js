@@ -81,6 +81,26 @@ test.describe.serial('sync write path', () => {
     }
   })
 
+  // The answer for a target that is a link names the target itself: the
+  // dialog says the path once, not "<target>: <target>: …".
+  test('Sync to... names a refused target once', async ({ page }) => {
+    const LINK = `${ROOT}/lnk`
+    await fs.rm(onDisk(LINK), { force: true })
+    await fs.symlink('tgt', onDisk(LINK))
+    try {
+      await openTree(page)
+      await openMenu(page, deploymentNode(page, 'src'))
+      await page.locator('.ant-dropdown-menu-item:visible', { hasText: 'Sync to...' }).click()
+      const modal = page.getByRole('dialog')
+      await modal.getByPlaceholder('Add new path (e.g. cpu/canary)').fill(LINK)
+      await modal.getByRole('button', { name: 'Confirm sync' }).click()
+      await expect(modal.getByText(`${LINK}: it is a link to ${TGT} — a folder that is a link is no deployment: ask for ${TGT}`, { exact: true })).toBeVisible({ timeout: 5000 })
+      await expect(modal.getByText(`${LINK}: ${LINK}:`)).toHaveCount(0)
+    } finally {
+      await fs.rm(onDisk(LINK), { force: true })
+    }
+  })
+
   test('Sync to... says why a source with broken values is refused, and does not sync', async ({ page, request }) => {
     const file = onDisk(`${SRC}/values.yaml`)
     const good = await fs.readFile(file, 'utf8')

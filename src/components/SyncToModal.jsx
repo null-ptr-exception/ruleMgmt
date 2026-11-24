@@ -5,6 +5,7 @@ import SyncProblems from './SyncProblems'
 import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
 import { templateChange } from '../utils/templateChange'
 import { stackNote } from '../utils/stackNote'
+import { syncResultLine } from '../utils/syncNotice'
 
 const STATUS_COLOR = { 'green-locked': 'green', new: 'green', red: 'red', orange: 'orange', disabled: 'default' }
 
@@ -218,7 +219,7 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
         <Alert
           style={{ marginTop: 12 }}
           type={results.every(r => r.ok) ? 'success' : 'warning'}
-          message={results.map(r => `${r.target}: ${r.ok ? 'OK' : r.error}`).join('; ')}
+          message={results.map(syncResultLine).join('; ')}
           // Every target is refused for the same source, so its problems once.
           description={results.some(r => r.problems?.length)
             ? <SyncProblems problems={results.find(r => r.problems?.length).problems} />

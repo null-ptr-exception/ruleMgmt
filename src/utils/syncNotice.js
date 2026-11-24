@@ -8,3 +8,12 @@ export function syncFailedNotice(syncFailed, done = 'Saved') {
   const one = syncFailed.length === 1
   return `${done}, but ${one ? 'this sync target' : 'these sync targets'} could not be updated and may not match the source: ${list}`
 }
+
+// One target's outcome in the Sync dialog: "<target>: OK", or the server's
+// reason. A reason that names the target itself at its start (a target
+// that is a link, or on a _common reached through one) is said as it is:
+// the path once.
+export function syncResultLine({ target, ok, error }) {
+  if (ok) return `${target}: OK`
+  return typeof error === 'string' && error.startsWith(`${target}: `) ? error : `${target}: ${error}`
+}

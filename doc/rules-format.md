@@ -809,7 +809,7 @@ cells:                                           # one entry = one filled cell
 |---|---|
 | `labels` | Label name → its values, in order. Values are kept even when no cell uses them, so a row that is empty on purpose stays in the table |
 | `defaults` | `groupWait`, `groupInterval`, `repeatInterval`: durations such as `30s`, `5m`, `1h30m` — largest unit first, each unit once, as Alertmanager reads them (`30m1h` is refused). `groupInterval` and `repeatInterval` cannot be `0`. Quote a bare number (`'0'`): YAML reads it as a number, not text |
-| `configs` | Name → `{ type: email, to }` or `{ type: webhook, url }` / `{ type: webhook, urlSecret: { name, key } }`. Names are lower-case letters, digits and `-`; a name starting with `_` is reserved |
+| `configs` | Name → `{ type: email, to }` or `{ type: webhook, url }` / `{ type: webhook, urlSecret: { name, key } }`. Names are lower-case letters, digits and `-`; a name starting with `_` is reserved. An e-mail or webhook config may say more — see [E-mail settings](#e-mail-settings) and [Webhook settings](#webhook-settings) |
 | `cells[].match` | Every label of `labels`, each with one of its values |
 | `cells[].configs` | Who is notified, by name from `configs` |
 | `cells[].groupWait` … | Overrides `defaults` for this cell |
@@ -828,6 +828,7 @@ What is refused when it is saved, and reported when it is read back:
 | A `urlSecret` whose `name` is not a Kubernetes name (lower-case letters, digits, `-` and `.`, at most 253), or whose `key` has anything but letters, digits, `-`, `_` and `.`, is `.`, or starts with `..` | The operator cannot read the Secret, and drops the whole AlertmanagerConfig |
 | An e-mail `to` with no address in it (`@`, `db-team`), or with a line break. A `to` written as an Alertmanager template (`{{ .CommonLabels.owner }}`) needs no `@` | Nothing can tell whether an address exists, so only what cannot be one is refused; a line break would add mail headers (`Bcc:`) |
 | A webhook `url` with a user name or password, a credential-like query parameter (`token=`, `key=` …) or a token-like path segment | Credentials belong in a Secret: use `urlSecret`. An in-cluster address such as `http://alert-relay.monitoring.svc:8080` is fine |
+| An e-mail or webhook setting written wrong — see [E-mail settings](#e-mail-settings) and [Webhook settings](#webhook-settings) | |
 | Any other key — under `urlSecret` too, which takes only `name` and `key` | Probably a typo; it would be left out of the AlertmanagerConfig |
 
 A `routing.yaml` saved before these three checks, with such a value, is
@@ -838,6 +839,155 @@ required. A value of the wrong type — a list where a name goes, a number where
 text goes — is refused where it is. Only a file of the right shape is checked
 for the rest of the table above (cells against `labels` and `configs`,
 credentials in a `url`), so fixing the first problems can show new ones.
+
+### E-mail settings
+
+Only `to` is required. Every other field is optional, and one not written is
+not written into the AlertmanagerConfig either: Alertmanager then uses the
+platform's own settings (its `global` SMTP settings). AlertForge does not know
+how a site sends mail, so it sets no defaults of its own.
+
+```yaml
+configs:
+  db-email:   { type: email, to: db@example.com }     # the platform's server and sender
+  web-email:
+    type: email
+    to: web@example.com
+    from: alertforge@example.com
+    smarthost: smtp.example.com:587
+    authUsername: alertforge
+    authPassword: { name: smtp-auth, key: password }  # a Secret in this namespace
+    requireTLS: true
+    tlsConfig:
+      ca: { secret: { name: smtp-ca, key: ca.crt } }
+    sendResolved: true
+    headers:
+      Subject: "[{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}"
+    text: |
+      {{ range .Alerts }}{{ .Annotations.summary }}
+      {{ end }}
+    html: '{{ template "email.default.html" . }}'
+```
+
+| Field | AlertmanagerConfig (`emailConfigs[]`) | Not written |
+|---|---|---|
+| `to` | `to` | **required** |
+| `from`, `smarthost`, `authUsername` | the same name | the platform's setting |
+| `authPassword: { name, key }` | `authPassword`, a Secret reference | the platform's setting |
+| `requireTLS` | `requireTLS` | the platform's setting |
+| `tlsConfig.insecureSkipVerify`, `tlsConfig.ca: { secret: { name, key } }` | `tlsConfig` | the platform's TLS settings. Written, `tlsConfig` **replaces** them for this config (Alertmanager 0.28 and later), it is not merged with them |
+| `sendResolved` | `sendResolved` | no mail when an alert resolves |
+| `headers` (a map) | `headers: [{ key, value }]` | no extra headers |
+| `text` | `text` | no plain-text part |
+| `html` | `html`; `html: ""` sends the text alone | Alertmanager's default HTML |
+
+- The names are the AlertmanagerConfig's (camelCase), not `alertmanager.yml`'s
+  snake_case.
+- **The password is only ever a Secret's name and key**: the AlertmanagerConfig
+  has no field for a password itself, and one in `routing.yaml` would be in git.
+  As with `urlSecret`, AlertForge cannot see the cluster: when the Secret or its
+  key is missing, the operator drops the whole AlertmanagerConfig.
+- `from`, `to`, `headers`, `text` and `html` may be Alertmanager templates
+  (`{{ .CommonLabels.alertname }}`); they reach the cluster as written. A YAML
+  value that starts with `{{` must be quoted.
+- **A `smarthost` of the config's own needs its own `authUsername` and
+  `authPassword`.** Alertmanager fills a missing user name and password from
+  its global settings whatever the server is, so without them the platform's
+  SMTP login would be sent to this server — with `insecureSkipVerify`, to
+  anyone answering. A relay that needs no login cannot be written as a
+  config's own `smarthost`; leave `smarthost` out to use the platform's.
+- With only `to`, the platform's Alertmanager must have `smtp_smarthost` and
+  `smtp_from` set (kube-prometheus-stack sets neither by default). Without them
+  Alertmanager cannot build its configuration (`no global SMTP smarthost set`),
+  and no notification of any kind goes out.
+- Not supported yet: `hello`, `authIdentity`, `authSecret`, `forceImplicitTLS`
+  (port 465 uses implicit TLS anyway), `threading`, and TLS settings other than
+  the two above.
+- A `routing.yaml` with these fields is refused by an AlertForge from before
+  them, as an unknown key.
+
+| Refused | Why |
+|---|---|
+| `from`, `smarthost`, `authUsername` or `text` that is not text, or is empty; `html` that is not text; `requireTLS` or `sendResolved` that is not `true` / `false` | The AlertmanagerConfig needs them non-empty, of that type |
+| `to`, `from`, `smarthost`, `authUsername` with spaces before or after it | The Routing page trims them: opening the config there and saving would change the value without a word |
+| A `from` with no address in it, or with a line break — the same check as `to` (a template needs no `@`) | A line break would add mail headers |
+| A header named `Authorization` or `Proxy-Authorization` (any case), or a header other than `Subject` with a word that looks like a token (20 characters or more, letters and digits, no `.`; a hyphenated word is judged part by part) | A credential does not belong in `routing.yaml`, which is in git, and a mail header cannot be read from a Secret. The subject is not judged: long names with digits are common there |
+| A `smarthost` that is not `host:port` — no port (`smtp.example.com`), an empty port (`smtp.example.com:`), more than one `:` outside `[ ]` (`smtp://x:25`, `::1:25`) | Alertmanager refuses it, and with it its whole configuration. As in Alertmanager, the port is not read as a number |
+| `authPassword` written as text, or with keys besides `name` and `key` | Only a Secret reference; another key would be dropped without a word |
+| `authPassword` without `authUsername` | They are a pair |
+| `smarthost` without both `authUsername` and `authPassword` | The platform's SMTP user name and password would be sent to this server |
+| A `tlsConfig` that is not a map, is empty, or has keys besides `insecureSkipVerify` and `ca`; `insecureSkipVerify` not `true` / `false`; a `ca` other than `{ secret: { name, key } }` | Only these two for now; an empty one would still replace the platform's |
+| `headers` that is not a map; a header name that is empty or has a space, `:` or a character that is not printable; a value that is not text; a `Subject` with a line break | Alertmanager writes the name into the mail as it is |
+| Two header names that differ only in case (`Subject`, `subject`) | The operator and Alertmanager count them as one, and refuse the whole resource |
+| A `{{` with no `}}` after it, in `to`, `from`, a header value, `text` or `html` (a `}}` alone is plain text) | Alertmanager cannot read the template, and every notification of the config fails |
+
+Of a template, only that is checked. Anything else wrong in one — a function
+or template name Alertmanager does not have (`{{ nosuch . }}`), a field that
+does not exist, a `{{` inside an action — is saved, and fails only when
+Alertmanager sends that notification.
+
+### Webhook settings
+
+`url` or `urlSecret` is required, one of them, as before. Every other field is
+optional; one not written is not written into the AlertmanagerConfig either,
+and Alertmanager's default applies.
+
+```yaml
+configs:
+  relay: { type: webhook, url: http://alert-relay.monitoring.svc:8080 }
+  ops-webhook:
+    type: webhook
+    url: https://hooks.example.com/alert
+    sendResolved: false
+    maxAlerts: 20
+    timeout: 10s
+    authorization:                          # or basicAuth, not both
+      type: Bearer
+      credentials: { name: ops, key: token }
+    tlsConfig:
+      insecureSkipVerify: false
+      ca: { secret: { name: ops-ca, key: ca.crt } }
+```
+
+| Field | AlertmanagerConfig (`webhookConfigs[]`) | Not written |
+|---|---|---|
+| `url` or `urlSecret` | the same name | **one of them is required** |
+| `sendResolved` | `sendResolved` | resolved alerts are sent too |
+| `maxAlerts` | `maxAlerts` | `0`: every alert in one request |
+| `timeout` | `timeout` | no timeout |
+| `authorization: { type, credentials: { name, key } }` | `httpConfig.authorization` | no authentication. `type` left out is `Bearer` |
+| `basicAuth: { username: { name, key }, password: { name, key } }` | `httpConfig.basicAuth` | no authentication |
+| `tlsConfig.insecureSkipVerify`, `tlsConfig.ca: { secret: { name, key } }` | `httpConfig.tlsConfig` | the certificate is checked against the system's CAs |
+
+- Authentication and TLS sit beside the address in `routing.yaml`; the
+  generator moves them under `httpConfig`, where the resource has them.
+- **A token, user name or password is only ever a Secret's name and key**: the
+  AlertmanagerConfig has no field for the value itself, and a `url` with one in
+  it is refused already (use `urlSecret`). When a Secret or its key is missing,
+  the operator drops the whole AlertmanagerConfig; when its value is empty, the
+  request goes out without authentication.
+- **`timeout` needs Alertmanager 0.28 and prometheus-operator 0.82 or later**
+  (kube-prometheus-stack 75 or later). With an older one the field is dropped
+  without a word. Check the platform's versions before relying on it.
+- Not supported yet: `bearerTokenSecret` (use `authorization`), `oauth2`,
+  proxies, `followRedirects`, `enableHttp2`, client certificates, TLS settings
+  other than the two above, and `payload`.
+- The generated resource is prometheus-operator's AlertmanagerConfig; a site
+  that converts it to VictoriaMetrics' `VMAlertmanagerConfig` does so on its
+  own side.
+- A `routing.yaml` with these fields is refused by an AlertForge from before
+  them, as an unknown key.
+
+| Refused | Why |
+|---|---|
+| `sendResolved` that is not `true` / `false` | The resource's type |
+| `maxAlerts` that is not a whole number from 0 to 2147483647 (`-1`, `1.5`, `"20"`) | The resource's type, a 32-bit whole number |
+| `timeout` that is not a duration as the resource writes it — largest unit first, each unit once (`1m30s`; not `5s1m`, `1s1s`, `""`), up to about 292 years. Quote a bare number | The API server refuses the resource (`5s1m`); the operator cannot read `293y` and builds no Alertmanager configuration at all; `""` would be ignored |
+| `authorization` and `basicAuth` together | The operator refuses the whole AlertmanagerConfig |
+| `authorization.type` that is `Basic`, in any case or with spaces around it | The operator refuses it: use `basicAuth` |
+| `authorization` without `credentials`, or `credentials` other than `{ name, key }` | Only a Secret reference; another key would be dropped without a word |
+| `basicAuth` without both `username` and `password`, or either of them other than `{ name, key }` | They are a pair, and both Secret references |
+| A `tlsConfig` that is not a map, is empty, or has keys besides `insecureSkipVerify` and `ca`; `insecureSkipVerify` not `true` / `false`; a `ca` other than `{ secret: { name, key } }` | Only these two for now |
 
 `schema/routing.schema.json` describes the shape for editors. In VS Code with
 the YAML extension, a first line naming it gives hints and marks wrong keys

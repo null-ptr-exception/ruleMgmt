@@ -370,6 +370,13 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    Secret in the deployment's namespace and give its name and key instead
    (AlertForge cannot see the cluster, so check the Secret exists). These
    configs belong to this deployment; another deployment has its own.
+   An email config's **More settings** sets its sender, SMTP server, user
+   and password (from a Secret), TLS, headers such as the subject, and the
+   text and HTML body. Each one left empty is the platform's own setting
+   ([E-mail settings](rules-format.md#e-mail-settings)). A webhook's
+   **More settings** sets its authentication (a Bearer token, or a user and
+   password, each from a Secret), TLS, timeout and how many alerts go in one
+   request ([Webhook settings](rules-format.md#webhook-settings)).
 3. **Routes** — pick one or more configs in each cell. An empty cell says
    *drop*: its alerts notify no one, and so does every alert no cell
    matches (*All other alerts: drop*). The brush on a row or column header

@@ -1,0 +1,6 @@
+# The route test loads the whole config, so amtool also reads every e-mail
+# field (a Secret as a stand-in) — see toAlertmanagerConfig.
+- labels: { severity: critical }
+  receivers: [db-email, other-team]
+- labels: { severity: warning }
+  receivers: [web-email]

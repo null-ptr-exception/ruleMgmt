@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import yaml from 'js-yaml'
 import { removeChart } from './charts.js'
 
 // Routing page (#93): routing.yaml (#92) edited as a table — labels, the
@@ -165,8 +166,8 @@ test('a webhook URL can live in a Secret, with a reminder that it must exist', a
   await addConfig(page, 'pager', async dialog => {
     await dialog.getByText('URL in a Secret').click()
     await expect(dialog.getByText(/Make sure the Secret exists in this deployment's namespace/)).toBeVisible()
-    await dialog.getByLabel('Secret name').fill('pager')
-    await dialog.getByLabel('Secret key').fill('url')
+    await dialog.getByLabel('URL Secret name').fill('pager')
+    await dialog.getByLabel('URL Secret key').fill('url')
     await dialog.getByRole('button', { name: 'Add' }).click()
   })
   await expect(page.getByTestId('notification-configs')).toContainText('Secret pager / url')
@@ -182,8 +183,8 @@ test('a config Alertmanager would refuse cannot be added, and says why', async (
     await expect(dialog.getByTestId('config-problems')).toContainText('url must be an http:// or https:// address')
     await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
     await dialog.getByText('URL in a Secret').click()
-    await dialog.getByLabel('Secret name').fill('My Secret')
-    await dialog.getByLabel('Secret key').fill('url')
+    await dialog.getByLabel('URL Secret name').fill('My Secret')
+    await dialog.getByLabel('URL Secret key').fill('url')
     await expect(dialog.getByTestId('config-problems')).toContainText('name must be a Kubernetes name')
     await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
     await dialog.getByLabel('Config type').click()
@@ -305,14 +306,22 @@ const failing = [
   ['defaults and cells of the wrong shape', 'labels:\n  severity: [critical]\ndefaults: 5\nconfigs:\n  mail: {type: email, to: a@example.com}\ncells:\n  old: {match: {severity: critical}, configs: [mail]}\n'],
   ['a timing value that is not a duration', 'labels:\n  severity: [critical]\ndefaults: {groupWait: {a: 1}}\nconfigs: {}\ncells: []\n'],
   ['a config type written as a list', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: [email], to: a@example.com}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n'],
+  // #159: a new e-mail field written wrong by hand.
+  ['an SMTP server with no port', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, smarthost: smtp.example.com, authUsername: u, authPassword: {name: s, key: p}}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'smarthost must be host:port'],
+  ['a mail header carrying a credential', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, headers: {Authorization: Bearer abcdef1234567890abcdef12}}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'a credential does not belong in routing.yaml'],
+  ['a sender with a space before it', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, from: " af@example.com"}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'from must have no spaces around it'],
+  ['an SMTP server of its own without its own login', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, smarthost: other.example.com:587}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'the platform\'s SMTP user name and password would be sent to this server'],
+  // #160: a webhook with two kinds of authentication, by hand.
+  ['a webhook with both authorization and basicAuth', 'labels:\n  severity: [critical]\nconfigs:\n  hook:\n    type: webhook\n    url: https://hooks.example.com/a\n    authorization: {credentials: {name: s, key: t}}\n    basicAuth: {username: {name: s, key: u}, password: {name: s, key: p}}\ncells:\n  - {match: {severity: critical}, configs: [hook]}\n', 'either authorization or basicAuth, not both'],
   ['a cell that names a label the table does not have', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com}\ncells:\n  - {match: {severity: critical, extra: z}, configs: [mail]}\n'],
 ]
-for (const [what, text] of failing) {
+for (const [what, text, says] of failing) {
   test(`a routing.yaml with ${what} is listed, not edited, and stays as written`, async ({ page }) => {
     const file = path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml')
     await fs.writeFile(file, text)
     await openRouting(page, FOLDER)
     await expect(page.getByTestId('routing-problems')).toContainText('fix it by hand', { timeout: 8000 })
+    if (says) await expect(page.getByTestId('routing-problems')).toContainText(says)
     await expect(page.getByTestId('routes-matrix')).toHaveCount(0)
     await expect(page.getByTestId('notification-configs')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0)
@@ -564,4 +573,189 @@ test('three labels show as a list, and can be switched to the grid', async ({ pa
   await expect(page.getByTestId('cell-prod-critical-web')).toContainText('ops')
   await expect(page.getByTestId('cell-prod-warning-db')).toContainText('drop')
   await expect(page.getByTestId('cell-prod-warning-web')).toContainText('drop')
+})
+
+// #159: an e-mail config's settings past `to`, in the dialog.
+const ONE_CELL = { labels: { severity: ['critical'] }, configs: {}, cells: [] }
+
+async function previewedConfig(page) {
+  await page.getByRole('button', { name: 'Preview' }).click()
+  const modal = page.locator('.ant-modal').filter({ hasText: 'AlertmanagerConfig' })
+  await expect(modal).toBeVisible({ timeout: 15000 })
+  const docs = yaml.loadAll(await modal.locator('pre').innerText())
+  await modal.locator('.ant-modal-close').click()
+  return docs.find(d => d?.kind === 'AlertmanagerConfig')
+}
+
+async function chooseOption(page, dialog, label, option) {
+  await dialog.getByLabel(label, { exact: true }).click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: new RegExp(`^${option}$`) }).click()
+}
+
+test('an e-mail config takes its sender, server, password and CA from the dialog, and keeps them when edited', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
+  await openRouting(page)
+  await addConfig(page, 'db-email', async dialog => {
+    await chooseOption(page, dialog, 'Config type', 'email')
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByText('More settings').click()
+    await expect(dialog.getByLabel('From')).toHaveAttribute('placeholder', 'platform default')
+    await dialog.getByLabel('From').fill('alertforge')
+    await expect(dialog.getByTestId('config-problems')).toContainText('from must be an e-mail address')
+    await dialog.getByLabel('From').fill('alertforge@example.com')
+    await dialog.getByLabel('SMTP server').fill('smtp.example.com')
+    await expect(dialog.getByTestId('config-problems')).toContainText('smarthost must be host:port')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('SMTP server').fill('smtp.example.com:587')
+    // A server of its own, without its own login, would get the platform's.
+    await expect(dialog.getByTestId('config-problems')).toContainText('the platform\'s SMTP user name and password would be sent to this server')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('SMTP user').fill('alertforge')
+    await dialog.getByLabel('Password Secret name').fill('smtp-auth')
+    await dialog.getByLabel('Password Secret key').fill('password')
+    await chooseOption(page, dialog, 'Require TLS', 'yes')
+    await dialog.getByLabel('CA Secret name').fill('smtp-ca')
+    await dialog.getByLabel('CA Secret key').fill('ca.crt')
+    await expect(dialog.getByText(/Make sure the Secret exists/)).toBeVisible()
+    // A custom HTML body left empty would save "text only": not allowed.
+    await chooseOption(page, dialog, 'HTML body', 'custom')
+    await expect(dialog.getByTestId('config-problems')).toContainText('the custom HTML body is empty')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await chooseOption(page, dialog, 'HTML body', 'Alertmanager default')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await pick(page, 'cell-critical', ['db-email'])
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+
+  const want = {
+    type: 'email', to: 'db@example.com', from: 'alertforge@example.com', smarthost: 'smtp.example.com:587',
+    authUsername: 'alertforge', authPassword: { name: 'smtp-auth', key: 'password' }, requireTLS: true,
+    tlsConfig: { ca: { secret: { name: 'smtp-ca', key: 'ca.crt' } } },
+  }
+  const saved = await (await request.get(routingUrl(FOLDER))).json()
+  expect(saved.errors).toEqual([])
+  expect(yaml.load(saved.text).configs['db-email']).toEqual(want)
+  const { type: _, ...fields } = want
+  expect((await previewedConfig(page)).spec.receivers.find(r => r.name === 'db-email').emailConfigs).toEqual([fields])
+
+  // Opened and saved untouched, nothing is lost.
+  await page.getByLabel('Edit db-email').click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs['db-email']).toEqual(want)
+})
+
+test('a subject and text with {{ }} reach the AlertmanagerConfig exactly as written', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
+  await openRouting(page)
+  const subject = '[{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}'
+  const text = '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}'
+  await addConfig(page, 'db-email', async dialog => {
+    await chooseOption(page, dialog, 'Config type', 'email')
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByText('More settings').click()
+    await dialog.getByRole('button', { name: 'New header' }).click()
+    await expect(dialog.getByLabel('Header 1 name')).toHaveValue('Subject')
+    // A credential in a header would be in git: refused, saying why.
+    await dialog.getByLabel('Header 1 name').fill('Authorization')
+    await dialog.getByLabel('Header 1 value').fill('Bearer abcdef1234567890abcdef12')
+    await expect(dialog.getByTestId('config-problems')).toContainText('a credential does not belong in routing.yaml')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Header 1 name').fill('Subject')
+    await dialog.getByLabel('Header 1 value').fill(subject)
+    await dialog.getByLabel('Text body').fill(text)
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await pick(page, 'cell-critical', ['db-email'])
+  const [config] = (await previewedConfig(page)).spec.receivers.find(r => r.name === 'db-email').emailConfigs
+  expect(config).toEqual({ to: 'db@example.com', headers: [{ key: 'Subject', value: subject }], text })
+})
+
+test('an e-mail config turned into a webhook carries none of its e-mail settings', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: {
+    labels: { severity: ['critical'] },
+    configs: { oncall: { type: 'email', to: 'oncall@example.com', from: 'a@example.com', smarthost: 'smtp.example.com:25', authUsername: 'u', authPassword: { name: 's', key: 'p' }, headers: { Subject: 'x' } } },
+    cells: [{ match: { severity: 'critical' }, configs: ['oncall'] }],
+  } } })
+  await openRouting(page)
+  await page.getByLabel('Edit oncall').click()
+  const dialog = page.getByRole('dialog')
+  await chooseOption(page, dialog, 'Config type', 'webhook')
+  await dialog.getByLabel('Webhook URL').fill('http://alert-relay.monitoring.svc:8080')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs.oncall)
+    .toEqual({ type: 'webhook', url: 'http://alert-relay.monitoring.svc:8080' })
+})
+
+// #160: a webhook config's authentication, TLS, timeout and batch size.
+test('a webhook config takes a Bearer token, a CA and a timeout from the dialog, and keeps them when edited', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
+  await openRouting(page)
+  await addConfig(page, 'ops-webhook', async dialog => {
+    // With More settings open, each Secret's inputs are told apart.
+    await dialog.getByText('URL in a Secret').click()
+    await dialog.getByText('More settings').click()
+    await dialog.getByText('Bearer token').click()
+    await dialog.getByLabel('URL Secret name').fill('ops')
+    await dialog.getByLabel('URL Secret key').fill('url')
+    await dialog.getByLabel('Token Secret name').fill('ops')
+    await dialog.getByLabel('Token Secret key').fill('to/ken')
+    await dialog.getByLabel('CA Secret name').fill('ops-ca')
+    await dialog.getByLabel('CA Secret key').fill('ca/crt')
+    // A problem says which Secret it is in.
+    const problems = dialog.getByTestId('config-problems')
+    await expect(problems).toContainText('token Secret: key must be letters')
+    await expect(problems).toContainText('CA Secret: key must be letters')
+    await dialog.getByLabel('Token Secret key').fill('token')
+    await dialog.getByLabel('CA Secret key').fill('ca.crt')
+    await dialog.getByLabel('Timeout').fill('5s1m')
+    await expect(dialog.getByTestId('config-problems')).toContainText('timeout must be a duration')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Timeout').fill('10s')
+    await dialog.getByLabel('Max alerts').fill('20')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await pick(page, 'cell-critical', ['ops-webhook'])
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+
+  const want = {
+    type: 'webhook', urlSecret: { name: 'ops', key: 'url' }, maxAlerts: 20, timeout: '10s',
+    authorization: { credentials: { name: 'ops', key: 'token' } },
+    tlsConfig: { ca: { secret: { name: 'ops-ca', key: 'ca.crt' } } },
+  }
+  const saved = await (await request.get(routingUrl(FOLDER))).json()
+  expect(saved.errors).toEqual([])
+  expect(yaml.load(saved.text).configs['ops-webhook']).toEqual(want)
+  expect((await previewedConfig(page)).spec.receivers.find(r => r.name === 'ops-webhook').webhookConfigs).toEqual([{
+    urlSecret: { name: 'ops', key: 'url' }, maxAlerts: 20, timeout: '10s',
+    httpConfig: { authorization: { credentials: { name: 'ops', key: 'token' } }, tlsConfig: { ca: { secret: { name: 'ops-ca', key: 'ca.crt' } } } },
+  }])
+
+  await page.getByLabel('Edit ops-webhook').click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs['ops-webhook']).toEqual(want)
+})
+
+test('a webhook config turned into an e-mail carries none of its webhook settings', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: {
+    labels: { severity: ['critical'] },
+    configs: { hook: { type: 'webhook', url: 'https://hooks.example.com/a', maxAlerts: 5, timeout: '10s', authorization: { credentials: { name: 's', key: 't' } }, tlsConfig: { insecureSkipVerify: true } } },
+    cells: [{ match: { severity: 'critical' }, configs: ['hook'] }],
+  } } })
+  await openRouting(page)
+  await page.getByLabel('Edit hook').click()
+  const dialog = page.getByRole('dialog')
+  await chooseOption(page, dialog, 'Config type', 'email')
+  await dialog.getByLabel('Email address').fill('ops@example.com')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs.hook).toEqual({ type: 'email', to: 'ops@example.com' })
 })

@@ -338,18 +338,59 @@ export function readAmtoolTests(name) {
  * not say `continue`.
  *
  * Matcher objects become strings and the field names snake case. Receivers
- * keep their e-mail and webhook configs, so amtool checks `to` and `url`
- * (#171); a webhook's urlSecret becomes a fixed address, since the Secret is
- * not here, and e-mail gets a placeholder server, which the cluster's
- * Alertmanager has. The operator's prefixing of receiver names is left out:
- * it renames, it does not reroute.
+ * keep their e-mail and webhook configs with every field, so amtool checks
+ * them (#171, #159); what the resource reads from a Secret becomes a
+ * stand-in, since the Secret is not here: a fixed address for urlSecret, a
+ * fixed password or token, a CA file path (amtool does not open it). E-mail gets a
+ * placeholder global server, which the cluster's Alertmanager has. The
+ * operator's prefixing of receiver names is left out: it renames, it does
+ * not reroute.
  */
 const SECRET_URL_STAND_IN = 'http://from-a-secret.example.invalid/'
+export const SECRET_STAND_IN = 'from-a-secret'
+export const SECRET_FILE_STAND_IN = '/from-a-secret/file'
+
+const tls = t => ({
+  ...(t.insecureSkipVerify !== undefined ? { insecure_skip_verify: t.insecureSkipVerify } : {}),
+  ...(t.ca ? { ca_file: SECRET_FILE_STAND_IN } : {}),
+})
+
+const email = c => ({
+  to: c.to,
+  ...(c.from !== undefined ? { from: c.from } : {}),
+  ...(c.smarthost !== undefined ? { smarthost: c.smarthost } : {}),
+  ...(c.authUsername !== undefined ? { auth_username: c.authUsername } : {}),
+  ...(c.authPassword ? { auth_password: SECRET_STAND_IN } : {}),
+  ...(c.requireTLS !== undefined ? { require_tls: c.requireTLS } : {}),
+  ...(c.tlsConfig ? { tls_config: tls(c.tlsConfig) } : {}),
+  ...(c.sendResolved !== undefined ? { send_resolved: c.sendResolved } : {}),
+  // A list of key and value in the resource, a map in Alertmanager.
+  ...(c.headers ? { headers: Object.fromEntries(c.headers.map(h => [h.key, h.value])) } : {}),
+  ...(c.text !== undefined ? { text: c.text } : {}),
+  ...(c.html !== undefined ? { html: c.html } : {}),
+})
+
+// timeout is left out: the amtool the tests run (0.27) does not know it,
+// and Alertmanager reads it from 0.28 on.
+const webhook = c => {
+  const h = c.httpConfig || {}
+  const http = {
+    ...(h.authorization ? { authorization: { ...(h.authorization.type !== undefined ? { type: h.authorization.type } : {}), credentials: SECRET_STAND_IN } } : {}),
+    ...(h.basicAuth ? { basic_auth: { username: SECRET_STAND_IN, password: SECRET_STAND_IN } } : {}),
+    ...(h.tlsConfig ? { tls_config: tls(h.tlsConfig) } : {}),
+  }
+  return {
+    url: c.url ?? SECRET_URL_STAND_IN,
+    ...(c.sendResolved !== undefined ? { send_resolved: c.sendResolved } : {}),
+    ...(c.maxAlerts !== undefined ? { max_alerts: c.maxAlerts } : {}),
+    ...(Object.keys(http).length ? { http_config: http } : {}),
+  }
+}
 
 const receiver = r => ({
   name: r.name,
-  ...(r.emailConfigs ? { email_configs: r.emailConfigs.map(c => ({ to: c.to })) } : {}),
-  ...(r.webhookConfigs ? { webhook_configs: r.webhookConfigs.map(c => ({ url: c.url ?? SECRET_URL_STAND_IN })) } : {}),
+  ...(r.emailConfigs ? { email_configs: r.emailConfigs.map(email) } : {}),
+  ...(r.webhookConfigs ? { webhook_configs: r.webhookConfigs.map(webhook) } : {}),
 })
 
 export function toAlertmanagerConfig(spec) {

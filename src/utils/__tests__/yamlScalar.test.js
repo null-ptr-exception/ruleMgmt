@@ -94,7 +94,12 @@ describe('helmLiteralText', () => {
   it.each([
     ['x: {{ .db }}', 'x: {{ `{{` }} .db {{ `}}` }}'],
     ['a}}b{{c', 'a{{ `}}` }}b{{ `{{` }}c'],
-    ['{{{', '{{ `{{` }}{'],
+    // A whole run at once: in `{}}` the `{` would join the action after it.
+    ['{{{', '{{ `{{{` }}'],
+    ['{}}', '{{ `{}}` }}'],
+    ['a{"b":{}}', 'a{"b":{{ `{}}` }}'],
+    // A run with no {{ or }} is no action, and stays.
+    ['{}{}', '{}{}'],
     ['plain', 'plain'],
   ])('%s', (text, out) => expect(helmLiteralText(text)).toBe(out))
 

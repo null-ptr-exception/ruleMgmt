@@ -230,4 +230,101 @@ describe('the file', () => {
   it('escapes braces in one pass', () => {
     expect(escapeBraces('{{ x }}')).toBe('{{ "{{" }} x {{ "}}" }}')
   })
+
+  // In `{}}` the lone `{` would join the action printed after it: `{{{`.
+  it('escapes a whole run of braces at once, and leaves one with no {{ or }}', () => {
+    expect(escapeBraces('{"a":{}}')).toBe('{"a":{{ "{}}" }}')
+    expect(escapeBraces('a}}}')).toBe('a{{ "}}}" }}')
+    expect(escapeBraces('{}{}')).toBe('{}{}')
+  })
+})
+
+// #159: what an e-mail config may say beyond `to`. Each field is written
+// under the same name; one left out is not written at all.
+describe('e-mail fields', () => {
+  const emailOf = extra => {
+    const routing = base()
+    routing.configs['db-email'] = { type: 'email', to: 'db@example.com', ...extra }
+    expect(checkRouting(routing)).toEqual([])
+    return routingSpec(routing).receivers[1].emailConfigs
+  }
+
+  it('writes only `to` when nothing else is said, as before', () => {
+    expect(emailOf({})).toEqual([{ to: 'db@example.com' }])
+  })
+
+  it.each([
+    ['from', 'alertforge@example.com'],
+    ['authUsername', 'alertforge'],
+    ['requireTLS', false],
+    ['sendResolved', true],
+    ['text', '{{ .CommonLabels.alertname }}'],
+    ['html', ''],
+  ])('writes %s as it is', (key, value) => {
+    expect(emailOf({ [key]: value })).toEqual([{ to: 'db@example.com', [key]: value }])
+  })
+
+  it('writes smarthost as it is, with its own login', () => {
+    const login = { authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } }
+    expect(emailOf({ smarthost: 'smtp.example.com:587', ...login })).toEqual([{ to: 'db@example.com', smarthost: 'smtp.example.com:587', ...login }])
+  })
+
+  it('writes authPassword as a reference to a Secret', () => {
+    expect(emailOf({ authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } }))
+      .toEqual([{ to: 'db@example.com', authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } }])
+  })
+
+  it('writes tlsConfig with a CA from a Secret', () => {
+    expect(emailOf({ tlsConfig: { insecureSkipVerify: true, ca: { secret: { name: 'smtp-ca', key: 'ca.crt' } } } }))
+      .toEqual([{ to: 'db@example.com', tlsConfig: { insecureSkipVerify: true, ca: { secret: { name: 'smtp-ca', key: 'ca.crt' } } } }])
+  })
+
+  it('turns the headers map into a list of key and value, in order', () => {
+    expect(emailOf({ headers: { Subject: '[{{ .CommonLabels.severity }}]', 'X-Team': 'db' } })[0].headers)
+      .toEqual([{ key: 'Subject', value: '[{{ .CommonLabels.severity }}]' }, { key: 'X-Team', value: 'db' }])
+  })
+
+  it('writes the fields in one order, whatever order routing.yaml has', () => {
+    expect(Object.keys(emailOf({ html: 'h', authPassword: { name: 's', key: 'k' }, from: 'a@b.c', sendResolved: true, smarthost: 'smtp:25', authUsername: 'u' })[0]))
+      .toEqual(['to', 'from', 'smarthost', 'authUsername', 'authPassword', 'sendResolved', 'html'])
+  })
+})
+
+// #160: what a webhook config may say beyond its address. Authentication
+// and TLS move under httpConfig, where the resource reads them.
+describe('webhook fields', () => {
+  const webhookOf = extra => {
+    const routing = base()
+    routing.configs['ops-webhook'] = { type: 'webhook', urlSecret: { name: 'ops', key: 'url' }, ...extra }
+    routing.cells[0].configs = ['ops-webhook']
+    expect(checkRouting(routing)).toEqual([])
+    return routingSpec(routing).receivers[1].webhookConfigs
+  }
+  const URL_SECRET = { urlSecret: { name: 'ops', key: 'url' } }
+
+  it('writes only the address when nothing else is said, as before', () => {
+    expect(webhookOf({})).toEqual([URL_SECRET])
+  })
+
+  it.each([['sendResolved', false], ['maxAlerts', 20], ['maxAlerts', 0], ['timeout', '10s']])('writes %s %j as it is', (key, value) => {
+    expect(webhookOf({ [key]: value })).toEqual([{ ...URL_SECRET, [key]: value }])
+  })
+
+  it('moves authorization under httpConfig, its type only when written', () => {
+    const credentials = { name: 'ops', key: 'token' }
+    expect(webhookOf({ authorization: { type: 'Bearer', credentials } })).toEqual([{ ...URL_SECRET, httpConfig: { authorization: { type: 'Bearer', credentials } } }])
+    expect(webhookOf({ authorization: { credentials } })).toEqual([{ ...URL_SECRET, httpConfig: { authorization: { credentials } } }])
+  })
+
+  it('moves basicAuth under httpConfig', () => {
+    const basicAuth = { username: { name: 'r', key: 'user' }, password: { name: 'r', key: 'password' } }
+    expect(webhookOf({ basicAuth })).toEqual([{ ...URL_SECRET, httpConfig: { basicAuth } }])
+  })
+
+  it('moves tlsConfig under httpConfig', () => {
+    const tlsConfig = { insecureSkipVerify: true, ca: { secret: { name: 'ops-ca', key: 'ca.crt' } } }
+    const [config] = webhookOf({ tlsConfig })
+    expect(config).toEqual({ ...URL_SECRET, httpConfig: { tlsConfig } })
+    expect(config.tlsConfig).toBeUndefined()
+  })
 })

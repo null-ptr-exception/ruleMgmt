@@ -1,0 +1,7 @@
+# The route test loads the whole config, so amtool also reads the webhook
+# fields (a Secret as a stand-in; timeout is left out for amtool 0.27, which
+# does not know it) — see toAlertmanagerConfig.
+- labels: { severity: critical }
+  receivers: [ops-webhook, token-relay, other-team]
+- labels: { severity: warning }
+  receivers: [relay]

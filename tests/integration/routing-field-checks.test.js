@@ -9,7 +9,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import yaml from 'js-yaml'
-import { configProblems } from '../../src/utils/routingGenerator.js'
+import { configProblems, routingSpec } from '../../src/utils/routingGenerator.js'
 import { toAlertmanagerConfig, amtoolRoutes, hasBinary } from '../blind/harness.js'
 
 const HAS_AMTOOL = hasBinary('amtool')
@@ -133,5 +133,156 @@ describe('the blind harness hands amtool the configs', () => {
     expect(c.email_configs).toEqual([{ to: 'a@b.c' }])
     expect(c.webhook_configs[0]).toEqual({ url: 'http://relay' })
     expect(c.webhook_configs[1].url).toMatch(/^http:\/\//)
+  })
+})
+
+// #159: each e-mail field, as generated, handed to amtool. Where amtool can
+// tell, what the save refuses amtool refuses too, and what it accepts loads.
+// Where the save is stricter, the test says so.
+describe('e-mail fields', () => {
+  const email = extra => ({ type: 'email', to: 'db@example.com', ...extra })
+  // A server of the config's own needs its own login (see routingSchema.test.js).
+  const LOGIN = { authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } }
+  // The receiver as generated, without the save's checks in the way.
+  const generated = config => routingSpec({ labels: { s: ['x'] }, configs: { c: config }, cells: [{ match: { s: 'x' }, configs: ['c'] }] })
+    .receivers.find(r => r.name === 'c')
+
+  const ACCEPTED = [
+    { from: 'alertforge@example.com', smarthost: 'smtp.example.com:587', authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } },
+    { smarthost: '[::1]:25', ...LOGIN }, { smarthost: ':25', ...LOGIN },
+    // Neither the operator nor Alertmanager reads the port as a number.
+    { smarthost: 'smtp.example.com:smtp', ...LOGIN },
+    { requireTLS: false, sendResolved: true },
+    { tlsConfig: { insecureSkipVerify: true, ca: { secret: { name: 'smtp-ca', key: 'ca.crt' } } } },
+    { headers: { Subject: '[{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}', 'X-Team': 'db' } },
+    { text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}', html: '' },
+    { html: '{{ template "email.default.html" . }}' },
+  ]
+  // Refused by the save and by amtool.
+  const REFUSED_BY_AMTOOL = [
+    [{ smarthost: 'smtp.example.com' }, 'smarthost must be host:port'],
+    [{ smarthost: 'smtp.example.com:' }, 'smarthost must be host:port'],
+    [{ smarthost: '::1:25' }, 'smarthost must be host:port'],
+    [{ smarthost: 'smtp://smtp.example.com:25' }, 'smarthost must be host:port'],
+    [{ smarthost: '[::1' }, 'smarthost must be host:port'],
+    [{ smarthost: 'a]b:25' }, 'smarthost must be host:port'],
+    [{ smarthost: '[a]b:25' }, 'smarthost must be host:port'],
+    [{ requireTLS: 'yes' }, 'requireTLS must be true or false'],
+    [{ headers: { Subject: 'a', subject: 'b' } }, 'are one header'],
+  ]
+
+  it.each(ACCEPTED)('accepts %j', extra => {
+    expect(problems(email(extra))).toEqual([])
+  })
+
+  it.each(REFUSED_BY_AMTOOL)('refuses %j', (extra, why) => {
+    expect(problems(email(extra)).join()).toContain(why)
+  })
+
+  it.skipIf(!HAS_AMTOOL)('amtool loads the accepted ones and refuses the refused ones', () => {
+    for (const extra of ACCEPTED) expect(amtoolAccepts(generated(email(extra))), JSON.stringify(extra)).toBe(true)
+    for (const [extra] of REFUSED_BY_AMTOOL) expect(amtoolAccepts(generated(email(extra))), JSON.stringify(extra)).toBe(false)
+  })
+
+  // Stricter than amtool: the CRD wants these non-empty, and a header name
+  // with a space or ":" would write a broken mail header when sent.
+  it.skipIf(!HAS_AMTOOL)('the save is stricter than amtool on empty text and header names', () => {
+    for (const extra of [{ from: '' }, { text: '' }, { headers: { 'X Team': 'x' } }, { headers: { '': 'x' } }]) {
+      expect(problems(email(extra)), JSON.stringify(extra)).not.toEqual([])
+      expect(amtoolAccepts(generated(email(extra))), JSON.stringify(extra)).toBe(true)
+    }
+  })
+
+  /** `amtool template render` on one template: true when it reads. */
+  function amtoolRenders(text) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-template-'))
+    try {
+      fs.writeFileSync(path.join(dir, 'none.tmpl'), '')
+      execFileSync('amtool', ['template', 'render', `--template.glob=${path.join(dir, 'none.tmpl')}`, `--template.text=${text}`], { stdio: 'ignore' })
+      return true
+    } catch {
+      return false
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  // A {{ with no }} after it; a }} alone is text to Alertmanager.
+  const UNCLOSED = ['{{ .CommonLabels.alertname', '{{ .A }} {{', '{{']
+  const READS = ['{{ .CommonLabels.alertname }}', 'a }} b', '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}', '{{ template "email.default.html" . }}']
+
+  it.each(UNCLOSED)('refuses the template %j in headers, text and html', template => {
+    expect(problems(email({ headers: { Subject: template } })).join()).toContain('with no }} after it')
+    expect(problems(email({ text: template })).join()).toContain('with no }} after it')
+    expect(problems(email({ html: template })).join()).toContain('with no }} after it')
+  })
+
+  it.each(READS)('accepts the template %j', template => {
+    expect(problems(email({ headers: { Subject: template }, text: template, html: template }))).toEqual([])
+  })
+
+  it.skipIf(!HAS_AMTOOL)('amtool template render agrees', () => {
+    for (const t of UNCLOSED) expect(amtoolRenders(t), t).toBe(false)
+    for (const t of READS) expect(amtoolRenders(t), t).toBe(true)
+  })
+})
+
+// #160: each webhook field, as generated, handed to amtool 0.27. timeout is
+// not: that amtool does not know it (Alertmanager reads it from 0.28 on), so
+// it is checked against the CRD's format only (tests/unit/routingCrd.test.js).
+describe('webhook fields', () => {
+  const webhook = extra => ({ type: 'webhook', url: 'https://hooks.example.com/alert', ...extra })
+  const generated = config => routingSpec({ labels: { s: ['x'] }, configs: { c: config }, cells: [{ match: { s: 'x' }, configs: ['c'] }] })
+    .receivers.find(r => r.name === 'c')
+  const ref = { name: 'ops', key: 'token' }
+
+  const ACCEPTED = [
+    { sendResolved: false, maxAlerts: 20 }, { maxAlerts: 0 },
+    { authorization: { type: 'Bearer', credentials: ref } }, { authorization: { credentials: ref } },
+    { basicAuth: { username: ref, password: ref } },
+    { tlsConfig: { insecureSkipVerify: true, ca: { secret: { name: 'ops-ca', key: 'ca.crt' } } } },
+    { urlSecret: ref, url: undefined, authorization: { credentials: ref } },
+  ]
+  const REFUSED_BY_AMTOOL = [
+    [{ sendResolved: 'no' }, 'sendResolved must be true or false'],
+    [{ maxAlerts: -1 }, 'maxAlerts must be a whole number'],
+    [{ maxAlerts: '20' }, 'maxAlerts must be a whole number'],
+    [{ authorization: { type: 'Basic', credentials: ref } }, 'type cannot be Basic'],
+    [{ authorization: { type: ' basic ', credentials: ref } }, 'type cannot be Basic'],
+    [{ authorization: { credentials: ref }, basicAuth: { username: ref, password: ref } }, 'either authorization or basicAuth'],
+    [{ tlsConfig: { insecureSkipVerify: 'yes' } }, 'insecureSkipVerify must be true or false'],
+  ]
+
+  it.each(ACCEPTED)('accepts %j', extra => {
+    expect(problems(webhook(extra))).toEqual([])
+  })
+
+  it.each(REFUSED_BY_AMTOOL)('refuses %j', (extra, why) => {
+    expect(problems(webhook(extra)).join()).toContain(why)
+  })
+
+  it.skipIf(!HAS_AMTOOL)('amtool loads the accepted ones and refuses the refused ones', () => {
+    for (const extra of ACCEPTED) expect(amtoolAccepts(generated(webhook(extra))), JSON.stringify(extra)).toBe(true)
+    for (const [extra] of REFUSED_BY_AMTOOL) expect(amtoolAccepts(generated(webhook(extra))), JSON.stringify(extra)).toBe(false)
+  })
+
+  // Stricter than amtool: the CRD's maxAlerts is a 32-bit whole number, and
+  // a user name without a password (or the other way) is a mistake the
+  // operator would pass on.
+  it.skipIf(!HAS_AMTOOL)('the save is stricter than amtool on maxAlerts and a lone half of basicAuth', () => {
+    for (const extra of [{ maxAlerts: 1.5 }, { maxAlerts: 2147483648 }]) {
+      expect(problems(webhook(extra)), JSON.stringify(extra)).not.toEqual([])
+      expect(amtoolAccepts(generated(webhook(extra))), JSON.stringify(extra)).toBe(true)
+    }
+    expect(problems(webhook({ basicAuth: { username: ref } }))).not.toEqual([])
+    expect(amtoolAccepts({ webhookConfigs: [{ url: 'http://relay', httpConfig: { basicAuth: { username: ref } } }] })).toBe(true)
+  })
+
+  it.skipIf(!HAS_AMTOOL)('amtool 0.27 does not know timeout, so the harness leaves it out', () => {
+    const receiver = generated(webhook({ timeout: '10s' }))
+    expect(receiver.webhookConfigs[0].timeout).toBe('10s')
+    const config = toAlertmanagerConfig({ route: { receiver: 'c' }, receivers: [receiver] })
+    expect(config.receivers.find(r => r.name === 'c').webhook_configs[0].timeout).toBeUndefined()
+    expect(amtoolAccepts(receiver)).toBe(true)
   })
 })

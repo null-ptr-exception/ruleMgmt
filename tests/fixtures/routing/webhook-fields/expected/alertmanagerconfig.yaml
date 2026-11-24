@@ -1,0 +1,50 @@
+# Expected output for #160: written by hand from the issue's field table
+# before the generator was run — not produced by the generator.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    receiver: _drop
+    continue: true
+    routes:
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+        routes:
+          - { receiver: ops-webhook, continue: true }
+          - { receiver: token-relay }
+      - matchers:
+          - { name: severity, value: warning, matchType: "=" }
+        receiver: relay
+  receivers:
+    - name: _drop
+    - name: ops-webhook
+      webhookConfigs:
+        - urlSecret: { name: ops, key: url }
+          sendResolved: false
+          maxAlerts: 20
+          timeout: 10s
+          httpConfig:
+            authorization:
+              type: Bearer
+              credentials: { name: ops, key: token }
+            tlsConfig:
+              insecureSkipVerify: false
+              ca: { secret: { name: ops-ca, key: ca.crt } }
+    - name: token-relay
+      webhookConfigs:
+        - url: https://token-relay.example.com/alert
+          httpConfig:
+            authorization:
+              credentials: { name: relay, key: token }
+    - name: relay
+      webhookConfigs:
+        - url: https://relay.example.com/alert
+          maxAlerts: 0
+          httpConfig:
+            basicAuth:
+              username: { name: relay, key: user }
+              password: { name: relay, key: password }

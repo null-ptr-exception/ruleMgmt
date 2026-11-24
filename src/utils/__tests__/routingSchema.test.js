@@ -13,6 +13,16 @@ const full = () => ({
     'db-email': { type: 'email', to: 'db@example.com' },
     'ops-webhook': { type: 'webhook', urlSecret: { name: 'ops', key: 'url' } },
     pager: { type: 'webhook', url: 'http://pager.monitoring.svc:8080' },
+    mail: {
+      type: 'email', to: 'a@example.com', from: 'b@example.com', smarthost: 'smtp:25', authUsername: 'u',
+      authPassword: { name: 's', key: 'k' }, requireTLS: true, tlsConfig: { insecureSkipVerify: true, ca: { secret: { name: 'ca', key: 'ca.crt' } } },
+      sendResolved: true, headers: { Subject: 'x' }, text: 't', html: 'h',
+    },
+    hook: {
+      type: 'webhook', url: 'https://hooks.example.com/a', sendResolved: false, maxAlerts: 5, timeout: '10s',
+      authorization: { type: 'Bearer', credentials: { name: 's', key: 'k' } }, tlsConfig: { insecureSkipVerify: true },
+    },
+    basic: { type: 'webhook', url: 'https://hooks.example.com/b', basicAuth: { username: { name: 's', key: 'u' }, password: { name: 's', key: 'p' } } },
   },
   cells: [{ match: { severity: 'critical', team: 'db' }, configs: ['db-email', 'pager'], groupWait: '10s', groupInterval: '1m', repeatInterval: '1h' }],
 })
@@ -24,12 +34,22 @@ const PATHS = [
   ['configs', 'ops-webhook', 'type'], ['configs', 'ops-webhook', 'urlSecret'],
   ['configs', 'ops-webhook', 'urlSecret', 'name'], ['configs', 'ops-webhook', 'urlSecret', 'key'],
   ['configs', 'pager', 'url'],
+  ...['from', 'smarthost', 'authUsername', 'authPassword', 'tlsConfig', 'headers', 'text', 'html'].map(k => ['configs', 'mail', k]),
+  ['configs', 'mail', 'authPassword', 'name'], ['configs', 'mail', 'tlsConfig', 'ca'], ['configs', 'mail', 'tlsConfig', 'ca', 'secret'],
+  ['configs', 'mail', 'tlsConfig', 'ca', 'secret', 'key'], ['configs', 'mail', 'headers', 'Subject'],
+  ...['timeout', 'authorization', 'tlsConfig'].map(k => ['configs', 'hook', k]),
+  ['configs', 'hook', 'authorization', 'type'], ['configs', 'hook', 'authorization', 'credentials'], ['configs', 'hook', 'authorization', 'credentials', 'name'],
+  ['configs', 'basic', 'basicAuth'], ['configs', 'basic', 'basicAuth', 'username'], ['configs', 'basic', 'basicAuth', 'password', 'key'],
   ['cells'], ['cells', 0], ['cells', 0, 'match'], ['cells', 0, 'match', 'severity'],
   ['cells', 0, 'configs'], ['cells', 0, 'configs', 0],
   ['cells', 0, 'groupWait'], ['cells', 0, 'groupInterval'], ['cells', 0, 'repeatInterval'],
 ]
 const MAPS = [[], ['labels'], ['defaults'], ['configs'], ['configs', 'db-email'], ['configs', 'ops-webhook'],
-  ['configs', 'ops-webhook', 'urlSecret'], ['configs', 'pager'], ['cells', 0], ['cells', 0, 'match']]
+  ['configs', 'ops-webhook', 'urlSecret'], ['configs', 'pager'], ['configs', 'mail'], ['configs', 'mail', 'authPassword'],
+  ['configs', 'mail', 'tlsConfig'], ['configs', 'mail', 'tlsConfig', 'ca'], ['configs', 'mail', 'tlsConfig', 'ca', 'secret'],
+  ['configs', 'hook'], ['configs', 'hook', 'authorization'], ['configs', 'hook', 'authorization', 'credentials'],
+  ['configs', 'basic', 'basicAuth'], ['configs', 'basic', 'basicAuth', 'username'],
+  ['cells', 0], ['cells', 0, 'match']]
 
 const set = (obj, path, value) => {
   const parent = path.slice(0, -1).reduce((o, k) => o[k], obj)
@@ -161,5 +181,194 @@ describe('routing.schema.json', () => {
   it('is the schema as exported — run node scripts/gen-routing-schema.mjs after changing it', () => {
     const written = JSON.parse(readFileSync(new URL('../../../schema/routing.schema.json', import.meta.url), 'utf8'))
     expect(written).toEqual(JSON.parse(JSON.stringify(z.toJSONSchema(routingSchema))))
+  })
+})
+
+// #159: each refusal of an e-mail field, with what it says. Every one of
+// them is refused on the old code too — as an unknown key — so the message
+// is what is checked.
+describe('e-mail fields', () => {
+  const said = extra => configProblems('c', { type: 'email', to: 'db@example.com', ...extra })
+  const LOGIN = { authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } }
+  const OWN_LOGIN = 'configs.c: smarthost needs authUsername and authPassword: without them the platform\'s SMTP user name and password would be sent to this server'
+
+  // Alertmanager fills a missing login from its global settings whatever
+  // the server (config.go, v0.27): a server of the config's own would get
+  // the platform's.
+  it.each([
+    { smarthost: 'other.example.com:587' },
+    { smarthost: 'other.example.com:587', authUsername: 'u' },
+    { smarthost: 'other.example.com:587', authPassword: LOGIN.authPassword },
+    { smarthost: 'other.example.com:587', tlsConfig: { insecureSkipVerify: true } },
+  ])('refuses a server of its own without its own login: %j', extra => {
+    expect(said(extra)).toContain(OWN_LOGIN)
+  })
+
+  it('accepts a server of its own with its own login, and a login for the platform\'s server', () => {
+    expect(said({ smarthost: 'other.example.com:587', ...LOGIN })).toEqual([])
+    expect(said(LOGIN)).toEqual([])
+  })
+
+  it.each([
+    [{ from: ' ' }, 'configs.c: from must be text, not empty'],
+    [{ smarthost: 5 }, 'configs.c: smarthost must be text, not empty'],
+    [{ authUsername: '' }, 'configs.c: authUsername must be text, not empty'],
+    [{ text: '' }, 'configs.c: text must be text, not empty'],
+    [{ html: 5 }, 'configs.c: html must be text'],
+    [{ requireTLS: 'yes' }, 'configs.c: requireTLS must be true or false'],
+    [{ sendResolved: 1 }, 'configs.c: sendResolved must be true or false'],
+    [{ smarthost: 'smtp.example.com' }, 'configs.c: smarthost must be host:port, e.g. smtp.example.com:587'],
+    [{ smarthost: 'smtp.example.com:' }, 'configs.c: smarthost must be host:port, e.g. smtp.example.com:587'],
+    [{ smarthost: 'smtp://smtp.example.com:25' }, 'configs.c: smarthost must be host:port, e.g. smtp.example.com:587'],
+    [{ authUsername: 'u', authPassword: 'hunter2' }, 'configs.c: authPassword must be a Secret\'s name and key, { name, key }: put the value in a Secret in this namespace, not in routing.yaml'],
+    [{ authUsername: 'u', authPassword: { name: 's', key: 'k', optional: true } }, 'configs.c.authPassword: unknown key "optional" (expected name, key)'],
+    [{ authUsername: 'u', authPassword: { name: 'S', key: 'k' } }, 'configs.c.authPassword: name must be a Kubernetes name: lower-case letters, digits, "-" and ".", at most 253'],
+    [{ authPassword: { name: 's', key: 'k' } }, 'configs.c: authPassword needs authUsername: they are a pair'],
+    [{ tlsConfig: 'on' }, 'configs.c: tlsConfig must be a map with insecureSkipVerify or ca'],
+    [{ tlsConfig: {} }, 'configs.c: tlsConfig must be a map with insecureSkipVerify or ca'],
+    [{ tlsConfig: { insecureSkipVerify: true, serverName: 'x' } }, 'configs.c.tlsConfig: unknown key "serverName" (expected insecureSkipVerify, ca)'],
+    [{ tlsConfig: { insecureSkipVerify: 'yes' } }, 'configs.c.tlsConfig: insecureSkipVerify must be true or false'],
+    [{ tlsConfig: { ca: { secret: 'smtp-ca' } } }, 'configs.c.tlsConfig.ca: secret needs a Secret\'s name and key'],
+    [{ tlsConfig: { ca: { secret: { name: 'smtp-ca', key: 'k' }, configMap: {} } } }, 'configs.c.tlsConfig.ca: unknown key "configMap" (expected secret)'],
+    [{ headers: ['Subject: x'] }, 'configs.c: headers must be a map of header name → text'],
+    [{ headers: { '': 'x' } }, 'configs.c.headers.: a header name is printable characters, with no space or ":"'],
+    [{ headers: { 'X Team': 'x' } }, 'configs.c.headers.X Team: a header name is printable characters, with no space or ":"'],
+    [{ headers: { 'X:Team': 'x' } }, 'configs.c.headers.X:Team: a header name is printable characters, with no space or ":"'],
+    [{ headers: { 'X-Team': 5 } }, 'configs.c.headers.X-Team: the value must be text'],
+    [{ headers: { Subject: 'a\nb' } }, 'configs.c.headers.Subject: the subject must be one line'],
+    [{ headers: { Subject: 'a', subject: 'b' } }, 'configs.c.headers: Subject and subject are one header: names are compared without case'],
+    [{ headers: { Subject: '{{ .CommonLabels.alertname' } }, 'configs.c.headers.Subject: the value has a {{ with no }} after it: Alertmanager cannot read the template'],
+    [{ text: '{{ .Alerts }} {{ end' }, 'configs.c: text has a {{ with no }} after it: Alertmanager cannot read the template'],
+    [{ html: '{{' }, 'configs.c: html has a {{ with no }} after it: Alertmanager cannot read the template'],
+    [{ from: '{{ .CommonLabels.team' }, 'configs.c: from has a {{ with no }} after it: Alertmanager cannot read the template'],
+    [{ hello: 'x' }, 'configs.c: unknown key "hello" (expected type, to, from, smarthost, authUsername, authPassword, requireTLS, tlsConfig, sendResolved, headers, text, html)'],
+  ])('refuses %j', (extra, message) => {
+    expect(said(extra)).toContain(message)
+  })
+
+  it.each([
+    { smarthost: '[::1]:25', ...LOGIN }, { smarthost: ':25', ...LOGIN },
+    { text: 'a }} b' }, { html: '' }, { headers: { Subject: '' } }, { headers: {} },
+    { tlsConfig: { insecureSkipVerify: false } },
+  ])('accepts %j', extra => {
+    expect(said(extra)).toEqual([])
+  })
+})
+
+// #160: each refusal of a webhook field, with what it says.
+describe('webhook fields', () => {
+  const said = extra => configProblems('c', { type: 'webhook', url: 'https://hooks.example.com/alert', ...extra })
+  const ref = { name: 'ops', key: 'token' }
+  const MAX = 'configs.c: maxAlerts must be a whole number from 0 (all alerts in one request) to 2147483647'
+  const PLAIN = key => `${key} must be a Secret's name and key, { name, key }: put the value in a Secret in this namespace, not in routing.yaml`
+
+  it.each([
+    [{ sendResolved: 'no' }, 'configs.c: sendResolved must be true or false'],
+    [{ maxAlerts: -1 }, MAX], [{ maxAlerts: 1.5 }, MAX], [{ maxAlerts: 2147483648 }, MAX], [{ maxAlerts: '20' }, MAX],
+    [{ timeout: '5s1m' }, 'configs.c: timeout must be a duration such as 30s, 5m or 4h'],
+    [{ timeout: '1s1s' }, 'configs.c: timeout must be a duration such as 30s, 5m or 4h'],
+    [{ timeout: '' }, 'configs.c: timeout must be a duration such as 30s, 5m or 4h'],
+    [{ timeout: '293y' }, 'configs.c: timeout is longer than Alertmanager allows (about 292 years)'],
+    [{ timeout: 10 }, 'configs.c: timeout must be text: quote it, e.g. \'0\' or \'30s\''],
+    [{ authorization: { credentials: ref }, basicAuth: { username: ref, password: ref } }, 'configs.c: a webhook has either authorization or basicAuth, not both'],
+    [{ authorization: { type: 'Basic', credentials: ref } }, 'configs.c.authorization: type cannot be Basic: use basicAuth for a user name and password'],
+    [{ authorization: { type: ' basic ', credentials: ref } }, 'configs.c.authorization: type cannot be Basic: use basicAuth for a user name and password'],
+    [{ authorization: { type: 'BASIC', credentials: ref } }, 'configs.c.authorization: type cannot be Basic: use basicAuth for a user name and password'],
+    [{ authorization: { type: 'Bearer' } }, `configs.c.authorization: ${PLAIN('credentials')}`],
+    [{ authorization: { credentials: 'abc123' } }, `configs.c.authorization: ${PLAIN('credentials')}`],
+    [{ authorization: { credentials: { ...ref, optional: true } } }, 'configs.c.authorization.credentials: unknown key "optional" (expected name, key)'],
+    [{ authorization: 'abc' }, 'configs.c: authorization must be a map: { type, credentials: { name, key } }'],
+    [{ basicAuth: { username: ref } }, `configs.c.basicAuth: ${PLAIN('password')}`],
+    [{ basicAuth: { password: ref } }, `configs.c.basicAuth: ${PLAIN('username')}`],
+    [{ basicAuth: { username: 'alice', password: ref } }, `configs.c.basicAuth: ${PLAIN('username')}`],
+    [{ basicAuth: { username: ref, password: { ...ref, extra: 1 } } }, 'configs.c.basicAuth.password: unknown key "extra" (expected name, key)'],
+    [{ tlsConfig: 'on' }, 'configs.c: tlsConfig must be a map with insecureSkipVerify or ca'],
+    [{ tlsConfig: { serverName: 'x' } }, 'configs.c.tlsConfig: unknown key "serverName" (expected insecureSkipVerify, ca)'],
+    [{ tlsConfig: { insecureSkipVerify: 'yes' } }, 'configs.c.tlsConfig: insecureSkipVerify must be true or false'],
+    [{ tlsConfig: { ca: { secret: 'ops-ca' } } }, 'configs.c.tlsConfig.ca: secret needs a Secret\'s name and key'],
+    [{ bearerTokenSecret: ref }, 'configs.c: unknown key "bearerTokenSecret" (expected type, url, urlSecret, sendResolved, maxAlerts, timeout, authorization, basicAuth, tlsConfig)'],
+  ])('refuses %j', (extra, message) => {
+    expect(said(extra)).toContain(message)
+  })
+
+  it.each([
+    { maxAlerts: 0 }, { maxAlerts: 2147483647 }, { timeout: '0' }, { timeout: '1m30s' },
+    { authorization: { credentials: ref } }, { authorization: { type: 'Token', credentials: ref } },
+    { basicAuth: { username: ref, password: ref } }, { tlsConfig: { ca: { secret: ref } } },
+  ])('accepts %j', extra => {
+    expect(said(extra)).toEqual([])
+  })
+
+  it('still refuses a credential in the url, pointing at urlSecret', () => {
+    expect(said({ url: 'https://hooks.example.com/alert?token=abc', authorization: { credentials: ref } }).join()).toMatch(/use urlSecret/)
+  })
+})
+
+// A credential has no place in routing.yaml, which is in git: a url with a
+// token in it is refused, and so is a mail header carrying one — headers
+// cannot be read from a Secret.
+describe('credentials in mail headers', () => {
+  const said = headers => configProblems('c', { type: 'email', to: 'db@example.com', headers })
+  const REFUSED = [
+    [{ Authorization: 'Bearer abcdef1234567890abcdef12' }, 'Authorization', 'it carries a credential'],
+    [{ authorization: 'x' }, 'authorization', 'it carries a credential'],
+    [{ 'PROXY-AUTHORIZATION': 'x' }, 'PROXY-AUTHORIZATION', 'it carries a credential'],
+    [{ 'X-Api-Key': 'abcdef1234567890abcdef12' }, 'X-Api-Key', 'its value looks like a token'],
+    [{ 'X-Token': 'Bearer abcdef1234567890abcdef12' }, 'X-Token', 'its value looks like a token'],
+    [{ 'X-Slack': 'xoxb-1234-5678-abcdef1234567890abcdef' }, 'X-Slack', 'its value looks like a token'],
+  ]
+  it.each(REFUSED)('refuses %j', (headers, name, why) => {
+    expect(said(headers)).toEqual([`configs.c.headers.${name}: refused because ${why}; a credential does not belong in routing.yaml, which is in git, and a mail header cannot be read from a Secret`])
+  })
+
+  it('refuses it in a whole routing.yaml too', () => {
+    const routing = { labels: { s: ['x'] }, configs: { c: { type: 'email', to: 'db@example.com', headers: { Authorization: 'Basic x' } } }, cells: [] }
+    expect(checkRouting(routing).join()).toMatch(/configs\.c\.headers\.Authorization: refused because it carries a credential/)
+  })
+
+  // Ordinary headers, and long words people write in them.
+  it.each([
+    { Subject: 'PostgreSQLReplicationLag2 on db-cluster-01-primary-node03' },
+    { Subject: '[critical] HighCPU on node42 for 5m' },
+    { Subject: '{{ .CommonLabels.alertname }} on {{ .CommonLabels.instance }}' },
+    { 'Reply-To': 'oncall-team-2026@example.com' }, { 'X-Priority': '1 (Highest)' },
+    { 'Message-ID': '<20261120123456.abcdef@alertforge.example.com>' }, { 'In-Reply-To': '<abc123def456ghi789jkl@example.com>' },
+    { 'X-Team': 'database-reliability-2026' }, { 'X-Node': 'db-node42-primary-cluster-eu-west-1' },
+    { 'X-Runbook': 'https://wiki.example.com/runbooks/HighCPU2026' }, { 'X-Alert-Group': '{{ .GroupKey }}' },
+    { 'List-Id': 'alerts <alerts.example.com>' },
+  ])('accepts %j', headers => {
+    expect(said(headers)).toEqual([])
+  })
+})
+
+describe('from, as an address', () => {
+  const said = extra => configProblems('c', { type: 'email', to: 'db@example.com', ...extra })
+  it.each([
+    ['alertforge', 'configs.c: from must be an e-mail address, such as db-team@example.com'],
+    ['a@example.com\nBcc: x@example.com', 'configs.c: from must not contain a line break or other control character'],
+    ['a@example.com\r', 'configs.c: from must not contain a line break or other control character'],
+  ])('refuses %j', (from, message) => {
+    expect(said({ from })).toContain(message)
+  })
+  it.each(['alertforge@example.com', 'AlertForge <af@example.com>', '{{ .CommonLabels.team }}@example.com', '{{ template "from" . }}'])('accepts %j', from => {
+    expect(said({ from })).toEqual([])
+  })
+})
+
+// The page trims a single-line field; one written with spaces around it
+// would change when opened there and saved, so it is refused instead.
+describe('spaces around a single-line field', () => {
+  const LOGIN = { authUsername: 'u', authPassword: { name: 's', key: 'k' } }
+  it.each([
+    ['to', { type: 'email', to: ' db@example.com' }],
+    ['from', { type: 'email', to: 'db@example.com', from: 'a@example.com ' }],
+    ['smarthost', { type: 'email', to: 'db@example.com', ...LOGIN, smarthost: ' smtp.example.com:25' }],
+    ['authUsername', { type: 'email', to: 'db@example.com', authUsername: 'u ', authPassword: LOGIN.authPassword }],
+  ])('refuses %s', (key, config) => {
+    expect(configProblems('c', config)).toEqual([`configs.c: ${key} must have no spaces around it`])
+  })
+  it('refuses an authorization type', () => {
+    expect(configProblems('c', { type: 'webhook', url: 'http://relay', authorization: { type: 'Bearer ', credentials: { name: 's', key: 'k' } } }))
+      .toEqual(['configs.c.authorization: type must have no spaces around it'])
   })
 })

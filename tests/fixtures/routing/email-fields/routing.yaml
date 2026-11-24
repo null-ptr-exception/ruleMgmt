@@ -1,0 +1,34 @@
+# Every e-mail field (#159). Templates must reach the cluster as written;
+# a value starting with {{ is quoted.
+labels:
+  severity: [critical, warning]
+configs:
+  db-email:
+    type: email
+    to: db@example.com
+    from: alertforge@example.com
+    smarthost: smtp.example.com:587
+    authUsername: alertforge
+    authPassword: { name: smtp-auth, key: password }
+    requireTLS: true
+    tlsConfig:
+      insecureSkipVerify: false
+      ca: { secret: { name: smtp-ca, key: ca.crt } }
+    sendResolved: true
+    headers:
+      Subject: "[{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}"
+      X-Team: db
+    text: |
+      {{ range .Alerts }}{{ .Annotations.summary }}
+      {{ end }}
+    html: '{{ template "email.default.html" . }}'
+  # Plain text only, through the platform's server.
+  web-email:
+    type: email
+    to: web@example.com
+    html: ""
+cells:
+  - match: { severity: critical }
+    configs: [db-email]
+  - match: { severity: warning }
+    configs: [web-email]

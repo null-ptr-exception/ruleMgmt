@@ -31,7 +31,7 @@
  *     `disableRouteContinueEnforce` is set, and then an unwritten `continue`
  *     would stop every alert here
  *   - a webhook address that carries a credential is refused; it belongs in
- *     a Secret (`urlSecret`)
+ *     a Secret (`urlSecret`). So is a mail header that carries one
  *
  * The output is a complete resource, written into the deployment's
  * templates/ so the deployment chart deploys it. Helm still reads the file as
@@ -84,10 +84,34 @@ export function urlCredential(url) {
   return null
 }
 
-function credentialProblem(where, config) {
-  if (config.type !== 'webhook' || config.url === undefined) return null
+// Headers that carry a credential by their name alone.
+const CREDENTIAL_HEADERS = new Set(['authorization', 'proxy-authorization'])
+
+/**
+ * Why a mail header must not be written in routing.yaml, or null: it names
+ * a credential, or a word of its value looks like a token (looksLikeToken). An e-mail
+ * config's headers cannot be read from a Secret, so there is nowhere else
+ * to put it. The subject is not judged by its words — it is what people
+ * read, and long names with digits in them are common there.
+ */
+export function headerCredential(name, value) {
+  if (CREDENTIAL_HEADERS.has(name.toLowerCase())) return 'it carries a credential'
+  // Word by word, and a hyphenated word part by part: `db-team-2026` is
+  // words, `xoxb-1-abcdef1234567890abcdef` holds a token.
+  if (name.toLowerCase() !== 'subject' && value.split(/[\s-]+/).some(looksLikeToken)) return 'its value looks like a token'
+  return null
+}
+
+function credentialProblems(where, config) {
+  if (config.type === 'email') {
+    return Object.entries(config.headers ?? {}).flatMap(([name, value]) => {
+      const why = headerCredential(name, value)
+      return why ? [`${where}.headers.${name}: refused because ${why}; a credential does not belong in routing.yaml, which is in git, and a mail header cannot be read from a Secret`] : []
+    })
+  }
+  if (config.url === undefined) return []
   const why = urlCredential(config.url)
-  return why ? `${where}: url is refused because ${why}; put it in a Secret and use urlSecret` : null
+  return why ? [`${where}: url is refused because ${why}; put it in a Secret and use urlSecret`] : []
 }
 
 /** One config's problems — what the Routing page checks before adding it. */
@@ -97,8 +121,7 @@ export function configProblems(name, config) {
   if (why) return [`${where}: ${why}`]
   const errors = schemaProblems(configSchema, config, ['configs', name])
   if (errors.length) return errors
-  const credential = credentialProblem(where, config)
-  return credential ? [credential] : []
+  return credentialProblems(where, config)
 }
 
 /**
@@ -132,8 +155,7 @@ export function checkRouting(routing) {
   }
   for (const [name, config] of Object.entries(configs)) {
     if (!isMap(config) || named(`configs.${name}`)) continue
-    const credential = credentialProblem(`configs.${name}`, config)
-    if (credential) errors.push(credential)
+    errors.push(...credentialProblems(`configs.${name}`, config))
   }
 
   const seen = new Map()
@@ -165,12 +187,61 @@ export function checkRouting(routing) {
   return [...shape, ...errors]
 }
 
+const secretKey = ref => ({ name: ref.name, key: ref.key })
+
+/** A TLS setting as the resource writes it: the same keys, a CA from a Secret. */
+export function tlsConfigFor(tls) {
+  return {
+    ...(tls.insecureSkipVerify !== undefined ? { insecureSkipVerify: tls.insecureSkipVerify } : {}),
+    ...(tls.ca ? { ca: { secret: secretKey(tls.ca.secret) } } : {}),
+  }
+}
+
+// An e-mail config's fields, in this order; one not written is left to the
+// platform's Alertmanager settings (#159).
+const EMAIL_KEYS = ['to', 'from', 'smarthost', 'authUsername', 'authPassword', 'requireTLS', 'tlsConfig', 'sendResolved', 'headers', 'text', 'html']
+
+function emailConfig(config) {
+  const out = {}
+  for (const key of EMAIL_KEYS) {
+    const value = config[key]
+    if (value === undefined) continue
+    if (key === 'authPassword') out[key] = secretKey(value)
+    else if (key === 'tlsConfig') out[key] = tlsConfigFor(value)
+    // The resource takes headers as a list of key and value.
+    else if (key === 'headers') {
+      const list = Object.entries(value).map(([k, v]) => ({ key: k, value: v }))
+      if (list.length) out[key] = list
+    } else out[key] = value
+  }
+  return out
+}
+
 function receiverFor(name, config) {
-  if (config.type === 'email') return { name, emailConfigs: [{ to: config.to }] }
-  const webhook = config.urlSecret
-    ? { urlSecret: { name: config.urlSecret.name, key: config.urlSecret.key } }
-    : { url: config.url }
-  return { name, webhookConfigs: [webhook] }
+  if (config.type === 'email') return { name, emailConfigs: [emailConfig(config)] }
+  return { name, webhookConfigs: [webhookConfig(config)] }
+}
+
+// A webhook config's own fields; authentication and TLS go under httpConfig
+// in the resource, where routing.yaml has them beside the address (#160).
+function webhookConfig(config) {
+  const http = {
+    ...(config.authorization ? {
+      authorization: {
+        ...(config.authorization.type !== undefined ? { type: config.authorization.type } : {}),
+        credentials: secretKey(config.authorization.credentials),
+      },
+    } : {}),
+    ...(config.basicAuth ? { basicAuth: { username: secretKey(config.basicAuth.username), password: secretKey(config.basicAuth.password) } } : {}),
+    ...(config.tlsConfig ? { tlsConfig: tlsConfigFor(config.tlsConfig) } : {}),
+  }
+  return {
+    ...(config.urlSecret ? { urlSecret: secretKey(config.urlSecret) } : { url: config.url }),
+    ...(config.sendResolved !== undefined ? { sendResolved: config.sendResolved } : {}),
+    ...(config.maxAlerts !== undefined ? { maxAlerts: config.maxAlerts } : {}),
+    ...(config.timeout !== undefined ? { timeout: config.timeout } : {}),
+    ...(Object.keys(http).length ? { httpConfig: http } : {}),
+  }
 }
 
 function timing(defaults, cell) {
@@ -210,8 +281,11 @@ export function routingSpec(routing) {
 }
 
 // `{{` and `}}` reach the cluster as written: Helm turns `{{ "{{" }}` back
-// into `{{`. One pass, so a replacement is never replaced again.
-export const escapeBraces = text => text.replace(/\{\{|\}\}/g, m => `{{ "${m}" }}`)
+// into `{{`. A whole run of braces is printed at once — escaping only the
+// pair in `{}}` would leave its `{` to join the action that follows, `{{{`,
+// and Helm would fail. A run holding no `{{` or `}}` (`{}`) is no action and
+// stays as it is. One pass, so a replacement is never replaced again.
+export const escapeBraces = text => text.replace(/[{}]{2,}/g, m => (/\{\{|\}\}/.test(m) ? `{{ ${JSON.stringify(m)} }}` : m))
 
 /**
  * The file for templates/: the AlertmanagerConfig for a parsed routing.yaml.

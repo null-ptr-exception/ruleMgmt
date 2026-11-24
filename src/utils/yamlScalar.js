@@ -100,7 +100,9 @@ export function yamlName(value) {
  * reads once Helm has rendered it. A raw string (backticks) holds any text,
  * a `"` included.
  */
-export const helmLiteralText = text => text.replace(/\{\{|\}\}/g, m => `{{ \`${m}\` }}`)
+// A whole run of braces at once, as in routingGenerator's escapeBraces: in
+// `{}}` the `{` would otherwise join the action printed after it.
+export const helmLiteralText = text => text.replace(/[{}]{2,}/g, m => (/\{\{|\}\}/.test(m) ? `{{ \`${m}\` }}` : m))
 
 /**
  * A value in a generated template — a rule group's, an alert's or a

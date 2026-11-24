@@ -16,6 +16,8 @@
  * still gets is reference integrity, which the CLI has always run on it.
  */
 
+import { profileFor } from './outputs.js'
+import { parseDerived, derivedColumns } from './derived.js'
 import { normalizeRules, columnFallbacks } from './templateGenerator.js'
 import { danglingRefs, ruleVars, varsIn, nestedPlaceholders } from './ruleModel.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
@@ -35,6 +37,8 @@ function definedColumns(schema, alertDef) {
     ...Object.keys(getCommonSchema(schema)?.properties || {}),
     // ${selector} expands to the group's selector matchers (#60)
     ...(alertDef?.selectors?.length ? ['selector'] : []),
+    // a derived value (#118) is referenced like a column
+    ...Object.keys(alertDef?.derived || {}),
   ]
 }
 
@@ -95,6 +99,20 @@ export function checkRules(schema) {
       findings.push({ severity: 'save', group, ...p })
     }
 
+    // derived (#118): a reference stands for the columns the expression
+    // reads. Where a value goes matters only in PromQL: a range, an offset,
+    // for and keep_firing_for are durations there, and a number with a unit
+    // is not a number. LogsQL's `_time:${w}` is text to it (vmalert takes it).
+    // The columns each one reads, worked out from its expression (the
+    // schema-shaped def carries only expr and unit).
+    const derived = Object.fromEntries(Object.entries(alertDef.derived || {}).map(([n, d]) => {
+      let columns = []
+      try { columns = derivedColumns(parseDerived(d.expr)) } catch { /* the rules file says so */ }
+      return [n, { ...d, columns }]
+    }))
+    const columnsOf = name => (Object.hasOwn(derived, name) ? derived[name].columns : [name])
+    const promql = profileFor(alertDef.groupType)?.validate === 'promtool'
+
     for (const rule of rules) {
       const where = rule.alert ? `rule "${rule.alert}"`
         : rule.record ? `recording rule "${rule.record}"`
@@ -129,15 +147,16 @@ export function checkRules(schema) {
           ? [...entries, { key: 'keep_firing_for', value: rule.keep_firing_for }]
           : entries
         for (const entry of lines) {
-          if (mayBeAbsent.has(wholeRefName(entry.value))) continue
-          for (const name of varsIn(entry.value)) {
+          const whole = wholeRefName(entry.value)
+          if (mayBeAbsent.has(whole) || Object.hasOwn(derived, whole)) continue
+          for (const ref of varsIn(entry.value)) for (const name of columnsOf(ref)) {
             if (mayBeAbsent.has(name)) {
               findings.push({
                 severity: 'save',
                 kind: 'optional-mid-string',
                 group,
                 alert: rule.alert,
-                message: `${where}: "${entry.key}" reads \${${name}} mid-string, but it has no default and can be absent — give it a default or make it required`,
+                message: `${where}: "${entry.key}" reads \${${ref}}${ref !== name ? ` (made from ${name})` : ''} mid-string, but it has no default and can be absent — give it a default or make it required`,
               })
             }
           }
@@ -151,7 +170,19 @@ export function checkRules(schema) {
       // rule that belongs once per deployment goes in a `once: true` group
       // (#70). An empty `columns` is the just-imported state and is left
       // alone.
-      if (groupColumns.size && ![...ruleVars(rule)].some(name => groupColumns.has(name))) {
+      if (!rule.raw) findings.push(...derivedPositionProblems(rule, derived, promql, group, where))
+      else {
+        // A raw rule is written out as it is: where a value goes in it is not
+        // known, so a derived value cannot be checked there.
+        for (const name of varsIn(rule.raw)) {
+          if (Object.hasOwn(derived, name)) {
+            findings.push({ severity: 'save', kind: 'derived-raw', group, alert: rule.alert,
+              message: `${where}: a raw rule cannot use derived "${name}" — write the rule with expr and for instead` })
+          }
+        }
+      }
+
+      if (groupColumns.size && ![...ruleVars(rule)].flatMap(columnsOf).some(name => groupColumns.has(name))) {
         findings.push({
           severity: 'commit',
           kind: 'no-column-ref',
@@ -164,6 +195,34 @@ export function checkRules(schema) {
   }
 
   return findings
+}
+
+/**
+ * derived (#118): a value in a time position — `for`, `keep_firing_for`, and
+ * in PromQL a range or an offset — needs a unit (a bare number is seconds in
+ * a range and a failure in `for`); in PromQL, a value with a unit compared
+ * as a number is refused (`> 21m` is taken as 1260).
+ */
+function derivedPositionProblems(rule, derived, promql, group, where) {
+  const out = []
+  for (const [name, d] of Object.entries(derived)) {
+    const ref = `\\$\\{\\s*${name}\\s*\\}`
+    const expr = rule.expr || ''
+    const inDuration = new RegExp(ref).test(`${rule.for || ''} ${rule.keep_firing_for || ''}`)
+    // PromQL keywords are not case-sensitive, and an offset may be negative.
+    const offset = `\\boffset\\s+-?\\s*${ref}`
+    const inRange = promql && new RegExp(`\\[[^\\]]*${ref}[^\\]]*\\]|${offset}`, 'i').test(expr)
+    const asNumber = promql && new RegExp(ref).test(expr.replace(/\[[^\]]*\]/g, '[]').replace(new RegExp(offset, 'gi'), ''))
+    if ((inDuration || inRange) && !d.unit) {
+      out.push({ severity: 'save', kind: 'derived-unit', group, alert: rule.alert,
+        message: `${where}: derived "${name}" is used as a duration, so it needs a unit (e.g. unit: m)` })
+    }
+    if (asNumber && d.unit) {
+      out.push({ severity: 'save', kind: 'derived-unit', group, alert: rule.alert,
+        message: `${where}: derived "${name}" has unit "${d.unit}" but is compared as a number — a value with a unit only fits a range, offset, for or keep_firing_for` })
+    }
+  }
+  return out
 }
 
 /** Findings that block a save (and, being a subset, a commit as well). */

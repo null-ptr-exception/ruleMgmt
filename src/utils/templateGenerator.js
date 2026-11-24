@@ -16,7 +16,8 @@
  * }
  */
 
-import { renderValue, expandVars, varsIn } from './ruleModel.js'
+import { renderValue, expandVars, varsIn, helmLiteral, DERIVED } from './ruleModel.js'
+import { parseDerived, derivedColumns, compileSprig } from './derived.js'
 import { emitRuleObjects } from './crConverter.js'
 import { needsQuote, durationScalar } from './yamlScalar.js'
 import { profileFor } from './outputs.js'
@@ -108,12 +109,7 @@ function renderEntry(entry, ref, refVar, indent, defaults, block = false) {
     const rendered = renderValue(quoted ? yamlQuotedText(entry.value) : entry.value, ref, defaults) + (entry.helmSuffix || '')
     line = `${indent}${entry.key}: ${quoted ? `"${rendered}"` : rendered}`
   }
-  if (!entry.guard) return line
-  return (
-    `${indent}{{- if hasKey ${refVar} "${entry.guard}" }}\n` +
-    line + '\n' +
-    `${indent}{{- end }}`
-  )
+  return guarded(line, entry.guard ? [].concat(entry.guard) : [], refVar, indent)
 }
 
 /**
@@ -187,7 +183,7 @@ function renderRule(rule, ref, refVar, defaults, selectorCall = null) {
   if (rule.keep_firing_for) {
     const line = `          keep_firing_for: ${durationScalar(renderValue(rule.keep_firing_for, ref, defaults))}`
     parts[0] += '\n' + (rule.keepFiringGuard
-      ? `          {{- if hasKey ${refVar} "${rule.keepFiringGuard}" }}\n${line}\n          {{- end }}`
+      ? guarded(line, [].concat(rule.keepFiringGuard), refVar, '          ')
       : line)
   }
   if (rule.labels?.length) {
@@ -299,20 +295,29 @@ export function columnFallbacks(alertDef, commonProps, requiredSet) {
  * a label's entire value. A reference in the middle of a longer string has no
  * meaningful omission and is rejected before it gets here.
  */
-function attachGuards(rules, mayBeAbsent) {
+function attachGuards(rules, mayBeAbsent, derived = {}) {
   if (!mayBeAbsent.size) return rules
+
+  // A derived value (#118) is absent when any column it reads is: it is
+  // guarded as if the rule referenced those columns itself.
+  const absentOf = name => (Object.hasOwn(derived, name)
+    ? derived[name].columns.filter(c => mayBeAbsent.has(c))
+    : mayBeAbsent.has(name) ? [name] : [])
 
   return rules.map(rule => {
     const guards = new Set()
     for (const text of [rule.expr, rule.for, rule.raw]) {
-      for (const name of varsIn(text || '')) if (mayBeAbsent.has(name)) guards.add(name)
+      for (const name of varsIn(text || '')) for (const col of absentOf(name)) guards.add(col)
     }
     // A line whose entire value is one reference disappears with it. Already
     // guarded at the rule level means the line guard would be dead weight.
     const lineGuard = value => {
       const whole = /^\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}$/.exec(String(value).trim())
       const name = whole?.[1]
-      return name && mayBeAbsent.has(name) && !guards.has(name) ? name : null
+      if (!name) return null
+      const cols = absentOf(name).filter(c => !guards.has(c)).sort()
+      if (!cols.length) return null
+      return Object.hasOwn(derived, name) ? cols : cols[0]
     }
     const guardLine = entry => {
       const name = lineGuard(entry.value)
@@ -437,8 +442,20 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
       : `include "${helper.name}" (dict ${args})`)
   }
 
-  const ruleTexts = attachGuards(rules, mayBeAbsent)
-    .map(rule => renderRule(rule, ref, refVar, defaults, selectorCall(rule)))
+  // derived (#118): each expression compiled once, reading a cell the way
+  // ${name} does — dig with the default, or the bare key.
+  const derived = {}
+  if (!legacy && !once) {
+    const cell = name => (defaults[name] === undefined ? `${ref}${name}` : `(dig "${name}" ${helmLiteral(defaults[name])} ${refVar})`)
+    for (const [name, def] of Object.entries(alertDef.derived || {})) {
+      const tree = parseDerived(def.expr)
+      derived[name] = { columns: derivedColumns(tree), helm: `{{ ${compileSprig(tree, cell)} }}${def.unit || ''}` }
+    }
+  }
+  const renderDefaults = Object.keys(derived).length ? { ...defaults, [DERIVED]: derived } : defaults
+
+  const ruleTexts = attachGuards(rules, mayBeAbsent, derived)
+    .map(rule => renderRule(rule, ref, refVar, renderDefaults, selectorCall(rule)))
 
   if (ruleTexts.length === 0) return null
 

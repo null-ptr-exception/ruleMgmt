@@ -17,6 +17,7 @@
  *         group: <key>, once?, type?, interval?, limit?, selectors?,
  *         selectorLabels?: { <column>: <label> },
  *         vars?: { <name>: <text> },
+ *         derived?: { <name>: { expr, unit?, columns } },   (#118)
  *         columns: { <name>: <column> },
  *         rules: [ <rule> ],
  *         custom?: true            // x-custom-template — kept in the schema,
@@ -40,9 +41,11 @@ import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { SELECTOR_PATTERN } from './selectorContract.js'
 import { durationFault } from './duration.js'
-import { varsIn } from './ruleModel.js'
+import { varsIn, expandVars } from './ruleModel.js'
+import { parseDerived, derivedColumns, DERIVED_UNITS, evalDerived, derivedPosition } from './derived.js'
+import { profileFor } from './outputs.js'
 
-const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'selectorLabels', 'vars', 'columns', 'rules']
+const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
 const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
 // A recording rule has no `for`, `keep_firing_for` or annotations in
 // Prometheus — only these.
@@ -215,6 +218,13 @@ export function schemaToModel(schema) {
 
     const vars = group.vars || group['x-vars']
     if (vars && Object.keys(vars).length) entry.vars = { ...vars }
+    if (group.derived && Object.keys(group.derived).length) {
+      entry.derived = Object.fromEntries(Object.entries(group.derived).map(([n, d]) => {
+        let columns = []
+        try { columns = derivedColumns(parseDerived(d.expr)) } catch { /* reported when read as a rules file */ }
+        return [n, { expr: d.expr, ...(d.unit !== undefined ? { unit: d.unit } : {}), columns }]
+      }))
+    }
 
     entry.columns = columnsFromSchema(group?.items?.properties, group?.items?.required || [])
     entry.rules = rulesFromSchema(key, group, common, warnings)
@@ -310,6 +320,10 @@ export function groupGenDef(group) {
   const { properties, required } = columnsToSchema(group.columns)
   const def = { type: 'array', 'x-rules': group.rules.map(canonicalRule) }
   if (group.vars && Object.keys(group.vars).length) def.vars = { ...group.vars }
+  // What the generator needs, not the columns read (worked out again).
+  if (group.derived && Object.keys(group.derived).length) {
+    def.derived = Object.fromEntries(Object.entries(group.derived).map(([n, d]) => [n, { expr: d.expr, ...(d.unit !== undefined ? { unit: d.unit } : {}) }]))
+  }
   if (group.once) def.once = true
   if (group.selectors?.length) def.selectors = [...group.selectors]
   if (group.selectorLabels) def.selectorLabels = { ...group.selectorLabels }
@@ -370,6 +384,13 @@ export function groupFileText(group) {
   if (group.columns && Object.keys(group.columns).length) {
     lines.push('', 'columns:')
     for (const [name, col] of Object.entries(group.columns)) lines.push(`  ${name}: ${flowColumn(col)}`)
+  }
+
+  if (group.derived && Object.keys(group.derived).length) {
+    lines.push('', 'derived:')
+    for (const [name, d] of Object.entries(group.derived)) {
+      lines.push(`  ${name}: ${yaml.dump({ expr: d.expr, ...(d.unit ? { unit: d.unit } : {}) }, { ...DUMP, flowLevel: 0 }).trimEnd()}`)
+    }
   }
 
   lines.push('', yaml.dump({ rules: group.rules.map(canonicalRule) }, DUMP).trimEnd())
@@ -511,6 +532,34 @@ export function parseGroupFile(text, filename) {
     }
   }
 
+  // derived (#118): computed per row from integer columns. The expression
+  // is parsed here; which columns it may read needs _common too
+  // (parseRulesDir).
+  let derived
+  if (doc.derived !== undefined && doc.derived !== null && !isMapping(doc.derived)) {
+    errors.push(`${filename}.yaml: derived must be a mapping of name to { expr, unit }`)
+  } else if (doc.derived && Object.keys(doc.derived).length) {
+    derived = {}
+    if (doc.once === true) errors.push(`${filename}.yaml: a once group has no rows, so it cannot have derived values`)
+    for (const [name, def] of Object.entries(doc.derived)) {
+      const where = `${filename}.yaml derived "${name}"`
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) errors.push(`${where}: a name is letters, digits and _, not starting with a digit`)
+      if (RESERVED.has(name)) errors.push(`${where} is a reserved name`)
+      if (name in columns) errors.push(`${where} collides with a column`)
+      if (vars && name in vars) errors.push(`${where} collides with a vars entry`)
+      if (!isMapping(def)) { errors.push(`${where}: must be { expr, unit }`); continue }
+      rejectUnknown(def, ['expr', 'unit'], where, errors)
+      // A unit is required for now (#118's first version): a derived value is
+      // a duration, used in a range, an offset, for or keep_firing_for.
+      if (def.unit === undefined) errors.push(`${where}: unit is required — one of ${DERIVED_UNITS.join(', ')}`)
+      else if (!DERIVED_UNITS.includes(def.unit)) errors.push(`${where}: unit must be one of ${DERIVED_UNITS.join(', ')}, not ${JSON.stringify(def.unit)}`)
+      let tree = null
+      try { tree = parseDerived(def.expr) } catch (e) { errors.push(`${where}: ${e.message}`) }
+      if (!tree) continue
+      derived[name] = { expr: def.expr, ...(def.unit !== undefined ? { unit: def.unit } : {}), columns: derivedColumns(tree) }
+    }
+  }
+
   const rules = (Array.isArray(doc.rules) ? doc.rules : []).flatMap((rule, i) => {
     const where = `${filename}.yaml rules[${i}]`
     if (!isMapping(rule)) {
@@ -579,6 +628,7 @@ export function parseGroupFile(text, filename) {
   if (doc.interval !== undefined) group.interval = doc.interval
   if (doc.limit !== undefined) group.limit = doc.limit
   if (vars) group.vars = vars
+  if (derived && Object.keys(derived).length) group.derived = derived
 
   return { group, errors }
 }
@@ -621,6 +671,20 @@ export function parseRulesDir(files) {
     // $common`, so a collision would silently shadow the common value.
     for (const colName of Object.keys(group.columns)) {
       if (commonNames.has(colName)) errors.push(`${name}: column "${colName}" collides with a _common column`)
+    }
+    // derived (#118): an expression reads integer columns of this group or
+    // of _common only. A number column could hold 2.5, which Helm truncates
+    // cell by cell; another derived value or a vars entry is not a column.
+    for (const [dName, d] of Object.entries(group.derived || {})) {
+      if (commonNames.has(dName)) errors.push(`${name}: derived "${dName}" collides with a _common column`)
+      for (const col of d.columns) {
+        const def = group.columns[col] || model.common.columns[col]
+        if (group.derived[col]) errors.push(`${name}: derived "${dName}" reads "${col}", which is another derived value — write its expression out`)
+        else if (group.vars && col in group.vars) errors.push(`${name}: derived "${dName}" reads "${col}", which is a vars entry — only columns can be computed with`)
+        else if (!def) errors.push(`${name}: derived "${dName}" reads "${col}", which is not a column`)
+        else if (def.type !== 'integer') errors.push(`${name}: derived "${dName}" reads "${col}", a ${def.type || 'string'} column — only integer columns can be computed with`)
+        else if (def.default !== undefined && !Number.isSafeInteger(def.default)) errors.push(`${name}: derived "${dName}" reads "${col}", whose default ${JSON.stringify(def.default)} is not a whole number`)
+      }
     }
     model.groups[filename] = group
   }
@@ -690,6 +754,19 @@ export function valueProblems(values, model) {
     const columns = entry.columns || {}
     const quoted = columnsInQuotedValues(entry)
     for (const name of quoted) if (name in commonCols && !(name in columns)) quotedCommon.add(name)
+    // derived (#118): each row's value computed as Helm will, so 0 in a
+    // range, a negative or overflowing value, or a duration past what Go
+    // holds is refused here rather than deployed.
+    const derived = Object.entries(entry.derived || {}).map(([name, d]) => {
+      let tree = null
+      try { tree = parseDerived(d.expr) } catch { /* the rules file says so */ }
+      // Where it goes is read from the rules as rendered: a vars entry can
+      // put it in a range.
+      const expanded = (entry.rules || []).map(r => ({
+        ...r, ...Object.fromEntries(['expr', 'for', 'keep_firing_for'].filter(k => r[k] !== undefined).map(k => [k, expandVars(r[k], entry.vars)])),
+      }))
+      return { name, d, tree, position: derivedPosition(name, expanded, profileFor(entry.type)?.validate === 'promtool') }
+    }).filter(x => x.tree)
     const rows = values?.[group]
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
       rendersAnything = true
@@ -697,6 +774,26 @@ export function valueProblems(values, model) {
       for (const name of cells) {
         const why = cellProblem(columns[name], name in (row || {}), row?.[name], quoted.has(name))
         if (why) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}` })
+      }
+      for (const { name, d, tree, position } of derived) {
+        // A cell as Helm reads it: the row's, then _common's, then the default.
+        // A cell as Helm reads it: Helm's `merge $row $common` lets a
+        // _common value replace a row's 0 or empty, then the default.
+        const blank = v => v === undefined || v === null || v === '' || v === 0 || v === false
+        const cellOf = col => {
+          const own = row?.[col]
+          const fromCommon = values?._common?.[col]
+          if (!blank(own)) return own
+          if (!blank(fromCommon)) return fromCommon
+          if (own !== undefined && own !== null && own !== '') return own
+          return (columns[col] || commonCols[col])?.default
+        }
+        const read = Object.fromEntries(derivedColumns(tree).map(c => [c, cellOf(c)]))
+        // A column left out with no default drops the rule or line that uses
+        // it (attachGuards), so there is nothing to compute.
+        if (Object.values(read).some(v => v === undefined)) continue
+        const out = evalDerived(tree, read, { unit: d.unit, position })
+        if (out.problem) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, derived "${name}": ${out.problem}` })
       }
     }
   }

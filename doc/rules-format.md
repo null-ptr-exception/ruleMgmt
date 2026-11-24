@@ -86,6 +86,7 @@ the query lives in `vars` so there is only ever one copy of it.
 | `selectorLabels` | no | Selector column → the label it matches, when the two names differ — see [matching a label of another name](#matching-a-label-of-another-name) |
 | `vars` | no | Edit-time text substitutions |
 | `columns` | no | The table's columns |
+| `derived` | no | Values computed per row from integer columns — see [`derived`](#derived) |
 | `rules` | yes | The rules |
 
 Any other key is rejected. Unknown keys are never ignored silently: a typo
@@ -223,6 +224,62 @@ any other reference.
 - A `vars` name may not collide with a column name. A collision is rejected
   rather than resolved by precedence: any precedence rule leaves someone
   staring at a substitution that came out wrong with no way to see why.
+
+### `derived`
+
+A value worked out for each row, at render time, from that row's integer
+columns. It is referenced like a column, `${name}`, and never appears in the
+table. Use it where a value has to be computed and PromQL cannot do it — a
+range selector, an offset, `for`, a label.
+
+```yaml
+columns:
+  freq_num:  { type: integer, required: true }
+  spc_point: { type: integer, default: 3 }
+
+derived:
+  short_w: { expr: "freq_num * (spc_point + 2)", unit: m }
+  long_w:  { expr: "freq_num * spc_point * 4",   unit: m }
+
+rules:
+  - alert: SpcCustom
+    expr: rate(x[${short_w}]) > 2 * rate(x[${long_w}])
+```
+
+A row with `freq_num: 3, spc_point: 5` renders `rate(x[21m]) > 2 *
+rate(x[60m])`. The generator writes it as Sprig, reading each cell the way
+`${name}` does:
+
+```
+{{ mul (int64 .freq_num) (add (int64 (dig "spc_point" 3 .)) 2) }}m
+```
+
+- **`expr`** is `+`, `-`, `*`, brackets, whole numbers and column names —
+  nothing else, and no Helm: `{{ }}` stays Prometheus's everywhere. There is
+  no `/` (Helm drops the remainder, and an empty cell would fail the whole
+  chart) and no negative number (subtract instead).
+- **It reads integer columns** (`type: integer`) of its group or of
+  `_common`, whose `default`, if any, is a whole number. A `number` column
+  could hold `2.5`, which Helm would cut to 2 before computing. It does not
+  read a `vars` entry or another `derived`.
+- **`unit`** is required, one of `ms s m h d w y`, written after the
+  number: a derived value is a duration, for a range, a subquery, an offset
+  (`OFFSET` too, or negative), `for` or `keep_firing_for`. In PromQL it
+  cannot be compared as a number (`x > 21m` would be taken as 1260). In a
+  LogsQL group (`type: vlogs`) the query is not looked at: `_time:${w}` is
+  its own text.
+- **A `raw` rule cannot use one**: it is written out as it is, so where the
+  value goes cannot be checked.
+- **An empty cell** works as for a column: a column it reads that a row
+  leaves out, with no default, drops the rule (in `expr` or `for`) or the
+  line (a label, an annotation or `keep_firing_for` that is nothing but the
+  reference), as an [empty cell](#empty-cells) would.
+- **Saving a deployment computes it for every row** and refuses a row where
+  it overflows a 64-bit integer, comes to 0 or less in a range, is negative
+  as a duration, or is longer than a duration can be (about 292 years),
+  naming the row.
+- A `once` group has no rows, so it has no `derived`. A `derived` name may
+  not be a column's, a `vars` entry's, a `_common` column's or `selector`.
 
 ## Placeholders
 
@@ -387,6 +444,9 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 - A `vars` entry referencing another `vars` entry
 - An optional column with no default referenced from the middle of a string
 - `group:` not matching the filename
+- A `derived` without a `unit`, with an expression that does not parse or
+  reads anything but an integer column (or one whose default is not a whole
+  number), used in a `raw` rule, or — in PromQL — compared as a number
 
 And, before a commit:
 

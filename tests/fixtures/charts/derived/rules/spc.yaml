@@ -1,0 +1,16 @@
+# derived (#118): a range and a `for` computed per row from integer columns,
+# one of them read with its default when the row leaves it out.
+columns:
+  job:       { type: string, required: true }
+  freq_num:  { type: integer, required: true }
+  spc_point: { type: integer, default: 3 }
+
+derived:
+  short_w: { expr: "freq_num * (spc_point + 2)", unit: m }
+  hold:    { expr: "freq_num * 2", unit: m }
+
+rules:
+  - alert: SpcErrors
+    expr: rate(spc_errors_total{job="${job}"}[${short_w}]) > 0
+    for: ${hold}
+    labels: { severity: warning }

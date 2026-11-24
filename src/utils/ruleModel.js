@@ -55,7 +55,7 @@ export function expandVars(str, vars) {
  * inside a YAML double-quoted scalar, where a nested double quote would break
  * the document.
  */
-function helmLiteral(value) {
+export function helmLiteral(value) {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return '`' + String(value) + '`'
 }
@@ -70,9 +70,16 @@ function helmLiteral(value) {
  * also replaces 0, "" and false — a row setting a threshold of 0 against a
  * default of 80 rendered `> 80`.
  */
+// A group's compiled derived values (#118) ride on the defaults object under
+// this key, so every renderValue call site sees them without a new
+// parameter threaded through each one.
+export const DERIVED = Symbol('derived')
+
 export function substituteVars(str, ref = '.', defaults) {
   const dict = ref === '.' ? '.' : ref.replace(/\.$/, '')
+  const derived = defaults?.[DERIVED]
   return String(str).replace(VAR_RE, (_, name) => {
+    if (derived && Object.hasOwn(derived, name)) return derived[name].helm
     const fallback = defaults?.[name]
     return fallback === undefined
       ? `{{ ${ref}${name} }}`
@@ -143,13 +150,18 @@ export function ruleVars(rule) {
  * expandVars does, and, since `${selector}` stands for them, its group's
  * selector columns.
  */
-export function ruleColumns(rule, selectors, vars) {
+export function ruleColumns(rule, selectors, vars, derived) {
   const names = new Set()
+  // A derived value (#118) stands for the columns its expression reads.
+  const addName = name => {
+    if (derived && Object.hasOwn(derived, name)) for (const col of derived[name].columns || []) names.add(col)
+    else names.add(name)
+  }
   for (const name of ruleVars(rule)) {
     if (vars && Object.prototype.hasOwnProperty.call(vars, name)) {
-      for (const inner of varsIn(vars[name])) names.add(inner)
+      for (const inner of varsIn(vars[name])) addName(inner)
     } else {
-      names.add(name)
+      addName(name)
     }
   }
   if (names.has('selector')) for (const name of selectors || []) names.add(name)
@@ -162,7 +174,7 @@ export function ruleColumns(rule, selectors, vars) {
 export function columnUsage(group) {
   const usage = Object.create(null)
   for (const r of group.rules || []) {
-    for (const n of ruleColumns(r, group.selectors, group.vars)) (usage[n] ||= []).push(r.alert || r.record || '(unnamed)')
+    for (const n of ruleColumns(r, group.selectors, group.vars, group.derived)) (usage[n] ||= []).push(r.alert || r.record || '(unnamed)')
   }
   return usage
 }
@@ -173,7 +185,7 @@ export function commonColumnUsage(groups, commonColumns) {
   for (const g of Object.values(groups)) {
     if (g.custom) continue
     for (const r of g.rules || []) {
-      for (const n of ruleColumns(r, g.selectors, g.vars)) {
+      for (const n of ruleColumns(r, g.selectors, g.vars, g.derived)) {
         if (Object.prototype.hasOwnProperty.call(commonColumns, n)) (usage[n] ||= new Set()).add(g.group)
       }
     }

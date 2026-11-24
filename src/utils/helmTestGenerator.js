@@ -25,6 +25,7 @@
  * on: its YAML is the rule owner's, not the converter's.
  */
 
+import { parseDerived, evalDerived } from './derived.js'
 import yaml from 'js-yaml'
 import { groupGenDef } from './rulesFile.js'
 import { normalizeRules } from './templateGenerator.js'
@@ -172,6 +173,15 @@ export function generateHelmUnittestSuite(model) {
       Object.entries({ ...commonValues, ...ownValues })
         .map(([name, v]) => [name, typeof v === 'number' ? goFloat(v) : String(v)])
     )
+    // A derived value (#118) renders as what it computes to for these cells.
+    const withDerived = (into, cells) => {
+      for (const [name, d] of Object.entries(group.derived || {})) {
+        const out = evalDerived(parseDerived(d.expr), cells)
+        if (out.value !== undefined) into[name] = `${out.value}${d.unit || ''}`
+      }
+      return into
+    }
+    withDerived(text, { ...commonValues, ...ownValues })
 
     // The resource is the group's output profile (#65): a vlogs group is a
     // VMRule with `type: vlogs`, and a suite expecting PrometheusRule would
@@ -198,6 +208,7 @@ export function generateHelmUnittestSuite(model) {
 
     const withDefaults = { ...text }
     for (const name of defaulted) withDefaults[name] = defaultText(allColumns[name].default)
+    withDerived(withDefaults, { ...commonValues, ...ownValues, ...Object.fromEntries(defaulted.map(n => [n, allColumns[n].default])) })
     tests.push({
       it: `renders ${key} with defaults for ${defaulted.join(', ')}`,
       template,

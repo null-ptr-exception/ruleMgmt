@@ -1,0 +1,8 @@
+spc:
+  # 2 * (5 + 2) = 14m, held 2 * 2 = 4m
+  - job: api
+    freq_num: 2
+    spc_point: 5
+  # spc_point left out: its default 3 — 3 * (3 + 2) = 15m, held 6m
+  - job: worker
+    freq_num: 3

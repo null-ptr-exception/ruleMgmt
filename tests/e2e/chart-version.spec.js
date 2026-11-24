@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
-import { removeChart } from './charts.js'
+import { removeChart, openTemplateChart } from './charts.js'
 import { WORKSPACE } from './workspace.js'
 
 // The Template editor loads the chart's Chart.yaml once. Its Save used to
@@ -31,10 +31,7 @@ test.describe('the Template editor\'s Save and the chart version', () => {
   })
 
   test('keeps a version changed on disk after the page loaded', async ({ page }) => {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-    await page.locator('.ant-select').first().click()
-    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
+    await openTemplateChart(page, CHART)
     await expect(page.getByPlaceholder('Description', { exact: true })).toBeVisible({ timeout: 5000 })
 
     // The pull in another tab.

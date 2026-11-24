@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { hasBinary } from '../blind/harness.js'
-import { removeChart } from './charts.js'
+import { removeChart, openTemplateChart } from './charts.js'
 
 // Output profiles (#65): a group's type, interval and limit are set in the
 // editor's group settings row, a vlogs group becomes a VMRule, and Preview
@@ -41,11 +41,7 @@ async function createChart(request, chart, files) {
 }
 
 async function openGroup(page, chart, group) {
-  await page.goto('/')
-  await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-  await page.locator('.ant-select').first().click()
-  await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
-  await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+  await openTemplateChart(page, chart)
   await page.getByText(group, { exact: true }).first().click()
   await expect(page.getByTestId('group-settings')).toBeVisible({ timeout: 5000 })
 }

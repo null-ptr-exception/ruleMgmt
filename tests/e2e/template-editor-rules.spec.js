@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import yaml from 'js-yaml'
-import { removeChart } from './charts.js'
+import { removeChart, openTemplateChart } from './charts.js'
 
 // The editor now loads a chart's rules/*.yaml (or adapts a schema-only chart),
 // and Save goes through the one atomic POST /:chart/rules. This drives that
@@ -35,12 +35,7 @@ test.describe.serial('Template editor — rules source', () => {
   })
 
   async function openChart(page) {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-    const select = page.locator('.ant-select').first()
-    await select.click()
-    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
-    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await openTemplateChart(page, CHART)
     // The sidebar tree node (comes before the group header in the DOM).
     await page.getByText('cpu', { exact: true }).first().click()
     await expect(page.getByPlaceholder('alert name')).toBeVisible({ timeout: 5000 })
@@ -385,11 +380,7 @@ test.describe('Set as variable', () => {
   test.afterAll(async ({ request }) => { await removeChart(request, MARK) })
 
   test('stores the literal it replaced as the default', async ({ page, request }) => {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-    await page.locator('.ant-select').first().click()
-    await page.locator('.ant-select-item-option').filter({ hasText: MARK }).click()
-    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await openTemplateChart(page, MARK)
     await page.getByText('cpu', { exact: true }).first().click()
 
     const mark = async (from, to, name) => {

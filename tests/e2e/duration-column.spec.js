@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { removeChart } from './charts.js'
+import { removeChart, openTemplateChart } from './charts.js'
 
 // `type: duration` (#117): picked in the Template editor, and a cell that is
 // not a duration is marked in the table before the server refuses its save.
@@ -22,11 +22,7 @@ const COMMON = `columns:
 `
 
 async function openTemplate(page, chart) {
-  await page.goto('/')
-  await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-  await page.locator('.ant-select').first().click()
-  await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
-  await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+  await openTemplateChart(page, chart)
   await page.getByText('spc', { exact: true }).first().click()
   await expect(page.locator('input[value="win"]')).toBeVisible({ timeout: 5000 })
 }

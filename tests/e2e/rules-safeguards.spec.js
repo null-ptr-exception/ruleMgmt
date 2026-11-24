@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
-import { removeChart } from './charts.js'
+import { removeChart, openTemplateChart } from './charts.js'
 
 // The safeguards around a chart's rules/ source that only had backend or unit
 // coverage (issue #57): a save that would overwrite someone else's change, a
@@ -36,11 +36,7 @@ async function chartInfo(request, chart) {
 }
 
 async function openChart(page, chart, group = 'cpu') {
-  await page.goto('/')
-  await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-  await page.locator('.ant-select').first().click()
-  await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
-  await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+  await openTemplateChart(page, chart)
   await page.getByText(group, { exact: true }).first().click()
   await expect(page.getByPlaceholder('alert name')).toBeVisible({ timeout: 5000 })
 }

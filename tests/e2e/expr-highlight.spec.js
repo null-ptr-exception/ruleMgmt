@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { removeChart } from './charts.js'
+import { removeChart, openTemplateChart } from './charts.js'
 
 // The expr editor's colours and font (#72). They are read back from the page:
 // the dark palette was defined but never applied — the editor used
@@ -41,11 +41,7 @@ rules:
 const CHART = 'e2e-expr-highlight'
 
 async function openGroup(page, group) {
-  await page.goto('/')
-  await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-  await page.locator('.ant-select').first().click()
-  await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
-  await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+  await openTemplateChart(page, CHART)
   await page.getByText(group, { exact: true }).first().click()
   await expect(page.locator('.cm-content').first()).toBeVisible({ timeout: 5000 })
 }

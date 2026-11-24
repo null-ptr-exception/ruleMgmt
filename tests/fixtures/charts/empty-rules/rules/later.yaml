@@ -1,0 +1,6 @@
+# A group whose rules are still to be written: it has a table and no rules,
+# so it generates no template and no object.
+columns:
+  host: { type: string, required: true }
+
+rules: []

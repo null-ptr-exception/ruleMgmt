@@ -1,0 +1,16 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-off-1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    "y": "1_000"
+    false: x
+spec:
+  groups:
+    - name: "off"
+      rules:
+        - alert: AnyDown
+          expr: |-
+            min(up) == 0

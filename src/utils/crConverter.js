@@ -31,7 +31,7 @@ export const MAX_ROWS_PER_OBJECT = 100
 // Anything inspecting the output reads the same profiles (outputs.js), so it
 // cannot drift from what is emitted.
 import { profileFor } from './outputs.js'
-import { durationScalar } from './yamlScalar.js'
+import { durationScalar, nameScalar } from './yamlScalar.js'
 
 // The generator runs in the browser as well as in scripts, so size is measured
 // with TextEncoder rather than Buffer.
@@ -118,7 +118,8 @@ function objectHead({ profile, name, objectMeta, groupName, groupFields }) {
     renderMetaMap('annotations', meta.annotations) +
     `spec:\n` +
     `  groups:\n` +
-    `    - name: ${groupName}\n` +
+    // A group key such as `yes` or `on` is a boolean to Kubernetes written bare.
+    `    - name: ${nameScalar(groupName)}\n` +
     renderGroupFields(groupFields, profile) +
     `      rules:\n`
   )
@@ -159,13 +160,19 @@ function buildObject({ releaseName, baseName, groupName, groupFields, profile, v
 }
 
 /**
+ * The rules of each object a group is packed into, in order. A once group's
+ * rules are not multiplied by rows, so its whole budget is one object's.
+ */
+export function groupShards(ruleTexts, once, options) {
+  return shardRules(ruleTexts, once ? { ...options, rowsPerObject: 1 } : options)
+}
+
+/**
  * Render one alert group as a template that emits one or more custom
  * resources: one per rule shard, times one per row chunk.
  */
 export function emitRuleObjects({ releaseName, group, groupName, groupFields, profile = profileFor(undefined), valuesKey, hasCommon, once = false, preamble = '', ruleTexts }, options) {
-  // A once group's rules are not multiplied by rows, so its whole budget is
-  // one object's.
-  const shards = shardRules(ruleTexts, once ? { ...options, rowsPerObject: 1 } : options)
+  const shards = groupShards(ruleTexts, once, options)
   const base = group.replace(/_/g, '-')
 
   // Both indices are always present, for the same reason the chunk index is:

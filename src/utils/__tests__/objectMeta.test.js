@@ -69,6 +69,23 @@ describe('rendering the metadata block', () => {
     expect(renderMetaMap('annotations', {})).toBe('')
   })
 
+  // A site's key is a label name too: `yes:` bare is the key "true" to Kubernetes.
+  it('quotes a key YAML 1.1 reads as something else', () => {
+    const out = renderMetaMap('labels', { yes: 'a', on: 'b', 'example.com/team': 'c' })
+    expect(out).toContain('"yes": a')
+    expect(out).toContain('"on": b')
+    expect(out).toContain('example.com/team: c')
+  })
+
+  // A key Kubernetes reads back as itself stays as it was written, so a
+  // site's labels do not change every generated template.
+  it('leaves a key bare that reads back as itself', () => {
+    const out = renderMetaMap('labels', { '3scale.net/team': 'db', false: 'x', 123: 'db2' })
+    expect(out).toContain('    3scale.net/team: db\n')
+    expect(out).toContain('    false: x\n')
+    expect(out).toContain('    123: db2\n')
+  })
+
   it('quotes a value a bare scalar would not survive', () => {
     expect(renderMetaMap('annotations', { note: 'has spaces' })).toContain('note: "has spaces"')
   })

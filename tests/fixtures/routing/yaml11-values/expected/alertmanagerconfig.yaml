@@ -1,0 +1,24 @@
+# Hand-written — never generated. The matcher values stay text as the
+# cluster reads them.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    receiver: _drop
+    continue: true
+    routes:
+      - matchers:
+          - { name: zone, value: "1_000", matchType: "=" }
+        receiver: ops
+      - matchers:
+          - { name: zone, value: "0_7", matchType: "=" }
+        receiver: ops
+  receivers:
+    - name: _drop
+    - name: ops
+      emailConfigs:
+        - to: ops@example.com

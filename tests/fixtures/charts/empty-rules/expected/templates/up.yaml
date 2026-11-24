@@ -1,0 +1,19 @@
+{{- $chunks := chunk 100 ($.Values.up | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-up-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: up
+      rules:
+        {{- range $rows }}
+        - alert: HostDown
+          expr: |-
+            up{host="{{ .host }}"} == 0
+        {{- end }}
+{{- end }}

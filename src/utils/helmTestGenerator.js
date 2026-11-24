@@ -23,15 +23,23 @@
  *
  * A hand-written (raw) rule keeps its place in the order but is not asserted
  * on: its YAML is the rule owner's, not the converter's.
+ *
+ * A group whose rules are too large for one object is split into several
+ * (shardRules in crConverter.js); the suite expects as many documents as the
+ * generator packs, each asserted on its own rules and name. One row is one
+ * row chunk, so every shard is one document.
  */
 
 import { parseDerived, evalDerived } from './derived.js'
 import yaml from 'js-yaml'
-import { groupGenDef } from './rulesFile.js'
-import { normalizeRules } from './templateGenerator.js'
+import { groupGenDef, modelToSchema } from './rulesFile.js'
+import { normalizeRules, groupShardSizes } from './templateGenerator.js'
 import { profileFor } from './outputs.js'
-import { needsQuote } from './yamlScalar.js'
+import { needsQuote, keyScalar, readsAsNonStringInYaml11, KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
 import { selectorLabelsFor } from './selectorContract.js'
+
+// The release every test renders as, so object names can be asserted.
+const RELEASE = 'unittest'
 
 const VAR_RE = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 
@@ -108,7 +116,23 @@ function labelValue(entry, text) {
  */
 const blockValue = (value, text) => substitute(String(value ?? '').trim(), text)
 
-function ruleAsserts(group, rules, groupText) {
+/**
+ * A label or annotation map as the suite expects it. The generator writes a
+ * key such as `true` or `123` bare, since Kubernetes reads it back as that
+ * text; helm-unittest reads it as a boolean or number key, which a quoted
+ * key in the suite does not equal. Such a key goes into the suite under a
+ * placeholder that the dump writes bare, and is put back bare afterwards.
+ */
+const BARE_KEY = /__alertforge_bare_key_(\d+)__/g
+function expectedMap(entries, bareKeys) {
+  return Object.fromEntries(entries.map(([key, value]) => {
+    if (!readsAsNonStringInYaml11(key) || keyScalar(key) !== key) return [key, value]
+    bareKeys.push(key)
+    return [`__alertforge_bare_key_${bareKeys.length - 1}__`, value]
+  }))
+}
+
+function ruleAsserts(group, rules, groupText, bareKeys) {
   const asserts = []
   rules.forEach((rule, i) => {
     if (rule.raw) return
@@ -118,7 +142,7 @@ function ruleAsserts(group, rules, groupText) {
       asserts.push({ equal: { path: `${path}.record`, value: rule.record } })
       asserts.push({ equal: { path: `${path}.expr`, value: blockValue(rule.expr, text) } })
       if (rule.labels?.length) {
-        asserts.push({ equal: { path: `${path}.labels`, value: Object.fromEntries(rule.labels.map(e => [e.key, labelValue(e, text)])) } })
+        asserts.push({ equal: { path: `${path}.labels`, value: expectedMap(rule.labels.map(e => [e.key, labelValue(e, text)]), bareKeys) } })
       }
       return
     }
@@ -130,7 +154,7 @@ function ruleAsserts(group, rules, groupText) {
     for (const field of ['labels', 'annotations']) {
       if (!rule[field]?.length) continue
       const value = field === 'annotations' ? e => blockValue(e.value, text) : e => labelValue(e, text)
-      const expected = Object.fromEntries(rule[field].map(e => [e.key, value(e)]))
+      const expected = expectedMap(rule[field].map(e => [e.key, value(e)]), bareKeys)
       asserts.push({ equal: { path: `${path}.${field}`, value: expected } })
     }
   })
@@ -159,16 +183,32 @@ function omitDefaults(values, columns) {
 }
 
 export function generateHelmUnittestSuite(model) {
-  const groups = Object.entries(model?.groups || {}).filter(([, g]) => !g.custom)
+  const schema = model?.groups ? modelToSchema(model) : null
+  // A group with no rules (`rules: []`) generates no template, so there is
+  // nothing to render or to test.
+  const groups = Object.entries(model?.groups || {})
+    .filter(([, g]) => !g.custom)
+    .map(([key, g]) => [key, g, groupShardSizes(key, groupGenDef(g), schema)])
+    .filter(([, , sizes]) => sizes.length > 0)
   if (!groups.length) return ''
 
   const commonColumns = model.common?.columns || {}
   const commonValues = testValues(commonColumns)
   const tests = []
+  const bareKeys = []
 
-  for (const [key, group] of groups) {
+  for (const [key, group, sizes] of groups) {
     const template = `templates/${key.replace(/_/g, '-')}.yaml`
     const rules = normalizeRules(key, groupGenDef(group))
+    // The objects the group renders as, each with its slice of the rules.
+    const base = key.replace(/_/g, '-')
+    let start = 0
+    const docs = sizes.map((count, d) => {
+      const doc = { rules: rules.slice(start, start + count), name: `${RELEASE}-${base}-${d + 1}${group.once ? '' : '-1'}` }
+      start += count
+      return doc
+    })
+    const perDocument = asserts => docs.flatMap((doc, d) => asserts(doc).map(a => ({ ...a, documentIndex: d })))
     const ownColumns = group.columns || {}
     const ownValues = testValues(ownColumns)
     const text = Object.fromEntries(
@@ -192,15 +232,19 @@ export function generateHelmUnittestSuite(model) {
     tests.push({
       it: group.once ? `renders ${key} once, with no rows` : `renders ${key} with every column set`,
       template,
+      release: { name: RELEASE },
       set: setFor(key, commonValues, ownValues, group.once),
       asserts: [
-        { hasDocuments: { count: 1 } },
-        { isKind: { of: profile.kind } },
-        { isAPIVersion: { of: profile.apiVersion } },
-        { equal: { path: 'spec.groups[0].name', value: key.replace(/_/g, '-') } },
-        ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
-        { lengthEqual: { path: 'spec.groups[0].rules', count: rules.length } },
-        ...ruleAsserts(group, rules, text),
+        { hasDocuments: { count: docs.length } },
+        ...perDocument(doc => [
+          { isKind: { of: profile.kind } },
+          { isAPIVersion: { of: profile.apiVersion } },
+          { equal: { path: 'metadata.name', value: doc.name } },
+          { equal: { path: 'spec.groups[0].name', value: base } },
+          ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
+          { lengthEqual: { path: 'spec.groups[0].rules', count: doc.rules.length } },
+          ...ruleAsserts(group, doc.rules, text, bareKeys),
+        ]),
       ],
     })
 
@@ -214,14 +258,20 @@ export function generateHelmUnittestSuite(model) {
     tests.push({
       it: `renders ${key} with defaults for ${defaulted.join(', ')}`,
       template,
+      release: { name: RELEASE },
       set: setFor(key, omitDefaults(commonValues, commonColumns), omitDefaults(ownValues, ownColumns), group.once),
-      asserts: ruleAsserts(group, rules, withDefaults),
+      asserts: perDocument(doc => ruleAsserts(group, doc.rules, withDefaults, bareKeys)),
     })
   }
 
-  return yaml.dump({
+  // helm-unittest v0.8.2 reads a bare 0_7 or 08 in the suite as a number
+  // (yes, y and on stay text), so an expected alert name 0_7 written bare
+  // would be the number 7. Quoting everything YAML 1.1 would misread covers
+  // those and does no harm to the rest.
+  const suite = yaml.dump({
     suite: 'generated alert rule tests',
     templates: groups.map(([key]) => `templates/${key.replace(/_/g, '-')}.yaml`),
     tests,
-  }, { lineWidth: -1, noRefs: true })
+  }, { lineWidth: -1, noRefs: true, schema: KUBERNETES_DUMP_SCHEMA })
+  return suite.replace(BARE_KEY, (_, i) => bareKeys[Number(i)])
 }

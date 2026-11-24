@@ -1,0 +1,11 @@
+# Values Kubernetes reads as numbers when written bare: it reads YAML 1.1,
+# where 1_000 is 1000 and 0_7 is 7. A matcher's value is text.
+labels:
+  zone: ["1_000", "0_7"]
+configs:
+  ops: { type: email, to: ops@example.com }
+cells:
+  - match: { zone: "1_000" }
+    configs: [ops]
+  - match: { zone: "0_7" }
+    configs: [ops]

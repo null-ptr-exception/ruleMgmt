@@ -1,0 +1,6 @@
+columns:
+  host: { type: string, required: true }
+
+rules:
+  - alert: HostDown
+    expr: up{host="${host}"} == 0

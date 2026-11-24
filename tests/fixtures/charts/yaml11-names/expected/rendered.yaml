@@ -1,0 +1,23 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# Every name below is text as Kubernetes reads the output (YAML 1.1): the
+# group yes is "yes", not true.
+blind-yes-1-1:
+  - name: "yes"
+    rules:
+      - alert: "yes"
+        expr: up{db="db1"} == 0
+        labels: { "on": db1, "true": t, severity: warning }
+        annotations: { "n": down }
+      - alert: "0_7"
+        expr: up{db="db1"} == 0
+      - alert: "CPU: high #1"
+        expr: up{db="db1"} == 0
+      - alert: "del\u007fchar"
+        expr: up{db="db1"} == 0
+      - record: "true"
+        expr: up{db="db1"}
+blind-off-1:
+  - name: "off"
+    rules:
+      - alert: AnyDown
+        expr: min(up) == 0

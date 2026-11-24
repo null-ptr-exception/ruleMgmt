@@ -1,0 +1,17 @@
+# Alert names are literal text, but the generated file is a Helm template:
+# a {{ }} in a name has to reach the cluster as written, not be run by
+# Helm. ${host} in a name is literal text too — names are not substituted.
+columns:
+  host: { type: string, required: true }
+
+rules:
+  - alert: "x: {{ .host }}"
+    expr: up{host="${host}"} == 0
+  - alert: "{{ .Release.Name }}-down"
+    expr: up{host="${host}"} == 0
+  - alert: '{{ "y" }}'
+    expr: up{host="${host}"} == 0
+  - alert: "a}}b{{c"
+    expr: up{host="${host}"} == 0
+  - alert: "Down ${host}"
+    expr: up{host="${host}"} == 0

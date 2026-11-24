@@ -41,6 +41,7 @@
 
 import yaml from 'js-yaml'
 import { ROUTING } from './outputs.js'
+import { KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
 import { routingSchema, configSchema, configNameProblem, schemaProblems, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
 
 // The page marks a timing field with the same check the save makes (#93).
@@ -232,6 +233,6 @@ export function generateRouting(routing, { meta = {} } = {}) {
     },
     spec: routingSpec(routing),
   }
-  const body = escapeBraces(yaml.dump(doc, { lineWidth: -1, noRefs: true }))
+  const body = escapeBraces(yaml.dump(doc, { lineWidth: -1, noRefs: true, schema: KUBERNETES_DUMP_SCHEMA }))
   return { text: GENERATED_HEADER + body.replace(name, () => '{{ .Release.Name }}-routing') }
 }

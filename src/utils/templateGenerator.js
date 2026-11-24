@@ -18,8 +18,8 @@
 
 import { renderValue, expandVars, varsIn, helmLiteral, DERIVED } from './ruleModel.js'
 import { parseDerived, derivedColumns, compileSprig } from './derived.js'
-import { emitRuleObjects } from './crConverter.js'
-import { needsQuote, durationScalar } from './yamlScalar.js'
+import { emitRuleObjects, groupShards } from './crConverter.js'
+import { needsQuote, durationScalar, nameScalar, keyScalar } from './yamlScalar.js'
 import { profileFor } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { selectorLabelsFor } from './selectorContract.js'
@@ -73,7 +73,7 @@ function renderBlock(key, value, ref, defaults, indent, suffix = '', selectorCal
   let text = renderValue(source, ref, defaults) + suffix
   if (selectorCall) text = text.split(SELECTOR_SENTINEL).join(` {{- ${selectorCall} -}} `)
   const lines = text.split('\n').map(l => (l ? `${indent}  ${l}` : ''))
-  return `${indent}${key}: |-\n` + lines.join('\n')
+  return `${indent}${keyScalar(key)}: |-\n` + lines.join('\n')
 }
 
 /**
@@ -107,7 +107,7 @@ function renderEntry(entry, ref, refVar, indent, defaults, block = false) {
   } else {
     const quoted = needsQuote(entry.value)
     const rendered = renderValue(quoted ? yamlQuotedText(entry.value) : entry.value, ref, defaults) + (entry.helmSuffix || '')
-    line = `${indent}${entry.key}: ${quoted ? `"${rendered}"` : rendered}`
+    line = `${indent}${keyScalar(entry.key)}: ${quoted ? `"${rendered}"` : rendered}`
   }
   return guarded(line, entry.guard ? [].concat(entry.guard) : [], refVar, indent)
 }
@@ -167,7 +167,7 @@ function renderRule(rule, ref, refVar, defaults, selectorCall = null) {
 
   // A recording rule has no for, keep_firing_for or annotations (#70).
   if (rule.record !== undefined) {
-    let text = `        - record: ${rule.record}\n` + renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10), '', selectorCall)
+    let text = `        - record: ${nameScalar(rule.record)}\n` + renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10), '', selectorCall)
     if (rule.labels?.length) {
       text += `\n          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n')
     }
@@ -175,7 +175,7 @@ function renderRule(rule, ref, refVar, defaults, selectorCall = null) {
   }
 
   const parts = [
-    `        - alert: ${rule.alert}\n` +
+    `        - alert: ${nameScalar(rule.alert)}\n` +
     renderBlock('expr', rule.expr, ref, defaults, ' '.repeat(10), '', selectorCall) +
     // A duration or a single reference — plain, as a hand-written rule has it.
     (rule.for ? `\n          for: ${durationScalar(renderValue(rule.for, ref, defaults))}` : '')
@@ -481,6 +481,15 @@ export function generateGroupTemplate(alertGroup, alertDef, releaseName, schema,
     group: alertGroup,
     ...parts
   }, options)
+}
+
+/**
+ * How many rules each of a group's objects holds, in order — the shards
+ * generateGroupTemplate packs them into. Empty when it generates nothing.
+ */
+export function groupShardSizes(alertGroup, alertDef, schema, options) {
+  const parts = buildGroupParts(alertGroup, alertDef, getCommonSchema(schema))
+  return parts ? groupShards(parts.ruleTexts, parts.once, options).map(shard => shard.length) : []
 }
 
 export function generateDefaultValues(schema) {

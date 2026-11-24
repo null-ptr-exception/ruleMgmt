@@ -50,6 +50,42 @@ import { parseObjectMeta, metaForProfile } from '../../src/utils/objectMeta.js'
 import { generateRouting } from '../../src/utils/routingGenerator.js'
 import { profileOfObject, profileFor } from '../../src/utils/outputs.js'
 
+/**
+ * Helm's output read the way the cluster reads it. Kubernetes reads YAML 1.1
+ * (go-yaml v2, through sigs.k8s.io/yaml), where a bare `yes` or `on` is true,
+ * `n` is false and `1_000` is 1000 — js-yaml's YAML 1.2 would read all of
+ * them as text and hide a name the API server receives as a boolean. Checked
+ * against kubectl's YAML-to-JSON conversion. Written here rather than taken
+ * from the generator, which is what it checks.
+ */
+const YAML11_VALUES = {
+  y: true, Y: true, yes: true, Yes: true, YES: true, on: true, On: true, ON: true,
+  n: false, N: false, no: false, No: false, NO: false, off: false, Off: false, OFF: false,
+}
+// A number once go-yaml v2 has dropped its `_`s.
+const YAML11_NUMBER = /^[-+]?(0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+|(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?)$/
+// What js-yaml's own types leave as text.
+const isYaml11NonString = text => Object.hasOwn(YAML11_VALUES, text) ||
+  (/^[-+.0-9]/.test(text) && YAML11_NUMBER.test(text.replace(/_/g, '')))
+function yaml11Value(text) {
+  if (Object.hasOwn(YAML11_VALUES, text)) return YAML11_VALUES[text]
+  const plain = text.replace(/_/g, '')
+  const sign = plain.startsWith('-') ? -1 : 1
+  const digits = plain.replace(/^[-+]/, '')
+  const prefixed = /^0([xXoObB])(.+)$/.exec(digits)
+  if (prefixed) return sign * parseInt(prefixed[2], { x: 16, o: 8, b: 2 }[prefixed[1].toLowerCase()])
+  if (/^0[0-7]+$/.test(digits)) return sign * parseInt(digits, 8)
+  return Number(plain)
+}
+const KUBERNETES_SCHEMA = yaml.DEFAULT_SCHEMA.extend({
+  implicit: [new yaml.Type('tag:yaml.org,2002:yaml11', {
+    kind: 'scalar',
+    resolve: data => data !== null && isYaml11NonString(data),
+    construct: yaml11Value,
+  })]
+})
+const loadRendered = text => yaml.loadAll(text, null, { schema: KUBERNETES_SCHEMA })
+
 export const CASES_DIR = path.resolve('tests/fixtures/charts')
 
 /** Fixed so the expected object names are fixed. */
@@ -159,7 +195,7 @@ export function renderCase(name, products) {
 export function renderedGroups(renderedYaml) {
   const out = {}
   const defaultKind = profileFor(undefined).kind
-  for (const doc of yaml.loadAll(renderedYaml)) {
+  for (const doc of loadRendered(renderedYaml)) {
     if (!profileOfObject(doc)) continue
     const key = doc.kind === defaultKind ? doc.metadata.name : `${doc.kind} ${doc.metadata.name}`
     out[key] = doc.spec.groups
@@ -171,7 +207,7 @@ export function renderedGroups(renderedYaml) {
 export function renderedMeta(renderedYaml) {
   const out = {}
   const defaultKind = profileFor(undefined).kind
-  for (const doc of yaml.loadAll(renderedYaml)) {
+  for (const doc of loadRendered(renderedYaml)) {
     if (!profileOfObject(doc)) continue
     const key = doc.kind === defaultKind ? doc.metadata.name : `${doc.kind} ${doc.metadata.name}`
     out[key] = { labels: doc.metadata.labels || {}, annotations: doc.metadata.annotations || {} }
@@ -182,7 +218,7 @@ export function renderedMeta(renderedYaml) {
 /** Object name → spec.groups, for the objects whose profile promtool can check. */
 export function promtoolGroups(renderedYaml) {
   const out = {}
-  for (const doc of yaml.loadAll(renderedYaml)) {
+  for (const doc of loadRendered(renderedYaml)) {
     if (profileOfObject(doc)?.validate === 'promtool') out[doc.metadata.name] = doc.spec.groups
   }
   return out
@@ -197,7 +233,7 @@ export function caseChecksWith(name, validator) {
 /** Object name → spec.groups, for the objects whose profile vmalert checks (#76). */
 export function vmalertGroups(renderedYaml) {
   const out = {}
-  for (const doc of yaml.loadAll(renderedYaml)) {
+  for (const doc of loadRendered(renderedYaml)) {
     if (profileOfObject(doc)?.validate === 'vmalert') out[doc.metadata.name] = doc.spec.groups
   }
   return out
@@ -278,7 +314,7 @@ export function renderRoutingCase(name, text) {
     fs.mkdirSync(path.join(tmp, 'templates'))
     fs.writeFileSync(path.join(tmp, 'templates', 'alertmanagerconfig.yaml'), text)
     const out = execFileSync('helm', ['template', RELEASE, tmp], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
-    return yaml.loadAll(out).find(doc => doc?.kind === 'AlertmanagerConfig')
+    return loadRendered(out).find(doc => doc?.kind === 'AlertmanagerConfig')
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }

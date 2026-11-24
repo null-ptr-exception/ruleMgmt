@@ -1,0 +1,7 @@
+# Labels of an alert → the receivers it reaches, in order (see basic/).
+- labels: { zone: "1_000" }
+  receivers: [ops]
+- labels: { zone: "0_7" }
+  receivers: [ops]
+- labels: { zone: "7" }
+  receivers: [_drop]

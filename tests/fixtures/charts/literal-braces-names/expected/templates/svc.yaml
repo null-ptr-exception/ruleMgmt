@@ -1,0 +1,31 @@
+{{- $chunks := chunk 100 ($.Values.svc | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-svc-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: svc
+      rules:
+        {{- range $rows }}
+        - alert: "x: {{ `{{` }} .host {{ `}}` }}"
+          expr: |-
+            up{host="{{ .host }}"} == 0
+        - alert: "{{ `{{` }} .Release.Name {{ `}}` }}-down"
+          expr: |-
+            up{host="{{ .host }}"} == 0
+        - alert: "{{ `{{` }} \"y\" {{ `}}` }}"
+          expr: |-
+            up{host="{{ .host }}"} == 0
+        - alert: a{{ `}}` }}b{{ `{{` }}c
+          expr: |-
+            up{host="{{ .host }}"} == 0
+        - alert: Down ${host}
+          expr: |-
+            up{host="{{ .host }}"} == 0
+        {{- end }}
+{{- end }}

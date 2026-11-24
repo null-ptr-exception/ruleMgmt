@@ -1,0 +1,6 @@
+# A once group whose key is a YAML 1.1 boolean.
+once: true
+
+rules:
+  - alert: AnyDown
+    expr: min(up) == 0

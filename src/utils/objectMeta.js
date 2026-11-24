@@ -33,7 +33,7 @@
  * that never appears.
  */
 
-import { readsAsNonString } from './yamlScalar.js'
+import { readsAsNonString, keyScalar } from './yamlScalar.js'
 import { PROFILES, ROUTING_KIND } from './outputs.js'
 
 /** Always present: this is the product's own statement about the resource. */
@@ -163,7 +163,7 @@ export function renderMetaMap(name, map, indent = '  ') {
   if (entries.length === 0) return ''
   return (
     `${indent}${name}:\n` +
-    entries.map(([key, value]) => `${indent}  ${key}: ${quote(value)}`).join('\n') +
+    entries.map(([key, value]) => `${indent}  ${keyScalar(key)}: ${quote(value)}`).join('\n') +
     '\n'
   )
 }

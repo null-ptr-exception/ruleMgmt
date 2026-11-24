@@ -1,0 +1,32 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{db="db1"}'
+        values: '0x10'
+    promql_expr_test:
+      - expr: 'true'
+        eval_time: 5m
+        exp_samples:
+          - labels: 'true{db="db1"}'
+            value: 0
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: "yes"
+        exp_alerts:
+          - exp_labels: { "on": db1, "true": t, severity: warning, db: db1 }
+            exp_annotations: { "n": down }
+      - eval_time: 5m
+        alertname: "0_7"
+        exp_alerts:
+          - exp_labels: { db: db1 }
+      - eval_time: 5m
+        alertname: "CPU: high #1"
+        exp_alerts:
+          - exp_labels: { db: db1 }
+      - eval_time: 5m
+        alertname: AnyDown
+        exp_alerts:
+          - exp_labels: {}

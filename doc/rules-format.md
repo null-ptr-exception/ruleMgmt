@@ -546,6 +546,26 @@ Label values are quoted strings, `for` and `keep_firing_for` plain. Leading
 and trailing whitespace of an expression or annotation is dropped — the
 trailing newline `expr: |` leaves in the source means nothing.
 
+Kubernetes and Helm read YAML 1.1, where a bare `yes`, `on`, `y`, `n` or
+`off` is a boolean and `0_7` is the number 7. The generator writes a name
+bare, as a hand-written file has it, and double-quotes it only when:
+
+- a group's, an alert's or a recording rule's name would not be text bare:
+  `yes`, `true`, `null`, `123`, `0_7` — so a group `rules/yes.yaml` is
+  written `- name: "yes"`
+- a label's or annotation's key — on a rule, or one the site puts on every
+  object — is a YAML 1.1 boolean, null or number other than `true`, `false`,
+  a whole number such as `123`, `.inf`, `-.inf` or `.nan`, which read back
+  as themselves: `yes:`
+  would be the key `true`, `0_7:` the key `7`, and `null:` is refused
+- either would not parse bare, or would lose part of itself: `CPU: high`,
+  `a #b`, a leading or trailing space, a control character (written as
+  `\uXXXX`)
+
+A name is literal text: a `{{ }}` in it reaches the cluster as written, never
+run by Helm (`alert: "x: {{ .host }}"` is that alert name), and a `${column}`
+in a name is not substituted.
+
 Objects are named:
 
 ```
@@ -832,7 +852,9 @@ as you type (a save from the Routing page writes the file anew, without it):
 Saving `routing.yaml` also writes `templates/alertmanagerconfig.yaml` into the
 deployment folder — a complete AlertmanagerConfig (`routing` in
 `config/outputs.json`), which the deployment's chart deploys with its rules.
-The file says it is generated; an edit to it is overwritten.
+The file says it is generated; an edit to it is overwritten. Every value stays
+text as the cluster reads it: a label value such as `1_000` or `yes` is
+quoted, since YAML 1.1 reads them bare as 1000 and true.
 
 | `routing.yaml` | AlertmanagerConfig |
 |---|---|

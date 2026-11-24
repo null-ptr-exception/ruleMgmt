@@ -1,0 +1,7 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# Only the group with rules renders; the empty one has no object.
+blind-up-1-1:
+  - name: up
+    rules:
+      - alert: HostDown
+        expr: up{host="h1"} == 0

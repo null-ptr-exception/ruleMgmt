@@ -10,6 +10,7 @@ import { COMMON_DIR, isCommonChartPath } from '../../../src/utils/reservedNames.
 import { openRepo } from '../../repo/openRepo.js'
 import { parseVersion } from '../../repo/findings/template.js'
 import { fact } from './facts.js'
+import { blockingProblems, CANNOT_TELL } from '../stack.js'
 
 // A constraint that is one version and nothing else — `2.1.0`, `=2.1.0`,
 // `v2.1.0` — all three parts written: `2.1` and every range are not judged.
@@ -34,7 +35,10 @@ async function templateProblem(gitopsDir, dep, stack) {
   // Its `_common` stack (#100): what Helm renders nothing from, or stops
   // on. Below the deployment Helm fetches nothing, so a version or a
   // repository a `_common` asks for is not checked: Helm does not read it.
-  if (stack.problems.length) return { ...stack.problems[0], description: `${dep}: ${stack.problems[0].description}`, said: stack.problems[0].description, code: `stack.${stack.problems[0].kind}`, file: `${dep}/Chart.yaml` }
+  // A _common AlertForge cannot tell Helm's reading of is no reason Helm
+  // renders nothing: Helm decides (cannotTell), after any problem that is.
+  const p = blockingProblems(stack)[0] ?? stack.problems.find(x => x.kind === CANNOT_TELL)
+  if (p) return { ...p, description: `${dep}: ${p.description}`, said: p.description, code: `stack.${p.kind}`, file: `${dep}/Chart.yaml`, ...(p.kind === CANNOT_TELL ? { cannotTell: true } : {}) }
   return null
 }
 
@@ -101,9 +105,12 @@ async function fileDependencyProblem(gitopsDir, dir, dep, loader) {
 export async function templateFindings(gitopsDir, dep, stack) {
   const template = await templateProblem(gitopsDir, dep, stack)
   if (!template) return { findings: [], facts: [] }
-  const { said, code, file, ...shown } = template
+  const { said, code, file, cannotTell, ...shown } = template
+  // What AlertForge cannot tell in a _common is Helm's to render, as
+  // check-deployment and Preview leave it: check-repo renders it, and
+  // refuses it as Commit does — as it does such values of the deployment's own.
   return {
     findings: [{ severity: 'commit', deployment: dep, ...shown }],
-    facts: [fact('refuse', { code, file, message: said }, dep, { blocksRender: true })],
+    facts: [fact('refuse', { code, file, message: said }, dep, { blocksRender: !cannotTell })],
   }
 }

@@ -167,6 +167,23 @@ describe.skipIf(!CAN_RUN)('check-repo', () => {
     expect(codes(json().data)).toEqual([`refuse yaml.cannot-read ${P2}/values.yaml`, `refuse deployment.render ${P2}`])
   })
 
+  // The same for a _common's values: rendered by Helm, which decides, and
+  // refused as Commit refuses them. Catches: a _common AlertForge cannot
+  // tell taken for one Helm cannot render, and not rendered.
+  it('a _common\'s values AlertForge cannot tell Helm\'s reading of: refused as Commit refuses them, and rendered by Helm', () => {
+    write(`deployments/s/_common/${T.split('/')[1]}/Chart.yaml`, `apiVersion: v2\nname: common\nversion: 0.1.0\ndependencies:\n  - name: mariadb-alerts\n    version: ">=0.0.0-0"\n`)
+    write('deployments/s/_common/mariadb-alerts/values.yaml', 'mariadb-alerts:\n  _common:\n    owner: s\n  note: |2\n     two spaces more\n')
+    fs.mkdirSync(path.join(repo, 'deployments/s/_common/mariadb-alerts/charts'), { recursive: true })
+    fs.symlinkSync('../../../../../charts/mariadb-alerts', path.join(repo, 'deployments/s/_common/mariadb-alerts/charts/mariadb-alerts'))
+    write('deployments/s/d1/Chart.yaml', 'apiVersion: v2\nname: d1\nversion: 0.1.0\ndependencies:\n  - name: common\n    version: ">=0.0.0-0"\n    repository: file://../_common/mariadb-alerts\n')
+    write('deployments/s/d1/values.yaml', 'common:\n  mariadb-alerts:\n    _common:\n      namespace: ns1\n')
+    write('deployments/s/d1/templates/broken.yaml', BROKEN)
+    const { status, data } = json()
+    // Rendered: its rules are checked (the broken one is found).
+    expect(codes(data)).toEqual(['refuse stack.values-cannot-tell deployments/s/d1/Chart.yaml', 'refuse deployment.rules deployments/s/d1'])
+    expect(status).toBe(1)
+  })
+
   // Catches: a folder whose deployments were not looked at taken for none.
   it.skipIf(asRoot)('a folder that cannot be listed: exit 2, naming it', () => {
     fs.mkdirSync(path.join(repo, 'deployments/locked'))

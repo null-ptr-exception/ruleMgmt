@@ -67,7 +67,7 @@ function toTreeNode(node, registry, handlers) {
 
   // A deployment on another _common than its folder's (#103): a sync target
   // follows its source's; one unlinked, or moved, keeps what it has.
-  const follows = node.isDeployment ? stackNote(node.inheritsFrom, node.folderCommon, status.role === 'target' ? 'source' : null) : null
+  const follows = node.isDeployment && !node.unreadable ? stackNote(node.inheritsFrom, node.folderCommon, status.role === 'target' ? 'source' : null) : null
 
   const titleInner = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -114,7 +114,7 @@ function toTreeNode(node, registry, handlers) {
       )}
       {node.unreadable && (
         <Tooltip title={node.isDeployment
-          ? `This deployment cannot be read (${node.unreadable}): it cannot be opened or committed here — fix the file in git`
+          ? `This deployment cannot be read as it is (${node.unreadable}): Preview and Commit refuse it — fix it in git`
           : `This folder cannot be read (${node.unreadable}): the deployments in it are not listed, checked or migrated`}>
           <WarningOutlined aria-label="cannot be read" style={{ color: '#dc2626' }} />
         </Tooltip>

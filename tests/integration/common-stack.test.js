@@ -285,12 +285,17 @@ describe.skipIf(!HAS_HELM || !HAS_PROMTOOL)('check-deployment', () => {
     expect(own.stderr).toContain('is a _common chart')
   })
 
-  it('fails with a line, not a stack trace, when a layer\'s values.yaml is not YAML', async () => {
+  // An unclosed [ is a text AlertForge cannot tell Helm's reading of: left
+  // to Helm, which fails on it.
+  it('fails with Helm\'s error and a line, not a stack trace, when a layer\'s values.yaml is not YAML', async () => {
     await write(`${SHOP}/values.yaml`, 'x: [\n')
     const r = check('shop/inherit')
     expect(r.status).toBe(1)
-    expect(r.stdout).toContain(`Rules: not checked`)
-    expect(r.stdout).toContain(`${SHOP}/values.yaml cannot be read`)
+    expect(r.stdout).toContain('helm could not render the deployment')
+    expect(r.stdout).toContain(`${SHOP}/values.yaml: AlertForge cannot tell how Helm reads this`)
+    // Helm's own words, with the repo's place on this machine taken out.
+    expect(r.stdout).toContain('Error: cannot load values.yaml')
+    expect(r.stdout).not.toContain(tmpDir)
     expect(r.stderr).not.toMatch(/\bat \S+\.js:\d+/)
   })
 

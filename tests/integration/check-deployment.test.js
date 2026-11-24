@@ -123,6 +123,23 @@ afterEach(async () => {
 })
 
 describe.skipIf(!CAN_RUN)('check-deployment', () => {
+  // Helm names the file it stops on by its place on this machine: said in
+  // the repo's terms, as Preview says it.
+  it('says what Helm stops on without where the repo is on this machine', async () => {
+    const values = path.join(gitops, 'charts', 'tiny', 'values.yaml')
+    await fs.writeFile(values, 'x: 1\n')
+    await fs.chmod(values, 0o000)
+    try {
+      const { code, out } = check(dir, {}, ['--repo', gitops])
+      expect(out).toContain('helm could not render the deployment')
+      expect(out).toContain('charts/tiny/values.yaml')
+      expect(out).not.toContain(gitops)
+      expect(code).toBe(1)
+    } finally {
+      await fs.chmod(values, 0o644)
+    }
+  })
+
   it('passes a deployment with good rules and no routing.yaml, checking only the rules', () => {
     const { code, out } = check()
     expect(out).toContain('Rules: passed (promtool)')

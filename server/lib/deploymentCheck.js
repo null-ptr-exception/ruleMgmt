@@ -9,7 +9,8 @@ import os from 'os'
 import path from 'path'
 import { checkRules, renderChart, runCommand } from './ruleCheck.js'
 import { ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
-import { resolveStack } from './stack.js'
+import { resolveStack, blockingProblems, CANNOT_TELL } from './stack.js'
+import { withoutPath } from './answerPaths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { openRepoAt, inRealRoot } from '../repo/locate.js'
 import { folderEntry } from '../repo/walk.js'
@@ -119,6 +120,8 @@ export async function checkRuleObjects(dir, repo) {
   let twice
   // Values AlertForge cannot tell Helm's reading of: Helm, at hand, decides.
   let cannotTell = null
+  // The repo's root as best told, which Helm's messages are said against.
+  let valuesRoot
   try {
     stack = await resolveStack(root, dir)
     if (stack.firstLayerPath !== undefined) {
@@ -137,7 +140,7 @@ export async function checkRuleObjects(dir, repo) {
     // Read from the repo's root when it can be told (--repo, or git), so a
     // link to another file of the repo is read as Helm reads it; else from
     // the folder it is in, as before.
-    let valuesRoot = root
+    valuesRoot = root
     if (stack.firstLayerPath === undefined) {
       const found = await repoRoot(dir, repo).catch(err => { if (err instanceof CannotCheck) return {}; throw err })
       if (found.root) valuesRoot = found.root
@@ -168,8 +171,12 @@ export async function checkRuleObjects(dir, repo) {
     if (err instanceof CannotCheck) throw err
     return { ok: false, lines: [`Rules: not checked — its _common stack cannot be read (${err.code || err.message})`] }
   }
-  if (stack.problems.length) return { ok: false, lines: ['Rules: not checked — Helm would not render it as it reads:', ...stack.problems.map(p => `  ${p.description}`)] }
-  const rules = await renderAndCheck(dir, stack)
+  if (blockingProblems(stack).length) return { ok: false, lines: ['Rules: not checked — Helm would not render it as it reads:', ...blockingProblems(stack).map(p => `  ${p.description}`)] }
+  // A _common's values AlertForge cannot tell Helm's reading of: Helm
+  // decides, as for the deployment's own (said once, with them).
+  const layerCannotTell = stack.problems.filter(p => p.kind === CANNOT_TELL && !cannotTell).map(p => `Values: ${p.description}`)
+  if (layerCannotTell.length) cannotTell = layerCannotTell.join('\n')
+  const rules = await renderAndCheck(dir, stack, { root: valuesRoot ?? root })
   if (!rules.rendered) return { ok: false, lines: ['helm could not render the deployment:', rules.output, ...(cannotTell ? [cannotTell] : [])] }
   const lines = [`Rules: ${rules.title}`, rules.output, cannotTell].filter(Boolean)
   if (twice.length) lines.push(...twice.map(t => `Values: warning: ${t}`))
@@ -184,7 +191,7 @@ export async function checkRuleObjects(dir, repo) {
  * @returns { rendered, ok, warned, title, output } — rendered false: Helm
  *   failed, and output is what it said
  */
-export async function renderAndCheck(dir, stack) {
+export async function renderAndCheck(dir, stack, { root = stack.repo?.root ?? path.dirname(dir) } = {}) {
   let rendered
   try {
     rendered = await renderChart(dir, ['template', releaseName(dir, stack), dir])
@@ -192,7 +199,9 @@ export async function renderAndCheck(dir, stack) {
     if (err.code === 'ENOENT') throw new CannotCheck(`helm is not available: ${process.env.HELM_BIN || 'helm'}`)
     // A template error, or helm unable to write Chart.lock and charts/ into
     // the folder: the mount must be writable by the uid it runs as.
-    return { rendered: false, ok: false, warned: false, title: 'not rendered', output: (err.stderr || err.message).trim() }
+    // Helm names files by their place on this machine: said in the repo's
+    // terms, as Preview says it (answerPaths.js).
+    return { rendered: false, ok: false, warned: false, title: 'not rendered', output: (await withoutPath(err.stderr || err.message, root)).trim() }
   }
   const check = await checkRules(rendered)
   if (check.missing) throw new CannotCheck(check.output)

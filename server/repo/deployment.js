@@ -4,6 +4,8 @@
  * plan, a new deployment, a migration).
  *
  *   loadDeployment(repo, rel, { chart }) → Loaded<Deployment>
+ *   loadOwnValues(repo, rel, { chart }) → its first part: the values and
+ *     their shape, the stack, no Template (the folder tree)
  *     rel    a folder deployment (deployments/t/a), a _common chart
  *            (deployments/t/_common/demo), or a legacy flat file
  *            (deployments/demo/f-values.yaml, given to Helm with -f)
@@ -41,7 +43,7 @@ import { isName } from './paths.js'
 import { valueFindings } from './findings/values.js'
 import { schemaValidator } from './schema.js'
 import { modelToSchema } from '../../src/utils/rulesFile.js'
-import { resolveStack, stackValues } from '../lib/stack.js'
+import { resolveStack, stackValues, CANNOT_TELL } from '../lib/stack.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -71,7 +73,20 @@ function modelOf(repo, template) {
   })
 }
 
-async function build(repo, rel, { chart, next }) {
+/**
+ * A deployment's own values and its stack, the first part of
+ * loadDeployment: the file read as Helm reads it, its stack, and its values
+ * under the stack's keys — unreadable or invalid as loadDeployment says,
+ * with no Template read and no value checked. For what needs only whether
+ * the values can be read and their shape (the folder tree). Once per
+ * snapshot, shared with loadDeployment.
+ *   ok({ rel, file, flat, isLayer, doc, stack, keys, chartName, bare }, findings)
+ */
+export function loadOwnValues(repo, rel, { chart } = {}) {
+  return repo.memo('deploymentOwn', `${rel}\0${chart ?? ''}`, () => readOwn(repo, rel, { chart }))
+}
+
+async function readOwn(repo, rel, { chart }) {
   const flat = isFlatFile(rel)
   const file = flat ? rel : `${rel}/values.yaml`
   const isLayer = !flat && isCommonChartPath(rel)
@@ -85,7 +100,7 @@ async function build(repo, rel, { chart, next }) {
   const keys = flat ? [] : stack.keys
   const chartName = flat ? chart : (stack.chart || chart || stack.claims || null)
   for (const p of stack?.problems ?? []) {
-    findings.push(finding({ code: `stack.${p.kind}`, file, helm: p.kind === 'stack-off' ? 'renders-differently' : 'fails', message: p.description, detail: { stack: true } }))
+    findings.push(finding({ code: `stack.${p.kind}`, file, helm: p.kind === 'stack-off' ? 'renders-differently' : p.kind === CANNOT_TELL ? 'unknown' : 'fails', message: p.description, detail: { stack: true } }))
   }
 
   // Its own values, under the keys of its stack: anything but a map there
@@ -107,7 +122,15 @@ async function build(repo, rel, { chart, next }) {
     }
     bare = v
   } else if (!flat && keys.length) bare = Object.create(null)
+  return ok({ rel, file, flat, isLayer, doc, stack, keys, chartName, bare }, findings)
+}
 
+
+async function build(repo, rel, { chart, next }) {
+  const read = await loadOwnValues(repo, rel, { chart })
+  if (read.state !== 'ok') return read
+  const { file, flat, isLayer, doc, stack, keys, chartName, bare } = read.value
+  const findings = [...read.findings]
   const layerValues = stack ? stackValues(stack, { own: bare }).layers : []
   // A key a _common above writes twice: Helm takes the later one, and it
   // deploys; which of the two the author meant cannot be told. Said to
@@ -179,7 +202,9 @@ async function build(repo, rel, { chart, next }) {
     layers: layerValues, effective: merged.value, template: tpl,
     model: columns.model, stack,
   }
-  if (!merged.unsure.length) findings.push(...valueFindings(dep, { every: !!next?.every }))
+  // Values a _common gives that AlertForge cannot tell Helm's reading of
+  // are not known: nothing is checked against a guess of them.
+  if (!merged.unsure.length && !(stack?.problems ?? []).some(p => p.kind === CANNOT_TELL)) findings.push(...valueFindings(dep, { every: !!next?.every }))
   return ok(dep, findings)
 }
 

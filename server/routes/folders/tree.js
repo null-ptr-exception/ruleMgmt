@@ -3,21 +3,27 @@
 import path from 'path'
 import { walk, childEntries } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
+import { createLimit } from '../../lib/limit.js'
 import { resolveStack } from '../../lib/stack.js'
 import { folderCommonOf, folderCommons, inheritsFromOf } from '../../lib/commonEdit.js'
 import { z } from 'zod'
 import { isName } from '../../repo/paths.js'
 import { route, repoPath } from '../../http/route.js'
-import { loadDeployment, deployedRows } from '../../repo/deployment.js'
+import { loadDeployment, loadOwnValues, deployedRows } from '../../repo/deployment.js'
 
 // One level of the tree: the walk's own folders (repo/walk.js), each with
 // what the tree shows of it.
+// How many of a folder's entries are read at once: far below any open-files limit.
+const NODES_AT_ONCE = 16
+
 async function listChildren(baseDir, parentPath) {
   const repo = openRepo(baseDir)
   // Every deployment in it has the same folders above it: each asked once.
   const folderCommonHere = folderCommons(baseDir, parentPath || '.', repo)
-  const folders = []
-  for (const e of await childEntries(repo, parentPath)) {
+  // A few at a time, as the walk lists them (repo/walk.js): each node's
+  // reads are its own.
+  const limit = createLimit(NODES_AT_ONCE)
+  const folders = await Promise.all((await childEntries(repo, parentPath)).map(e => limit(async () => {
     const nodePath = e.rel
     const absPath = path.join(baseDir, nodePath)
     const node = { name: e.name, path: nodePath }
@@ -36,15 +42,20 @@ async function listChildren(baseDir, parentPath) {
     }
     if (e.kind === 'deployment') {
       node.isDeployment = true
-      // Its values as Helm reads them (repo/deployment.js): one Helm cannot
-      // read is marked, as a folder that cannot be read is.
-      const dep = await loadDeployment(repo, nodePath)
+      // Its values as Helm reads them, and their shape (repo/deployment.js,
+      // no Template read): one Helm cannot read is marked, as a folder that
+      // cannot be read is.
+      const dep = await loadOwnValues(repo, nodePath)
       if (dep.state === 'unreadable') node.unreadable = `its values.yaml cannot be read (${dep.why})`
       else if (dep.state === 'invalid') node.unreadable = `its values.yaml cannot be used (${dep.findings.map(f => f.message).join('; ')})`
       // The Template at the bottom of its `_common` stack (#100), which
       // Preview and the editor open: not the `_common` chart it names.
       const stack = dep.state === 'ok' ? dep.value.stack : await resolveStack(baseDir, absPath, { repo })
-      node.chart = stack.chart || (await repo.helmYaml(`${nodePath}/Chart.yaml`)).value.dependencies[0].name
+      node.chart = stack.chart || stack.claims || (await repo.helmYaml(`${nodePath}/Chart.yaml`)).value.dependencies[0].name
+      // A _common reached through a hand-made link is not followed: marked,
+      // as Preview, the editor and Commit say it.
+      const linked = stack.problems.find(p => p.kind === 'stack-link')
+      if (linked && !node.unreadable) node.unreadable = linked.description
       // The _common it renders on, and the one its folder has (#103): a sync
       // target follows its source's, which may be another.
       node.inheritsFrom = inheritsFromOf(stack)
@@ -58,8 +69,8 @@ async function listChildren(baseDir, parentPath) {
     // Nothing in it is listed, checked or migrated (or, for a Chart.yaml
     // that cannot be read, it is no deployment that can be): said in the tree.
     if (e.kind === 'unreadable') node.unreadable = e.why
-    folders.push(node)
-  }
+    return node
+  })))
   return folders.sort((a, b) => a.name.localeCompare(b.name))
 }
 

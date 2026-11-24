@@ -256,7 +256,7 @@ crlf	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-
 crlf	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 crlf	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
 crlf	A	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
-tab-indent	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+tab-indent	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/t/a/values.yaml line 2: a tab in the indentation: Helm stops on it. Use spaces)	1	-	-	-		
 tab-indent	A	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 tab-indent	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 tab-indent	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
@@ -268,9 +268,9 @@ null-doc	A	tree	ok	200	no	-	n/a	-	-	0	1	0	-
 null-doc	A	all-list	ok	200	no	-	0	-	-	0	1	0	-		
 null-doc	A	editor	ok	200	no	values.required-empty	0	-	-	0	1	0	-		
 null-doc	A	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/,CpuRate/	0	1	0	w=-; names=Down		
-demo-null	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+demo-null	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/t/a/values.yaml: demo must be a map of values, not null: Helm stops on it ("type mismatch on demo") — write {} for no values, or remove the file)	1	-	-	-		
 demo-null	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=0 preview=-	
-demo-null	A	editor	ok	200	no	-	0	-	-	1	-	-	-	all-list=- editor=0 preview=-	count-while-helm-fails
+demo-null	A	editor	ok	200	no	values.chart-key	0	-	-	1	-	-	-	all-list=- editor=0 preview=-	
 demo-null	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=0 preview=-	
 trailing-dashes	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 trailing-dashes	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
@@ -284,15 +284,15 @@ second-doc-broken	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-
 second-doc-broken	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 second-doc-broken	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
 second-doc-broken	A	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
-not-yaml	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+not-yaml	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/t/a/values.yaml line 2: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document)	1	-	-	-		
 not-yaml	A	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 not-yaml	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 not-yaml	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
-top-scalar	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+top-scalar	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/t/a/values.yaml: the file must be a map of keys, not a number)	1	-	-	-		
 top-scalar	A	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 top-scalar	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 top-scalar	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
-top-list	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+top-list	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/t/a/values.yaml: the file must be a map of keys, not a list)	1	-	-	-		
 top-list	A	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 top-list	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 top-list	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
@@ -316,27 +316,27 @@ derived-overflow	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-
 derived-overflow	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 derived-overflow	A	editor	ok	200	no	values.derived	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=100000000000000000	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.freq=100000000000000000		
 derived-overflow	A	preview	ok	200	no	check-failed	1	3	w=problem	0	3	1	w=400000000000000000m; names=CpuHigh,CpuRate,Down		
-threshold-inf	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+threshold-inf	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/t/a/values.yaml: .inf is not a number JSON can hold: Helm stops on it)	1	-	-	-		
 threshold-inf	A	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 threshold-inf	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 threshold-inf	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
-unreadable-perm	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+unreadable-perm	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be read (permission denied)	1	-	-	-		
 unreadable-perm	A	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 unreadable-perm	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 unreadable-perm	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
-unreadable-dir	A	tree	ok	200	no	unreadable	n/a	-	-	0	1	0	-		
+unreadable-dir	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be read (it is a folder, not a file)	0	1	0	-		
 unreadable-dir	A	all-list	ok	200	no	null	-	-	-	0	1	0	-		
 unreadable-dir	A	editor	unreadable	409	no	-	-	-	-	0	1	0	-		
 unreadable-dir	A	preview	ok	200	no	no-summary	-	-	-	0	1	0	w=-; names=Down		no-count-helm-renders
-dangling-link	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+dangling-link	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be read (a link to a file that is not there)	1	-	-	-		
 dangling-link	A	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 dangling-link	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 dangling-link	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
-link-outside	A	tree	ok	200	no	unreadable	n/a	-	-	0	3	1	-		
+link-outside	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be read (it is a link that leads outside the repo)	0	3	1	-		
 link-outside	A	all-list	ok	200	no	null	-	-	-	0	3	1	-		no-count-helm-renders
 link-outside	A	editor	unreadable	409	no	-	-	-	-	0	3	1	_common.team="shop"; cpu.0.job="api"		no-count-helm-renders
 link-outside	A	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		no-count-helm-renders
-link-loop	A	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+link-loop	A	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be read (it is a link that leads round in a circle)	1	-	-	-		
 link-loop	A	all-list	ok	200	no	null	-	-	-	1	-	-	-		
 link-loop	A	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 link-loop	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
@@ -398,9 +398,9 @@ stack-unwrapped	S	all-list	ok	200	no	-	0	-	-	0	1	0	-
 stack-unwrapped	S	editor	ok	200	no	values.not-under-chart-key	0	-	_common.team="shop"	0	1	0	_common.team="shop"		
 stack-unwrapped	S	preview	ok	200	no	-	0	1	w=-; missing=CpuHigh/,CpuRate/	0	1	0	w=-; names=Down		
 stack-unwrapped	S	common-users	ok	200	no	-	0	-	cpu from template	0	1	0	-		
-stack-x-null	S	tree	ok	200	no	unreadable	n/a	-	-	1	-	-	-		
+stack-x-null	S	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/s/x/values.yaml: common.demo must be a map of values, not null: Helm stops on it ("type mismatch on demo") — write {} for no values, or remove the file)	1	-	-	-		
 stack-x-null	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=0 preview=- common-users=-	
-stack-x-null	S	editor	ok	200	no	-	0	-	_common.team="shop"	1	-	-	-	all-list=- editor=0 preview=- common-users=-	count-while-helm-fails
+stack-x-null	S	editor	ok	200	no	values.chart-key	0	-	_common.team="shop"	1	-	-	-	all-list=- editor=0 preview=- common-users=-	
 stack-x-null	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=0 preview=- common-users=-	
 stack-x-null	S	common-users	ok	200	no	-	-	-	cpu from template	1	-	-	-	all-list=- editor=0 preview=- common-users=-	
 stack-x-number-text	S	tree	ok	200	no	-	n/a	-	-	1	-	-	-		
@@ -485,9 +485,42 @@ layer-common-partial	L	preview	ok	200	no	-	1	3	w=5m	0	3	1	w=5m; names=CpuHigh,Cp
 layer-common-partial	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
 layer-chart-null	L	tree	ok	200	no	-	n/a	-	-	1	-	-	-		
 layer-chart-null	L	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- preview=- common-users=1	
-layer-chart-null	L	editor	ok	200	no	-	n/a	-	-	1	-	-	-		
+layer-chart-null	L	editor	ok	200	no	values.chart-key	n/a	-	-	1	-	-	-		
 layer-chart-null	L	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- preview=- common-users=1	
 layer-chart-null	L	common-users	ok	200	no	-	1	-	cpu from own	1	-	-	-	all-list=- preview=- common-users=1	count-while-helm-fails
+layer-cannot-tell	L	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
+layer-cannot-tell	L	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- preview=- common-users=1	no-count-helm-renders
+layer-cannot-tell	L	editor	unreadable	409	no	-	n/a	-	-	0	3	1	_common.team="shop"		
+layer-cannot-tell	L	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- preview=- common-users=1	no-count-helm-renders
+layer-cannot-tell	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-	all-list=- preview=- common-users=1	
+common-linked	A	tree	ok	200	no	unreadable	n/a	-	its _common chart deployments/t/_common/demo: deployments/t/_common is a link to deployments/s/_common — a _common chart is looked at where it is, not through a link: depend on deployments/s/_common/demo, or make a _common in this folder	0	3	1	-		
+common-linked	A	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- editor=0 preview=-	no-count-helm-renders
+common-linked	A	editor	ok	200	no	stack.stack-link,values.required-empty,stackProblems	0	-	-	0	3	1	_common.team="shop"; cpu.0.job="api"	all-list=- editor=0 preview=-	rows-differ
+common-linked	A	preview	failed	200	no	error	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- editor=0 preview=-	no-count-helm-renders
+stack-own-unreadable	S	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be read (permission denied)	1	-	-	-		
+stack-own-unreadable	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=- preview=- common-users=2	
+stack-own-unreadable	S	editor	unreadable	409	no	-	-	-	-	1	-	-	-	all-list=- editor=- preview=- common-users=2	
+stack-own-unreadable	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=- preview=- common-users=2	
+stack-own-unreadable	S	common-users	ok	200	no	-	2	-	cpu from here	1	-	-	-	all-list=- editor=- preview=- common-users=2	count-while-helm-fails
+stack-own-not-yaml	S	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/s/x/values.yaml line 2: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document)	1	-	-	-		
+stack-own-not-yaml	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=- preview=- common-users=2	
+stack-own-not-yaml	S	editor	unreadable	409	no	-	-	-	-	1	-	-	-	all-list=- editor=- preview=- common-users=2	
+stack-own-not-yaml	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=- preview=- common-users=2	
+stack-own-not-yaml	S	common-users	ok	200	no	-	2	-	cpu from here	1	-	-	-	all-list=- editor=- preview=- common-users=2	count-while-helm-fails
+stack-own-null	S	tree	ok	200	no	unreadable	n/a	-	its values.yaml cannot be used (deployments/s/x/values.yaml: common.demo must be a map of values, not null: Helm stops on it ("type mismatch on demo") — write {} for no values, or remove the file)	1	-	-	-		
+stack-own-null	S	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=2 preview=- common-users=2	
+stack-own-null	S	editor	ok	200	no	values.chart-key	2	-	_common.team="shop"; cpu.0.job="l1"	1	-	-	-	all-list=- editor=2 preview=- common-users=2	
+stack-own-null	S	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- editor=2 preview=- common-users=2	
+stack-own-null	S	common-users	ok	200	no	-	2	-	cpu from here	1	-	-	-	all-list=- editor=2 preview=- common-users=2	count-while-helm-fails
+layer-cannot-tell-rows	L	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
+layer-cannot-tell-rows	L	all-list	ok	200	no	null	-	-	-	0	3	1	-	all-list=- preview=- common-users=1	no-count-helm-renders
+layer-cannot-tell-rows	L	editor	unreadable	409	no	-	n/a	-	-	0	3	1	_common.team="shop"		
+layer-cannot-tell-rows	L	preview	ok	200	no	no-summary	-	-	-	0	3	1	w=4m; names=CpuHigh,CpuRate,Down	all-list=- preview=- common-users=1	no-count-helm-renders
+layer-cannot-tell-rows	L	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-	all-list=- preview=- common-users=1	
+tpl-default-rows	T	tree	ok	200	no	-	n/a	-	-	0	5	2	-		
+tpl-default-rows	T	all-list	ok	200	no	-	2	-	-	0	5	2	-	all-list=2 editor=0 preview=2	
+tpl-default-rows	T	editor	ok	200	no	-	0	-	_common.team="shop"	0	5	2	_common.team="shop"; cpu.0.job="t1"	all-list=2 editor=0 preview=2	rows-differ
+tpl-default-rows	T	preview	ok	200	no	-	2	5	w=4m	0	5	2	w=4m; names=CpuHigh,CpuRate,Down	all-list=2 editor=0 preview=2	
 tpl-common-partial	T	tree	ok	200	no	-	n/a	-	-	1	-	-	-		
 tpl-common-partial	T	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=1 preview=-	
 tpl-common-partial	T	editor	ok	200	no	values.required	1	-	cpu.0.job="api"	1	-	-	-	all-list=- editor=1 preview=-	

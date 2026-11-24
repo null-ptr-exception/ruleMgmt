@@ -171,7 +171,10 @@ export async function baseFiles(ws) {
 //   cli                a process: args(ws) → [script, ...args]
 const read = (ws, rel) => fs.readFile(path.join(ws.root, rel), 'utf-8')
 const append = (ws, rel, line) => fs.appendFile(path.join(ws.root, rel), line)
-const textSave = (dep, marker) => async (ws, ctx) => ({ method: 'POST', url: vals(dep), body: { values: `${(await ws.api('GET', vals(dep))).data.content}# ${marker}\n`, ...(ctx.version ? { version: ctx.version } : {}) } })
+// The text the page would send: what the file holds, as opened (a
+// deployment that does not open sends no text: "undefined", as before).
+const openedText = async (ws, dep) => ((await ws.api('GET', vals(dep))).status === 200 ? fs.readFile(path.join(ws.root, dep, 'values.yaml'), 'utf-8') : undefined)
+const textSave = (dep, marker) => async (ws, ctx) => ({ method: 'POST', url: vals(dep), body: { values: `${await openedText(ws, dep)}# ${marker}\n`, ...(ctx.version ? { version: ctx.version } : {}) } })
 const valuesVersion = dep => async ws => (await ws.api('GET', vals(dep))).data.version
 const commonPlan = async (ws, query) => (await ws.api('GET', `/api/v2/folders/common/plan?${query}`)).data
 const rel = (base, list) => (list || []).map(f => path.posix.normalize(`${base}/${f.startsWith('- ') ? f.slice(2) : f}`))

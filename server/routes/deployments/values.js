@@ -52,13 +52,13 @@ export function valuesRoutes(router) {
     if (read.state === 'absent') return { status: 404, body: { error: 'Not found' } }
     if (read.state === 'unreadable') throw new UnreadableError(file, { reason: read.why })
     if (read.state === 'invalid') throw new UnreadableError(file, { reason: read.findings.map(reasonOf).join('; ') })
-    const content = (await repo.file(rel)).value.text
     // Only the deployment's own values, under every key of its stack (#100).
     const stack = await resolveStack(gitopsDir, dir, { repo })
     const parsed = unwrapPath(read.value, stack.keys)
     // What Helm does with them, for the page to say (findings, policy.js: as a save would decide).
     const loadedDep = await loadDeployment(repo, direct ? path.relative(gitopsDir, dir).replace(/\\/g, '/') : rel, { chart })
-    const findings = loadedDep.state === 'ok' ? loadedDep.findings.map(f => ({ code: f.code, message: f.message, helm: f.helm, ...(f.at ? { at: f.at } : {}) })) : []
+    // Values Helm stops on as a whole (`demo: null`) open as no rows, and say why.
+    const findings = loadedDep.state === 'ok' || loadedDep.state === 'invalid' ? loadedDep.findings.map(f => ({ code: f.code, message: f.message, helm: f.helm, ...(f.at ? { at: f.at } : {}) })) : []
     // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
     // anything; say so, or it looks like the file being edited.
     const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
@@ -80,7 +80,7 @@ export function valuesRoutes(router) {
         problems.stackProblems = [...(problems.stackProblems || []), `what it inherits cannot be read (${err.code || err.message})`]
       }
     }
-    return { status: 200, body: { content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited, ...(findings.length ? { findings } : {}) } }
+    return { status: 200, body: { parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited, ...(findings.length ? { findings } : {}) } }
   }))
 
   router.post('/:chart/:deployment', route('deployments.save', { ...DEPLOYMENT_REQUEST, body: SAVE_BODY }, async (input, { gitopsDir, res }) => {

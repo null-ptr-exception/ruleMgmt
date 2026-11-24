@@ -5,6 +5,7 @@ import { decide } from '../../repo/policy.js'
 import { finding } from '../../repo/finding.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { factsOf } from './facts.js'
+import { CANNOT_TELL } from '../stack.js'
 
 /**
  * One deployment's values, as a commit checks them (policy.js, `commit`):
@@ -21,8 +22,8 @@ import { factsOf } from './facts.js'
 export async function valuesFindings(gitopsDir, dep, stack, { repo = openRepo(gitopsDir), policy = 'commit' } = {}) {
   const loaded = await loadDeployment(repo, dep)
   // A file its stack already said cannot be read (unreadable, or not
-  // values: resolveStack's values-unreadable) is said once.
-  const stackSaid = stack.problems.some(p => p.kind === 'values-unreadable')
+  // values: resolveStack's values-unreadable, or values-cannot-tell) is said once.
+  const stackSaid = stack.problems.some(p => p.kind === 'values-unreadable' || p.kind === CANNOT_TELL)
   const facts = loaded.state === 'unreadable'
     ? (stackSaid ? [] : [finding({ code: 'values.unreadable', file: loaded.file, helm: 'unknown', message: `${dep}: values.yaml cannot be read (${loaded.why}), so Helm cannot render it` })])
     : loaded.state === 'invalid' && stackSaid ? []

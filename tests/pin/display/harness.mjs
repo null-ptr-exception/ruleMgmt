@@ -136,6 +136,8 @@ export async function runRow(ws, c) {
     return {
       cls: res.status >= 400 ? cls(res) : !node ? 'absent' : node.isDeployment ? 'ok' : 'not-deployment',
       status: res.status, rows: 'n/a', mark: marks.join(',') || '-',
+      // Why it is marked, as its tooltip says it (DeploymentTree).
+      values: node?.unreadable || '-',
       note: node?.problems?.join(' / ') || res.data?.error, raw: res.text,
     }
   })

@@ -37,6 +37,7 @@ import { invalid, ok } from './loaded.js'
 import { readRepoFile, repoRel } from './readRepoFile.js'
 import { loadTemplate, loadTemplateFiles } from './template.js'
 import { readRepoDir } from './readRepoDir.js'
+import { realBaseOf } from './paths.js'
 
 const shown = v => (typeof v === 'string' ? JSON.stringify(v) : String(v))
 
@@ -68,6 +69,9 @@ function normalizeOverlay(overlay) {
 
 function makeRepo(root, overlay, sharedFiles, log) {
   const files = new Map()
+  // The repo's real path, asked once for the snapshot's reads.
+  let realRootP = null
+  const realRoot = () => (realRootP ??= realBaseOf(root))
   const built = new Map() // kind → key → Promise
   const memo = (kind, key, build) => {
     if (!built.has(kind)) built.set(kind, new Map())
@@ -93,7 +97,7 @@ function makeRepo(root, overlay, sharedFiles, log) {
       const key = repoRel(rel)
       const cache = overlay.has(key) ? files : sharedFiles
       if (!overlay.has(key)) log.files.add(key)
-      return once(cache, key, () => readRepoFile(root, key, { overlay }))
+      return once(cache, key, () => readRepoFile(root, key, { overlay, realRoot: realRoot() }))
     },
     helmYaml(rel) {
       const key = repoRel(rel)

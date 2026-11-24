@@ -201,7 +201,8 @@ export default function AlertUserView() {
       setStackInfo(data.stack || null)
       setStackProblems(data.stackProblems || null)
       setLoadedVersion(data.version || null)
-      setReadNotes((data.findings || []).filter(f => f.code === 'yaml.read-differently').map(f => f.message))
+      // What Helm reads otherwise than it looks, and values Helm stops on as a whole.
+      setReadNotes((data.findings || []).filter(f => f.code === 'yaml.read-differently' || f.code === 'values.chart-key').map(f => f.message))
       const parsed = data.parsed || {}
       const { _common, ...rest } = parsed
       setCommonValues(_common || {})

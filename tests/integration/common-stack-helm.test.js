@@ -119,7 +119,8 @@ const cases = [
   ['the _common link asks a version the Template is not at', async r => { await r.base(1); await r.write(`${L1}/Chart.yaml`, { apiVersion: 'v2', name: 'common', version: '0.1.0', dependencies: [{ name: C, version: '9.9.9' }] }); await r.onLayer(1, {}) }, 6, 'same'],
   ['the _common folder is a link', async r => {
     await r.base(1); await fs.rename(r.abs('shop/_common'), r.abs('shop/real-common')); await fs.symlink('real-common', r.abs('shop/_common')); await r.onLayer(1, {})
-  }, 6, 'same'],
+    // Helm renders through it; a hand-made link is not supported, and said.
+  }, 6, /shop\/_common is a link to shop\/real-common — a _common chart is looked at where it is, not through a link: make a _common in this folder/],
   ['a _common named as the deployment asks (shared)', async r => {
     await r.base(1); await r.write(`${L1}/Chart.yaml`, { apiVersion: 'v2', name: 'shared', version: '0.1.0', dependencies: [{ name: C, version: '>=0.0.0-0' }] })
     await r.deployment('shop/d', [r.fileDep('shop/d', L1, 'shared')], { shared: { [C]: { _common: { owner: 'mine' } } } })
@@ -200,7 +201,7 @@ const cases = [
   ['the Template directly and the _common too', async r => {
     await r.base(1); await r.deployment('shop/d', [r.fileDep('shop/d', `charts/${C}`, C), r.fileDep('shop/d', L1)], { [C]: { _common: { owner: 'direct', namespace: 'n' }, ...empty, [CPU]: [{ warn_pct: 1, critical_pct: 2 }] }, common: { [C]: {} } })
   }, 8, /Helm renders each of them/],
-  ['a _common\'s values.yaml that is not YAML', async r => { await r.base(2); await r.write(`${L1}/values.yaml`, 'x: [\n'); await r.onLayer(2, {}) }, 'error', /shop\/_common\/mariadb-alerts\/values\.yaml cannot be read/],
+  ['a _common\'s values.yaml that is not YAML', async r => { await r.base(2); await r.write(`${L1}/values.yaml`, 'x: [\n'); await r.onLayer(2, {}) }, 'error', /shop\/_common\/mariadb-alerts\/values\.yaml: AlertForge cannot tell how Helm reads this/],
 
   ['a null group in the deployment', async r => { await r.base(1); await r.onLayer(1, { [DISK]: null }) }, 'varies', 'value'],
   ['a null group in the second layer', async r => { await r.base(2, { l2: { [DISK]: null } }); await r.onLayer(2, {}) }, 'varies', 'value'],

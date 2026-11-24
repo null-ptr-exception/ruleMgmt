@@ -47,7 +47,7 @@ test.describe('a deployment whose values.yaml cannot be read', () => {
     const mark = dev.getByRole('img', { name: 'cannot be read' })
     await expect(mark).toBeVisible({ timeout: 8000 })
     await mark.hover()
-    await expect(page.getByRole('tooltip')).toContainText('This deployment cannot be read (its values.yaml cannot be read (it is a folder, not a file))', { timeout: 5000 })
+    await expect(page.getByRole('tooltip')).toContainText('This deployment cannot be read as it is (its values.yaml cannot be read (it is a folder, not a file))', { timeout: 5000 })
     await page.getByText('cpu', { exact: true }).first().click()
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
@@ -87,5 +87,35 @@ test.describe('a deployment whose values hold 010', () => {
     await page.getByRole('button', { name: 'Save' }).click()
     await expect.poll(() => fs.readFile(path.join(WORKSPACE, DIR, 'values.yaml'), 'utf-8'), { timeout: 8000 }).toContain('thr: 8')
     await expect(page.getByTestId('values-read-notes')).toHaveCount(0)
+  })
+})
+
+// The chart's key written with nothing under it: Helm stops on it, and the
+// page says so where it says how Helm reads the values, instead of a silent
+// empty table.
+test.describe('a deployment whose chart key holds nothing', () => {
+  const NULLED = 'e2e-null-values'
+  const DIR = `deployments/${NULLED}/dev`
+  test.afterAll(async ({ request }) => { await removeChart(request, NULLED) })
+
+  test('says Helm stops on it', async ({ page, request }) => {
+    await removeChart(request, NULLED)
+    expect((await request.post('/api/v2/charts', { data: { name: NULLED } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/templates/${NULLED}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
+    expect((await request.post('/api/v2/folders/init', { data: { folder: DIR, chart: NULLED } })).status()).toBeLessThan(300)
+    await fs.writeFile(path.join(WORKSPACE, DIR, 'values.yaml'), `${NULLED}: null\n`)
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = page.locator('.ant-tree')
+    for (const segment of ['deployments', NULLED]) {
+      const node = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${segment}$`) }).first()
+      await expect(node).toBeVisible({ timeout: 8000 })
+      const switcher = node.locator('.ant-tree-switcher_close')
+      if (await switcher.count() > 0) await switcher.click()
+    }
+    await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
+      .first().locator('.ant-tree-node-content-wrapper').click()
+    await page.getByText('cpu', { exact: true }).first().click()
+    await expect(page.getByTestId('values-read-notes')).toContainText(`${NULLED} must be a map of values, not null: Helm stops on it`, { timeout: 8000 })
   })
 })

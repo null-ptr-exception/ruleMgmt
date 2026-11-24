@@ -308,7 +308,14 @@ async function unreadableOnTheWay(at, err) {
 export async function realPlace(base, ...parts) {
   const target = inside(base, ...parts)
   if (!target) return { target: null, why: 'outside' }
-  const realBase = await fs.realpath(path.resolve(base)).catch(() => path.resolve(base))
+  return placeOf(target, await realBaseOf(base))
+}
+
+/** The repo's own real path, as realPlace compares a path with it. */
+export const realBaseOf = base => fs.realpath(path.resolve(base)).catch(() => path.resolve(base))
+
+/** realPlace for a `target` already inside the repo whose real path is `realBase`. */
+export async function placeOf(target, realBase) {
   let at = target
   let rest = ''
   for (;;) {

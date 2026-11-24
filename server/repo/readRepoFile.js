@@ -22,7 +22,7 @@ import fs from 'fs/promises'
 import { constants } from 'fs'
 import path from 'path'
 import { Buffer } from 'node:buffer'
-import { inside, realPlace } from './paths.js'
+import { inside, placeOf, realBaseOf } from './paths.js'
 import { absent, ok, unreadable } from './loaded.js'
 
 /** Helm refuses a chart file larger than this (5 MiB, Helm 3.19); AlertForge reads no file larger. */
@@ -77,16 +77,18 @@ const tooBig = `it is larger than ${MAX_FILE_BYTES / 1024 / 1024} MiB, the most 
 const CHANGED = Symbol('changed')
 const TRIES = 5
 
-export async function readRepoFile(root, rel, { overlay } = {}) {
+// `realRoot`: the repo's real path, when the caller has it (a snapshot asks
+// once for all its files); else asked here.
+export async function readRepoFile(root, rel, { overlay, realRoot } = {}) {
   const key = repoRel(rel)
   for (let n = 1; ; n++) {
-    const loaded = await readOnce(root, rel, key, overlay)
+    const loaded = await readOnce(root, rel, key, overlay, realRoot)
     if (loaded !== CHANGED) return loaded
     if (n === TRIES) return unreadable(key, 'it kept changing while it was being read')
   }
 }
 
-async function readOnce(root, rel, key, overlay) {
+async function readOnce(root, rel, key, overlay, realRoot) {
   if (overlay?.has(key)) {
     const data = overlay.get(key)
     if (data === null) return absent(key)
@@ -110,12 +112,14 @@ async function readOnce(root, rel, key, overlay) {
   }
   let place
   try {
-    place = await realPlace(root, key)
+    place = await placeOf(abs, await (realRoot ?? realBaseOf(root)))
   } catch (err) {
     return failed(key, err)
   }
   if (place.why) return unreadable(key, place.why === 'git-dir' ? "it is a link into git's own folder" : 'it is a link that leads outside the repo', 'outside-link')
-  const st = await fs.stat(abs).catch(err => err)
+  // Not a link: what lstat saw is the file (the open below checks it is
+  // still the same one).
+  const st = link.isSymbolicLink() ? await fs.stat(abs).catch(err => err) : link
   if (st instanceof Error) return st.code === 'ENOENT' ? absent(key) : failed(key, st)
   const kind = kindOf(st)
   if (kind) return unreadable(key, kind, st.isDirectory() ? 'folder' : 'not-a-file')

@@ -22,6 +22,9 @@ const TPL = 'charts/demo/values.yaml'
 // A deployment's or a layer's Chart.yaml whose dependency has a condition.
 const A_CHART = 'deployments/t/a/Chart.yaml'
 const L_CHART = 'deployments/s/_common/demo/Chart.yaml'
+// The layer's values with two cpu rows.
+const L_VALUES = 'deployments/s/_common/demo/values.yaml'
+const L_ROWS = 'demo:\n  _common:\n    team: shop\n  cpu:\n    - { job: l1 }\n    - { job: l2 }\n'
 const withCondition = (name, extra) => `apiVersion: v2\nname: ${name}\nversion: 0.1.0\ndependencies:\n  - name: demo\n    version: '>=0.0.0-0'\n${extra}    condition: demo.enabled\n`
 
 export const BASE = {
@@ -162,6 +165,21 @@ export const CASES = [
   { id: 'layer-common-partial', target: 'L', text: 'demo:\n  _common:\n    base: 5\n', files: { 'deployments/s/x/values.yaml': 'common:\n  demo:\n    _common:\n      team: shop\n    cpu:\n      - job: x\n' } },
   // The chart key of a layer written with nothing after it.
   { id: 'layer-chart-null', target: 'L', text: 'demo: ~\n' },
+  // A layer AlertForge's reader cannot tell Helm's reading of (a |2 block),
+  // which Helm renders.
+  { id: 'layer-cannot-tell', target: 'L', text: 'demo:\n  _common:\n    team: shop\n  note: |2\n     two spaces more\n' },
+  // By hand: deployments/t/_common is a link to deployments/s/_common, and
+  // the deployment renders on the _common through it.
+  { id: 'common-linked', target: 'A', text: 'common:\n  demo:\n    cpu:\n      - { job: api }\n', json: { cpu: [{ job: 'api' }] }, files: { 'deployments/t/_common': { link: '../s/_common' }, [A_CHART]: "apiVersion: v2\nname: a\nversion: 0.1.0\ndependencies:\n  - name: common\n    version: '>=0.0.0-0'\n    repository: file://../_common/demo\n" } },
+  // The layer gives rows while the deployment's own values cannot be read,
+  // are not YAML, or hold nothing under the chart's key.
+  { id: 'stack-own-unreadable', target: 'S', text: { mode: 0, content: BASE.X }, files: { [L_VALUES]: L_ROWS } },
+  { id: 'stack-own-not-yaml', target: 'S', text: 'common:\n  demo: [\n', files: { [L_VALUES]: L_ROWS } },
+  { id: 'stack-own-null', target: 'S', text: 'common:\n  demo: null\n', files: { [L_VALUES]: L_ROWS } },
+  // A layer AlertForge cannot tell Helm's reading of, which gives rows.
+  { id: 'layer-cannot-tell-rows', target: 'L', text: L_ROWS + '  note: |2\n     two spaces more\n' },
+  // The Template's own values.yaml gives default rows; the deployment none.
+  { id: 'tpl-default-rows', target: 'T', text: W(C), files: { [TPL]: 'cpu:\n  - { job: t1 }\n  - { job: t2 }\n' } },
   // The Template's own Common Values, without the required one.
   { id: 'tpl-common-partial', target: 'T', text: W(ROW('{ job: api }')), files: { [TPL]: '_common:\n  base: 3\ncpu: []\n' } },
   // flat legacy file (bare values)

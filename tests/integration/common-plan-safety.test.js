@@ -215,7 +215,8 @@ describe.skipIf(!HAS_HELM)('links and the deployment routes', { timeout: 60000 }
     await write(`${SHOP}/values.yaml`, 'x: [\n')
     const got = await api('GET', `/api/v2/deployments/${C}/b?folder=shop/b`)
     expect(got.status).toBe(200)
-    expect(got.data.stackProblems.join('\n')).toMatch(/shop\/_common\/mariadb-alerts\/values\.yaml cannot be read/)
+    // An unclosed [ is a text AlertForge cannot tell Helm's reading of: named, and left to Helm.
+    expect(got.data.stackProblems.join('\n')).toMatch(/shop\/_common\/mariadb-alerts\/values\.yaml: AlertForge cannot tell how Helm reads this/)
   })
 
   it('a new deployment under a broken _common leaves no folder behind, nor one that was there', async () => {

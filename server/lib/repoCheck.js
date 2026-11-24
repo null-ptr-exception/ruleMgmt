@@ -24,7 +24,7 @@ import { openRepo } from '../repo/openRepo.js'
 import { copyRepo, tempFolder } from '../repo/copyRepo.js'
 import { collectChartChecks } from './chartChecks.js'
 import { collectDeploymentChecks } from './commitChecks.js'
-import { resolveStack } from './stack.js'
+import { resolveStack, blockingProblems } from './stack.js'
 import { renderAndCheck, helmHome, CannotCheck } from './deploymentCheck.js'
 import { chartsDir } from '../repo/template.js'
 import { walk } from '../repo/walk.js'
@@ -149,8 +149,8 @@ async function renderIn(root, toRender, { jobs, shown, deployments, templates, n
       const stack = await resolveStack(copy.root, dir, { repo })
       // What keeps Helm from rendering it was said by the checks above, on
       // the repo itself: the copy reads it otherwise. Never a silent pass.
-      if (stack.problems.length) {
-        return [{ group: dep, notChecked: true, file: dep, action: 'refuse', code: 'deployment.not-rendered', message: `not checked: not rendered, as the copy Helm renders in reads its _common stack otherwise than the repo: ${asRepo(stack.problems.map(p => p.description).join('; '), copy.root, shown)}` }]
+      if (blockingProblems(stack).length) {
+        return [{ group: dep, notChecked: true, file: dep, action: 'refuse', code: 'deployment.not-rendered', message: `not checked: not rendered, as the copy Helm renders in reads its _common stack otherwise than the repo: ${asRepo(blockingProblems(stack).map(p => p.description).join('; '), copy.root, shown)}` }]
       }
       const r = await renderAndCheck(dir, stack)
       const at = { group: dep, notChecked: false, file: dep }

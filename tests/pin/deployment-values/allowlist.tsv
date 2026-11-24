@@ -133,3 +133,21 @@ layer-common-partial	init	accepts-what-helm-fails	policy	a new deployment is mad
 tpl-common-partial	init	accepts-what-helm-fails	policy	a new deployment is made to be filled in: a required value nothing gives yet (Helm stops on it) is asked for when it is saved, and by Commit
 group-null	common-plan	refuses-what-helm-renders	policy	a null moved onto a new _common would deploy differently on Helm 3.15 and 3.19, and its save and Commit would refuse it: the plan refuses it first
 once-group-null	common-plan	refuses-what-helm-renders	policy	a null moved onto a new _common would deploy differently on Helm 3.15 and 3.19, and its save and Commit would refuse it: the plan refuses it first
+layer-cannot-tell	save-text	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell	migration-apply	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell	commit	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell	check-repo	refuses-what-helm-renders	policy	check-repo renders a deployment on a _common AlertForge cannot tell Helm's reading of, and refuses it as Commit does, as it refuses such values of the deployment's own
+common-linked	common-plan	refuses-what-helm-renders	policy	a _common reached through a hand-made link is not supported: making a _common there is refused
+common-linked	save-text	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	sync	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	migration-apply	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	commit	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	preview	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	check-deployment	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	check-repo	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+stack-own-null	migration-preview	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+stack-own-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+layer-cannot-tell-rows	save-text	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell-rows	migration-apply	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell-rows	commit	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell-rows	check-repo	refuses-what-helm-renders	policy	check-repo renders a deployment on a _common AlertForge cannot tell Helm's reading of, and refuses it as Commit does, as it refuses such values of the deployment's own

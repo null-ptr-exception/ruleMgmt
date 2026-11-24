@@ -11,6 +11,9 @@ import { WORKSPACE } from './workspace.js'
 
 const CHART = 'e2e-editor-rules'
 
+// A deployment's values.yaml as it is on disk ('' when there is none).
+const valuesOnDisk = rel => fs.readFile(path.join(WORKSPACE, rel), 'utf-8').catch(() => '')
+
 const CPU_RULES = `group: cpu
 columns:
   namespace: {type: string, required: true}
@@ -123,8 +126,7 @@ rules:
     await dialog.getByRole('button', { name: 'Change in place' }).click()
 
     await expect.poll(async () => {
-      const dep = await (await request.get(`/api/v2/deployments/${CHART}/prod`)).json()
-      return dep.content || ''
+      return valuesOnDisk(`deployments/${CHART}/prod-values.yaml`)
     }, { timeout: 8000 }).not.toContain('warn')
 
     // reset the fixture for the tests after this one
@@ -215,7 +217,7 @@ rules:
 `
     expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': optionalWarn }, confirmBreaking: true } })).ok()).toBeTruthy()
     expect((await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p' }] } } })).ok()).toBeTruthy()
-    const deployment = async () => (await (await request.get(`/api/v2/deployments/${CHART}/prod`)).json()).content || ''
+    const deployment = () => valuesOnDisk(`deployments/${CHART}/prod-values.yaml`)
     const before = await deployment()
     try {
       await openChart(page)
@@ -300,7 +302,7 @@ rules:
 `
     expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': orphanWarn }, confirmBreaking: true } })).ok()).toBeTruthy()
     expect((await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p', warn: 90 }] } } })).ok()).toBeTruthy()
-    const deployment = async () => (await (await request.get(`/api/v2/deployments/${CHART}/prod`)).json()).content || ''
+    const deployment = () => valuesOnDisk(`deployments/${CHART}/prod-values.yaml`)
     try {
       await openChart(page)
       // Someone else touches the file (a comment: nothing breaking).
@@ -388,7 +390,7 @@ rules:
 
       // The target ends up with the source's file, not its old column.
       await expect.poll(async () => {
-        const [src, tgt] = await Promise.all([SRC, TGT].map(async f => (await (await request.get(valuesUrl(f))).json()).content || ''))
+        const [src, tgt] = await Promise.all([SRC, TGT].map(f => valuesOnDisk(`${f}/values.yaml`)))
         return { same: src === tgt, warn: tgt.includes('warn'), namespace: tgt.includes('namespace: p') }
       }, { timeout: 8000 }).toEqual({ same: true, warn: false, namespace: true })
     } finally {

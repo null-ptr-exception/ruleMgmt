@@ -33,6 +33,8 @@ import yaml from 'js-yaml'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { unwrapPath } from './subchart.js'
 import { openRepo } from '../repo/openRepo.js'
+import { linkOnTheWay } from '../repo/paths.js'
+import { folderEntry } from '../repo/walk.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 // More hops than this is a loop of links, not a stack.
@@ -72,7 +74,8 @@ export const dependenciesOf = chart => (Array.isArray(chart?.dependencies) ? cha
 /**
  * A values.yaml, as the repo's reader reads it (as Helm does): `{ doc }`,
  * `{ doc: {} }` when there is none, `{ error }` when it cannot be read or
- * is not YAML Helm reads.
+ * is not YAML Helm reads, `{ doc: {}, cannotTell }` when AlertForge cannot
+ * tell what Helm reads in it (Helm decides: what it renders is shown).
  */
 async function readValuesDoc(repo, gitopsDir, dir) {
   const file = rel(gitopsDir, path.join(dir, 'values.yaml'))
@@ -80,7 +83,10 @@ async function readValuesDoc(repo, gitopsDir, dir) {
   const loaded = await repo.helmYaml(file)
   if (loaded.state === 'absent') return { doc: {} }
   if (loaded.state === 'unreadable') return { error: loaded.why }
-  if (loaded.state === 'invalid') return { error: loaded.findings.map(f => f.message.replace(/^\S+ (line \d+: )?/, '')).join('; ') }
+  if (loaded.state === 'invalid') {
+    const why = loaded.findings.map(f => f.message.replace(/^\S+ (line \d+: )?/, '')).join('; ')
+    return loaded.findings.every(f => f.helm === 'unknown') ? { doc: {}, cannotTell: why } : { error: why }
+  }
   return { doc: loaded.value }
 }
 
@@ -153,7 +159,9 @@ async function chartsIn(dir) {
  *             `{ path, keys, doc }`, `keys` their own values' wrapping
  *   doc       the folder's own values.yaml
  *   problems  why Helm renders none of it, or renders what AlertForge
- *             cannot show: `{ kind, description }`, naming the layer
+ *             cannot show: `{ kind, description }`, naming the layer;
+ *             'values-cannot-tell' alone leaves the render to Helm
+ *             (CANNOT_TELL, blockingProblems)
  */
 export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) } = {}) {
   const templatesDir = path.resolve(gitopsDir, chartsDirName())
@@ -257,9 +265,22 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
       break walk
     }
     visited.add(path.resolve(cur))
+    // A _common reached through a hand-made link (a _common folder, or one
+    // above it, that is a link): not followed, here as by every route that
+    // is asked for it. AlertForge's own links, in a _common's charts/, lead
+    // to where the next one is.
+    const link = !self && !layerPath.startsWith('../') && (await folderEntry(repo, layerPath)).link ? await linkOnTheWay(gitopsDir, layerPath) : null
+    if (link) {
+      lastLayerFolder = cur
+      problems.push(problem('stack-link', `its _common chart ${layerPath}: ${link.why} — a _common chart is looked at where it is, not through a link: ${link.real && isCommonChartPath(link.real) ? `depend on ${link.real}, or ` : ''}make a _common in this folder`))
+      break walk
+    }
     const values = await readValuesDoc(repo, gitopsDir, cur)
     // Named, and the stack still followed: what it renders on is still known.
     if (values.error) problems.push(problem('values-unreadable', `${layerPath}/values.yaml cannot be read (${values.error}), so Helm cannot render it`))
+    // Not a reason to say Helm renders nothing: Helm decides, and what it
+    // inherits from there is not shown as if known.
+    if (values.cannotTell) problems.push(problem('values-cannot-tell', `${layerPath}/values.yaml: ${values.cannotTell}, so what it gives is not shown — Helm decides what deploys`))
     const layerDoc = values.doc ?? {}
     if (!self) layers.push({ path: layerPath, doc: layerDoc })
     seen = self ? layerDoc : mergeValues(layerDoc, at(seen, key))
@@ -329,6 +350,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
   const groups = await templateGroups(repo, result.chart)
   result.groups = groups
   if (own?.error) problems.push(problem('values-unreadable', `${rel(gitopsDir, dir)}/values.yaml cannot be read (${own.error}), so Helm cannot render it`))
+  if (own?.cannotTell) problems.push(problem('values-cannot-tell', `${rel(gitopsDir, dir)}/values.yaml: ${own.cannotTell}, so what it gives is not shown — Helm decides what deploys`))
   return result
 }
 
@@ -341,6 +363,11 @@ async function templateGroups(repo, chart) {
 }
 
 export { unwrapPath }
+
+/** The problem kind that leaves what deploys to Helm: AlertForge cannot tell a layer's values. */
+export const CANNOT_TELL = 'values-cannot-tell'
+/** The problems that keep Helm from rendering it as AlertForge shows it (all but CANNOT_TELL). */
+export const blockingProblems = stack => stack.problems.filter(p => p.kind !== CANNOT_TELL)
 
 /** `values` wrapped under `keys`, outermost first. */
 export function wrapPath(values, keys) {

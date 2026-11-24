@@ -535,6 +535,17 @@ shop/prod/Chart.yaml                     dependencies: [{name: common, version: 
 shop/prod/values.yaml                    common: {mariadb-alerts: {...prod's own...}}
 ```
 
+The links AlertForge makes are the ones in a `_common`'s `charts/`. A
+`_common` folder shared by a link made by hand (`team-b/_common →
+../shop/_common`) is not followed: the tree marks a deployment that
+depends on it, Preview, `check-deployment` and the editor name the link and
+the `_common` to depend on instead, and the Sync dialogs give it no row
+count. `check-deployment` and `check-repo` fail such a deployment (exit 1),
+as they fail one whose `values.yaml` (or a `_common`'s) is a link out of
+the repo: it is a deployment, and what it renders on is refused. Exit 2 is
+for what is no deployment at all — a deployment folder that is itself a
+link, or is reached through one.
+
 Helm renders `prod` with `_common`'s values under its own: Common Values key
 by key, a group's rows as a whole — a group `prod` writes replaces the
 inherited one, `[]` clears it. A `_common` made by AlertForge gives every
@@ -623,7 +634,9 @@ otherwise than they look (`010` is 8 to Helm, `yes` is true), when they are
 not under the chart's name, or when a key is written twice — see
 [writing values by hand](rules-format.md#writing-values-by-hand). A problem
 in what a `_common` above gives is said when you save, not refused: it is
-fixed on that `_common`.
+fixed on that `_common`. A file whose chart key holds nothing
+(`mariadb-alerts: null`) opens as no rows, and the page says Helm stops on
+it, next to the Save button.
 
 In a group with selectors, a row that is `.*` covers everything the rows
 under it do not. **Scope** says which rows a row gives up (*excludes N* —
@@ -1293,7 +1306,11 @@ block, an unclosed `[`) is left to Helm: if Helm fails on it the check
 fails (exit 1) with Helm's error, and if Helm renders it the rest is
 checked on what Helm rendered, with a line saying AlertForge cannot tell
 how Helm reads the file (the editor and Commit refuse it, though it
-deploys).
+deploys). The same goes for the `values.yaml` of a `_common` it renders on, and
+Preview does the same: it shows what Helm renders, or Helm's error, with
+that line beside the check and no summary of values AlertForge cannot read. `check-repo`
+renders such a deployment as well, and refuses it as Commit does (exit 1),
+as it refuses such values of the deployment's own.
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \

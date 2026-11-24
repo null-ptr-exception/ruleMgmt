@@ -2,7 +2,7 @@ import express from 'express'
 import path from 'path'
 import { readTemplate } from '../lib/chartFiles.js'
 import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
-import { resolveStack } from '../lib/stack.js'
+import { resolveStack, blockingProblems, CANNOT_TELL } from '../lib/stack.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment } from '../repo/deployment.js'
 import { findingsOf, NotLoadedError } from '../repo/loaded.js'
@@ -88,9 +88,14 @@ export default function renderRouter() {
       const releaseName = `${template}-${deployment}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
       // A link gone, a `_common` chart missing: Helm renders nothing and
       // says nothing, which would read as passed.
-      if (stack?.problems.length) {
-        return res.json({ ok: false, error: stack.problems.map(p => `${folder}: ${p.description}`).join('\n') })
+      const blocking = stack ? blockingProblems(stack) : []
+      if (blocking.length) {
+        return res.json({ ok: false, error: blocking.map(p => `${folder}: ${p.description}`).join('\n') })
       }
+      // Values AlertForge cannot tell Helm's reading of (in a _common, or
+      // its own on one): Helm decides, as check-deployment leaves it. Said
+      // beside what Helm renders or its error; no summary of values not known.
+      const cannotTell = (stack?.problems ?? []).filter(p => p.kind === CANNOT_TELL).map(p => `${folder}: ${p.description}`)
       const templateDir = folder ? deploymentsDir : chartDir
 
       let templateArgs
@@ -101,8 +106,15 @@ export default function renderRouter() {
         templateArgs = ['template', releaseName, chartDir, '-f', valuesFile]
       }
 
-      const output = await renderChart(templateDir, templateArgs)
+      let output
+      try {
+        output = await renderChart(templateDir, templateArgs)
+      } catch (err) {
+        if (cannotTell.length) err.stderr = [err.stderr || err.stdout || err.message, ...cannotTell].join('\n')
+        throw err
+      }
       let check = await checkRules(output)
+      if (cannotTell.length) check = { ...check, output: [...cannotTell, check.output].filter(Boolean).join('\n') }
       // The Template's files, read once: its model for the summary and the
       // self-check, and what Helm renders other than written
       // (a generated file missing, a partial holding rules, rules repeated)
@@ -154,7 +166,7 @@ export default function renderRouter() {
         valueWarnings = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code) || explain(f, 'preview').action === 'warn').map(f => f.message)
         return dep.value.effective
       }
-      const summary = !rendered ? null : await buildSummary(rendered, chartModel, readValues).catch(err => {
+      const summary = !rendered || cannotTell.length ? null : await buildSummary(rendered, chartModel, readValues).catch(err => {
         logger.error({ err, chart: template, deployment }, 'buildSummary failed, falling back to raw YAML')
         return null
       })

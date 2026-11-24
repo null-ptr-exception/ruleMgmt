@@ -128,7 +128,8 @@ export const ROUTES = [
       chart: { at: 'body', kind: 'chart', mode: 'write' },
       path: { at: 'body', kind: 'common', mode: 'write', req: { body: { action: 'delete', path: 'deployments/s/_common/demo', expected: '$plan:delete' } } },
     },
-    fields: [S('action'), { name: 'expected', types: ['o'], required: true }, S('folder'), S('chart')] },
+    // path: the _common removed (action delete); a create has none.
+    fields: [S('action'), { name: 'expected', types: ['o'], required: true }, S('folder'), S('chart'), { name: 'path', types: ['s'], required: false }] },
   { id: 'folders.common-users', method: 'GET', path: '/api/v2/folders/common/users', query: { path: 'deployments/s/_common/demo' },
     inputs: { path: { at: 'query', kind: 'common', mode: 'read' } } },
   { id: 'folders.init', method: 'POST', path: '/api/v2/folders/init', body: { folder: 'deployments/team/new', chart: 'demo' },

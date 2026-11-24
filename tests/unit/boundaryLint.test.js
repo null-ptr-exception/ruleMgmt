@@ -90,6 +90,10 @@ describe('boundary/request: a route reads the request through its parsed input',
       { code: 'const run = (input) => input.folder', filename: ROUTE },
       { code: 'other.query.folder; req.gitopsDir; req.method', filename: ROUTE },
       { code: "router.get('/', (q, res) => res.json(q.gitopsDir))", filename: ROUTE },
+      // A declared route's handler is given the parsed input, not the request.
+      { code: "route('x', { body: s }, async (input, ctx) => input.body.values)", filename: ROUTE },
+      { code: "route('x', { query: s }, async ({ query, body }) => query.folder)", filename: ROUTE },
+      { code: "route('x', { query: s }, async (input, ctx) => ctx.req.headers)", filename: ROUTE },
     ],
     invalid: [
       { code: 'req.query.folder', filename: ROUTE, errors: kinds('raw') },
@@ -104,6 +108,7 @@ describe('boundary/request: a route reads the request through its parsed input',
       { code: "router.post('/', (q, res) => q.body)", filename: ROUTE, errors: kinds('raw') },
       { code: "router.post('/', ({ body }, res) => body)", filename: ROUTE, errors: kinds('alias') },
       { code: "route('x', async (r, res) => r.params.chart)", filename: ROUTE, errors: kinds('raw') },
+      { code: "route('x', { query: s }, async (input, ctx) => ctx.req.query.folder)", filename: ROUTE, errors: kinds('raw') },
     ],
   })
 })

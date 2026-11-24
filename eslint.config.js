@@ -322,7 +322,8 @@ const measure = {
 
 /**
  * `boundary/request` warns where a route file reads the request itself —
- * `req.query`, `req.params`, `req.body`, `req['body']`, `req[name]`, the
+ * `req.query`, `req.params`, `req.body`, `req['body']`, `req[name]`,
+ * `ctx.req.query`, the
  * same under another name (a handler's first parameter, `const r = req`),
  * or in parts (`const { query } = req`, `{ ...all } = req`, a handler
  * taking `({ body })`) — instead of the input its route declares and
@@ -348,12 +349,17 @@ const request = {
     // parameter of a handler given to a router or to route(), and what is
     // set to one of them (const r = req).
     const names = new Set(['req', 'request'])
-    const isRequest = node => node?.type === 'Identifier' && names.has(node.name)
+    // ctx.req too: a declared route's handler is given the request only
+    // for what is no input (streaming, a header).
+    const isRequest = node => (node?.type === 'Identifier' && names.has(node.name)) ||
+      (node?.type === 'MemberExpression' && !node.computed && node.property.type === 'Identifier' && node.property.name === 'req')
     const isHandler = fn => {
       const call = fn.parent
       if (call?.type !== 'CallExpression' || !call.arguments.includes(fn)) return false
       const c = call.callee
-      if (c.type === 'Identifier') return c.name === 'route'
+      // route(name, handler) takes the request; route(name, shape, handler)
+      // gives its handler the parsed input instead.
+      if (c.type === 'Identifier') return c.name === 'route' && call.arguments[1] === fn
       return c.type === 'MemberExpression' && c.property.type === 'Identifier' && ROUTER_METHODS.has(c.property.name)
     }
     // A pattern that takes parts of the request: { query }, { ...all }.

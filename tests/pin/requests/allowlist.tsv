@@ -106,3 +106,10 @@ link-via-in	deployments.routing-put:folder	refuses-legit	policy	a folder that is
 link-via-in	deployments.save:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-via-in	render.preview:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-via-in	sync.create:source	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
+field:number	folders.common{path}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
+field:array	folders.common{path}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
+field:map	folders.common{path}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
+field:empty-list	folders.common{path}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
+field:null	folders.common{path}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
+field:bool	folders.common{path}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)
+field:deep	folders.common{path}	accepts-bad-body	bug	no issue yet: an optional field of the wrong type is ignored, not refused (request-body validation)

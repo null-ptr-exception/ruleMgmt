@@ -8,7 +8,8 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import express from 'express'
-import { route, answerEveryRoute, answerUncaught, FAILED } from '../../server/http/route.js'
+import { z } from 'zod'
+import { route, answerEveryRoute, answerUncaught, declaredRoutes, repoPath, repoName, FAILED } from '../../server/http/route.js'
 import { jsonBody } from '../../server/http/body.js'
 import { holdSyncRegistryLock } from '../../server/lib/sync.js'
 import { UnreadableError } from '../../server/lib/readIfThere.js'
@@ -192,5 +193,129 @@ describe('a body that cannot be taken', () => {
   it('a body that is JSON is taken', async () => {
     const r = await ask('POST', '/write', { body: '{"a":1}' })
     expect(JSON.parse(r.text)).toEqual({ ok: true, body: { a: 1 } })
+  })
+})
+
+// route(name, { params, query, body }, handler): the request is parsed by
+// its declared shape before the handler runs; what does not fit is a 400
+// naming the field, and the handler is given only the parsed input.
+describe('a route that declares its request', () => {
+  let app2, server2, base2, root
+  const calls = []
+  const askAt = async (method, p, body, type = 'application/json') => {
+    const res = await fetch(base2 + p, { method, ...(body === undefined ? {} : { body, headers: { 'Content-Type': type } }) })
+    return { status: res.status, json: await res.json().catch(() => null) }
+  }
+
+  beforeAll(async () => {
+    root = await fs.mkdtemp(path.join(os.tmpdir(), 'route-declared-'))
+    await fs.mkdir(path.join(root, 'deployments/team/a'), { recursive: true })
+    await fs.writeFile(path.join(root, 'deployments/team/a/values.yaml'), 'a: 1\n')
+    const router = express.Router()
+    const values = z.union([z.string(), z.record(z.string(), z.unknown())])
+    router.post('/save/:chart', route('t.save', {
+      params: z.object({ chart: repoName('name', { what: 'chart name' }) }),
+      query: z.object({ folder: repoPath('deployment', { what: 'folder path' }) }),
+      body: z.object({ values, version: z.string().max(10).optional(), note: z.string().min(1).nullable().optional() }),
+    }, async (input, ctx) => {
+      calls.push(input)
+      return { status: 200, body: { input, hasRepo: typeof ctx.repo?.file === 'function', root: ctx.gitopsDir === root } }
+    }))
+    router.get('/own-message', route('t.own-message', {
+      query: z.object({ n: z.string({ error: 'n is the number of commits, as text' }) }),
+    }, async ({ query }, { res }) => res.json(query)))
+    router.get('/optional', route('t.optional', {
+      query: z.object({ folder: repoPath('list', { what: 'folder' }).optional() }),
+    }, async ({ query }) => ({ status: 200, body: { folder: query.folder ?? null } })))
+    router.get('/fails', route('t.fails', {}, async () => { throw new Error(`EACCES at ${root}/x`) }))
+    router.get('/unreadable', route('t.unreadable', { query: z.object({}) }, async () => { throw new UnreadableError(path.join(root, 'deployments/team/a/values.yaml'), { code: 'EACCES' }) }))
+    app2 = express()
+    app2.use(jsonBody())
+    app2.use((req, res, next) => { req.gitopsDir = root; next() })
+    app2.use(declaredRoutes(router))
+    app2.use(answerUncaught)
+    await new Promise(r => { server2 = app2.listen(0, '127.0.0.1', () => { base2 = `http://127.0.0.1:${server2.address().port}`; r() }) })
+  })
+
+  afterAll(async () => {
+    if (server2) await new Promise(r => server2.close(r))
+    await fs.rm(root, { recursive: true, force: true })
+  })
+
+  const SAVE = '/save/demo?folder=deployments/team/a'
+
+  it('the handler is given the parsed input: a path as { rel, abs }, a name as itself, an extra field dropped', async () => {
+    const r = await askAt('POST', `${SAVE}&extra=1`, JSON.stringify({ values: { a: 1 }, pinExtra: 'x' }))
+    expect(r.status).toBe(200)
+    expect(r.json.input).toEqual({
+      params: { chart: 'demo' },
+      query: { folder: { rel: 'deployments/team/a', abs: path.join(root, 'deployments/team/a') } },
+      body: { values: { a: 1 } },
+    })
+    expect(r.json).toMatchObject({ hasRepo: true, root: true })
+  })
+
+  it.each([
+    ['no body', undefined, 'values is required'],
+    ['a body that is no JSON object', '[{"values":"a"}]', 'The request body must be a JSON object with values, version, note'],
+    ['text/plain', '{"values":"a"}', 'values is required', 'text/plain'],
+    ['a field of the wrong type', '{"values":5}', 'values must be text or a map'],
+    ['null where it may not be', '{"values":null}', 'values must be text or a map'],
+    ['a list for a map', '{"values":["a"]}', 'values must be text or a map'],
+    ['a string too long', '{"values":"a","version":"12345678901"}', 'version can be at most 10 characters long'],
+    ['an empty string', '{"values":"a","note":""}', 'note cannot be empty'],
+  ])('%s → 400 naming the field, the handler not called', async (_, body, error, type) => {
+    calls.length = 0
+    const r = await askAt('POST', SAVE, body, type)
+    expect(r).toEqual({ status: 400, json: { error } })
+    expect(calls).toEqual([])
+  })
+
+  it('null where the shape takes it is taken', async () => {
+    const r = await askAt('POST', SAVE, '{"values":"a","note":null}')
+    expect(r.status).toBe(200)
+    expect(r.json.input.body).toEqual({ values: 'a', note: null })
+  })
+
+  it.each([
+    ['a path going up', '/save/demo?folder=../x', 'Invalid folder path: a path cannot go up with ..'],
+    ['a path missing', '/save/demo', 'Invalid folder path: a path is needed'],
+    ['a path given twice (a list)', '/save/demo?folder=a&folder=b', 'Invalid folder path: a path is text'],
+    ['a name that is none', '/save/Bad?folder=deployments/team/a', 'Invalid chart name: a name is lower-case letters, digits, - and _, starting with a letter or a digit'],
+  ])('%s → 400 as parsePath answers it', async (_, p, error) => {
+    const r = await askAt('POST', p, '{"values":"a"}')
+    expect(r).toEqual({ status: 400, json: { error } })
+  })
+
+  it('a message the schema gives is kept', async () => {
+    expect(await askAt('GET', '/own-message')).toEqual({ status: 400, json: { error: 'n is the number of commits, as text' } })
+    expect(await askAt('GET', '/own-message?n=3')).toEqual({ status: 200, json: { n: '3' } })
+  })
+
+  it('an optional path left out is undefined; given, it is still decided', async () => {
+    expect(await askAt('GET', '/optional')).toEqual({ status: 200, json: { folder: null } })
+    expect((await askAt('GET', '/optional?folder=.git')).status).toBe(400)
+  })
+
+  it('a failure is answered as route() answers it', async () => {
+    expect(await askAt('GET', '/fails')).toEqual({ status: 500, json: { error: FAILED } })
+    const r = await askAt('GET', '/unreadable')
+    expect(r.status).toBe(409)
+    expect(r.json.error).toBe('deployments/team/a/values.yaml cannot be read: permission denied')
+  })
+
+  it('a router with a route that does not declare its request does not start, naming it', () => {
+    const r = express.Router()
+    r.get('/a', route('a', { query: z.object({}) }, async () => ({ status: 200, body: {} })))
+    r.post('/b', route('b', async (req, res) => res.json({})))
+    const inner = express.Router()
+    inner.delete('/c', (req, res) => res.json({}))
+    r.use('/inner', inner)
+    expect(() => declaredRoutes(r)).toThrow('these routes do not declare their request (route(name, shape, handler)): POST /b, DELETE /c')
+  })
+
+  it('a shape that is not one is refused when the route is made', () => {
+    expect(() => route('x', { body: { values: 'string' } }, () => {})).toThrow('route x: body is not a zod schema')
+    expect(() => route('x', { headers: z.object({}) }, () => {})).toThrow('route x: a request has params, query and body, not headers')
   })
 })

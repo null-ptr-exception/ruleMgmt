@@ -1197,6 +1197,7 @@ field:number	folders.common{action}	bad-named	refused	400	same	no	same	no	free		
 field:number	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:number	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
 field:number	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1223,6 +1224,7 @@ field:text	folders.common{action}	any	refused	400	same	no	same	no	free		-	-	-
 field:text	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	folders.common{folder}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	folders.common{chart}	any	refused	400	same	no	same	no	free		-	-	-	
+field:text	folders.common{path}	any	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	
 field:text	folders.init{folder}	any	ok	200	same	no	same	no	free	x/Chart.yaml,x/values.yaml	-	-	-	
 field:text	folders.init{chart}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	sync.create{source}	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1249,6 +1251,7 @@ field:array	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-
 field:array	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:array	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
 field:array	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1275,6 +1278,7 @@ field:map	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	y
 field:map	folders.common{expected}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:map	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:map	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
 field:map	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1301,6 +1305,7 @@ field:empty-list	folders.common{action}	bad-named	refused	400	same	no	same	no	fr
 field:empty-list	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:empty-list	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
 field:empty-list	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1327,6 +1332,7 @@ field:null	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	
 field:null	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:null	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
 field:null	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1353,6 +1359,7 @@ field:bool	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	
 field:bool	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:bool	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
 field:bool	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1379,6 +1386,7 @@ field:empty	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-
 field:empty	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:empty	folders.common{path}	any	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	
 field:empty	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1405,6 +1413,7 @@ field:long	folders.common{action}	any	refused	400	same	no	same	no	free		-	-	-
 field:long	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	folders.common{folder}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	folders.common{chart}	any	refused	400	same	no	same	no	free		-	-	-	
+field:long	folders.common{path}	any	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	
 field:long	folders.init{folder}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	folders.init{chart}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	sync.create{source}	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1431,6 +1440,7 @@ field:deep	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	
 field:deep	folders.common{expected}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:deep	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
+field:deep	folders.common{path}	bad-named	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	accepts-bad-body
 field:deep	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field

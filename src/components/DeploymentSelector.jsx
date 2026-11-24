@@ -48,7 +48,7 @@ export default function DeploymentSelector({ deployments, activeDeployment, onSe
           >
             <FolderOutlined style={{ marginRight: 8, color: '#faad14' }} />
             <Text style={{ flex: 1 }}>{d.name}</Text>
-            <Badge count={d.alertCount} showZero color="#d9d9d9" style={{ color: '#595959' }} />
+            <Badge count={d.alertCount ?? 0} showZero color="#d9d9d9" style={{ color: '#595959' }} />
           </List.Item>
         )}
       />

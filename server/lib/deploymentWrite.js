@@ -4,6 +4,7 @@
  *
  *   problemsOf      the save checks on bare values against a model
  *   valuesRefusal   the same, for what a save or POST /sync is about to write
+ *   copyChartDependencies  the target's Chart.yaml depends on what the source's does
  *   copyToTarget    make one target a copy of its source's files
  *   copyToTargets   every target of a source; returns the ones that failed
  *   saveValues      check → write → copy → report
@@ -64,12 +65,62 @@ export async function valuesRefusal(gitopsDir, chartName, depName, values) {
 }
 
 /**
- * Throws when a file cannot be written. `values` and `routing` pick the files;
- * `valuesContent` is what to write as values.yaml, when the caller has already
- * read and checked it.
+ * The target's Chart.yaml gets the source's `dependencies`, so it renders the
+ * same Template at the same version (#180). A `file://` path is relative to
+ * the Chart.yaml, so it is worked out again from where the target is; the
+ * target keeps its own `name` and other fields. A new target gets the
+ * source's Chart.yaml with its own folder name. Nothing is written when the
+ * dependencies are already the same, so a hand-written Chart.yaml keeps its
+ * comments. Returns whether it wrote.
  */
-export async function copyToTarget(srcDir, dstDir, { values = true, routing = true, valuesContent } = {}) {
+// A relative file:// path, or null (an absolute one, another scheme, or an
+// empty path, which is copied as it is).
+const relativeFilePath = repo => (typeof repo === 'string' && /^file:\/\/(?!\/)./.test(repo) ? repo.slice('file://'.length) : null)
+const isPlainObject = v => !!v && typeof v === 'object' && !Array.isArray(v)
+
+// One dependency as Helm sees it, for comparing two Chart.yaml files: the
+// file:// path resolved from the file's folder, the keys in one order.
+function dependencyKey(d, dir) {
+  if (!isPlainObject(d)) return JSON.stringify(d)
+  const rel = relativeFilePath(d.repository)
+  const resolved = rel === null ? d : { ...d, repository: `file://${path.resolve(dir, rel)}` }
+  return JSON.stringify(Object.keys(resolved).sort().map(k => [k, resolved[k]]))
+}
+
+export async function copyChartDependencies(srcDir, dstDir) {
+  const src = yaml.load(await fs.readFile(path.join(srcDir, 'Chart.yaml'), 'utf-8')) || {}
+  const srcDeps = Array.isArray(src.dependencies) ? src.dependencies : []
+  const dependencies = srcDeps.map(d => {
+    const rel = relativeFilePath(d?.repository)
+    if (rel === null) return d
+    // Helm reads it as a URL, on Linux, whatever wrote it: forward slashes.
+    const abs = path.resolve(srcDir, rel)
+    return { ...d, repository: `file://${path.relative(dstDir, abs).replace(/\\/g, '/')}` }
+  })
+  const file = path.join(dstDir, 'Chart.yaml')
+  let dst = null
+  try {
+    const loaded = yaml.load(await fs.readFile(file, 'utf-8'))
+    dst = isPlainObject(loaded) ? loaded : {}
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
+  }
+  const same = dst && Array.isArray(dst.dependencies ?? []) && (dst.dependencies ?? []).length === srcDeps.length &&
+    (dst.dependencies ?? []).every((d, i) => dependencyKey(d, dstDir) === dependencyKey(srcDeps[i], srcDir))
+  if (same) return false
+  const doc = dst ? { ...dst, dependencies } : { ...src, name: path.basename(dstDir), dependencies }
+  await fs.writeFile(file, yaml.dump(doc, { lineWidth: -1 }), 'utf-8')
+  return true
+}
+
+/**
+ * Throws when a file cannot be written. `chart`, `values` and `routing` pick
+ * the files; `valuesContent` is what to write as values.yaml, when the caller
+ * has already read and checked it.
+ */
+export async function copyToTarget(srcDir, dstDir, { chart = true, values = true, routing = true, valuesContent } = {}) {
   await fs.mkdir(dstDir, { recursive: true })
+  if (chart) await copyChartDependencies(srcDir, dstDir)
   if (values) {
     const content = valuesContent ?? await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8')
     await fs.writeFile(path.join(dstDir, 'values.yaml'), content, 'utf-8')

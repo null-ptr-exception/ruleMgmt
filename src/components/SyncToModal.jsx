@@ -3,6 +3,7 @@ import { Modal, Checkbox, Tag, Input, List, message, Alert } from 'antd'
 import { listAllDeployments, getSyncRegistry, createSync } from '../utils/chartApi'
 import SyncProblems from './SyncProblems'
 import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
+import { templateChange } from '../utils/templateChange'
 
 const STATUS_COLOR = { 'green-locked': 'green', new: 'green', red: 'red', orange: 'orange', disabled: 'default' }
 
@@ -27,6 +28,7 @@ function classify(registry, sourcePath, candidatePath) {
 
 export default function SyncToModal({ open, source, onClose, onSuccess }) {
   const [candidates, setCandidates] = useState([])
+  const [sourceChart, setSourceChart] = useState(null)
   const [registry, setRegistry] = useState({ syncs: [] })
   const [selected, setSelected] = useState(new Set())
   const [acked, setAcked] = useState(new Set())
@@ -43,6 +45,7 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
     ;(async () => {
       const [all, reg] = await Promise.all([listAllDeployments(), getSyncRegistry()])
       setCandidates(all.filter(d => d.path !== source.path))
+      setSourceChart(all.find(d => d.path === source.path)?.chart || null)
       setRegistry(reg)
       const sourceEntry = reg.syncs.find(s => s.source === source.path)
       setSelected(new Set(sourceEntry?.targets || []))
@@ -50,8 +53,8 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
   }, [open, source])
 
   const rows = useMemo(
-    () => candidates.map(c => ({ ...c, ...classify(registry, source?.path, c.path) })),
-    [candidates, registry, source]
+    () => candidates.map(c => ({ ...c, ...classify(registry, source?.path, c.path), change: templateChange(sourceChart, c) })),
+    [candidates, registry, source, sourceChart]
   )
 
   function toggle(row) {
@@ -82,8 +85,8 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
       }
       return { status: 'new', reason: 'will be created as a new deployment' }
     }
-    return classify(registry, source?.path, newPathTrimmed)
-  }, [newPathTrimmed, candidates, registry, source])
+    return { ...classify(registry, source?.path, newPathTrimmed), change: templateChange(sourceChart, candidates.find(c => c.path === newPathTrimmed)) }
+  }, [newPathTrimmed, candidates, registry, source, sourceChart])
 
   const needsAck = [
     ...rows.filter(r => selected.has(r.path) && (r.status === 'red' || r.status === 'orange')),
@@ -149,6 +152,8 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
               {r.path}
             </Checkbox>
             <Tag color={STATUS_COLOR[r.status]}>{r.reason}</Tag>
+            {/* Also on a link already made: the next save of the source moves it. */}
+            {r.change && r.status !== 'disabled' && <Tag color="red">{r.change}</Tag>}
           </List.Item>
         )}
       />
@@ -177,7 +182,7 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
                   return next
                 })}
               >
-                I understand, overwrite {r.path}
+                I understand, overwrite {r.path}{r.change ? ` — it ${r.change}` : ''}
               </Checkbox>
             </div>
           ))}

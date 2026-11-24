@@ -380,13 +380,25 @@ stand up staging from production and change what differs.
 ### Keep a deployment identical to another
 
 **Sync to...** on the source (or **Sync from...** on the target) makes the
-target a copy of the source: its `values.yaml` and its routing. From then on
+target a copy of the source: the Template its `Chart.yaml` depends on, its
+`values.yaml` and its routing. From then on
 the target is read-only, and every save of the source's values or routing is
 copied to it.
 
+- The target renders the same Template as the source: its `Chart.yaml`
+  depends on what the source's does, with the `file://` path worked out from
+  where the target is, so a target in a deeper or shallower folder renders
+  too. A target on another Template is moved onto the source's, and its own
+  alert rows go; the dialog says so, with how many, before you confirm. A
+  sync made before this, to a target on another Template, is moved at the
+  next save of the source; **Sync to...** marks such a target the same way.
 - A source with values a save would refuse — a required value left empty, a
   value that cannot go in a label, a `values.yaml` that is not YAML — cannot
   be synced. The dialog lists what to fix in the source first.
+- Deleting a source lets go of its targets: each keeps what it has and can
+  be edited again. The **Delete** dialog lists them, and each can be deleted
+  along with the source instead. Deleting it through the API does the same,
+  and the response lists them as `unlinked`.
 - When a save cannot write a target (a permission error, or a `sync.yaml`
   entry that is not a deployment on disk), the source is still saved and the
   page names the target, which may not match the source. Fix the cause and

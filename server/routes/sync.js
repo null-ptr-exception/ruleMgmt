@@ -107,6 +107,8 @@ export default function syncRouter() {
         const targetValuesFile = path.join(targetDir, 'values.yaml')
         const prevTargetValues = await fs.readFile(targetValuesFile, 'utf-8').catch(() => null)
         const prevTargetRouting = await readRouting(targetDir)
+        const targetChartFile = path.join(targetDir, 'Chart.yaml')
+        const prevTargetChart = await fs.readFile(targetChartFile, 'utf-8').catch(() => null)
 
         // Registry first: if this write fails, the target hasn't been
         // touched at all. (The reverse order could leave the target
@@ -114,26 +116,25 @@ export default function syncRouter() {
         await writeSyncRegistry(req.gitopsDir, registry)
 
         try {
-          // The bytes checked above, not a second read a `git pull` could change.
+          // The bytes checked above, not a second read a `git pull` could
+          // change. Chart.yaml comes too: a target on another Template, or a
+          // new one at another depth, renders what the source does (#180).
           await copyToTarget(sourceDir, targetDir, { valuesContent: content })
-
-          // First-time target: carry over Chart.yaml too, so it renders like
-          // a real deployment (mirrors what folders/init would have produced).
-          try {
-            await fs.access(path.join(targetDir, 'Chart.yaml'))
-          } catch {
-            const chartYaml = await fs.readFile(path.join(sourceDir, 'Chart.yaml'), 'utf-8')
-            await fs.writeFile(path.join(targetDir, 'Chart.yaml'), chartYaml, 'utf-8')
-          }
         } catch (copyErr) {
           // Best-effort rollback: restore the target's previous content and
           // take the link back out of the registry. If the rollback itself
           // fails, the link stays — eager sync on the next source save will
           // re-propagate, which is the safer residual state.
-          if (prevTargetValues !== null) {
-            await fs.writeFile(targetValuesFile, prevTargetValues, 'utf-8').catch(() => {})
+          if (!targetExists) {
+            // A new target half made would be a deployment of its own, unlinked.
+            await fs.rm(targetDir, { recursive: true, force: true }).catch(() => {})
+          } else {
+            if (prevTargetValues !== null) {
+              await fs.writeFile(targetValuesFile, prevTargetValues, 'utf-8').catch(() => {})
+            }
+            await restoreRouting(targetDir, prevTargetRouting).catch(() => {})
+            if (prevTargetChart !== null) await fs.writeFile(targetChartFile, prevTargetChart, 'utf-8').catch(() => {})
           }
-          await restoreRouting(targetDir, prevTargetRouting).catch(() => {})
           applyUnlink(registry, target)
           await writeSyncRegistry(req.gitopsDir, registry).catch(() => {})
           throw copyErr

@@ -294,6 +294,81 @@ describe('a hand-edited sync.yaml', () => {
   })
 })
 
+describe('deleting a sync source', () => {
+  const del = f => api('DELETE', `/api/v2/deployments/demo/${f.split('/').pop()}${q(f)}`)
+
+  it('lets go of its targets: they keep what they have and can be saved again', async () => {
+    await setup([TGT, T2])
+    const copied = await read(`${TGT}/values.yaml`)
+
+    expect(await del(SRC)).toEqual({ status: 200, data: { ok: true, unlinked: [TGT, T2] } })
+
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
+    expect(await read(`${TGT}/values.yaml`)).toBe(copied)
+    expect((await api('POST', `/api/v2/deployments/demo/tgt${q(TGT)}`, { values: { cpu: [{ namespace: 'own', warn: 1 }] } })).status).toBe(200)
+    expect((await api('PUT', `/api/v2/deployments/demo/tgt/routing${q(TGT)}`, { routing: await routingFixture() })).status).toBe(200)
+  })
+
+  it('a hand-edited sync.yaml listing it twice, or also as a target, is cleared of it', async () => {
+    await setup([TGT, T2])
+    const other = 'deployments/team/other'
+    expect((await api('POST', '/api/v2/folders/init', { folder: other, chart: 'demo' })).status).toBe(200)
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [
+      { source: SRC, targets: [TGT] },
+      { source: SRC, targets: [T2, TGT] },
+      { source: other, targets: [SRC] },
+    ] }))
+
+    expect(await del(SRC)).toEqual({ status: 200, data: { ok: true, unlinked: [TGT, T2] } })
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
+  })
+
+  // The folder query is not always spelled as sync.yaml spells it.
+  it.each([`${SRC}/`, SRC.replace('team/', 'team/./'), SRC.replace('team/', 'team//')])('the folder spelled %s still lets go of its targets', async folder => {
+    await setup()
+    expect(await api('DELETE', `/api/v2/deployments/demo/src${q(folder)}`)).toEqual({ status: 200, data: { ok: true, unlinked: [TGT] } })
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
+  })
+
+  it.each([`${TGT}/`, TGT.replace('team/', 'team/./')])('a target spelled %s is still read-only', async folder => {
+    await setup()
+    expect((await api('POST', `/api/v2/deployments/demo/tgt${q(folder)}`, { values: { cpu: [{ namespace: 'x', warn: 1 }] } })).status).toBe(409)
+    expect((await api('PUT', `/api/v2/deployments/demo/tgt/routing${q(folder)}`, { routing: await routingFixture() })).status).toBe(409)
+  })
+
+  it('only targets that are let go are listed, and other sync links stay', async () => {
+    await setup([TGT, T2])
+    const other = 'deployments/team/other'
+    const ghost = 'deployments/team/ghost'
+    expect((await api('POST', '/api/v2/folders/init', { folder: other, chart: 'demo' })).status).toBe(200)
+    // A hand edit: T2 also listed under another source, and a target not on disk.
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [
+      { source: SRC, targets: [TGT, T2, ghost] },
+      { source: other, targets: [T2] },
+    ] }))
+    expect(await del(SRC)).toEqual({ status: 200, data: { ok: true, unlinked: [TGT] } })
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: other, targets: [T2] }] })
+  })
+
+  // The folder cannot be removed: nothing is let go, as nothing was deleted.
+  it.skipIf(IS_ROOT)('a source that cannot be removed keeps its sync links', async () => {
+    await setup()
+    const parent = path.join(tmpDir, 'deployments/team')
+    await fs.chmod(parent, 0o555)
+    try {
+      expect((await del(SRC)).status).toBe(500)
+    } finally {
+      await fs.chmod(parent, 0o755)
+    }
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT] }] })
+  })
+
+  it('a deployment that is no source says nothing was let go', async () => {
+    await setup([])
+    expect(await del(SRC)).toEqual({ status: 200, data: { ok: true } })
+  })
+})
+
 describe('saves racing sync changes leave the target a copy of its source', () => {
   it('a values save at the same time as a new sync link', async () => {
     await setup([])

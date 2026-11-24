@@ -1,6 +1,6 @@
 // A sync target is a copy of its source (#175): after every action that
-// writes the source, the target's files are the same bytes, and the target
-// renders the same alerts. The write paths are one table — values save,
+// writes the source, the target's files are the same bytes, it depends on the same Template,
+// and it renders the same alerts. The write paths are one table — values save,
 // routing save and delete, a breaking change, POST /sync — and a new path is
 // checked by adding a row.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
@@ -93,6 +93,14 @@ const writePaths = [
     await fs.writeFile(path.join(tmpDir, TGT, 'values.yaml'), 'demo:\n  cpu:\n    - namespace: hand\n')
     return api('POST', '/api/v2/sync', { source: SRC, target: TGT })
   }],
+  ['syncing to a deployment on another Template', async () => {
+    await fs.mkdir(path.join(tmpDir, 'charts', 'mem'), { recursive: true })
+    expect((await api('POST', '/api/v2/templates/mem/rules', { files: { 'mem.yaml': 'group: mem\nrules:\n  - alert: MemHigh\n    expr: mem > 1\n' } })).status).toBe(200)
+    expect((await api('POST', '/api/v2/folders/init', { folder: OTHER, chart: 'mem' })).status).toBe(200)
+    return api('POST', '/api/v2/sync', { source: SRC, target: OTHER })
+  }, [SRC, OTHER]],
+  ['syncing to a new deployment at another depth', () => api('POST', '/api/v2/sync', { source: SRC, target: 'deployments/eu/west/team/new' }),
+    [SRC, 'deployments/eu/west/team/new']],
   ['moving the target to another source', async () => {
     expect((await api('POST', '/api/v2/folders/init', { folder: OTHER, chart: 'demo' })).status).toBe(200)
     expect((await api('POST', `/api/v2/deployments/demo/other${q(OTHER)}`, { values: { cpu: [{ namespace: 'o', warn: 1 }] } })).status).toBe(200)
@@ -100,8 +108,18 @@ const writePaths = [
   }, [OTHER, TGT]],
 ]
 
+// The Template a folder renders: its dependencies, with file:// paths
+// resolved, since each folder writes them relative to itself.
+async function dependenciesOf(dir) {
+  const chart = yaml.load(await read(`${dir}/Chart.yaml`)) || {}
+  return (chart.dependencies || []).map(d => ({
+    ...d,
+    repository: /^file:\/\/(?!\/)/.test(d.repository || '') ? path.resolve(tmpDir, dir, d.repository.slice('file://'.length)) : d.repository,
+  }))
+}
+
 async function filesOf(dir) {
-  const out = {}
+  const out = { dependencies: await dependenciesOf(dir) }
   for (const rel of ['values.yaml', 'routing.yaml', 'templates/alertmanagerconfig.yaml']) {
     out[rel] = await read(`${dir}/${rel}`).catch(() => null)
   }

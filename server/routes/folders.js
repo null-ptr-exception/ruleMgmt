@@ -116,7 +116,8 @@ async function collectDeployments(baseDir, parentPath, chartsDirName, results) {
 
     if (await isDeploymentDir(absPath)) {
       let chart = null
-      let alertCount = 0
+      // null when values.yaml cannot be read: unknown, not none.
+      let alertCount = null
       try {
         const chartYaml = yaml.load(await fs.readFile(path.join(absPath, 'Chart.yaml'), 'utf-8')) || {}
         chart = chartYaml.dependencies?.[0]?.name || null

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Modal, Select, Checkbox, Alert, message } from 'antd'
 import { listAllDeployments, getSyncRegistry, createSync } from '../utils/chartApi'
 import SyncProblems from './SyncProblems'
+import { templateChange } from '../utils/templateChange'
 
 function classifySource(registry, candidatePath) {
   const isTargetOfOther = registry.syncs.some(s => s.targets.includes(candidatePath))
@@ -13,6 +14,7 @@ function classifySource(registry, candidatePath) {
 
 export default function SyncFromModal({ open, target, onClose, onSuccess }) {
   const [candidates, setCandidates] = useState([])
+  const [self, setSelf] = useState(null)
   const [registry, setRegistry] = useState({ syncs: [] })
   const [selectedSource, setSelectedSource] = useState(null)
   const [acked, setAcked] = useState(false)
@@ -28,6 +30,7 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
     ;(async () => {
       const [all, reg] = await Promise.all([listAllDeployments(), getSyncRegistry()])
       setCandidates(all.filter(d => d.path !== target.path))
+      setSelf(all.find(d => d.path === target.path) || null)
       setRegistry(reg)
     })()
   }, [open, target])
@@ -45,6 +48,9 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
     if (entry) return { status: 'orange', currentSource: entry.source }
     return { status: 'red' }
   }, [registry, target])
+
+  // Following a source on another Template moves this target onto it (#180).
+  const change = templateChange(candidates.find(c => c.path === selectedSource)?.chart, self)
 
   const needsAck = targetState.status === 'red' || targetState.status === 'orange'
   const canConfirm = !!selectedSource && (!needsAck || acked) && !submitting
@@ -102,9 +108,13 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
         />
       )}
 
+      {change && (
+        <Alert style={{ marginTop: 12 }} type="error" data-testid="template-change" message={`${target?.name} ${change}.`} />
+      )}
+
       {needsAck && (
         <Checkbox style={{ marginTop: 12 }} checked={acked} onChange={e => setAcked(e.target.checked)}>
-          I understand, overwrite {target?.name}
+          I understand, overwrite {target?.name}{change ? ` — it ${change}` : ''}
         </Checkbox>
       )}
 

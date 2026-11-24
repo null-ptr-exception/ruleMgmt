@@ -302,6 +302,8 @@ test.describe.serial('deployment sync', () => {
 
     await modal.getByRole('button', { name: `Delete del-source` }).click()
     await expect(modal).not.toBeVisible({ timeout: 5000 })
+    // Deleting the source let go of the target kept (#180).
+    await expect(page.getByText('Deleted del-source; 1 kept, no longer synced')).toBeVisible({ timeout: 5000 })
 
     // Source and the "Delete"-marked target are gone from the tree.
     await expect(deploymentNode(page, 'del-source')).not.toBeVisible({ timeout: 5000 })

@@ -4,7 +4,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
 import { valuesRefusal, saveValues, copyToTargets, okWith } from '../lib/deploymentWrite.js'
-import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink } from '../lib/sync.js'
+import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink, normalizeSyncPath, isDeploymentDir } from '../lib/sync.js'
 import { buildRouting, writeRouting, removeRouting, routingState } from '../lib/routingFiles.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 
@@ -17,6 +17,11 @@ function isValidDeploymentParam(req) {
     ? FOLDER_DEPLOYMENT_SEGMENT_RE.test(deployment)
     : NAME_RE.test(deployment)
 }
+
+// The folder as sync.yaml spells it: `a/src/`, `a/./src` and `a//src` are
+// `a/src` to the registry, or a target spelled another way is not read-only
+// and a deleted source keeps its sync link (#180).
+const syncFolder = req => (req.query.folder ? normalizeSyncPath(req.query.folder) : req.query.folder)
 
 function resolveDeploymentDir(req) {
   const folder = req.query.folder
@@ -127,7 +132,7 @@ export default function deploymentsRouter() {
     if (!isValidDeploymentParam(req)) {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
-    const folder = req.query.folder
+    const folder = syncFolder(req)
     try {
       const readOnly = () => ({ status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } })
       if (folder) {
@@ -181,7 +186,7 @@ export default function deploymentsRouter() {
     const dir = resolveDeploymentDir(req)
     if (!dir) { res.status(400).json({ error: 'Invalid folder path' }); return null }
     if (!isValidDeploymentParam(req)) { res.status(400).json({ error: 'Invalid deployment name' }); return null }
-    const folder = req.query.folder
+    const folder = syncFolder(req)
     const { direct } = folder ? await resolveValuesFile(dir, req.params.deployment) : { direct: false }
     if (!direct) {
       res.status(400).json({ error: 'Only a folder deployment has notification routing' })
@@ -287,28 +292,44 @@ export default function deploymentsRouter() {
     }
     try {
       const { direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
-      const folder = req.query.folder
+      const folder = syncFolder(req)
       // Deleting a legacy sibling leaves the folder's deployment, and so its
-      // sync link, in place.
+      // sync link, in place. A deleted target leaves its source; a deleted
+      // source lets go of its targets, which keep what they have and become
+      // editable again, instead of staying read-only with no source (#180).
+      let unlinked = []
       if (folder && direct) {
-        await withSyncRegistryLock(req.gitopsDir, async () => {
-          const registry = await readSyncRegistry(req.gitopsDir)
-          if (isTarget(registry, folder)) {
-            applyUnlink(registry, folder)
-            await writeSyncRegistry(req.gitopsDir, registry)
-          }
-        })
-      }
-
-      if (direct) {
         // Folder-mode deployment: the directory itself is the deployment
         // (Chart.yaml + values.yaml live directly inside it), so removing
         // just one file would leave an orphaned, half-deleted deployment.
+        // Removed first, inside the lock: a removal that fails leaves the
+        // sync links as they were, and no sync can be made to it meanwhile.
+        await withSyncRegistryLock(req.gitopsDir, async () => {
+          const registry = await readSyncRegistry(req.gitopsDir)
+          await fs.rm(dir, { recursive: true, force: true })
+          let changed = false
+          if (isTarget(registry, folder)) {
+            applyUnlink(registry, folder)
+            changed = true
+          }
+          // Every entry, as a hand edit can list the same source twice.
+          const entries = registry.syncs.filter(s => s.source === folder)
+          if (entries.length) {
+            registry.syncs = registry.syncs.filter(s => !entries.includes(s))
+            changed = true
+            // Listed as let go: on disk, and not still under another source.
+            for (const t of new Set(entries.flatMap(e => e.targets))) {
+              if (t !== folder && !isTarget(registry, t) && await isDeploymentDir(path.join(req.gitopsDir, t))) unlinked.push(t)
+            }
+          }
+          if (changed) await writeSyncRegistry(req.gitopsDir, registry)
+        })
+      } else if (direct) {
         await fs.rm(dir, { recursive: true, force: true })
       } else {
         await fs.rm(legacyFile, { force: true })
       }
-      res.json({ ok: true })
+      res.json(unlinked.length ? { ok: true, unlinked } : { ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

@@ -3,12 +3,11 @@
  * version Helm reads, at the version the deployment asks for (#179).
  */
 
-import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
 import { COMMON_DIR, isCommonChartPath } from '../../../src/utils/reservedNames.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { parseVersion } from '../../repo/findings/template.js'
+import { parseChart } from '../../repo/chart.js'
 import { fact } from './facts.js'
 import { blockingProblems, CANNOT_TELL } from '../stack.js'
 
@@ -46,13 +45,12 @@ async function templateProblem(gitopsDir, dep, stack) {
 // there is none, undefined when its Chart.yaml is gone (deleted since the
 // walk, #187: not there to commit).
 async function fileDependencyProblem(gitopsDir, dir, dep, loader) {
-  let chart
-  try {
-    chart = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8')) || {}
-  } catch (err) {
-    if (err.code === 'ENOENT') return undefined
-    throw err
-  }
+  const own = await loader.file(`${dep}/Chart.yaml`)
+  // Gone (a link to nothing reads as gone too, as it always did).
+  if (own.state === 'absent' || (own.state === 'unreadable' && own.kind === 'dangling-link')) return undefined
+  // There and not to be read: not a commit to answer for, as before.
+  if (own.state !== 'ok') throw new Error(`${own.file} cannot be read (${own.why})`)
+  const chart = parseChart(own.value.text) || {}
   for (const d of chart.dependencies || []) {
     const repo = typeof d?.repository === 'string' ? d.repository : ''
     const at = repo.startsWith('file://') ? path.resolve(dir, repo.slice('file://'.length)) : null

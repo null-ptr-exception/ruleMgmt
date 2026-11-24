@@ -5,7 +5,7 @@
  * real path, which git and Helm report — is taken out of every string of an
  * error answer, leaving the path inside the workspace.
  */
-import fs from 'fs/promises'
+import { realPath } from '../repo/locate.js'
 
 const escape = d => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -14,7 +14,7 @@ export async function workspacePaths(dir) {
   const base = String(dir || '').replace(/[\\/]+$/, '')
   // The root itself, or nothing, is no path to take out.
   if (!base) return []
-  return [...new Set([base, await fs.realpath(base).catch(() => base)])]
+  return [...new Set([base, await realPath(base).catch(() => base)])]
 }
 
 export function stripPaths(text, bases) {

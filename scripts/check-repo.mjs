@@ -34,7 +34,8 @@ import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { valuesLimitNote } from '../server/repo/limits.js'
 import { openRepo } from '../server/repo/openRepo.js'
 import { gitCheckoutOf } from '../server/repo/locate.js'
-import { CannotCheck, realRoot } from '../server/lib/deploymentCheck.js'
+import { CannotCheck } from '../server/lib/deploymentCheck.js'
+import { realBaseOf } from '../server/repo/paths.js'
 import { checkRepo } from '../server/lib/repoCheck.js'
 import { removeWhenStopped } from '../server/repo/copyRepo.js'
 
@@ -118,7 +119,7 @@ async function main(args) {
     if (!found) throw new CannotCheck("the current folder is in no git checkout: give the gitops repo's root")
     shown = path.relative(process.cwd(), found) || '.'
   }
-  const root = await realRoot(shown)
+  const root = await realBaseOf(shown)
   Object.assign(at, { root, shown })
   const top = await openRepo(root).dir('')
   if (top.state === 'absent') throw new CannotCheck(`${shown} does not exist`)

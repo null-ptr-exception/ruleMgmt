@@ -10,7 +10,8 @@ import { ROUTING_POLICIES } from '../../repo/routingPolicy.js'
 import { z } from 'zod'
 import { planChange, applyChange } from '../../repo/changes/index.js'
 import { route, map } from '../../http/route.js'
-import { DEPLOYMENT_REQUEST, deploymentAt, resolveValuesFile, commonRefused } from './resolve.js'
+import { DEPLOYMENT_REQUEST, deploymentAt, commonRefused } from './resolve.js'
+import { resolveValuesFile } from '../../repo/locate.js'
 
 // What stops a page, a save or a removal: an answer naming the file, or null.
 function refusalOf(loaded, policy) {

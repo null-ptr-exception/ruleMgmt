@@ -36,7 +36,7 @@ const nameIn = rule => (isMap(rule) && typeof (rule.alert ?? rule.record) === 's
 function namesOf(rule) {
   if (rule.raw === undefined) return [rule.alert || rule.record].filter(Boolean)
   let doc
-  try { doc = yaml.load(rule.raw) } catch { return [UNNAMED] }
+  try { doc = yaml.load(rule.raw) } catch { return [UNNAMED] } // a raw rule that is not YAML has no name to tell
   return (Array.isArray(doc) ? doc : [doc]).map(nameIn)
 }
 

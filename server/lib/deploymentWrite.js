@@ -19,10 +19,10 @@
 
 import { createHash } from 'crypto'
 import path from 'path'
-import yaml from 'js-yaml'
 import { resolveStack, wrapPath, linkedStackRefusal } from './stack.js'
 import { routingToCopy, routingEntries, unreadableAnswer } from './routingFiles.js'
 import { ROUTING_FILE, ROUTING_CR_FILE } from '../repo/routing.js'
+import { parseChart } from '../repo/chart.js'
 import { writeRefusal } from '../repo/writePath.js'
 import { getTargetsForSource, isSafeSyncPath } from './sync.js'
 import { isDeployment } from '../repo/walk.js'
@@ -147,7 +147,7 @@ export function sameDependencies(srcDeps, srcDir, dst, dstDir) {
  * and the copy reported as failed.
  */
 export function sourceChart(text) {
-  const src = yaml.load(text) || {}
+  const src = parseChart(text) || {}
   const deps = Array.isArray(src.dependencies) ? src.dependencies : []
   if (!deps.length) throw Object.assign(new Error('the source\'s Chart.yaml names no Template'), { code: 'SOURCE_HAS_NO_TEMPLATE' })
   return { src, deps }
@@ -171,7 +171,7 @@ export function chartCopyText({ src, deps: srcDeps }, srcDir, dstText, dstDir) {
   // target's name — not written as a bare `dependencies:` Helm cannot load.
   let dst = null
   if (dstText !== null) {
-    const loaded = yaml.load(dstText)
+    const loaded = parseChart(dstText)
     dst = isPlainObject(loaded) ? loaded : null
   }
   if (sameDependencies(srcDeps, srcDir, dst, dstDir)) return null

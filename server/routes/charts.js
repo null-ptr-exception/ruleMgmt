@@ -1,8 +1,8 @@
 import express from 'express'
 import { z } from 'zod'
-import fs from 'fs/promises'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { openRepo } from '../repo/openRepo.js'
+import { ensureFolder } from '../repo/setup.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { route, repoName, declaredRoutes } from '../http/route.js'
 import { migrationMapping } from '../http/templateShapes.js'
@@ -19,7 +19,7 @@ export default function chartsRouter() {
 
   router.get('/', route('charts.list', {}, async (input, { gitopsDir }) => {
     const chartsDir = getChartsDir(gitopsDir, process.env.CHARTS_DIR)
-    await fs.mkdir(chartsDir, { recursive: true })
+    await ensureFolder(chartsDir)
     return { status: 200, body: await findAlertTemplateCharts(chartsDir) }
   }))
 

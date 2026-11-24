@@ -80,3 +80,29 @@ export function repoGit(root) {
     },
   }
 }
+
+const INDEX_LOCK_STALE_MS = 30000
+const gone = async abs => fs.lstat(abs).then(() => false, () => true) // cannot be looked at: gone, for a retry
+
+/**
+ * Whether git or the file system failed because a file went away under it
+ * (#187): something to try again. A path that is still there — a dangling
+ * symlink, a file that is in the way — fails every time, so it is not;
+ * neither is an index.lock older than any running git would leave it.
+ */
+export async function filesChanging(err, cwd) {
+  // ENOENT / ENOTDIR of git or the file system: a file went away under it.
+  if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return !err.path || await gone(err.path)
+  const text = `${err?.message || ''} ${err?.stderr || ''}`
+  if (/index\.lock/i.test(text)) {
+    // Where git keeps it: the repo may be a worktree, or gitopsDir a folder
+    // inside the repo. A lock that cannot be found is not one to wait for.
+    const rel = (await git(cwd, 'rev-parse', '--git-path', 'index.lock').catch(() => '')).trim()
+    if (!rel) return false
+    const age = await fs.stat(path.resolve(cwd, rel)).then(st => Date.now() - st.mtimeMs, () => Infinity)
+    return age < INDEX_LOCK_STALE_MS
+  }
+  if (!/unable to stat|short read while indexing|No such file or directory|Not a directory/i.test(text)) return false
+  const named = text.match(/(?:unable to stat|open\()\s*['"]([^'"]+)['"]/i)?.[1]
+  return !named || await gone(path.resolve(cwd, named))
+}

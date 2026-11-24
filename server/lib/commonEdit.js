@@ -30,9 +30,7 @@
  * re-attached by itself: it moves with its source (#103).
  */
 
-import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
 import { isDeepStrictEqual } from 'util'
 import { createHash } from 'crypto'
 import { resolveStack, wrapPath, linkedStackRefusal, linkedCommonRefusal, linkToCommon, STACK_LINK } from './stack.js'
@@ -52,6 +50,8 @@ import { findingsOf } from '../repo/loaded.js'
 import { decide } from '../repo/policy.js'
 import { chartsDir } from '../repo/template.js'
 import { coalesce } from '../repo/coalesce.js'
+import { parseChart } from '../repo/chart.js'
+import { linkWritten, stateOf, folderState } from '../repo/diskState.js'
 
 /** The name every `_common` chart has: the key its deployments' values are under. */
 export const COMMON_CHART = 'common'
@@ -132,7 +132,7 @@ async function linkTo(repo, item, toAbs) {
   if (listed.state !== 'ok') return null
   const folder = path.join(item.abs, 'charts')
   for (const name of [...listed.value.links.keys()].sort()) {
-    const to = await fs.readlink(path.join(folder, name)).catch(() => null)
+    const to = await linkWritten(repo.root, `${item.path}/charts/${name}`)
     if (to !== null && path.resolve(folder, to) === path.resolve(toAbs)) return name
   }
   return null
@@ -155,8 +155,8 @@ async function repoint(repo, item, fromAbs, toAbs, name, key) {
   const text = read.value.text
   let chart
   try {
-    chart = yaml.load(text)
-  } catch {
+    chart = parseChart(text)
+  } catch { // not YAML: said as a Chart.yaml that cannot be read
     return { why: 'its Chart.yaml cannot be read' }
   }
   const deps = Array.isArray(chart?.dependencies) ? chart.dependencies : []
@@ -499,17 +499,6 @@ export async function planCreate(repo, folderIn, chart) {
 
 const unique = list => [...new Set(list)]
 
-// Every file under a folder, with its text or link, in one order.
-async function folderState(abs, rel = '') {
-  const out = []
-  for (const e of (await fs.readdir(path.join(abs, rel), { withFileTypes: true }).catch(() => [])).sort((a, b) => (a.name < b.name ? -1 : 1))) {
-    const child = rel ? `${rel}/${e.name}` : e.name
-    if (e.isDirectory()) out.push(...await folderState(abs, child))
-    else out.push([child, await stateOf(path.join(abs, child))])
-  }
-  return out
-}
-
 /**
  * A plan's `expected` worked out again from the repo as it is now (`check`
  * as planCreate/planDelete return it): what the writer compares under the
@@ -657,15 +646,6 @@ export async function planDelete(repo, commonRelIn) {
     files,
     check: { writes, removed: commonRel },
   }
-}
-
-// One path's state, as the plan's `expected` hashes it: a file's text, a
-// link's target, or nothing.
-async function stateOf(abs) {
-  const stat = await fs.lstat(abs).catch(() => null)
-  if (!stat) return { none: true }
-  if (stat.isSymbolicLink()) return { link: await fs.readlink(abs) }
-  return { content: await fs.readFile(abs, 'utf-8') }
 }
 
 /**

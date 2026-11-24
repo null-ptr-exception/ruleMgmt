@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import yaml from 'js-yaml'
 import { parse } from 'yaml'
-import { renameConfigInText, updateConfigsInText } from '../../server/lib/sharedConfigs.js'
+import { renameConfigInText, updateConfigsInText } from '../../server/repo/sharedDoc.js'
 
 // Renaming a shared config rewrites the routing.yaml files using it (#123):
 // the name in configs and in each cell, and nothing else — comments stay.

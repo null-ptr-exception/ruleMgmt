@@ -218,6 +218,7 @@ export async function checkRules(renderedYaml) {
         const output = v.clean(`${stdout || ''}${stderr || ''}`, file)
         return { objName, passed: true, warned: v.clean === cleanPromtoolOutput && LINT_FAILED.test(output), output }
       } catch (err) {
+        // ENOENT of the child process, not of a file: the checker's binary is not there.
         if (err.code === 'ENOENT') return { objName, missing: `${v.label} is not available: ${v.bin()}` }
         const output = v.clean(`${err.stdout || ''}${err.stderr || ''}${err.message || ''}`, file)
         // Nothing said, e.g. killed at the timeout: say how it ended.

@@ -1,12 +1,10 @@
 /** Where a deployment route's chart, folder and deployment name lead (routes/deployments.js). */
 
-import fs from 'fs/promises'
 import path from 'path'
 import { z } from 'zod'
 import { isCommonChartPath, COMMON_DIR } from '../../../src/utils/reservedNames.js'
-import { deploymentNameProblem, realPlace, PLACE_WHY, LEGACY_VALUES_SUFFIX } from '../../repo/paths.js'
+import { deploymentNameProblem, realPlace, PLACE_WHY } from '../../repo/paths.js'
 import { repoName, repoPath } from '../../http/route.js'
-import { isAbsent, UnreadableError } from '../../lib/readIfThere.js'
 
 /**
  * What every deployment route is asked with: the chart and the deployment
@@ -48,32 +46,6 @@ export async function deploymentAt({ params, query }, gitopsDir) {
   const problem = deploymentNameProblem(deployment, folder)
   if (problem) return { error: `Invalid deployment name: ${problem.why}` }
   return { dir, folder, chart, deployment }
-}
-
-// Which file holds a deployment's values. The folder's own deployment —
-// named after the folder, which is how the UI always calls it — is
-// `values.yaml` when that exists, the same file Preview and sync use. Any
-// other name is a legacy `<name>-values.yaml` sibling and never touches
-// `values.yaml`, or saving it would overwrite the folder's deployment (#90).
-export async function resolveValuesFile(dir, deployment) {
-  const legacyFile = path.join(dir, `${deployment}${LEGACY_VALUES_SUFFIX}`)
-  const directFile = path.join(dir, 'values.yaml')
-  if (deployment === path.basename(dir)) {
-    try {
-      await fs.access(directFile)
-      return { file: directFile, direct: true, legacyFile }
-    } catch (err) {
-      // Only a missing values.yaml means a legacy file named after the
-      // folder; any other error — a link to nothing among them — must not
-      // quietly pick the other file.
-      if (err.code !== 'ENOTDIR' && !(await isAbsent(directFile, err))) throw new UnreadableError(directFile, err.code === 'ENOENT' ? { reason: 'a link to a file that is not there' } : err)
-    }
-  }
-  return { file: legacyFile, direct: false, legacyFile }
-}
-
-export async function exists(file) {
-  try { await fs.access(file); return true } catch { return false }
 }
 
 // A folder's _common chart (#101) opens in the editor and is saved there,

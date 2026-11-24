@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
-import { scaffoldSamplesIfNeeded } from '../../server/lib/chartDiscovery.js'
+import { scaffoldSamplesIfNeeded } from '../../server/repo/setup.js'
 
 describe('sample scaffolding', () => {
   let tmpDir

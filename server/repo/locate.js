@@ -13,6 +13,8 @@ import fs from 'fs'
 import fsp from 'fs/promises'
 import path from 'path'
 import { openRepo } from './openRepo.js'
+import { UnreadableError } from '../lib/readIfThere.js'
+import { LEGACY_VALUES_SUFFIX } from './paths.js'
 
 const gitRoot = abs => {
   for (let at = path.dirname(abs); ; at = path.dirname(at)) {
@@ -61,4 +63,52 @@ export async function inRealRoot(realRoot, abs) {
     if (await fsp.realpath(up).catch(() => null) === realRoot) return path.join(realRoot, ...parts.slice(i))
   }
   return null
+}
+
+/** Whether something is at the path, as far as this process may look. */
+export const exists = p => fsp.access(p).then(() => true, () => false) // not there, or not to be looked at: not there for the caller
+
+/** The path as it really is, through any link; throws (as fs does) when it leads nowhere. */
+export const realPath = p => fsp.realpath(p)
+
+/** What is at a path given on a command line, a link not followed: 'link', 'dir', 'other', or null for nothing. */
+export const lookAt = p => fsp.lstat(p).then(st => (st.isSymbolicLink() ? 'link' : st.isDirectory() ? 'dir' : 'other'), () => null) // nothing to look at: the caller says it does not exist
+
+/** The names in a folder given on a command line; throws (as fs does) when it cannot be listed. */
+export const namesIn = dir => fsp.readdir(dir)
+
+// Whether a failed look means the path is not there: ENOENT, unless there
+// is a link at the path whose target is missing — that is there, and cannot
+// be read. A file that appears between the look and this one (a checkout
+// deleting and writing it again) is no link: it counts as not there for the
+// look that missed it.
+async function isAbsent(abs, err) {
+  if (err?.code !== 'ENOENT') return false // only "not there" is absent
+  const at = await fsp.lstat(abs).catch(() => null) // gone again: no link there
+  if (!at?.isSymbolicLink()) return true
+  return fsp.stat(abs).then(() => true, () => false)
+}
+
+/**
+ * Which file holds a deployment's values. The folder's own deployment —
+ * named after the folder, which is how the UI always calls it — is
+ * `values.yaml` when that exists, the same file Preview and sync use. Any
+ * other name is a legacy `<name>-values.yaml` sibling and never touches
+ * `values.yaml`, or saving it would overwrite the folder's deployment (#90).
+ */
+export async function resolveValuesFile(dir, deployment) {
+  const legacyFile = path.join(dir, `${deployment}${LEGACY_VALUES_SUFFIX}`)
+  const directFile = path.join(dir, 'values.yaml')
+  if (deployment === path.basename(dir)) {
+    try {
+      await fsp.access(directFile)
+      return { file: directFile, direct: true, legacyFile }
+    } catch (err) {
+      // Only a missing values.yaml means a legacy file named after the
+      // folder; any other error — a link to nothing among them — must not
+      // quietly pick the other file.
+      if (err.code !== 'ENOTDIR' && !(await isAbsent(directFile, err))) throw new UnreadableError(directFile, err.code === 'ENOENT' ? { reason: 'a link to a file that is not there' } : err) // ENOENT here: the link is there, its target is not
+    }
+  }
+  return { file: legacyFile, direct: false, legacyFile }
 }

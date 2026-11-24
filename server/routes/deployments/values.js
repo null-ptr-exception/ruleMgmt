@@ -16,7 +16,8 @@ import { UnreadableError, errorAnswer } from '../../lib/readIfThere.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadDeployment } from '../../repo/deployment.js'
 
-import { DEPLOYMENT_REQUEST, deploymentAt, resolveValuesFile, exists, commonRefused } from './resolve.js'
+import { DEPLOYMENT_REQUEST, deploymentAt, commonRefused } from './resolve.js'
+import { resolveValuesFile, exists } from '../../repo/locate.js'
 /**
  * What a deployment on a `_common` stack inherits (#102): the values its
  * layers give one that writes nothing (`values`), and which layer gives each

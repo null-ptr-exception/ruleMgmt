@@ -1,17 +1,16 @@
 /**
- * Reading a file or folder that may not be there. Only "not there"
- * (ENOENT) is absent. Anything else — no permission, a file where a folder
- * should be, a folder where a file should be, text that does not parse —
- * is an error naming the path, never read as absent: a chart whose rules/
- * cannot be read is not a chart without rules, and a save that took it for
- * one would regenerate the chart from nothing.
+ * A file of the repo that cannot be read, as an error and as an answer.
+ * Only "not there" is absent; anything else — no permission, a file where
+ * a folder should be, a folder where a file should be, text that does not
+ * parse — is an UnreadableError naming the path, never read as absent: a
+ * chart whose rules/ cannot be read is not a chart without rules, and a
+ * save that took it for one would regenerate the chart from nothing.
  *
  * The message names the absolute path; the routers take the workspace's
  * path out of an error answer (answerPaths.js), leaving the path in the repo:
  *
  *   charts/demo/rules cannot be read: permission denied
  */
-import fs from 'fs/promises'
 import { NotLoadedError } from '../repo/loaded.js'
 
 const WHY = {
@@ -30,20 +29,6 @@ export class UnreadableError extends Error {
     this.path = abs
     this.cause = cause
   }
-}
-
-/**
- * Whether a failed read means the path is not there: ENOENT, unless there is
- * a link at the path whose target is missing — that is there, and cannot be
- * read. A file that appears between the read and this look (a checkout
- * deleting and writing it again) is no link: it counts as not there for
- * the read that missed it, as it always did.
- */
-export async function isAbsent(abs, err) {
-  if (err?.code !== 'ENOENT') return false
-  const at = await fs.lstat(abs).catch(() => null)
-  if (!at?.isSymbolicLink()) return true
-  return fs.stat(abs).then(() => true, () => false)
 }
 
 /**

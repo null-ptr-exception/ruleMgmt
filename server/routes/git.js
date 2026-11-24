@@ -3,10 +3,7 @@ import { planChange, applyChange } from '../repo/changes/index.js'
 import { openRepo } from '../repo/openRepo.js'
 import { z } from 'zod'
 import { route, declaredRoutes } from '../http/route.js'
-import fs from 'fs/promises'
-import path from 'path'
-import os from 'os'
-import git from '../lib/git.js'
+import git, { pushWithToken } from '../lib/git.js'
 import { deploymentCommitBlockers } from '../lib/commitChecks.js'
 import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { getSourceForTarget, getTargetsForSource } from '../lib/sync.js'
@@ -15,7 +12,7 @@ import { syncAnswer } from '../repo/sync.js'
 import { TEMP_PATHSPEC_EXCLUDE, parkedItems } from '../repo/write.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { parsePath, pathProblem } from '../repo/paths.js'
-import { repoGit } from '../repo/git.js'
+import { repoGit, filesChanging } from '../repo/git.js'
 
 // `git status --porcelain -z`: each entry NUL-ended, the path as it is (no
 // quoting: `café-prod`, `my folder` and `q"x` reach the page as they are,
@@ -35,31 +32,6 @@ function parseStatus(raw) {
     else changes.modified.push(file)
   }
   return changes
-}
-
-const INDEX_LOCK_STALE_MS = 30000
-const gone = async abs => fs.lstat(abs).then(() => false, () => true)
-
-/**
- * Whether git or the file system failed because a file went away under it
- * (#187): something to try again. A path that is still there — a dangling
- * symlink, a file that is in the way — fails every time, so it is not;
- * neither is an index.lock older than any running git would leave it.
- */
-async function filesChanging(err, cwd) {
-  if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return !err.path || await gone(err.path)
-  const text = `${err?.message || ''} ${err?.stderr || ''}`
-  if (/index\.lock/i.test(text)) {
-    // Where git keeps it: the repo may be a worktree, or gitopsDir a folder
-    // inside the repo. A lock that cannot be found is not one to wait for.
-    const rel = (await git(cwd, 'rev-parse', '--git-path', 'index.lock').catch(() => '')).trim()
-    if (!rel) return false
-    const age = await fs.stat(path.resolve(cwd, rel)).then(st => Date.now() - st.mtimeMs, () => Infinity)
-    return age < INDEX_LOCK_STALE_MS
-  }
-  if (!/unable to stat|short read while indexing|No such file or directory|Not a directory/i.test(text)) return false
-  const named = text.match(/(?:unable to stat|open\()\s*['"]([^'"]+)['"]/i)?.[1]
-  return !named || await gone(path.resolve(cwd, named))
 }
 
 function hasRemote() {
@@ -365,24 +337,4 @@ export default function gitRouter() {
 function isAuthError(err) {
   const msg = err.message.toLowerCase()
   return msg.includes('authentication failed') || msg.includes('could not read username') || msg.includes('401')
-}
-
-async function pushWithToken(cwd, branch, token) {
-  const { execFile } = await import('child_process')
-  const askpassFile = path.join(os.tmpdir(), `askpass-${process.pid}-${Date.now()}.sh`)
-  await fs.writeFile(askpassFile, `#!/bin/sh\necho "${token}"`, { mode: 0o700 })
-  try {
-    await new Promise((resolve, reject) => {
-      execFile('git', ['push', 'origin', branch], {
-        cwd,
-        env: { ...process.env, GIT_ASKPASS: askpassFile },
-        timeout: 60000,
-      }, (err, stdout, stderr) => {
-        if (err) reject(new Error(stderr?.trim() || err.message))
-        else resolve(stdout)
-      })
-    })
-  } finally {
-    await fs.unlink(askpassFile).catch(() => {})
-  }
 }

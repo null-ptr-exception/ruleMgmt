@@ -1,5 +1,4 @@
 import express from 'express'
-import fs from 'fs/promises'
 import { readFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -9,11 +8,11 @@ import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
 import renderRouter from './server/routes/render.js'
 import gitRouter from './server/routes/git.js'
-import git from './server/lib/git.js'
 import foldersRouter from './server/routes/folders.js'
 import syncRouter from './server/routes/sync.js'
 import routingSharedRouter from './server/routes/routingShared.js'
-import { getChartsDir, getDeploymentsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
+import { getChartsDir, getDeploymentsDir } from './server/lib/chartDiscovery.js'
+import { initGitIfNone, scaffoldSamplesIfNeeded } from './server/repo/setup.js'
 import { logger, httpLogger } from './server/lib/logger.js'
 import { jsonBody } from './server/http/body.js'
 import { answerUncaught } from './server/http/route.js'
@@ -55,15 +54,7 @@ const GITOPS_DIR_V2 = process.env.GITOPS_DIR || path.join(__dirname, 'gitops')
 
 // Auto-init git in local dev mode (no JupyterHub)
 if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
-  try {
-    await fs.access(path.join(GITOPS_DIR_V2, '.git'))
-  } catch {
-    await fs.mkdir(GITOPS_DIR_V2, { recursive: true })
-    await git(GITOPS_DIR_V2, 'init')
-    await git(GITOPS_DIR_V2, 'add', '-A')
-    await git(GITOPS_DIR_V2, 'commit', '--allow-empty', '-m', 'initial')
-    logger.info(`Git initialized in ${GITOPS_DIR_V2}`)
-  }
+  if (await initGitIfNone(GITOPS_DIR_V2)) logger.info(`Git initialized in ${GITOPS_DIR_V2}`)
 }
 
 // A MAX_VALUES_BYTES that is not used as written is said once.

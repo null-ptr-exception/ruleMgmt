@@ -1,8 +1,4 @@
-import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
-import { dumpForHelm } from '../../src/utils/yamlScalar.js'
-import { writeWhole } from '../repo/write.js'
 import { openRepo } from '../repo/openRepo.js'
 import { decide } from '../repo/policy.js'
 import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
@@ -76,65 +72,4 @@ export async function templateForNewDeployment(gitopsDir, chart, folder, repo = 
     return { status: 409, error: `Not made: ${folder} would not deploy (${problems.join('; ')})`, problems }
   }
   return { defaults: t.values }
-}
-
-export async function scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir) {
-  const existing = await findAlertTemplateCharts(chartsDir)
-  if (existing.length > 0) return false
-
-  const sampleChartsDir = path.join(sampleDir, 'charts')
-  let entries
-  try {
-    entries = await fs.readdir(sampleChartsDir, { withFileTypes: true })
-  } catch {
-    return false
-  }
-
-  for (const e of entries) {
-    if (!e.isDirectory()) continue
-    await copyDirRecursive(path.join(sampleChartsDir, e.name), path.join(chartsDir, e.name))
-
-    const chartYamlPath = path.join(chartsDir, e.name, 'Chart.yaml')
-    try {
-      const raw = await fs.readFile(chartYamlPath, 'utf-8')
-      const meta = yaml.load(raw) || {}
-      let changed = false
-      if (!meta.annotations || meta.annotations.app !== 'alertforge') {
-        if (!meta.annotations) meta.annotations = {}
-        meta.annotations.app = 'alertforge'
-        changed = true
-      }
-      if (!meta.type || meta.type === 'alert-templates') {
-        meta.type = 'application'
-        changed = true
-      }
-      if (changed) {
-        await writeWhole(chartYamlPath, dumpForHelm(meta, { lineWidth: -1 }))
-      }
-    } catch { /* skip */ }
-  }
-
-  if (deploymentsDir) {
-    const sampleDeploymentsDir = path.join(sampleDir, 'deployments')
-    try {
-      await fs.access(sampleDeploymentsDir)
-      await copyDirRecursive(sampleDeploymentsDir, deploymentsDir)
-    } catch { /* no sample deployments */ }
-  }
-
-  return true
-}
-
-async function copyDirRecursive(src, dest) {
-  await fs.mkdir(dest, { recursive: true })
-  const entries = await fs.readdir(src, { withFileTypes: true })
-  for (const e of entries) {
-    const srcPath = path.join(src, e.name)
-    const destPath = path.join(dest, e.name)
-    if (e.isDirectory()) {
-      await copyDirRecursive(srcPath, destPath)
-    } else {
-      await fs.copyFile(srcPath, destPath)
-    }
-  }
 }

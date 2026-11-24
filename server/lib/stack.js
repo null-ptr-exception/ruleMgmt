@@ -27,14 +27,14 @@
  * with no `_common` is a stack of none: the Template, under its name.
  */
 
-import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { unwrapPath } from './subchart.js'
 import { openRepo } from '../repo/openRepo.js'
 import { linkOnTheWay } from '../repo/paths.js'
 import { folderEntry } from '../repo/walk.js'
+import { chartDoc } from '../repo/chart.js'
+import { linkWritten } from '../repo/diskState.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 // More hops than this is a loop of links, not a stack.
@@ -44,28 +44,26 @@ const rel = (gitopsDir, abs) => path.relative(gitopsDir, abs).replace(/\\/g, '/'
 const isPlainObject = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const problem = (kind, description) => ({ kind, description })
 
-/** A Chart.yaml: the document, undefined when there is none, null when it cannot be read. */
-export async function readChart(dir) {
-  try {
-    return yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8'))
-  } catch (err) {
-    if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return undefined
-    return null
-  }
+// Where a layer's or a Template's files are read: `{ repo, rel }`, a
+// snapshot kept beside the request's own for as long as that one lives. A
+// file is read once, through the loader — but not as part of the request's
+// snapshot: these reads were never among what a write holds the repo to
+// (its snapshot's read log), and never saw a planned overlay. Reading them
+// in it changes what a write answers when a layer changes under it: to do
+// with a behaviour change. A folder outside the repo given (a dependency
+// that leads out of it; a deployment checked with no root told) is read by
+// its place on the machine, as it always was.
+function placeIn(repo, gitopsDir, abs) {
+  const inRepo = rel(gitopsDir, abs)
+  if (!inRepo.startsWith('../')) return { repo: repo.memo('stackReads', '', () => openRepo(repo.root)), rel: inRepo === '.' ? '' : inRepo }
+  const root = path.parse(path.resolve(abs)).root
+  return { repo: repo.memo('stackReads', root, () => openRepo(root)), rel: path.relative(root, path.resolve(abs)).split(path.sep).join('/') }
 }
 
-// A Template's Chart.yaml, read once per version of the file: every
-// deployment of it asks.
-const templateCharts = new Map()
-async function readTemplateChart(dir) {
-  const file = path.join(dir, 'Chart.yaml')
-  const stat = await fs.stat(file).catch(() => null)
-  if (!stat) return readChart(dir)
-  const hit = templateCharts.get(file)
-  if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) return hit.chart
-  const chart = await readChart(dir)
-  templateCharts.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, chart })
-  return chart
+/** The Chart.yaml of the chart folder `dir`: the document, undefined when there is none, null when it cannot be read. */
+async function readChart(repo, gitopsDir, dir) {
+  const at = placeIn(repo, gitopsDir, dir)
+  return chartDoc(await at.repo, at.rel)
 }
 
 /** A chart's dependencies that are entries (a hand edit may hold anything). */
@@ -117,34 +115,34 @@ function enabledBy(dep, seen) {
  * `_common` is still one), `name` its Chart.yaml's. Helm's own `.tgz`
  * downloads in a deployment's charts/ are not read here.
  */
-async function chartsIn(dir) {
+async function chartsIn(repo, gitopsDir, dir) {
   const folder = path.join(dir, 'charts')
-  let entries
-  try {
-    entries = await fs.readdir(folder, { withFileTypes: true })
-  } catch {
-    return []
-  }
+  const at = placeIn(repo, gitopsDir, folder)
+  const from = await at.repo
+  const listed = await from.dir(at.rel)
+  // Not there, or not to be listed: no charts, as Helm finds none.
+  if (listed.state !== 'ok') return []
   const out = []
-  for (const e of entries) {
-    if (e.name.startsWith('.')) continue
-    const abs = path.join(folder, e.name)
-    if (e.isFile() && e.name.endsWith('.tgz')) {
-      out.push({ name: /^(.+?)-v?\d+(?:\.\d+)*[^/]*\.tgz$/.exec(e.name)?.[1] ?? e.name, at: abs, packed: true, file: e.name })
+  for (const [name, kind] of listed.value.entries) {
+    if (name.startsWith('.')) continue
+    const abs = path.join(folder, name)
+    const link = listed.value.links.has(name)
+    if (!link && kind === 'file' && name.endsWith('.tgz')) {
+      out.push({ name: /^(.+?)-v?\d+(?:\.\d+)*[^/]*\.tgz$/.exec(name)?.[1] ?? name, at: abs, packed: true, file: name })
       continue
     }
-    if (e.isFile()) {
+    if (!link && kind === 'file') {
       // A link checked out as a text file (git with core.symlinks off, as on
       // Windows): Helm stops on it.
-      out.push({ name: null, at: abs, file: e.name, textFile: true })
+      out.push({ name: null, at: abs, file: name, textFile: true })
       continue
     }
-    if (!e.isDirectory() && !e.isSymbolicLink()) continue
-    const stat = await fs.stat(abs).catch(() => null)
-    if (!stat?.isDirectory()) continue
-    const target = e.isSymbolicLink() ? path.resolve(folder, await fs.readlink(abs)) : abs
-    const chart = await readChart(abs)
-    out.push({ name: typeof chart?.name === 'string' ? chart.name : null, at: target, file: e.name })
+    // A folder, or a link that leads to one.
+    if (kind !== 'dir') continue
+    const to = link ? await linkWritten(from.root, `${at.rel}/${name}`) : null
+    const target = to !== null ? path.resolve(folder, to) : abs
+    const chart = await readChart(repo, gitopsDir, abs)
+    out.push({ name: typeof chart?.name === 'string' ? chart.name : null, at: target, file: name })
   }
   return out
 }
@@ -171,7 +169,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
   const isTemplate = (where, name) => path.resolve(where) === path.join(templatesDir, String(name))
   const templateKind = async (where, name) => {
     if (!isTemplate(where, name)) return 'other'
-    const chart = await readTemplateChart(where)
+    const chart = await readChart(repo, gitopsDir, where)
     return chart?.annotations?.app === 'alertforge' ? 'template' : 'plain'
   }
   const keys = []
@@ -198,7 +196,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
   // there is none, null when it cannot be read or is not YAML.
   async function ownChart() {
     const own = rel(gitopsDir, dir)
-    if (own === '.' || own.startsWith('../')) return readChart(dir)
+    if (own === '.' || own.startsWith('../')) return readChart(repo, gitopsDir, dir)
     const f = await repo.helmYaml(`${own}/Chart.yaml`)
     if (f.state === 'absent' || (f.state === 'unreadable' && f.kind === 'not-a-folder')) return undefined
     return f.state === 'ok' ? f.value : null
@@ -238,7 +236,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
     // The _common it names, whatever state it is in: a sync target's mark
     // (#103) still says which one it follows.
     result.firstLayerPath = rel(gitopsDir, first.where)
-    const layerChart = await readChart(first.where)
+    const layerChart = await readChart(repo, gitopsDir, first.where)
     if (layerChart === undefined || layerChart?.name !== first.d.name) lastLayerFolder = first.where
     if (layerChart === undefined) {
       problems.push(problem('template-missing', `its _common chart ${rel(gitopsDir, first.where)} is not in the repo`))
@@ -296,8 +294,8 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
     if (!self) layers.push({ path: layerPath, doc: layerDoc })
     seen = self ? layerDoc : mergeValues(layerDoc, at(seen, key))
 
-    const layerDeps = dependenciesOf(await readChart(cur))
-    const found = await chartsIn(cur)
+    const layerDeps = dependenciesOf(await readChart(repo, gitopsDir, cur))
+    const found = await chartsIn(repo, gitopsDir, cur)
     // A file named as a chart it depends on: a link checked out as text.
     const textFile = found.find(c => c.textFile && layerDeps.some(d => d.name === c.file))
     if (textFile) {
@@ -329,7 +327,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
       // Nothing in charts/ to pass the values to: Helm renders nothing.
       const name = layerDeps[0]?.name
       const wants = typeof name === 'string'
-        ? (await readTemplateChart(path.join(templatesDir, name)) !== undefined ? `its Template ${name}` : `the chart ${name}`)
+        ? (await readChart(repo, gitopsDir, path.join(templatesDir, name)) !== undefined ? `its Template ${name}` : `the chart ${name}`)
         : 'the chart it depends on'
       problems.push(problem('template-missing', `the _common chart ${layerPath} has no link to ${wants} in its charts/ (charts/${typeof name === 'string' ? name : '…'}), so Helm renders nothing`))
       break walk
@@ -351,7 +349,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
   if (!result.chart) {
     const named = [...layers.map(l => path.posix.basename(l.path)), ...(lastLayerFolder ? [path.basename(lastLayerFolder)] : [])]
     for (const name of named.reverse()) {
-      if ((await readTemplateChart(path.join(templatesDir, name)))?.annotations?.app === 'alertforge') { result.claims = name; break }
+      if ((await readChart(repo, gitopsDir, path.join(templatesDir, name)))?.annotations?.app === 'alertforge') { result.claims = name; break }
     }
   }
 

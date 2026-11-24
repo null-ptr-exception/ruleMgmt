@@ -4,12 +4,13 @@ import js from '@eslint/js'
 /*
  * Only the repo loader touches the disk.
  *
- * `boundary/disk` warns where server or script code reads the gitops repo
- * on its own: the file system, a YAML parser, a git process, or a helper
- * that wraps one of them. Today that is most of the server; each warning
- * is a place still to move behind the loader (server/repo/). It warns
- * rather than fails until that move is done; tests/pin/counts.json keeps
- * the number from going back up (see AGENTS.md, "Disk boundary").
+ * `boundary/disk` is an error where server or script code outside
+ * server/repo/ uses the file system, a YAML parser or a child process:
+ * the gitops repo is read through the loader (openRepo) and written
+ * through the writer. What is not the repo — a temp folder for Helm or a
+ * checker, Helm's output, the app's own files — is listed in ALLOWED
+ * below, file by file, with the calls it may make and why (see AGENTS.md,
+ * "Disk boundary").
  *
  * `boundary/measure` is not part of `npm run lint`: tests/pin/counts.mjs
  * turns it on to count catches that swallow a failed read, own ENOENT
@@ -24,18 +25,11 @@ const MODULE = /^(node:)?module$/
 const YAML_PARSE = new Set(['load', 'loadAll', 'parse', 'parseDocument', 'parseAllDocuments'])
 // fs functions that read (a catch around one of them may hide an unreadable file).
 const FS_READ = /^(readFile|readFileSync|readdir|readdirSync|stat|statSync|lstat|lstatSync|access|accessSync|realpath|realpathSync|opendir|readlink|readlinkSync|existsSync|open)$/
-// Helpers that read or parse a repo file for their caller, by the module they live in.
-const HELPERS = {
-  'server/lib/readIfThere.js': { read: ['readTextIfThere', 'readDirIfThere', 'parseIfThere'], other: ['isAbsent'] },
-  'src/utils/valuesText.js': { parse: ['loadValues'] },
-}
-
 const MESSAGES = {
   fs: 'disk access ({{what}}): read the repo through server/repo',
   fsUse: 'disk access (uses {{what}}): read the repo through server/repo',
   yaml: 'YAML parser ({{what}}): read the repo through server/repo',
   yamlParse: 'YAML parse ({{what}}): read the repo through server/repo',
-  helper: 'disk helper ({{what}}): read the repo through server/repo',
   childProcess: 'child process ({{what}}): run git through server/lib/git.js',
   require: 'require ({{what}}) gets around this check: use import',
   unknownImport: 'module chosen at run time ({{what}}): this check cannot see what it loads',
@@ -69,18 +63,13 @@ function analyse(context) {
   const keys = sourceCode.visitorKeys
   const rel = path.relative(context.cwd, context.filename).split(path.sep).join('/')
   const loads = [] // { node, kind, what }
-  const bound = [] // { variable, kind, imported, helper }
+  const bound = [] // { variable, kind, imported }
   const parents = new Map()
   const requirers = [] // variables holding a require made by createRequire
   const isCreateRequire = callee =>
     (callee?.type === 'Identifier' && callee.name === 'createRequire') ||
     (callee?.type === 'MemberExpression' && !callee.computed && callee.property.name === 'createRequire')
 
-  const helperOf = source => {
-    if (!source.startsWith('.')) return null
-    const target = path.relative(context.cwd, path.resolve(path.dirname(context.filename), source)).split(path.sep).join('/')
-    return HELPERS[target] ? { module: target, names: HELPERS[target] } : null
-  }
   const bindVariables = (node, kind, extra = {}) => {
     for (const variable of sourceCode.getDeclaredVariables(node)) bound.push({ variable, kind, ...extra })
   }
@@ -98,11 +87,10 @@ function analyse(context) {
     const name = literalOf(arg)
     if (name === null) { loads.push({ node, kind: 'unknownImport', what: how }); return }
     const kind = moduleKind(name)
-    const helper = helperOf(name)
-    if (!kind && !helper) return
-    loads.push({ node, kind: kind || 'helper', what: `${how} ${name}` })
+    if (!kind) return
+    loads.push({ node, kind, what: `${how} ${name}` })
     const declarator = declaratorAbove(node)
-    if (declarator) bindVariables(declarator, kind || 'helper', { imported: null, helper })
+    if (declarator) bindVariables(declarator, kind, { imported: null })
   }
 
   walk(sourceCode.ast, keys, (node, parent) => {
@@ -117,21 +105,6 @@ function analyse(context) {
             const imported = spec.type === 'ImportSpecifier' ? (spec.imported.name ?? spec.imported.value) : null
             for (const variable of sourceCode.getDeclaredVariables(spec)) bound.push({ variable, kind, imported })
           }
-        }
-        return
-      }
-      const helper = helperOf(name)
-      if (!helper) return
-      const all = [...(helper.names.read || []), ...(helper.names.parse || []), ...(helper.names.other || [])]
-      const specs = node.type === 'ExportAllDeclaration' ? [null] : node.specifiers
-      for (const spec of specs) {
-        // `export { a as b } from`: `local` is the name in the helper's module
-        const named = spec?.type === 'ImportSpecifier' ? spec.imported : spec?.type === 'ExportSpecifier' ? spec.local : null
-        const imported = named ? (named.name ?? named.value) : '*'
-        if (imported !== '*' && !all.includes(imported)) continue
-        loads.push({ node: spec || node, kind: 'helper', what: `${imported === '*' ? 'everything' : imported} from ${helper.module}` })
-        if (spec && node.type === 'ImportDeclaration') {
-          for (const variable of sourceCode.getDeclaredVariables(spec)) bound.push({ variable, kind: 'helper', imported, helper })
         }
       }
       return
@@ -158,23 +131,18 @@ function analyse(context) {
     }
   }
 
-  // Every use of a variable that holds the module, one of its functions, or a helper.
-  const uses = [] // { node (Identifier), kind: 'fsUse'|'yamlParse'|'helperRead'|'helperParse'|..., read: bool, what }
-  for (const { variable, kind, imported, helper } of bound) {
+  // Every use of a variable that holds the module or one of its functions.
+  const uses = [] // { node (Identifier), kind: 'fsUse'|'yamlParse', read: bool, what, fn }
+  for (const { variable, kind, imported } of bound) {
     for (const ref of variable.references) {
       if (ref.init) continue
       const id = ref.identifier
       const up = parents.get(id)
       const member = up?.type === 'MemberExpression' && up.object === id && !up.computed ? up.property.name : null
       const fn = imported || member
-      if (kind === 'fs') uses.push({ node: id, kind: 'fsUse', read: FS_READ.test(fn || ''), what: fn ? `fs ${fn}` : id.name })
+      if (kind === 'fs') uses.push({ node: id, kind: 'fsUse', read: FS_READ.test(fn || ''), what: fn ? `fs ${fn}` : id.name, fn })
       else if (kind === 'yaml') {
         if (fn && YAML_PARSE.has(fn)) uses.push({ node: id, kind: 'yamlParse', read: true, what: fn })
-      } else if (kind === 'helper') {
-        const names = helper?.names || {}
-        const name = imported && imported !== '*' ? imported : member
-        if ((names.parse || []).includes(name)) uses.push({ node: id, kind: 'yamlParse', read: true, what: name })
-        else if ((names.read || []).includes(name)) uses.push({ node: id, kind: 'helperRead', read: true, what: name })
       }
     }
   }
@@ -184,24 +152,31 @@ function analyse(context) {
 const disk = {
   meta: {
     type: 'suggestion',
-    docs: { description: 'Only the repo loader reads the gitops repo: no fs, YAML parser, git process or read helper elsewhere' },
+    docs: { description: 'Only the repo loader reads the gitops repo: no fs, YAML parser or child process elsewhere' },
     schema: [{
       type: 'object',
-      properties: { allow: { type: 'array', items: { enum: Object.keys(MESSAGES) } } },
+      properties: {
+        // kinds let through whole
+        allow: { type: 'array', items: { enum: Object.keys(MESSAGES) } },
+        // the only fs functions the file may call (and import fs for)
+        fsCalls: { type: 'array', items: { type: 'string' } },
+      },
       additionalProperties: false,
     }],
     messages: MESSAGES,
   },
   create(context) {
     const allow = new Set(context.options[0]?.allow || [])
+    const fsCalls = context.options[0]?.fsCalls ? new Set(context.options[0].fsCalls) : null
     return {
       'Program:exit'() {
         const { loads, uses } = analyse(context)
         for (const { node, kind, what } of loads) {
+          if (kind === 'fs' && fsCalls) continue // loaded for the calls listed; any other use is reported below
           if (!allow.has(kind)) context.report({ node, messageId: kind, data: { what } })
         }
-        for (const { node, kind, what } of uses) {
-          if (kind === 'helperRead') continue // the import of the helper is already reported
+        for (const { node, kind, what, fn } of uses) {
+          if (kind === 'fsUse' && fsCalls?.has(fn)) continue
           if (!allow.has(kind)) context.report({ node, messageId: kind, data: { what } })
         }
       },
@@ -321,7 +296,7 @@ const measure = {
 }
 
 /**
- * `boundary/request` warns where a route file reads the request itself —
+ * `boundary/request` is an error where a route file reads the request itself —
  * `req.query`, `req.params`, `req.body`, `req['body']`, `req[name]`,
  * `ctx.req.query`, the
  * same under another name (a handler's first parameter, `const r = req`),
@@ -329,8 +304,7 @@ const measure = {
  * taking `({ body })`) — instead of the input its route declares and
  * parses (server/http/route.js). Not seen: a helper outside server/routes/
  * given `req` whole, and a helper in a route file that takes it under a
- * name of its own (`function f(r) { r.query }`) and is not a handler. tests/pin/counts.mjs counts
- * the warnings (requestReads) so the number only goes down, route by route.
+ * name of its own (`function f(r) { r.query }`) and is not a handler.
  */
 const REQUEST_PARTS = new Set(['query', 'params', 'body'])
 const ROUTER_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all', 'use'])
@@ -395,16 +369,29 @@ const request = {
 
 export const boundary = { rules: { disk, measure, request } }
 
-// Modules meant to do what the rule warns about, and what each may do.
-const ALLOWED = [
-  // The repo loader, being written on its own branch.
-  { files: ['server/repo/**'], allow: Object.keys(MESSAGES) },
-  // The read helpers and path checks it starts from.
-  { files: ['server/lib/readIfThere.js'], allow: ['fs', 'fsUse'] },
-  // The git wrapper, and the runner of helm, promtool and vmalert.
-  { files: ['server/lib/git.js', 'server/lib/ruleCheck.js'], allow: ['childProcess'] },
-  // Write the app's own schema/ files, not the gitops repo.
-  { files: ['scripts/gen-routing-schema.mjs', 'scripts/gen-rules-schema.mjs'], allow: ['fs', 'fsUse'] },
+// The exceptions, each with its reason: `allow` lets a kind through whole,
+// `fsCalls` names the only fs functions a file may call. To add one, add a
+// line here with a `why` that says what the file touches that is not the
+// gitops repo; code that reads or writes the repo goes into server/repo/.
+export const ALLOWED = [
+  { files: ['server/repo/**'], allow: Object.keys(MESSAGES),
+    why: 'the repo loader and writer: the one place that reads and writes the gitops repo' },
+  { files: ['server/lib/git.js'], allow: ['childProcess'], fsCalls: ['writeFile', 'unlink'],
+    why: 'the git wrapper: starts git, and writes the askpass script for a push into the temp folder' },
+  { files: ['server/lib/ruleCheck.js'], allow: ['childProcess', 'yaml', 'yamlParse'], fsCalls: ['mkdtemp', 'writeFile', 'rm'],
+    why: 'runs helm, promtool and vmalert: parses Helm\'s output, writes each rendered group to a temp folder for the checker' },
+  { files: ['server/lib/helmCheck.js'], allow: ['yaml', 'yamlParse'],
+    why: 'parses what Helm rendered (its output, not a file of the repo), to compare two renders' },
+  { files: ['server/lib/deploymentCheck.js'], fsCalls: ['mkdtemp', 'rm'],
+    why: 'Helm\'s cache, config and data home in the temp folder for a command line run' },
+  { files: ['server/lib/sync.js', 'server/lib/sharedConfigs.js'], allow: ['yaml'],
+    why: 'writes YAML text (yaml.dump) for the writer; a parse is still an error' },
+  { files: ['server.js'], fsCalls: ['readFileSync'],
+    why: 'the app\'s own built page, dist/index.html, read once at start-up' },
+  { files: ['scripts/import-rules.mjs'], fsCalls: ['readFile'],
+    why: 'the rules file to import, named on the command line: any file of the user\'s, not one of the repo' },
+  { files: ['scripts/gen-routing-schema.mjs', 'scripts/gen-rules-schema.mjs'], allow: ['fs', 'fsUse'],
+    why: 'write the app\'s own schema/ files, not the gitops repo' },
 ]
 
 export default [
@@ -455,7 +442,7 @@ export default [
   },
   {
     files: ['server.js', 'server/**/*.js', 'scripts/**/*.mjs'],
-    rules: { 'boundary/disk': 'warn' },
+    rules: { 'boundary/disk': 'error' },
   },
   // src/ runs in the browser and, through what the server imports, on the
   // server: no disk or process there; its YAML parsing is pure functions
@@ -463,12 +450,12 @@ export default [
   {
     files: ['src/**/*.js'],
     ignores: ['src/**/__tests__/**', 'src/**/__fixtures__/**'],
-    rules: { 'boundary/disk': ['warn', { allow: ['yaml', 'yamlParse', 'helper'] }] },
+    rules: { 'boundary/disk': ['error', { allow: ['yaml', 'yamlParse'] }] },
   },
-  ...ALLOWED.map(({ files, allow }) => ({ files, rules: { 'boundary/disk': ['warn', { allow }] } })),
+  ...ALLOWED.map(({ files, allow = [], fsCalls }) => ({ files, rules: { 'boundary/disk': ['error', { allow, ...(fsCalls ? { fsCalls } : {}) }] } })),
   {
     files: ['server/routes/**/*.js'],
-    rules: { 'boundary/request': 'warn' },
+    rules: { 'boundary/request': 'error' },
   },
   {
     ignores: ['dist/**', 'node_modules/**', '.playwright-mcp/**'],

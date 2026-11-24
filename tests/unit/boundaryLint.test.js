@@ -1,13 +1,15 @@
 /**
  * The disk boundary: only the repo loader reads the gitops repo.
- * `boundary/disk` (eslint.config.js) warns where other code does; the
- * counts in tests/pin/counts.json may only go down.
+ * `boundary/disk` and `boundary/request` (eslint.config.js) are errors
+ * where other code does: `npm run lint` fails on a new use. The counts in
+ * tests/pin/counts.json hold what lint does not: catches that swallow a
+ * failed read, own ENOENT checks and YAML parse sites.
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, it, expect } from 'vitest'
-import { RuleTester } from 'eslint'
-import { boundary } from '../../eslint.config.js'
+import { RuleTester, ESLint } from 'eslint'
+import { boundary, ALLOWED } from '../../eslint.config.js'
 import { measure, compare, COUNTS_FILE } from '../pin/counts.mjs'
 
 RuleTester.describe = describe
@@ -24,11 +26,12 @@ describe('boundary/disk catches the ways around it', () => {
   tester.run('disk', boundary.rules.disk, {
     valid: [
       { code: "import path from 'node:path'\npath.join('a', 'b')", filename: ROUTE },
-      // a helper's other exports are not reads
-      { code: "import { UnreadableError, errorAnswer } from '../lib/readIfThere.js'", filename: ROUTE },
       // yaml.dump writes text; it does not parse
       { code: "import yaml from 'js-yaml'\nyaml.dump({})", filename: ROUTE, options: [{ allow: ['yaml'] }] },
       { code: "import fs from 'fs/promises'\nfs.readFile('x')", filename: ROUTE, options: [{ allow: ['fs', 'fsUse'] }] },
+      // a file given some fs calls may make those
+      { code: "import fs from 'fs/promises'\nawait fs.mkdtemp('x')\nawait fs.rm('x')", filename: ROUTE, options: [{ fsCalls: ['mkdtemp', 'rm'] }] },
+      { code: "import { readFileSync } from 'fs'\nreadFileSync('x')", filename: SCRIPT, options: [{ fsCalls: ['readFileSync'] }] },
       // Not caught (known limits): a module of ours that reads for its caller
       // and is not listed as a helper; git through the wrapper; a computed name.
       { code: "import { readChart } from '../lib/chartFiles.js'\nreadChart('x')", filename: ROUTE },
@@ -41,8 +44,11 @@ describe('boundary/disk catches the ways around it', () => {
       { code: "import * as fsp from 'node:fs/promises'\nawait fsp.readFile('x')", filename: ROUTE, errors: kinds('fs', 'fsUse') },
       { code: "const fs = await import('fs/promises')\nawait fs.readFile('x')", filename: ROUTE, errors: kinds('fs', 'fsUse') },
       { code: "import { createRequire } from 'node:module'\nconst yaml = createRequire(import.meta.url)('js-yaml')\nyaml.load('a: 1')", filename: ROUTE, errors: kinds('require', 'yaml', 'yamlParse') },
-      { code: "import { readTextIfThere } from '../lib/readIfThere.js'\nawait readTextIfThere('x')", filename: ROUTE, errors: kinds('helper') },
-      { code: "import { loadValues } from '../../src/utils/valuesText.js'\nloadValues('a: 1')", filename: ROUTE, errors: kinds('helper', 'yamlParse') },
+      // a file given some fs calls may make no other, nor hand fs on
+      { code: "import fs from 'fs/promises'\nawait fs.mkdtemp('x')\nawait fs.readFile('y')", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
+      { code: "import fs from 'fs/promises'\nconst { readFile } = fs", filename: ROUTE, options: [{ fsCalls: ['mkdtemp'] }], errors: kinds('fsUse') },
+      // yaml.dump allowed is not a parse allowed
+      { code: "import yaml from 'js-yaml'\nyaml.load('a: 1')", filename: ROUTE, options: [{ allow: ['yaml'] }], errors: kinds('yamlParse') },
       // and more of the same
       { code: "import { createRequire } from 'module'\nconst load = createRequire(import.meta.url)\nload('fs').readFileSync('x')", filename: SCRIPT, errors: kinds('require', 'fs') },
       { code: "const fs = process.getBuiltinModule('node:fs')\nfs.readFileSync('x')", filename: ROUTE, errors: kinds('fs', 'fsUse') },
@@ -50,11 +56,11 @@ describe('boundary/disk catches the ways around it', () => {
       { code: "import { execFile } from 'node:child_process'", filename: SCRIPT, errors: kinds('childProcess') },
       { code: "const name = 'fs'\nawait import(name)", filename: ROUTE, errors: kinds('unknownImport') },
       { code: "await import(`fs`)", filename: ROUTE, errors: kinds('fs') },
-      { code: "export { readTextIfThere as read } from '../lib/readIfThere.js'", filename: ROUTE, errors: kinds('helper') },
-      { code: "export * from '../lib/readIfThere.js'", filename: ROUTE, errors: kinds('helper') },
+      { code: "export { readFile } from 'fs/promises'", filename: ROUTE, errors: kinds('fs') },
+      { code: "export * from 'node:fs'", filename: ROUTE, errors: kinds('fs') },
       { code: "import { parseDocument } from 'yaml'\nparseDocument('a: 1')", filename: ROUTE, errors: kinds('yaml', 'yamlParse') },
       // passed on, not called, is still a parse
-      { code: "import yaml from 'js-yaml'\nimport { parseIfThere } from '../lib/readIfThere.js'\nparseIfThere('x', yaml.load)", filename: ROUTE, errors: kinds('yaml', 'helper', 'yamlParse') },
+      { code: "import yaml from 'js-yaml'\nconst read = (text, parse) => parse(text)\nread('x', yaml.load)", filename: ROUTE, errors: kinds('yaml', 'yamlParse') },
       { code: "import { readFileSync } from 'fs'\nreadFileSync('x')", filename: SCRIPT, errors: kinds('fs', 'fsUse') },
     ],
   })
@@ -113,10 +119,65 @@ describe('boundary/request: a route reads the request through its parsed input',
   })
 })
 
+// The rules as `npm run lint` runs them (eslint.config.js): a use planted
+// in a file that is not there is an error, in each place the rule covers.
+describe('npm run lint fails on a new use', () => {
+  const eslint = new ESLint({ cwd: ROOT })
+  const errorsOf = async (code, file) => {
+    const [result] = await eslint.lintText(code, { filePath: path.join(ROOT, file) })
+    return result.messages.filter(m => m.severity === 2).map(m => `${m.ruleId}:${m.messageId}`)
+  }
+  const READ = "import fs from 'fs/promises'\nexport const read = () => fs.readFile('values.yaml', 'utf-8')\n"
+  const PARSE = "import yaml from 'js-yaml'\nexport const read = text => yaml.load(text)\n"
+
+  it.each([
+    'server/lib/planted.js', 'server/routes/planted.js', 'server/routes/deployments/planted.js', 'server/http/planted.js', 'scripts/planted.mjs',
+    // a file with an exception may make its own calls and no other
+    'server/lib/deploymentCheck.js', 'server/lib/git.js', 'server.js',
+  ])('a read of a file in %s is an error', async file => {
+    expect(await errorsOf(READ, file)).toContain('boundary/disk:fsUse')
+  })
+
+  it.each(['server/lib/planted.js', 'server/routes/planted.js', 'scripts/planted.mjs', 'server/lib/sync.js', 'server/lib/sharedConfigs.js'])('a YAML parse in %s is an error', async file => {
+    expect(await errorsOf(PARSE, file)).toContain('boundary/disk:yamlParse')
+  })
+
+  it('a child process outside the git wrapper and the checkers\' runner is an error', async () => {
+    const code = "import { execFile } from 'child_process'\nexport const run = () => execFile('git', ['status'])\n"
+    expect(await errorsOf(code, 'server/routes/planted.js')).toEqual(['boundary/disk:childProcess'])
+    expect(await errorsOf(code, 'server/lib/git.js')).toEqual([])
+  })
+
+  it('a route reading the request itself is an error', async () => {
+    const code = "export const handler = (req, res) => res.json(req.query.folder)\n"
+    expect(await errorsOf(code, 'server/routes/planted.js')).toEqual(['boundary/request:raw'])
+    expect(await errorsOf(code, 'server/routes/deployments/planted.js')).toEqual(['boundary/request:raw'])
+  })
+
+  it('the loader may do all of it; src may parse text and not touch the disk', async () => {
+    expect(await errorsOf(READ + PARSE.replace('export const read', 'export const parse'), 'server/repo/planted.js')).toEqual([])
+    expect(await errorsOf(PARSE, 'src/utils/planted.js')).toEqual([])
+    expect(await errorsOf(READ, 'src/utils/planted.js')).toContain('boundary/disk:fs')
+  })
+
+  it('every exception says why, and names files that are there', () => {
+    for (const entry of ALLOWED) {
+      expect(entry.why, entry.files.join(', ')).toMatch(/\S.{20,}/)
+      for (const file of entry.files) {
+        if (!file.includes('*')) expect(fs.existsSync(path.join(ROOT, file)), file).toBe(true)
+      }
+    }
+    // No exception covers a folder but the loader's own.
+    expect(ALLOWED.filter(e => e.files.some(f => f.includes('*'))).map(e => e.files)).toEqual([['server/repo/**']])
+  })
+})
+
 describe('the counts in tests/pin/counts.json', () => {
-  it('match the code: none went up, and a lower one is committed', async () => {
+  it('match the code: none went up, and a lower one is committed; lint has no boundary problem', async () => {
     const checkedIn = JSON.parse(fs.readFileSync(COUNTS_FILE, 'utf-8'))
     const { counts } = await measure()
+    expect(counts.lint.total).toBe(0)
+    expect(counts.requestReads.total).toBe(0)
     const { up, down, recorded } = compare(checkedIn, counts)
     const write = 'run `node tests/pin/counts.mjs --write` and commit tests/pin/counts.json with this change'
     const advice = [

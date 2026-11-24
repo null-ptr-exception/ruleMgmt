@@ -1,70 +1,34 @@
 {
   "lint": {
-    "total": 78,
-    "byKind": {
-      "childProcess": 1,
-      "fs": 14,
-      "fsUse": 42,
-      "helper": 1,
-      "yaml": 10,
-      "yamlParse": 10
-    },
-    "byFile": {
-      "scripts/import-rules.mjs": 2,
-      "server.js": 5,
-      "server/lib/answerPaths.js": 2,
-      "server/lib/chartDiscovery.js": 9,
-      "server/lib/commit/template.js": 4,
-      "server/lib/commonEdit.js": 8,
-      "server/lib/deploymentCheck.js": 10,
-      "server/lib/deploymentWrite.js": 3,
-      "server/lib/helmCheck.js": 2,
-      "server/lib/reservedNames.js": 2,
-      "server/lib/ruleCheck.js": 6,
-      "server/lib/sharedConfigs.js": 4,
-      "server/lib/stack.js": 8,
-      "server/lib/sync.js": 1,
-      "server/routes/charts.js": 2,
-      "server/routes/deployments/resolve.js": 4,
-      "server/routes/git.js": 6
-    }
+    "total": 0,
+    "byKind": {},
+    "byFile": {}
   },
   "yamlParseSites": {
-    "serverAndScripts": 10,
+    "serverAndScripts": 2,
     "src": 6,
     "byFileKind": {
-      "Chart.yaml": 4,
+      "Chart.yaml": 0,
       "Template values.yaml": 0,
       "deployment values": 0,
       "routing.yaml": 0,
       "rules files": 0,
       "shared configs": 0,
       "sync.yaml": 0,
-      "unknown": 6
+      "unknown": 2
     }
   },
   "swallowingCatches": {
-    "total": 17,
+    "total": 1,
     "byFile": {
-      "server.js": 1,
-      "server/lib/answerPaths.js": 1,
-      "server/lib/chartDiscovery.js": 3,
-      "server/lib/commonEdit.js": 4,
-      "server/lib/deploymentCheck.js": 3,
-      "server/lib/stack.js": 3,
-      "server/routes/deployments/resolve.js": 1,
       "src/utils/schemaCompat.js": 1
     }
   },
   "ownEnoentChecks": {
-    "total": 7,
+    "total": 3,
     "byFile": {
-      "server/lib/commit/template.js": 1,
       "server/lib/deploymentCheck.js": 2,
-      "server/lib/ruleCheck.js": 1,
-      "server/lib/stack.js": 1,
-      "server/routes/deployments/resolve.js": 1,
-      "server/routes/git.js": 1
+      "server/lib/ruleCheck.js": 1
     }
   },
   "requestReads": {

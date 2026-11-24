@@ -11,7 +11,8 @@ import { checkRules, renderChart, runCommand } from './ruleCheck.js'
 import { resolveStack, blockingProblems, CANNOT_TELL } from './stack.js'
 import { withoutPath } from './answerPaths.js'
 import { openRepo } from '../repo/openRepo.js'
-import { openRepoAt, inRealRoot } from '../repo/locate.js'
+import { openRepoAt, inRealRoot, exists, realPath, lookAt, namesIn } from '../repo/locate.js'
+import { realBaseOf } from '../repo/paths.js'
 import { folderEntry } from '../repo/walk.js'
 import { ROUTING_FILE, ROUTING_CR_FILE, loadRouting, commonResource } from '../repo/routing.js'
 import { decide } from '../repo/policy.js'
@@ -22,8 +23,6 @@ import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 /** A reason the deployment could not be checked at all: exit 2. */
 export class CannotCheck extends Error {}
-
-const exists = file => fs.access(file).then(() => true, () => false)
 
 /**
  * The folder as given, in the repo as it really is: a link at or above the
@@ -39,44 +38,41 @@ const exists = file => fs.access(file).then(() => true, () => false)
 export async function locateDeployment(arg, given) {
   const abs = path.resolve(arg)
   const asWritten = given ? path.resolve(given) : openRepoAt(abs).root
-  const root = await realRoot(asWritten)
+  const root = await realBaseOf(asWritten)
   const dir = await inRealRoot(root, abs)
   if (dir) return { dir, root }
   // Given a repo, a folder outside it is none of its deployments.
   if (given) return { dir: abs, root, outside: `${abs} is not inside the repo ${path.resolve(given)}` }
   if (!given && !(await exists(path.join(root, '.git')))) {
-    const parent = await fs.realpath(path.dirname(abs)).catch(() => path.dirname(abs))
+    const parent = await realBaseOf(path.dirname(abs))
     return { dir: path.join(parent, path.basename(abs)), root: null }
   }
   return { dir: abs, root }
 }
-
-/** The repo's root as it really is, through any link. */
-export const realRoot = given => fs.realpath(path.resolve(given)).catch(() => path.resolve(given))
 
 /**
  * Why this folder cannot be checked, or null for a folder deployment: the
  * walk's answer (repo/walk.js), in the repo given (or the one it is in).
  */
 export async function notADeployment(dir, given) {
-  const link = await fs.lstat(dir).catch(() => null)
+  const link = await lookAt(dir)
   if (!link) return `${dir} does not exist`
   // The repo it is in: given (as it really is), or the one its folder is in.
   const at = given ? { repo: openRepo(given) } : openRepoAt(path.dirname(dir))
   const rel = path.relative(at.repo.root, dir).split(path.sep).join('/')
   const entry = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? await folderEntry(at.repo, rel) : null
-  if (link.isSymbolicLink()) {
+  if (link === 'link') {
     // Named by its place in the repo; a place outside it is not shown.
     const said = entry?.link ? entry.why.replace(/^it is /, '') : 'a link'
     return `${dir} is ${said}: a folder that is a link is no deployment${entry?.real ? ` — check ${entry.real}` : ''}`
   }
-  if (!link.isDirectory()) return `${dir} is not a folder: give the deployment's folder`
+  if (link !== 'dir') return `${dir} is not a folder: give the deployment's folder`
   if (isCommonChartPath(dir)) return `${dir} is a ${COMMON_DIR} chart — what the deployments beside its ${COMMON_DIR}/ inherit — not a deployment: check one of them`
   if (entry?.kind === 'deployment') return null
   if (entry?.kind === 'unreadable') return `${dir} cannot be checked: ${entry.why}`
   if (entry?.link) return `${dir}: ${entry.why} — a folder reached through a link is no deployment${entry.real ? `: check ${entry.real}` : ''}`
   if (!entry && await exists(path.join(dir, 'Chart.yaml')) && await exists(path.join(dir, 'values.yaml'))) return null
-  const legacy = (await fs.readdir(dir)).filter(f => f.endsWith('-values.yaml'))
+  const legacy = (await namesIn(dir)).filter(f => f.endsWith('-values.yaml'))
   if (legacy.length) {
     return `${dir} keeps several deployments as <name>-values.yaml files (${legacy.join(', ')}). ` +
       'Only a folder deployment — its own Chart.yaml and values.yaml — can be checked.'
@@ -148,8 +144,8 @@ export async function checkRuleObjects(dir, repo) {
     // one way and the folder another) is still the same repo. The folder's
     // own name stays as given: a deployment folder that is a link is read
     // through it, as Helm reads it.
-    const realRoot = await fs.realpath(valuesRoot)
-    const realDir = path.join(await fs.realpath(path.dirname(dir)), path.basename(dir))
+    const realRoot = await realPath(valuesRoot)
+    const realDir = path.join(await realPath(path.dirname(dir)), path.basename(dir))
     const dep = await loadDeployment(openRepo(realRoot), path.relative(realRoot, realDir).split(path.sep).join('/'))
     if (dep.state !== 'ok') {
       // The file is named once: each finding's message starts with it.
@@ -195,6 +191,7 @@ export async function renderAndCheck(dir, stack, { root = stack.repo?.root ?? pa
   try {
     rendered = await renderChart(dir, ['template', releaseName(dir, stack), dir])
   } catch (err) {
+    // ENOENT of the child process, not of a file: the helm binary is not there.
     if (err.code === 'ENOENT') throw new CannotCheck(`helm is not available: ${process.env.HELM_BIN || 'helm'}`)
     // A template error, or helm unable to write Chart.lock and charts/ into
     // the folder: the mount must be writable by the uid it runs as.
@@ -228,6 +225,7 @@ async function repoRoot(dir, given) {
     return stdout.trim() ? { root: stdout.trim() } : { why: 'git gave no root' }
   } catch (err) {
     const said = `${err.stderr || ''}`.split('\n').map(l => l.trim()).find(Boolean)
+    // ENOENT of the child process, not of a file: the git binary is not there.
     return { why: said || (err.code === 'ENOENT' ? 'git is not installed' : err.message) }
   }
 }

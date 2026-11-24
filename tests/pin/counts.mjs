@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The numbers the move to one repo loader drives down, in one place.
+ * The numbers the move to one repo loader drove down, in one place.
  *
  *   node tests/pin/counts.mjs            print them (JSON)
  *   node tests/pin/counts.mjs --list     print every site behind them
@@ -15,19 +15,21 @@
  * with the change.
  *
  * What each number is (rules in eslint.config.js):
- * - lint: the `boundary/disk` warnings `npm run lint` prints, by kind and file.
+ * - lint: the `boundary/disk` errors `npm run lint` prints, by kind and file:
+ *   none (the rule is an error; an exception is a line of ALLOWED in
+ *   eslint.config.js).
  * - yamlParseSites: uses of a YAML parse function — js-yaml / yaml `load`,
  *   `loadAll`, `parse`, `parseDocument`, `parseAllDocuments`, called or passed
- *   on, and `loadValues` — in server+scripts and in src. byFileKind: the
+ *   on — in server+scripts and in src. byFileKind: the
  *   server+scripts ones by the repo file they read, from the nearest file
  *   name in the same function (`unknown`: none, e.g. text from the caller).
- * - swallowingCatches: a `try` whose block reads (an fs read function, a read
- *   helper, a YAML parse), with a `catch` that never uses the error and never
+ * - swallowingCatches: a `try` whose block reads (an fs read function, a
+ *   YAML parse), with a `catch` that never uses the error and never
  *   throws; or `<expression that reads>.catch(fn)` where fn is the same.
  * - ownEnoentChecks: the string 'ENOENT' in code.
- * The last two leave out the files meant to read: server/repo/ and
- * server/lib/readIfThere.js. Tests are not counted.
- * - requestReads: the `boundary/request` warnings — a route file reading
+ * The last two leave out the files meant to read: server/repo/. Tests are
+ * not counted.
+ * - requestReads: the `boundary/request` errors — a route file reading
  *   req.query, req.params or req.body itself instead of its route's parsed
  *   input — by file.
  */
@@ -40,7 +42,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const COUNTS_FILE = path.join(ROOT, 'tests/pin/counts.json')
 const PATTERNS = ['server.js', 'server/**/*.js', 'scripts/**/*.mjs', 'src/**/*.js']
 const MEASURED = ['server.js', 'server/**/*.js', 'scripts/**/*.mjs', 'src/**/*.js']
-const NOT_MEASURED = ['server/repo/**', 'server/lib/readIfThere.js', 'src/**/__tests__/**', 'src/**/__fixtures__/**']
+const NOT_MEASURED = ['server/repo/**', 'src/**/__tests__/**', 'src/**/__fixtures__/**']
 
 const sorted = obj => Object.fromEntries(Object.entries(obj).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
 const bump = (obj, key) => { obj[key] = (obj[key] || 0) + 1 }

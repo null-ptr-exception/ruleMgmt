@@ -1367,6 +1367,7 @@ will do that is worth saying.
 | 0 | nothing refused; warnings do not count; a repo with no deployments is 0 (a folder with no `charts/` and no deployment says `nothing found to check` first, so a wrong path shows in the log) |
 | 1 | something refused: a deployment or Template that would not deploy as written — Helm fails on it, a rule check fails, a file of its own cannot be read, or what Commit refuses (values AlertForge cannot tell Helm's reading of included: Helm renders them, and what it renders is checked) |
 | 2 | something was not looked at: wrong arguments, a repo that is not there, a folder that is not the repo's root (one inside a git checkout, which names the checkout's root; one with deployments and no `charts/` folder, such as `deployments/`), site settings it cannot read, helm or a checker missing, a folder it cannot list or a `Chart.yaml` it cannot read (whether a deployment is there cannot be told), `sync.yaml` or the shared configs that cannot be read, a file outside every deployment and Template that cannot be read |
+| 130, 143 | stopped (Ctrl-C, SIGTERM): whenever it comes, the copy and the rest of its temp folder are removed and the Helm and checkers it started are stopped first; a second Ctrl-C does not cut that short |
 
 It prints one line per problem, under the Template or deployment it belongs
 to, refusals before warnings, and the counts last:

@@ -11,6 +11,7 @@ import { execFile } from 'child_process'
 import yaml from 'js-yaml'
 import { profileOfObject, unknownProfileMark } from '../../src/utils/outputs.js'
 import { createLimit } from './limit.js'
+import { track } from './running.js'
 
 // execFile's default maxBuffer is 1MiB; large chart renders or rule sets
 // can exceed that and fail with ERR_CHILD_PROCESS_STDIO_MAXBUFFER instead
@@ -19,7 +20,7 @@ export const MAX_BUFFER = 10 * 1024 * 1024
 
 export function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, options, (err, stdout, stderr) => {
+    track(execFile(command, args, options, (err, stdout, stderr) => {
       if (err) {
         err.stdout = stdout
         err.stderr = stderr
@@ -27,7 +28,7 @@ export function runCommand(command, args, options = {}) {
       } else {
         resolve({ stdout, stderr })
       }
-    })
+    }))
   })
 }
 

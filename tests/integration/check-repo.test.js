@@ -324,6 +324,39 @@ describe.skipIf(!CAN_RUN)('check-repo', () => {
     }, 60000)
   }
 
+  // The same, with the signal at one chosen moment (tests/helpers/stopAt.mjs)
+  // rather than wherever a timer lands. Catches: a temp folder made but not
+  // yet known to the handler; a copy that goes on making folders while they
+  // are removed; a Helm that outlives the run and writes into its folder
+  // again; a folder no longer known while it is being removed; a second
+  // signal that kills the run in the middle of its cleanup; a signal before
+  // any folder exists answered otherwise than one after.
+  const STOP_AT = path.resolve('tests/helpers/stopAt.mjs')
+  for (const [at, signal] of [['before', 'SIGTERM'], ['made', 'SIGTERM'], ['copy', 'SIGTERM'], ['helm', 'SIGTERM'], ['removing', 'SIGTERM'], ['second', 'SIGINT']]) {
+    it(`stopped with ${signal} at a chosen moment (${at}): nothing of it is left, no Helm of it running`, async () => {
+      for (let i = 0; i < 20; i++) fs.cpSync(path.join(repo, P1), path.join(repo, `deployments/many/d${i}`), { recursive: true })
+      for (let i = 0; i < 20; i++) edit(`deployments/many/d${i}/Chart.yaml`, 'name: mariadb-1-production', `name: d${i}`)
+      const tmp = path.join(work, 'tmp')
+      fs.mkdirSync(tmp)
+      // A Helm that takes a while, then makes a folder in the chart it was
+      // given, as `helm dependency update` makes charts/; its pid is noted.
+      const pids = path.join(work, 'helm-pids')
+      const helm = path.join(work, 'slow-helm')
+      fs.writeFileSync(helm, `#!/bin/sh\necho $$ >> '${pids}'\nfor a; do last=$a; done\nsleep 1\nmkdir -p "$last/charts/late"\nexec '${execFileSync('sh', ['-c', `command -v ${process.env.HELM_BIN || 'helm'}`], { encoding: 'utf-8' }).trim()}' "$@"\n`, { mode: 0o755 })
+      const log = path.join(work, 'signals')
+      const child = spawn('node', ['--import', STOP_AT, SCRIPT, repo, '--jobs', '4'], { env: env({ TMPDIR: tmp, HELM_BIN: helm, STOP_AT: at, STOP_SIGNAL: signal, STOP_LOG: log }), stdio: 'ignore' })
+      const how = await new Promise(resolve => child.on('exit', (c, s) => resolve(c ?? s)))
+      expect(fs.readFileSync(log, 'utf-8').trim().split('\n')).toEqual(at === 'second' ? [`${signal} 1`, `${signal} 2`] : [`${signal} 1`])
+      expect(fs.readdirSync(tmp)).toEqual([])
+      // Nor made again by a Helm it had started, which is no longer running.
+      await new Promise(r => setTimeout(r, 1500))
+      expect(fs.readdirSync(tmp)).toEqual([])
+      const alive = (fs.existsSync(pids) ? fs.readFileSync(pids, 'utf-8').trim().split('\n') : []).filter(pid => { try { process.kill(Number(pid), 0); return true } catch { return false } })
+      expect(alive).toEqual([])
+      expect(how).toBe(signal === 'SIGINT' ? 130 : 143)
+    }, 60000)
+  }
+
   // Catches: a path of the run's temp folder (its copy of the repo, Helm's
   // home) or of the home folder in what is said: a Helm error about a link
   // climbing out of the repo, a remote dependency missing from Helm's cache.

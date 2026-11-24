@@ -24,7 +24,9 @@
  * what Commit refuses. 2: something was not looked at — wrong arguments, not
  * a folder, site settings it cannot read, helm or a checker missing, a
  * folder or Chart.yaml it cannot read, sync.yaml or the shared configs that
- * cannot be read. The same rule as check-deployment's.
+ * cannot be read. The same rule as check-deployment's. Stopped (Ctrl-C,
+ * SIGTERM): 130 or 143, its temp folders removed and the Helm and checkers
+ * it started stopped.
  */
 
 import path from 'path'
@@ -34,6 +36,7 @@ import { openRepo } from '../server/repo/openRepo.js'
 import { gitCheckoutOf } from '../server/repo/locate.js'
 import { CannotCheck, realRoot } from '../server/lib/deploymentCheck.js'
 import { checkRepo } from '../server/lib/repoCheck.js'
+import { removeWhenStopped } from '../server/repo/copyRepo.js'
 
 const USAGE = 'usage: node scripts/check-repo.mjs [[--repo] <gitops repo root>] [--jobs N] [--json]'
 
@@ -139,6 +142,10 @@ async function main(args) {
   }
   return r.exit
 }
+
+// Stopped (Ctrl-C, SIGTERM) at any moment: exit 130 or 143, with nothing
+// of it left in the temp folder and no Helm or checker it started running.
+removeWhenStopped()
 
 // The same values size limit as the server's (MAX_VALUES_BYTES).
 if (valuesLimitNote()) console.error(`warn: ${valuesLimitNote()}`)

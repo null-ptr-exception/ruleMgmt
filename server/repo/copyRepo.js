@@ -14,6 +14,9 @@
  *   tempFolder(prefix) → { dir, remove() }: a folder in the temp folder,
  *   removed by remove() or, if the process is stopped first (SIGINT,
  *   SIGTERM), on the way out
+ *   removeWhenStopped(): from now on a SIGINT or SIGTERM stops the child
+ *   processes still running, removes every temp folder not yet removed,
+ *   and exits 130 or 143 (tempFolder calls it; a command calls it first)
  *
  * Everything but .git is copied, every file and folder writable by whoever
  * runs it. What cannot be read is left out, and listed in `skipped`. A link leads where the repo's does: one whose target is
@@ -26,8 +29,10 @@
  * told against it.
  */
 import fs from 'fs/promises'
+import fsSync from 'fs'
 import os from 'os'
 import path from 'path'
+import { killAll } from '../lib/running.js'
 
 const inside = (root, p) => {
   const rel = path.relative(root, p)
@@ -76,12 +81,31 @@ async function copyInto(root, copy, from, to, skipped) {
 // Every temp folder not yet removed: removed if the process is stopped.
 const live = new Set()
 let watching = false
-function removeWhenStopped() {
+
+const wait = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+// Gone, whatever was still being written into it as it went: a few tries.
+function removeNow(dir) {
+  for (let i = 0; i < 10 && fsSync.existsSync(dir); i++) {
+    try { fsSync.rmSync(dir, { recursive: true, force: true }) } catch { wait(20) }
+  }
+}
+
+export function removeWhenStopped() {
   if (watching) return
   watching = true
   for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]]) {
-    process.once(signal, async () => {
-      await Promise.all([...live].map(remove => remove().catch(() => {})))
+    // Kept (on, not once): with no handler left, a second signal would
+    // kill the process outright, its cleanup half done.
+    process.on(signal, () => {
+      // All in one go, nothing of the run in between: no copy half made, no
+      // Helm or checker it started, goes on writing after the folders are
+      // removed. Once more after a moment, for a file a child killed just
+      // then was still writing.
+      killAll()
+      for (const dir of live) removeNow(dir)
+      wait(50)
+      for (const dir of live) removeNow(dir)
       process.exit(code)
     })
   }
@@ -89,13 +113,15 @@ function removeWhenStopped() {
 
 export async function tempFolder(prefix) {
   removeWhenStopped()
-  // As it really is: what a tool says of it names it so.
-  const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), prefix)))
+  // Made and listed in one step, so no signal comes between the two; as
+  // it really is, so what a tool says of it names it so.
+  const dir = fsSync.realpathSync(fsSync.mkdtempSync(path.join(os.tmpdir(), prefix)))
+  live.add(dir)
   const remove = async () => {
-    live.delete(remove)
     await fs.rm(dir, { recursive: true, force: true })
+    // Listed until it is gone: stopped while it is removed, the rest goes too.
+    live.delete(dir)
   }
-  live.add(remove)
   return { dir, remove }
 }
 

@@ -4,6 +4,7 @@ import { listAllDeployments, getSyncRegistry, createSync } from '../utils/chartA
 import SyncProblems from './SyncProblems'
 import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
 import { templateChange } from '../utils/templateChange'
+import { stackNote } from '../utils/stackNote'
 
 const STATUS_COLOR = { 'green-locked': 'green', new: 'green', red: 'red', orange: 'orange', disabled: 'default' }
 
@@ -29,6 +30,8 @@ function classify(registry, sourcePath, candidatePath) {
 export default function SyncToModal({ open, source, onClose, onSuccess }) {
   const [candidates, setCandidates] = useState([])
   const [sourceChart, setSourceChart] = useState(null)
+  // The _common the source renders on: a target inherits it (#103).
+  const [sourceInherits, setSourceInherits] = useState(null)
   const [registry, setRegistry] = useState({ syncs: [] })
   const [selected, setSelected] = useState(new Set())
   const [acked, setAcked] = useState(new Set())
@@ -43,9 +46,11 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
     setNewPath('')
     setResults(null)
     ;(async () => {
-      const [all, reg] = await Promise.all([listAllDeployments(), getSyncRegistry()])
+      // Each folder's _common for the source's Template, which a target renders.
+      const [all, reg] = await Promise.all([listAllDeployments(source.chart), getSyncRegistry()])
       setCandidates(all.filter(d => d.path !== source.path))
       setSourceChart(all.find(d => d.path === source.path)?.chart || null)
+      setSourceInherits(all.find(d => d.path === source.path)?.inheritsFrom || null)
       setRegistry(reg)
       const sourceEntry = reg.syncs.find(s => s.source === source.path)
       setSelected(new Set(sourceEntry?.targets || []))
@@ -147,13 +152,17 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
               checked={selected.has(r.path)}
               disabled={r.status === 'disabled' || r.status === 'green-locked'}
               onChange={() => toggle(r)}
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: 120 }}
             >
               {r.path}
             </Checkbox>
             <Tag color={STATUS_COLOR[r.status]}>{r.reason}</Tag>
             {/* Also on a link already made: the next save of the source moves it. */}
             {r.change && r.status !== 'disabled' && <Tag color="red">{r.change}</Tag>}
+            {r.status !== 'disabled' && stackNote(sourceInherits, r.folderCommon, 'will') && (
+              // Long: it wraps, or it squeezes the checkbox out of the row.
+              <Tag data-testid={`stack-note-${r.path}`} color="geekblue" style={{ whiteSpace: 'normal', maxWidth: '50%' }}>{stackNote(sourceInherits, r.folderCommon, 'will')}</Tag>
+            )}
           </List.Item>
         )}
       />
@@ -166,6 +175,9 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
         />
         {newPathStatus && (
           <Tag style={{ marginTop: 6 }} color={STATUS_COLOR[newPathStatus.status]}>{newPathStatus.reason}</Tag>
+        )}
+        {newPathStatus?.status === 'new' && sourceInherits && (
+          <Tag data-testid="stack-note-new" style={{ marginTop: 6 }} color="geekblue">will inherit {sourceInherits}, its source&apos;s</Tag>
         )}
       </div>
 

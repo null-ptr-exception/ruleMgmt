@@ -15,6 +15,7 @@
  */
 
 import fs from 'fs/promises'
+import { createHash } from 'crypto'
 import path from 'path'
 import yaml from 'js-yaml'
 import { resolveStack, stackValues, unwrapPath, wrapPath, valueIssuesIn } from './stack.js'
@@ -24,6 +25,7 @@ import { getTargetsForSource, isSafeSyncPath, isDeploymentDir } from './sync.js'
 import { valueProblems } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
+import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
@@ -83,7 +85,10 @@ export async function valuesRefusal(gitopsDir, dir, values, { chartName, stack: 
   }
   // On a stack, a null (or a group that is not a list) is refused in both
   // forms: written, it would block every commit after (#100).
-  if (stack.layers.length) {
+  // A `_common` chart (#101) is checked as a deployment on a stack is, but
+  // a required Common Value it leaves out is the deployments' to give.
+  const isLayer = isCommonChartPath(dir)
+  if (stack.layers.length || isLayer) {
     const issues = typeof values === 'string'
       ? valueIssuesIn(yaml.load(values) || {}, stack.keys, 'values.yaml', stack.groups)
       : valueIssuesIn(bare, [], 'values.yaml', stack.groups)
@@ -93,9 +98,10 @@ export async function valuesRefusal(gitopsDir, dir, values, { chartName, stack: 
   if (!chart) return null
   const { model } = await readChartModel(path.join(gitopsDir, chartsDirName(), chart))
   if (!model || !bare || typeof bare !== 'object') return null
-  if (!stack.layers.length) return problemsOf(bare, model)
+  const keep = isLayer ? p => !(p.required && p.group === '_common') : () => true
+  if (!stack.layers.length) return problemsOf(bare, model, keep)
   const { merged, layers } = stackValues(stack, { own: bare })
-  return problemsOf(merged, model, p => !isInherited(p, bare, layers))
+  return problemsOf(merged, model, p => keep(p) && !isInherited(p, bare, layers))
 }
 
 /**
@@ -207,6 +213,22 @@ export async function copyToTargets(gitopsDir, registry, source, what) {
   return failed
 }
 
+/**
+ * What a deployment's page was loaded from (#102): its values.yaml, the keys
+ * of its stack and each `_common`'s values.yaml. A save that sends another
+ * is refused — a `_common` was made, removed or changed underneath, or
+ * someone else saved — or it would write values of the old shape, or
+ * override with inherited rows that are no longer there.
+ */
+export async function valuesVersion(gitopsDir, dir, stack) {
+  const read = file => fs.readFile(file, 'utf-8').catch(() => '')
+  const hash = createHash('sha256')
+  hash.update(await read(path.join(dir, 'values.yaml')))
+  hash.update(`\0${JSON.stringify(stack.keys)}`)
+  for (const layer of stack.layers) hash.update(`\0${layer.path}\0${await read(path.join(gitopsDir, layer.path, 'values.yaml'))}`)
+  return hash.digest('hex').slice(0, 20)
+}
+
 /** `{ ok: true }`, with the targets that were not copied to when there are any. */
 export const okWith = syncFailed => (syncFailed.length ? { ok: true, syncFailed } : { ok: true })
 
@@ -215,9 +237,12 @@ export const okWith = syncFailed => (syncFailed.length ? { ok: true, syncFailed 
  * the sync targets. `values` as valuesRefusal takes it.
  * @returns {{ status: number, body: object }} 400 with the refusal, or 200
  */
-export async function saveValues(gitopsDir, registry, folder, values, { chartName } = {}) {
+export async function saveValues(gitopsDir, registry, folder, values, { chartName, version } = {}) {
   const dir = path.join(gitopsDir, folder)
   const stack = await resolveStack(gitopsDir, dir)
+  if (version !== undefined && version !== await valuesVersion(gitopsDir, dir, stack)) {
+    return { status: 409, body: { error: `${folder} changed since you opened it: reload it to see what is there now`, changed: true } }
+  }
   const refusal = await valuesRefusal(gitopsDir, dir, values, { chartName, stack })
   if (refusal) return { status: 400, body: refusal }
   // Under every key of its stack (#100): one level less, and Helm reads
@@ -226,5 +251,5 @@ export async function saveValues(gitopsDir, registry, folder, values, { chartNam
   const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, keys), { lineWidth: -1 })
   await fs.writeFile(path.join(dir, 'values.yaml'), text, 'utf-8')
   const syncFailed = await copyToTargets(gitopsDir, registry, folder, { values: true, routing: false })
-  return { status: 200, body: okWith(syncFailed) }
+  return { status: 200, body: { ...okWith(syncFailed), version: await valuesVersion(gitopsDir, dir, await resolveStack(gitopsDir, dir)) } }
 }

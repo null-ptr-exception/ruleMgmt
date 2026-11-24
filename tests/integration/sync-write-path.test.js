@@ -292,7 +292,7 @@ describe.skipIf(IS_ROOT)('a target that cannot be written is reported, and the s
     const { status, data } = await saveSrc(50)
 
     expect(status).toBe(200)
-    expect(data).toEqual({ ok: true, syncFailed: [{ target: TGT, error: 'EACCES' }] })
+    expect(data).toEqual({ ok: true, syncFailed: [{ target: TGT, error: 'EACCES' }], version: expect.any(String) })
     expect(await read(`${SRC}/values.yaml`)).toContain('warn: 50')
     expect(await read(`${T2}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
     expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not be copied to ${TGT}`), expect.anything())
@@ -324,7 +324,7 @@ describe('a hand-edited sync.yaml', () => {
     await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [{ source: 'deployments/team/other' }] }))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true, version: expect.any(String) } })
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping an entry'), expect.anything())
     } finally {
       warn.mockRestore()
@@ -339,7 +339,7 @@ describe('a hand-edited sync.yaml', () => {
     await fs.writeFile(path.join(tmpDir, 'sync.yaml'), `${registry}  - &bad {unexpected: *bad}\n`)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true, version: expect.any(String) } })
       expect(await read(`${TGT}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
       expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT] }] })
     } finally {
@@ -359,7 +359,7 @@ describe('a hand-edited sync.yaml', () => {
 `)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true, version: expect.any(String) } })
       for (const t of [TGT, T2]) expect(await read(`${t}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
       expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT, T2] }] })
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping 2 target(s) that are not a path'))

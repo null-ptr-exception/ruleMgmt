@@ -122,6 +122,12 @@ async function chartsIn(dir) {
       out.push({ name: /^(.+?)-v?\d+(?:\.\d+)*[^/]*\.tgz$/.exec(e.name)?.[1] ?? e.name, at: abs, packed: true, file: e.name })
       continue
     }
+    if (e.isFile()) {
+      // A link checked out as a text file (git with core.symlinks off, as on
+      // Windows): Helm stops on it.
+      out.push({ name: null, at: abs, file: e.name, textFile: true })
+      continue
+    }
     if (!e.isDirectory() && !e.isSymbolicLink()) continue
     const stat = await fs.stat(abs).catch(() => null)
     if (!stat?.isDirectory()) continue
@@ -205,6 +211,9 @@ export async function resolveStack(gitopsDir, dir) {
       result.chart = first.d.name
       return null
     }
+    // The _common it names, whatever state it is in: a sync target's mark
+    // (#103) still says which one it follows.
+    result.firstLayerPath = rel(gitopsDir, first.where)
     const layerChart = await readChart(first.where)
     if (layerChart === undefined || layerChart?.name !== first.d.name) lastLayerFolder = first.where
     if (layerChart === undefined) {
@@ -252,13 +261,19 @@ export async function resolveStack(gitopsDir, dir) {
 
     const layerDeps = dependenciesOf(await readChart(cur))
     const found = await chartsIn(cur)
+    // A file named as a chart it depends on: a link checked out as text.
+    const textFile = found.find(c => c.textFile && layerDeps.some(d => d.name === c.file))
+    if (textFile) {
+      problems.push(problem('stack-link-file', `the _common chart ${layerPath} has charts/${textFile.file} as a file, not a link (a checkout with symlinks turned off, as Git on Windows may make): Helm stops with an error — check it out with links, or make the link again`))
+      break walk
+    }
     const packed = found.filter(c => c.packed)
     if (packed.length) {
       problems.push(problem('stack-unsupported', `the _common chart ${layerPath} holds a packed chart (charts/${packed[0].file}), which AlertForge cannot read — put a link to the chart there instead`))
       break walk
     }
     const usable = []
-    for (const c of found) {
+    for (const c of found.filter(c => !c.textFile)) {
       const d = layerDeps.find(x => x.name === c.name)
       usable.push({ ...c, d, enabled: enabledBy(d, seen), kind: isCommonChartPath(c.at) ? 'common' : await templateKind(c.at, c.name) })
     }

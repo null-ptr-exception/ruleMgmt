@@ -528,6 +528,24 @@ A once group with `columns`, a rule with both or neither of `alert` and
 `record`, and a recording rule with `for`, `keep_firing_for` or annotations
 are rejected at save time.
 
+## A deployment's values
+
+A deployment's `values.yaml` holds the rows under the chart's name — Helm
+passes a dependency only the values under its name:
+
+```yaml
+mariadb-alerts:
+  _common: { owner: team-a }
+  mariadb_saturation_disk:
+    - { warn_pct: 80, critical_pct: 92 }
+```
+
+On a folder's `_common` (see [how-to](how-to.md#share-settings-across-a-folder)),
+one `common:` more per `_common` above it — `common: { mariadb-alerts: … }`,
+two levels `common: { common: { mariadb-alerts: … } }`. A `_common`'s own
+`values.yaml` is laid out the same, counted from it. The editor shows and
+saves only the rows under these keys.
+
 ## What gets generated
 
 Two things, both products:

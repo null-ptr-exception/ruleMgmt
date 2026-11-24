@@ -6,7 +6,8 @@
 // null). `js` is what AlertForge must do: 'same' — the values it works out
 // for the Template render exactly Helm's alerts, with no problem — or the
 // problem it reports, or 'value' — a value issue in a file.
-// Run with HELM_BIN set to each version.
+// Run with HELM_BIN set to each version. A layout AlertForge makes runs
+// helm several times (before and after each change): a minute, not 5 s.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { execFileSync } from 'child_process'
 import fs from 'fs/promises'
@@ -15,6 +16,7 @@ import os from 'os'
 import yaml from 'js-yaml'
 import { renderChart } from '../../server/lib/ruleCheck.js'
 import { resolveStack, readStackValues } from '../../server/lib/stack.js'
+import { planCreate, planDelete, applyPlan, deploymentOnCommon } from '../../server/lib/commonEdit.js'
 
 const HELM = process.env.HELM_BIN || 'helm'
 const HAS_HELM = (() => { try { execFileSync(HELM, ['version'], { stdio: 'ignore' }); return true } catch { return false } })()
@@ -67,7 +69,22 @@ function repo(name) {
     if (levels >= 3) await common(L3, 'common', L2, wrap(2, { [C]: { _common: { owner: 'team-c' }, ...over.l3 } }))
   }
   const onLayer = (n, values) => deployment(DEP[n - 1], [fileDep(DEP[n - 1], [L1, L2, L3][n - 1])], wrap(n, { [C]: values }))
-  return { root, abs, write, link, common, fileDep, deployment, wrap, base, onLayer }
+  // A stack AlertForge makes or takes apart (#101): what it writes, all of it.
+  const template = () => fs.cp(SAMPLE, abs(`charts/${C}`), { recursive: true })
+  const direct = (rel, values) => deployment(rel, [fileDep(rel, `charts/${C}`, C)], { [C]: values })
+  const apply = async planned => {
+    if (!planned.plan) throw new Error(JSON.stringify(planned.body))
+    const out = await applyPlan(root, planned)
+    if (out.status !== 200) throw new Error(JSON.stringify(out.body))
+  }
+  const make = folder => planCreate(root, folder, C).then(apply)
+  const drop = rel => planDelete(root, rel).then(apply)
+  const born = async rel => {
+    const made = await deploymentOnCommon(root, rel, C)
+    await write(`${rel}/Chart.yaml`, made.chartYaml)
+    await write(`${rel}/values.yaml`, made.valuesYaml)
+  }
+  return { root, abs, write, link, common, fileDep, deployment, wrap, base, onLayer, template, direct, make, drop, born }
 }
 
 const cases = [
@@ -120,6 +137,32 @@ const cases = [
     await r.base(2); await r.write(`${L1}/Chart.yaml`, { apiVersion: 'v2', name: 'common', version: '0.1.0', dependencies: [{ name: 'common', version: '>=0.0.0-0', repository: `file://${path.relative(r.abs(L1), r.abs(L2))}` }] })
     await r.onLayer(2, {})
   }, 6, 'same'],
+  ['made by AlertForge: a _common over a deployment on the Template', async r => {
+    await r.template(); await r.direct('shop/d', { _common: { owner: 'x', namespace: 'n' }, ...empty, [CPU]: [{ warn_pct: 1, critical_pct: 2 }] }); await r.make('shop')
+  }, 2, 'same'],
+  ['made by AlertForge: the deployment wrote no groups, its example rows kept', async r => {
+    await r.template(); await r.direct('shop/d', { _common: { owner: 'x', namespace: 'n' } }); await r.make('shop')
+  }, 20, 'same'],
+  ['made by AlertForge: a second level, and an own disk row under it', async r => {
+    await r.template(); await r.direct('shop/b/d', { _common: { owner: 'x', namespace: 'n' }, ...empty, [DISK]: [{ warn_pct: 1, critical_pct: 2 }] })
+    await r.make('shop'); await r.make('shop/b')
+  }, 2, 'same'],
+  ['made by AlertForge: above a folder that has one', async r => {
+    await r.template(); await r.direct('shop/b/d', { _common: { owner: 'x', namespace: 'n' }, ...empty, [DISK]: [{ warn_pct: 1, critical_pct: 2 }] })
+    await r.make('shop/b'); await r.make('shop')
+  }, 2, 'same'],
+  ['made by AlertForge, then removed: the deployment on the Template again', async r => {
+    await r.template(); await r.direct('shop/d', { _common: { owner: 'x', namespace: 'n' }, ...empty, [CPU]: [{ warn_pct: 1, critical_pct: 2 }] })
+    await r.make('shop'); await r.drop(L1)
+  }, 2, 'same'],
+  ['removed by AlertForge: what the deployment inherited copied into it', async r => {
+    await r.base(1); await r.onLayer(1, { _common: { owner: 'mine' }, [DISK]: [{ warn_pct: 80, critical_pct: 92 }] }); await r.drop(L1)
+  }, 4, 'same'],
+  ['removed by AlertForge: the middle of three levels', async r => {
+    await r.base(3, { l2: { [CPU]: [] } }); await r.onLayer(3, { [DISK]: [{ warn_pct: 80, critical_pct: 92 }] }); await r.drop(L2)
+  }, 2, 'same'],
+  ['a new deployment made under a _common: it inherits everything', async r => { await r.base(1); await r.born('shop/d') }, 6, 'same'],
+  ['a new deployment made under two levels', async r => { await r.base(2, { l2: { [CPU]: [] } }); await r.born('shop/b/d') }, 4, 'same'],
   ['a condition that is true', async r => { await r.base(1); await r.deployment('shop/d', [r.fileDep('shop/d', L1, 'common', { condition: 'common.enabled' })], { common: { enabled: true, [C]: {} } }) }, 6, 'same'],
 
   ['the _common depends on the Template by file:// with no link', async r => {
@@ -134,6 +177,9 @@ const cases = [
     await r.write(`${L2}/Chart.yaml`, { apiVersion: 'v2', name: 'common', version: '0.1.0', dependencies: [{ name: 'common', version: '>=0.0.0-0', repository: `file://${path.relative(r.abs(L2), r.abs(L1))}` }] })
     await r.onLayer(2, {})
   }, 0, /shop\/b\/_common\/mariadb-alerts has no link/],
+  ['the link checked out as a text file (symlinks off)', async r => {
+    await r.base(1); await fs.rm(r.abs(`${L1}/charts/${C}`)); await r.write(`${L1}/charts/${C}`, `../../../../charts/${C}`); await r.onLayer(1, {})
+  }, 'error', /has charts\/mariadb-alerts as a file, not a link/],
   ['a packed chart in the _common\'s charts/', async r => {
     await r.base(1); await fs.rm(r.abs(`${L1}/charts`), { recursive: true }); await fs.mkdir(r.abs(`${L1}/charts`))
     execFileSync(HELM, ['package', r.abs(`charts/${C}`), '-d', r.abs(`${L1}/charts`)], { stdio: 'ignore' }); await r.onLayer(1, {})
@@ -164,7 +210,7 @@ const cases = [
 const alertsOf = out => yaml.loadAll(out).filter(Boolean).flatMap(d => d.spec?.groups || []).flatMap(g => g.rules || []).filter(r => r.alert)
   .map(r => `${r.alert}|${r.labels?.owner}|${r.labels?.namespace}|${/>\s*(\S+)\s*$/.exec(r.expr)?.[1]}`).sort()
 
-describe.skipIf(!HAS_HELM).concurrent('a stack as Helm renders it', () => {
+describe.skipIf(!HAS_HELM).concurrent('a stack as Helm renders it', { timeout: 60000 }, () => {
   it.each(cases)('%s', async (name, build, helmSays, jsSays) => {
     const r = repo(name)
     await build(r)

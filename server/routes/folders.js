@@ -1,5 +1,5 @@
 import express from 'express'
-import { holdSyncRegistryLock } from '../lib/sync.js'
+import { holdSyncRegistryLock, withSyncRegistryLock } from '../lib/sync.js'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
@@ -11,9 +11,11 @@ import { resolveStack } from '../lib/stack.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
+import { planCreate, planDelete, applyPlan, commonUsers, deploymentOnCommon, folderCommonOf, folderCommons, inheritsFromOf, linkOnPath, ANY_VERSION } from '../lib/commonEdit.js'
+import { withoutPath } from './git.js'
 
 // What a new deployment asks of its Template's version: any.
-export const ANY_TEMPLATE_VERSION = '>=0.0.0-0'
+export const ANY_TEMPLATE_VERSION = ANY_VERSION
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -47,6 +49,8 @@ async function listChildren(baseDir, parentPath) {
   // — unless it is one of the repo's own, with other things in it.
   const hideShared = !parentPath && await inSharedDir(baseDir, SHARED_DIR)
 
+  // Every deployment in it has the same folders above it: each asked once.
+  const folderCommonHere = folderCommons(baseDir, parentPath || '.')
   const folders = []
   for (const e of entries) {
     if (!e.isDirectory() || skippedDir(e.name, { inChart })) continue
@@ -71,7 +75,13 @@ async function listChildren(baseDir, parentPath) {
 
     const hasDeps = chartData && Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
     const isCommon = await isCommonChartDir(absPath)
-    if (isCommon) node.isCommon = true
+    if (isCommon) {
+      node.isCommon = true
+      // The Template it is for, which its page opens (#101).
+      const stack = await resolveStack(baseDir, absPath)
+      node.chart = stack.chart || stack.claims || e.name
+      if (stack.problems.length) node.problems = stack.problems.map(p => p.description)
+    }
     // Helm deploys it with the Template's example rows: flagged, and
     // counted as using its Template (a breaking change, a chart's delete).
     if (chartData && hasDeps && !hasValues && !isCommon) {
@@ -84,6 +94,10 @@ async function listChildren(baseDir, parentPath) {
       // Preview and the editor open: not the `_common` chart it names.
       const stack = await resolveStack(baseDir, absPath)
       node.chart = stack.chart || chartData.dependencies[0].name
+      // The _common it renders on, and the one its folder has (#103): a sync
+      // target follows its source's, which may be another.
+      node.inheritsFrom = inheritsFromOf(stack)
+      node.folderCommon = await folderCommonHere(stack.chart || stack.claims)
       try {
         const valuesYaml = await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')
         node.alertCount = countAlerts(yaml.load(valuesYaml) || {}, stack.keys.length ? stack.keys : node.chart)
@@ -114,7 +128,9 @@ async function listChildren(baseDir, parentPath) {
 // than a few folders, is a candidate like any other. Deliberately not
 // cached: this only runs when a sync modal opens, so a fresh scan each time
 // is simplest and cannot drift from the filesystem.
-async function collectDeployments(baseDir) {
+// `chart`: the folders' _common is looked up for it — the Sync to dialog's
+// source's Template, which a target renders (#103) — else each one's own.
+async function collectDeployments(baseDir, chartFor = null) {
   const results = []
   for (const d of await walkDeployments(baseDir)) {
     if (d.kind !== 'deployment') continue
@@ -122,20 +138,27 @@ async function collectDeployments(baseDir) {
     let chart = null
     // null when values.yaml cannot be read: unknown, not none.
     let alertCount = null
+    let inheritsFrom = null
+    let folderCommon = null
     try {
       const stack = await resolveStack(baseDir, absPath)
       chart = stack.chart
+      inheritsFrom = inheritsFromOf(stack)
+      folderCommon = await folderCommonOf(baseDir, d.path, chartFor || chart || stack.claims)
       const valuesYaml = yaml.load(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
       alertCount = countAlerts(valuesYaml, stack.keys)
     } catch { /* leave defaults */ }
-    results.push({ name: path.basename(d.path), path: d.path, chart, alertCount })
+    results.push({ name: path.basename(d.path), path: d.path, chart, alertCount, inheritsFrom, folderCommon })
   }
   return results
 }
 
 export default function foldersRouter() {
   const router = express.Router()
-  router.use(holdSyncRegistryLock)
+  // A _common's make or remove holds the commit lock itself, for as long
+  // as it takes: it renders every deployment it touches twice, which in a
+  // large repo outlasts the time limit the other writes are held to.
+  router.use((req, res, next) => (req.method === 'POST' && req.path === '/common' ? next() : holdSyncRegistryLock(req, res, next)))
 
   router.get('/tree', async (req, res) => {
     try {
@@ -152,7 +175,8 @@ export default function foldersRouter() {
 
   router.get('/deployments', async (req, res) => {
     try {
-      res.json(await collectDeployments(req.gitopsDir))
+      const chart = typeof req.query.chart === 'string' && /^[a-z0-9][a-z0-9_-]*$/.test(req.query.chart) ? req.query.chart : null
+      res.json(await collectDeployments(req.gitopsDir, chart))
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -186,6 +210,53 @@ export default function foldersRouter() {
     }
   })
 
+  // A folder's _common (#101): what making or removing one changes, listed
+  // before anything is written; then all of it, or nothing.
+  const planFor = (gitopsDir, q) => (q.action === 'delete' ? planDelete(gitopsDir, q.path) : planCreate(gitopsDir, q.folder, q.chart))
+
+  router.get('/common/plan', async (req, res) => {
+    try {
+      const out = await planFor(req.gitopsDir, req.query)
+      if (!out.plan) return res.status(out.status).json(out.body)
+      res.json(out.plan)
+    } catch (err) {
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+    }
+  })
+
+  // Under the commit lock, for the whole plan, write and check. `expected`
+  // is the plan's, as shown: a file changed since refuses it.
+  router.post('/common', async (req, res) => {
+    try {
+      const { action, expected } = req.body || {}
+      if (action !== 'create' && action !== 'delete') return res.status(400).json({ error: 'action is create or delete' })
+      if (!expected || typeof expected !== 'object' || Array.isArray(expected)) {
+        return res.status(400).json({ error: 'expected is needed: the plan\'s expected, from GET /common/plan, as it was shown' })
+      }
+      const { status, body } = await withSyncRegistryLock(req.gitopsDir, async () => {
+        const out = await planFor(req.gitopsDir, req.body)
+        if (!out.plan) return out
+        const same = JSON.stringify(Object.entries(expected).sort()) === JSON.stringify(Object.entries(out.plan.expected).sort())
+        if (!same) return { status: 409, body: { error: 'The repo changed since the list was made: look at the changes again', plan: out.plan } }
+        return applyPlan(req.gitopsDir, out)
+      })
+      res.status(status).json(body)
+    } catch (err) {
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+    }
+  })
+
+  router.get('/common/users', async (req, res) => {
+    try {
+      const rel = String(req.query.path || '')
+      if (rel.includes('..') || path.isAbsolute(rel)) return res.status(400).json({ error: 'Invalid path' })
+      if (await linkOnPath(req.gitopsDir, rel)) return res.status(400).json({ error: `${rel} goes through a link` })
+      res.json(await commonUsers(req.gitopsDir, rel.replace(/\/+$/, '')))
+    } catch (err) {
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
+    }
+  })
+
   router.post('/init', async (req, res) => {
     const { folder, chart } = req.body
     if (!isSafeFolderPath(folder, req.gitopsDir)) {
@@ -210,6 +281,9 @@ export default function foldersRouter() {
         const { chart: template } = await resolveStack(req.gitopsDir, deployDir)
         return res.json({ status: 'existing', chart: template ?? existing.dependencies?.[0]?.name ?? null })
       }
+      // Asked before any folder is made: a refusal leaves the repo as it was.
+      const onCommon = await deploymentOnCommon(req.gitopsDir, folder, chart)
+      if (onCommon?.error) return res.status(409).json({ error: onCommon.error })
       await fs.mkdir(deployDir, { recursive: true })
 
       try {
@@ -230,6 +304,15 @@ export default function foldersRouter() {
       // The Template has to be there, and readable; its version is not
       // copied (below).
       yaml.load(await fs.readFile(path.join(chartDir, 'Chart.yaml'), 'utf-8'))
+
+      // Under a folder with a _common for this Template (#102): on it, and
+      // writing nothing of its own — it inherits everything, a group the
+      // _common gets later too.
+      if (onCommon) {
+        await fs.writeFile(path.join(deployDir, 'Chart.yaml'), onCommon.chartYaml, 'utf-8')
+        await fs.writeFile(path.join(deployDir, 'values.yaml'), onCommon.valuesYaml, 'utf-8')
+        return res.json({ status: 'created', chart, folder, inheritsFrom: onCommon.inheritsFrom })
+      }
       // Helm reads this as a URL, and the file is committed and rendered on
       // Linux even when it was written on Windows, so the separator has to be
       // a forward slash regardless of the platform that produced it.

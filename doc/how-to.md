@@ -276,6 +276,9 @@ not checked.
 **Alerts** → **+** → type the folder path (e.g. `shop/prod`) and pick the
 chart → **Create**.
 
+Under a folder with a `_common` for that chart, it inherits from it and
+writes nothing of its own (see [Share settings across a folder](#share-settings-across-a-folder)).
+
 Its `Chart.yaml` asks for any version of the chart (`">=0.0.0-0"`): there
 is one copy of each chart, and a new version of one is a clone of it under
 another name.
@@ -313,12 +316,107 @@ A deployment in a hidden folder (`.something/…`) is not in the tree, but
 counts as using its Template, and a breaking change migrates it: ArgoCD
 deploys whatever folder it is pointed at.
 
-### Inherit from a folder's `_common` (written by hand for now)
+### Share settings across a folder
 
-A folder's `_common/<chart>/` holds what the deployments beside it share. It
-is a small chart named `common`, reading the Template through a link in its
-own `charts/`; a deployment depends on it instead of on the Template, and
-wraps its values under one more `common:` per layer:
+A folder's `_common` holds what the deployments of one Template under it
+share: Common Values (an owner, a cluster) and whole groups of rows. Each
+deployment inherits them unless it writes its own.
+
+**Make one:** in the tree, the folder's **⋯** → **Add _common...** → pick the
+Template. Before anything is written, the dialog lists every deployment it
+changes, how, and every file. **Create** writes all of it or nothing.
+
+| What | What happens |
+|---|---|
+| The new `_common` | `<folder>/_common/<chart>/`: a chart named `common` with a link to the Template; every group `[]` |
+| Each deployment of that Template under the folder, at any depth | Inherits from it: its `Chart.yaml` depends on the `_common`, its values move under `common:`. It deploys exactly what it did |
+| A deployment that wrote no row for a group | Deployed the Template's example rows for it: they are written into it, so it still does |
+| A folder under one that has a `_common` | The new one inherits from that one (it writes nothing of its own) |
+| A folder above one that has a `_common` | The lower `_common` inherits from the new one; its deployments get one more `common:` level |
+| A sync target | Not re-attached by itself: it follows its source. When the source is re-attached, the target is re-attached with it (wherever it is); when not, it is listed and left |
+| A deployment of another Template, one with no `values.yaml` | Left as they are |
+
+Values are moved as text, never read and written again: every value stays
+as written (`010`, `1_0`, `on` mean to Helm what they did), and comments,
+anchors and the order of keys stay too. In `Chart.yaml` only the
+dependency's `name` and `repository` change. So a make and then a remove
+give back every file byte for byte — but for the example rows a make
+copied into a deployment, which the dialog lists.
+
+Before anything is written, Helm renders every deployment it would touch,
+with the same steps as Preview; once written, Helm renders them again, and
+if one renders anything else, everything is put back and that deployment
+named. It stops before writing, naming each deployment, when:
+
+| | |
+|---|---|
+| Helm cannot render the deployment now | Fix it first: AlertForge cannot tell a change keeps it the same |
+| Its `values.yaml` is not valid YAML, or holds no map at its top level (a list, a single value) | |
+| Its dependency has an `alias:`, a `condition:`, `tags:`, a version other than `>=0.0.0-0`, or is not a `file://` path | Undone, the file would not be the same: change it by hand first |
+
+With no `helm` on the server, only the values AlertForge works out are
+compared, and the dialog says so.
+
+The dialog lists everything under the folder once: what changes, what is
+left as it is and why (another Template, a deployment on two Templates, a
+sync target of a deployment elsewhere), what stops it, and folders that
+cannot be read. **Create** (or **Remove**) writes what was listed: a file
+changed since, by anyone, refuses it and shows the list again. Nothing is
+made or removed through a folder that is a link. A `_common` is not deleted,
+cloned or given routing as a deployment: **Remove this _common...** is the
+way, so the deployments on it keep what they inherited. While it renders and
+writes, it holds the commit lock: measured with 300 deployments, 33–41
+seconds (Helm 3.15, 3.19), commits and saves waiting meanwhile.
+
+**Edit it:** click `_common/<chart>` in the tree. It opens in the same editor
+as a deployment, with the same checks — except that a required Common Value
+may be left to the deployments. Above the editor: the deployments that
+inherit from it, how many groups and rows each takes from it, and, for the
+group open, whether each has its own rows. Saving it changes every deployment
+that does not write that group (or that Common Value) itself. It has no
+Preview: preview a deployment under it.
+
+**Remove it:** `_common/<chart>`'s **⋯** → **Remove this _common...** The
+dialog lists each deployment that inherits from it: what it inherited is
+copied into its own values as written in the `_common` (Helm's way: Common
+Values key by key, a group whole — a group it wrote itself stays its own),
+and it depends on the Template again (or on the `_common` above). It is
+checked with Helm the same way.
+
+**A deployment under it** — made with **+** in a folder under the
+`_common` — depends on the nearest `_common` of its Template and writes
+nothing of its own (`common: {mariadb-alerts: {}}`): it inherits every group
+and Common Value, a group the `_common` gets later too. A folder with no
+`_common` makes a deployment as before (on the Template, every group `[]`).
+
+On a deployment's page, what it inherits is marked:
+
+| | What you see | What you can do |
+|---|---|---|
+| A group it does not write | The inherited rows, dimmed, "Inherited from shop/_common/…: N rows" | **Override here**: the rows are copied into the deployment, to edit. **Add instance** copies them first too, and says so: a group is inherited whole, so a deployment that writes one row of it writes all of them |
+| A group it writes, that a `_common` gives too | "Overrides shop/_common/… (N rows there)", or "clears it" when it writes `[]` | **Reset to inherited**: shows its rows and the inherited ones; on OK the group is removed from the deployment (the key, never a `null`), and the inherited rows show. Save writes it |
+| A Common Value it does not set | The inherited value as the field's placeholder, and "from shop/_common/…" | Type a value to override it; **Reset** beside a value it sets removes it |
+
+Saving never writes an inherited group into the deployment unless it was
+overridden. After an override, a change to that group in the `_common` no
+longer reaches the deployment; after Reset, it does again.
+
+In **Overview**, an inherited group shows its rows read-only, with where they
+come from: override it in **Single**, where its rows are copied first.
+
+A page saves only over what it was opened on. When the deployment changed
+since — a `_common` made or removed above it, its `_common` edited, or
+someone else saved it — Save is refused ("changed since you opened it") and
+nothing is written; **Reload** shows what is there now, and the edits on the
+page are discarded. Making or removing a `_common` from the tree asks first
+when the page open has unsaved edits.
+
+### How a `_common` is laid out
+
+A folder's `_common/<chart>/` is a small chart named `common`, reading the
+Template through a link in its own `charts/`; a deployment depends on it
+instead of on the Template, and wraps its values under one more `common:`
+per layer:
 
 ```
 shop/_common/mariadb-alerts/Chart.yaml   name: common, dependencies: [{name: mariadb-alerts, version: ">=0.0.0-0"}]
@@ -330,8 +428,9 @@ shop/prod/values.yaml                    common: {mariadb-alerts: {...prod's own
 
 Helm renders `prod` with `_common`'s values under its own: Common Values key
 by key, a group's rows as a whole — a group `prod` writes replaces the
-inherited one, `[]` clears it. Give `_common` every group (`[]` where it has
-no rows), or a group it leaves out renders the chart's example rows. A
+inherited one, `[]` clears it. A `_common` made by AlertForge gives every
+group (`[]` where it has no rows); one written by hand that leaves a group out
+renders the chart's example rows for it. A
 second layer (`shop/team-b/_common/…`) depends on the first through its link
 `charts/common`, and its deployments wrap under `common: {common: {…}}`.
 
@@ -345,6 +444,11 @@ What Helm needs (the same on Helm 3.15 and 3.19):
   under that name, or under the dependency's `alias:`.
 - The deployment's dependency names the `_common` by its Chart.yaml `name`
   (`common`), or Helm stops with an error.
+- The link in a `_common`'s `charts/` must be a link. A checkout with links
+  turned off (`core.symlinks=false`, the default of Git for Windows) writes
+  it as a text file, and Helm stops with an error; AlertForge names it. Check
+  the repo out with links on (on Windows: `git clone -c core.symlinks=true`,
+  with Developer Mode or as an administrator).
 
 AlertForge reports, naming the layer, a stack Helm renders nothing from (no
 link, a `condition:` or `tags:` that is false, a `_common` missing), one it
@@ -613,6 +717,17 @@ copied to it.
   alert rows go; the dialog says so, with how many, before you confirm. A
   sync made before this, to a target on another Template, is moved at the
   next save of the source; **Sync to...** marks such a target the same way.
+- The target inherits what the source inherits: on a source under a
+  folder's `_common`, its `Chart.yaml` depends on that `_common`, wherever the
+  target is — not on the `_common` of the target's own folder, nor on none.
+  It deploys what the source does. This is not refused; it is said: **Sync
+  to...** marks such a target ("will inherit shop/_common/…, its source's —
+  not cart/_common/…"), the tree marks it after ("inherits shop/_common/…
+  (from its source)"), and its page says where its inherited values come
+  from. A `_common` made in the target's folder leaves it to its source
+  (the dialog lists it, and why); unlinked, it keeps the source's, and the
+  tree goes on marking it ("inherits shop/_common/…, not cart/_common/…")
+  — as it marks any deployment on another `_common` than its folder's.
 - A source with values a save would refuse — a required value left empty, a
   value that cannot go in a label, a `values.yaml` that is not YAML — cannot
   be synced, nor one whose `routing.yaml` a save would refuse: neither file

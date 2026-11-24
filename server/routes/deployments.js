@@ -3,13 +3,15 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { countAlerts } from '../lib/subchart.js'
-import { resolveStack, unwrapPath, wrapPath } from '../lib/stack.js'
-import { valuesRefusal, saveValues, copyToTargets, okWith } from '../lib/deploymentWrite.js'
+import { resolveStack, unwrapPath, wrapPath, readStackValues, stackValues } from '../lib/stack.js'
+import { originsOf, folderCommonOf, inheritsFromOf } from '../lib/commonEdit.js'
+import { valuesRefusal, saveValues, copyToTargets, okWith, valuesVersion } from '../lib/deploymentWrite.js'
 import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink, normalizeSyncPath, isDeploymentDir, getSourceForTarget } from '../lib/sync.js'
 import { buildRouting, writeRouting, removeRouting, routingState, readRouting } from '../lib/routingFiles.js'
 import { readSharedConfigs } from '../lib/sharedConfigs.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
+import { isCommonChartPath, COMMON_DIR } from '../../src/utils/reservedNames.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
@@ -71,6 +73,28 @@ async function exists(file) {
   try { await fs.access(file); return true } catch { return false }
 }
 
+/**
+ * What a deployment on a `_common` stack inherits (#102): the values its
+ * layers give one that writes nothing (`values`), and which layer gives each
+ * group and Common Value (`from`: a `_common`'s path, or 'template' for a
+ * group none gives). Its own values are not in it.
+ */
+async function inheritedOf(gitopsDir, dir, stack) {
+  await readStackValues(gitopsDir, dir, stack)
+  const bare = stackValues(stack, { own: {} })
+  const { groups, common } = originsOf(bare, stack.groups)
+  return { values: bare.merged, from: { groups, common } }
+}
+
+// A folder's _common chart (#101) opens in the editor and is saved there,
+// and nothing else: it is removed with its plan (POST /api/v2/folders/common),
+// which gives the deployments on it what they inherited first.
+function commonRefused(req, res, what) {
+  if (!req.query.folder || !isCommonChartPath(req.query.folder)) return false
+  res.status(400).json({ error: `${normalizeSyncPath(req.query.folder)} is a ${COMMON_DIR} chart, not a deployment: it cannot be ${what} — remove it with "Remove this ${COMMON_DIR}" in the tree` })
+  return true
+}
+
 export default function deploymentsRouter() {
   const router = express.Router()
 
@@ -130,11 +154,30 @@ export default function deploymentsRouter() {
       const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
       const content = await fs.readFile(file, 'utf-8')
       // Only the deployment's own values, under every key of its stack (#100).
-      const parsed = unwrapPath(yaml.load(content) || {}, (await resolveStack(req.gitopsDir, dir)).keys)
+      const stack = await resolveStack(req.gitopsDir, dir)
+      const parsed = unwrapPath(yaml.load(content) || {}, stack.keys)
       // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
       // anything; say so, or it looks like the file being edited.
       const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
-      res.json({ content, parsed, unusedFile })
+      // The _common it renders on and the one its folder has (#103), for a
+      // sync target's page: it follows its source's.
+      const stackOf = req.query.folder && direct
+        ? { stack: { inheritsFrom: inheritsFromOf(stack), folderCommon: await folderCommonOf(req.gitopsDir, syncFolder(req), stack.chart || stack.claims) } }
+        : {}
+      // What it was loaded from: its save sends it back (#102).
+      const version = req.query.folder && direct ? { version: await valuesVersion(req.gitopsDir, dir, stack) } : {}
+      // A _common that cannot be read, a link gone: the deployment still
+      // opens, and says what keeps Helm from rendering it.
+      const problems = stack.problems.length ? { stackProblems: stack.problems.map(p => p.description) } : {}
+      let inherited = {}
+      if (direct && stack.layers.length) {
+        try {
+          inherited = { inherited: await inheritedOf(req.gitopsDir, dir, stack) }
+        } catch (err) {
+          problems.stackProblems = [...(problems.stackProblems || []), `what it inherits cannot be read (${err.code || err.message})`]
+        }
+      }
+      res.json({ content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited })
     } catch {
       res.status(404).json({ error: 'Not found' })
     }
@@ -172,12 +215,13 @@ export default function deploymentsRouter() {
         const outcome = await withSyncRegistryLock(req.gitopsDir, async () => {
           const registry = await readSyncRegistry(req.gitopsDir)
           if (isTarget(registry, folder)) return readOnly()
-          return saveValues(req.gitopsDir, registry, folder, req.body.values, { chartName: req.params.chart })
+          return saveValues(req.gitopsDir, registry, folder, req.body.values, { chartName: req.params.chart, version: req.body.version })
         })
         return res.status(outcome.status).json(outcome.body)
       }
 
       // A legacy `<name>-values.yaml`: the same checks, and no sync.
+      if (commonRefused(req, res, 'given another values file')) return
       let values = req.body.values
       const stack = await resolveStack(req.gitopsDir, dir)
       const refusal = await valuesRefusal(req.gitopsDir, dir, values, { chartName: req.params.chart, stack })
@@ -197,6 +241,7 @@ export default function deploymentsRouter() {
   // AlertmanagerConfig generated from it, always written together. Only the
   // folder's own deployment has one — see routingFiles.js.
   async function routingTarget(req, res, { write = true } = {}) {
+    if (commonRefused(req, res, 'given notification routing')) return null
     const dir = resolveDeploymentDir(req)
     if (!dir) { res.status(400).json({ error: 'Invalid folder path' }); return null }
     if (!isValidDeploymentParam(req)) { res.status(400).json({ error: 'Invalid deployment name' }); return null }
@@ -293,6 +338,7 @@ export default function deploymentsRouter() {
   })
 
   router.post('/:chart/:deployment/clone', async (req, res) => {
+    if (commonRefused(req, res, 'cloned')) return
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!isValidDeploymentParam(req)) {
@@ -312,6 +358,7 @@ export default function deploymentsRouter() {
   })
 
   router.delete('/:chart/:deployment', async (req, res) => {
+    if (commonRefused(req, res, 'deleted as one')) return
     const dir = resolveDeploymentDir(req)
     if (!dir) return res.status(400).json({ error: 'Invalid folder path' })
     if (!isValidDeploymentParam(req)) {

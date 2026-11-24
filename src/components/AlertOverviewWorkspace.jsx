@@ -131,7 +131,7 @@ function DeploymentPart({ deployment, alertName, vars, sectionFilters, effective
   )
 }
 
-function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer, deployments, onOpenDeployment }) {
+function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer, deployments, onOpenDeployment, note = null }) {
   const [collapsed, setCollapsed] = useState(false)
   const [headerHeight, setHeaderHeight] = useState(0)
 
@@ -189,6 +189,7 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
           </Button>
         )}
       </div>
+      {!collapsed && note}
       {!collapsed && deployments && (
         <div style={{ padding: '10px 12px' }}>
           {deployments.map(d => (
@@ -245,6 +246,11 @@ export default function AlertOverviewWorkspace({
   // [{ path, values, commonValues }] in the order they were checked.
   deployments = null,
   onOpenDeployment,
+  // A group the deployment inherits from a _common (#102): its rows shown,
+  // read-only here — overriding one is done in Single, where its rows are
+  // copied first. `inheritedFrom(group)` is the _common, or null.
+  inheritedFrom = null,
+  inheritedRows = () => [],
 }) {
   const multi = deployments && deployments.length > 1
   const [wsFilters, setWsFilters] = useState({})
@@ -300,12 +306,20 @@ export default function AlertOverviewWorkspace({
         vars={allVars}
       />
       <div ref={setScrollContainer} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {checkedAlerts.map(alertName => (
+        {checkedAlerts.map(alertName => {
+          const from = inheritedFrom && !(alertName in allValues) ? inheritedFrom(alertName) : null
+          const shown = from ? inheritedRows(alertName) : (allValues[alertName] || [])
+          return (
           <SectionPanel
             key={alertName}
             alertName={alertName}
             vars={getVars(alertName)}
-            rows={allValues[alertName] || []}
+            rows={shown}
+            note={from && (
+              <div data-testid={`overview-inherited-${alertName}`} style={{ padding: '6px 12px', fontSize: 12, color: '#1d39c4', background: '#f0f5ff' }}>
+                Inherited from <b>{from}</b>: {shown.length} row{shown.length === 1 ? '' : 's'}, read-only here. To change them, open this group in Single and override it there.
+              </div>
+            )}
             commonValues={commonValues}
             sectionFilters={sectionFilters[alertName] || {}}
             effectiveFilters={mergedFilters(alertName)}
@@ -315,12 +329,13 @@ export default function AlertOverviewWorkspace({
             onUpdate={updated => handleUpdate(alertName, updated)}
             onDelete={realIndex => handleDelete(alertName, realIndex)}
             onAdd={newRow => handleAdd(alertName, newRow)}
-            readOnly={readOnly || multi}
+            readOnly={readOnly || multi || !!from}
             scrollContainer={scrollContainer}
             deployments={multi ? deployments : null}
             onOpenDeployment={onOpenDeployment}
           />
-        ))}
+          )
+        })}
       </div>
       <div style={{ padding: '10px 16px', borderTop: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button type="primary" icon={<SaveOutlined />} onClick={onSave} disabled={!dirty || readOnly || multi}>Save all</Button>

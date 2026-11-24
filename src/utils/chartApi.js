@@ -154,12 +154,14 @@ export async function getDeployment(chart, deployment, folder) {
   return res.json()
 }
 
-export async function saveDeployment(chart, deployment, values, folder) {
+// `version` is what the page was loaded from: a deployment changed since is
+// refused with { changed: true } (#102).
+export async function saveDeployment(chart, deployment, values, folder, version) {
   const params = folder ? `?folder=${encodeURIComponent(folder)}` : ''
   const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}${params}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values })
+    body: JSON.stringify({ values, ...(version ? { version } : {}) })
   })
   // A refusal carries { error, problems } — which cells, and why.
   if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({}))) }
@@ -281,8 +283,9 @@ export async function getFolderTree(parentPath = '') {
 
 // Recursive, on-demand scan of every deployment in the repo — used only to
 // populate the Sync to/from modals' candidate lists (not the lazy tree).
-export async function listAllDeployments() {
-  const res = await apiFetch(`${BASE}/folders/deployments`)
+// `chart`: each folder's _common is looked up for that Template (#103).
+export async function listAllDeployments(chart) {
+  const res = await apiFetch(`${BASE}/folders/deployments${chart ? `?chart=${encodeURIComponent(chart)}` : ''}`)
   if (!res.ok) return []
   return res.json()
 }
@@ -297,6 +300,37 @@ export async function initDeploymentFolder(folder, chart) {
     const body = await res.json().catch(() => ({}))
     return { error: body.error || `Could not create the deployment (HTTP ${res.status})` }
   }
+  return res.json()
+}
+
+// ─── A folder's _common (#101) ──────────────────────────────────────────────
+
+// What making (`{ action: 'create', folder, chart }`) or removing
+// (`{ action: 'delete', path }`) a _common changes: the plan, or `{ error }`.
+export async function getCommonPlan(query) {
+  const res = await apiFetch(`${BASE}/folders/common/plan?${Object.entries(query).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}`)
+  const body = await res.json().catch(() => ({}))
+  return res.ok ? body : { error: body.error || `HTTP ${res.status}`, problems: body.problems || [] }
+}
+
+// Writes it: `expected` is the plan's files, as shown.
+export async function applyCommon(query, expected) {
+  const res = await apiFetch(`${BASE}/folders/common`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...query, expected }),
+  })
+  // An answer that cannot be read throws (AnswerCutOff): whether it was
+  // made is not known, and the dialog says so.
+  if (res.ok) return res.json()
+  const body = await res.json().catch(() => ({}))
+  return { error: body.error || `HTTP ${res.status}`, problems: body.problems || [], plan: body.plan }
+}
+
+// The deployments that inherit from a _common, with where each group comes from.
+export async function getCommonUsers(commonPath) {
+  const res = await apiFetch(`${BASE}/folders/common/users?path=${encodeURIComponent(commonPath)}`)
+  if (!res.ok) return []
   return res.json()
 }
 

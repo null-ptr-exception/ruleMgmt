@@ -9,6 +9,14 @@ import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
+// "2 deployments and 1 _common chart": a _common is not a deployment.
+function usedBy(found) {
+  const commons = found.filter(d => d.kind === 'common').length
+  const others = found.length - commons
+  const part = (n, one) => `${n} ${one}${n === 1 ? '' : 's'}`
+  return [others ? part(others, 'deployment') : null, commons ? part(commons, '_common chart') : null].filter(Boolean).join(' and ')
+}
+
 export default function chartsRouter() {
   const router = express.Router()
   router.use(holdSyncRegistryLock)
@@ -120,7 +128,7 @@ export default function chartsRouter() {
       const { deployments, unreadable } = await findChartUsage(req.gitopsDir, req.params.name, process.env.DEPLOYMENTS_DIR)
       if (deployments.length) {
         return res.status(409).json({
-          error: `${req.params.name} is still used by ${deployments.length} deployment${deployments.length === 1 ? '' : 's'}`,
+          error: `${req.params.name} is still used by ${usedBy(deployments)}`,
           deployments: deployments.map(d => ({ deployment: d.deployment, path: d.path, ...(d.kind ? { kind: d.kind } : {}) })),
         })
       }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Tree, Tag, Dropdown, Modal, Tooltip, Alert, message } from 'antd'
-import { FolderOutlined, MoreOutlined, WarningOutlined } from '@ant-design/icons'
+import { FolderOutlined, MoreOutlined, ToolOutlined, WarningOutlined } from '@ant-design/icons'
 import { isReservedName, RESERVED_HINT, COMMON_DIR } from '../utils/reservedNames'
 import { getFolderTree, getSyncRegistry, unlinkSync, deleteDeployment } from '../utils/chartApi'
 import SyncToModal from './SyncToModal'
@@ -56,6 +56,11 @@ function withMenu(titleInner, label, items, onPick) {
   )
 }
 
+// The Templates folder (the server says which it is): greyed, with the
+// Templates page's icon, so that it is not taken for a place for deployments.
+const TEMPLATES_GREY = '#9ca3af'
+const TEMPLATES_HINT = `The Templates folder. Templates are edited on the Templates page: this is no place for a deployment or a ${COMMON_DIR}`
+
 function toTreeNode(node, registry, handlers) {
   const status = node.isDeployment ? getSyncStatus(registry, node.path) : { role: null }
 
@@ -71,7 +76,14 @@ function toTreeNode(node, registry, handlers) {
 
   const titleInner = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span>{node.name}</span>
+      {node.isTemplates ? (
+        <Tooltip title={TEMPLATES_HINT}>
+          <span data-testid="templates-folder" style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, color: TEMPLATES_GREY, cursor: 'default' }}>
+            <span>{node.name}</span>
+            <span style={{ fontSize: 11 }}>Templates</span>
+          </span>
+        </Tooltip>
+      ) : <span>{node.name}</span>}
       {node.isDeployment && (
         <Tag
           color="blue"
@@ -155,7 +167,8 @@ function toTreeNode(node, registry, handlers) {
     // A folder's _common (#101): opened like a deployment, removed from here.
     titleContent = withMenu(titleInner, `${COMMON_DIR} actions`, [{ key: 'delete-common', label: `Remove this ${COMMON_DIR}...`, danger: true }],
       () => handlers.onDeleteCommon(node.path))
-  } else if (node.name !== COMMON_DIR) {
+  } else if (node.name !== COMMON_DIR && !node.isTemplates) {
+    // The Templates folder has no menu: a _common there is refused.
     titleContent = withMenu(titleInner, 'Folder actions', [{ key: 'add-common', label: `Add ${COMMON_DIR}...` }],
       () => handlers.onAddCommon(node.path))
   }
@@ -163,8 +176,10 @@ function toTreeNode(node, registry, handlers) {
   return {
     key: node.path,
     title: titleContent,
-    icon: <FolderOutlined />,
+    icon: node.isTemplates ? <ToolOutlined aria-label="Templates folder" style={{ color: TEMPLATES_GREY }} /> : <FolderOutlined />,
     isLeaf: node.isLeaf,
+    // A click on the Templates folder selects nothing: nothing opens for it.
+    ...(node.isTemplates ? { selectable: false } : {}),
     isDeployment: node.isDeployment,
     isCommon: node.isCommon,
     chart: node.chart,

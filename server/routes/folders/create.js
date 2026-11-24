@@ -6,6 +6,7 @@ import { isSafeSyncPath } from '../../lib/sync.js'
 import { z } from 'zod'
 import { route, repoPath, repoName } from '../../http/route.js'
 import { openRepo } from '../../repo/openRepo.js'
+import { newDeploymentProblem } from '../../repo/walk.js'
 import { planChange, applyChange } from '../../repo/changes/index.js'
 
 function chartsDirName() {
@@ -37,8 +38,11 @@ export function initRoutes(router) {
   // a refusal leaves no folder and no file.
   router.post('/init', route('folders.init', { body: INIT_BODY }, async ({ body }, { gitopsDir }) => {
     const folder = body.folder.rel
-    if (!isSafeFolderPath(folder, gitopsDir)) return { status: 400, body: { error: 'Invalid folder path' } }
-    const plan = await planChange(openRepo(gitopsDir), { kind: 'create-deployment', folder, chart: body.chart })
+    const repo = openRepo(gitopsDir)
+    // In the Templates folder: refused before anything is planned, in the
+    // walk's words for it (which folder that is, and why not there).
+    if (!isSafeFolderPath(folder, gitopsDir)) return { status: 400, body: { error: await newDeploymentProblem(repo, folder) || 'Invalid folder path' } }
+    const plan = await planChange(repo, { kind: 'create-deployment', folder, chart: body.chart })
     return applyChange(plan)
   }))
 }

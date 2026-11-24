@@ -29,6 +29,8 @@
  *                leads in the repo (the folder to use instead). A link is never a deployment and
  *                never walked into: what it leads to is found where it is.
  *                One leading outside the repo is 'unreadable', and named.
+ *     templates?: it is the Templates folder (childEntries): shown, never
+ *                opened, and no place for a deployment or a `_common`
  *     nestedIn:  the deployment it is inside, or null (walk, childEntries)
  *     inCommon:  whether it is inside a `_common` folder (walk, childEntries)
  *   }
@@ -59,7 +61,8 @@ const WALK_AT_ONCE = 16
 
 export { COMMON_DIR }
 
-// Right inside a deployment or a `_common` chart: the chart's own folders —
+// Right inside a deployment, a `_common` chart or a folder whose Chart.yaml
+// names a Template with no values.yaml: the chart's own folders —
 // templates/ (the notification routing) and charts/ (what Helm fetches, or
 // the `_common` chart's link to the Template). Further down they are
 // folders like any other, as Helm reads only these two.
@@ -77,7 +80,8 @@ function excludedName(name, { inChart = false, hidden = false } = {}) {
 
 /**
  * Whether folder `name` is left out by its name alone. `inChart`: it is
- * right inside a deployment or a `_common` chart. `hidden`: hidden folders
+ * right inside a chart (a deployment, a `_common` chart, a Chart.yaml naming
+ * a Template with no values.yaml). `hidden`: hidden folders
  * are looked into too (all but .git), as "who uses this Template" does.
  */
 export function skippedDir(name, opts) {
@@ -87,6 +91,13 @@ export function skippedDir(name, opts) {
 /** Whether `rel` is the Templates folder (CHARTS_DIR, however it is spelled). */
 export function isTemplatesDir(rel) {
   return segmentsOf(rel).join('/') === segmentsOf(chartsDir() ?? 'charts').join('/')
+}
+
+// Whether `rel` is the Templates folder or a folder in it.
+function inTemplatesDir(rel) {
+  const segments = segmentsOf(rel)
+  const templates = segmentsOf(chartsDir() ?? 'charts')
+  return segments.length >= templates.length && templates.every((s, i) => s === segments[i])
 }
 
 const inShared = async (repo, rel) => segmentsOf(rel)[0] === SHARED_DIR && !sharedDirProblemOf(await loadSharedDir(repo))
@@ -221,7 +232,10 @@ export async function isDeployment(repo, rel) {
   return (await folderEntry(repo, rel)).kind === 'deployment'
 }
 
-const isChart = e => e.kind === 'deployment' || e.kind === 'common'
+// Whether charts/ and templates/ right inside it are the chart's own: a
+// deployment, a `_common` chart, and a Chart.yaml naming a Template with no
+// values.yaml, which Helm deploys as it does a deployment.
+const isChart = e => e.kind === 'deployment' || e.kind === 'common' || !!e.chartOnly
 
 // Where a folder is: the deployment above it, whether its parent is a chart.
 async function contextOf(repo, rel) {
@@ -283,13 +297,15 @@ export function walk(repo, { from = '', hidden = false } = {}) {
 }
 
 /**
- * The folders right inside `rel`, as the tree shows them: by name only (the
- * Templates folder is shown), the shared configs' folder left out at the
- * top, a link only when it leads out of the repo (named as unreadable).
- * Each with `hasFolders`: whether the tree can open it.
+ * The folders right inside `rel`, as the tree shows them: by name only, the
+ * shared configs' folder left out at the top, a link only when it leads out
+ * of the repo (named as unreadable). Each with `hasFolders`: whether the
+ * tree can open it. The Templates folder is shown as `templates`, the place
+ * the walk leaves out (excludedFolder): never opened, nothing in it listed.
  */
 export async function childEntries(repo, rel) {
   const key = segmentsOf(rel).join('/')
+  if (inTemplatesDir(key)) return []
   const { nestedIn: above, self } = await contextOf(repo, key)
   const inChart = !!self && isChart(self)
   const nestedIn = self?.kind === 'deployment' ? (above ?? key) : above
@@ -305,6 +321,7 @@ export async function childEntries(repo, rel) {
   const limit = createLimit(WALK_AT_ONCE)
   return Promise.all(names.map(name => limit(async () => {
     const e = placed(await folderEntry(repo, key ? `${key}/${name}` : name), nestedIn)
+    if (isTemplatesDir(e.rel)) return { ...e, name, templates: true, hasFolders: false }
     let hasFolders = false
     if (!dir.value.links.get(name)) {
       const sub = await repo.dir(e.rel)

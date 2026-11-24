@@ -65,6 +65,9 @@ async function listChildren(baseDir, parentPath) {
       if (e.nestedIn) node.nestedIn = e.nestedIn
       else if (e.inCommon) node.inCommon = true
     }
+    // The Templates folder: shown so that it is seen where it is, and as
+    // no place for a deployment or a _common (the walk leaves it out).
+    if (e.templates) node.isTemplates = true
     node.isLeaf = !e.hasFolders
     // Nothing in it is listed, checked or migrated (or, for a Chart.yaml
     // that cannot be read, it is no deployment that can be): said in the tree.

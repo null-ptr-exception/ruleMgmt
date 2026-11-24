@@ -272,6 +272,36 @@ describe('the walk, from every side', () => {
     expect(await newDeploymentProblem(tmpDir, 'team/charts/prod')).toBeNull()
   })
 
+  it('a new deployment in the Templates folder is refused saying which folder that is; in a folder only called charts it is made', async () => {
+    for (const folder of ['charts', 'charts/myapp', 'charts/demo/prod']) {
+      const { status, data } = await init(folder)
+      expect(status).toBe(400)
+      expect(data.error).toBe(`${folder}: a deployment there would not be seen — charts is the Templates folder, which AlertForge does not look into`)
+      expect(await exists(`${folder}/values.yaml`)).toBe(false)
+    }
+    expect(await exists('charts/myapp')).toBe(false)
+
+    // Not in a chart, and not the Templates folder: only its name is charts.
+    expect((await init('infra/legacy/charts/prod')).data).toMatchObject({ status: 'created' })
+    expect((await api('GET', '/api/v2/folders/tree?path=infra/legacy')).data).toEqual([{ name: 'charts', path: 'infra/legacy/charts', isLeaf: false }])
+    expect((await api('GET', '/api/v2/folders/tree?path=infra/legacy/charts')).data).toEqual([expect.objectContaining({ name: 'prod', isDeployment: true, chart: 'demo' })])
+    expect((await api('GET', '/api/v2/folders/deployments')).data.map(d => d.path)).toEqual(['infra/legacy/charts/prod'])
+  })
+
+  it('the Templates folder somewhere else (CHARTS_DIR): that one is named', async () => {
+    const before = process.env.CHARTS_DIR
+    process.env.CHARTS_DIR = 'platform/tpl'
+    try {
+      const { status, data } = await init('platform/tpl/myapp')
+      expect(status).toBe(400)
+      expect(data.error).toMatch(/platform\/tpl is the Templates folder/)
+      expect(await exists('platform/tpl/myapp')).toBe(false)
+    } finally {
+      if (before === undefined) delete process.env.CHARTS_DIR
+      else process.env.CHARTS_DIR = before
+    }
+  })
+
   it('a folder that holds a _common is no deployment: its deployments go under it', async () => {
     await commonChart('solo/_common/demo')
     const { status, data } = await init('solo')
@@ -304,6 +334,32 @@ describe('the walk, from every side', () => {
     expect((await api('DELETE', `/api/v2/deployments/demo/nv?folder=nv`)).status).toBe(200)
     expect(await exists('nv')).toBe(false)
     expect((await api('DELETE', '/api/v2/charts/demo')).status).toBe(200)
+  })
+
+  it('a Chart.yaml with no values.yaml: its charts/ and templates/ are its own, in the tree and in every list, as a deployment\'s are', async () => {
+    for (const bare of ['nv', 'nv2']) {
+      await deployment(bare)
+      await fs.rm(path.join(tmpDir, bare, 'values.yaml'))
+    }
+    await deployment('nv/charts/own')
+    await deployment('nv/templates/own')
+    await deployment('nv/envs/charts/prod')
+    await fs.mkdir(path.join(tmpDir, 'nv2', 'charts', 'fetched'), { recursive: true })
+
+    const top = (await api('GET', '/api/v2/folders/tree')).data
+    expect(top.find(n => n.name === 'nv')).toMatchObject({ noValues: true, isLeaf: false })
+    expect(top.find(n => n.name === 'nv2')).toMatchObject({ noValues: true, isLeaf: true })
+    expect((await api('GET', '/api/v2/folders/tree?path=nv')).data.map(n => n.name)).toEqual(['envs'])
+    expect((await api('GET', '/api/v2/folders/tree?path=nv2')).data).toEqual([])
+
+    expect(await listFolderDeployments(tmpDir)).toEqual(['nv/envs/charts/prod'])
+    expect((await api('GET', '/api/v2/folders/deployments')).data.map(d => d.path)).toEqual(['nv/envs/charts/prod'])
+    expect((await findDeploymentsUsing(tmpDir, 'demo')).map(d => d.path).sort()).toEqual(['nv', 'nv/envs/charts/prod', 'nv2'])
+
+    const made = await init('nv/charts/new')
+    expect(made.status).toBe(400)
+    expect(made.data.error).toMatch(/nv\/charts is a chart's own charts\/ folder/)
+    expect(await exists('nv/charts/new')).toBe(false)
   })
 
   it.skipIf(IS_ROOT)('a folder that cannot be read is named, by its place in the repo, and stops nothing else', async () => {

@@ -36,12 +36,14 @@ describe('folders API', () => {
     expect(names).toContain('charts')
     expect(names).toContain('deployments')
 
+    // The Templates folder is shown, and not opened.
     const chartsNode = res.body.find(f => f.name === 'charts')
-    expect(chartsNode.isLeaf).toBe(false)
+    expect(chartsNode.isLeaf).toBe(true)
+    expect(res.body.find(f => f.name === 'deployments').isLeaf).toBe(false)
 
-    const res2 = await request(app).get('/api/v2/folders/tree?path=charts')
+    const res2 = await request(app).get('/api/v2/folders/tree?path=deployments')
     expect(res2.body).toHaveLength(1)
-    expect(res2.body[0].name).toBe('my-alerts')
+    expect(res2.body[0].name).toBe('prod')
   })
 
   it('GET /tree excludes .git and node_modules', async () => {

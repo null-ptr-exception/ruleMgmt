@@ -8,6 +8,7 @@ import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
 import { blocksCommit } from '../../src/utils/drift.js'
 import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
 import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
+import { withSyncRegistryLock } from '../lib/sync.js'
 
 /**
  * Reasons a commit should be refused, across every chart in the gitops repo —
@@ -34,39 +35,48 @@ async function chartCommitBlockers(gitopsDir) {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
     const chartDir = path.join(chartsDir, entry.name)
-
-    // Schema carries no rule data (see modelToSchema in rulesFile.js), so a
-    // migrated chart's rules are checked from rules/*.yaml via `genSchema`,
-    // which rebuilds the old x-rules-per-group shape checkRules expects
-    // without writing it anywhere. A parse error here is left to the drift
-    // check below (`stale`), which already blocks on it.
-    const { rulesFiles, schema } = await readChartArtifacts(chartDir)
-    if (rulesFiles && Object.keys(rulesFiles).length) {
-      const { model, errors } = parseRulesDir(rulesFiles)
-      if (!errors.length) {
-        for (const finding of checkRules(genSchema(model, schema))) {
-          findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
-        }
-      }
-    } else if (schema) {
-      for (const finding of checkRules(schema)) {
-        findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
-      }
-    }
-
-    const drift = await chartDrift(chartDir)
-    if (blocksCommit(drift.state)) {
-      // rules/ that cannot be read has nothing to regenerate from: say what
-      // is wrong with it, not that the products are behind (#172).
-      const detail = drift.errors?.length
-        ? `rules/ cannot be read (${drift.errors.slice(0, 3).join('; ')}${drift.errors.length > 3 ? `; and ${drift.errors.length - 3} more` : ''}) — fix it before committing`
-        : `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
-      findings.push({ severity: 'commit', kind: `drift-${drift.state}`, chart: entry.name, description: `${entry.name}: ${detail}` })
-    } else if (drift.state === 'legacy') {
-      unconverted.push(entry.name)
+    try {
+      await checkChart(entry, chartDir, findings, unconverted)
+    } catch (err) {
+      // A chart deleted while it was being checked is not there to commit.
+      if (err?.code === 'ENOENT' && !(await fs.access(chartDir).then(() => true, () => false))) continue
+      throw err
     }
   }
   return { findings, unconverted }
+}
+
+async function checkChart(entry, chartDir, findings, unconverted) {
+  // Schema carries no rule data (see modelToSchema in rulesFile.js), so a
+  // migrated chart's rules are checked from rules/*.yaml via `genSchema`,
+  // which rebuilds the old x-rules-per-group shape checkRules expects
+  // without writing it anywhere. A parse error here is left to the drift
+  // check below (`stale`), which already blocks on it.
+  const { rulesFiles, schema } = await readChartArtifacts(chartDir)
+  if (rulesFiles && Object.keys(rulesFiles).length) {
+    const { model, errors } = parseRulesDir(rulesFiles)
+    if (!errors.length) {
+      for (const finding of checkRules(genSchema(model, schema))) {
+        findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
+      }
+    }
+  } else if (schema) {
+    for (const finding of checkRules(schema)) {
+      findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
+    }
+  }
+
+  const drift = await chartDrift(chartDir)
+  if (blocksCommit(drift.state)) {
+    // rules/ that cannot be read has nothing to regenerate from: say what
+    // is wrong with it, not that the products are behind (#172).
+    const detail = drift.errors?.length
+      ? `rules/ cannot be read (${drift.errors.slice(0, 3).join('; ')}${drift.errors.length > 3 ? `; and ${drift.errors.length - 3} more` : ''}) — fix it before committing`
+      : `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
+    findings.push({ severity: 'commit', kind: `drift-${drift.state}`, chart: entry.name, description: `${entry.name}: ${detail}` })
+  } else if (drift.state === 'legacy') {
+    unconverted.push(entry.name)
+  }
 }
 
 function parseStatus(raw) {
@@ -80,6 +90,46 @@ function parseStatus(raw) {
     else changes.modified.push(file)
   }
   return changes
+}
+
+const INDEX_LOCK_STALE_MS = 30000
+const gone = async abs => fs.lstat(abs).then(() => false, () => true)
+
+/**
+ * Whether git or the file system failed because a file went away under it
+ * (#187): something to try again. A path that is still there — a dangling
+ * symlink, a file that is in the way — fails every time, so it is not;
+ * neither is an index.lock older than any running git would leave it.
+ */
+async function filesChanging(err, cwd) {
+  if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return !err.path || await gone(err.path)
+  const text = `${err?.message || ''} ${err?.stderr || ''}`
+  if (/index\.lock/i.test(text)) {
+    // Where git keeps it: the repo may be a worktree, or gitopsDir a folder
+    // inside the repo. A lock that cannot be found is not one to wait for.
+    const rel = (await git(cwd, 'rev-parse', '--git-path', 'index.lock').catch(() => '')).trim()
+    if (!rel) return false
+    const age = await fs.stat(path.resolve(cwd, rel)).then(st => Date.now() - st.mtimeMs, () => Infinity)
+    return age < INDEX_LOCK_STALE_MS
+  }
+  if (!/unable to stat|short read while indexing|No such file or directory|Not a directory/i.test(text)) return false
+  const named = text.match(/(?:unable to stat|open\()\s*['"]([^'"]+)['"]/i)?.[1]
+  return !named || await gone(path.resolve(cwd, named))
+}
+
+// A message for the browser does not carry where the repo is on the server,
+// as given or as its real path (git reports that one).
+export async function withoutPath(text, dir) {
+  let out = String(text || '')
+  const base = String(dir || '').replace(/[\\/]+$/, '')
+  // The root itself, or nothing, is no path to take out.
+  if (!base) return out
+  const escape = d => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  for (const d of new Set([base, await fs.realpath(base).catch(() => base)])) {
+    // Only the folder itself: /srv/gitops, not /srv/gitops-old.
+    out = out.replace(new RegExp(`${escape(d)}(?:[\\/]|(?=$|[\\s'"):,]))`, 'g'), m => (/[\\/]$/.test(m) ? '' : '.'))
+  }
+  return out
 }
 
 function hasRemote() {
@@ -136,27 +186,45 @@ export default function gitRouter() {
     if (!message) return res.status(400).json({ error: 'message required' })
 
     try {
-      await git(cwd, 'add', '-A')
-      const statusRaw = await git(cwd, 'status', '--porcelain')
-      if (!statusRaw.trim()) {
-        return res.status(400).json({ error: 'no changes to commit' })
-      }
+      // Add, check, commit in one go: a deployment save or a Regenerate in
+      // between would leave the checks passing on files not in the index.
+      const outcome = await withSyncRegistryLock(cwd, async () => {
+        let charts, deployments
+        try {
+          await git(cwd, 'add', '-A')
+          const statusRaw = await git(cwd, 'status', '--porcelain')
+          if (!statusRaw.trim()) return { status: 400, body: { error: 'no changes to commit' } }
 
-      const charts = await chartCommitBlockers(cwd)
-      // Notification routing, sync.yaml and the Template each deployment
-      // renders are checked too: a resource behind its routing.yaml would
-      // silently stop notifying (#179).
-      const deployments = await deploymentCommitBlockers(cwd)
-      const findings = [...charts.findings, ...deployments.findings]
-      if (findings.length) {
-        return res.status(409).json({ error: 'Commit refused', findings, regenerable: deployments.regenerable })
-      }
+          charts = await chartCommitBlockers(cwd)
+          // Notification routing, sync.yaml and the Template each deployment
+          // renders are checked too: a resource behind its routing.yaml would
+          // silently stop notifying (#179).
+          deployments = await deploymentCommitBlockers(cwd)
+        } catch (err) {
+          // Only these steps read the files as they change; a failure in
+          // `git commit` itself (a hook) is never "try again".
+          err.whileReading = true
+          throw err
+        }
+        const findings = [...charts.findings, ...deployments.findings]
+        if (findings.length) {
+          return { status: 409, body: { error: 'Commit refused', findings, regenerable: deployments.regenerable } }
+        }
 
-      await git(cwd, 'commit', '-m', message)
-      const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
-      res.json({ sha, message, unconverted: charts.unconverted, ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}) })
+        await git(cwd, 'commit', '-m', message)
+        const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
+        return { status: 200, body: { sha, message, unconverted: charts.unconverted, ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}) } }
+      })
+      res.status(outcome.status).json(outcome.body)
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      // A file that went away while it was being added or checked: another
+      // tab saving, a chart being deleted (#187). Nothing was committed.
+      if (err?.whileReading && await filesChanging(err, cwd)) {
+        console.error('Commit: files changed, asked to try again', err)
+        return res.status(409).json({ error: 'Files changed while committing — try again', retry: true })
+      }
+      console.error('Commit failed', err)
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
   })
 

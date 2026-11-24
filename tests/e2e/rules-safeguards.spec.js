@@ -272,11 +272,20 @@ rules:
     await page.goto('/')
     await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
     await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: should be refused')
-    await page.locator('button:has-text("Commit")').click()
+    // Other specs save and delete charts while this one runs: a commit then
+    // answers "try again" (#187), and is tried again, as a person would.
+    const refused = page.getByText(/e2e-safeguard-stale: products are out of date/)
+    const tryAgain = page.getByText('Files changed while committing — try again')
+    for (let i = 0; i < 5; i++) {
+      await page.locator('button:has-text("Commit")').click()
+      await expect(refused.or(tryAgain).first()).toBeVisible({ timeout: 8000 })
+      if (await refused.isVisible()) break
+      await expect(tryAgain).toHaveCount(0, { timeout: 5000 })
+    }
 
     // Not just "Rule checks failed": the person committing has to be able to
     // find the problem.
-    await expect(page.getByText(/e2e-safeguard-stale: products are out of date/)).toBeVisible({ timeout: 8000 })
+    await expect(refused).toBeVisible()
     await expect(page.getByText(/e2e-safeguard-noref\/cpu: .*references none of this group's columns/)).toBeVisible()
     await expect(page.getByText('Changes committed')).toHaveCount(0)
   })

@@ -54,7 +54,14 @@ export async function listFolderDeployments(gitopsDir) {
 /** The Template a deployment renders is not in the repo (deleted with git). */
 async function missingTemplate(gitopsDir, dep) {
   const dir = path.join(gitopsDir, dep)
-  const chart = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8')) || {}
+  let chart
+  try {
+    chart = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8')) || {}
+  } catch (err) {
+    // Deleted since the walk (#187): not there to commit.
+    if (err.code === 'ENOENT') return null
+    throw err
+  }
   for (const d of chart.dependencies || []) {
     const repo = typeof d?.repository === 'string' ? d.repository : ''
     const at = repo.startsWith('file://') ? path.resolve(dir, repo.slice('file://'.length)) : null

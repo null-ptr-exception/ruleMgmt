@@ -470,6 +470,12 @@ commit stays refused.
 A `routing.yaml` with problems does not stop a commit: the commit goes
 through and names it, to fix on its Routing page.
 
+A commit made while files are changing — a save in another tab, a chart
+being deleted — may answer **Files changed while committing — try again**.
+Nothing was committed; commit again. What would fail every time — a
+symlink pointing nowhere, a git `index.lock` left by a git that is gone, a
+commit hook that fails — is reported as a failure, naming it, instead.
+
 These checks are AlertForge's commit button only. A commit made with git, or
 in the Gitea web editor, is left to CI: `check-deployment` (see below) fails
 a deployment whose routing resource is behind, whose `routing.yaml` has

@@ -364,6 +364,12 @@ rate(x[60m])`. The generator writes it as Sprig, reading each cell the way
   PromQL `offset` (a negative one is fine), is negative as a `for` or
   `keep_firing_for`, or is longer than a duration can be (about 292 years),
   naming the row.
+- **A row reads a cell as Helm does**: its own value, else the Common
+  Value (from the deployment or a `_common` folder above it), else the
+  column's `default`. Helm counts a row's `0` as not set, so a Common Value
+  replaces it; a Common Value of `0` is used as it is, not the default. A
+  row that leaves `base` out, under `_common: { base: 0 }`, computes
+  `freq_num * base` as 0 — `[0m]` — and the save is refused, naming the row.
 - A `once` group has no rows, so it has no `derived`. A `derived` name may
   not be a column's, a `vars` entry's, a `_common` column's or `selector`.
 

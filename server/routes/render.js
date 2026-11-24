@@ -1,5 +1,4 @@
 import express from 'express'
-import fs from 'fs/promises'
 import path from 'path'
 import { chartDrift, readChartModel } from '../lib/chartFiles.js'
 import { getDepName, unwrapValues } from '../lib/subchart.js'
@@ -9,6 +8,8 @@ import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/uti
 import { logger } from '../lib/logger.js'
 import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import yaml from 'js-yaml'
+import { answersWithoutPaths } from '../lib/answerPaths.js'
+import { readTextIfThere, parseIfThere } from '../lib/readIfThere.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
@@ -65,6 +66,7 @@ async function buildSummary(renderedYaml, { model, schema }, readValues) {
 
 export default function renderRouter() {
   const router = express.Router()
+  router.use(answersWithoutPaths)
 
   router.post('/:chart/:deployment', async (req, res) => {
     const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
@@ -132,17 +134,18 @@ export default function renderRouter() {
         if (stack?.layers.length) {
           const stacked = await readStackValues(req.gitopsDir, deploymentsDir, stack)
           valueWarnings = stacked.nulls
-          const defaults = yaml.load(await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8').catch(() => '')) || {}
+          const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)) || {}
           return mergeValues(defaults, stacked.merged)
         }
         const candidates = folder
           ? [path.join(deploymentsDir, 'values.yaml'), path.join(deploymentsDir, `${deployment}-values.yaml`)]
           : [path.join(deploymentsDir, `${deployment}-values.yaml`)]
+        // Not there: the next one. One that cannot be read or parsed fails
+        // the summary (logged), rather than showing another file's rows.
         for (const candidate of candidates) {
-          try {
-            const parsed = yaml.load(await fs.readFile(candidate, 'utf-8'))
-            return unwrapValues(parsed || {}, stack?.keys[0] ?? await getDepName(path.dirname(candidate)))
-          } catch { /* the next one */ }
+          const text = await readTextIfThere(candidate)
+          if (text === null) continue
+          return unwrapValues(yaml.load(text) || {}, stack?.keys[0] ?? await getDepName(path.dirname(candidate)))
         }
         return null
       }

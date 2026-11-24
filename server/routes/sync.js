@@ -18,6 +18,8 @@ import { readRouting, restoreRouting, checkedRouting } from '../lib/routingFiles
 import { readSharedConfigs, inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
 import { newDeploymentProblem } from '../lib/deploymentWalk.js'
+import { writeWhole } from '../lib/routingFiles.js'
+import { answersWithoutPaths } from '../lib/answerPaths.js'
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -37,6 +39,7 @@ async function validateSyncPath(gitopsDir, candidate) {
 
 export default function syncRouter() {
   const router = express.Router()
+  router.use(answersWithoutPaths)
 
   router.get('/', async (req, res) => {
     const source = req.query.source ? normalizeSyncPath(req.query.source) : undefined
@@ -150,10 +153,12 @@ export default function syncRouter() {
             await fs.rm(targetDir, { recursive: true, force: true }).catch(() => {})
           } else {
             if (prevTargetValues !== null) {
-              await fs.writeFile(targetValuesFile, prevTargetValues, 'utf-8').catch(() => {})
+              await writeWhole(targetValuesFile, prevTargetValues).catch(() => {})
             }
             await restoreRouting(targetDir, prevTargetRouting).catch(() => {})
-            if (prevTargetChart !== null) await fs.writeFile(targetChartFile, prevTargetChart, 'utf-8').catch(() => {})
+            // A Chart.yaml the copy made is taken out again.
+            if (prevTargetChart !== null) await writeWhole(targetChartFile, prevTargetChart).catch(() => {})
+            else await fs.rm(targetChartFile, { force: true }).catch(() => {})
           }
           applyUnlink(registry, target)
           await writeSyncRegistry(req.gitopsDir, registry).catch(() => {})

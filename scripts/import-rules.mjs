@@ -46,8 +46,10 @@ if (objectMeta.errors.length) {
   process.exit(1)
 }
 
+// Only a missing file is null: a schema that cannot be read is not the
+// chart having none, which would import into a chart started from nothing.
 async function readIfExists(file) {
-  try { return await fs.readFile(file, 'utf-8') } catch { return null }
+  try { return await fs.readFile(file, 'utf-8') } catch (err) { if (err.code === 'ENOENT') return null; throw err }
 }
 
 const result = importRules(await fs.readFile(rulesFile, 'utf-8'))

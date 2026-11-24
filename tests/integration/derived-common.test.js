@@ -1,0 +1,130 @@
+// derived (#118) reading a Common Value: a row that leaves the cell out reads
+// _common's, 0 included, as Helm's `merge $row $common` does — directly or
+// through a _common stack. The save check computes the row the same way, so
+// a 0 that would deploy as [0m] is refused, naming the row.
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'fs/promises'
+import path from 'path'
+import os from 'os'
+import { execFileSync } from 'child_process'
+import express from 'express'
+import yaml from 'js-yaml'
+import { renderChart } from '../../server/lib/ruleCheck.js'
+
+const HAS_HELM = (() => { try { execFileSync(process.env.HELM_BIN || 'helm', ['version'], { stdio: 'ignore' }); return true } catch { return false } })()
+
+let server, baseURL, tmpDir
+
+const COMMON = 'columns:\n  base: {type: integer, default: 4}\n'
+const SPC = `group: spc
+columns:
+  job: {type: string, required: true}
+  freq_num: {type: integer, required: true}
+
+derived:
+  w: {expr: "freq_num * base", unit: m}
+
+rules:
+  - alert: SpcErrors
+    expr: rate(x{job="\${job}"}[\${w}]) > 0
+    labels: {window: "\${w}"}
+`
+const DIRECT = 'deployments/team/spc'
+const ON_STACK = 'deployments/shop/spc'
+const LAYER = 'deployments/shop/_common/demo/values.yaml'
+
+beforeEach(async () => {
+  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'derived-common-'))
+  await fs.mkdir(path.join(tmpDir, 'charts', 'demo'), { recursive: true })
+  const routes = await Promise.all(['templates', 'deployments', 'folders'].map(n => import(`../../server/routes/${n}.js`)))
+  const app = express()
+  app.use(express.json())
+  app.use((req, res, next) => { req.gitopsDir = tmpDir; next() })
+  ;['templates', 'deployments', 'folders'].forEach((n, i) => app.use(`/api/v2/${n}`, routes[i].default()))
+  await new Promise(r => { server = app.listen(0, '127.0.0.1', () => { baseURL = `http://127.0.0.1:${server.address().port}`; r() }) })
+  expect((await api('POST', '/api/v2/templates/demo/rules', { files: { '_common.yaml': COMMON, 'spc.yaml': SPC } })).status).toBe(200)
+  expect((await api('POST', '/api/v2/folders/init', { folder: DIRECT, chart: 'demo' })).status).toBe(200)
+})
+
+afterEach(async () => {
+  if (server) await new Promise(r => server.close(r))
+  if (tmpDir) await fs.rm(tmpDir, { recursive: true, force: true })
+})
+
+async function api(method, urlPath, body) {
+  const res = await fetch(`${baseURL}${urlPath}`, {
+    method, headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body),
+  })
+  return { status: res.status, data: await res.json() }
+}
+const q = f => `?folder=${encodeURIComponent(f)}`
+const save = (folder, values) => api('POST', `/api/v2/deployments/demo/spc${q(folder)}`, { values })
+
+async function makeStack() {
+  expect((await api('POST', '/api/v2/folders', { path: 'deployments/shop' })).status).toBe(200)
+  const shown = await api('GET', `/api/v2/folders/common/plan?${new URLSearchParams({ action: 'create', folder: 'deployments/shop', chart: 'demo' })}`)
+  expect(shown.status).toBe(200)
+  expect((await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'deployments/shop', chart: 'demo', expected: shown.data.expected })).status).toBe(200)
+  expect((await api('POST', '/api/v2/folders/init', { folder: ON_STACK, chart: 'demo' })).status).toBe(200)
+}
+const layerKey = async () => Object.keys(yaml.load(await fs.readFile(path.join(tmpDir, LAYER), 'utf-8')) || {})[0] || 'demo'
+const writeLayer = async common => fs.writeFile(path.join(tmpDir, LAYER), yaml.dump({ [await layerKey()]: { _common: common } }))
+
+// What Helm puts in the window label, row by row, for a folder as it is on disk.
+async function windows(folder) {
+  const abs = path.join(tmpDir, folder)
+  return yaml.loadAll(await renderChart(abs, ['template', 'spc', abs])).filter(d => d?.kind === 'PrometheusRule')
+    .flatMap(d => d.spec.groups.flatMap(g => g.rules.map(r => r.labels.window)))
+}
+
+describe('a deployment whose Common Values give the cell', () => {
+  it('0 there, the row leaving it out: the save is refused, naming the row', async () => {
+    const { status, data } = await save(DIRECT, { _common: { base: 0 }, spc: [{ job: 'a', freq_num: 3 }] })
+    expect(status).toBe(400)
+    expect(data.problems.map(p => p.message)).toEqual(['spc row 1, derived "w": it comes to 0, and a range has to be more than 0'])
+  })
+
+  it('a row\'s own 0 under a Common Value of 5, and a row\'s own 2: saved', async () => {
+    expect((await save(DIRECT, { _common: { base: 5 }, spc: [{ job: 'a', freq_num: 3, base: 0 }, { job: 'b', freq_num: 3, base: 2 }] })).status).toBe(200)
+  })
+
+  it.skipIf(!HAS_HELM)('Helm renders what the save check computed', async () => {
+    // Refused above: written by hand, Helm renders it as 0.
+    await fs.writeFile(path.join(tmpDir, DIRECT, 'values.yaml'), yaml.dump({ demo: { _common: { base: 0 }, spc: [{ job: 'a', freq_num: 3 }] } }))
+    expect(await windows(DIRECT)).toEqual(['0m'])
+    // Saved above: the row's 0 takes the Common Value, its 2 stays.
+    await fs.writeFile(path.join(tmpDir, DIRECT, 'values.yaml'), yaml.dump({ demo: { _common: { base: 5 }, spc: [{ job: 'a', freq_num: 3, base: 0 }, { job: 'b', freq_num: 3, base: 2 }, { job: 'c', freq_num: 3 }] } }))
+    expect(await windows(DIRECT)).toEqual(['15m', '6m', '15m'])
+    // No Common Values: the default.
+    await fs.writeFile(path.join(tmpDir, DIRECT, 'values.yaml'), yaml.dump({ demo: { spc: [{ job: 'a', freq_num: 3 }] } }))
+    expect(await windows(DIRECT)).toEqual(['12m'])
+  })
+})
+
+describe('a deployment on a _common stack', () => {
+  it('a layer giving 0: the deployment\'s save is refused, naming its row', async () => {
+    await makeStack()
+    await writeLayer({ base: 0 })
+    const { status, data } = await save(ON_STACK, { spc: [{ job: 'a', freq_num: 3 }] })
+    expect(status).toBe(400)
+    expect(data.problems.map(p => p.message)).toEqual(['spc row 1, derived "w": it comes to 0, and a range has to be more than 0'])
+  })
+
+  it('a layer giving 0 that the deployment\'s own Common Value replaces: saved', async () => {
+    await makeStack()
+    await writeLayer({ base: 0 })
+    expect((await save(ON_STACK, { _common: { base: 2 }, spc: [{ job: 'a', freq_num: 3 }] })).status).toBe(200)
+  })
+
+  it.skipIf(!HAS_HELM)('Helm renders what the save check computed', async () => {
+    await makeStack()
+    await writeLayer({ base: 0 })
+    const own = async values => fs.writeFile(path.join(tmpDir, ON_STACK, 'values.yaml'), yaml.dump({ common: { demo: values } }))
+    const key = Object.keys(yaml.load(await fs.readFile(path.join(tmpDir, ON_STACK, 'values.yaml'), 'utf-8')) || {})
+    expect(key).toEqual(['common'])
+    await own({ spc: [{ job: 'a', freq_num: 3 }] })
+    expect(await windows(ON_STACK)).toEqual(['0m'])
+    await own({ _common: { base: 2 }, spc: [{ job: 'a', freq_num: 3 }] })
+    expect(await windows(ON_STACK)).toEqual(['6m'])
+  })
+})

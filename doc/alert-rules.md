@@ -320,6 +320,18 @@ Preview tells the rule owner the output may be behind. And a commit is refused
 while any chart is stale; a legacy chart is only named after the commit, as a
 reminder.
 
+Only a file or folder that is not there counts as absent. One that is there
+but cannot be read — no permission, `rules` as a file, a folder named
+`rules/<group>.yaml`, a `values.yaml` or `Chart.yaml` that is not YAML — is
+named by its place in the repo (`charts/demo/rules cannot be read:
+permission denied`), and stops what would take it for absent: opening the
+chart, Save, making a deployment, a commit, and `gen-rules`, `gen-chart` and
+`import-rules`. A chart whose `rules/` cannot be read is not legacy. A
+`values.schema.json` that is not JSON still opens a chart with `rules/` (it
+is shown as a product to regenerate), but Save refuses it until it is fixed
+or removed: it may hold `x-custom-template` groups. A deployment's
+`values.yaml` that cannot be read refuses the commit too.
+
 ### Files of your own in templates/
 
 Regenerating removes a template only when it is the generator's own

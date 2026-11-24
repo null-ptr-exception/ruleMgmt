@@ -85,15 +85,15 @@ describe('a failure that is not a file going away', () => {
   beforeEach(() => { errors = vi.spyOn(console, 'error').mockImplementation(() => {}) })
   afterEach(() => errors.mockRestore())
 
-  it('a dangling symlink is a 500 naming it, not "try again", and the server logs it', async () => {
+  it('a dangling symlink in rules/ refuses the commit naming it, not "try again"', async () => {
     await fs.symlink(path.join(tmpDir, 'nowhere.yaml'), path.join(tmpDir, 'charts/stale/rules/mem.yaml'))
     for (let i = 0; i < 2; i++) {
       const { status, text } = await api('POST', '/api/v2/git/commit', { message: 'x' })
-      expect(status).toBe(500)
+      expect(status).toBe(409)
+      expect(JSON.parse(text).findings.map(f => f.description)).toContain('stale: charts/stale/rules/mem.yaml cannot be read (a link to a file that is not there) — fix it before committing')
       expect(text).not.toContain('try again')
       expect(text).not.toContain(tmpDir)
     }
-    expect(errors).toHaveBeenCalledWith('Commit failed', expect.anything())
   })
 
   it('an index.lock left by a git that is gone is a 500, not "try again"', async () => {

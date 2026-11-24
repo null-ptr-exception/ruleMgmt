@@ -3,6 +3,7 @@ import { holdSyncRegistryLock } from '../lib/sync.js'
 import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing, findChartUsage } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
+import { readTextIfThere, readDirIfThere, parseIfThere, UnreadableError } from '../lib/readIfThere.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema, genSchema, valueChecksKey } from '../../src/utils/rulesFile.js'
@@ -15,8 +16,22 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
+import { writeWhole } from '../lib/routingFiles.js'
+import { answersWithoutPaths } from '../lib/answerPaths.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+
+// A templates/ file's text, for telling a 1.x rule file apart: null when it
+// is not there or is a folder named *.yaml (not a rule object; Helm says so
+// when it renders). Any other failure is an error naming it.
+async function readTemplateText(file) {
+  try {
+    return await readTextIfThere(file)
+  } catch (err) {
+    if (err.cause?.code === 'EISDIR') return null
+    throw err
+  }
+}
 // A rules/ filename: a group file, or _common.yaml. Guards path traversal in
 // the keys of the POST /:chart/rules body, and keeps a group key a name Helm
 // can read (the same rule as GROUP_KEY_RE in rulesFile.js).
@@ -67,9 +82,12 @@ async function withSources(gitopsDir, refused) {
 
 export default function templatesRouter() {
   const router = express.Router()
-  // The migration preview writes nothing: it does not wait for a save or a
-  // commit, as a read does not.
-  router.use((req, res, next) => (req.method === 'POST' && /^\/[^/]+\/migration-preview$/.test(req.path) ? next() : holdSyncRegistryLock(req, res, next)))
+  router.use(answersWithoutPaths)
+  // The migration preview writes nothing, but waits all the same: a save in
+  // progress writes rules/, templates, the schema and every deployment's
+  // values one after another, and a preview read between them would check
+  // values of one version against rules of another.
+  router.use(holdSyncRegistryLock)
 
   router.use('/:chart', (req, res, next) => {
     if (!NAME_RE.test(req.params.chart)) {
@@ -90,12 +108,19 @@ export default function templatesRouter() {
     }
   }
 
-  async function readSchema(schemaFile) {
+  // null when values.schema.json is not there. One that cannot be read, or
+  // is not JSON, is an error naming it: a save that took it for none would
+  // drop the x-custom-template groups it holds. Opening the chart (`shown`)
+  // takes a schema that is not JSON as none, so the editor still opens and
+  // the drift says so.
+  async function readSchema(schemaFile, { shown = false } = {}) {
+    const raw = await readTextIfThere(schemaFile)
+    if (raw === null) return null
     try {
-      const raw = await fs.readFile(schemaFile, 'utf-8')
       return JSON.parse(raw)
-    } catch {
-      return null
+    } catch (err) {
+      if (shown) return null
+      throw new UnreadableError(schemaFile, { reason: `not valid JSON (${err.message}) — fix it by hand, or remove it to generate it again` })
     }
   }
 
@@ -123,7 +148,7 @@ export default function templatesRouter() {
             await fs.access(chartYamlFile)
           } catch {
             const { text } = ensureChartYaml(null, req.params.chart)
-            await fs.writeFile(chartYamlFile, text, 'utf-8')
+            await writeWhole(chartYamlFile, text)
           }
           let d = await chartDrift(chartDir)
           if (d.state === 'missing') {
@@ -134,25 +159,15 @@ export default function templatesRouter() {
         })
       }
 
-      let templateFiles = []
-      try {
-        const files = await fs.readdir(tmplDir)
-        templateFiles = files.filter(f => f.endsWith('.yaml')).map(f => f.replace(/\.yaml$/, ''))
-      } catch { /* no templates dir */ }
+      const templateFiles = ((await readDirIfThere(tmplDir)) || [])
+        .filter(f => f.endsWith('.yaml')).map(f => f.replace(/\.yaml$/, ''))
 
-      const schema = await readSchema(schemaFile)
+      const schema = await readSchema(schemaFile, { shown: true })
 
-      let values = {}
-      try {
-        const raw = await fs.readFile(valuesFile, 'utf-8')
-        values = yaml.load(raw) || {}
-      } catch { /* use default */ }
-
-      let chartMeta = {}
-      try {
-        const raw = await fs.readFile(chartYamlFile, 'utf-8')
-        chartMeta = yaml.load(raw) || {}
-      } catch { /* use default */ }
+      // Not there: none. One that cannot be read or parsed is said, not
+      // shown as empty for a Save to write over.
+      const values = (await parseIfThere(valuesFile, yaml.load)) || {}
+      const chartMeta = (await parseIfThere(chartYamlFile, yaml.load)) || {}
 
       // The editor loads from these; null when the chart has not been migrated
       // to the rules/ format yet (it falls back to reading `schema`).
@@ -312,8 +327,9 @@ export default function templatesRouter() {
         [schemaFile, products.schemaText],
         ...migrationWrites,
       ]
-      let chartYamlRaw = null
-      try { chartYamlRaw = await fs.readFile(chartYamlFile, 'utf-8') } catch { /* absent */ }
+      // Made only when it is not there: one that cannot be read is not
+      // written over.
+      const chartYamlRaw = await readTextIfThere(chartYamlFile)
       const { text: chartYamlText, created } = ensureChartYaml(chartYamlRaw, req.params.chart)
       if (created) entries.push([chartYamlFile, chartYamlText])
 
@@ -321,14 +337,12 @@ export default function templatesRouter() {
       // _common.yaml for a chart that no longer has common columns. In
       // templates/ only a generated file is: one a hand-written file sits
       // next to is left alone (#114).
-      const listYaml = async dir => {
-        try { return (await fs.readdir(dir)).filter(f => f.endsWith('.yaml')) } catch { return [] }
-      }
+      const listYaml = async dir => ((await readDirIfThere(dir)) || []).filter(f => f.endsWith('.yaml'))
       // Converting a 1.x chart (no rules/ before): its old rule file, which
       // holds every group under a name no group has, goes too (#190).
       const templateNames = await listYaml(tmplDir)
       const replaced = oldRulesFiles && Object.keys(oldRulesFiles).length ? [] : replacedByConversion(
-        Object.fromEntries(await Promise.all(templateNames.map(async f => [f, await fs.readFile(path.join(tmplDir, f), 'utf-8').catch(() => null)]))),
+        Object.fromEntries(await Promise.all(templateNames.map(async f => [f, await readTemplateText(path.join(tmplDir, f))]))),
         products.templates)
       const removed = [
         ...(await listYaml(rulesDir)).filter(f => !(f in files)).map(f => path.join(rulesDir, f)),
@@ -390,7 +404,7 @@ export default function templatesRouter() {
     const { values } = req.body
     try {
       const content = typeof values === 'string' ? values : dumpForHelm(values, { lineWidth: -1 })
-      await fs.writeFile(valuesFile, content, 'utf-8')
+      await writeWhole(valuesFile, content)
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -426,7 +440,7 @@ export default function templatesRouter() {
     if (description) next.description = description
     else if (description !== undefined) delete next.description
     try {
-      await fs.writeFile(chartYamlFile, dumpForHelm(next, { lineWidth: -1 }), 'utf-8')
+      await writeWhole(chartYamlFile, dumpForHelm(next, { lineWidth: -1 }))
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -457,10 +471,11 @@ export default function templatesRouter() {
     const { tmplDir } = chartPaths(req, req.params.chart)
     const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
     try {
-      const content = await fs.readFile(tmplFile, 'utf-8')
+      const content = await readTextIfThere(tmplFile)
+      if (content === null) return res.status(404).json({ error: 'Template not found' })
       res.json({ content })
-    } catch {
-      res.status(404).json({ error: 'Template not found' })
+    } catch (err) {
+      res.status(500).json({ error: err.message })
     }
   })
 
@@ -471,7 +486,7 @@ export default function templatesRouter() {
     const { content } = req.body
     try {
       await fs.mkdir(tmplDir, { recursive: true })
-      await fs.writeFile(tmplFile, content, 'utf-8')
+      await writeWhole(tmplFile, content)
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

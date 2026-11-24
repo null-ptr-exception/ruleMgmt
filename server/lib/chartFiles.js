@@ -8,10 +8,12 @@ import path from 'path'
 import { computeDrift, generateProducts } from '../../src/utils/drift.js'
 import { parseRulesDir, schemaToModel } from '../../src/utils/rulesFile.js'
 import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
+import { writeWhole } from './routingFiles.js'
+import { readTextIfThere, readDirIfThere, UnreadableError } from './readIfThere.js'
 
-async function readOr(file) {
-  try { return await fs.readFile(file, 'utf-8') } catch { return null }
-}
+// null only when the file is not there: one that cannot be read is an error,
+// not a file to write over.
+const readOr = readTextIfThere
 
 /**
  * Write only the entries whose on-disk content differs. Returns their paths.
@@ -28,34 +30,54 @@ export async function writeChanged(entries) {
   for (const [abs, content] of entries) {
     if (await readOr(abs) !== content) {
       await fs.mkdir(path.dirname(abs), { recursive: true })
-      await fs.writeFile(abs, content, 'utf-8')
+      await writeWhole(abs, content)
       written.push(abs)
     }
   }
   return written
 }
 
-/** { '<name>.yaml': text } for a directory, or null when the directory is absent. */
+/**
+ * { '<name>.yaml': text } for a directory, or null when the directory is not
+ * there. A directory that cannot be read, or a *.yaml in it that cannot (a
+ * folder named so, a file without permission), is an error naming it: read
+ * as absent, a chart's rules/ would make it a legacy or empty chart.
+ */
 async function readYamlDir(dir) {
-  let names
-  try {
-    names = (await fs.readdir(dir)).filter(f => f.endsWith('.yaml'))
-  } catch {
-    return null
-  }
+  const names = await readDirIfThere(dir)
+  if (names === null) return null
   const out = {}
-  for (const name of names) out[name] = await fs.readFile(path.join(dir, name), 'utf-8')
+  for (const name of names.filter(f => f.endsWith('.yaml'))) {
+    const file = path.join(dir, name)
+    const text = await readTextIfThere(file)
+    if (text !== null) out[name] = text
+    // Listed, and nothing to read: a link to a file that is not there is
+    // there, and cannot be read. One gone since the listing is not there.
+    else if (await fs.lstat(file).then(() => true, () => false)) throw new UnreadableError(file, { reason: 'a link to a file that is not there' })
+  }
   return out
 }
 
+/**
+ * The chart's source and products. `schema` is null when values.schema.json
+ * is not there, or — on a chart with rules/, where it is a product the next
+ * save writes again — when it is not JSON. On a chart without rules/ the
+ * schema is the source, and one that is not JSON is an error naming it.
+ */
 export async function readChartArtifacts(chartDir) {
   const rulesFiles = await readYamlDir(path.join(chartDir, 'rules'))
   const templateFiles = (await readYamlDir(path.join(chartDir, 'templates'))) || {}
 
+  const schemaFile = path.join(chartDir, 'values.schema.json')
+  const schemaText = await readTextIfThere(schemaFile)
   let schema = null
-  try {
-    schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
-  } catch { /* absent or unparseable */ }
+  if (schemaText !== null) {
+    try {
+      schema = JSON.parse(schemaText)
+    } catch (err) {
+      if (!rulesFiles || !Object.keys(rulesFiles).length) throw new UnreadableError(schemaFile, { reason: `not valid JSON (${err.message})` })
+    }
+  }
 
   return { rulesFiles, templateFiles, schema }
 }

@@ -50,6 +50,8 @@ async function api(method, urlPath, body) {
 
 const rules = op => `group: cpu\ncolumns:\n  namespace: {type: string, required: true}\nrules:\n  - alert: CpuHigh\n    expr: cpu{ns="\${namespace}"} ${op} 1\n`
 const inHead = async rel => git(tmpDir, 'show', `HEAD:${rel}`)
+// The template's write: whole, through a temp file beside it.
+const isTemplate = file => /[\\/]templates[\\/](_cpu\.yaml\.[0-9a-f]+\.tmp|cpu\.yaml)$/.test(String(file))
 
 describe('a commit during a Template save', () => {
   it('waits for the save: HEAD never holds the new rules with the old templates', async () => {
@@ -59,7 +61,7 @@ describe('a commit during a Template save', () => {
     let reached
     const atTemplates = new Promise(r => { reached = r })
     vi.spyOn(fs, 'writeFile').mockImplementation(async (file, ...rest) => {
-      if (String(file).endsWith(path.join('templates', 'cpu.yaml'))) {
+      if (isTemplate(file)) {
         reached()
         await new Promise(r => setTimeout(r, 300))
       }
@@ -87,7 +89,7 @@ describe('a commit during a Template save', () => {
     const at = new Promise(r => { reached = r })
     const gate = new Promise(r => { release = r })
     vi.spyOn(fs, 'writeFile').mockImplementation(async (file, ...rest) => {
-      if (String(file).endsWith(path.join('templates', 'cpu.yaml'))) {
+      if (isTemplate(file)) {
         reached()
         await gate
       }
@@ -98,17 +100,31 @@ describe('a commit during a Template save', () => {
   }
   const within = (p, ms = 5000) => Promise.race([p, new Promise(r => setTimeout(() => r('TIMEOUT'), ms))])
 
-  it.each([
-    ['a read', () => api('GET', '/api/v2/charts')],
-    ['a migration preview, which writes nothing', () => api('POST', '/api/v2/templates/demo/migration-preview', { files: { 'cpu.yaml': rules('>') }, migration: {} })],
-  ])('%s is not held up by it', async (_, request) => {
+  it('a read is not held up by it', async () => {
     const { at, release, save } = heldSave()
     await at
-    const answer = await within(request())
+    const answer = await within(api('GET', '/api/v2/charts'))
     release()
     expect(answer).not.toBe('TIMEOUT')
     expect(answer.status).toBe(200)
     expect((await save).status).toBe(200)
+  })
+
+  // Between the save's files a preview would read rules/ of one version and
+  // the rest of another: it waits for the save, and answers after it.
+  it('a migration preview waits for it', async () => {
+    const { at, release, save } = heldSave()
+    await at
+    const order = []
+    const preview = api('POST', '/api/v2/templates/demo/migration-preview', { files: { 'cpu.yaml': rules('>') }, migration: {} })
+      .then(r => { order.push('preview'); return r })
+    await within(preview, 300)
+    release()
+    const saved = await save
+    order.push('save')
+    expect(saved.status).toBe(200)
+    expect((await preview).status).toBe(200)
+    expect(order).toEqual(['save', 'preview'])
   })
 })
 
@@ -119,7 +135,7 @@ describe('other writes during a save or a commit', () => {
     let reached
     const at = new Promise(r => { reached = r })
     vi.spyOn(fs, 'writeFile').mockImplementation(async (file, ...rest) => {
-      if (String(file).endsWith(path.join('templates', 'cpu.yaml'))) {
+      if (isTemplate(file)) {
         reached()
         await new Promise(r => setTimeout(r, 300))
       }
@@ -163,7 +179,7 @@ describe('a save whose client leaves', () => {
     const atTemplates = new Promise(r => { reached = r })
     let hold = true
     vi.spyOn(fs, 'writeFile').mockImplementation(async (file, ...rest) => {
-      if (hold && String(file).endsWith(path.join('templates', 'cpu.yaml'))) {
+      if (hold && isTemplate(file)) {
         reached()
         await new Promise(r => setTimeout(r, 500))
       }
@@ -189,7 +205,7 @@ describe('a save whose client leaves', () => {
     let reached
     const atTemplates = new Promise(r => { reached = r })
     vi.spyOn(fs, 'writeFile').mockImplementation(async (file, ...rest) => {
-      if (String(file).endsWith(path.join('templates', 'cpu.yaml'))) {
+      if (isTemplate(file)) {
         reached()
         await new Promise(r => setTimeout(r, 300))
       }

@@ -1,5 +1,5 @@
 import express from 'express'
-import { withoutPath } from './git.js'
+import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
@@ -13,6 +13,7 @@ import { readSharedConfigs } from '../lib/sharedConfigs.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath, COMMON_DIR } from '../../src/utils/reservedNames.js'
+import { writeWhole } from '../lib/routingFiles.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
@@ -98,6 +99,7 @@ function commonRefused(req, res, what) {
 
 export default function deploymentsRouter() {
   const router = express.Router()
+  router.use(answersWithoutPaths)
 
   router.use('/:chart', (req, res, next) => {
     if (!NAME_RE.test(req.params.chart)) {
@@ -230,7 +232,7 @@ export default function deploymentsRouter() {
       if (typeof values !== 'string') {
         values = dumpForHelm(wrapPath(values, stack.keys), { lineWidth: -1 })
       }
-      await fs.writeFile(file, values, 'utf-8')
+      await writeWhole(file, values)
 
       res.json({ ok: true })
     } catch (err) {

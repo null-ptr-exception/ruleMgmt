@@ -5,6 +5,7 @@ import { regenerateRouting } from '../lib/commitChecks.js'
 import {
   readSharedConfigs, routingUsers, usageOf, unreadableOf, staleUsers, sharedDirProblem, writeShared, renameShared, updateConfigsInText, SHARED_FILE,
 } from '../lib/sharedConfigs.js'
+import { answersWithoutPaths } from '../lib/answerPaths.js'
 
 /**
  * The repo's shared notification configs (#123): read them with who uses
@@ -14,6 +15,7 @@ import {
  */
 export default function routingSharedRouter() {
   const router = express.Router()
+  router.use(answersWithoutPaths)
 
   // { file, exists, text, configs, errors, usage: { name: [{ deployment,
   // syncedFrom? }] }, stale: [deployment], unreadable: [{ deployment, error }],

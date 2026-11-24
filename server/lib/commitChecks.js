@@ -24,6 +24,7 @@ import { listDeploymentPaths, walkDeployments } from './deploymentWalk.js'
 import { resolveStack } from './stack.js'
 import { valuesWarnings } from './deploymentWrite.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
+import { parseIfThere } from './readIfThere.js'
 
 const SYNC_FILE = 'sync.yaml'
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
@@ -221,7 +222,18 @@ export async function deploymentCommitBlockers(gitopsDir) {
     if (template) findings.push({ severity: 'commit', deployment: dep, ...template })
     const nulls = stackNulls(stack)
     if (nulls.length) findings.push({ severity: 'commit', kind: 'values-null', deployment: dep, regenerable: false, description: `${dep}: ${nulls.join('; ')}` })
-    const valuesText = await fs.readFile(path.join(gitopsDir, dep, 'values.yaml'), 'utf-8').catch(() => null)
+    // A values.yaml that cannot be read, or is not YAML, renders nothing:
+    // said as a stack says it for a deployment on one, not passed over.
+    let valuesText
+    try {
+      valuesText = await parseIfThere(path.join(gitopsDir, dep, 'values.yaml'), text => { yaml.load(text); return text })
+    } catch (err) {
+      if (!stack.problems.some(p => p.kind === 'values-unreadable')) {
+        findings.push({ severity: 'commit', kind: 'values-unreadable', deployment: dep, regenerable: false,
+          description: `${dep}: values.yaml cannot be read (${err.why || err.message}), so Helm cannot render it` })
+      }
+      valuesText = null
+    }
     const repeats = valuesText === null ? [] : await valuesWarnings(gitopsDir, path.join(gitopsDir, dep), valuesText, { stack })
     if (repeats.length) valueWarnings.push({ deployment: dep, warnings: repeats })
     // A target is held to its source below. One listed as its own target is

@@ -44,6 +44,7 @@ import { SELECTOR_PATTERN } from './selectorContract.js'
 import { durationCellFault, DURATION_COLUMN_PATTERN, ruleDurationProblem } from './duration.js'
 import { varsIn, expandVars, withoutVars } from './ruleModel.js'
 import { parseDerived, derivedColumns, DERIVED_UNITS, evalDerived, derivedPosition, mergePosition } from './derived.js'
+import { helmMerge } from './helmMerge.js'
 
 const GROUP_KEYS = ['group', 'once', 'type', ...GROUP_FIELD_NAMES, 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
 const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
@@ -765,7 +766,9 @@ const listed = nums => (nums.length === 2 ? nums.join(' and ') : `${nums.slice(0
  */
 export function rowIdentityRepeats(values, model) {
   if (model?.common?.rowIdentity !== true || !values || typeof values !== 'object') return []
-  const common = values._common && typeof values._common === 'object' && !Array.isArray(values._common) ? values._common : {}
+  // As the templates read a row: merged with _common (helmMerge) when the
+  // chart has Common Values columns, so a row's false or "" takes _common's.
+  const merges = Object.keys(model.common.columns || {}).length > 0
   const found = []
   for (const [key, group] of sortedGroups(model.groups)) {
     if (group.custom || group.once || !Array.isArray(values[key])) continue
@@ -775,8 +778,8 @@ export function rowIdentityRepeats(values, model) {
     const byCells = new Map()
     values[key].forEach((row, i) => {
       if (!row || typeof row !== 'object') return
-      const cells = columns.filter(c => Object.hasOwn(row, c) || Object.hasOwn(common, c))
-        .map(c => [c, Object.hasOwn(row, c) ? row[c] : common[c]])
+      const seen = merges ? helmMerge(row, values._common) : row
+      const cells = columns.filter(c => Object.hasOwn(seen, c)).map(c => [c, seen[c]])
       const id = JSON.stringify(cells)
       if (!byCells.has(id)) byCells.set(id, { cells, rows: [] })
       byCells.get(id).rows.push(i + 1)
@@ -830,6 +833,54 @@ export function valueChecksKey(model) {
   return JSON.stringify({ common: commonCols, groups })
 }
 
+/**
+ * Each row's derived values (#118) as Helm renders them: the row merged with
+ * _common as the templates merge it (helmMerge; on a _common stack, pass the
+ * values the layers and the deployment add up to), then the column's
+ * default. The save check and Preview both read this, so neither can show a
+ * value that is not the one deployed.
+ *
+ * @returns { [group]: [ { [name]: { value, unit } | { omitted: true } | { problem } } ] }
+ *   one entry per row, for each group with derived values; `omitted` when a
+ *   column it reads is left out with no default, so the rule that uses it
+ *   is not rendered for that row.
+ *
+ *   _common { base: 0 }, row { freq_num: 3 }, w = freq_num * base (default 4)
+ *     → { problem: 'it comes to 0, …' } — Helm renders [0m], not [12m]
+ */
+export function derivedRows(values, model) {
+  const commonCols = model?.common?.columns || {}
+  // The templates merge _common into a row only when the chart has
+  // Common Values columns; otherwise a row is read as it is.
+  const merges = Object.keys(commonCols).length > 0
+  const out = {}
+  for (const [group, entry] of sortedGroups(model?.groups)) {
+    if (entry.custom || entry.once || !Object.keys(entry.derived || {}).length) continue
+    const position = groupPositionOf(entry)
+    const defs = Object.entries(entry.derived).map(([name, d]) => {
+      let tree = null
+      try { tree = parseDerived(d.expr) } catch { /* the rules file says so */ }
+      // Where it goes is read from the rules as rendered: a vars entry can
+      // put it in a range.
+      return { name, d, tree, position: position(name) }
+    }).filter(x => x.tree)
+    const rows = Array.isArray(values?.[group]) ? values[group] : []
+    out[group] = rows.map(row => {
+      const seen = merges ? helmMerge(row, values?._common) : (row && typeof row === 'object' ? row : {})
+      const cellOf = col => (col in seen ? seen[col] : (entry.columns?.[col] || commonCols[col])?.default)
+      return Object.fromEntries(defs.map(({ name, d, tree, position: where }) => {
+        const read = Object.fromEntries(derivedColumns(tree).map(c => [c, cellOf(c)]))
+        // A column left out with no default drops the rule or line that uses
+        // it (attachGuards), so there is nothing to compute.
+        if (Object.values(read).some(v => v === undefined)) return [name, { omitted: true }]
+        const r = evalDerived(tree, read, { unit: d.unit, position: where })
+        return [name, r.problem ? { problem: r.problem } : { value: r.value, unit: d.unit }]
+      }))
+    })
+  }
+  return out
+}
+
 export function valueProblems(values, model) {
   const problems = []
   const isEmpty = v => v === null || v === ''
@@ -853,6 +904,7 @@ export function valueProblems(values, model) {
   const commonPosition = name => Object.values(model.groups || {}).filter(g => !g.custom)
     .map(g => positionOf(g)(name)).reduce(mergePosition, null)
 
+  const derivedByRow = derivedRows(values, model)
   // _common is read whenever anything renders: any row, or a once group,
   // which renders with none (#70).
   let rendersAnything = false
@@ -866,13 +918,7 @@ export function valueProblems(values, model) {
     // derived (#118): each row's value computed as Helm will, so 0 in a
     // range, a negative or overflowing value, or a duration past what Go
     // holds is refused here rather than deployed.
-    const derived = Object.entries(entry.derived || {}).map(([name, d]) => {
-      let tree = null
-      try { tree = parseDerived(d.expr) } catch { /* the rules file says so */ }
-      // Where it goes is read from the rules as rendered: a vars entry can
-      // put it in a range.
-      return { name, d, tree, position: positionHere(name) }
-    }).filter(x => x.tree)
+    const computed = derivedByRow[group]
     const rows = values?.[group]
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
       rendersAnything = true
@@ -881,24 +927,7 @@ export function valueProblems(values, model) {
         const why = cellProblem(columns[name], name in (row || {}), row?.[name], quoted.has(name), positionHere(name))
         if (why) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}`, ...(why === REQUIRED ? { required: true } : {}) })
       }
-      for (const { name, d, tree, position } of derived) {
-        // A cell as Helm reads it: the row's, then _common's, then the default.
-        // A cell as Helm reads it: Helm's `merge $row $common` lets a
-        // _common value replace a row's 0 or empty, then the default.
-        const blank = v => v === undefined || v === null || v === '' || v === 0 || v === false
-        const cellOf = col => {
-          const own = row?.[col]
-          const fromCommon = values?._common?.[col]
-          if (!blank(own)) return own
-          if (!blank(fromCommon)) return fromCommon
-          if (own !== undefined && own !== null && own !== '') return own
-          return (columns[col] || commonCols[col])?.default
-        }
-        const read = Object.fromEntries(derivedColumns(tree).map(c => [c, cellOf(c)]))
-        // A column left out with no default drops the rule or line that uses
-        // it (attachGuards), so there is nothing to compute.
-        if (Object.values(read).some(v => v === undefined)) continue
-        const out = evalDerived(tree, read, { unit: d.unit, position })
+      for (const [name, out] of Object.entries(computed?.[i] || {})) {
         if (out.problem) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, derived "${name}": ${out.problem}` })
       }
     }

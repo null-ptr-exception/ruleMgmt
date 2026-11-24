@@ -28,11 +28,13 @@ if (!chartDir) {
   process.exit(2)
 }
 
+// Only a missing file is null: one that cannot be read is not written over.
 async function readIfExists(file) {
   try {
     return await fs.readFile(file, 'utf-8')
-  } catch {
-    return null
+  } catch (err) {
+    if (err.code === 'ENOENT') return null
+    throw err
   }
 }
 
@@ -145,4 +147,12 @@ async function main() {
   return failed ? 1 : 0
 }
 
-process.exitCode = await main()
+// Anything main() did not expect (a file it cannot read) is one ERROR line
+// and exit 2, as in gen-rules — not a stack, and not the 1 that means a
+// template differs.
+try {
+  process.exitCode = await main()
+} catch (err) {
+  console.log(`ERROR  ${err.message}`)
+  process.exitCode = 2
+}

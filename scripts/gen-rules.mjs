@@ -163,14 +163,16 @@ async function main() {
     if (migrating && !check) await fs.mkdir(rulesDir, { recursive: true })
 
     let existingTemplates = []
-    try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
+    // Only a missing templates/ has none: one that cannot be read would hide
+    // the files to prune, and --check would pass.
+    try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch (err) { if (err.code !== 'ENOENT') throw err }
     const stale = new Set(staleTemplates(existingTemplates, products.templates, { schemas: [schema], models: [model] }))
     // Converting a 1.x chart: its one rule file holds every group under a name
     // no group has, and is replaced by what is generated now (#190).
     const texts = {}
     // A file that cannot be read as text (a directory named *.yaml) is not a
     // rule object; Helm reports it when it renders.
-    for (const name of existingTemplates) texts[name] = await readIfExists(path.join(tmplDir, name)).catch(() => null)
+    for (const name of existingTemplates) texts[name] = await readIfExists(path.join(tmplDir, name)).catch(err => { if (err.code === 'EISDIR') return null; throw err })
     if (migrating) {
       for (const name of replacedByConversion(texts, products.templates)) stale.add(name)
     }

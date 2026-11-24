@@ -300,10 +300,15 @@ test.describe.serial('deployment sync', () => {
     const removeRow = modal.locator('div').filter({ hasText: `${ROOT}/del-remove` }).last()
     await removeRow.locator('.ant-radio-button-wrapper', { hasText: 'Delete' }).click()
 
+    // What the server answered for the source, so a failure below says
+    // whether the message or the server's count is off.
+    const answered = page.waitForResponse(r => r.request().method() === 'DELETE' && r.url().includes('/del-source?'))
     await modal.getByRole('button', { name: `Delete del-source` }).click()
+    expect(await (await answered).json()).toEqual({ ok: true, unlinked: [`${ROOT}/del-keep`] })
+    // Deleting the source let go of the target kept (#180). The message is
+    // shown as the dialog closes, for 3 s: looked for before the dialog is.
+    await expect(page.locator('.ant-message')).toContainText('Deleted del-source; 1 kept, no longer synced', { timeout: 5000 })
     await expect(modal).not.toBeVisible({ timeout: 5000 })
-    // Deleting the source let go of the target kept (#180).
-    await expect(page.getByText('Deleted del-source; 1 kept, no longer synced')).toBeVisible({ timeout: 5000 })
 
     // Source and the "Delete"-marked target are gone from the tree.
     await expect(deploymentNode(page, 'del-source')).not.toBeVisible({ timeout: 5000 })

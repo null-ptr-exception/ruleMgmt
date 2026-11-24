@@ -20,7 +20,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { resolveStack, stackValues, unwrapPath, wrapPath, valueIssuesIn } from './stack.js'
 import { readChartModel } from './chartFiles.js'
-import { copyRouting, writeWhole } from './routingFiles.js'
+import { copyRouting, readRouting, restoreRouting, writeWhole } from './routingFiles.js'
 import { getTargetsForSource, isSafeSyncPath, isDeploymentDir } from './sync.js'
 import { valueProblems, rowIdentityRepeats } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
@@ -194,25 +194,45 @@ export async function copyChartDependencies(srcDir, dstDir) {
 export async function copyToTarget(srcDir, dstDir, { values = true, chart = values, routing = true, valuesContent, routingContent } = {}) {
   await fs.mkdir(dstDir, { recursive: true })
   const chartFile = path.join(dstDir, 'Chart.yaml')
-  const chartBefore = chart && values ? await fs.readFile(chartFile, 'utf-8').catch(err => (err.code === 'ENOENT' ? null : Promise.reject(err))) : null
-  const wroteChart = chart ? await copyChartDependencies(srcDir, dstDir) : false
-  if (values) {
-    try {
-      const content = valuesContent ?? await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8')
-      await writeWhole(path.join(dstDir, 'values.yaml'), content)
-    } catch (err) {
-      // The Template goes back with the values that stayed: the new Template
-      // over values under the old one's name renders none of its alerts.
-      if (wroteChart) {
-        await (chartBefore === null ? fs.rm(chartFile, { force: true }) : writeWhole(chartFile, chartBefore))
-          .catch(undo => console.error(`Sync: ${dstDir}/Chart.yaml could not be put back`, undo))
-      }
-      throw err
-    }
+  const valuesFile = path.join(dstDir, 'values.yaml')
+  // A copy that fails leaves the target as it was: every file it was to
+  // write, put back, and one it made removed. Half a copy is worse than none
+  // — the source's Template over values under the old one's name renders
+  // none of its alerts, and values without their routing notify the wrong
+  // people.
+  const before = {
+    chart: chart ? await readOrNull(chartFile) : undefined,
+    values: values ? await readOrNull(valuesFile) : undefined,
+    routing: routing ? await readRouting(dstDir) : undefined,
   }
-  // Notification routing (#92) follows values.yaml: the target gets the
-  // source's, or loses its own when the source has none.
-  if (routing) await copyRouting(srcDir, dstDir, routingContent)
+  try {
+    if (chart) await copyChartDependencies(srcDir, dstDir)
+    if (values) await writeWhole(valuesFile, valuesContent ?? await fs.readFile(path.join(srcDir, 'values.yaml'), 'utf-8'))
+    // Notification routing (#92) follows values.yaml: the target gets the
+    // source's, or loses its own when the source has none.
+    if (routing) await copyRouting(srcDir, dstDir, routingContent)
+  } catch (err) {
+    const undo = []
+    if (before.chart !== undefined) undo.push(putBack(chartFile, before.chart))
+    if (before.values !== undefined) undo.push(putBack(valuesFile, before.values))
+    if (before.routing !== undefined) {
+      undo.push(readRouting(dstDir).then(now => (now.text === before.routing.text && now.cr === before.routing.cr ? null : restoreRouting(dstDir, before.routing))))
+    }
+    for (const r of await Promise.allSettled(undo)) {
+      if (r.status === 'rejected') console.error(`Sync: ${dstDir} could not be put back as it was`, r.reason)
+    }
+    throw err
+  }
+}
+
+const readOrNull = file => fs.readFile(file, 'utf-8').catch(err => (err.code === 'ENOENT' ? null : Promise.reject(err)))
+
+// A file as it was before: written again only when it changed, removed
+// when it was not there.
+async function putBack(file, text) {
+  if (await readOrNull(file) === text) return
+  if (text === null) await fs.rm(file, { force: true })
+  else await writeWhole(file, text)
 }
 
 /**
@@ -281,7 +301,7 @@ export async function saveValues(gitopsDir, registry, folder, values, { chartNam
   // none of it.
   const { keys } = stack
   const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, keys), { lineWidth: -1 })
-  await fs.writeFile(path.join(dir, 'values.yaml'), text, 'utf-8')
+  await writeWhole(path.join(dir, 'values.yaml'), text)
   const syncFailed = await copyToTargets(gitopsDir, registry, folder, { values: true, routing: false })
   const warnings = await valuesWarnings(gitopsDir, dir, values, { chartName, stack })
   return { status: 200, body: { ...okWith(syncFailed), version: await valuesVersion(gitopsDir, dir, await resolveStack(gitopsDir, dir)), ...(warnings.length ? { warnings } : {}) } }

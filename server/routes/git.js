@@ -5,10 +5,14 @@ import os from 'os'
 import git from '../lib/git.js'
 import { checkRules } from '../../src/utils/ruleChecks.js'
 import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
+import { UnreadableError } from '../lib/readIfThere.js'
 import { blocksCommit, repeatsText, REPEATS_FIX } from '../../src/utils/drift.js'
 import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
 import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
+import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
+
+export { withoutPath }
 
 /**
  * Reasons a commit should be refused, across every chart in the gitops repo —
@@ -26,8 +30,10 @@ async function chartCommitBlockers(gitopsDir) {
   let entries
   try {
     entries = await fs.readdir(chartsDir, { withFileTypes: true })
-  } catch {
-    return { findings: [], unconverted: [] }
+  } catch (err) {
+    if (err.code === 'ENOENT') return { findings: [], unconverted: [] }
+    const why = new UnreadableError(chartsDir, err).why
+    return { findings: [{ severity: 'commit', kind: 'chart-unreadable', chart: '', description: `${path.relative(gitopsDir, chartsDir).replace(/\\/g, '/')} cannot be read (${why}) — fix it before committing` }], unconverted: [] }
   }
 
   const findings = []
@@ -38,6 +44,13 @@ async function chartCommitBlockers(gitopsDir) {
     try {
       await checkChart(entry, chartDir, findings, unconverted)
     } catch (err) {
+      // rules/ or a file of the chart that cannot be read: said, naming it,
+      // not taken for a chart without rules (a legacy one is no reason to
+      // stop a commit).
+      if (err instanceof UnreadableError) {
+        findings.push({ severity: 'commit', kind: 'chart-unreadable', chart: entry.name, description: `${entry.name}: ${path.relative(gitopsDir, err.path).replace(/\\/g, '/')} cannot be read (${err.why}) — fix it before committing` })
+        continue
+      }
       // A chart deleted while it was being checked is not there to commit.
       if (err?.code === 'ENOENT' && !(await fs.access(chartDir).then(() => true, () => false))) continue
       throw err
@@ -123,21 +136,6 @@ async function filesChanging(err, cwd) {
   return !named || await gone(path.resolve(cwd, named))
 }
 
-// A message for the browser does not carry where the repo is on the server,
-// as given or as its real path (git reports that one).
-export async function withoutPath(text, dir) {
-  let out = String(text || '')
-  const base = String(dir || '').replace(/[\\/]+$/, '')
-  // The root itself, or nothing, is no path to take out.
-  if (!base) return out
-  const escape = d => d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  for (const d of new Set([base, await fs.realpath(base).catch(() => base)])) {
-    // Only the folder itself: /srv/gitops, not /srv/gitops-old.
-    out = out.replace(new RegExp(`${escape(d)}(?:[\\/]|(?=$|[\\s'"):,]))`, 'g'), m => (/[\\/]$/.test(m) ? '' : '.'))
-  }
-  return out
-}
-
 function hasRemote() {
   return !!process.env.GITLAB_TOKEN
 }
@@ -149,6 +147,7 @@ async function getBranch(cwd) {
 
 export default function gitRouter() {
   const router = Router()
+  router.use(answersWithoutPaths)
 
   router.get('/status', async (req, res) => {
     const cwd = req.gitopsDir

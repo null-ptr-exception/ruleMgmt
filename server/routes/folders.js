@@ -12,7 +12,9 @@ import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { planCreate, planDelete, applyPlan, commonUsers, deploymentOnCommon, folderCommonOf, folderCommons, inheritsFromOf, linkOnPath, ANY_VERSION } from '../lib/commonEdit.js'
-import { withoutPath } from './git.js'
+import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
+import { writeWhole } from '../lib/routingFiles.js'
+import { parseIfThere } from '../lib/readIfThere.js'
 
 // What a new deployment asks of its Template's version: any.
 export const ANY_TEMPLATE_VERSION = ANY_VERSION
@@ -155,6 +157,7 @@ async function collectDeployments(baseDir, chartFor = null) {
 
 export default function foldersRouter() {
   const router = express.Router()
+  router.use(answersWithoutPaths)
   // A _common's make or remove holds the commit lock itself, for as long
   // as it takes: it renders every deployment it touches twice, which in a
   // large repo outlasts the time limit the other writes are held to.
@@ -286,10 +289,12 @@ export default function foldersRouter() {
       if (onCommon?.error) return res.status(409).json({ error: onCommon.error })
       await fs.mkdir(deployDir, { recursive: true })
 
-      try {
-        const existingChartYaml = await fs.readFile(path.join(deployDir, 'Chart.yaml'), 'utf-8')
-        const existing = yaml.load(existingChartYaml) || {}
-        if (existing.dependencies) {
+      // A Chart.yaml there without a values.yaml: someone's. Read as it is,
+      // or the init stops naming it — one that cannot be read or parsed is
+      // not written over.
+      const existing = await parseIfThere(path.join(deployDir, 'Chart.yaml'), yaml.load)
+      if (existing && typeof existing === 'object') {
+        if (Array.isArray(existing.dependencies)) {
           const alertCharts = await findAlertTemplateCharts(chartsDir)
           const alertChartNames = new Set(alertCharts.map(c => c.name))
           for (const dep of existing.dependencies) {
@@ -298,19 +303,28 @@ export default function foldersRouter() {
             }
           }
         }
-      } catch { /* no existing Chart.yaml */ }
+      }
 
       const chartDir = path.join(chartsDir, chart)
       // The Template has to be there, and readable; its version is not
       // copied (below).
       yaml.load(await fs.readFile(path.join(chartDir, 'Chart.yaml'), 'utf-8'))
 
+      // The Template's groups, from its values.yaml: none when it has none;
+      // one that cannot be read or parsed is said, not taken for none.
+      const emptyValues = {}
+      // Read before anything is written: a refusal leaves the folder as it was.
+      const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)) || {}
+      for (const [key, val] of Object.entries(defaults)) {
+        if (Array.isArray(val)) emptyValues[key] = []
+      }
+
       // Under a folder with a _common for this Template (#102): on it, and
       // writing nothing of its own — it inherits everything, a group the
       // _common gets later too.
       if (onCommon) {
-        await fs.writeFile(path.join(deployDir, 'Chart.yaml'), onCommon.chartYaml, 'utf-8')
-        await fs.writeFile(path.join(deployDir, 'values.yaml'), onCommon.valuesYaml, 'utf-8')
+        await writeWhole(path.join(deployDir, 'Chart.yaml'), onCommon.chartYaml)
+        await writeWhole(path.join(deployDir, 'values.yaml'), onCommon.valuesYaml)
         return res.json({ status: 'created', chart, folder, inheritsFrom: onCommon.inheritsFrom })
       }
       // Helm reads this as a URL, and the file is committed and rendered on
@@ -332,17 +346,10 @@ export default function foldersRouter() {
           repository: `file://${relPath}`,
         }]
       }
-      await fs.writeFile(path.join(deployDir, 'Chart.yaml'), dumpForHelm(deployChart, { lineWidth: -1 }), 'utf-8')
+      await writeWhole(path.join(deployDir, 'Chart.yaml'), dumpForHelm(deployChart, { lineWidth: -1 }))
 
-      let emptyValues = {}
-      try {
-        const defaults = yaml.load(await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8')) || {}
-        for (const [key, val] of Object.entries(defaults)) {
-          if (Array.isArray(val)) emptyValues[key] = []
-        }
-      } catch { /* no default values */ }
       const wrapped = wrapValues(emptyValues, chart)
-      await fs.writeFile(path.join(deployDir, 'values.yaml'), dumpForHelm(wrapped, { lineWidth: -1 }), 'utf-8')
+      await writeWhole(path.join(deployDir, 'values.yaml'), dumpForHelm(wrapped, { lineWidth: -1 }))
 
       res.json({ status: 'created', chart, folder })
     } catch (err) {

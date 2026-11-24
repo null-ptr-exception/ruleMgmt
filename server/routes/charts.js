@@ -6,6 +6,8 @@ import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { findChartUsage } from '../lib/chartUsage.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
+import { writeWhole } from '../lib/routingFiles.js'
+import { answersWithoutPaths } from '../lib/answerPaths.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -19,6 +21,7 @@ function usedBy(found) {
 
 export default function chartsRouter() {
   const router = express.Router()
+  router.use(answersWithoutPaths)
   router.use(holdSyncRegistryLock)
 
   router.get('/', async (req, res) => {
@@ -48,14 +51,14 @@ export default function chartsRouter() {
     try {
       await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
       const chartYaml = dumpForHelm({ apiVersion: 'v2', name, version: '0.1.0', type: 'application', annotations: { app: 'alertforge' } })
-      await fs.writeFile(path.join(chartDir, 'Chart.yaml'), chartYaml, 'utf-8')
-      await fs.writeFile(path.join(chartDir, 'values.yaml'), dumpForHelm({}), 'utf-8')
+      await writeWhole(path.join(chartDir, 'Chart.yaml'), chartYaml)
+      await writeWhole(path.join(chartDir, 'values.yaml'), dumpForHelm({}))
       const emptySchema = {
         $schema: 'https://json-schema.org/draft-07/schema#',
         type: 'object',
         properties: {}
       }
-      await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify(emptySchema, null, 2), 'utf-8')
+      await writeWhole(path.join(chartDir, 'values.schema.json'), JSON.stringify(emptySchema, null, 2))
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -94,12 +97,12 @@ export default function chartsRouter() {
         const chartYamlFile = path.join(target, 'Chart.yaml')
         const chartYaml = yaml.load(await fs.readFile(chartYamlFile, 'utf-8')) || {}
         chartYaml.name = newName
-        await fs.writeFile(chartYamlFile, dumpForHelm(chartYaml), 'utf-8')
+        await writeWhole(chartYamlFile, dumpForHelm(chartYaml))
 
         const schemaFile = path.join(target, 'values.schema.json')
         const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
         schema['x-migrated-from'] = { ...mapping, chart: req.params.name }
-        await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
+        await writeWhole(schemaFile, JSON.stringify(schema, null, 2))
       } catch (err) {
         // A half-made copy would block a retry with "already exists".
         await fs.rm(target, { recursive: true, force: true })

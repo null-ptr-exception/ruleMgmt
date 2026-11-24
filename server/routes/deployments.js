@@ -16,6 +16,7 @@ import { isCommonChartPath, COMMON_DIR } from '../../src/utils/reservedNames.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
 import { isAbsent, UnreadableError, readTextIfThere, errorAnswer } from '../lib/readIfThere.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 // One segment of a file name: not a path, not hidden.
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
@@ -131,7 +132,7 @@ export default function deploymentsRouter() {
         let alertCount = 0
         try {
           const raw = await fs.readFile(path.join(dir, 'values.yaml'), 'utf-8')
-          alertCount = countAlerts(yaml.load(raw) || {}, keys)
+          alertCount = countAlerts(loadValues(raw) || {}, keys)
         } catch { /* skip unreadable */ }
         deployments.push({ name: folderName, file: 'values.yaml', alertCount })
       }
@@ -142,7 +143,7 @@ export default function deploymentsRouter() {
         let alertCount = 0
         try {
           const raw = await fs.readFile(path.join(dir, f), 'utf-8')
-          alertCount = countAlerts(yaml.load(raw) || {}, keys)
+          alertCount = countAlerts(loadValues(raw) || {}, keys)
         } catch { /* skip unreadable */ }
         deployments.push({ name, file: f, alertCount })
       }
@@ -166,7 +167,7 @@ export default function deploymentsRouter() {
       const content = await readTextIfThere(file)
       if (content === null) return res.status(404).json({ error: 'Not found' })
       let loaded
-      try { loaded = yaml.load(content) } catch (err) { throw new UnreadableError(file, { reason: `not valid YAML (${err.reason || err.message})` }) }
+      try { loaded = loadValues(content) } catch (err) { throw new UnreadableError(file, { reason: `not valid YAML (${err.reason || err.message})` }) }
       // Only the deployment's own values, under every key of its stack (#100).
       const stack = await resolveStack(req.gitopsDir, dir)
       const parsed = unwrapPath(loaded || {}, stack.keys)

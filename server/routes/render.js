@@ -8,10 +8,10 @@ import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/uti
 import { derivedTable } from '../../src/utils/rulesFile.js'
 import { logger } from '../lib/logger.js'
 import { checkRules, renderChart } from '../lib/ruleCheck.js'
-import yaml from 'js-yaml'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { readTextIfThere, parseIfThere } from '../lib/readIfThere.js'
 import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 // One segment of a file name: not a path, not hidden.
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
@@ -140,7 +140,7 @@ export default function renderRouter() {
         if (stack?.layers.length) {
           const stacked = await readStackValues(req.gitopsDir, deploymentsDir, stack)
           valueWarnings = stacked.nulls
-          const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)) || {}
+          const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), loadValues)) || {}
           return mergeValues(defaults, stacked.merged)
         }
         const candidates = folder
@@ -151,11 +151,11 @@ export default function renderRouter() {
         for (const candidate of candidates) {
           const text = await readTextIfThere(candidate)
           if (text === null) continue
-          return unwrapValues(yaml.load(text) || {}, stack?.keys[0] ?? await getDepName(path.dirname(candidate)))
+          return unwrapValues(loadValues(text) || {}, stack?.keys[0] ?? await getDepName(path.dirname(candidate)))
         }
         return null
       }
-      const readDefaults = async () => (await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)) || {}
+      const readDefaults = async () => (await parseIfThere(path.join(chartDir, 'values.yaml'), loadValues)) || {}
       const summary = await buildSummary(output, chartModel, readValues, readDefaults).catch(err => {
         logger.error({ err, chart: template, deployment }, 'buildSummary failed, falling back to raw YAML')
         return null

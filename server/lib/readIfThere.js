@@ -32,13 +32,17 @@ export class UnreadableError extends Error {
 }
 
 /**
- * Whether a failed read means the path is not there: ENOENT, and nothing at
- * the path itself — a link to a file that is not there is there, and cannot
- * be read.
+ * Whether a failed read means the path is not there: ENOENT, unless there is
+ * a link at the path whose target is missing — that is there, and cannot be
+ * read. A file that appears between the read and this look (a checkout
+ * deleting and writing it again) is no link: it counts as not there for
+ * the read that missed it, as it always did.
  */
 export async function isAbsent(abs, err) {
   if (err?.code !== 'ENOENT') return false
-  return fs.lstat(abs).then(() => false, () => true)
+  const at = await fs.lstat(abs).catch(() => null)
+  if (!at?.isSymbolicLink()) return true
+  return fs.stat(abs).then(() => true, () => false)
 }
 
 const DANGLING = { reason: 'a link to a file that is not there' }

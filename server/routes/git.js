@@ -12,7 +12,7 @@ import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { isRepoPath } from '../lib/safePath.js'
-import yaml from 'js-yaml'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 export { withoutPath }
 
@@ -70,7 +70,7 @@ async function checkChart(entry, chartDir, findings, unconverted) {
   const { rulesFiles, schema } = await readChartArtifacts(chartDir)
   // The Template's own values.yaml is read by Helm for every deployment of
   // it: one that cannot be read or is not YAML fails them all.
-  await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)
+  await parseIfThere(path.join(chartDir, 'values.yaml'), loadValues)
   if (rulesFiles && Object.keys(rulesFiles).length) {
     const { model, errors } = parseRulesDir(rulesFiles)
     if (!errors.length) {
@@ -103,12 +103,19 @@ async function checkChart(entry, chartDir, findings, unconverted) {
   }
 }
 
+// `git status --porcelain -z`: each entry NUL-ended, the path as it is (no
+// quoting: `café-prod`, `my folder` and `q"x` reach the page as they are,
+// and come back in a diff request as the real path). A rename or copy is
+// followed by its old path, which is not a change of its own.
 function parseStatus(raw) {
   const changes = { modified: [], added: [], deleted: [] }
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue
-    const code = line.slice(0, 2)
-    const file = line.slice(3)
+  const entries = raw.split('\0')
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
+    if (!entry.trim()) continue
+    const code = entry.slice(0, 2)
+    const file = entry.slice(3)
+    if (code.includes('R') || code.includes('C')) i++
     if (code.includes('D')) changes.deleted.push(file)
     else if (code.includes('?') || code.includes('A')) changes.added.push(file)
     else changes.modified.push(file)
@@ -158,7 +165,7 @@ export default function gitRouter() {
     const cwd = req.gitopsDir
     try {
       const branch = await getBranch(cwd)
-      const raw = await git(cwd, 'status', '--porcelain')
+      const raw = await git(cwd, 'status', '--porcelain', '-z')
       const changes = parseStatus(raw)
       const changeCount = changes.modified.length + changes.added.length + changes.deleted.length
       const remote = hasRemote()
@@ -318,13 +325,16 @@ export default function gitRouter() {
         const [sha, shortSha, message, author, date] = line.split(SEP)
         let files = []
         try {
-          const diffTree = await git(cwd, 'diff-tree', '--no-commit-id', '-r', '--name-status', '--end-of-options', sha)
-          files = diffTree.trim().split('\n').filter(Boolean).map(l => {
-            const [statusCode, ...parts] = l.split('\t')
-            const file = parts.join('\t')
-            const status = statusCode.startsWith('A') ? 'A' : statusCode.startsWith('D') ? 'D' : 'M'
-            return { file, status }
-          })
+          // -z: the paths as they are, not quoted (see parseStatus).
+          const fields = (await git(cwd, 'diff-tree', '--no-commit-id', '-r', '--name-status', '-z', '--end-of-options', sha)).split('\0')
+          for (let i = 0; i + 1 < fields.length; i += 2) {
+            const statusCode = fields[i]
+            if (!statusCode) break
+            // A rename or copy: its old path, then the new one.
+            if (/^[RC]/.test(statusCode)) i++
+            const file = fields[i + 1]
+            files.push({ file, status: statusCode.startsWith('A') ? 'A' : statusCode.startsWith('D') ? 'D' : 'M' })
+          }
         } catch { /* initial commit has no parent */ }
         commits.push({ sha, shortSha, message, author, date, files })
       }
@@ -362,7 +372,9 @@ export default function gitRouter() {
         try { original = await git(cwd, 'show', '--end-of-options', `HEAD:${file}`) } catch { original = '' }
         try {
           const filePath = path.join(cwd, file)
-          modified = await fs.readFile(filePath, 'utf8')
+          // A link is shown as git keeps it — where it points — never read
+          // through: it may lead outside the repo.
+          modified = (await fs.lstat(filePath)).isSymbolicLink() ? await fs.readlink(filePath) : await fs.readFile(filePath, 'utf8')
         } catch { modified = '' }
       }
 

@@ -79,7 +79,7 @@ describe('the rules parser never throws', () => {
     'labels', 'annotations',
   ])('an empty entry under %s, written as a list, is a problem naming the file and the rule', key => {
     const text = `columns:\n  job: {type: string}\nrules:\n  - alert: A\n    expr: up\n    ${key}:\n      - \n`
-    expect(parseRulesDir({ 'g.yaml': text }).errors).toEqual([`g.yaml rules[0]: ${key} must be a mapping of name to text, e.g. { severity: warning }, not [null]`])
+    expect(parseRulesDir({ 'g.yaml': text }).errors).toEqual([`g.yaml rules[0]: ${key}[0] is null — a list of ${key} is { key, value } entries; or write ${key} as a mapping of name to text`])
   })
 
   it('an empty entry under a rule\'s selectorLabels is a problem, not a throw', () => {
@@ -96,5 +96,22 @@ describe('the rules parser never throws', () => {
     }
     expect(() => parseGroupFile(text, 'g')).not.toThrow()
     expect(() => parseCommonFile(text)).not.toThrow()
+  })
+})
+
+describe('labels in a rules file', () => {
+  const rule = extra => `columns:\n  job: {type: string}\nrules:\n  - alert: A\n    expr: up\n${extra}`
+  it('a list of { key, value } entries is read as the mapping, as it always was', () => {
+    const { model, errors } = parseRulesDir({ 'g.yaml': rule('    labels:\n      - {key: severity, value: warning}\n      - {key: tier, value: 2}\n') })
+    expect(errors).toEqual([])
+    expect(model.groups.g.rules[0].labels).toEqual({ severity: 'warning', tier: '2' })
+  })
+
+  it.each([
+    ['a date', '    labels: {since: 2024-01-01}\n', 'g.yaml rules[0]: labels "since" is a date — quote it to keep it as text, e.g. since: "2024-01-01"'],
+    ['an infinity', '    labels: {x: .inf}\n', 'g.yaml rules[0]: labels "x" is Infinity — quote it to keep it as text, e.g. x: ".inf"'],
+    ['null', '    labels: {x: ~}\n', 'g.yaml rules[0]: labels "x" is null — write text, e.g. x: warning'],
+  ])('%s as a value is refused saying what to write', (_, extra, message) => {
+    expect(parseRulesDir({ 'g.yaml': rule(extra) }).errors).toEqual([message])
   })
 })

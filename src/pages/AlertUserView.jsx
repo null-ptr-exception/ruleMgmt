@@ -87,6 +87,9 @@ export default function AlertUserView() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const [frozenSource, setFrozenSource] = useState(null)
+  // Why the deployment's values cannot be read, when they cannot: nothing is
+  // shown to edit or save over.
+  const [loadError, setLoadError] = useState(null)
 
   const [newDeployOpen, setNewDeployOpen] = useState(false)
   const [newDeployPath, setNewDeployPath] = useState('')
@@ -170,6 +173,7 @@ export default function AlertUserView() {
     setUnusedValuesFile(null)
     getDeployment(selectedChart, folderBasename, selectedFolder).then(data => {
       if (stale) return
+      setLoadError(data.failed && data.status !== 404 ? data.error || 'The values cannot be read' : null)
       setUnusedValuesFile(data.unusedFile || null)
       setInherited(data.inherited || null)
       setStackInfo(data.stack || null)
@@ -722,6 +726,11 @@ export default function AlertUserView() {
             )}
           </div>
         )}
+        {loadError && selectedFolder && !multi && (
+          <div data-testid="values-load-error" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
+            This deployment&apos;s values cannot be read: {loadError}
+          </div>
+        )}
         {stackProblems && selectedFolder && !multi && (
           <div data-testid="stack-problems" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
             Helm cannot render this as shown: {stackProblems.join('; ')}
@@ -772,7 +781,7 @@ export default function AlertUserView() {
             dirty={dirty}
             saveStatus={saveStatus}
             getVars={getVars}
-            readOnly={!!frozenSource}
+            readOnly={!!frozenSource || !!loadError}
             deployments={viewedDeployments}
             onOpenDeployment={openViewedDeployment}
             inheritedFrom={multi ? null : inheritedFrom}
@@ -808,13 +817,13 @@ export default function AlertUserView() {
                           style={{ flex: 1 }}
                           options={v.enum.map(opt => ({ value: opt, label: opt }))}
                           allowClear
-                          disabled={!!frozenSource}
+                          disabled={!!frozenSource || !!loadError}
                           onClear={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}
                         />
                       ) : (
                         <Input size="small" value={commonValues[v.name] ?? ''}
                           placeholder={from ? `${inheritedCommon[v.name]} (inherited)` : undefined}
-                          disabled={!!frozenSource}
+                          disabled={!!frozenSource || !!loadError}
                           status={missing || badDuration ? 'error' : undefined}
                           onChange={e => {
                             if (e.target.value) {
@@ -888,14 +897,14 @@ export default function AlertUserView() {
                   onUpdate={updated => { setRows(updated); setDirty(true) }}
                   onDelete={realIndex => { setRows(rows.filter((_, i) => i !== realIndex)); setDirty(true) }}
                   onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
-                  readOnly={!!frozenSource}
+                  readOnly={!!frozenSource || !!loadError}
                   scrollContainer={mainScrollContainer}
                 />
                 </>
               )}
             </div>
             <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty || !!frozenSource}>Save</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty || !!frozenSource || !!loadError}>Save</Button>
               {!isCommonView && !onCommon && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
               {!isCommonView && Object.values(filters).some(f => f && f.value !== '' && f.value != null) && (
                 <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>

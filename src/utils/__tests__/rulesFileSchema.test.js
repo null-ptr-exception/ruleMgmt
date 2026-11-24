@@ -106,6 +106,7 @@ describe('rules-file.schema.json and common-file.schema.json', () => {
     'group: matching the file': `group: g\n${alert('')}`,
     'labels: { severity: 5 }': alert('    labels: { severity: 5 }\n'),
     'labels: with nothing': alert('    labels:\n'),
+    'labels as a list of key and value': alert('    labels: [{ key: severity, value: warning }]\n'),
     'alert: with nothing': `${base}rules:\n  - alert:\n    expr: up\n`,
     'alert: 5': `${base}rules:\n  - alert: 5\n    expr: up\n`,
     'an alert with no expr': `${base}rules:\n  - alert: A\n`,
@@ -189,8 +190,8 @@ describe('rules-file.schema.json and common-file.schema.json', () => {
     // label "undefined"; the text "null").
     ['labels: abc', `${ok}    labels: abc\n`, true],
     ['labels as a list', `${ok}    labels:\n      - severity: warning\n`, true],
-    ['labels as a list of key and value', `${ok}    labels: [{ key: severity, value: warning }]\n`, true],
     ['a label of null', `${ok}    labels: { severity: null }\n`, true],
+    ['a list of key and value missing its value', `${ok}    labels: [{ key: severity }]\n`, true],
     ['an annotation that is a list', `${ok}    annotations: { summary: [a] }\n`, true],
     ['expr as a list', 'columns:\n  job: { type: string }\nrules:\n  - alert: A\n    expr: [up]\n', true],
     ['alert as a mapping', 'rules:\n  - alert: { a: 1 }\n    expr: up\n', true],

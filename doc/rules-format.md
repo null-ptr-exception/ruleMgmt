@@ -646,8 +646,9 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
   [row identity label](#the-row-identity-label-rowidentity)'s
 - A `vars` entry referencing another `vars` entry
 - A rule's `labels` or `annotations` that are not a mapping of name to text
-  (`labels: foo`, a list, a value that is `null`, a list or a mapping); a
-  number or `true` is taken as its text. A rule's `alert`, `record`, `expr`
+  (`labels: foo`, a value that is `null`, a date, a list or a mapping) or a
+  list of `{ key, value }` entries (read as that mapping); a number or
+  `true` is taken as its text, and a date is to be quoted. A rule's `alert`, `record`, `expr`
   or `raw` that is a list or a mapping. Read as written, each would deploy
   something else; the file and the rule are named
 - An optional column with no default referenced from the middle of a string

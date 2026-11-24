@@ -316,6 +316,23 @@ describe('a deployment whose Chart.yaml cannot be read', () => {
   })
 })
 
+describe('a folder whose Chart.yaml cannot be read, placed by its path', () => {
+  it.skipIf(IS_ROOT)('inside a _common folder, or inside another deployment', async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })).status).toBe(200)
+    for (const dir of ['deployments/team/_common/demo/inner', 'deployments/team/a/canary']) {
+      await fs.mkdir(abs(dir), { recursive: true })
+      await write(`${dir}/Chart.yaml`, 'name: x\n')
+      await lock(`${dir}/Chart.yaml`)
+    }
+    const { walkDeployments } = await import('../../server/lib/deploymentWalk.js')
+    const unreadable = (await walkDeployments(tmpDir)).filter(d => d.kind === 'unreadable')
+    expect(unreadable).toEqual([
+      { path: 'deployments/team/_common/demo/inner', kind: 'unreadable', error: 'EACCES', nestedIn: null, inCommon: true },
+      { path: 'deployments/team/a/canary', kind: 'unreadable', error: 'EACCES', nestedIn: 'deployments/team/a', inCommon: false },
+    ])
+  })
+})
+
 describe('a Template\'s Chart.yaml that cannot be read', () => {
   it.skipIf(IS_ROOT)('the commit says it cannot be read, not that it is not YAML', async () => {
     expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })).status).toBe(200)
@@ -392,5 +409,46 @@ describe('the command-line tools', () => {
     expect(code).not.toBe(0)
     expect(out).toMatch(/EACCES/)
     await expect(fs.access(abs('charts/demo/rules'))).rejects.toThrow()
+  })
+})
+
+describe('a values file Helm reads, whatever follows its first document', () => {
+  it('a Template values.yaml ending with a `---` line commits, and gen-rules --check passes', async () => {
+    await write('charts/demo/values.yaml', 'cpu: []\n---\n')
+    await write('notes.txt', `${Math.random()}\n`)
+    const commit = await api('POST', '/api/v2/git/commit', { message: 'x' })
+    expect(commit.status, JSON.stringify(commit.data)).toBe(200)
+    const check = await run(process.execPath, [path.join(ROOT, 'scripts', 'gen-rules.mjs'), 'charts/demo', '--check'], { cwd: tmpDir }).then(() => 0, e => e.code)
+    expect(check).toBe(0)
+  })
+
+  it('a deployment saved as text with a second document is saved, and read back as its first', async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })).status).toBe(200)
+    const url = `/api/v2/deployments/demo/a?folder=${encodeURIComponent('deployments/team/a')}`
+    expect((await api('POST', url, { values: 'demo:\n  cpu:\n    - {namespace: p}\n---\nother: 1\n' })).status).toBe(200)
+    expect((await api('GET', url)).data.parsed).toEqual({ cpu: [{ namespace: 'p' }] })
+  })
+})
+
+describe('what is not there is still absent, not unreadable', () => {
+  it('a chart with no rules/ opens, as legacy or empty', async () => {
+    await fs.rm(abs('charts/demo/rules'), { recursive: true })
+    const { status, data } = await api('GET', '/api/v2/templates/demo')
+    expect(status).toBe(200)
+    expect(['legacy', 'empty']).toContain(data.drift.state)
+  })
+
+  it('a deployment that is not there is not found; one with no values.yaml opens', async () => {
+    expect((await api('GET', '/api/v2/deployments/demo/nothere')).status).toBe(404)
+    expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })).status).toBe(200)
+    await fs.rm(abs('deployments/team/a/values.yaml'))
+    expect((await api('GET', `/api/v2/deployments/demo/a?folder=${encodeURIComponent('deployments/team/a')}`)).status).toBe(404)
+  })
+
+  it('a link to a file that is there is read through', async () => {
+    await write('charts/demo/kept-values.yaml', 'cpu: []\n')
+    await fs.rm(abs('charts/demo/values.yaml'), { force: true })
+    await fs.symlink('kept-values.yaml', abs('charts/demo/values.yaml'))
+    expect((await api('GET', '/api/v2/templates/demo')).status).toBe(200)
   })
 })

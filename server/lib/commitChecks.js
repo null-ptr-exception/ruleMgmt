@@ -26,6 +26,7 @@ import { valuesWarnings } from './deploymentWrite.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { parseIfThere, readTextIfThere, UnreadableError } from './readIfThere.js'
 import { insideReal } from './safePath.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 const SYNC_FILE = 'sync.yaml'
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
@@ -234,7 +235,7 @@ export async function deploymentCommitBlockers(gitopsDir) {
     // said as a stack says it for a deployment on one, not passed over.
     let valuesText
     try {
-      valuesText = await parseIfThere(path.join(gitopsDir, dep, 'values.yaml'), text => { yaml.load(text); return text })
+      valuesText = await parseIfThere(path.join(gitopsDir, dep, 'values.yaml'), text => { loadValues(text); return text })
     } catch (err) {
       if (!stack.problems.some(p => p.kind === 'values-unreadable')) {
         findings.push({ severity: 'commit', kind: 'values-unreadable', deployment: dep, regenerable: false,

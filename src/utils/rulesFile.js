@@ -128,20 +128,41 @@ const entriesToMap = list =>
 
 /**
  * A rule's labels or annotations as a rules file holds them: a mapping of
- * name to text (a number or true/false is its text, as written). Anything
- * else would deploy something not written — `labels: foo` as labels 0, 1, 2,
- * a list as a label named "undefined", a null as the text "null" — so it is
- * refused, naming the file and the rule. Left out or empty is none.
+ * name to text (a number or true/false is its text, as written), or a list
+ * of `{ key, value }` entries, read as that mapping. Anything else would
+ * deploy something not written — `labels: foo` as labels 0, 1, 2, a list of
+ * other maps as a label named "undefined", a null as the text "null" — so
+ * it is refused, naming the file and the rule. Left out or empty is none.
  */
+const TEXT_TYPES = ['string', 'number', 'boolean']
+// What a value the YAML reader turned into something else was, said so the
+// fix is plain: a date, an infinity.
+function notText(name, text) {
+  if (text instanceof Date) {
+    const day = text.toISOString().replace(/T00:00:00\.000Z$/, '')
+    return `a date — quote it to keep it as text, e.g. ${name}: "${day}"`
+  }
+  if (typeof text === 'number' && !Number.isFinite(text)) return `${text} — quote it to keep it as text, e.g. ${name}: "${Number.isNaN(text) ? '.nan' : text > 0 ? '.inf' : '-.inf'}"`
+  if (!TEXT_TYPES.includes(typeof text)) return `${JSON.stringify(text)} — write text, e.g. ${name}: warning`
+  return null
+}
 function labelsProblem(rule, where) {
   for (const key of ['labels', 'annotations']) {
     const value = rule[key]
     if (value === undefined || value === null) continue
+    if (Array.isArray(value)) {
+      const bad = value.findIndex(e => !isMapping(e) || Object.keys(e).sort().join() !== 'key,value' || typeof e.key !== 'string')
+      if (bad >= 0) return `${where}: ${key}[${bad}] is ${JSON.stringify(value[bad] ?? null)} — a list of ${key} is { key, value } entries; or write ${key} as a mapping of name to text`
+      for (const e of value) {
+        const why = notText(e.key, e.value)
+        if (why) return `${where}: ${key} "${e.key}" is ${why}`
+      }
+      continue
+    }
     if (!isMapping(value)) return `${where}: ${key} must be a mapping of name to text, e.g. { severity: warning }, not ${JSON.stringify(value)}`
     for (const [name, text] of Object.entries(value)) {
-      if (!['string', 'number', 'boolean'].includes(typeof text)) {
-        return `${where}: ${key} "${name}" is ${JSON.stringify(text)} — write text, e.g. ${name}: warning`
-      }
+      const why = notText(name, text)
+      if (why) return `${where}: ${key} "${name}" is ${why}`
     }
   }
   return null

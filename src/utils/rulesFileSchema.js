@@ -138,8 +138,16 @@ function ruleSchema() {
   properties.selectorLabels = { type: 'object', additionalProperties: { type: 'string' }, description: doc('selectorLabels') }
   // name → text; a number or true/false is taken as its text, as the save
   // takes it. Left empty is none.
+  // Or a list of { key, value } entries, read as that mapping.
   for (const key of ['labels', 'annotations']) {
-    properties[key] = { type: ['object', 'null'], additionalProperties: { type: ['string', 'number', 'boolean'] }, description: doc(key) }
+    const text = { type: ['string', 'number', 'boolean'] }
+    properties[key] = {
+      anyOf: [
+        { type: ['object', 'null'], additionalProperties: text },
+        { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, value: text }, required: ['key', 'value'], additionalProperties: false } },
+      ],
+      description: doc(key),
+    }
   }
   // Text, as written; a number is its text. Not a list or a mapping.
   for (const key of ['alert', 'record', 'expr', 'raw']) properties[key] = { type: ['string', 'number', 'boolean', 'null'], description: doc(key) }

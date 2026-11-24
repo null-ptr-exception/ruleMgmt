@@ -33,6 +33,7 @@ import yaml from 'js-yaml'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { unwrapPath } from './subchart.js'
 import { isAbsent } from './readIfThere.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 // More hops than this is a loop of links, not a stack.
@@ -72,7 +73,7 @@ export const dependenciesOf = chart => (Array.isArray(chart?.dependencies) ? cha
 /** A values.yaml: `{ doc }`, `{ doc: {} }` when there is none, `{ error }` when it cannot be read. */
 async function readValuesDoc(dir) {
   try {
-    const doc = yaml.load(await fs.readFile(path.join(dir, 'values.yaml'), 'utf-8'))
+    const doc = loadValues(await fs.readFile(path.join(dir, 'values.yaml'), 'utf-8'))
     return { doc: doc ?? {} }
   } catch (err) {
     if (await isAbsent(path.join(dir, 'values.yaml'), err)) return { doc: {} }
@@ -343,7 +344,7 @@ async function templateGroups(templatesDir, chart) {
     const { mtimeMs, size } = await fs.stat(file)
     const hit = groupsCache.get(file)
     if (hit && hit.mtimeMs === mtimeMs && hit.size === size) return hit.groups
-    const doc = yaml.load(await fs.readFile(file, 'utf-8'))
+    const doc = loadValues(await fs.readFile(file, 'utf-8'))
     const groups = new Set(Object.entries(isPlainObject(doc) ? doc : {}).filter(([, v]) => Array.isArray(v)).map(([k]) => k))
     groupsCache.set(file, { mtimeMs, size, groups })
     return groups

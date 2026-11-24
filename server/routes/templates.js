@@ -19,6 +19,7 @@ import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { NAME_RE, isFileName, insideReal } from '../lib/safePath.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
@@ -177,7 +178,7 @@ export default function templatesRouter() {
 
       // Not there: none. One that cannot be read or parsed is said, not
       // shown as empty for a Save to write over.
-      const values = (await parseIfThere(valuesFile, yaml.load)) || {}
+      const values = (await parseIfThere(valuesFile, loadValues)) || {}
       const chartMeta = (await parseIfThere(chartYamlFile, yaml.load)) || {}
 
       // The editor loads from these; null when the chart has not been migrated

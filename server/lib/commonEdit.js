@@ -39,6 +39,7 @@ import { helmAvailable, renderAll, sameRender } from './helmCheck.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { isRepoPath } from './safePath.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 /** The name every `_common` chart has: the key its deployments' values are under. */
 export const COMMON_CHART = 'common'
@@ -59,7 +60,7 @@ export const commonPathOf = (folder, chart) => [...segmentsOf(folder), COMMON_DI
 // The Template's own values: what a group no chart gives renders with.
 async function templateDefaults(gitopsDir, chart) {
   try {
-    const doc = yaml.load(await fs.readFile(path.join(gitopsDir, chartsDirName(), chart, 'values.yaml'), 'utf-8'))
+    const doc = loadValues(await fs.readFile(path.join(gitopsDir, chartsDirName(), chart, 'values.yaml'), 'utf-8'))
     return isPlainObject(doc) ? doc : {}
   } catch {
     return {}
@@ -230,7 +231,7 @@ async function baseline(gitopsDir, items, defaults) {
 
 const valueProblems = (text, keys, rel, groups) => {
   let doc
-  try { doc = yaml.load(text) } catch (err) { return [`${rel}: would not be valid YAML (${err.reason || err.message})`] }
+  try { doc = loadValues(text) } catch (err) { return [`${rel}: would not be valid YAML (${err.reason || err.message})`] }
   return valueIssuesIn(doc, keys, rel, new Set(groups))
 }
 
@@ -355,7 +356,7 @@ export async function planCreate(gitopsDir, folderIn, chart) {
       // the Template's example rows; the new `_common` clears every group,
       // so the rows it deployed are copied into it, as the Template has them.
       if (text !== null && j === 0 && !nextRel) {
-        const mine = getPath(yaml.load(own.text) ?? {}, [...prefix, key])
+        const mine = getPath(loadValues(own.text) ?? {}, [...prefix, key])
         const missing = groups.filter(g => !(isPlainObject(mine) && g in mine))
         if (missing.length) {
           const added = addMissing(text, newKeys, templateText, [], { only: missing })

@@ -314,8 +314,11 @@ function DerivedEditor({ derived, usage, taken, onChange }) {
     const out = {}
     const from = {}
     next.forEach((r, i) => {
-      // A clash or a reserved name is marked on the row and not sent.
-      if (!r.name || Object.hasOwn(out, r.name) || taken(r.name)) return
+      // A name another row has already is that row's (the one being typed
+      // waits). One taken by a column, a vars entry or reserved is kept as
+      // written and marked: the save refuses it and says why — a row is
+      // never dropped from the file because of it.
+      if (!r.name || Object.hasOwn(out, r.name)) return
       let columns = []
       try { columns = derivedColumns(parseDerived(r.expr)) } catch { /* the save says what is wrong */ }
       Object.defineProperty(out, r.name, { value: { expr: r.expr, ...(r.unit ? { unit: r.unit } : {}), columns }, enumerable: true, writable: true, configurable: true })
@@ -436,9 +439,16 @@ export default function TemplateDevEditor() {
     const info = await getChartInfo(chart)
     setLoadError(info.failed ? info.error || 'The chart cannot be opened' : null)
     if (info.failed) {
+      // Nothing of the chart before stays: not its model, its problems, its
+      // description or its unsaved changes.
       setModel({ common: { columns: {} }, groups: {} })
       setOrder([])
       setDrift(null)
+      setParseErrors([])
+      setChartMeta({})
+      setDirty(false)
+      setDirtyFiles(new Set())
+      loadedDescription.current = undefined
       originalRef.current = {}
       return
     }

@@ -16,6 +16,7 @@ import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { parseIfThere, errorAnswer } from '../lib/readIfThere.js'
 import { isRepoPath, repoPathProblem, isName, insideReal } from '../lib/safePath.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 // What a new deployment asks of its Template's version: any.
 export const ANY_TEMPLATE_VERSION = ANY_VERSION
@@ -103,7 +104,7 @@ async function listChildren(baseDir, parentPath) {
       node.folderCommon = await folderCommonHere(stack.chart || stack.claims)
       try {
         const valuesYaml = await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')
-        node.alertCount = countAlerts(yaml.load(valuesYaml) || {}, stack.keys.length ? stack.keys : node.chart)
+        node.alertCount = countAlerts(loadValues(valuesYaml) || {}, stack.keys.length ? stack.keys : node.chart)
       } catch { node.alertCount = 0 }
       // Where no new deployment can be made (inside another, inside a
       // _common folder): still shown and used, and flagged.
@@ -148,7 +149,7 @@ async function collectDeployments(baseDir, chartFor = null) {
       chart = stack.chart
       inheritsFrom = inheritsFromOf(stack)
       folderCommon = await folderCommonOf(baseDir, d.path, chartFor || chart || stack.claims)
-      const valuesYaml = yaml.load(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
+      const valuesYaml = loadValues(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
       alertCount = countAlerts(valuesYaml, stack.keys)
     } catch { /* leave defaults */ }
     results.push({ name: path.basename(d.path), path: d.path, chart, alertCount, inheritsFrom, folderCommon })
@@ -322,7 +323,7 @@ export default function foldersRouter() {
       // The Template's groups, from its values.yaml: none when it has none;
       // one that cannot be read or parsed is said, not taken for none.
       const emptyValues = {}
-      const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)) || {}
+      const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), loadValues)) || {}
       for (const [key, val] of Object.entries(defaults)) {
         if (Array.isArray(val)) emptyValues[key] = []
       }

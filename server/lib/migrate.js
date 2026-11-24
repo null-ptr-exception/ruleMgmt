@@ -11,7 +11,6 @@
 
 import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
 import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
 import { getDepName } from './subchart.js'
 import { unwrapPath, wrapPath, replaceAtPath, resolveStack, stackValues } from './stack.js'
@@ -21,6 +20,7 @@ import { findDeploymentsUsing } from './chartUsage.js'
 import { valueProblems } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 // Everything a values save would refuse, both kinds at once (a save stops at
 // the first kind). Each names its cell in its message.
@@ -132,7 +132,7 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     // the plan: migrating `{}` would write an empty file over its data.
     let parsed = {}
     try {
-      parsed = yaml.load(await fs.readFile(valuesFile, 'utf-8')) || {}
+      parsed = loadValues(await fs.readFile(valuesFile, 'utf-8')) || {}
     } catch (err) {
       // Only checking (#176): one that cannot be read is left out, the rest
       // are still checked; its own save says what is wrong with it.

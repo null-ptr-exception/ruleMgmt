@@ -97,6 +97,55 @@ test.describe('the Derived and Vars sections', () => {
     await expect(page.getByTestId('derived-editor')).toContainText('Used by CpuHigh')
   })
 
+  test('a derived row whose name a vars entry has too is kept as written when another row is edited', async ({ page, request }) => {
+    // Written by hand: a vars entry and a derived value both named lat.
+    await removeChart(request, A)
+    expect((await request.post('/api/v2/charts', { data: { name: A } })).ok()).toBeTruthy()
+    const fs = await import('fs/promises')
+    const path = await import('path')
+    const { WORKSPACE } = await import('./workspace.js')
+    const text = rules('  lat: {expr: "freq * 2", unit: m}\n  w: {expr: "freq * 3", unit: m}\n', 'vars:\n  lat: up\n')
+    await fs.mkdir(path.join(WORKSPACE, 'charts', A, 'rules'), { recursive: true })
+    await fs.writeFile(path.join(WORKSPACE, 'charts', A, 'rules', 'cpu.yaml'), text)
+    await openGroup(page, A)
+    const editor = page.getByTestId('derived-editor')
+    await expect(editor).toContainText('"lat" is already a vars entry\'s name in this group')
+    // Another row's unit changed, and Save: refused, saying why — lat stays.
+    await editor.getByLabel('Derived 2 unit').click()
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^h$/ }).click()
+    await page.getByRole('button', { name: 'Save' }).first().click()
+    await expect(page.locator('.ant-modal-confirm-error')).toContainText('collides with a vars entry', { timeout: 8000 })
+    expect(await fs.readFile(path.join(WORKSPACE, 'charts', A, 'rules', 'cpu.yaml'), 'utf-8')).toContain('lat: {expr: "freq * 2", unit: m}')
+  })
+
+  test('opening a chart that cannot be opened leaves nothing of the chart before', async ({ page, request }) => {
+    await chart(request, B, rules(''))
+    // A: problems in its rules file, and an unsaved change.
+    await chart(request, A, rules(''))
+    const fs = await import('fs/promises')
+    const path = await import('path')
+    const { WORKSPACE } = await import('./workspace.js')
+    await fs.appendFile(path.join(WORKSPACE, 'charts', A, 'rules', 'cpu.yaml'), 'bogus: 1\n')
+    await openGroup(page, A)
+    await expect(page.getByText(/rules\/\*\.yaml has problems/)).toBeVisible()
+    await page.getByTestId('derived-editor').getByRole('button', { name: 'Add derived' }).click()
+    await page.getByTestId('derived-editor').getByLabel('Derived 1 name').fill('z')
+    await expect(page.getByText('Unsaved changes')).toBeVisible()
+    // B cannot be opened.
+    const dir = path.join(WORKSPACE, 'charts', B, 'rules')
+    await fs.rm(dir, { recursive: true })
+    await fs.writeFile(dir, 'not a folder\n')
+    try {
+      page.on('dialog', d => d.accept())
+      await openTemplateChart(page, B).catch(() => {})
+      await expect(page.getByTestId('chart-load-error')).toBeVisible({ timeout: 8000 })
+      await expect(page.getByText(/rules\/\*\.yaml has problems/)).toHaveCount(0)
+      await expect(page.getByText('Unsaved changes')).toHaveCount(0)
+    } finally {
+      await fs.rm(dir, { force: true })
+    }
+  })
+
   test('a chart whose rules/ cannot be read says so, and shows nothing to edit', async ({ page, request }) => {
     await chart(request, A, rules(''))
     // A file named rules where the folder was: the same on every system.

@@ -149,10 +149,13 @@ export async function listDeployments(chart, folder) {
   return res.json()
 }
 
+// Not there (404) is a deployment with nothing yet; any other refusal — a
+// values.yaml that cannot be read — says why: `{ failed, status, error }`,
+// never an empty table to save over.
 export async function getDeployment(chart, deployment, folder) {
   const params = folder ? `?folder=${encodeURIComponent(folder)}` : ''
   const res = await apiFetch(`${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}${params}`)
-  if (!res.ok) return {}
+  if (!res.ok) return { failed: true, status: res.status, ...(await res.json().catch(() => ({ error: `the server answered ${res.status}` }))) }
   return res.json()
 }
 

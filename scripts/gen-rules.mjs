@@ -34,7 +34,7 @@ import { checkRules } from '../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates, replacedByConversion, repeatingTemplates, repeatsText, REPEATS_FIX } from '../src/utils/drift.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { ensureChartYaml } from '../src/utils/chartYaml.js'
-import yaml from 'js-yaml'
+import { loadValues } from '../src/utils/valuesText.js'
 
 const args = process.argv.slice(2)
 const check = args.includes('--check')
@@ -222,7 +222,7 @@ async function main() {
   const valuesText = await readIfExists(path.join(chartDir, 'values.yaml'))
   if (valuesText) {
     try {
-      for (const problem of validateValues(yaml.load(valuesText) || {}, model)) {
+      for (const problem of validateValues(loadValues(valuesText) || {}, model)) {
         console.log(`warn   ${problem}`)
       }
     } catch (err) {

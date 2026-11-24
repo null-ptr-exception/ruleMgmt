@@ -24,7 +24,7 @@ beforeAll(async () => {
   app.use((req, res, next) => { req.gitopsDir = tmpDir; next() })
   ;['templates', 'deployments', 'folders'].forEach((n, i) => app.use(`/api/v2/${n}`, routes[i].default()))
   await new Promise(r => { server = app.listen(0, '127.0.0.1', () => { baseURL = `http://127.0.0.1:${server.address().port}`; r() }) })
-  const files = { '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n', 'cpu.yaml': 'group: cpu\ncolumns:\n  pct: {type: number, default: 80}\nrules:\n  - alert: CpuHigh\n    expr: cpu{owner="${owner}"} > ${pct}\n' }
+  const files = { '_common.yaml': 'columns:\n  owner: {type: string, required: true}\n', 'cpu.yaml': 'group: cpu\ncolumns:\n  pct: {type: number, default: 80}\nrules:\n  - alert: CpuHigh\n    expr: cpu{owner="${owner}"} > ${pct}\n', 'up.yaml': 'group: up\nonce: true\nrules:\n  - alert: Down\n    expr: up{owner="${owner}"} == 0\n' }
   expect((await api('POST', '/api/v2/templates/demo/rules', { files })).status).toBe(200)
   expect((await api('POST', '/api/v2/folders/init', { folder: DEP, chart: 'demo' })).status).toBe(200)
 })
@@ -77,8 +77,45 @@ describe('a deployment save', () => {
     expect(await fs.readFile(path.join(tmpDir, DEP, 'values.yaml'), 'utf-8')).toBe(before)
   })
 
+  // What Helm (3.15.4, 3.19.0) renders, each of these is saved.
+  it.each([
+    ['a once group written as nothing', { _common: O, cpu: [], up: null }],
+    ['a once group written as a map', { _common: O, cpu: [], up: {} }],
+    ['a once group with a row', { _common: O, cpu: [], up: [{}] }],
+    ['a row group that is empty', { _common: O, cpu: [] }],
+    // Keys the schema does not declare are Helm's to leave alone.
+    ['a list in a row key no column declares', { _common: O, cpu: [{ extra: [1] }] }],
+    ['a list in a Common Values key no column declares', { _common: { owner: 'o', tags: ['a'] }, cpu: [] }],
+  ])('takes %s', async (_, values) => {
+    const { status, data } = await api('POST', URL_, { values })
+    expect(status, JSON.stringify(data)).toBe(200)
+  })
+
+  it('takes a null group where the Template gives one (Helm renders the Template\'s)', async () => {
+    expect((await api('POST', '/api/v2/templates/demo/values', { values: { cpu: [], up: [], _common: { owner: 't' } } })).status).toBe(200)
+    try {
+      // (`_common: null` alone is refused here for another reason: the
+      // save check does not read the Template's own Common Values yet.)
+      for (const text of ['demo:\n  cpu:\n  _common: {owner: o}\n', 'demo:\n  cpu: null\n  _common: {owner: o}\n']) {
+        const { status, data } = await api('POST', URL_, { values: text })
+        expect(status, `${text} ${JSON.stringify(data)}`).toBe(200)
+      }
+    } finally {
+      await api('POST', '/api/v2/templates/demo/values', { values: {} })
+    }
+  })
+
   it('takes a row with no cells and Common Values that are a map', async () => {
     expect((await api('POST', URL_, { values: { _common: O, cpu: [{}] } })).status).toBe(200)
     expect(yaml.load(await fs.readFile(path.join(tmpDir, DEP, 'values.yaml'), 'utf-8')).demo.cpu).toEqual([{}])
+  })
+})
+
+describe('shapeProblems', () => {
+  it('null Common Values pass where the Template has a map of them, and are said where it has none', async () => {
+    const { shapeProblems } = await import('../../server/lib/deploymentWrite.js')
+    const model = { groups: { cpu: { columns: {} } } }
+    expect(shapeProblems({ _common: null, cpu: [] }, model, { _common: { owner: 't' } })).toEqual([])
+    expect(shapeProblems({ _common: null, cpu: [] }, model, {}).map(p => p.message)).toEqual(['Common Values must be a map of name to value, not null'])
   })
 })

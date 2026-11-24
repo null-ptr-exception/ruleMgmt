@@ -145,7 +145,8 @@ export async function walkDeployments(gitopsDir, { from = '', chartOnly = false,
       // taken for no deployment.
       const chartError = await unreadableChart(abs)
       // A folder that cannot be listed is named once, by the walk into it.
-      if (chartError && Array.isArray(await readDir(abs))) found.push({ path: child, kind: 'unreadable', error: chartError, nestedIn: null, inCommon: false })
+      // Where it is, as for a deployment there: inside another, or a _common folder.
+      if (chartError && Array.isArray(await readDir(abs))) found.push({ path: child, kind: 'unreadable', error: chartError, nestedIn, inCommon: segmentsOf(child).includes(COMMON_DIR) })
       const isDeployment = !chartError && await isDeploymentDir(abs)
       if (isDeployment) {
         found.push({ path: child, kind: 'deployment', nestedIn, inCommon: segmentsOf(child).includes(COMMON_DIR) })

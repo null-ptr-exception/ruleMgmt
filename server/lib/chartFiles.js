@@ -56,10 +56,9 @@ async function readYamlDir(dir, { skipFolders = false } = {}) {
       if (skipFolders && err.cause?.code === 'EISDIR') continue
       throw err
     }
+    // null: gone, or being written again, since the listing (a link to
+    // nothing readTextIfThere has already named).
     if (text !== null) out[name] = text
-    // Listed, and nothing to read: a link to a file that is not there is
-    // there, and cannot be read. One gone since the listing is not there.
-    else if (await fs.lstat(file).then(() => true, () => false)) throw new UnreadableError(file, { reason: 'a link to a file that is not there' })
   }
   return out
 }

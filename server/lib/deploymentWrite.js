@@ -26,8 +26,9 @@ import { valueProblems, rowIdentityRepeats } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
-import { readTextIfThere } from './readIfThere.js'
+import { readTextIfThere, parseIfThere } from './readIfThere.js'
 import { insideReal } from './safePath.js'
+import { loadValues } from '../../src/utils/valuesText.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
@@ -66,31 +67,42 @@ const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'a list' : typeof 
 const isValue = v => v === null || typeof v !== 'object'
 
 /**
- * The shapes the Template's schema can never take, whatever the cells hold:
- * values that are not a map, Common Values that are not a map, a group that
- * is not a list of rows, a row that is not a map, a cell that is a list or a
+ * The shapes the Template's schema refuses whatever the cells hold: values
+ * that are not a map, Common Values that are not a map, a row group that is
+ * not a list of rows, a row that is not a map, a cell that is a list or a
  * map. Said here, naming the group and the row, instead of saved and then
- * refused by Helm for every render. (A cell's type against its column is
- * the schema's; the empty and the null ones valueProblems says.)
+ * refused by Helm for every render. Measured with Helm 3.15.4 and 3.19.0:
+ * - a once group takes no rows: Helm renders it whatever its key holds, so
+ *   it is not looked at;
+ * - a null group or null Common Values removes the key, and Helm renders
+ *   the Template's own value (`templateValues`, its values.yaml); with none
+ *   there, the schema refuses the null, and so is it here.
+ * (A cell's type against its column is the schema's; the empty and the
+ * null cells valueProblems says.)
  */
-export function shapeProblems(bare, model) {
+export function shapeProblems(bare, model, templateValues = {}) {
   if (!isPlainObject(bare)) return [{ message: `the values must be a map of groups, not ${kindOf(bare)}` }]
   const out = []
   const groups = model?.groups || {}
+  const commonCols = model?.common?.columns || {}
+  const fromTemplate = isPlainObject(templateValues) ? templateValues : {}
   for (const [key, value] of Object.entries(bare)) {
+    // null removes the key: fine where the Template gives one to use.
+    if (value === null && Object.hasOwn(fromTemplate, key) && (key === '_common' ? isPlainObject(fromTemplate[key]) : Array.isArray(fromTemplate[key]))) continue
     if (key === '_common') {
       if (!isPlainObject(value)) { out.push({ group: '_common', row: null, message: `Common Values must be a map of name to value, not ${kindOf(value)}` }); continue }
+      // Only a column the schema declares: Helm leaves any other key alone.
       for (const [name, cell] of Object.entries(value)) {
-        if (!isValue(cell)) out.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${kindOf(cell)} — a value is text, a number or true/false` })
+        if (!isValue(cell) && Object.hasOwn(commonCols, name)) out.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${kindOf(cell)} — a value is text, a number or true/false` })
       }
       continue
     }
-    if (!Object.hasOwn(groups, key) || groups[key].custom) continue
+    if (!Object.hasOwn(groups, key) || groups[key].custom || groups[key].once) continue
     if (!Array.isArray(value)) { out.push({ group: key, row: null, message: `${key}: must be a list of rows, not ${kindOf(value)}` }); continue }
     value.forEach((row, i) => {
       if (!isPlainObject(row)) { out.push({ group: key, row: i, message: `${key} row ${i + 1}: must be a map of column to value, not ${kindOf(row)}` }); return }
       for (const [name, cell] of Object.entries(row)) {
-        if (!isValue(cell)) out.push({ group: key, row: i, column: name, message: `${key} row ${i + 1}, "${name}": ${kindOf(cell)} — a value is text, a number or true/false` })
+        if (!isValue(cell) && (Object.hasOwn(groups[key].columns || {}, name) || Object.hasOwn(commonCols, name))) out.push({ group: key, row: i, column: name, message: `${key} row ${i + 1}, "${name}": ${kindOf(cell)} — a value is text, a number or true/false` })
       }
     })
   }
@@ -114,7 +126,7 @@ export async function valuesRefusal(gitopsDir, dir, values, { chartName, stack: 
   if (typeof values === 'string') {
     let parsed
     try {
-      parsed = yaml.load(values) || {}
+      parsed = loadValues(values) || {}
     } catch (err) {
       return { error: 'values.yaml is not valid YAML', problems: [{ message: err.reason || 'not valid YAML' }] }
     }
@@ -127,19 +139,20 @@ export async function valuesRefusal(gitopsDir, dir, values, { chartName, stack: 
   const isLayer = isCommonChartPath(dir)
   if (stack.layers.length || isLayer) {
     const issues = typeof values === 'string'
-      ? valueIssuesIn(yaml.load(values) || {}, stack.keys, 'values.yaml', stack.groups)
+      ? valueIssuesIn(loadValues(values) || {}, stack.keys, 'values.yaml', stack.groups)
       : valueIssuesIn(bare, [], 'values.yaml', stack.groups)
     if (issues.length) return { error: 'Some values are null, or not what Helm reads', problems: issues.map(message => ({ message })) }
   }
   // A file that is not a map of groups renders nothing Helm accepts.
-  if (typeof values === 'string' && !isPlainObject(yaml.load(values) ?? {})) {
-    return { error: 'Some values are not what Helm reads', problems: [{ message: `values.yaml must be a map, not ${kindOf(yaml.load(values))}` }] }
+  if (typeof values === 'string' && !isPlainObject(loadValues(values) ?? {})) {
+    return { error: 'Some values are not what Helm reads', problems: [{ message: `values.yaml must be a map, not ${kindOf(loadValues(values))}` }] }
   }
   const chart = stack.chart || chartName
   if (!chart) return null
   const { model } = await readChartModel(path.join(gitopsDir, chartsDirName(), chart))
   if (!model) return null
-  const shapes = shapeProblems(bare, model)
+  const templateValues = await parseIfThere(path.join(gitopsDir, chartsDirName(), chart, 'values.yaml'), loadValues)
+  const shapes = shapeProblems(bare, model, templateValues ?? {})
   if (shapes.length) return { error: 'Some values are not what Helm reads', problems: shapes }
   const keep = isLayer ? p => !(p.required && p.group === '_common') : () => true
   if (!stack.layers.length) return problemsOf(bare, model, keep)
@@ -157,7 +170,7 @@ export async function valuesWarnings(gitopsDir, dir, values, { chartName, stack:
   const stack = resolved ?? await resolveStack(gitopsDir, dir)
   let bare = values
   if (typeof values === 'string') {
-    try { bare = unwrapPath(yaml.load(values) || {}, stack.keys) } catch { return [] }
+    try { bare = unwrapPath(loadValues(values) || {}, stack.keys) } catch { return [] }
   }
   const chart = stack.chart || chartName
   if (!chart || !bare || typeof bare !== 'object') return []

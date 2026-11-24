@@ -904,8 +904,17 @@ A commit is refused while any chart:
 - has a problem Save would refuse, or a rule that reads no column at all — it
   would be emitted identically on every row. Save allows that, because a chart
   being turned into a template passes through it
-- has generated files that are behind its rules files — open the chart and
-  save, or run `gen-rules`
+- has generated files that are behind its rules files, or one of them
+  missing — open the chart and save, or run `gen-rules`
+- has a file Helm stops on or renders other than written: a
+  `values.schema.json` that is not JSON, a `values.yaml` that is not YAML (or
+  written in a way AlertForge cannot tell how Helm reads — a tag, an anchor,
+  `|2`: the message names the line; write it plainly), a `Chart.yaml` whose
+  `name` is not the folder's, a folder name with a dot (Helm passes no values
+  under it, so nothing renders), a file in `templates/` starting with `_` that
+  holds a rule object (Helm takes it for a partial and renders none of it)
+- is a link that leads outside the repo, or has a file that does (named as
+  one that cannot be read)
 
 A chart that is not migrated yet does not stop a commit: it renders as it
 always has, so the commit goes through and names it as a reminder — see

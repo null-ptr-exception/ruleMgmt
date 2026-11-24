@@ -103,6 +103,7 @@ export async function loadTemplate(repo, name) {
  *     rulesFiles: {name: text} | null   rules/*.yaml (null: no rules/)
  *     templateFiles: {name: text},  templates/*.yaml (a folder named so is
  *                                   Helm's to read, not a file here)
+ *     templateNames: string[],      every *.yaml name in templates/, folders too
  *     fromRules: boolean,           rules/ holds a file: it is the source
  *     model, ruleErrors: string[],  the rules as parsed (model null when
  *                                   there is neither rules/ nor a schema)
@@ -111,8 +112,11 @@ export async function loadTemplate(repo, name) {
  *                                   whether the generated files are what
  *                                   rules/ makes (computeDrift, drift.js);
  *                                   null when a file of it cannot be read
- *     unreadable: { file, why } | null  the first of rules/ and templates/
- *                                   (or a file in them) that cannot be read
+ *     unreadable: { file, why } | null  the first of rules/, templates/ (or
+ *                                   a file in them) and a schema that is the
+ *                                   source, that cannot be read
+ *     sourceUnreadable              the same, of rules/ and the schema only:
+ *                                   what the rule model is built from
  *   }, findings>                    findings/template.js
  *
  * absent: no folder there. unreadable: the folder cannot be listed, or it

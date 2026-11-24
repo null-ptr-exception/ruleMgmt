@@ -128,8 +128,8 @@ describe('gen-rules.mjs after a once group is removed from rules/', () => {
     await expect(fs.access(path.join(chartDir, 'templates', 'up.yaml'))).rejects.toThrow()
     const after = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
     expect(after).not.toHaveProperty('x-once-groups')
-    const { chartDrift } = await import('../../server/lib/chartFiles.js')
-    expect((await chartDrift(chartDir)).state).toBe('ok')
+    const { readTemplateAt } = await import('../../server/lib/chartFiles.js')
+    expect((await readTemplateAt(chartDir)).drift.state).toBe('ok')
   })
 })
 
@@ -149,8 +149,8 @@ describe('an x-custom-template group across gen-rules runs', () => {
     const check = run(GEN_RULES, [chartDir, '--check'])
     expect(check.status, check.stdout).toBe(0)
 
-    const { chartDrift } = await import('../../server/lib/chartFiles.js')
-    expect((await chartDrift(chartDir)).state).toBe('ok')
+    const { readTemplateAt } = await import('../../server/lib/chartFiles.js')
+    expect((await readTemplateAt(chartDir)).drift.state).toBe('ok')
   })
 })
 
@@ -228,8 +228,8 @@ describe('gen-rules.mjs on hand-written files in templates/', () => {
 
     const check = run(GEN_RULES, [chartDir, '--check'])
     expect(check.status, check.stdout).toBe(0)
-    const { chartDrift } = await import('../../server/lib/chartFiles.js')
-    expect((await chartDrift(chartDir)).state).toBe('ok')
+    const { readTemplateAt } = await import('../../server/lib/chartFiles.js')
+    expect((await readTemplateAt(chartDir)).drift.state).toBe('ok')
   })
 })
 

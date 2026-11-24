@@ -2,8 +2,8 @@ import express from 'express'
 import { holdSyncRegistryLock } from '../lib/sync.js'
 import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupNameChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing, findChartUsage } from '../lib/chartUsage.js'
-import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
-import { readTextIfThere, readDirIfThere, parseIfThere, UnreadableError, errorAnswer } from '../lib/readIfThere.js'
+import { regenerateProducts, writeChanged, readTemplate } from '../lib/chartFiles.js'
+import { UnreadableError, errorAnswer } from '../lib/readIfThere.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema, genSchema, valueChecksKey } from '../../src/utils/rulesFile.js'
@@ -20,21 +20,12 @@ import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
 import { NAME_RE, isFileName, insideReal } from '../lib/safePath.js'
-import { loadValues } from '../../src/utils/valuesText.js'
+import { openRepo } from '../repo/openRepo.js'
+import { decide } from '../repo/policy.js'
+import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
 
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
-// A templates/ file's text, for telling a 1.x rule file apart: null when it
-// is not there or is a folder named *.yaml (not a rule object; Helm says so
-// when it renders). Any other failure is an error naming it.
-async function readTemplateText(file) {
-  try {
-    return await readTextIfThere(file)
-  } catch (err) {
-    if (err.cause?.code === 'EISDIR') return null
-    throw err
-  }
-}
 // A rules/ filename: a group file, or _common.yaml. Guards path traversal in
 // the keys of the POST /:chart/rules body, and keeps a group key a name Helm
 // can read (the same rule as GROUP_KEY_RE in rulesFile.js).
@@ -64,11 +55,7 @@ async function withReadonly(gitopsDir, deployments) {
 // deployment's values were valid against (#176). null when it has none.
 // null when rules/ on disk does not parse: a partial model would make every
 // problem a deployment already had look new.
-async function modelBefore(chartDir) {
-  const { rulesFiles } = await readChartArtifacts(chartDir)
-  if (rulesFiles && Object.keys(rulesFiles).length && parseRulesDir(rulesFiles).errors.length) return null
-  return (await readChartModel(chartDir)).model
-}
+const modelBefore = t => (t?.ruleErrors.length ? null : t?.model ?? null)
 
 // A refused deployment's new problems; a sync target names its source. A
 // target its source's copy would fix has none of its own: one listed here
@@ -118,23 +105,16 @@ export default function templatesRouter() {
     }
   }
 
-  // null when values.schema.json is not there. One that cannot be read, or
-  // is not JSON, is an error naming it: a save that took it for none would
-  // drop the x-custom-template groups it holds. Opening a chart with rules/
-  // (`shown`) takes a schema that is not JSON as none — it is a product: the
-  // editor opens, the drift says it is missing, Save writes it again (with
-  // nothing to carry over: a save refuses it first, see above). On a chart
-  // without rules/ the schema is the source: opening it is refused naming
-  // the file (readChartArtifacts), as there is nothing to regenerate it from.
-  async function readSchema(schemaFile, { shown = false } = {}) {
-    const raw = await readTextIfThere(schemaFile)
-    if (raw === null) return null
-    try {
-      return JSON.parse(raw)
-    } catch (err) {
-      if (shown) return null
-      throw new UnreadableError(schemaFile, { reason: `not valid JSON (${err.message}) — fix it by hand, or remove it to generate it again` })
+  // The schema a save carries x-custom-template groups over from: null when
+  // it is not there. One that cannot be read (readTemplate) or is not JSON
+  // is an error naming it: a save that took it for none would drop the
+  // groups it holds.
+  function schemaBefore(req, t) {
+    if (!t) return null
+    if (t.schemaNotJson !== null) {
+      throw new UnreadableError(path.join(req.gitopsDir, t.dir, 'values.schema.json'), { reason: `not valid JSON (${t.schemaNotJson}) — fix it by hand, or remove it to generate it again` })
     }
+    return t.schema
   }
 
   // Get chart-level info: schema + values + Chart.yaml metadata + template file
@@ -144,49 +124,43 @@ export default function templatesRouter() {
   // products are generated (nothing is overwritten either way) — deliberately
   // not the list route, where a write would be a side effect of scrolling past.
   router.get('/:chart', async (req, res) => {
-    const { chartDir, tmplDir, valuesFile, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
+    const { chartYamlFile } = chartPaths(req, req.params.chart)
+    const chart = req.params.chart
     try {
       // Reading a chart that does not exist must not create it — a typo or a
       // stale saved selection would leave a directory under charts/.
-      try { await fs.access(chartDir) } catch { return res.status(404).json({ error: 'Chart not found' }) }
+      let t = await readTemplate(req.gitopsDir, chart)
+      if (!t) return res.status(404).json({ error: 'Chart not found' })
       // A GET is not held by the commit's lock (holdSyncRegistryLock lets
       // reads through), but these two write: they take it themselves, so a
       // commit does not stage half the products.
-      let drift = await chartDrift(chartDir)
-      let chartYamlMissing = false
-      try { await fs.access(chartYamlFile) } catch { chartYamlMissing = true }
-      if (chartYamlMissing || drift.state === 'missing') {
-        drift = await withSyncRegistryLock(req.gitopsDir, async () => {
-          try {
-            await fs.access(chartYamlFile)
-          } catch {
-            const { text } = ensureChartYaml(null, req.params.chart)
+      const chartYamlMissing = t.findings.some(f => f.code === 'template.chart-absent')
+      if (chartYamlMissing || t.drift.state === 'missing') {
+        t = await withSyncRegistryLock(req.gitopsDir, async () => {
+          let now = await readTemplate(req.gitopsDir, chart)
+          if (now.findings.some(f => f.code === 'template.chart-absent')) {
+            const { text } = ensureChartYaml(null, chart)
             await writeWhole(chartYamlFile, text)
           }
-          let d = await chartDrift(chartDir)
-          if (d.state === 'missing') {
-            await regenerateProducts(chartDir)
-            d = await chartDrift(chartDir)
-          }
-          return d
+          if (now.drift.state === 'missing') await regenerateProducts(req.gitopsDir, chart)
+          now = await readTemplate(req.gitopsDir, chart)
+          return now
         })
       }
 
-      const templateFiles = ((await readDirIfThere(tmplDir)) || [])
-        .filter(f => f.endsWith('.yaml')).map(f => f.replace(/\.yaml$/, ''))
+      const templateFiles = t.templateNames.map(f => f.replace(/\.yaml$/, ''))
 
-      const schema = await readSchema(schemaFile, { shown: true })
+      // The values and Chart.yaml as Helm reads them (`010` is 8). One that
+      // cannot be read or parsed is said, not shown as empty for a Save to
+      // write over.
+      const stop = t.findings.find(f => /^template\.(values|chart)-(unreadable|not-yaml|cannot-tell|not-map)$/.test(f.code))
+      if (stop) throw new UnreadableError(path.join(req.gitopsDir, stop.file), { reason: stop.message.replace(/^.*? cannot be read: /, '') })
 
-      // Not there: none. One that cannot be read or parsed is said, not
-      // shown as empty for a Save to write over.
-      const values = (await parseIfThere(valuesFile, loadValues)) || {}
-      const chartMeta = (await parseIfThere(chartYamlFile, yaml.load)) || {}
-
-      // The editor loads from these; null when the chart has not been migrated
-      // to the rules/ format yet (it falls back to reading `schema`).
-      const { rulesFiles } = await readChartArtifacts(chartDir)
-
-      res.json({ templateFiles, schema, values, chartMeta, drift, rulesFiles })
+      // The editor loads from `rulesFiles`; null when the chart has not been
+      // migrated to the rules/ format yet (it falls back to reading `schema`).
+      // A schema that is not JSON is shown as none on a chart with rules/: it
+      // is a product, the drift says it is missing and Save writes it again.
+      res.json({ templateFiles, schema: t.schema, values: t.values, chartMeta: t.chart || {}, drift: t.drift, rulesFiles: t.rulesFiles })
     } catch (err) {
       const { status, body } = errorAnswer(err)
       res.status(status).json(body)
@@ -232,7 +206,8 @@ export default function templatesRouter() {
       const { model, errors } = parseRulesDir(files)
       if (errors.length) return res.status(400).json({ error: 'Invalid rules', errors })
 
-      const before = await readSchema(schemaFile)
+      const onDisk = await readTemplate(req.gitopsDir, req.params.chart)
+      const before = schemaBefore(req, onDisk)
 
       // An x-custom-template group has no rules file — carry it over from the
       // schema so its hand-written template is neither regenerated nor deleted.
@@ -250,7 +225,7 @@ export default function templatesRouter() {
       // Schema carries no rule data any more, so rule-removed detection reads
       // alert names from the model on both sides — the old rules/*.yaml on
       // disk (absent on a legacy chart's first migration, same as before).
-      const { rulesFiles: oldRulesFiles } = await readChartArtifacts(chartDir)
+      const oldRulesFiles = onDisk?.rulesFiles ?? null
       const beforeModel = oldRulesFiles ? parseRulesDir(oldRulesFiles).model : null
       const { breaking, isBreaking, notices } = diffSchema(before, newSchema, {
         before: modelAlerts(beforeModel),
@@ -292,7 +267,7 @@ export default function templatesRouter() {
       if (confirmBreaking && migration && isBreaking) {
         try {
           const plan = await planDeploymentMigration(req.gitopsDir, req.params.chart, newSchema, migration, {
-            deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: await modelBefore(chartDir),
+            deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: modelBefore(onDisk),
           })
           migratedDeployments = plan.deployments
           migrationWrites = plan.writes.filter(w => !w[2]).map(([file, text]) => [file, text])
@@ -320,7 +295,7 @@ export default function templatesRouter() {
       // Every deployment is read only when the change can give one a new
       // problem: with no model before, none counts as new; with the same
       // checks as before, each has the problems it had.
-      const checkedBefore = !(confirmBreaking && migration && isBreaking) ? await modelBefore(chartDir) : null
+      const checkedBefore = !(confirmBreaking && migration && isBreaking) ? modelBefore(onDisk) : null
       if (checkedBefore && valueChecksKey(checkedBefore) !== valueChecksKey(model)) {
         const plan = await planDeploymentMigration(req.gitopsDir, req.params.chart, newSchema, {}, {
           deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: checkedBefore, checkOnly: true,
@@ -342,27 +317,39 @@ export default function templatesRouter() {
         ...migrationWrites,
       ]
       // Made only when it is not there: one that cannot be read is not
-      // written over.
-      const chartYamlRaw = await readTextIfThere(chartYamlFile)
-      const { text: chartYamlText, created } = ensureChartYaml(chartYamlRaw, req.params.chart)
-      if (created) entries.push([chartYamlFile, chartYamlText])
+      // written over (the check below refuses it).
+      if (!onDisk || onDisk.findings.some(f => f.code === 'template.chart-absent')) entries.push([chartYamlFile, ensureChartYaml(null, req.params.chart).text])
 
       // Files on disk with no counterpart any more: a removed group, or a
       // _common.yaml for a chart that no longer has common columns. In
       // templates/ only a generated file is: one a hand-written file sits
       // next to is left alone (#114).
-      const listYaml = async dir => ((await readDirIfThere(dir)) || []).filter(f => f.endsWith('.yaml'))
       // Converting a 1.x chart (no rules/ before): its old rule file, which
-      // holds every group under a name no group has, goes too (#190).
-      const templateNames = await listYaml(tmplDir)
+      // holds every group under a name no group has, goes too (#190). A
+      // folder named *.yaml is no rule object (Helm says so when it renders).
+      const templateNames = onDisk?.templateNames ?? []
       const replaced = oldRulesFiles && Object.keys(oldRulesFiles).length ? [] : replacedByConversion(
-        Object.fromEntries(await Promise.all(templateNames.map(async f => [f, await readTemplateText(path.join(tmplDir, f))]))),
+        Object.fromEntries(templateNames.map(f => [f, onDisk.templateFiles[f] ?? null])),
         products.templates)
       const removed = [
-        ...(await listYaml(rulesDir)).filter(f => !(f in files)).map(f => path.join(rulesDir, f)),
+        ...Object.keys(oldRulesFiles ?? {}).filter(f => !(f in files)).map(f => path.join(rulesDir, f)),
         ...[...new Set([...staleTemplates(templateNames, products.templates, { schemas: [before], models: [beforeModel, model] }), ...replaced])]
           .map(f => path.join(tmplDir, f)),
       ]
+
+      // The Template as this save leaves it: what Helm fails on, or renders
+      // other than written, in the files it does not write (Chart.yaml, the
+      // Template's values.yaml, a hand-written template) is said before
+      // anything is written.
+      const after = await openRepo(req.gitopsDir).with(new Map([
+        ...entries.map(([abs, text]) => [path.relative(req.gitopsDir, abs).replace(/\\/g, '/'), text]),
+        ...removed.map(abs => [path.relative(req.gitopsDir, abs).replace(/\\/g, '/'), null]),
+      ])).templateFiles(path.relative(req.gitopsDir, chartDir).replace(/\\/g, '/'))
+      const { refuse } = after.state === 'ok' ? decide(after.findings, TEMPLATE_POLICIES.saveRules) : { refuse: [] }
+      // A file that cannot be read is answered as one (409, unreadable).
+      const unread = refuse.find(f => /-unreadable$/.test(f.code))
+      if (unread) throw new UnreadableError(path.join(req.gitopsDir, unread.file), { reason: unread.message.replace(/^.*? cannot be read: /, '') })
+      if (refuse.length) return res.status(409).json({ error: `The Template would not render as written: ${refuse.map(f => f.message).join('; ')}`, findings: refuse.map(f => ({ code: f.code, file: f.file, description: f.message })) })
 
       const wrote = await writeChanged(entries)
       for (const abs of removed) await fs.rm(abs, { force: true })
@@ -397,16 +384,16 @@ export default function templatesRouter() {
   // What a breaking change plus a mapping would do to every affected
   // deployment — feeds step 3 of the breaking-change dialog. Writes nothing.
   router.post('/:chart/migration-preview', async (req, res) => {
-    const { schemaFile } = chartPaths(req, req.params.chart)
     const { files, migration } = req.body || {}
     if (!files || typeof files !== 'object') return res.status(400).json({ error: 'files object required' })
     try {
       const { model, errors } = parseRulesDir(files)
       if (errors.length) return res.status(400).json({ error: 'Invalid rules', errors })
-      const targetSchema = modelToSchema(model, await readSchema(schemaFile))
+      const onDisk = await readTemplate(req.gitopsDir, req.params.chart)
+      const targetSchema = modelToSchema(model, schemaBefore(req, onDisk))
       const { deployments } = await planDeploymentMigration(
         req.gitopsDir, req.params.chart, targetSchema, migration || {},
-        { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: await modelBefore(chartPaths(req, req.params.chart).chartDir) })
+        { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: modelBefore(onDisk) })
       res.json({ deployments })
     } catch (err) {
       const { status, body } = errorAnswer(err)
@@ -426,10 +413,23 @@ export default function templatesRouter() {
     }
     try {
       const content = typeof values === 'string' ? values : dumpForHelm(values, { lineWidth: -1 })
+      // The Template as this save leaves it, read as Helm reads it: a text
+      // that is not YAML, one AlertForge cannot tell Helm's reading of (the
+      // line is named), and what else of the Template keeps every deployment
+      // from rendering are refused before it is written. Saving does not run
+      // Helm.
+      const dir = path.relative(req.gitopsDir, path.dirname(valuesFile)).replace(/\\/g, '/')
+      const after = await openRepo(req.gitopsDir).with(new Map([[`${dir}/values.yaml`, content]])).templateFiles(dir)
+      if (after.state === 'unreadable') throw new UnreadableError(path.join(req.gitopsDir, after.file), { reason: after.why })
+      const { refuse } = after.state === 'ok' ? decide(after.findings, TEMPLATE_POLICIES.saveValues) : { refuse: [] }
+      const unread = refuse.find(f => /-unreadable$/.test(f.code))
+      if (unread) throw new UnreadableError(path.join(req.gitopsDir, unread.file), { reason: unread.message.replace(/^.*? cannot be read: /, '') })
+      if (refuse.length) return res.status(400).json({ error: refuse.map(f => f.message).join('; '), findings: refuse.map(f => ({ code: f.code, file: f.file, description: f.message, ...(f.at ? { at: f.at } : {}) })) })
       await writeWhole(valuesFile, content)
       res.json({ ok: true })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -494,9 +494,11 @@ export default function templatesRouter() {
     try {
       const tmplFile = await templateFile(req)
       if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
-      const content = await readTextIfThere(tmplFile)
-      if (content === null) return res.status(404).json({ error: 'Template not found' })
-      res.json({ content })
+      const { tmplDir } = chartPaths(req, req.params.chart)
+      const read = await openRepo(req.gitopsDir).file(path.relative(req.gitopsDir, path.join(tmplDir, `${req.params.template}.yaml`)).replace(/\\/g, '/'))
+      if (read.state === 'absent') return res.status(404).json({ error: 'Template not found' })
+      if (read.state === 'unreadable') throw new UnreadableError(path.join(tmplDir, `${req.params.template}.yaml`), { reason: read.why })
+      res.json({ content: read.value.text })
     } catch (err) {
       const { status, body } = errorAnswer(err)
       res.status(status).json(body)

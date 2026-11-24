@@ -1,11 +1,12 @@
 import express from 'express'
 import path from 'path'
-import { chartDrift, readChartModel } from '../lib/chartFiles.js'
+import { readTemplate } from '../lib/chartFiles.js'
+import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
 import { resolveStack, mergeValues } from '../lib/stack.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment } from '../repo/deployment.js'
 import { findingsOf, NotLoadedError } from '../repo/loaded.js'
-import { explain } from '../repo/policy.js'
+import { decide, explain } from '../repo/policy.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
 import { derivedTable, groupName } from '../../src/utils/rulesFile.js'
@@ -13,6 +14,7 @@ import { logger } from '../lib/logger.js'
 import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
+import { UnreadableError } from '../lib/readIfThere.js'
 import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
 
 // One segment of a file name: not a path, not hidden.
@@ -121,13 +123,25 @@ export default function renderRouter() {
       }
 
       const output = await renderChart(templateDir, templateArgs)
-      const check = await checkRules(output)
-      // Like the summary and drift below: optional, so a failure here cannot
-      // turn a good render into { ok: false }.
-      const chartModel = await readChartModel(chartDir).catch(err => {
-        logger.error({ err, chart: template, deployment }, 'readChartModel failed, rendering without a model')
-        return { model: null, fromRules: false, schema: null }
-      })
+      let check = await checkRules(output)
+      // The Template's files, read once: its model for the summary and the
+      // self-check, the drift, and what Helm renders other than written
+      // (a generated file missing, a partial holding rules, rules repeated)
+      // said with the check. A Template that cannot be read renders all the
+      // same (Helm said so): shown without them.
+      let tmpl = null
+      try {
+        tmpl = await readTemplate(req.gitopsDir, template)
+      } catch (err) {
+        if (!(err instanceof UnreadableError)) throw err
+        logger.warn({ err, chart: template, deployment }, 'the Template cannot be read, rendering without its model')
+      }
+      const chartModel = { model: tmpl?.model ?? null, fromRules: !!tmpl?.fromRules, schema: tmpl?.schema ?? null }
+      const { refuse: templateProblems } = tmpl ? decide(tmpl.findings, TEMPLATE_POLICIES.preview) : { refuse: [] }
+      if (templateProblems.length) {
+        const said = templateProblems.map(f => f.message).join('\n')
+        check = { ...check, passed: false, output: check.output ? `${said}\n${check.output}` : said }
+      }
       let selfCheck = null
       try {
         selfCheck = selfCheckRendered(output, chartModel.fromRules ? chartModel.model : null)
@@ -159,7 +173,7 @@ export default function renderRouter() {
       })
       // The rule owner is looking at products; if they are older than the
       // chart's rules/ source, what they see here may not be current.
-      const drift = await chartDrift(chartDir).catch(() => ({ state: 'ok' }))
+      const drift = tmpl?.drift ?? null
       res.json({ ok: true, output, check, selfCheck, summary, drift, ...(valueWarnings.length ? { valueWarnings } : {}) })
     } catch (err) {
       res.json({ ok: false, error: err.stderr || err.stdout || err.message })

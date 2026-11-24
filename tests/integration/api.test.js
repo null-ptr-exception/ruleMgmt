@@ -194,11 +194,14 @@ describe('reads and failed writes leave no chart behind', () => {
     await expect(fs.access(path.join(tmpDir, 'charts', 'no-such-chart'))).rejects.toThrow()
   })
 
-  it('a clone that fails part-way is removed, so a retry is not "already exists"', async () => {
+  it('a clone that cannot be made leaves no copy, so a retry is not "already exists"', async () => {
     await api('POST', '/api/v2/charts', { name: 'clone-src' })
+    // no rules/ to generate one from, and none on disk
     await fs.rm(path.join(tmpDir, 'charts', 'clone-src', 'values.schema.json'), { force: true })
-    const { status } = await api('POST', '/api/v2/charts/clone-src/clone', { newName: 'clone-half' })
-    expect(status).toBe(500)
+    const { status, data } = await api('POST', '/api/v2/charts/clone-src/clone', { newName: 'clone-half' })
+    // Refused naming what is missing, before anything is copied.
+    expect(status).toBe(409)
+    expect(data.error).toMatch(/no values\.schema\.json/)
     await expect(fs.access(path.join(tmpDir, 'charts', 'clone-half'))).rejects.toThrow()
     await api('DELETE', '/api/v2/charts/clone-src')
   })

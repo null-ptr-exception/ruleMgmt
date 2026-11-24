@@ -355,6 +355,25 @@ no permission, opening, saving, renaming or deleting one of its files says
 `deployments/w/d`. Whatever fails, a request is answered and the server goes
 on serving the next one.
 
+A Template folder that is a link leading outside the repo, or a file in it
+that does, is read as one that cannot be read, everywhere; a link to a
+folder of the repo is read as that folder (the Template list shows it, a
+commit checks it). The Template's `values.yaml` is read as Helm reads it
+(`010` is 8, `yes` is true), and opening the Template shows it so. A text
+AlertForge cannot tell Helm's reading of — a tag such as `!custom`, a block
+text with an indentation digit (`|2`), a `[` list not closed — is named by
+its line, with a request to write it plainly: saving refuses it, and so do a
+commit, a new deployment of the Template and Preview.
+
+Saving the Template's rules or its values checks the Template as the save
+leaves it, without running Helm: a `Chart.yaml` or `values.yaml` that keeps
+every deployment from rendering, a folder name with a dot, a partial
+(`templates/_x.yaml`) holding a rule object, or a 1.x rule file repeating
+the generated alerts is named and nothing is written. A new deployment is
+not made from a Template none of whose deployments would render. Preview
+shows Helm's output and says the same with its check, as does a generated
+template that is missing.
+
 ### Files of your own in templates/
 
 Regenerating removes a template only when it is the generator's own

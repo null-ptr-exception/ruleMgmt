@@ -19,6 +19,7 @@
  *   rules-unreadable     rules/ or templates/, or a file in them
  *   rules-invalid        rules/ does not parse
  *   rule-check           a rule check (ruleChecks.js) refuses the rules
+ *   schema-absent        only the generated schema is not there
  *   drift-missing / drift-stale / drift-repeats
  *                        a generated file is not there, is not what rules/
  *                        makes (hand-edited, or behind), or a rule object
@@ -40,6 +41,7 @@ import { computeDrift, generateProducts, holdsRuleObject, repeatsText, REPEATS_F
 import { objectMetaFromEnv } from '../../../src/utils/objectMeta.js'
 import { schemaProblem } from '../schema.js'
 
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
 // A version as Helm's semver library reads one: a leading v, a part left
@@ -71,7 +73,7 @@ async function readYamlFiles(repo, dir, { skipFolders = false } = {}) {
     else if (f.state === 'unreadable') unreadable ??= { file: `${dir}/${name}`, why: f.why }
     // absent: gone since the listing
   }
-  return { state: 'ok', files, unreadable }
+  return { state: 'ok', files, unreadable, names }
 }
 
 // A schema the generator wrote carries no rules (modelToSchema); a 1.x
@@ -95,11 +97,11 @@ export async function buildTemplateFiles(repo, dir) {
   if (chartRead.state === 'absent') {
     add({ code: 'template.chart-absent', file: chartFile, helm: 'fails', message: `${chartFile} is not there: Helm renders no deployment of the Template without it` })
   } else if (chartRead.state === 'unreadable') {
-    add({ code: 'template.chart-unreadable', file: chartFile, helm: 'fails', message: `${chartFile} cannot be read (${chartRead.why})` })
+    add({ code: 'template.chart-unreadable', file: chartFile, helm: 'fails', message: `${chartFile} cannot be read: ${chartRead.why}` })
   } else if (chartRead.state === 'invalid') {
     for (const f of chartRead.findings) {
       const tell = f.helm === 'unknown'
-      add({ code: tell ? 'template.chart-cannot-tell' : 'template.chart-not-yaml', file: chartFile, helm: f.helm, message: tell ? `${f.message} — ${PLAINLY}` : `${chartFile} is not valid YAML (${f.message})`, ...(f.at ? { at: f.at } : {}) })
+      add({ code: tell ? 'template.chart-cannot-tell' : 'template.chart-not-yaml', file: chartFile, helm: f.helm, message: tell ? `${chartFile} cannot be read: ${f.message.replace(`${chartFile} `, '')} — ${PLAINLY}` : `${chartFile} cannot be read: not valid YAML (${f.message.replace(`${chartFile} `, '').replace('not valid YAML: ', '')})`, ...(f.at ? { at: f.at } : {}) })
     }
   } else if (!isMap(chartRead.value)) {
     add({ code: 'template.chart-not-map', file: chartFile, helm: 'fails', message: `${chartFile} is not a map` })
@@ -122,11 +124,11 @@ export async function buildTemplateFiles(repo, dir) {
     // A folder named values.yaml is skipped by Helm; it is still named here,
     // not taken for none.
     const folder = valuesRead.why === 'it is a folder, not a file'
-    add({ code: 'template.values-unreadable', file: valuesFile, helm: folder ? 'renders' : 'fails', message: `${valuesFile} cannot be read (${valuesRead.why})` })
+    add({ code: 'template.values-unreadable', file: valuesFile, helm: folder ? 'renders' : 'fails', message: `${valuesFile} cannot be read: ${valuesRead.why}` })
   } else if (valuesRead.state === 'invalid') {
     for (const f of valuesRead.findings) {
       const tell = f.helm === 'unknown'
-      add({ code: tell ? 'template.values-cannot-tell' : 'template.values-not-yaml', file: valuesFile, helm: f.helm, message: tell ? `${f.message} — ${PLAINLY}` : `${valuesFile} is not valid YAML (${f.message})`, ...(f.at ? { at: f.at } : {}) })
+      add({ code: tell ? 'template.values-cannot-tell' : 'template.values-not-yaml', file: valuesFile, helm: f.helm, message: tell ? `${valuesFile} cannot be read: ${f.message.replace(`${valuesFile} `, '')} — ${PLAINLY}` : `${valuesFile} cannot be read: not valid YAML (${f.message.replace(`${valuesFile} `, '').replace('not valid YAML: ', '')})`, ...(f.at ? { at: f.at } : {}) })
     }
   } else if (valuesRead.state === 'ok') {
     if (isMap(valuesRead.value)) values = valuesRead.value
@@ -138,7 +140,7 @@ export async function buildTemplateFiles(repo, dir) {
   let schema = null
   let schemaNotJson = null
   if (schemaRead.state === 'unreadable') {
-    add({ code: 'template.schema-unreadable', file: schemaFile, helm: 'fails', message: `${schemaFile} cannot be read (${schemaRead.why})` })
+    add({ code: 'template.schema-unreadable', file: schemaFile, helm: 'fails', message: `${schemaFile} cannot be read: ${schemaRead.why}` })
   } else if (schemaRead.state === 'ok') {
     try {
       schema = JSON.parse(schemaRead.value.text.replace(/^\ufeff/, ''))
@@ -150,9 +152,6 @@ export async function buildTemplateFiles(repo, dir) {
       const helm = schema === false || schema === null || Array.isArray(schema) ? 'fails' : 'unknown'
       add({ code: 'template.schema-not-object', file: schemaFile, helm, message: `${schemaFile} must be a JSON object` })
       schema = null
-    } else if (schema) {
-      const problem = schemaProblem(schema)
-      if (problem) add({ code: 'template.schema-unchecked', file: schemaFile, helm: 'unknown', message: `${schemaFile}: AlertForge cannot tell how Helm checks values against this schema: ${problem}. AlertForge checks schemas made of type, properties, items, required, enum, pattern, minLength and annotations` })
     }
   }
 
@@ -170,10 +169,13 @@ export async function buildTemplateFiles(repo, dir) {
   // from. Taken for none, a save would write over them.
   const schemaUnreadable = schemaRead.state === 'unreadable' ? { file: schemaFile, why: schemaRead.why }
     : schemaNotJson !== null && !fromRules ? { file: schemaFile, why: `not valid JSON (${schemaNotJson})` } : null
-  const unreadable = rules.state === 'unreadable' ? rules
-    : rules.unreadable ?? (templates.state === 'unreadable' ? templates : templates.unreadable ?? schemaUnreadable)
+  const rulesUnreadable = rules.state === 'unreadable' ? rules : rules.unreadable ?? null
+  const templatesUnreadable = templates.state === 'unreadable' ? templates : templates.unreadable ?? null
+  const unreadable = rulesUnreadable ?? templatesUnreadable ?? schemaUnreadable
+  // What the rule model is built from: rules/, or a schema that is the source.
+  const sourceUnreadable = rulesUnreadable ?? schemaUnreadable
   if (unreadable && unreadable !== schemaUnreadable) {
-    add({ code: 'template.rules-unreadable', file: unreadable.file, helm: unreadable.file.startsWith(`${dir}/templates`) ? 'fails' : 'n/a', message: `${unreadable.file} cannot be read (${unreadable.why})` })
+    add({ code: 'template.rules-unreadable', file: unreadable.file, helm: unreadable.file.startsWith(`${dir}/templates`) ? 'fails' : 'n/a', message: `${unreadable.file} cannot be read: ${unreadable.why}` })
   }
 
   for (const [n, text] of Object.entries(templateFiles)) {
@@ -203,13 +205,24 @@ export async function buildTemplateFiles(repo, dir) {
     drift = computeDrift({ rulesFiles, schema, templateFiles, objectMeta })
     if (fromRules && !ruleErrors.length) products = generateProducts(model, schema, objectMeta)
   }
+  // A keyword AlertForge does not check as Helm does. The schema rules/
+  // generates is not asked: it is what the generator writes, rendered by
+  // Helm in the generator's own tests.
+  if (schema && !(products && sameJson(schema, JSON.parse(products.schemaText)))) {
+    const problem = schemaProblem(schema)
+    if (problem) add({ code: 'template.schema-unchecked', file: schemaFile, helm: 'unknown', message: `${schemaFile}: AlertForge cannot tell how Helm checks values against this schema: ${problem}. AlertForge checks schemas made of type, properties, items, required, enum, pattern, minLength and annotations` })
+  }
   if (ruleErrors.length) {
     add({ code: 'template.rules-invalid', file: `${dir}/rules`, helm: 'n/a', message: `${dir}/rules cannot be read (${ruleErrors.slice(0, 3).join('; ')}${ruleErrors.length > 3 ? `; and ${ruleErrors.length - 3} more` : ''})` })
   }
   for (const f of ruleChecks) {
     add({ code: 'template.rule-check', file: `${dir}/rules`, helm: 'n/a', message: `${name}/${f.group}: ${f.message}` })
   }
-  if (drift?.state === 'missing') {
+  // Only the schema missing: Helm renders as before, without checking the
+  // values; opening the Template or a save writes it.
+  if (drift?.state === 'missing' && drift.files.every(f => f === 'values.schema.json')) {
+    add({ code: 'template.schema-absent', file: `${dir}/values.schema.json`, helm: 'renders', message: `${dir}/values.schema.json is not there: Helm does not check the values — open the Template or regenerate to write it` })
+  } else if (drift?.state === 'missing') {
     add({ code: 'template.drift-missing', file: dir, helm: 'renders-differently', message: `${name}: products are out of date (${drift.files.join(', ')}) — regenerate before committing` })
   } else if (drift?.state === 'stale' && !drift.errors) {
     if (drift.repeats?.length) {
@@ -227,9 +240,10 @@ export async function buildTemplateFiles(repo, dir) {
   return ok({
     name, dir, chart,
     values, valuesText: valuesRaw.state === 'ok' ? valuesRaw.value.text : null,
-    schema, schemaNotJson,
+    schema, schemaNotJson, schemaText: schemaRead.state === 'ok' ? schemaRead.value.text : null,
     rulesFiles, templateFiles, fromRules,
-    model, ruleErrors, ruleChecks, products, drift, unreadable,
+    templateNames: templates.state === 'ok' ? templates.names : [],
+    model, ruleErrors, ruleChecks, products, drift, unreadable, sourceUnreadable,
   }, findings)
 }
 
@@ -270,7 +284,6 @@ export const TEMPLATE_POLICIES = Object.freeze({
       'template.rules-invalid': { action: 'ignore', why: 'what is on disk renders; Commit names it' },
       'template.rule-check': { action: 'ignore', why: 'what is on disk renders; Commit names it' },
       'template.drift-stale': { action: 'ignore', why: 'what is on disk renders; Commit names it' },
-      'template.rules-unreadable': { action: 'refuse', why: 'a file that cannot be read is not taken for none' },
       'template.values-unreadable': { action: 'refuse', why: FOLDER },
       'template.legacy': { action: 'ignore', why: LEGACY },
     },
@@ -303,6 +316,7 @@ export const TEMPLATE_POLICIES = Object.freeze({
   cli: definePolicy('cli', {
     rows: {
       'template.chart-absent': { action: 'warn', why: 'a Template can be started from rules/ alone; gen-rules --init writes its Chart.yaml' },
+      'template.chart-name': { action: 'warn', why: 'the tools are given a folder by its path, which may be a copy or outside the repo\'s layout; a deployment finds the chart by the name in Chart.yaml, which the app keeps the folder\'s' },
       'template.rules-invalid': { action: 'ignore', why: 'the tool reports it in its own words' },
       'template.rule-check': { action: 'ignore', why: 'the tool reports it in its own words' },
       'template.drift-stale': { action: 'ignore', why: 'the tool compares or writes the generated files itself' },

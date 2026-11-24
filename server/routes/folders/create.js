@@ -3,7 +3,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
-import { getChartsDir, findAlertTemplateCharts } from '../../lib/chartDiscovery.js'
+import { getChartsDir, findAlertTemplateCharts, templateForNewDeployment } from '../../lib/chartDiscovery.js'
 import { wrapValues } from '../../lib/subchart.js'
 import { isDeploymentDir, isSafeSyncPath } from '../../lib/sync.js'
 import { newDeploymentProblem } from '../../lib/deploymentWalk.js'
@@ -110,11 +110,10 @@ export function initRoutes(router) {
         }
       }
 
-      const chartDir = path.join(chartsDir, chart)
-      // The Template has to be there, and readable; its version is not
-      // copied (below).
-      const templateChart = await parseIfThere(path.join(chartDir, 'Chart.yaml'), yaml.load)
-      if (templateChart === null) return res.status(400).json({ error: `${chart} is not a Template of this repo` })
+      // The Template has to be there, readable, and render (chartDiscovery.js);
+      // its version is not copied (below). Its values.yaml is read below.
+      const template = await templateForNewDeployment(req.gitopsDir, chart)
+      if (template.error) return res.status(template.status).json({ error: template.error })
 
       // The Template's groups, from its values.yaml: none when it has none;
       // one that cannot be read or parsed is said, not taken for none.
@@ -161,7 +160,7 @@ export function initRoutes(router) {
       // Helm reads this as a URL, and the file is committed and rendered on
       // Linux even when it was written on Windows, so the separator has to be
       // a forward slash regardless of the platform that produced it.
-      const relPath = path.relative(deployDir, chartDir).replace(/\\/g, '/')
+      const relPath = path.relative(deployDir, path.join(chartsDir, chart)).replace(/\\/g, '/')
 
       const deployChart = {
         apiVersion: 'v2',

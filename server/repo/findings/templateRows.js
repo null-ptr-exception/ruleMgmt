@@ -21,6 +21,7 @@ export const TEMPLATE_ROWS = Object.freeze({
     // default); a Template's file Helm stops on, or renders other than
     // written, fails every deployment of it: refused, as drift was.
     'template.*': { action: 'refuse', why: 'a Template file Helm fails on, or renders other than written, fails every deployment of the Template' },
+    'template.schema-absent': { action: 'ignore', why: 'only the generated schema missing: Helm renders the same, without checking the values' },
     'template.rules-unreadable': { action: 'refuse', why: 'a file that cannot be read is not committed as if fine' },
     'template.rules-invalid': { action: 'refuse', why: RULES_SOURCE },
     'template.rule-check': { action: 'refuse', why: RULES_SOURCE },
@@ -32,7 +33,7 @@ export const TEMPLATE_ROWS = Object.freeze({
     // Commit refused a values.yaml or Chart.yaml it could not parse before
     // there was a reader that can say "cannot tell"; it keeps refusing.
     'template.values-cannot-tell': { action: 'refuse', why: 'the Template values.yaml is read for every deployment: Commit refused one it could not read, and keeps doing so' },
-    'template.chart-cannot-tell': { action: 'refuse', why: 'Commit refused a Chart.yaml it could not read, and keeps doing so' },
+    'template.chart-cannot-tell': { action: 'ignore', why: 'named with each deployment of the Template' },
     'template.rules-gone': { action: 'list', why: 'what is on disk renders; a save or gen-rules would write no rules, and refuses' },
     'template.schema-unchecked': { action: 'list', why: CANNOT_TELL_LIST },
     'template.chart-absent': { action: 'ignore', why: 'named with each deployment of the Template (its Template is not in the repo)' },

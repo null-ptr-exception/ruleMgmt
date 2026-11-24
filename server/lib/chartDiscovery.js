@@ -3,6 +3,11 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from './routingFiles.js'
+import { openRepo } from '../repo/openRepo.js'
+import { decide } from '../repo/policy.js'
+import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
+import { UnreadableError } from './readIfThere.js'
+import { chartsDir as chartsDirRel } from '../repo/template.js'
 
 export function getChartsDir(gitopsDir, chartsDirEnv) {
   return path.join(gitopsDir, chartsDirEnv || 'charts')
@@ -12,37 +17,62 @@ export function getDeploymentsDir(gitopsDir, deploymentsDirEnv) {
   return path.join(gitopsDir, deploymentsDirEnv || 'deployments')
 }
 
+/**
+ * The Templates of the repo (the Templates folder `chartsDir`, absolute):
+ * each folder there, a link to a folder of the repo included, whose
+ * Chart.yaml (as Helm reads it) is annotated app: alertforge. A folder that
+ * cannot be read, or leads outside the repo, is left out.
+ */
 export async function findAlertTemplateCharts(chartsDir) {
-  let entries
-  try {
-    entries = await fs.readdir(chartsDir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-
+  // The repo it is the Templates folder of; a folder given on its own
+  // (not <repo>/<CHARTS_DIR>) is read as a folder of its parent.
+  const rel = chartsDirRel()
+  const abs = path.resolve(chartsDir)
+  const under = rel !== null && abs.endsWith(path.join(path.sep, rel))
+  const root = under ? abs.slice(0, -rel.length - 1) : path.dirname(abs)
+  const base = under ? rel : path.basename(abs)
+  const repo = openRepo(root)
+  const listed = await repo.dir(base)
+  if (listed.state !== 'ok') return []
   const results = []
-  for (const e of entries) {
-    if (!e.isDirectory()) continue
-    const chartYamlPath = path.join(chartsDir, e.name, 'Chart.yaml')
-    try {
-      const raw = await fs.readFile(chartYamlPath, 'utf-8')
-      const meta = yaml.load(raw) || {}
-      if (!meta.annotations || meta.annotations.app !== 'alertforge') continue
-
-      let templateCount = 0
-      try {
-        const files = await fs.readdir(path.join(chartsDir, e.name, 'templates'))
-        templateCount = files.filter(f => f.endsWith('.yaml')).length
-      } catch { /* no templates dir */ }
-
-      results.push({
-        name: meta.name || e.name,
-        version: meta.version || '0.0.0',
-        templateCount,
-      })
-    } catch { /* no Chart.yaml or unreadable */ }
+  for (const [name, kind] of [...listed.value.entries].sort(([a], [b]) => a.localeCompare(b))) {
+    if (kind !== 'dir') continue
+    const t = await repo.templateFiles(`${base}/${name}`)
+    // A file in it that cannot be read is said where it is opened or
+    // committed; the Template is listed all the same.
+    if (t.state !== 'ok') continue
+    const meta = t.value.chart
+    if (!meta?.annotations || meta.annotations.app !== 'alertforge') continue
+    results.push({
+      name: meta.name || name,
+      version: meta.version || '0.0.0',
+      templateCount: t.value.templateNames.length,
+    })
   }
   return results
+}
+
+/**
+ * The Template a new deployment is made from, read as everything else reads
+ * it: `{ defaults }` (its values.yaml as Helm reads it), or `{ status, error }`
+ * when no deployment of it would render: not a Template of the repo (400),
+ * or what Helm fails on or renders other than written (409, naming it). A
+ * file that cannot be read is an UnreadableError naming it.
+ */
+export async function templateForNewDeployment(gitopsDir, chart) {
+  const base = chartsDirRel()
+  const loaded = base === null ? null : await openRepo(gitopsDir).templateFiles(`${base}/${chart}`)
+  if (loaded?.state === 'unreadable') throw new UnreadableError(path.join(gitopsDir, loaded.file), { reason: loaded.why })
+  if (!loaded || loaded.state === 'absent' || loaded.findings.some(f => f.code === 'template.chart-absent')) return { status: 400, error: `${chart} is not a Template of this repo` }
+  const t = loaded.value
+  // A file of rules/ that cannot be read is no reason Helm fails (its
+  // finding says so); one of templates/ is.
+  // Its values.yaml is the new deployment's caller's to read and say (init).
+  const refuse = decide(loaded.findings, TEMPLATE_POLICIES.init).refuse.filter(f => !/^template\.values-/.test(f.code))
+  const unread = refuse.find(f => /-(unreadable|not-yaml|cannot-tell)$/.test(f.code))
+  if (unread) throw new UnreadableError(path.join(gitopsDir, unread.file), { reason: unread.message.replace(/^.*? cannot be read: /, '') })
+  if (refuse.length) return { status: 409, error: `No deployment of ${chart} would render as written: ${refuse.map(f => f.message).join('; ')}` }
+  return { defaults: t.values }
 }
 
 export async function scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir) {

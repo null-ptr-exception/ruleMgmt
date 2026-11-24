@@ -103,7 +103,7 @@ describe('opening a Template', () => {
   })
 
   it('a values.yaml that is not YAML: refused, naming it — not shown as empty for a Save to write over', async () => {
-    await write('charts/demo/values.yaml', 'cpu: [\n')
+    await write('charts/demo/values.yaml', 'cpu: x: y\n')
     const { status, data } = await api('GET', '/api/v2/templates/demo')
     expect(status).toBe(409)
     names(data, 'charts/demo/values.yaml cannot be read: not valid YAML')
@@ -210,7 +210,7 @@ describe('making a deployment', () => {
   })
 
   it('the Template\'s values.yaml that is not YAML: refused before anything is written, not made with no groups', async () => {
-    await write('charts/demo/values.yaml', 'cpu: [\n')
+    await write('charts/demo/values.yaml', 'cpu: x: y\n')
     const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })
     expect(status).toBe(409)
     names(data, 'charts/demo/values.yaml cannot be read: not')
@@ -360,7 +360,7 @@ describe('the Template\'s own values.yaml that is not YAML', () => {
   it('refuses the commit, naming it', async () => {
     await write('notes.txt', 'x\n')
     expect((await api('POST', '/api/v2/git/commit', { message: 'x' })).status).toBe(200)
-    await write('charts/demo/values.yaml', 'cpu: [\n')
+    await write('charts/demo/values.yaml', 'cpu: x: y\n')
     await write('notes.txt', 'y\n')
     const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'x' })
     expect(status).toBe(409)

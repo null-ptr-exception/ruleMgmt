@@ -1,15 +1,16 @@
 /**
- * Reading a chart's source and products off disk, and the drift between them
- * — see issue #57. Shared by the templates, render and git routes.
+ * A Template's source and products as the repo loader reads them, the drift
+ * between them (#57), and writing the products. Shared by the templates,
+ * render and git routes.
  */
 
 import fs from 'fs/promises'
 import path from 'path'
-import { computeDrift, generateProducts } from '../../src/utils/drift.js'
-import { parseRulesDir, schemaToModel } from '../../src/utils/rulesFile.js'
-import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
 import { writeWhole } from './routingFiles.js'
-import { readTextIfThere, readDirIfThere, UnreadableError } from './readIfThere.js'
+import { readTextIfThere, UnreadableError } from './readIfThere.js'
+import { openRepo } from '../repo/openRepo.js'
+import { chartsDir } from '../repo/template.js'
+import { openRepoAt } from '../repo/locate.js'
 
 // null only when the file is not there: one that cannot be read is an error,
 // not a file to write over.
@@ -38,78 +39,53 @@ export async function writeChanged(entries) {
 }
 
 /**
- * { '<name>.yaml': text } for a directory, or null when the directory is not
- * there. A directory that cannot be read, or a *.yaml in it that cannot (a
- * folder named so, a file without permission), is an error naming it: read
- * as absent, a chart's rules/ would make it a legacy or empty chart.
+ * The Template folder `<CHARTS_DIR>/<name>`, every file of it read once
+ * through the repo loader (server/repo/template.js loadTemplateFiles): its
+ * files, what they add up to, and `findings`. null when there is no such
+ * folder. A folder that cannot be read or leads out of the repo, and a
+ * file nothing can be worked out without (rules/, templates/, a schema
+ * that is the source), is an UnreadableError naming it: taken for none, a
+ * chart's rules/ would make it a legacy or empty chart.
  */
-async function readYamlDir(dir, { skipFolders = false } = {}) {
-  const names = await readDirIfThere(dir)
-  if (names === null) return null
-  const out = {}
-  for (const name of names.filter(f => f.endsWith('.yaml'))) {
-    const file = path.join(dir, name)
-    let text
-    try {
-      text = await readTextIfThere(file)
-    } catch (err) {
-      if (skipFolders && err.cause?.code === 'EISDIR') continue
-      throw err
-    }
-    // null: gone, or being written again, since the listing (a link to
-    // nothing readTextIfThere has already named).
-    if (text !== null) out[name] = text
-  }
-  return out
-}
-
-/**
- * The chart's source and products. `schema` is null when values.schema.json
- * is not there, or — on a chart with rules/, where it is a product the next
- * save writes again — when it is not JSON. On a chart without rules/ the
- * schema is the source, and one that is not JSON is an error naming it.
- */
-export async function readChartArtifacts(chartDir) {
-  const rulesFiles = await readYamlDir(path.join(chartDir, 'rules'))
-  // A folder named *.yaml in templates/ is a folder to Helm, which reads
-  // the files in it: not a template here, as gen-rules and Save take it.
-  const templateFiles = (await readYamlDir(path.join(chartDir, 'templates'), { skipFolders: true })) || {}
-
-  const schemaFile = path.join(chartDir, 'values.schema.json')
-  const schemaText = await readTextIfThere(schemaFile)
-  let schema = null
-  if (schemaText !== null) {
-    try {
-      schema = JSON.parse(schemaText)
-    } catch (err) {
-      if (!rulesFiles || !Object.keys(rulesFiles).length) throw new UnreadableError(schemaFile, { reason: `not valid JSON (${err.message})` })
-    }
-  }
-
-  return { rulesFiles, templateFiles, schema }
+export async function readTemplate(gitopsDir, name, repo = openRepo(gitopsDir)) {
+  const base = chartsDir()
+  if (base === null) throw new UnreadableError(String(process.env.CHARTS_DIR), { reason: 'CHARTS_DIR is no folder of the repo' })
+  const t = await repo.templateFiles(`${base}/${name}`)
+  if (t.state === 'absent') return null
+  const bad = t.state === 'unreadable' ? t : t.value.unreadable
+  if (bad) throw new UnreadableError(path.join(gitopsDir, bad.file), { reason: bad.why })
+  return { ...t.value, findings: t.findings }
 }
 
 /**
  * The chart's rule model: parsed from rules/ when the chart has one, else
- * adapted from a legacy schema. The schema of a migrated chart carries no
- * rules, so reading it there yields groups with none. `fromRules` says which;
- * `model` is null when there is neither.
+ * adapted from a legacy schema. `fromRules` says which; `model` is null
+ * when there is neither, or no folder. (Kept for deploymentWrite.js until
+ * it reads the Template through the repo loader itself.)
  */
 export async function readChartModel(chartDir) {
-  const { rulesFiles, schema } = await readChartArtifacts(chartDir)
-  const fromRules = !!(rulesFiles && Object.keys(rulesFiles).length)
-  let model = null
-  try {
-    if (fromRules) model = parseRulesDir(rulesFiles).model
-    else if (schema) model = schemaToModel(schema).model
-  } catch { /* an unparseable source: callers go without */ }
-  return { model, fromRules, schema }
+  // Only what the model is built from has to be read: a templates/ file
+  // that cannot be is Commit's to name.
+  const t = await readTemplateAt(chartDir, { model: true })
+  return { model: t?.model ?? null, fromRules: !!t?.fromRules, schema: t?.schema ?? null }
 }
 
-/** { state, files?, errors? } — see computeDrift. */
-export async function chartDrift(chartDir) {
-  const { rulesFiles, templateFiles, schema } = await readChartArtifacts(chartDir)
-  return computeDrift({ rulesFiles, schema, templateFiles, objectMeta: objectMetaFromEnv() })
+/**
+ * readTemplate of a Template folder given by its path (a command line
+ * tool's argument), in the repo it is in (server/repo/locate.js).
+ */
+export async function readTemplateAt(chartDir, { model = false } = {}) {
+  const { repo, root, rel } = openRepoAt(chartDir)
+  const t = await repo.templateFiles(rel)
+  if (t.state === 'absent') return null
+  const bad = t.state === 'unreadable' ? t : model ? t.value.sourceUnreadable : t.value.unreadable
+  if (bad) throw new UnreadableError(path.join(root, bad.file), { reason: bad.why })
+  return { ...t.value, findings: t.findings, repo, root }
+}
+
+/** { state, files?, errors? } — see computeDrift; null when there is no such Template. */
+export async function chartDrift(gitopsDir, name, repo) {
+  return (await readTemplate(gitopsDir, name, repo))?.drift ?? null
 }
 
 /**
@@ -120,21 +96,19 @@ export async function chartDrift(chartDir) {
  * the editor reports and a Save resolves, not something a read overwrites.
  * Returns null when there is no rules/ source, or { errors } / { written }.
  */
-export async function regenerateProducts(chartDir) {
-  const { rulesFiles, schema } = await readChartArtifacts(chartDir)
-  if (!rulesFiles || !Object.keys(rulesFiles).length) return null
-
-  const { model, errors } = parseRulesDir(rulesFiles)
-  if (errors.length) return { errors }
-
-  const { schemaText, templates } = generateProducts(model, schema, objectMetaFromEnv())
-  const tmplDir = path.join(chartDir, 'templates')
+export async function regenerateProducts(gitopsDir, name) {
+  const repo = openRepo(gitopsDir)
+  const t = await readTemplate(gitopsDir, name, repo)
+  if (!t?.fromRules) return null
+  if (t.ruleErrors.length) return { errors: t.ruleErrors }
   const entries = [
-    [path.join(chartDir, 'values.schema.json'), schemaText],
-    ...Object.entries(templates).map(([name, content]) => [path.join(tmplDir, name), content]),
+    ['values.schema.json', t.products.schemaText],
+    ...Object.entries(t.products.templates).map(([n, content]) => [`templates/${n}`, content]),
   ]
   const absent = []
-  for (const entry of entries) if (await readOr(entry[0]) === null) absent.push(entry)
+  for (const [rel, content] of entries) {
+    if ((await repo.file(`${t.dir}/${rel}`)).state === 'absent') absent.push([path.join(gitopsDir, t.dir, rel), content])
+  }
   const written = await writeChanged(absent)
-  return { written: written.map(p => path.relative(chartDir, p)) }
+  return { written: written.map(p => path.relative(path.join(gitopsDir, t.dir), p)) }
 }

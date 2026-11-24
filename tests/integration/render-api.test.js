@@ -5,6 +5,7 @@ import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
 import { execFileSync } from 'child_process'
+import { regenerateProducts } from '../../server/lib/chartFiles.js'
 
 let server, baseURL, tmpDir, helmOutputFile, helmArgsFile, promtoolCaptureFile, promtoolCaptureDir, fakePromtool
 let vmalertCaptureDir, fakeVmalert
@@ -253,6 +254,8 @@ spec:
     await fs.writeFile(path.join(rulesDir, 'latency.yaml'), 'columns: {}\nrules:\n  - alert: SlowRequests\n    expr: up == 0\n    labels: {severity: warning}\n')
     await fs.writeFile(path.join(rulesDir, 'panics.yaml'), 'type: vlogs\ncolumns: {}\nrules:\n  - alert: Panics\n    expr: \'"panic:" | stats count() as n | filter n:>0\'\n    labels: {severity: critical}\n')
     await fs.writeFile(path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml'), 'latency: [{}]\npanics: [{}]\n')
+    // the generated files rules/ makes, as a save writes them: none missing
+    await regenerateProducts(tmpDir, 'test-chart')
     try {
       await fs.writeFile(helmOutputFile, `---
 apiVersion: monitoring.coreos.com/v1
@@ -364,6 +367,8 @@ spec:
     await fs.writeFile(path.join(rulesDir, 'api_recording.yaml'), 'once: true\nrules:\n  - record: job:errors:rate5m\n    expr: sum by (job) (rate(errors_total[5m]))\n')
     await fs.writeFile(path.join(rulesDir, 'api.yaml'), 'columns:\n  job: {type: string, required: true}\nrules:\n  - alert: ApiErrors\n    expr: job:errors:rate5m{job="${job}"} > 5\n    labels: {severity: warning}\n')
     await fs.writeFile(path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml'), 'api: [{job: checkout}]\n')
+    await fs.rm(path.join(tmpDir, 'charts', 'test-chart', 'values.schema.json'), { force: true })
+    await regenerateProducts(tmpDir, 'test-chart')
     try {
       await fs.writeFile(helmOutputFile, `---
 apiVersion: monitoring.coreos.com/v1

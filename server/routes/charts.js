@@ -2,9 +2,11 @@ import express from 'express'
 import { holdSyncRegistryLock } from '../lib/sync.js'
 import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { findChartUsage } from '../lib/chartUsage.js'
+import { errorAnswer, UnreadableError } from '../lib/readIfThere.js'
+import { openRepo } from '../repo/openRepo.js'
+import { chartsDir as chartsDirRel } from '../repo/template.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
@@ -91,20 +93,41 @@ export default function chartsRouter() {
         // Not there yet, which is what we want.
       }
 
+      // The source, read as everything else reads it: a file of it that
+      // cannot be read, a Chart.yaml or a schema that cannot be used is
+      // named, and nothing is copied.
+      // A file of rules/ or templates/ that cannot be read is copied as it
+      // is (Commit names it in either): only the folder itself has to be.
+      const loaded = await openRepo(req.gitopsDir).templateFiles(`${chartsDirRel()}/${req.params.name}`)
+      if (loaded.state === 'absent') return res.status(404).json({ error: `Chart ${req.params.name} not found` })
+      if (loaded.state === 'unreadable') {
+        const { status, body } = errorAnswer(new UnreadableError(path.join(req.gitopsDir, loaded.file), { reason: loaded.why }))
+        return res.status(status).json(body)
+      }
+      const src = { ...loaded.value, findings: loaded.findings }
+      // What the copy's Chart.yaml and schema are written from; the rest is
+      // copied as it is.
+      const stop = src.findings.find(f => /^template\.(chart-(absent|unreadable|not-yaml|cannot-tell|not-map)|schema-(unreadable|not-json|not-object))$/.test(f.code))
+      if (stop) return res.status(409).json({ error: `${req.params.name} cannot be cloned: ${stop.message}`, ...(/-unreadable$/.test(stop.code) ? { unreadable: true } : {}) })
+      // No schema on disk: the one its rules/ generates (what opening it writes).
+      const schema = src.schema ?? (src.products ? JSON.parse(src.products.schemaText) : null)
+      if (!schema) return res.status(409).json({ error: `${req.params.name} cannot be cloned: it has no values.schema.json — open it in the editor (which writes it) and clone it then` })
+
       // The recorded source is always the chart cloned from; a mapping in
       // the body cannot replace it, and anything but an object is ignored.
       const mapping = migration && typeof migration === 'object' && !Array.isArray(migration) ? migration : {}
-      await fs.cp(source, target, { recursive: true })
       try {
-        const chartYamlFile = path.join(target, 'Chart.yaml')
-        const chartYaml = yaml.load(await fs.readFile(chartYamlFile, 'utf-8')) || {}
-        chartYaml.name = newName
-        await writeWhole(chartYamlFile, dumpForHelm(chartYaml))
-
-        const schemaFile = path.join(target, 'values.schema.json')
-        const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
-        schema['x-migrated-from'] = { ...mapping, chart: req.params.name }
-        await writeWhole(schemaFile, JSON.stringify(schema, null, 2))
+        await fs.cp(source, target, { recursive: true })
+      } catch (err) {
+        // A file it cannot read: named, and nothing half-copied is left.
+        await fs.rm(target, { recursive: true, force: true })
+        if (err.code !== 'EACCES' && err.code !== 'EPERM') throw err
+        const { status, body } = errorAnswer(new UnreadableError(err.path || source, err))
+        return res.status(status).json(body)
+      }
+      try {
+        await writeWhole(path.join(target, 'Chart.yaml'), dumpForHelm({ ...src.chart, name: newName }))
+        await writeWhole(path.join(target, 'values.schema.json'), JSON.stringify({ ...schema, 'x-migrated-from': { ...mapping, chart: req.params.name } }, null, 2))
       } catch (err) {
         // A half-made copy would block a retry with "already exists".
         await fs.rm(target, { recursive: true, force: true })

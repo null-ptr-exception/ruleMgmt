@@ -354,14 +354,14 @@ dangling-link	discard	ok	200	-	no	*	deployments/t/a/values.yaml,notes/new.txt	-	
 dangling-link	gen-rules	refused	exit 2	charts/demo/templates/cpu.yaml	-	-	-	-	T charts/demo/templates/cpu.yaml,M charts/demo/values.schema.json	-	-	-	
 dangling-link	gen-chart	refused	exit 2	charts/demo/templates/cpu.yaml	-	-	-	-	T charts/demo/templates/cpu.yaml	-	-	-	
 dangling-link	import-rules	refused	exit 2	charts/demo/values.schema.json	-	-	-	-	T charts/demo/values.schema.json	-	-	-	
-dir-link-outside	save-json	refused	400	-	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
-dir-link-outside	save-text	refused	400	-	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
-dir-link-outside	save-legacy	refused	409	deployments/demo/old-values.yaml	no	-	-	-	D deployments/demo/old-values.yaml,?? deployments/demo	released	answered	-	
-dir-link-outside	save-layer	refused	400	-	no	-	-	-	D deployments/s/_common/demo/Chart.yaml,D deployments/s/_common/demo/charts/demo,D deployments/s/_common/demo/values.yaml,?? deployments/s/_common/demo	released	answered	-	
+dir-link-outside	save-json	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-outside	save-text	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-outside	save-legacy	refused	400	deployments/demo	no	-	-	-	D deployments/demo/old-values.yaml,?? deployments/demo	released	answered	-	
+dir-link-outside	save-layer	refused	400	deployments/s/_common/demo	no	-	-	-	D deployments/s/_common/demo/Chart.yaml,D deployments/s/_common/demo/charts/demo,D deployments/s/_common/demo/values.yaml,?? deployments/s/_common/demo	released	answered	-	
 dir-link-outside	sync-create	refused	400	deployments/t/d	no	-	-	-	D deployments/t/d/Chart.yaml,D deployments/t/d/routing.yaml,D deployments/t/d/templates/alertmanagerconfig.yaml,D deployments/t/d/values.yaml,?? deployments/t/d	released	answered	-	
 dir-link-outside	common-create	refused	409	-	no	-	-	-	D deployments/u/p/Chart.yaml,D deployments/u/p/values.yaml,?? deployments/u/p	released	answered	-	
 dir-link-outside	common-remove	refused	409	-	no	-	-	-	D deployments/s/x/Chart.yaml,D deployments/s/x/values.yaml,?? deployments/s/x	released	answered	-	
-dir-link-outside	init	refused	400	-	no	-	-	-	?? deployments/t/n	released	answered	-	
+dir-link-outside	init	refused	400	deployments/t/n	no	-	-	-	?? deployments/t/n	released	answered	-	
 dir-link-outside	migration-apply	refused	409	charts/demo/rules	no	-	-	-	D charts/demo/rules/cpu.yaml,?? charts/demo/rules	released	answered	-	
 dir-link-outside	rules-save	refused	409	charts/demo/rules	no	-	-	-	D charts/demo/rules/cpu.yaml,?? charts/demo/rules	released	answered	-	
 dir-link-outside	template-values	refused	409	charts/demo	no	-	-	-	D charts/demo/Chart.yaml,D charts/demo/rules/cpu.yaml,D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,D charts/demo/values.schema.json,D charts/demo/values.yaml,?? charts/demo	released	answered	-	
@@ -371,10 +371,10 @@ dir-link-outside	template-file-delete	refused	409	charts/demo/templates/notes.ya
 dir-link-outside	chart-meta	refused	409	charts/demo/Chart.yaml	no	-	-	-	D charts/demo/Chart.yaml,D charts/demo/rules/cpu.yaml,D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,D charts/demo/values.schema.json,D charts/demo/values.yaml,?? charts/demo	released	answered	-	
 dir-link-outside	chart-clone	refused	409	charts/spare	no	-	-	-	D charts/spare/Chart.yaml,D charts/spare/rules/cpu.yaml,D charts/spare/templates/cpu.yaml,D charts/spare/values.schema.json,D charts/spare/values.yaml,?? charts/spare	released	answered	-	
 dir-link-outside	chart-delete	ok	200	-	no	charts/spare/	charts/spare	-	D charts/spare/Chart.yaml,D charts/spare/rules/cpu.yaml,D charts/spare/templates/cpu.yaml,D charts/spare/values.schema.json,D charts/spare/values.yaml	released	answered	-	
-dir-link-outside	deployment-clone	ok	200	-	no	deployments/demo/old2-values.yaml	-	outside/dir-demo/old2-values.yaml	D deployments/demo/old-values.yaml,?? deployments/demo	released	answered	-	wrote-outside
-dir-link-outside	deployment-delete	refused	400	-	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
-dir-link-outside	routing-save	refused	400	-	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
-dir-link-outside	routing-remove	refused	400	-	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-outside	deployment-clone	refused	400	deployments/demo	no	-	-	-	D deployments/demo/old-values.yaml,?? deployments/demo	released	answered	-	
+dir-link-outside	deployment-delete	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-outside	routing-save	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-outside	routing-remove	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
 dir-link-outside	regenerate	listed	200	deployments/t/a	no	deployments/t/a/,deployments/t/b/	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	M deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,M deployments/t/b/routing.yaml,M deployments/t/b/templates/alertmanagerconfig.yaml,?? deployments/t/a/templates	released	answered	-	partial
 dir-link-outside	shared-save	refused	409	_shared/notification-configs.yaml	no	-	-	-	D _shared/notification-configs.yaml,?? _shared	released	answered	-	
 dir-link-outside	shared-rename	refused	409	_shared/notification-configs.yaml	no	-	-	-	D _shared/notification-configs.yaml,?? _shared	released	answered	-	
@@ -384,6 +384,36 @@ dir-link-outside	discard	ok	200	-	no	*	deployments/t/a,deployments/t/a/Chart.yam
 dir-link-outside	gen-rules	refused	exit 2	charts/demo/templates	-	-	-	-	D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,M charts/demo/values.schema.json,?? charts/demo/templates	-	-	-	
 dir-link-outside	gen-chart	refused	exit 2	charts/demo/templates	-	-	-	-	D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,?? charts/demo/templates	-	-	-	
 dir-link-outside	import-rules	refused	exit 2	charts/demo	-	-	-	-	D charts/demo/Chart.yaml,D charts/demo/rules/cpu.yaml,D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,D charts/demo/values.schema.json,D charts/demo/values.yaml,?? charts/demo	-	-	-	
+dir-link-git	save-json	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-git	save-text	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-git	save-legacy	refused	400	deployments/demo	no	-	-	-	D deployments/demo/old-values.yaml,?? deployments/demo	released	answered	-	
+dir-link-git	save-layer	refused	400	deployments/s/_common/demo	no	-	-	-	D deployments/s/_common/demo/Chart.yaml,D deployments/s/_common/demo/charts/demo,D deployments/s/_common/demo/values.yaml,?? deployments/s/_common/demo	released	answered	-	
+dir-link-git	sync-create	refused	400	deployments/t/d	no	-	-	-	D deployments/t/d/Chart.yaml,D deployments/t/d/routing.yaml,D deployments/t/d/templates/alertmanagerconfig.yaml,D deployments/t/d/values.yaml,?? deployments/t/d	released	answered	-	
+dir-link-git	common-create	refused	409	-	no	-	-	-	D deployments/u/p/Chart.yaml,D deployments/u/p/values.yaml,?? deployments/u/p	released	answered	-	
+dir-link-git	common-remove	refused	409	-	no	-	-	-	D deployments/s/x/Chart.yaml,D deployments/s/x/values.yaml,?? deployments/s/x	released	answered	-	
+dir-link-git	init	refused	400	deployments/t/n	no	-	-	-	?? deployments/t/n	released	answered	-	
+dir-link-git	migration-apply	refused	409	charts/demo/rules	no	-	-	-	D charts/demo/rules/cpu.yaml,?? charts/demo/rules	released	answered	-	
+dir-link-git	rules-save	refused	409	charts/demo/rules	no	-	-	-	D charts/demo/rules/cpu.yaml,?? charts/demo/rules	released	answered	-	
+dir-link-git	template-values	refused	409	charts/demo	no	-	-	-	D charts/demo/Chart.yaml,D charts/demo/rules/cpu.yaml,D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,D charts/demo/values.schema.json,D charts/demo/values.yaml,?? charts/demo	released	answered	-	
+dir-link-git	template-file-save	refused	409	charts/demo/templates/notes.yaml	no	-	-	-	D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,?? charts/demo/templates	released	answered	-	
+dir-link-git	template-file-rename	refused	409	charts/demo/templates/notes.yaml	no	-	-	-	D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,?? charts/demo/templates	released	answered	-	
+dir-link-git	template-file-delete	refused	409	charts/demo/templates/notes.yaml	no	-	-	-	D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,?? charts/demo/templates	released	answered	-	
+dir-link-git	chart-meta	refused	409	charts/demo/Chart.yaml	no	-	-	-	D charts/demo/Chart.yaml,D charts/demo/rules/cpu.yaml,D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,D charts/demo/values.schema.json,D charts/demo/values.yaml,?? charts/demo	released	answered	-	
+dir-link-git	chart-clone	refused	409	charts/spare	no	-	-	-	D charts/spare/Chart.yaml,D charts/spare/rules/cpu.yaml,D charts/spare/templates/cpu.yaml,D charts/spare/values.schema.json,D charts/spare/values.yaml,?? charts/spare	released	answered	-	
+dir-link-git	chart-delete	ok	200	-	no	charts/spare/	charts/spare	-	D charts/spare/Chart.yaml,D charts/spare/rules/cpu.yaml,D charts/spare/templates/cpu.yaml,D charts/spare/values.schema.json,D charts/spare/values.yaml	released	answered	-	
+dir-link-git	deployment-clone	refused	400	deployments/demo	no	-	-	-	D deployments/demo/old-values.yaml,?? deployments/demo	released	answered	-	
+dir-link-git	deployment-delete	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-git	routing-save	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-git	routing-remove	refused	400	deployments/t/a	no	-	-	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a	released	answered	-	
+dir-link-git	regenerate	listed	200	deployments/t/a	no	deployments/t/a/,deployments/t/b/	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	M deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,M deployments/t/b/routing.yaml,M deployments/t/b/templates/alertmanagerconfig.yaml,?? deployments/t/a/templates	released	answered	-	partial
+dir-link-git	shared-save	refused	409	_shared/notification-configs.yaml	no	-	-	-	D _shared/notification-configs.yaml,?? _shared	released	answered	-	
+dir-link-git	shared-rename	refused	409	_shared/notification-configs.yaml	no	-	-	-	D _shared/notification-configs.yaml,?? _shared	released	answered	-	
+dir-link-git	shared-delete	refused	409	_shared/notification-configs.yaml	no	-	-	-	D _shared/notification-configs.yaml,?? _shared	released	answered	-	
+dir-link-git	commit	ok	200	-	no	-	-	-	-	released	answered	-	
+dir-link-git	discard	ok	200	-	no	*	deployments/t/a,deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,notes/new.txt	-	-	released	answered	-	
+dir-link-git	gen-rules	refused	exit 2	charts/demo/templates	-	-	-	-	D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,M charts/demo/values.schema.json,?? charts/demo/templates	-	-	-	
+dir-link-git	gen-chart	refused	exit 2	charts/demo/templates	-	-	-	-	D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,?? charts/demo/templates	-	-	-	
+dir-link-git	import-rules	refused	exit 2	charts/demo	-	-	-	-	D charts/demo/Chart.yaml,D charts/demo/rules/cpu.yaml,D charts/demo/templates/cpu.yaml,D charts/demo/templates/notes.yaml,D charts/demo/values.schema.json,D charts/demo/values.yaml,?? charts/demo	-	-	-	
 is-folder	save-json	refused	409	deployments/t/a	no	-	-	-	D deployments/t/a/values.yaml,?? deployments/t/a/values.yaml/keep	released	answered	-	
 is-folder	save-text	refused	409	deployments/t/a	no	-	-	-	D deployments/t/a/values.yaml,?? deployments/t/a/values.yaml/keep	released	answered	-	
 is-folder	save-legacy	refused	409	deployments/demo/old-values.yaml	no	-	-	-	D deployments/demo/old-values.yaml,?? deployments/demo/old-values.yaml/keep	released	answered	-	

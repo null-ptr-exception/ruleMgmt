@@ -9,19 +9,20 @@
  *   writeProblems(root, rels) → the first problem among them, or null
  */
 import path from 'path'
-import { insideReal } from './paths.js'
+import { insideReal, realPlace } from './paths.js'
 import { repoRel } from './readRepoFile.js'
 
 export async function writeProblem(root, rel) {
   const file = repoRel(rel)
   const parent = path.posix.dirname(file)
-  let real
+  let place
   try {
-    real = parent === '.' ? root : await insideReal(root, parent)
+    place = parent === '.' ? { why: null } : await realPlace(root, parent)
   } catch {
     return { file, why: 'a folder on the way to it cannot be read' }
   }
-  return real ? null : { file, why: 'a folder on the way to it is a link that leads outside the repo' }
+  if (!place.why) return null
+  return { file, why: place.why === 'git-dir' ? "a folder on the way to it is a link into git's own folder" : 'a folder on the way to it is a link that leads outside the repo' }
 }
 
 export async function writeProblems(root, rels) {

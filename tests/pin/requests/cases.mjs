@@ -26,6 +26,8 @@ const LONG = n => 'x'.repeat(n)
 //   deployment), deployments/team/inlink (a link to a), outlink (a link to a
 //   deployment outside), outfile.yaml (a link to a file outside);
 //   deployments/inteam (a link to team), deployments/outdir (a link outside);
+//   gitlink, deployments/gitdir, charts/gitchart and charts/spare/templates
+//   (links into .git);
 //   .gitignore, .github/workflows/ci.yaml; deployments/s/_common/demo.
 const PATH_CASES = [
   { id: 'good', legit: 'all', v: (k, g) => g },
@@ -55,6 +57,8 @@ const PATH_CASES = [
   // separator. In a URL segment it arrives as `%2F` (sent as %252F).
   { id: 'encoded-slash', v: (k, g) => (SEG.has(k) ? '..%2F..%2Foutside' : g.replaceAll('/', '%2F')) },
   { id: 'nul', v: (k, g) => `${g}\0x` },
+  // A %-encoding that does not decode, sent as written in the URL.
+  { id: 'bad-percent', raw: true, v: k => (SEG.has(k) ? '%E0%A4%A' : null) },
   { id: 'backslash', v: (k, g) => (SEG.has(k) ? '..\\..\\outside' : g.replaceAll('/', '\\')) },
   { id: 'trailing-slash', legit: ['folder', 'folder-new', 'folder-parent', 'common', 'tree'], v: (k, g) => `${g}/` },
   { id: 'empty', v: () => '' },
@@ -105,6 +109,13 @@ const PATH_CASES = [
     folder: 'deployments/outdir/dep', 'folder-new': 'deployments/outdir/new', 'folder-parent': 'deployments/outdir',
     common: 'deployments/outdir/dep', tree: 'deployments/outdir', file: 'deployments/outdir/secret.txt',
   })[k] ?? null },
+  // A link into git's own folder, where a chart, a Template's templates/,
+  // a folder of deployments and a file at the top are: git's own, never.
+  { id: 'link-git', v: k => ({
+    chart: 'gitchart', folder: 'deployments/gitdir/x', 'folder-new': 'deployments/gitdir/new', 'folder-parent': 'deployments/gitdir',
+    common: 'deployments/gitdir/_common/demo', tree: 'gitlink', file: 'gitlink/info/pin-note',
+  })[k] ?? null },
+  { id: 'link-git-templates', v: k => ({ chart: 'spare' })[k] ?? null },
   // A folder on the way that is a link to a place in the repo: what is
   // there is read through it; a deployment is not opened through it (the
   // refusal names the path to ask for instead).
@@ -143,6 +154,7 @@ const BODY_CASES = [
   { id: 'body:not-json', whole: true, body: 'not-json' },
   { id: 'body:array', whole: true, body: 'array' },
   { id: 'body:over-limit', whole: true, body: 'over-limit' },
+  { id: 'body:bad-gzip', whole: true, body: 'bad-gzip' },
   { id: 'field:number', value: 5, type: 'n' },
   { id: 'field:text', value: 'x', type: 's' },
   { id: 'field:array', value: ['x'], type: 'a' },

@@ -8,7 +8,7 @@
  *                          a link counted as what it leads to ('file' when it
  *                          leads nowhere: reading it says why); links: Map
  *                          name → where each entry that is a link leads:
- *                          'inside' (the repo), 'outside', 'nowhere', 'circle'
+ *                          'inside' (the repo), 'outside', 'git' (into .git), 'nowhere', 'circle'
  *
  * `rel` '' is the repo's own folder.
  *
@@ -17,7 +17,10 @@
  */
 import fs from 'fs/promises'
 import path from 'path'
-import { inside, insideReal } from './paths.js'
+import { inside, realPlace } from './paths.js'
+
+// A folder AlertForge may not touch, in words (as the walk says it).
+const LINK_WORDS = { outside: 'it is a link that leads outside the repo', 'git-dir': "it is a link into git's own folder" }
 import { absent, ok, unreadable } from './loaded.js'
 import { repoRel } from './readRepoFile.js'
 
@@ -50,8 +53,8 @@ function overlaid(key, overlay, entries) {
 // circle (`to` is what following it gave).
 async function leadsTo(root, rel, to) {
   if (to instanceof Error) return to.code === 'ELOOP' ? 'circle' : 'nowhere'
-  const real = await insideReal(root, rel).catch(() => null)
-  return real ? 'inside' : 'outside'
+  const { why } = await realPlace(root, rel).catch(() => ({ why: 'outside' }))
+  return why === 'git-dir' ? 'git' : why ? 'outside' : 'inside'
 }
 
 export async function readRepoDir(root, rel, { overlay } = {}) {
@@ -70,13 +73,13 @@ export async function readRepoDir(root, rel, { overlay } = {}) {
     return overlaid(key, overlay, entries) ? ok({ entries, links: new Map() }) : absent(key)
   }
   if (!st.isDirectory()) return unreadable(key, 'a file is where a folder should be', 'not-a-folder')
-  let real
+  let place
   try {
-    real = await insideReal(root, key)
+    place = await realPlace(root, key)
   } catch (err) {
     return unreadable(key, reason(err), KIND[err.code] ?? 'other')
   }
-  if (!real) return unreadable(key, 'it is a link that leads outside the repo', 'outside-link')
+  if (place.why) return unreadable(key, LINK_WORDS[place.why], 'outside-link')
   let list
   try {
     list = await fs.readdir(abs, { withFileTypes: true })

@@ -61,9 +61,10 @@ async function startApp(dir, home) {
   await start()
 
   // A raw request: the path is sent as written (`..` is not folded away).
-  const send = (method, urlPath, { body, ctype, timeout = 120_000 } = {}) => new Promise(resolve => {
+  const send = (method, urlPath, { body, ctype, encoding, timeout = 120_000 } = {}) => new Promise(resolve => {
     const headers = {}
     if (body !== undefined) { headers['Content-Type'] = ctype; headers['Content-Length'] = Buffer.byteLength(body) }
+    if (encoding) headers['Content-Encoding'] = encoding
     const req = http.request({ host: '127.0.0.1', port, method, path: urlPath, headers }, res => {
       const chunks = []
       res.on('data', c => chunks.push(c))
@@ -202,11 +203,23 @@ export async function makeWorkspace() {
   await link('deployments/team/outfile.yaml', path.join(outside, 'secret.txt'))
   await link('deployments/inteam', 'team')
   await link('deployments/outdir', outside)
+  // Links into git's own folder: at the top, as a folder of deployments,
+  // as a Template, and as a Template's templates/ (made before git init:
+  // they lead to nothing until then).
+  await link('gitlink', '.git')
+  await link('deployments/gitdir', '../.git')
+  await link('charts/gitchart', '../.git')
+  await fs.rm(path.join(root, 'charts/spare/templates'), { recursive: true, force: true })
+  await link('charts/spare/templates', '../../.git/hooks')
 
   const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf-8' })
   git('init', '-q', '-b', 'main'); git('config', 'user.email', 'pin@example.invalid'); git('config', 'user.name', 'pin')
   git('add', '-A'); git('commit', '-qm', 'base')
-  await put('deployments/team/a/values.yaml', `${await fs.readFile(path.join(root, 'deployments/team/a/values.yaml'), 'utf-8')}# second\n`)
+  // A second commit (HEAD~1 is a commit): the sync source and its target
+  // changed alike, so the target stays a copy of its source.
+  const second = `${await fs.readFile(path.join(root, 'deployments/team/a/values.yaml'), 'utf-8')}# second\n`
+  await put('deployments/team/a/values.yaml', second)
+  await put('deployments/team/b/values.yaml', second)
   git('commit', '-qam', 'second')
   const head = git('rev-parse', 'HEAD').trim()
   const tree = git('rev-parse', 'HEAD^{tree}').trim()
@@ -303,7 +316,7 @@ const short = list => (list.length > 4 ? `${list.slice(0, 4).join(',')},+${list.
  */
 // The base repo's links Commit refuses the whole repo for (a Template it
 // cannot read, a Template whose chart name is not its folder's).
-const COMMIT_REFUSES = ['charts/hand/templates/outlink.yaml', 'charts/inchart', 'charts/outchart']
+const COMMIT_REFUSES = ['charts/hand/templates/outlink.yaml', 'charts/inchart', 'charts/outchart', 'charts/gitchart', 'charts/spare/templates']
 
 async function cell(ws, route, req, sent) {
   const t0 = Date.now()
@@ -315,7 +328,7 @@ async function cell(ws, route, req, sent) {
   }
   const before = route.prep ? await snapshotAll(ws.root) : (ws.base ??= await snapshotAll(ws.root))
   const tPre = Date.now()
-  const r = await ws.app.api(req.method, req.url, { body: req.body, ctype: req.ctype })
+  const r = await ws.app.api(req.method, req.url, { body: req.body, ctype: req.ctype, encoding: req.encoding })
   const tReq = Date.now()
   const after = await snapshotAll(ws.root)
   const written = changed(before, after)
@@ -351,7 +364,7 @@ async function cell(ws, route, req, sent) {
 
 const NONE = { git: '-', named: '-', twin: '-' }
 
-async function pathCell(ws, slot, value, expect) {
+async function pathCell(ws, slot, value, expect, raw = false) {
   const r = slot.route
   const params = { ...(r.params || {}) }
   let query = { ...(slot.req?.query || r.query || {}) }
@@ -360,11 +373,14 @@ async function pathCell(ws, slot, value, expect) {
     const last = value.split(/[\\/]/).filter(Boolean).at(-1)
     if (last && /^[^./\\\0][^/\\\0]*$/.test(last)) params[slot.follow] = last
   }
-  if (slot.at === 'param') params[slot.name] = value
+  // A raw value goes into the URL as written, not encoded.
+  const RAW = 'pin-raw-value'
+  if (slot.at === 'param') params[slot.name] = raw ? RAW : value
   else if (slot.at === 'query') query = { ...query, [slot.name]: value }
   else if (slot.at === 'body') body = { ...body, [slot.name]: value }
   else if (slot.at === 'files-key') body = { ...body, files: { [value]: CPU } }
-  const req = { method: r.method, url: urlOf(r, params, query), ...(body === undefined ? {} : { body: JSON.stringify(body), ctype: 'application/json' }) }
+  const url = raw ? urlOf(r, params, query).replace(RAW, value) : urlOf(r, params, query)
+  const req = { method: r.method, url, ...(body === undefined ? {} : { body: JSON.stringify(body), ctype: 'application/json' }) }
   const out = await cell(ws, r, req, [value])
   return { entry: slot.entry, expect, ...NONE, ...out }
 }
@@ -386,6 +402,7 @@ function wholeBody(mode, route, ws) {
     case 'not-json': return { body: '{"a":', ctype: 'application/json' }
     case 'array': return json([good || {}])
     case 'over-limit': return json({ ...(good || {}), pad: 'x'.repeat(120_000) })
+    case 'bad-gzip': return { ...json(good || {}), encoding: 'gzip' }
   }
 }
 
@@ -405,7 +422,7 @@ async function bodyCell(ws, slot, c) {
     expect = {
       good: 'good', extra: 'same-as-good',
       none: hasBody ? 'bad-named' : 'good', 'text-plain': hasBody ? 'bad-named' : 'good', array: hasBody ? 'bad-named' : 'any',
-      'not-json': 'bad', 'over-limit': 'bad',
+      'not-json': 'bad', 'over-limit': 'bad', 'bad-gzip': 'bad',
     }[c.body]
   } else {
     const f = slot.field
@@ -432,7 +449,8 @@ export async function runRow(ws, c) {
       const value = c.v(slot.kind, slot.good ?? defaultGood(slot), ctx)
       if (value === null || value === undefined) continue
       const legit = c.id === 'good' || (slot.twins !== false && isLegit(c, slot.kind, slot.mode))
-      cells.push(await pathCell(ws, slot, value, legit ? 'legit' : 'any'))
+      if (c.raw && slot.at !== 'param') continue
+      cells.push(await pathCell(ws, slot, value, legit ? 'legit' : 'any', !!c.raw))
     }
   } else if (c.kind === 'ref') {
     const value = c.v(ctx)

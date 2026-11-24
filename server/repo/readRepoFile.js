@@ -22,7 +22,7 @@ import fs from 'fs/promises'
 import { constants } from 'fs'
 import path from 'path'
 import { Buffer } from 'node:buffer'
-import { inside, insideReal } from './paths.js'
+import { inside, realPlace } from './paths.js'
 import { absent, ok, unreadable } from './loaded.js'
 
 /** Helm refuses a chart file larger than this (5 MiB, Helm 3.19); AlertForge reads no file larger. */
@@ -108,13 +108,13 @@ async function readOnce(root, rel, key, overlay) {
     const target = await fs.stat(abs).catch(err => err)
     if (target instanceof Error) return target.code === 'ENOENT' ? unreadable(key, 'a link to a file that is not there', 'dangling-link') : failed(key, target)
   }
-  let real
+  let place
   try {
-    real = await insideReal(root, key)
+    place = await realPlace(root, key)
   } catch (err) {
     return failed(key, err)
   }
-  if (!real) return unreadable(key, 'it is a link that leads outside the repo', 'outside-link')
+  if (place.why) return unreadable(key, place.why === 'git-dir' ? "it is a link into git's own folder" : 'it is a link that leads outside the repo', 'outside-link')
   const st = await fs.stat(abs).catch(err => err)
   if (st instanceof Error) return st.code === 'ENOENT' ? absent(key) : failed(key, st)
   const kind = kindOf(st)

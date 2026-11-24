@@ -7,7 +7,7 @@ import { walk, childEntries } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { resolveStack } from '../../lib/stack.js'
 import { folderCommonOf, folderCommons, inheritsFromOf } from '../../lib/commonEdit.js'
-import { isName, pathProblem } from '../../repo/paths.js'
+import { isName, parsePath } from '../../repo/paths.js'
 import { loadValues } from '../../../src/utils/valuesText.js'
 
 // One level of the tree: the walk's own folders (repo/walk.js), each with
@@ -98,9 +98,8 @@ export function treeRoutes(router) {
   router.get('/tree', async (req, res) => {
     try {
       const parentPath = req.query.path || ''
-      if (parentPath && pathProblem(parentPath, 'list')) {
-        return res.status(400).json({ error: 'Invalid path' })
-      }
+      const where = parentPath ? await parsePath(parentPath, 'list', { root: req.gitopsDir, what: 'path' }) : { ok: true }
+      if (!where.ok) return res.status(400).json({ error: where.error })
       const children = await listChildren(req.gitopsDir, parentPath)
       res.json(children)
     } catch (err) {
@@ -120,9 +119,8 @@ export function treeRoutes(router) {
   router.get('/', async (req, res) => {
     try {
       const parentPath = req.query.path || ''
-      if (parentPath && pathProblem(parentPath, 'list')) {
-        return res.status(400).json({ error: 'Invalid path' })
-      }
+      const where = parentPath ? await parsePath(parentPath, 'list', { root: req.gitopsDir, what: 'path' }) : { ok: true }
+      if (!where.ok) return res.status(400).json({ error: where.error })
       const children = await listChildren(req.gitopsDir, parentPath)
       res.json(children)
     } catch (err) {

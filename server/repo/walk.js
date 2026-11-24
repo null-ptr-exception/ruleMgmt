@@ -24,7 +24,7 @@
  *                the repo), 'circle' (a link round in a circle)
  *     chartOnly?: a Chart.yaml naming a dependency and no values.yaml (Helm
  *                deploys the Template's example rows)
- *     link?:     'inside' | 'outside' | 'nowhere' | 'circle': the folder, or
+ *     link?:     'inside' | 'outside' | 'git' | 'nowhere' | 'circle': the folder, or
  *                one above it, is a link; `real`: where the whole path
  *                leads in the repo (the folder to use instead). A link is never a deployment and
  *                never walked into: what it leads to is found where it is.
@@ -52,6 +52,7 @@ import { chartsDir } from './template.js'
 import { repoRel } from './readRepoFile.js'
 import { finding } from './finding.js'
 import { createLimit } from '../lib/limit.js'
+import { offeredPath } from './paths.js'
 
 // How many folders one walk looks at at once: far below any open-files limit.
 const WALK_AT_ONCE = 16
@@ -106,6 +107,7 @@ export async function excludedFolder(repo, rel, { inChart = false, hidden = fals
 const LINK_WHY = {
   inside: real => `a link to ${real}`,
   outside: () => 'a link that leads outside the repo',
+  git: () => "a link into git's own folder",
   nowhere: () => 'a link to a folder that is not there',
   circle: () => 'a link that leads round in a circle',
 }
@@ -181,9 +183,10 @@ export function folderEntry(repo, rel) {
     const link = await linkOnTheWay(repo, key)
     if (link) {
       const why = `${link.at === key ? 'it' : link.at} is ${LINK_WHY[link.link](link.to)}`
-      // One leading out of the repo is not followed, one round in a circle
-      // cannot be (Helm stops on it): named, as unreadable.
-      const cause = link.link === 'outside' ? 'link' : link.link === 'circle' && link.at === key ? 'circle' : null
+      // One leading out of the repo, or into git's own folder, is not
+      // followed, one round in a circle cannot be (Helm stops on it):
+      // named, as unreadable.
+      const cause = link.link === 'outside' || link.link === 'git' ? 'link' : link.link === 'circle' && link.at === key ? 'circle' : null
       return { rel: key, kind: cause ? 'unreadable' : 'folder', link: link.link, why, ...(cause ? { cause } : {}), ...(link.real ? { real: link.real } : {}) }
     }
     return classify(repo, key)
@@ -295,7 +298,7 @@ export async function childEntries(repo, rel) {
   const hideShared = !key && await inShared(repo, SHARED_DIR)
   const names = [...dir.value.entries].filter(([name, kind]) => {
     const link = dir.value.links.get(name)
-    if (kind !== 'dir' || (link && link !== 'outside')) return false
+    if (kind !== 'dir' || (link && link !== 'outside' && link !== 'git')) return false
     return !skippedDir(name, { inChart }) && !(hideShared && name === SHARED_DIR)
   }).map(([name]) => name)
   // Side by side, a few at a time, in the folder's order.
@@ -306,7 +309,7 @@ export async function childEntries(repo, rel) {
     if (!dir.value.links.get(name)) {
       const sub = await repo.dir(e.rel)
       // What the tree shows in it: a folder, or a link leading out of the repo (named).
-      if (sub.state === 'ok') hasFolders = [...sub.value.entries].some(([n, k]) => k === 'dir' && (!sub.value.links.has(n) || sub.value.links.get(n) === 'outside') && !skippedDir(n, { inChart: isChart(e) }))
+      if (sub.state === 'ok') hasFolders = [...sub.value.entries].some(([n, k]) => k === 'dir' && (!sub.value.links.has(n) || ['outside', 'git'].includes(sub.value.links.get(n))) && !skippedDir(n, { inChart: isChart(e) }))
     }
     return { ...e, name, hasFolders }
   })))
@@ -338,8 +341,9 @@ export async function newDeploymentProblem(repo, rel) {
   if (here.kind === 'deployment') return null
   // Made through a link, it would be somewhere else, or outside the repo.
   if (here.link) {
-    const { at, real } = await linkOnTheWay(repo, where)
-    const instead = real ? `: make it in ${real}${where.slice(at.length)}` : ''
+    const { at, to } = await linkOnTheWay(repo, where)
+    const there = to ? `${to}${where.slice(at.length)}` : null
+    const instead = there && await offeredPath(repo.root, there) ? `: make it in ${there}` : ''
     return `${where}: ${here.why} — a deployment is made in a folder of the repo, not through a link${instead}`
   }
   let inChart = false

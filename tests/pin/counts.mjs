@@ -27,6 +27,9 @@
  * - ownEnoentChecks: the string 'ENOENT' in code.
  * The last two leave out the files meant to read: server/repo/ and
  * server/lib/readIfThere.js. Tests are not counted.
+ * - requestReads: the `boundary/request` warnings — a route file reading
+ *   req.query, req.params or req.body itself instead of its route's parsed
+ *   input — by file.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -53,6 +56,7 @@ export async function measure() {
     const file = path.relative(ROOT, result.filePath).split(path.sep).join('/')
     for (const m of result.messages) {
       if (m.ruleId === 'boundary/disk') sites.push({ file, line: m.line, what: 'lint', kind: m.messageId, message: m.message })
+      if (m.ruleId === 'boundary/request') sites.push({ file, line: m.line, what: 'request', kind: m.message, message: m.message })
       if (m.ruleId === 'boundary/measure') sites.push({ file, line: m.line, what: m.messageId, kind: m.message.replace(/^YAML parse of /, ''), message: m.message })
     }
   }
@@ -64,7 +68,9 @@ export async function measure() {
   const yamlParseSites = { serverAndScripts: 0, src: 0, byFileKind: Object.fromEntries(kinds.map(k => [k, 0])) }
   const swallowingCatches = { total: 0, byFile: {} }
   const ownEnoentChecks = { total: 0, byFile: {} }
+  const requestReads = { total: 0, byFile: {} }
   for (const s of sites) {
+    if (s.what === 'request') { requestReads.total++; bump(requestReads.byFile, s.file) }
     if (s.what === 'lint') { lint.total++; bump(lint.byKind, s.kind); bump(lint.byFile, s.file) }
     if (s.what === 'parseSite') {
       if (s.file.startsWith('src/')) yamlParseSites.src++
@@ -73,9 +79,9 @@ export async function measure() {
     if (s.what === 'swallow') { swallowingCatches.total++; bump(swallowingCatches.byFile, s.file) }
     if (s.what === 'enoent') { ownEnoentChecks.total++; bump(ownEnoentChecks.byFile, s.file) }
   }
-  for (const o of [lint, swallowingCatches, ownEnoentChecks]) for (const k of Object.keys(o)) if (typeof o[k] === 'object') o[k] = sorted(o[k])
+  for (const o of [lint, swallowingCatches, ownEnoentChecks, requestReads]) for (const k of Object.keys(o)) if (typeof o[k] === 'object') o[k] = sorted(o[k])
   yamlParseSites.byFileKind = sorted(yamlParseSites.byFileKind)
-  return { counts: { lint, yamlParseSites, swallowingCatches, ownEnoentChecks }, sites }
+  return { counts: { lint, yamlParseSites, swallowingCatches, ownEnoentChecks, requestReads }, sites }
 }
 
 /** Every number as `a.b.c` → n, so two counts compare leaf by leaf (a missing leaf is 0). */

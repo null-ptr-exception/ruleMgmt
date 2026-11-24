@@ -360,3 +360,147 @@ it('a deployment in a folder with a space whose values.yaml is not YAML: the ans
   expect(error.startsWith('deployments/my team/a/values.yaml cannot be read: '), error).toBe(true)
   expect(error).not.toContain('team/a/values.yaml line')
 })
+
+// A link in the repo that leads into git's own folder is no place to read,
+// list or write, wherever it is on the way.
+describe('a link into .git', () => {
+  beforeAll(async () => {
+    await fs.symlink('.git', path.join(repo, 'gitlink'))
+    await fs.symlink('../.git', path.join(repo, 'charts', 'gl'))
+    expect((await api('POST', '/api/v2/charts', { name: 'gt' })).status).toBe(200)
+    await fs.rm(path.join(repo, 'charts/gt/templates'), { recursive: true, force: true })
+    await fs.symlink('../../.git/hooks', path.join(repo, 'charts/gt/templates'))
+  })
+
+  const gitFiles = async () => (await fs.readdir(path.join(repo, '.git'), { recursive: true })).sort()
+
+  it.each([
+    ['GET', `/api/v2/git/diff?file=${q('gitlink/config')}`],
+    ['GET', `/api/v2/folders/tree?path=gitlink`],
+    ['GET', `/api/v2/folders?path=gitlink`],
+    ['POST', '/api/v2/folders', { path: 'gitlink/hooks/evil' }],
+    ['POST', '/api/v2/folders/init', { folder: 'gitlink/x', chart: 'demo' }],
+    ['GET', '/api/v2/templates/gl'],
+    ['POST', '/api/v2/templates/gl/notes', { content: 'x: 1\n' }],
+    ['POST', '/api/v2/templates/gt/notes', { content: 'x: 1\n' }],
+    ['POST', '/api/v2/templates/gt/rules', { files: { 'cpu.yaml': CPU } }],
+  ])('%s %s → refused, nothing of .git read or written', async (method, url, body) => {
+    const before = await gitFiles()
+    const { status, text } = await api(method, url, body)
+    expect(status, text).toBeGreaterThanOrEqual(400)
+    expect(status, text).toBeLessThan(500)
+    expect(text).not.toContain('repositoryformatversion')
+    expect(await gitFiles()).toEqual(before)
+  })
+})
+
+// At a commit, what git holds is shown, whatever the folder is now.
+describe('a diff at a commit', () => {
+  it.each([
+    ['a folder that cannot be read now', async dir => { await fs.chmod(dir, 0) }, async dir => { await fs.chmod(dir, 0o755) }],
+    ['a folder that is a link out of the repo now', async dir => {
+      await fs.rename(dir, path.join(root, 'hist-away'))
+      await fs.symlink(path.join(root, 'hist-away'), dir)
+    }, async dir => { await fs.rm(dir); await fs.rename(path.join(root, 'hist-away'), dir) }],
+  ])('in %s is read from git', async (_, change, undo) => {
+    const dir = path.join(repo, 'hist')
+    await fs.mkdir(path.join(dir, 'sub'), { recursive: true })
+    await fs.writeFile(path.join(dir, 'sub', 'f.yaml'), 'a: 1\n')
+    execFileSync('git', ['add', 'hist'], { cwd: repo })
+    execFileSync('git', ['commit', '-qm', 'hist'], { cwd: repo })
+    await change(dir)
+    try {
+      const { status, text } = await api('GET', `/api/v2/git/diff?file=${q('hist/sub/f.yaml')}&ref=HEAD`)
+      expect(status, text).toBe(200)
+      expect(JSON.parse(text).modified).toBe('a: 1\n')
+    } finally {
+      await undo(dir)
+      execFileSync('git', ['rm', '-rqf', 'hist'], { cwd: repo })
+      execFileSync('git', ['commit', '-qm', 'no hist'], { cwd: repo })
+    }
+  })
+})
+
+// Opening a Template writes back a Chart.yaml that is not there: when that
+// write fails, the file is named (409), not a server failure.
+it('opening a Template whose missing Chart.yaml cannot be written: 409 naming it', async () => {
+  expect((await api('POST', '/api/v2/charts', { name: 'ro' })).status).toBe(200)
+  const dir = path.join(repo, 'charts', 'ro')
+  await fs.rm(path.join(dir, 'Chart.yaml'))
+  await fs.chmod(dir, 0o555)
+  try {
+    const { status, text } = await api('GET', '/api/v2/templates/ro')
+    expect(status, text).toBe(409)
+    expect(JSON.parse(text)).toMatchObject({ file: 'charts/ro/Chart.yaml', error: 'charts/ro/Chart.yaml cannot be written: permission denied' })
+  } finally {
+    await fs.chmod(dir, 0o755)
+  }
+})
+
+// The path a refusal offers instead is one the same request would take.
+describe('the path offered instead of a link', () => {
+  beforeAll(async () => {
+    await fs.symlink('in-link', path.join(repo, 'deployments', 'l2'))
+    await fs.mkdir(path.join(repo, '.hid', 'team', 'a'), { recursive: true })
+    await fs.symlink('../.hid/team', path.join(repo, 'deployments', 'hl'))
+    await fs.symlink('../charts/demo', path.join(repo, 'deployments', 'cl'))
+  })
+  it.each([
+    ['a link to a hidden folder', 'deployments/hl/a'],
+    ['a link into the Templates', 'deployments/cl/templates'],
+  ])('through %s: no path is offered', async (_, folder) => {
+    const { status, text } = await api('GET', `/api/v2/deployments/demo/a?folder=${q(folder)}`)
+    expect(status, text).toBe(400)
+    expect(JSON.parse(text).error).not.toContain('ask for')
+  })
+  it.each([['a link to a plain folder', 'deployments/in-link/a'], ['a link to a link', 'deployments/l2/a']])('through %s: the folder it really is is offered', async (_, folder) => {
+    const { text } = await api('GET', `/api/v2/deployments/demo/a?folder=${q(folder)}`)
+    expect(JSON.parse(text).error).toContain('ask for deployments/team/a')
+  })
+})
+
+// The same state is said in the same words wherever it is met.
+describe('one refusal for one state', () => {
+  it('a sync target reached through a link says it is a link', async () => {
+    const { status, text } = await api('POST', '/api/v2/sync', { source: 'deployments/team/a', target: 'deployments/in-link/a' })
+    expect(status, text).toBe(400)
+    expect(JSON.parse(text).error).toContain('deployments/in-link is a link to deployments/team')
+  })
+  it('a new folder through a link chain leading out says it is a link', async () => {
+    await fs.symlink('out-link', path.join(repo, 'deployments', 'out2'))
+    const { status, text } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/out2/n', chart: 'demo' })
+    expect(status, text).toBe(400)
+    expect(JSON.parse(text).error).toContain('deployments/out2 is a link that leads outside the repo')
+  })
+  it.each([
+    ['GET', `/api/v2/deployments/demo/a?folder[]=a&folder[]=..`],
+    ['POST', '/api/v2/folders', { path: 5 }],
+  ])('%s %s: a value that is not text is said to be', async (method, url, body) => {
+    const { status, text } = await api(method, url, body)
+    expect(status, text).toBe(400)
+    expect(JSON.parse(text).error).toContain('a path is text')
+  })
+})
+
+// A path of short names that is longer, as a whole, than the system takes.
+it.each([
+  ['POST', '/api/v2/folders', p => ({ path: p })],
+  ['POST', '/api/v2/sync', p => ({ source: 'deployments/team/a', target: p })],
+])('%s %s with a path over 4095 bytes → 400 naming the limit', async (method, url, body) => {
+  const { status, text } = await api(method, url, body(`deployments/${'a/'.repeat(2100)}x`))
+  expect(status, text).toBe(400)
+  expect(JSON.parse(text).error).toContain('at most 4095 bytes')
+})
+
+// A branch named like a commit id is a name, which a diff does not take.
+it('a diff at a branch whose name is hex → 400; at a commit id it is taken', async () => {
+  execFileSync('git', ['branch', 'cafe'], { cwd: repo })
+  try {
+    const named = await api('GET', `/api/v2/git/diff?file=.gitignore&ref=cafe`)
+    expect(named.status, named.text).toBe(400)
+    const id = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf-8' }).trim()
+    for (const ref of [id, id.slice(0, 7).toUpperCase(), `${id.slice(0, 7)}~0`]) expect((await api('GET', `/api/v2/git/diff?file=.gitignore&ref=${ref}`)).status).toBe(200)
+  } finally {
+    execFileSync('git', ['branch', '-D', 'cafe'], { cwd: repo })
+  }
+})

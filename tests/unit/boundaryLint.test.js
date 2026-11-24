@@ -84,6 +84,30 @@ describe('boundary/measure', () => {
   })
 })
 
+describe('boundary/request: a route reads the request through its parsed input', () => {
+  tester.run('request', boundary.rules.request, {
+    valid: [
+      { code: 'const run = (input) => input.folder', filename: ROUTE },
+      { code: 'other.query.folder; req.gitopsDir; req.method', filename: ROUTE },
+      { code: "router.get('/', (q, res) => res.json(q.gitopsDir))", filename: ROUTE },
+    ],
+    invalid: [
+      { code: 'req.query.folder', filename: ROUTE, errors: kinds('raw') },
+      { code: 'const { chart } = req.params', filename: ROUTE, errors: kinds('raw') },
+      { code: 'if (!req.body?.target) {}', filename: ROUTE, errors: kinds('raw') },
+      { code: "req['body']", filename: ROUTE, errors: kinds('raw') },
+      { code: 'req[part]', filename: ROUTE, errors: kinds('raw') },
+      { code: 'request.body', filename: ROUTE, errors: kinds('raw') },
+      { code: 'const { query } = req', filename: ROUTE, errors: kinds('alias') },
+      { code: 'const { ...all } = req', filename: ROUTE, errors: kinds('alias') },
+      { code: 'const r = req; r.query', filename: ROUTE, errors: kinds('alias', 'raw') },
+      { code: "router.post('/', (q, res) => q.body)", filename: ROUTE, errors: kinds('raw') },
+      { code: "router.post('/', ({ body }, res) => body)", filename: ROUTE, errors: kinds('alias') },
+      { code: "route('x', async (r, res) => r.params.chart)", filename: ROUTE, errors: kinds('raw') },
+    ],
+  })
+})
+
 describe('the counts in tests/pin/counts.json', () => {
   it('match the code: none went up, and a lower one is committed', async () => {
     const checkedIn = JSON.parse(fs.readFileSync(COUNTS_FILE, 'utf-8'))

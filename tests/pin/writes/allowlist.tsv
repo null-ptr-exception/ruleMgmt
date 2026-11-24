@@ -49,7 +49,6 @@ dangling-link	sync-create	5xx	bug	no issue yet: a sync whose files cannot be wri
 dangling-link	deployment-clone	5xx	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 dangling-link	deployment-delete	5xx	bug	no issue yet: a deployment whose values.yaml is a link to nothing cannot be deleted: 500 "cannot be read"
 dangling-link	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
-dir-link-outside	deployment-clone	wrote-outside	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 dir-link-outside	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 is-folder	template-values	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 is-folder	template-file-save	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
@@ -95,3 +94,4 @@ readonly-repo	import-rules	5xx	bug	no issue yet: the CLI stops with a stack trac
 registry-tmp-blocked	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
 registry-tmp-blocked	sync-unlink	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
 registry-tmp-blocked	deployment-delete	refused-but-changed+5xx	bug	no issue yet: the folder is removed before sync.yaml is written; when sync.yaml cannot be written the deployment is gone and its targets stay read-only under a source that is not there
+dir-link-git	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet

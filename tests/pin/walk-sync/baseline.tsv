@@ -205,22 +205,22 @@ name-uppercase	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 name-uppercase	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 hidden-folder	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 hidden-folder	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-hidden-folder	W	folder-list	refused	400	-	no	-	folder	renders	0	1	-	-	
+hidden-folder	W	folder-list	refused	400	deployments/.w	no	-	folder	renders	0	1	-	-	
 hidden-folder	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found hidden	
 hidden-folder	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
-hidden-folder	W	routing-get	absent	400	-	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
-hidden-folder	W	preview	refused	400	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-folder	W	routing-get	absent	400	deployments/.w	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
+hidden-folder	W	preview	refused	400	deployments/.w	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 hidden-folder	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-hidden-folder	W	sync-to	refused	400	deployments/.w/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-folder	W	sync-to	refused	400	deployments/.w	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 hidden-folder	W	sync-from	refused	400	deployments/.w/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 hidden-folder	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 hidden-folder	W	check-repo	listed	exit 0	deployments/.w/d	no	-	folder	renders	0	1	-	warn:walk.hidden	
 hidden-deployment	W	tree	absent	200	-	no	-	folder	renders	0	1	-	not shown	misses-what-helm-renders
 hidden-deployment	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-hidden-deployment	W	folder-list	refused	400	-	no	-	folder	renders	0	1	-	-	
+hidden-deployment	W	folder-list	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	
 hidden-deployment	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found hidden	
 hidden-deployment	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
-hidden-deployment	W	routing-get	absent	400	-	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
+hidden-deployment	W	routing-get	absent	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
 hidden-deployment	W	preview	refused	400	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 hidden-deployment	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 hidden-deployment	W	sync-to	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
@@ -241,10 +241,10 @@ node-modules	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 node-modules	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 link-inside	W	tree	absent	200	-	no	-	link	renders	0	1	-	not shown	misses-what-helm-renders
 link-inside	W	list	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
-link-inside	W	folder-list	refused	400	-	no	-	link	renders	0	1	-	-	
+link-inside	W	folder-list	refused	400	deployments/w/ln	no	-	link	renders	0	1	-	-	
 link-inside	W	users	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-inside	W	migration	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
-link-inside	W	routing-get	absent	400	-	no	-	link	renders	0	1	-	-	misses-what-helm-renders
+link-inside	W	routing-get	absent	400	deployments/w/ln	no	-	link	renders	0	1	-	-	misses-what-helm-renders
 link-inside	W	preview	refused	400	deployments/w/ln	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
 link-inside	W	check-deployment	cannot-check	exit 2	-	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
 link-inside	W	sync-to	refused	400	deployments/w/ln	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
@@ -253,10 +253,10 @@ link-inside	W	commit	ok	200	-	no	-	link	renders	0	1	-	-
 link-inside	W	check-repo	ok	exit 0	-	no	-	link	renders	0	1	-	-	
 link-outside	W	tree	unreadable	200	-	no	-	link	renders	0	1	-	unreadable=it is a link that leads outside the repo	
 link-outside	W	list	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
-link-outside	W	folder-list	refused	400	-	no	-	link	renders	0	1	-	-	
+link-outside	W	folder-list	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	
 link-outside	W	users	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-outside	W	migration	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
-link-outside	W	routing-get	absent	400	-	no	-	link	renders	0	1	-	-	misses-what-helm-renders
+link-outside	W	routing-get	absent	400	deployments/w/out	no	-	link	renders	0	1	-	-	misses-what-helm-renders
 link-outside	W	preview	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
 link-outside	W	check-deployment	cannot-check	exit 2	-	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
 link-outside	W	sync-to	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
@@ -265,10 +265,10 @@ link-outside	W	commit	listed	200	deployments/w/out	no	-	link	renders	0	1	-	liste
 link-outside	W	check-repo	cannot-check	exit 2	deployments/w/out	no	-	link	renders	0	1	-	refuse:walk.link-outside	refuses-what-helm-renders
 link-loop	W	tree	absent	200	-	no	-	link	no-chart	-	-	-	not shown	
 link-loop	W	list	absent	200	-	no	-	link	no-chart	-	-	-	not found	
-link-loop	W	folder-list	refused	400	-	no	-	link	no-chart	-	-	-	-	
+link-loop	W	folder-list	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
 link-loop	W	users	absent	200	-	no	-	link	no-chart	-	-	-	not found	
 link-loop	W	migration	absent	200	-	no	-	link	no-chart	-	-	-	not found	
-link-loop	W	routing-get	absent	400	-	no	-	link	no-chart	-	-	-	-	
+link-loop	W	routing-get	absent	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
 link-loop	W	preview	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
 link-loop	W	check-deployment	cannot-check	exit 2	-	no	-	link	no-chart	-	-	-	-	
 link-loop	W	sync-to	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
@@ -277,10 +277,10 @@ link-loop	W	commit	ok	200	-	no	-	link	no-chart	-	-	-	-
 link-loop	W	check-repo	ok	exit 0	-	no	-	link	no-chart	-	-	-	-	
 link-dangling	W	tree	absent	200	-	no	-	link	no-chart	-	-	-	not shown	
 link-dangling	W	list	absent	200	-	no	-	link	no-chart	-	-	-	not found	
-link-dangling	W	folder-list	refused	400	-	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	folder-list	refused	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
 link-dangling	W	users	absent	200	-	no	-	link	no-chart	-	-	-	not found	
 link-dangling	W	migration	absent	200	-	no	-	link	no-chart	-	-	-	not found	
-link-dangling	W	routing-get	absent	400	-	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	routing-get	absent	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
 link-dangling	W	preview	refused	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
 link-dangling	W	check-deployment	cannot-check	exit 2	-	no	-	link	no-chart	-	-	-	-	
 link-dangling	W	sync-to	refused	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
@@ -289,10 +289,10 @@ link-dangling	W	commit	ok	200	-	no	-	link	no-chart	-	-	-	-
 link-dangling	W	check-repo	ok	exit 0	-	no	-	link	no-chart	-	-	-	-	
 link-self-loop	W	tree	absent	200	-	no	-	link	fails	1	-	-	not shown	
 link-self-loop	W	list	absent	200	-	no	-	link	fails	1	-	-	not found	
-link-self-loop	W	folder-list	refused	400	-	no	-	link	fails	1	-	-	-	
+link-self-loop	W	folder-list	refused	400	deployments/w/self	no	-	link	fails	1	-	-	-	
 link-self-loop	W	users	unreadable	200	-	no	-	link	fails	1	-	-	unreadable deployments/w/self	
 link-self-loop	W	migration	absent	200	-	no	-	link	fails	1	-	-	not found	
-link-self-loop	W	routing-get	absent	400	-	no	-	link	fails	1	-	-	-	
+link-self-loop	W	routing-get	absent	400	deployments/w/self	no	-	link	fails	1	-	-	-	
 link-self-loop	W	preview	refused	400	deployments/w/self	no	-	link	fails	1	-	-	-	
 link-self-loop	W	check-deployment	cannot-check	exit 2	-	no	-	link	fails	1	-	-	-	
 link-self-loop	W	sync-to	unreadable	409	deployments/w	no	-	link	fails	1	-	-	-	

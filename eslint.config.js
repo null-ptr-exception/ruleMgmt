@@ -320,7 +320,73 @@ const measure = {
   },
 }
 
-export const boundary = { rules: { disk, measure } }
+/**
+ * `boundary/request` warns where a route file reads the request itself —
+ * `req.query`, `req.params`, `req.body`, `req['body']`, `req[name]`, the
+ * same under another name (a handler's first parameter, `const r = req`),
+ * or in parts (`const { query } = req`, `{ ...all } = req`, a handler
+ * taking `({ body })`) — instead of the input its route declares and
+ * parses (server/http/route.js). Not seen: a helper outside server/routes/
+ * given `req` whole, and a helper in a route file that takes it under a
+ * name of its own (`function f(r) { r.query }`) and is not a handler. tests/pin/counts.mjs counts
+ * the warnings (requestReads) so the number only goes down, route by route.
+ */
+const REQUEST_PARTS = new Set(['query', 'params', 'body'])
+const ROUTER_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'all', 'use'])
+const request = {
+  meta: {
+    type: 'suggestion',
+    docs: { description: 'route files read the request only through the parsed input' },
+    schema: [],
+    messages: {
+      raw: 'reads req.{{part}} itself: read the request through the route\'s parsed input',
+      alias: 'takes the request under another name or in parts: read it through the route\'s parsed input',
+    },
+  },
+  create(context) {
+    // The names the request goes by in this file: req, request, the first
+    // parameter of a handler given to a router or to route(), and what is
+    // set to one of them (const r = req).
+    const names = new Set(['req', 'request'])
+    const isRequest = node => node?.type === 'Identifier' && names.has(node.name)
+    const isHandler = fn => {
+      const call = fn.parent
+      if (call?.type !== 'CallExpression' || !call.arguments.includes(fn)) return false
+      const c = call.callee
+      if (c.type === 'Identifier') return c.name === 'route'
+      return c.type === 'MemberExpression' && c.property.type === 'Identifier' && ROUTER_METHODS.has(c.property.name)
+    }
+    // A pattern that takes parts of the request: { query }, { ...all }.
+    const takesParts = pattern => pattern?.type === 'ObjectPattern' &&
+      pattern.properties.some(p => p.type === 'RestElement' || (p.key?.type === 'Identifier' && REQUEST_PARTS.has(p.key.name)) || p.computed)
+    const onFunction = fn => {
+      if (!isHandler(fn)) return
+      const first = fn.params[0]
+      if (first?.type === 'Identifier') names.add(first.name)
+      else if (takesParts(first)) context.report({ node: first, messageId: 'alias' })
+    }
+    return {
+      FunctionExpression: onFunction,
+      ArrowFunctionExpression: onFunction,
+      VariableDeclarator(node) {
+        if (!isRequest(node.init)) return
+        if (node.id.type === 'Identifier') { names.add(node.id.name); context.report({ node, messageId: 'alias' }) }
+        else if (takesParts(node.id)) context.report({ node, messageId: 'alias' })
+      },
+      MemberExpression(node) {
+        if (!isRequest(node.object)) return
+        if (!node.computed && node.property.type === 'Identifier' && REQUEST_PARTS.has(node.property.name)) {
+          context.report({ node, messageId: 'raw', data: { part: node.property.name } })
+        } else if (node.computed) {
+          const part = node.property.type === 'Literal' ? node.property.value : null
+          if (part === null || REQUEST_PARTS.has(part)) context.report({ node, messageId: 'raw', data: { part: part ?? '[…]' } })
+        }
+      },
+    }
+  },
+}
+
+export const boundary = { rules: { disk, measure, request } }
 
 // Modules meant to do what the rule warns about, and what each may do.
 const ALLOWED = [
@@ -393,6 +459,10 @@ export default [
     rules: { 'boundary/disk': ['warn', { allow: ['yaml', 'yamlParse', 'helper'] }] },
   },
   ...ALLOWED.map(({ files, allow }) => ({ files, rules: { 'boundary/disk': ['warn', { allow }] } })),
+  {
+    files: ['server/routes/**/*.js'],
+    rules: { 'boundary/request': 'warn' },
+  },
   {
     ignores: ['dist/**', 'node_modules/**', '.playwright-mcp/**'],
   },

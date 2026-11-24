@@ -32,7 +32,7 @@ export function withSyncRegistryLock(gitopsDir, fn) {
 
 // Longest a write may hold the lock: past it the lock is let go, so a
 // handler that never answers cannot stop every commit and save behind it.
-const HOLD_LIMIT_MS = 60000
+export const HOLD_LIMIT_MS = 60000
 
 /**
  * Express middleware: a request that writes files holds the same lock as a

@@ -77,6 +77,14 @@ async function withSources(gitopsDir, refused) {
   }))
 }
 
+// A write that the file system refused, in words (opening a Template
+// writes its Chart.yaml and products when they are missing).
+const WRITE_FAILED = {
+  EACCES: 'permission denied', EPERM: 'not permitted',
+  EROFS: 'the file system is read-only', EISDIR: 'a folder is in its place',
+  ENOTDIR: 'a file is where a folder should be', ENOSPC: 'no space left',
+}
+
 export default function templatesRouter() {
   const router = express.Router()
   router.use(answersWithoutPaths)
@@ -154,19 +162,33 @@ export default function templatesRouter() {
     // commit does not stage half the products.
     const chartYamlMissing = t.findings.some(f => f.code === 'template.chart-absent')
     if (chartYamlMissing || t.drift.state === 'missing') {
+      // A file these cannot write is named (409), not a server failure.
+      // The file named is the one written, never writeWhole's temp file
+      // beside it (`_<name>.<hex>`).
+      const wrote = (rel, write, { exact = false } = {}) => write().then(() => null, err => {
+        if (!WRITE_FAILED[err.code]) throw err
+        const named = !exact && err.path ? path.relative(req.gitopsDir, err.path).split(path.sep).join('/').replace(/(^|\/)_([^/]+)\.[0-9a-f]+$/, '$1$2') : null
+        return writeRefusal({ file: named && !named.startsWith('..') ? named : rel, why: WRITE_FAILED[err.code] })
+      })
+      const rel = name => path.relative(req.gitopsDir, name).split(path.sep).join('/')
       t = await withSyncRegistryLock(req.gitopsDir, async () => {
         let now = await readTemplate(req.gitopsDir, chart)
         // Deleted meanwhile: not there to open.
         if (!now) return null
         if (now.findings.some(f => f.code === 'template.chart-absent')) {
           const { text } = ensureChartYaml(null, chart)
-          await writeWhole(chartYamlFile, text)
+          const refused = await wrote(rel(chartYamlFile), () => writeWhole(chartYamlFile, text), { exact: true })
+          if (refused) return { refused }
         }
-        if (now.drift.state === 'missing') await regenerateProducts(req.gitopsDir, chart)
+        if (now.drift.state === 'missing') {
+          const refused = await wrote(rel(path.dirname(chartYamlFile)), () => regenerateProducts(req.gitopsDir, chart))
+          if (refused) return { refused }
+        }
         now = await readTemplate(req.gitopsDir, chart)
         return now
       })
       if (!t) return res.status(404).json({ error: 'Chart not found' })
+      if (t.refused) return res.status(t.refused.status).json(t.refused.body)
     }
 
     const templateFiles = t.templateNames.map(f => f.replace(/\.yaml$/, ''))

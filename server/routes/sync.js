@@ -22,7 +22,7 @@ import { syncAnswer } from '../repo/sync.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerEveryRoute } from '../http/route.js'
-import { parsePath } from '../repo/paths.js'
+import { parsePath, deploymentLinkProblem } from '../repo/paths.js'
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -33,8 +33,8 @@ async function validateSyncPath(gitopsDir, candidate) {
     return `Invalid path: ${candidate}`
   }
   if (await inSharedDir(gitopsDir, candidate)) return `${candidate}: ${SHARED_DIR}/ holds the shared notification configs, and no deployment`
-  const where = await parsePath(candidate, 'deployment', { root: gitopsDir })
-  if (!where.ok) return where.error
+  const link = await deploymentLinkProblem(gitopsDir, candidate)
+  if (link) return link
   if (!(await isDeployment(openRepo(gitopsDir), candidate))) {
     return `${candidate} is not a valid deployment`
   }
@@ -76,15 +76,20 @@ export default function syncRouter() {
     if (sourceError) return res.status(400).json({ error: sourceError })
 
     // Through a link, still in the repo: a copy is written there.
-    if (!isSafeSyncPath(target, chartsDirName()) || !(await parsePath(target, 'create', { root: req.gitopsDir })).ok) {
-      return res.status(400).json({ error: `Invalid path: ${target}` })
-    }
+    // Why, from the one path check; one under the Templates' folder is no
+    // sync target either.
+    const where = await parsePath(target, 'create', { root: req.gitopsDir, what: 'path' })
+    if (!where.ok) return res.status(400).json({ error: where.error })
+    if (!isSafeSyncPath(target, chartsDirName())) return res.status(400).json({ error: `Invalid path: ${target}` })
     // Unlike source, target is allowed not to exist yet (it gets created as
     // a copy of source) — but if something is already there, it must be a
     // real deployment, not an arbitrary folder we'd otherwise overwrite.
     // A new target is a new deployment, so a reserved name is refused (#99).
     const reserved = await newReservedSegment(req.gitopsDir, target)
     if (reserved) return res.status(400).json({ error: reservedError(reserved) })
+    // A target reached through a link is no deployment: said as one (paths.js).
+    const linked = await deploymentLinkProblem(req.gitopsDir, target)
+    if (linked) return res.status(400).json({ error: linked })
     const targetDir = path.join(req.gitopsDir, target)
 
     try {

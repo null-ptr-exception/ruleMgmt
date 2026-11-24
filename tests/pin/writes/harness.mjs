@@ -20,6 +20,8 @@ import express from 'express'
 import { run, oneLine } from '../lib/tools.mjs'
 import { withSyncRegistryLock } from '../../../server/lib/sync.js'
 
+// Where the dir-link-git row puts the folder it links to.
+const GIT_PIN_DIR = 'pin-dir'
 const WT = path.resolve(import.meta.dirname, '../../..')
 
 // The _common's move renders with Helm when it is there: not in this pin.
@@ -405,6 +407,13 @@ async function setUp(ws, c, p) {
       await fs.rm(dir, { recursive: true, force: true }); await fs.symlink(there, dir)
       break
     }
+    case 'dir-link-git': {
+      const dir = path.dirname(prim)
+      const there = path.join(root, '.git', GIT_PIN_DIR, path.basename(dir))
+      await copyOut(dir, there)
+      await fs.rm(dir, { recursive: true, force: true }); await fs.symlink(there, dir)
+      break
+    }
     case 'is-folder': await fs.rm(prim, { recursive: true, force: true }); await fs.mkdir(prim); await fs.writeFile(path.join(prim, 'keep'), 'x\n'); break
     case 'primary-unreadable': await fs.chmod(prim, 0); break
     case 'readonly-repo': await chmodTree(root, 'a-w'); break
@@ -417,6 +426,7 @@ async function reset(ws) {
   execFileSync('chmod', ['-R', 'u+rwX', work])
   await fs.rm(outside, { recursive: true, force: true }); await fs.mkdir(outside)
   await fs.rm(path.join(work, 'escape'), { recursive: true, force: true })
+  await fs.rm(path.join(root, '.git', GIT_PIN_DIR), { recursive: true, force: true })
   // A link or folder where git keeps a file: gone first, git puts it back.
   for (const e of await fs.readdir(root)) if (e !== '.git') await fs.rm(path.join(root, e), { recursive: true, force: true })
   git('reset', '-q', '--hard', baseSha); git('clean', '-ffdxq')
@@ -491,7 +501,13 @@ async function runCell(ws, c, p) {
   const r = await make(ws, c.id === 'no-version' ? {} : ctx)
   const r2 = c.id === 'race-same' ? await sameRequest(ws, p, ctx) : null
   await setUp(ws, c, p)
-  const outsideOf = () => snapshot(work, f => f === 'repo' || f === 'import.yaml')
+  // Outside the repo, and what a row put in git's own folder.
+  const outsideOf = async () => {
+    const out = await snapshot(work, f => f === 'repo' || f === 'import.yaml')
+    const inGit = await snapshot(path.join(root, '.git', GIT_PIN_DIR)).catch(() => new Map())
+    for (const [k, v] of inGit) out.set(`repo/.git/${GIT_PIN_DIR}/${k}`, v)
+    return out
+  }
   if (c.id === 'race-commit') await fs.writeFile(path.join(root, 'notes/commit-marker.txt'), 'commit\n')
   const pre = await snapshot(root)
   const preOut = await outsideOf()

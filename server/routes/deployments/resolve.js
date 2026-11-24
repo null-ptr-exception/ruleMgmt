@@ -4,7 +4,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { normalizeSyncPath } from '../../lib/sync.js'
 import { isCommonChartPath, COMMON_DIR } from '../../../src/utils/reservedNames.js'
-import { pathProblem, parsePath } from '../../repo/paths.js'
+import { pathProblem, parsePath, realPlace, PLACE_WHY } from '../../repo/paths.js'
 import { isAbsent, UnreadableError } from '../../lib/readIfThere.js'
 
 /** Why the deployment name of the request cannot be one, or null (paths.js). */
@@ -30,8 +30,11 @@ export async function resolveDeploymentDir(req) {
     const p = await parsePath(folder, 'deployment', { root: req.gitopsDir, what: 'folder path' })
     return p.ok ? { dir: p.abs } : { error: p.error }
   }
-  const deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments')
-  return { dir: path.join(deploymentsDir, req.params.chart) }
+  // A legacy flat deployment's folder: never through a link out of the
+  // repo or into git's own folder either.
+  const rel = path.posix.join(process.env.DEPLOYMENTS_DIR || 'deployments', req.params.chart)
+  const { target, why } = await realPlace(req.gitopsDir, rel)
+  return why ? { error: `${rel}: ${PLACE_WHY[why]}` } : { dir: target }
 }
 
 // Which file holds a deployment's values. The folder's own deployment —

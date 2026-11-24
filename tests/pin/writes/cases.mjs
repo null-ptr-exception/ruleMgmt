@@ -44,6 +44,8 @@ export const CASES = [
   { id: 'link-outside', applies: p => !!p.primary },
   { id: 'dangling-link', applies: p => !!p.primary },
   { id: 'dir-link-outside', applies: p => !!p.primary && p.primary.includes('/') },
+  // A folder on the way is a link into git's own folder.
+  { id: 'dir-link-git', applies: p => !!p.primary && p.primary.includes('/') },
   // A folder where the file should be: the write's rename fails.
   { id: 'is-folder', applies: p => !!p.primary },
   // The file written cannot be read.

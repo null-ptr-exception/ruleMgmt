@@ -8,7 +8,7 @@ import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks
 import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
-import { parsePath } from '../repo/paths.js'
+import { parsePath, pathProblem } from '../repo/paths.js'
 import { repoGit } from '../repo/git.js'
 
 export { withoutPath }
@@ -65,6 +65,12 @@ function hasRemote() {
 async function getBranch(cwd) {
   const result = await git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD')
   return result.trim()
+}
+
+// A file as git names it at a commit: its spelling only.
+function pathAt(file) {
+  const problem = pathProblem(file, 'read')
+  return problem ? { ok: false, error: `Invalid file path: ${problem.why}` } : { ok: true, rel: file.split('/').filter(x => x && x !== '.').join('/') }
 }
 
 export default function gitRouter() {
@@ -228,7 +234,7 @@ export default function gitRouter() {
 
       const SEP = '---GIT-LOG-SEP---'
       const format = `%H${SEP}%h${SEP}%s${SEP}%an${SEP}%aI`
-      const raw = await git(cwd, 'log', `--format=${format}`, `--skip=${skip}`, `-n`, `${limit}`)
+      const raw = await repoGit(cwd).log(format, skip, limit)
       const commits = []
 
       for (const line of raw.trim().split('\n')) {
@@ -262,8 +268,12 @@ export default function gitRouter() {
     const ref = req.query.ref
 
     // A tracked file, dot-files and dot-folders among them; never git's
-    // own; the folder it is in really in the repo (paths.js).
-    const where = await parsePath(file, 'read', { root: cwd, what: 'file path' })
+    // own (paths.js). At a commit git holds what is shown: only the
+    // spelling is checked, nothing on disk; in the work tree, the folder it
+    // is in must really be in the repo.
+    const where = ref === undefined
+      ? await parsePath(file, 'read', { root: cwd, what: 'file path' })
+      : pathAt(file)
     if (!where.ok) return res.status(400).json({ error: where.error })
     const g = repoGit(cwd)
     // A commit the policy allows and git has (repo/git.js).

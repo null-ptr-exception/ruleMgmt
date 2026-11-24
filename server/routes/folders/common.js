@@ -4,7 +4,7 @@ import { withSyncRegistryLock } from '../../lib/sync.js'
 import { planCreate, planDelete, applyPlan, commonUsers } from '../../lib/commonEdit.js'
 import { withoutPath } from '../../lib/answerPaths.js'
 import { errorAnswer } from '../../lib/readIfThere.js'
-import { pathProblem, linkOnTheWay } from '../../repo/paths.js'
+import { parsePath, linkOnTheWay } from '../../repo/paths.js'
 import { COMMON_DIR } from '../../../src/utils/reservedNames.js'
 
 export function commonRoutes(router) {
@@ -49,7 +49,8 @@ export function commonRoutes(router) {
   router.get('/common/users', async (req, res) => {
     try {
       const rel = String(req.query.path || '')
-      if (rel && pathProblem(rel, 'list')) return res.status(400).json({ error: 'Invalid path' })
+      const where = rel ? await parsePath(rel, 'list', { root: req.gitopsDir, what: 'path' }) : { ok: true }
+      if (!where.ok) return res.status(400).json({ error: where.error })
       const link = rel ? await linkOnTheWay(req.gitopsDir, rel) : null
       if (link) return res.status(400).json({ error: `${rel}: ${link.why} — a ${COMMON_DIR} chart is looked at where it is, not through a link${link.use}` })
       res.json(await commonUsers(req.gitopsDir, rel.replace(/\/+$/, '')))

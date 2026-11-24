@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
-import { computeDrift, generateProducts, blocksCommit, staleTemplates, repeatingTemplates, replacedByConversion } from '../drift.js'
+import { computeDrift, generateProducts, staleTemplates, repeatingTemplates, replacedByConversion } from '../drift.js'
 import { schemaToModel, modelToSchema, modelToFiles, parseRulesDir } from '../rulesFile.js'
 import { objectMetaFromEnv } from '../objectMeta.js'
 
@@ -95,15 +95,6 @@ describe('staleTemplates', () => {
     expect(staleTemplates(['up.yaml', 'configmap.yaml'], {}, { schemas: [schema] })).toEqual(['up.yaml'])
     expect(staleTemplates(['up.yaml'], { 'up.yaml': '' }, { schemas: [schema] })).toEqual([])
     expect(staleTemplates(['up.yaml'], {}, { schemas: [{ properties: {} }] })).toEqual([])
-  })
-})
-
-describe('blocksCommit', () => {
-  it('blocks stale, allows the rest', () => {
-    expect(blocksCommit('stale')).toBe(true)
-    // A legacy chart renders as it did in 1.x, so it is a reminder, not a
-    // blocker (#79): charts can be converted one at a time.
-    expect(['legacy', 'ok', 'empty', 'missing'].map(blocksCommit)).toEqual([false, false, false, false])
   })
 })
 
@@ -202,7 +193,6 @@ describe('repeatingTemplates / replacedByConversion', () => {
     expect(result.state).toBe('stale')
     expect(result.repeats).toEqual([{ file: 'templates/prometheus-rule.yaml', rules: [...new Set(alerts)] }])
     expect(result.outOfDate).toBeUndefined()
-    expect(blocksCommit(result.state)).toBe(true)
     expect(name in templates).toBe(true)
   })
 

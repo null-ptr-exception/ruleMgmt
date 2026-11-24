@@ -36,6 +36,33 @@ import path from 'path'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { CannotCheck, notADeployment, helmHome, checkRuleObjects, checkRouting } from '../server/lib/deploymentCheck.js'
 import { valuesLimitNote } from '../server/repo/limits.js'
+import { openRepoAt } from '../server/repo/locate.js'
+import { decide } from '../server/repo/policy.js'
+import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
+
+// The Templates the deployment's Chart.yaml takes from the repo (file://),
+// read as the server reads them: what Helm renders other than written (a
+// generated file missing, a partial holding rules, the alerts repeated, a
+// name with a dot) is said, as Commit says it. The deployment's own render
+// (checkRuleObjects) does not show it: Helm renders the rest without a word.
+async function checkTemplate(dir) {
+  const { repo, rel } = openRepoAt(path.join(dir, 'Chart.yaml'))
+  const chart = await repo.helmYaml(rel)
+  if (chart.state !== 'ok') return { ok: true, lines: [] }
+  const lines = []
+  for (const d of Array.isArray(chart.value.dependencies) ? chart.value.dependencies : []) {
+    const repository = typeof d?.repository === 'string' ? d.repository : ''
+    if (!repository.startsWith('file://')) continue
+    // A file of its rules/ that cannot be read is gen-rules --check's to
+    // name: Helm does not read rules/. The folder itself has to be.
+    const at = openRepoAt(path.resolve(dir, repository.slice('file://'.length)))
+    const t = await at.repo.templateFiles(at.rel)
+    if (t.state === 'unreadable') { lines.push(`  ${at.rel} cannot be read: ${t.why}`); continue }
+    if (t.state !== 'ok' || t.value.chart?.annotations?.app !== 'alertforge') continue
+    for (const f of decide(t.findings, TEMPLATE_POLICIES.checkDeployment).refuse) lines.push(`  ${f.message}`)
+  }
+  return lines.length ? { ok: false, lines: ['Template: failed — Helm would not render it as written:', ...lines] } : { ok: true, lines: [] }
+}
 
 // The same values size limit as the server's (MAX_VALUES_BYTES): a setting
 // not used as written is said, as the server says it.
@@ -72,9 +99,9 @@ async function main() {
     // Each said as soon as it is known: a later one that cannot be made
     // (an unreadable routing.yaml) does not hide what was checked before it.
     let ok = true
-    for (const step of [checkRuleObjects, checkRouting]) {
+    for (const step of [checkRuleObjects, checkTemplate, checkRouting]) {
       const result = await step(dir, repo)
-      console.log(result.lines.join('\n'))
+      if (step !== checkTemplate || result.lines.length) console.log(result.lines.join('\n'))
       ok &&= result.ok
     }
     return ok ? 0 : 1

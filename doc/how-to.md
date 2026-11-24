@@ -1199,7 +1199,11 @@ different.
 
 `check-deployment.mjs` checks one deployment the way the editor does: it
 renders it with Helm and runs `promtool` (or `vmalert`) on each rule object,
-as **Preview** does, and checks its `routing.yaml` as the **Routing** page
+as **Preview** does, checks its Template's files as a commit does (a
+generated template missing, a partial `templates/_x.yaml` holding a rule
+object, a rule object repeating the generated alerts, a Template folder name
+with a dot: Helm renders the rest without a word, so the render alone does
+not show them), and checks its `routing.yaml` as the **Routing** page
 reads it — including whether `templates/alertmanagerconfig.yaml` is still what
 `routing.yaml` generates, whether one is there with no `routing.yaml`, and
 whether a `_common` chart it renders on has one of its own. It reads the

@@ -27,6 +27,9 @@ import { schemaToModel, modelToFiles, parseRulesDir, groupFileText, genSchema } 
 import { checkRules } from '../src/utils/ruleChecks.js'
 import { generateProducts } from '../src/utils/drift.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
+import { readTemplateAt } from '../server/lib/chartFiles.js'
+import { decide } from '../server/repo/policy.js'
+import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
@@ -46,13 +49,29 @@ if (objectMeta.errors.length) {
   process.exit(1)
 }
 
-// Only a missing file is null: a schema that cannot be read is not the
-// chart having none, which would import into a chart started from nothing.
-async function readIfExists(file) {
-  try { return await fs.readFile(file, 'utf-8') } catch (err) { if (err.code === 'ENOENT') return null; throw err }
+// One ERROR line and exit 2 for what this tool cannot go on from (a file
+// it cannot read, a schema that is not JSON), as gen-rules and gen-chart:
+// not a stack trace, and not the 1 that means a refusal.
+function cannot(message) {
+  console.log(`ERROR  ${message}`)
+  process.exit(2)
 }
 
-const result = importRules(await fs.readFile(rulesFile, 'utf-8'))
+// The chart as it stands, read as the server reads it (the repo loader).
+let chart
+try {
+  chart = await readTemplateAt(chartDir)
+} catch (err) {
+  cannot(err.message)
+}
+let rulesText
+try {
+  rulesText = await fs.readFile(rulesFile, 'utf-8')
+} catch (err) {
+  cannot(`${rulesFile} cannot be read (${err.code || err.message})`)
+}
+
+const result = importRules(rulesText)
 
 for (const warning of result.warnings) console.log(`warn   ${warning}`)
 
@@ -62,31 +81,40 @@ if (result.groups.length === 0) {
 }
 
 // The chart as it stands: rules/ when it has one, otherwise its schema read
-// through the upgrade adapter, otherwise nothing yet.
-const rulesDir = path.join(chartDir, 'rules')
-const schemaText = await readIfExists(path.join(chartDir, 'values.schema.json'))
-const schema = schemaText ? JSON.parse(schemaText) : null
+// through the upgrade adapter, otherwise nothing yet. A schema that cannot
+// be read, or is not JSON, is not the chart having none, which would
+// import into a chart started from nothing.
+if (chart?.schemaNotJson != null) cannot(`${path.join(chartDir, 'values.schema.json')} is not valid JSON (${chart.schemaNotJson})`)
+const schema = chart?.schema ?? null
+const onDisk = chart?.rulesFiles ?? {}
+const migrating = !chart?.fromRules
 
-// Only a missing rules/ means "not migrated yet"; any other failure stops here.
-const onDisk = {}
-let names = []
-try {
-  names = (await fs.readdir(rulesDir)).filter(f => f.endsWith('.yaml'))
-} catch (err) {
-  if (err.code !== 'ENOENT') throw err
+// What Helm fails on, or renders other than written, in the rest of the
+// Template; and a 1.x chart not converted yet, whose rule file would render
+// every imported group's alerts a second time beside the generated ones
+// (#190): gen-rules converts it first.
+if (chart) {
+  const { refuse, warn } = decide(chart.findings, TEMPLATE_POLICIES.cli)
+  // A missing Chart.yaml is said at the end, with what to do.
+  for (const f of warn.filter(w => w.code !== 'template.chart-absent')) console.log(`warn   ${f.message}`)
+  if (chart.drift.state === 'legacy' && chart.templateNames.length) {
+    refuse.push({ message: `${chartDir} is not converted to rules/ yet, and its templates/ holds its 1.x rules: run gen-rules.mjs first, or the imported alerts render beside a second copy of every alert` })
+  }
+  if (refuse.length) {
+    for (const f of refuse) console.log(`ERROR  ${f.message}`)
+    console.error('\nRefusing to import: Helm would not render this Template as written.')
+    process.exit(1)
+  }
 }
-for (const name of names) onDisk[name] = await fs.readFile(path.join(rulesDir, name), 'utf-8')
 
-const migrating = !Object.keys(onDisk).length
 let model
 if (!migrating) {
-  const parsed = parseRulesDir(onDisk)
-  if (parsed.errors.length) {
-    for (const e of parsed.errors) console.log(`ERROR  ${e}`)
+  if (chart.ruleErrors.length) {
+    for (const e of chart.ruleErrors) console.log(`ERROR  ${e}`)
     console.error('\nRefusing to import: the chart\'s own rules/ does not parse.')
     process.exit(1)
   }
-  model = parsed.model
+  model = chart.model
 } else if (schema) {
   const converted = schemaToModel(schema)
   for (const w of converted.warnings) console.log(`note   ${w}`)
@@ -152,15 +180,17 @@ const entries = [
   ['values.schema.json', products.schemaText],
   ...Object.entries(products.templates).map(([name, text]) => [path.join('templates', name), text]),
 ]
+const had = rel => (rel === 'values.schema.json' ? chart?.schemaText ?? null
+  : rel.startsWith('templates') ? chart?.templateFiles[path.basename(rel)] ?? null : onDisk[path.basename(rel)] ?? null)
 for (const [rel, text] of entries) {
   const abs = path.join(chartDir, rel)
-  const have = await readIfExists(abs)
+  const have = had(rel)
   if (have === text) continue
   await fs.mkdir(path.dirname(abs), { recursive: true })
   await fs.writeFile(abs, text, 'utf-8')
   console.log(`${have === null ? 'created' : 'updated'}   ${rel}`)
 }
 
-if (await readIfExists(path.join(chartDir, 'Chart.yaml')) === null) {
+if (!chart || chart.findings.some(f => f.code === 'template.chart-absent')) {
   console.log('\nnote   no Chart.yaml — create the chart in the UI, or run gen-rules.mjs with --init')
 }

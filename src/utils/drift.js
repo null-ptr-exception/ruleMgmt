@@ -283,12 +283,3 @@ export function computeDrift({ rulesFiles, schema, templateFiles = {}, objectMet
 
   return { state: 'ok' }
 }
-
-/**
- * Whether this drift state should stop a commit. A `legacy` chart does not: it
- * renders exactly as it did in 1.x, so it is named after the commit instead
- * (#79) and charts can be converted one at a time.
- */
-export function blocksCommit(state) {
-  return state === 'stale'
-}

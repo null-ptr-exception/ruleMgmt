@@ -1,25 +1,25 @@
 {
   "lint": {
-    "total": 245,
+    "total": 226,
     "byKind": {
       "childProcess": 1,
       "fs": 34,
-      "fsUse": 158,
-      "helper": 9,
-      "yaml": 17,
-      "yamlParse": 26
+      "fsUse": 145,
+      "helper": 7,
+      "yaml": 16,
+      "yamlParse": 23
     },
     "byFile": {
-      "scripts/gen-chart.mjs": 7,
-      "scripts/gen-rules.mjs": 13,
-      "scripts/import-rules.mjs": 7,
+      "scripts/gen-chart.mjs": 3,
+      "scripts/gen-rules.mjs": 6,
+      "scripts/import-rules.mjs": 4,
       "server.js": 5,
       "server/lib/answerPaths.js": 2,
       "server/lib/chartDiscovery.js": 9,
       "server/lib/chartFiles.js": 3,
       "server/lib/chartUsage.js": 2,
       "server/lib/commit/sync.js": 4,
-      "server/lib/commit/template.js": 6,
+      "server/lib/commit/template.js": 4,
       "server/lib/commonEdit.js": 29,
       "server/lib/deploymentCheck.js": 6,
       "server/lib/deploymentWalk.js": 9,
@@ -42,15 +42,15 @@
       "server/routes/folders/tree.js": 12,
       "server/routes/git.js": 9,
       "server/routes/sync.js": 6,
-      "server/routes/templates.js": 8
+      "server/routes/templates.js": 5
     }
   },
   "yamlParseSites": {
-    "serverAndScripts": 26,
+    "serverAndScripts": 23,
     "src": 9,
     "byFileKind": {
-      "Chart.yaml": 15,
-      "Template values.yaml": 1,
+      "Chart.yaml": 13,
+      "Template values.yaml": 0,
       "deployment values": 4,
       "routing.yaml": 0,
       "rules files": 0,
@@ -86,11 +86,8 @@
     }
   },
   "ownEnoentChecks": {
-    "total": 27,
+    "total": 18,
     "byFile": {
-      "scripts/gen-chart.mjs": 2,
-      "scripts/gen-rules.mjs": 4,
-      "scripts/import-rules.mjs": 2,
       "server/lib/chartUsage.js": 1,
       "server/lib/commit/sync.js": 1,
       "server/lib/commit/template.js": 1,
@@ -105,8 +102,7 @@
       "server/lib/sync.js": 1,
       "server/routes/deployments/resolve.js": 1,
       "server/routes/folders/tree.js": 1,
-      "server/routes/git.js": 1,
-      "server/routes/templates.js": 1
+      "server/routes/git.js": 1
     }
   }
 }

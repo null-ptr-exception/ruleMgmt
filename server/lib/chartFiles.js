@@ -83,11 +83,6 @@ export async function readTemplateAt(chartDir, { model = false } = {}) {
   return { ...t.value, findings: t.findings, repo, root }
 }
 
-/** { state, files?, errors? } — see computeDrift; null when there is no such Template. */
-export async function chartDrift(gitopsDir, name, repo) {
-  return (await readTemplate(gitopsDir, name, repo))?.drift ?? null
-}
-
 /**
  * Write the products a chart's own `rules/*.yaml` generates that are absent
  * on disk. Used when a chart is opened and some are missing — there is

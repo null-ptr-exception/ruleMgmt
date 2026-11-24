@@ -169,13 +169,15 @@ describe('a commit', () => {
   })
 
   it.each([
-    ['not YAML', 'name: demo\nversion: [\n', 'is not valid YAML'],
+    ['not YAML', 'name: demo\nversion: a: b\n', 'is not valid YAML'],
+    // a [ not closed: Helm fails on it, AlertForge cannot tell how it reads it
+    ['written so AlertForge cannot tell how Helm reads it', 'name: demo\nversion: [\n', ': line 2: AlertForge cannot tell'],
     ['no version', 'apiVersion: v2\nname: demo\n', 'has no version Helm reads'],
   ])('is refused while the Template\'s Chart.yaml is %s', async (_, text, why) => {
     await fs.writeFile(file(TEMPLATE), text)
     const { status, data } = await commit()
     expect(status).toBe(409)
-    expect(data.findings.map(f => f.description)).toContainEqual(expect.stringContaining(`its Template demo's Chart.yaml ${why}`))
+    expect(data.findings.map(f => f.description)).toContainEqual(expect.stringContaining(`its Template demo's Chart.yaml${why.startsWith(':') ? '' : ' '}${why}`))
   })
 
   it.each([['no version', undefined], ['an empty one', ''], ['false', false]])('is refused with %s: Helm renders none of it', async (_, version) => {

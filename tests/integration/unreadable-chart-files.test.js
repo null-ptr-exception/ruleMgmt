@@ -369,7 +369,7 @@ describe('the Template\'s own values.yaml that is not YAML', () => {
   })
 
   it('gen-rules --check fails on it', async () => {
-    await write('charts/demo/values.yaml', 'cpu: [\n')
+    await write('charts/demo/values.yaml', 'cpu: x: y\n')
     const r = await run(process.execPath, [path.join(ROOT, 'scripts', 'gen-rules.mjs'), 'charts/demo', '--check'], { cwd: tmpDir }).then(o => ({ code: 0, out: o.stdout }), e => ({ code: e.code, out: `${e.stdout}` }))
     expect(r.code).toBe(1)
     expect(r.out).toMatch(/^ERROR {2}values.yaml is not valid YAML/m)
@@ -390,7 +390,7 @@ describe('the command-line tools', () => {
     locked.push(abs('charts/demo/templates'))
     const { code, out } = await node('gen-rules.mjs', 'charts/demo', '--check')
     expect(code).toBe(2)
-    expect(out).toMatch(/ERROR .*EACCES/)
+    expect(out).toMatch(/ERROR .*cannot be read: permission denied/)
   })
 
   it.skipIf(IS_ROOT)('gen-chart --check stops on a template it cannot read, rather than calling it different', async () => {
@@ -398,7 +398,7 @@ describe('the command-line tools', () => {
     await lock(`charts/demo/templates/${file}`)
     const { code, out } = await node('gen-chart.mjs', 'charts/demo', '--check')
     expect(code).toBe(2)
-    expect(out).toMatch(/^ERROR .*EACCES/m)
+    expect(out).toMatch(/^ERROR .*cannot be read: permission denied/m)
   })
 
   it.skipIf(IS_ROOT)('import-rules stops on a values.schema.json it cannot read, before writing rules/ from nothing', async () => {
@@ -407,7 +407,7 @@ describe('the command-line tools', () => {
     await write('rules.yaml', 'groups:\n  - name: g\n    rules:\n      - alert: A\n        expr: up == 0\n')
     const { code, out } = await node('import-rules.mjs', 'rules.yaml', 'charts/demo')
     expect(code).not.toBe(0)
-    expect(out).toMatch(/EACCES/)
+    expect(out).toMatch(/ERROR .*values.schema.json cannot be read: permission denied/)
     await expect(fs.access(abs('charts/demo/rules'))).rejects.toThrow()
   })
 })

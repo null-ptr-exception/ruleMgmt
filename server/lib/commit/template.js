@@ -7,15 +7,9 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { COMMON_DIR, isCommonChartPath } from '../../../src/utils/reservedNames.js'
-import { readTextIfThere } from '../readIfThere.js'
+import { openRepo } from '../../repo/openRepo.js'
+import { parseVersion } from '../../repo/findings/template.js'
 
-// A version as Helm's semver library reads one: a leading v, a part left
-// out read as 0 (`2.0` is 2.0.0), build metadata ignored when it compares.
-const VERSION = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
-const parseVersion = v => {
-  const m = VERSION.exec(String(v).trim())
-  return m ? { at: [m[1], m[2] ?? '0', m[3] ?? '0'].map(Number).join('.') + (m[4] ? `-${m[4]}` : '') } : null
-}
 // A constraint that is one version and nothing else — `2.1.0`, `=2.1.0`,
 // `v2.1.0` — all three parts written: `2.1` and every range are not judged.
 const exactWanted = v => {
@@ -32,7 +26,7 @@ const exactWanted = v => {
  */
 async function templateProblem(gitopsDir, dep, stack) {
   const dir = path.join(gitopsDir, dep)
-  const own = await fileDependencyProblem(gitopsDir, dir, dep)
+  const own = await fileDependencyProblem(gitopsDir, dir, dep, openRepo(gitopsDir))
   // Gone since the walk: not there to commit.
   if (own === undefined) return null
   if (own) return own
@@ -46,7 +40,7 @@ async function templateProblem(gitopsDir, dep, stack) {
 // The first problem with a chart folder's file:// dependencies, null when
 // there is none, undefined when its Chart.yaml is gone (deleted since the
 // walk, #187: not there to commit).
-async function fileDependencyProblem(gitopsDir, dir, dep) {
+async function fileDependencyProblem(gitopsDir, dir, dep, loader) {
   let chart
   try {
     chart = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8')) || {}
@@ -63,20 +57,22 @@ async function fileDependencyProblem(gitopsDir, dir, dep) {
     const what = common ? `${COMMON_DIR} chart` : 'Template'
     const noun = `${what} ${common ? path.relative(gitopsDir, at).replace(/\\/g, '/') : d.name || repo}`
     const problem = description => ({ kind: 'template-version', description: `${dep}: ${description}, so Helm cannot render it` })
-    let template
-    let text
-    try {
-      text = await readTextIfThere(path.join(at, 'Chart.yaml'))
-    } catch (err) {
-      // There, and not readable: its real reason, not "not YAML".
-      return problem(`its ${noun}'s Chart.yaml cannot be read (${err.why || err.message})`)
+    // Read as Helm reads it, through the repo loader. There and not
+    // readable: its real reason, not "not YAML".
+    const rel = path.relative(gitopsDir, path.join(at, 'Chart.yaml')).split(path.sep).join('/')
+    // A chart outside the repo is not the repo's to check.
+    if (rel.startsWith('../')) continue
+    const read = await loader.helmYaml(rel)
+    if (read.state === 'absent') return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
+    if (read.state === 'unreadable') return problem(`its ${noun}'s Chart.yaml cannot be read (${read.why})`)
+    if (read.state === 'invalid') {
+      const [f] = read.findings
+      const said = f.message.replace(`${rel} `, '')
+      // AlertForge cannot tell how Helm reads it: said so, naming the line.
+      if (f.helm === 'unknown') return { kind: 'template-version', description: `${dep}: its ${noun}'s Chart.yaml: ${said} — write it as plain YAML` }
+      return problem(`its ${noun}'s Chart.yaml is not valid YAML (${said.replace('not valid YAML: ', '')})`)
     }
-    if (text === null) return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
-    try {
-      template = yaml.load(text)
-    } catch (err) {
-      return problem(`its ${noun}'s Chart.yaml is not valid YAML (${err.reason || err.message})`)
-    }
+    const template = read.value
     const has = template && typeof template === 'object' ? parseVersion(template.version ?? '') : null
     if (!has) return problem(`its ${noun}'s Chart.yaml has no version Helm reads (${JSON.stringify(template?.version ?? null)})`)
     const wants = d.version

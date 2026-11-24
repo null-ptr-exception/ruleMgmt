@@ -687,9 +687,28 @@ rewrites it: comments and formatting added by hand survive, the same as a save
 in the editor. Only a migration writes rules files.
 
 `gen-rules --check` is worth wiring into CI or a pre-commit hook. It is what
-enforces "`rules/` is the source" when files are committed by hand.
-(`gen-chart.mjs` is the older, templates-only tool; it reads groups from the
-generated schema, so it misses a group added to `rules/` by hand.)
+enforces "`rules/` is the source" when files are committed by hand, and it
+answers as a commit and the editor do: the same comparison says whether the
+generated files are current (a schema saved before `x-once-groups` existed is
+not behind). `gen-chart.mjs` is the older, templates-only tool: it generates
+the templates from `rules/` as `gen-rules` does, and its `--check` names a
+schema behind `rules/`, a template left by a removed group and a file
+repeating the alerts too. On a chart not converted to `rules/` yet it stops:
+templates generated beside the 1.x rule file would render every alert twice —
+run `gen-rules`, which converts it. `import-rules` stops there for the same
+reason.
+
+The three tools read the chart as the server does, the whole Template:
+besides `rules/` and the schema, a `Chart.yaml` that cannot be read or is
+not YAML, a folder name with a dot, a partial (`templates/_x.yaml`) holding a
+rule object, and a `values.yaml` AlertForge cannot tell Helm's reading of
+stop them with an `ERROR` line (exit 1) before anything is written. A file
+that cannot be read is one `ERROR` line naming it and exit 2, in all three. A
+missing `Chart.yaml` (a chart started from `rules/` alone: `--init` writes
+it) and a `Chart.yaml` whose `name` is not the folder's are only warned of.
+A chart whose `rules/` is gone or empty next to a schema the generator wrote
+is not taken for a 1.x chart: `gen-rules` and Save refuse to convert it, as
+the conversion would write every group with no rules — restore `rules/`.
 
 ## What holds it together
 

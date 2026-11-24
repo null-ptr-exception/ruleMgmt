@@ -275,10 +275,10 @@ legacy-ok	legacy	commit	listed	200	-	no	-	renders	disk	-	renders	0	20	MariadbErr
 legacy-ok	legacy	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #d98294f7	promtool=ok	-	
 legacy-ok	legacy	gen-rules-check	refused	exit 1	values.yaml	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #d98294f7	promtool=ok	warn,ORPHANED,MISSING,DIFFERS	refuses-what-helm-renders
 legacy-ok	legacy	gen-rules	listed	exit 0	values.yaml	no	<T>/rules/_common.yaml,<T>/rules/mariadb_errors_aborted_clients.yaml,<T>/rules/mariadb_errors_aborted_connects.yaml,<T>/rules/mariadb_errors_connections.yaml,<T>/rules/mariadb_latency_slow_queries.yaml,<T>/rules/mariadb_saturation_buffer_pool.yaml,<T>/rules/mariadb_saturation_connections.yaml,<T>/rules/mariadb_saturation_cpu.yaml,<T>/rules/mariadb_saturation_disk.yaml,<T>/rules/mariadb_saturation_memory.yaml,<T>/rules/mariadb_traffic_network_receive.yaml,<T>/rules/mariadb_traffic_network_transmit.yaml,<T>/rules/mariadb_traffic_qps_high.yaml,<T>/rules/mariadb_traffic_qps_low.yaml,<T>/templates/mariadb-errors-aborted-clients.yaml,<T>/templates/mariadb-errors-aborted-connects.yaml,<T>/templates/mariadb-errors-connections.yaml,<T>/templates/mariadb-latency-slow-queries.yaml,<T>/templates/mariadb-saturation-buffer-pool.yaml,<T>/templates/mariadb-saturation-connections.yaml,<T>/templates/mariadb-saturation-cpu.yaml,<T>/templates/mariadb-saturation-disk.yaml,<T>/templates/mariadb-saturation-memory.yaml,<T>/templates/mariadb-traffic-network-receive.yaml,<T>/templates/mariadb-traffic-network-transmit.yaml,<T>/templates/mariadb-traffic-qps-high.yaml,<T>/templates/mariadb-traffic-qps-low.yaml,<T>/templates/prometheus-rule.yaml,<T>/values.schema.json	renders	after	changed	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #3c91a1a3	promtool=ok	-	
-legacy-ok	legacy	gen-chart-check	refused	exit 1	-	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #d98294f7	promtool=ok	MISSING	refuses-what-helm-renders
-legacy-ok	legacy	gen-chart	ok	exit 0	-	no	<T>/templates/mariadb-errors-aborted-clients.yaml,<T>/templates/mariadb-errors-aborted-connects.yaml,<T>/templates/mariadb-errors-connections.yaml,<T>/templates/mariadb-latency-slow-queries.yaml,<T>/templates/mariadb-saturation-buffer-pool.yaml,<T>/templates/mariadb-saturation-connections.yaml,<T>/templates/mariadb-saturation-cpu.yaml,<T>/templates/mariadb-saturation-disk.yaml,<T>/templates/mariadb-saturation-memory.yaml,<T>/templates/mariadb-traffic-network-receive.yaml,<T>/templates/mariadb-traffic-network-transmit.yaml,<T>/templates/mariadb-traffic-qps-high.yaml,<T>/templates/mariadb-traffic-qps-low.yaml	renders	after	changed	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #cc75c160	promtool=ok	-	accepts-what-helm-fails
-legacy-ok	legacy	import-rules	ok	exit 0	-	no	<T>/rules/_common.yaml,<T>/rules/imported.yaml,<T>/rules/mariadb_errors_aborted_clients.yaml,<T>/rules/mariadb_errors_aborted_connects.yaml,<T>/rules/mariadb_errors_connections.yaml,<T>/rules/mariadb_latency_slow_queries.yaml,<T>/rules/mariadb_saturation_buffer_pool.yaml,<T>/rules/mariadb_saturation_connections.yaml,<T>/rules/mariadb_saturation_cpu.yaml,<T>/rules/mariadb_saturation_disk.yaml,<T>/rules/mariadb_saturation_memory.yaml,<T>/rules/mariadb_traffic_network_receive.yaml,<T>/rules/mariadb_traffic_network_transmit.yaml,<T>/rules/mariadb_traffic_qps_high.yaml,<T>/rules/mariadb_traffic_qps_low.yaml,<T>/templates/imported.yaml,<T>/templates/mariadb-errors-aborted-clients.yaml,<T>/templates/mariadb-errors-aborted-connects.yaml,<T>/templates/mariadb-errors-connections.yaml,<T>/templates/mariadb-latency-slow-queries.yaml,<T>/templates/mariadb-saturation-buffer-pool.yaml,<T>/templates/mariadb-saturation-connections.yaml,<T>/templates/mariadb-saturation-cpu.yaml,<T>/templates/mariadb-saturation-disk.yaml,<T>/templates/mariadb-saturation-memory.yaml,<T>/templates/mariadb-traffic-network-receive.yaml,<T>/templates/mariadb-traffic-network-transmit.yaml,<T>/templates/mariadb-traffic-qps-high.yaml,<T>/templates/mariadb-traffic-qps-low.yaml,<T>/values.schema.json	renders	after	changed	renders-twice	0	41	ImportedDown MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #bcb28722	promtool=ok	-	accepts-what-helm-fails
-legacy-ok	legacy	products-current	differ	-	-	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #d98294f7	promtool=ok	open=legacy preview=legacy commit=legacy gen-rules=behind gen-chart=behind	entries-disagree
+legacy-ok	legacy	gen-chart-check	refused	exit 1	-	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #d98294f7	promtool=ok	ERROR	refuses-what-helm-renders
+legacy-ok	legacy	gen-chart	refused	exit 1	-	no	-	renders	would-be	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	-	
+legacy-ok	legacy	import-rules	refused	exit 1	-	no	-	renders	would-be	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	-	
+legacy-ok	legacy	products-current	differ	-	-	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #d98294f7	promtool=ok	open=legacy preview=legacy commit=legacy gen-rules=behind gen-chart=?	entries-disagree
 converted-ok	conv	open	ok	200	-	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #3c91a1a3	promtool=ok	drift=ok rules=14 templates=13	
 converted-ok	conv	list	ok	200	-	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #3c91a1a3	promtool=ok	templates=13 version=2.0.0	
 converted-ok	conv	usage	ok	200	-	no	-	renders	disk	-	renders	0	20	MariadbErrorsAbortedClients_WarnRate MariadbErrorsAbortedConnects_WarnRate MariadbErrorsConnections_CriticalRate MariadbErrorsConnections_WarnRate MariadbLatencySlowQueries_CriticalThreshold MariadbLatencySlowQueries_WarnThreshold MariadbSaturationBufferPool_CriticalPct MariadbSaturationBufferPool_WarnPct MariadbSaturationConnections_CriticalPct MariadbSaturationConnections_WarnPct MariadbSaturationCpu_CriticalPct MariadbSaturationCpu_WarnPct MariadbSaturationDisk_CriticalPct MariadbSaturationDisk_WarnPct MariadbSaturationMemory_CriticalPct MariadbSaturationMemory_WarnPct MariadbTrafficNetworkReceive_WarnBytes MariadbTrafficNetworkTransmit_WarnBytes MariadbTrafficQpsHigh_MaxQps MariadbTrafficQpsLow_MinQps #3c91a1a3	promtool=ok	deployments=deployments/conv/d	
@@ -341,13 +341,13 @@ tmpl-underscore-file	p2	delete	refused	409	-	no	-	renders-fewer	disk	-	renders-f
 tmpl-underscore-file	p2	init	refused	409	charts/p2/templates/_extra.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tmpl-underscore-file	p2	preview	refused	200	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=ok	
 tmpl-underscore-file	p2	commit	refused	409	charts/p2/templates/_extra.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	template-partial-rules	
-tmpl-underscore-file	p2	check-deployment	ok	exit 0	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	accepts-what-helm-fails
-tmpl-underscore-file	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
-tmpl-underscore-file	p2	gen-rules	listed	exit 0	values.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	accepts-what-helm-fails
-tmpl-underscore-file	p2	gen-chart-check	ok	exit 0	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	accepts-what-helm-fails
-tmpl-underscore-file	p2	gen-chart	ok	exit 0	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	accepts-what-helm-fails
-tmpl-underscore-file	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders-fewer	after	changed	renders-fewer	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	accepts-what-helm-fails
-tmpl-underscore-file	p2	products-current	same	-	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=current commit=? gen-rules=current gen-chart=current	
+tmpl-underscore-file	p2	check-deployment	refused	exit 1	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-file	p2	gen-rules-check	refused	exit 1	charts/p2/templates/_extra.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	
+tmpl-underscore-file	p2	gen-rules	refused	exit 1	charts/p2/templates/_extra.yaml	no	-	renders-fewer	would-be	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-file	p2	gen-chart-check	refused	exit 1	charts/p2/templates/_extra.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	
+tmpl-underscore-file	p2	gen-chart	refused	exit 1	charts/p2/templates/_extra.yaml	no	-	renders-fewer	would-be	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-file	p2	import-rules	refused	exit 1	charts/p2/templates/_extra.yaml	no	-	renders-fewer	would-be	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-file	p2	products-current	same	-	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=current commit=? gen-rules=? gen-chart=?	
 tmpl-underscore-helpers	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=4	
 tmpl-underscore-helpers	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=4 version=0.1.0	
 tmpl-underscore-helpers	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -410,7 +410,7 @@ tmpl-generated-missing	p2	delete	refused	409	-	no	-	renders-fewer	disk	-	renders
 tmpl-generated-missing	p2	init	refused	409	templates/mem.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	5	CpuHighx2 CpuRatex2 Down #f650151b	promtool=ok	-	
 tmpl-generated-missing	p2	preview	refused	200	-	no	-	renders-fewer	disk	-	renders-fewer	0	5	CpuHighx2 CpuRatex2 Down #f650151b	promtool=ok	alerts=5 drift=missing	
 tmpl-generated-missing	p2	commit	refused	409	templates/mem.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	5	CpuHighx2 CpuRatex2 Down #f650151b	promtool=ok	drift-missing	
-tmpl-generated-missing	p2	check-deployment	ok	exit 0	-	no	-	renders-fewer	disk	-	renders-fewer	0	5	CpuHighx2 CpuRatex2 Down #f650151b	promtool=ok	-	accepts-what-helm-fails
+tmpl-generated-missing	p2	check-deployment	refused	exit 1	-	no	-	renders-fewer	disk	-	renders-fewer	0	5	CpuHighx2 CpuRatex2 Down #f650151b	promtool=ok	-	
 tmpl-generated-missing	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	5	CpuHighx2 CpuRatex2 Down #f650151b	promtool=ok	warn,MISSING	
 tmpl-generated-missing	p2	gen-rules	listed	exit 0	values.yaml	no	<T>/templates/mem.yaml	renders-fewer	after	changed	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tmpl-generated-missing	p2	gen-chart-check	refused	exit 1	-	no	-	renders-fewer	disk	-	renders-fewer	0	5	CpuHighx2 CpuRatex2 Down #f650151b	promtool=ok	MISSING	
@@ -459,10 +459,10 @@ tmpl-leftover-of-removed-group	p2	commit	refused	409	values.schema.json	no	-	ren
 tmpl-leftover-of-removed-group	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tmpl-leftover-of-removed-group	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn,ORPHANED,DIFFERS	refuses-what-helm-renders
 tmpl-leftover-of-removed-group	p2	gen-rules	listed	exit 0	values.yaml	no	<T>/templates/mem.yaml,<T>/values.schema.json	renders	after	changed	renders	0	5	CpuHighx2 CpuRatex2 Down #f650151b	promtool=ok	-	
-tmpl-leftover-of-removed-group	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-leftover-of-removed-group	p2	gen-chart-check	refused	exit 1	values.schema.json	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	DIFFERS,ORPHANED	refuses-what-helm-renders
 tmpl-leftover-of-removed-group	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tmpl-leftover-of-removed-group	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
-tmpl-leftover-of-removed-group	p2	products-current	differ	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=behind preview=behind commit=behind gen-rules=behind gen-chart=current	entries-disagree
+tmpl-leftover-of-removed-group	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=behind preview=behind commit=behind gen-rules=behind gen-chart=behind	
 tmpl-1x-file-repeats-alerts	conv	open	ok	200	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	drift=stale rules=14 templates=14	
 tmpl-1x-file-repeats-alerts	conv	list	ok	200	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	templates=14 version=2.0.0	
 tmpl-1x-file-repeats-alerts	conv	usage	ok	200	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	deployments=deployments/conv/d	
@@ -479,13 +479,13 @@ tmpl-1x-file-repeats-alerts	conv	delete	refused	409	-	no	-	renders-twice	disk	-	
 tmpl-1x-file-repeats-alerts	conv	init	refused	409	templates/prometheus-rule.yaml	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	-	
 tmpl-1x-file-repeats-alerts	conv	preview	refused	200	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	alerts=40 drift=stale	
 tmpl-1x-file-repeats-alerts	conv	commit	refused	409	templates/prometheus-rule.yaml	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	drift-stale	
-tmpl-1x-file-repeats-alerts	conv	check-deployment	ok	exit 0	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	-	accepts-what-helm-fails
+tmpl-1x-file-repeats-alerts	conv	check-deployment	refused	exit 1	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	-	
 tmpl-1x-file-repeats-alerts	conv	gen-rules-check	refused	exit 1	values.yaml	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	warn,REPEATS	
 tmpl-1x-file-repeats-alerts	conv	gen-rules	refused	exit 1	values.yaml	no	-	renders-twice	would-be	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	-	
-tmpl-1x-file-repeats-alerts	conv	gen-chart-check	ok	exit 0	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	-	accepts-what-helm-fails
+tmpl-1x-file-repeats-alerts	conv	gen-chart-check	refused	exit 1	templates/prometheus-rule.yaml	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	REPEATS	
 tmpl-1x-file-repeats-alerts	conv	gen-chart	ok	exit 0	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	-	accepts-what-helm-fails
 tmpl-1x-file-repeats-alerts	conv	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders-twice	after	changed	renders-twice	0	41	ImportedDown MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #bcb28722	promtool=ok	-	accepts-what-helm-fails
-tmpl-1x-file-repeats-alerts	conv	products-current	differ	-	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	open=behind preview=behind commit=behind gen-rules=behind gen-chart=current	entries-disagree
+tmpl-1x-file-repeats-alerts	conv	products-current	same	-	-	no	-	renders-twice	disk	-	renders-twice	0	40	MariadbErrorsAbortedClients_WarnRatex2 MariadbErrorsAbortedConnects_WarnRatex2 MariadbErrorsConnections_CriticalRatex2 MariadbErrorsConnections_WarnRatex2 MariadbLatencySlowQueries_CriticalThresholdx2 MariadbLatencySlowQueries_WarnThresholdx2 MariadbSaturationBufferPool_CriticalPctx2 MariadbSaturationBufferPool_WarnPctx2 MariadbSaturationConnections_CriticalPctx2 MariadbSaturationConnections_WarnPctx2 MariadbSaturationCpu_CriticalPctx2 MariadbSaturationCpu_WarnPctx2 MariadbSaturationDisk_CriticalPctx2 MariadbSaturationDisk_WarnPctx2 MariadbSaturationMemory_CriticalPctx2 MariadbSaturationMemory_WarnPctx2 MariadbTrafficNetworkReceive_WarnBytesx2 MariadbTrafficNetworkTransmit_WarnBytesx2 MariadbTrafficQpsHigh_MaxQpsx2 MariadbTrafficQpsLow_MinQpsx2 #2277c5a8	promtool=ok	open=behind preview=behind commit=behind gen-rules=behind gen-chart=behind	
 tmpl-dir-unreadable	p2	open	unreadable	409	charts/p2/templates	no	-	fails	disk	-	fails	1	-	-	-	-	
 tmpl-dir-unreadable	p2	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=0 version=0.1.0	
 tmpl-dir-unreadable	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
@@ -505,9 +505,9 @@ tmpl-dir-unreadable	p2	commit	refused	409	charts/p2/templates	no	-	fails	disk	-	
 tmpl-dir-unreadable	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
 tmpl-dir-unreadable	p2	gen-rules-check	cannot-check	exit 2	-	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
 tmpl-dir-unreadable	p2	gen-rules	cannot-check	exit 2	-	no	-	fails	would-be	-	-	-	-	-	-	-	
-tmpl-dir-unreadable	p2	gen-chart-check	cannot-check	exit 2	templates/cpu.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
-tmpl-dir-unreadable	p2	gen-chart	cannot-check	exit 2	templates/cpu.yaml	no	-	fails	would-be	-	-	-	-	-	-	-	
-tmpl-dir-unreadable	p2	import-rules	error	crash 1	templates/cpu.yaml	no	<T>/rules/imported.yaml,<T>/values.schema.json	fails	would-be	-	-	-	-	-	-	-	5xx
+tmpl-dir-unreadable	p2	gen-chart-check	cannot-check	exit 2	-	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+tmpl-dir-unreadable	p2	gen-chart	cannot-check	exit 2	-	no	-	fails	would-be	-	-	-	-	-	-	-	
+tmpl-dir-unreadable	p2	import-rules	cannot-check	exit 2	-	no	-	fails	would-be	-	-	-	-	-	-	-	
 tmpl-dir-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 rules-absent	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=legacy rules=none templates=3	
 rules-absent	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
@@ -526,12 +526,12 @@ rules-absent	p2	init	ok	200	-	no	deployments/p2/n/Chart.yaml,deployments/p2/n/va
 rules-absent	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=legacy	
 rules-absent	p2	commit	listed	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	unconverted	
 rules-absent	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-absent	p2	gen-rules-check	refused	exit 1	templates/cpu.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ORPHANED,MISSING,DIFFERS	refuses-what-helm-renders
-rules-absent	p2	gen-rules	ok	exit 0	-	no	<T>/rules/_common.yaml,<T>/rules/cpu.yaml,<T>/rules/mem.yaml,<T>/templates/cpu.yaml,<T>/templates/mem.yaml,<T>/templates/up.yaml,<T>/values.schema.json	renders	after	changed	renders-empty	0	0	-	none	-	accepts-what-helm-fails
-rules-absent	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-absent	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-absent	p2	import-rules	ok	exit 0	-	no	<T>/rules/_common.yaml,<T>/rules/cpu.yaml,<T>/rules/imported.yaml,<T>/rules/mem.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
-rules-absent	p2	products-current	differ	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=legacy preview=legacy commit=legacy gen-rules=behind gen-chart=current	entries-disagree
+rules-absent	p2	gen-rules-check	refused	exit 1	charts/p2/rules	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+rules-absent	p2	gen-rules	refused	exit 1	charts/p2/rules	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-absent	p2	gen-chart-check	refused	exit 1	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+rules-absent	p2	gen-chart	refused	exit 1	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-absent	p2	import-rules	refused	exit 1	charts/p2/rules	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-absent	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=legacy preview=legacy commit=legacy gen-rules=? gen-chart=?	
 rules-empty	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=legacy rules=0 templates=3	
 rules-empty	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 rules-empty	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -549,12 +549,12 @@ rules-empty	p2	init	ok	200	-	no	deployments/p2/n/Chart.yaml,deployments/p2/n/val
 rules-empty	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=legacy	
 rules-empty	p2	commit	listed	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	unconverted	
 rules-empty	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-empty	p2	gen-rules-check	refused	exit 1	templates/cpu.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ORPHANED,MISSING,DIFFERS	refuses-what-helm-renders
-rules-empty	p2	gen-rules	ok	exit 0	-	no	<T>/rules/_common.yaml,<T>/rules/cpu.yaml,<T>/rules/mem.yaml,<T>/templates/cpu.yaml,<T>/templates/mem.yaml,<T>/templates/up.yaml,<T>/values.schema.json	renders	after	changed	renders-empty	0	0	-	none	-	accepts-what-helm-fails
-rules-empty	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-empty	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-empty	p2	import-rules	ok	exit 0	-	no	<T>/rules/_common.yaml,<T>/rules/cpu.yaml,<T>/rules/imported.yaml,<T>/rules/mem.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
-rules-empty	p2	products-current	differ	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=legacy preview=legacy commit=legacy gen-rules=behind gen-chart=current	entries-disagree
+rules-empty	p2	gen-rules-check	refused	exit 1	charts/p2/rules	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+rules-empty	p2	gen-rules	refused	exit 1	charts/p2/rules	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-empty	p2	gen-chart-check	refused	exit 1	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+rules-empty	p2	gen-chart	refused	exit 1	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-empty	p2	import-rules	refused	exit 1	charts/p2/rules	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-empty	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=legacy preview=legacy commit=legacy gen-rules=? gen-chart=?	
 rules-dir-unreadable	p2	open	unreadable	409	charts/p2/rules	no	-	fails	disk	-	fails	1	-	-	-	-	
 rules-dir-unreadable	p2	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=3 version=0.1.0	
 rules-dir-unreadable	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
@@ -576,7 +576,7 @@ rules-dir-unreadable	p2	gen-rules-check	cannot-check	exit 2	-	no	-	fails	disk	-	
 rules-dir-unreadable	p2	gen-rules	cannot-check	exit 2	-	no	-	fails	would-be	-	fails	1	-	-	-	-	
 rules-dir-unreadable	p2	gen-chart-check	cannot-check	exit 2	-	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
 rules-dir-unreadable	p2	gen-chart	cannot-check	exit 2	-	no	-	fails	would-be	-	fails	1	-	-	-	-	
-rules-dir-unreadable	p2	import-rules	error	crash 1	-	no	-	fails	would-be	-	fails	1	-	-	-	-	5xx
+rules-dir-unreadable	p2	import-rules	cannot-check	exit 2	-	no	-	fails	would-be	-	fails	1	-	-	-	-	
 rules-dir-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 rules-file-unreadable	p2	open	unreadable	409	charts/p2/rules/mem.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 rules-file-unreadable	p2	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=3 version=0.1.0	
@@ -599,7 +599,7 @@ rules-file-unreadable	p2	gen-rules-check	cannot-check	exit 2	rules/mem.yaml	no	-
 rules-file-unreadable	p2	gen-rules	cannot-check	exit 2	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
 rules-file-unreadable	p2	gen-chart-check	cannot-check	exit 2	rules/mem.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
 rules-file-unreadable	p2	gen-chart	cannot-check	exit 2	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
-rules-file-unreadable	p2	import-rules	error	crash 1	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	5xx
+rules-file-unreadable	p2	import-rules	cannot-check	exit 2	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
 rules-file-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 rules-file-is-folder	p2	open	unreadable	409	charts/p2/rules/mem.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 rules-file-is-folder	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
@@ -618,11 +618,11 @@ rules-file-is-folder	p2	init	refused	409	deployments/p2/n	no	-	renders	disk	-	re
 rules-file-is-folder	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=undefined	
 rules-file-is-folder	p2	commit	refused	409	charts/p2/rules/mem.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	chart-unreadable	refuses-what-helm-renders
 rules-file-is-folder	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-file-is-folder	p2	gen-rules-check	cannot-check	exit 2	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
-rules-file-is-folder	p2	gen-rules	cannot-check	exit 2	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
-rules-file-is-folder	p2	gen-chart-check	cannot-check	exit 2	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
-rules-file-is-folder	p2	gen-chart	cannot-check	exit 2	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
-rules-file-is-folder	p2	import-rules	error	crash 1	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	5xx
+rules-file-is-folder	p2	gen-rules-check	cannot-check	exit 2	rules/mem.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+rules-file-is-folder	p2	gen-rules	cannot-check	exit 2	rules/mem.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-file-is-folder	p2	gen-chart-check	cannot-check	exit 2	rules/mem.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+rules-file-is-folder	p2	gen-chart	cannot-check	exit 2	rules/mem.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-file-is-folder	p2	import-rules	cannot-check	exit 2	rules/mem.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 rules-file-is-folder	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=? commit=? gen-rules=? gen-chart=?	
 rules-dangling-link	p2	open	unreadable	409	charts/p2/rules/mem.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 rules-dangling-link	p2	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=3 version=0.1.0	
@@ -645,7 +645,7 @@ rules-dangling-link	p2	gen-rules-check	cannot-check	exit 2	rules/mem.yaml	no	-	f
 rules-dangling-link	p2	gen-rules	cannot-check	exit 2	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
 rules-dangling-link	p2	gen-chart-check	cannot-check	exit 2	rules/mem.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
 rules-dangling-link	p2	gen-chart	cannot-check	exit 2	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
-rules-dangling-link	p2	import-rules	error	crash 1	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	5xx
+rules-dangling-link	p2	import-rules	cannot-check	exit 2	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
 rules-dangling-link	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 rules-link-inside	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 rules-link-inside	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
@@ -687,12 +687,12 @@ rules-link-outside	p2	init	refused	409	deployments/p2/n	no	-	renders	disk	-	rend
 rules-link-outside	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=undefined	
 rules-link-outside	p2	commit	refused	409	charts/p2/rules/mem.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	chart-unreadable	refuses-what-helm-renders
 rules-link-outside	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-link-outside	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
-rules-link-outside	p2	gen-rules	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-link-outside	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-link-outside	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-link-outside	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
-rules-link-outside	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=? commit=? gen-rules=current gen-chart=current	
+rules-link-outside	p2	gen-rules-check	cannot-check	exit 2	rules/mem.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+rules-link-outside	p2	gen-rules	cannot-check	exit 2	rules/mem.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-link-outside	p2	gen-chart-check	cannot-check	exit 2	rules/mem.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+rules-link-outside	p2	gen-chart	cannot-check	exit 2	rules/mem.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-link-outside	p2	import-rules	cannot-check	exit 2	rules/mem.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-link-outside	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=? commit=? gen-rules=? gen-chart=?	
 rules-not-yaml	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=stale rules=4 templates=3	
 rules-not-yaml	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 rules-not-yaml	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -893,8 +893,8 @@ rules-group-constructor	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	
 rules-group-constructor	p2	init	refused	409	templates/constructor.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 rules-group-constructor	p2	preview	refused	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=missing	refuses-what-helm-renders
 rules-group-constructor	p2	commit	refused	409	templates/constructor.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift-missing	refuses-what-helm-renders
-rules-group-constructor	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-rules-group-constructor	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn,DIFFERS,MISSING	refuses-what-helm-renders
+rules-group-constructor	p2	check-deployment	refused	exit 1	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+rules-group-constructor	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn,MISSING	refuses-what-helm-renders
 rules-group-constructor	p2	gen-rules	listed	exit 0	values.yaml	no	<T>/templates/constructor.yaml,<T>/values.schema.json	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 rules-group-constructor	p2	gen-chart-check	refused	exit 1	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	MISSING	refuses-what-helm-renders
 rules-group-constructor	p2	gen-chart	ok	exit 0	-	no	<T>/templates/constructor.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
@@ -990,7 +990,7 @@ common-unreadable	p2	gen-rules-check	cannot-check	exit 2	rules/_common.yaml	no	-
 common-unreadable	p2	gen-rules	cannot-check	exit 2	rules/_common.yaml	no	-	fails	would-be	-	-	-	-	-	-	-	
 common-unreadable	p2	gen-chart-check	cannot-check	exit 2	rules/_common.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
 common-unreadable	p2	gen-chart	cannot-check	exit 2	rules/_common.yaml	no	-	fails	would-be	-	-	-	-	-	-	-	
-common-unreadable	p2	import-rules	error	crash 1	rules/_common.yaml	no	-	fails	would-be	-	-	-	-	-	-	-	5xx
+common-unreadable	p2	import-rules	cannot-check	exit 2	rules/_common.yaml	no	-	fails	would-be	-	-	-	-	-	-	-	
 common-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 common-absent	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=stale rules=3 templates=3	
 common-absent	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
@@ -1034,10 +1034,10 @@ schema-absent	p2	commit	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRa
 schema-absent	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 schema-absent	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn,MISSING	refuses-what-helm-renders
 schema-absent	p2	gen-rules	listed	exit 0	values.yaml	no	<T>/values.schema.json	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-schema-absent	p2	gen-chart-check	cannot-check	exit 2	values.schema.json	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
-schema-absent	p2	gen-chart	cannot-check	exit 2	values.schema.json	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+schema-absent	p2	gen-chart-check	refused	exit 1	values.schema.json	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	MISSING	refuses-what-helm-renders
+schema-absent	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 schema-absent	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
-schema-absent	p2	products-current	differ	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=behind commit=current gen-rules=behind gen-chart=?	entries-disagree
+schema-absent	p2	products-current	differ	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=behind commit=current gen-rules=behind gen-chart=behind	entries-disagree
 schema-stale	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=stale rules=4 templates=3	
 schema-stale	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 schema-stale	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -1057,8 +1057,8 @@ schema-stale	p2	commit	refused	409	values.schema.json	no	-	renders	disk	-	render
 schema-stale	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 schema-stale	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn,DIFFERS	refuses-what-helm-renders
 schema-stale	p2	gen-rules	listed	exit 0	values.yaml	no	<T>/values.schema.json	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-schema-stale	p2	gen-chart-check	refused	exit 1	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	DIFFERS	refuses-what-helm-renders
-schema-stale	p2	gen-chart	ok	exit 0	-	no	<T>/templates/cpu.yaml,<T>/templates/mem.yaml,<T>/templates/up.yaml	renders	after	changed	deploy-fails	0	6	CpuHighx2 CpuRatex2 Down MemHigh #101a797e	promtool=fails	-	accepts-what-helm-fails
+schema-stale	p2	gen-chart-check	refused	exit 1	values.schema.json	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	DIFFERS	refuses-what-helm-renders
+schema-stale	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 schema-stale	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
 schema-stale	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=behind preview=behind commit=behind gen-rules=behind gen-chart=behind	
 schema-not-json	p2	open	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	drift=missing rules=4 templates=3	
@@ -1078,11 +1078,11 @@ schema-not-json	p2	init	refused	409	charts/p2/values.schema.json	no	-	fails	disk
 schema-not-json	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 schema-not-json	p2	commit	refused	409	charts/p2/values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	template-schema-not-json	
 schema-not-json	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-schema-not-json	p2	gen-rules-check	cannot-check	exit 2	-	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
-schema-not-json	p2	gen-rules	cannot-check	exit 2	-	no	-	fails	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
-schema-not-json	p2	gen-chart-check	cannot-check	exit 2	-	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
-schema-not-json	p2	gen-chart	cannot-check	exit 2	-	no	-	fails	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
-schema-not-json	p2	import-rules	error	crash 1	-	no	-	fails	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	5xx
+schema-not-json	p2	gen-rules-check	cannot-check	exit 2	values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+schema-not-json	p2	gen-rules	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+schema-not-json	p2	gen-chart-check	cannot-check	exit 2	values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+schema-not-json	p2	gen-chart	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+schema-not-json	p2	import-rules	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 schema-not-json	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=behind preview=? commit=? gen-rules=? gen-chart=?	
 schema-bom	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 schema-bom	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
@@ -1101,12 +1101,12 @@ schema-bom	p2	init	ok	200	-	no	deployments/p2/n/Chart.yaml,deployments/p2/n/valu
 schema-bom	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=ok	
 schema-bom	p2	commit	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 schema-bom	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-schema-bom	p2	gen-rules-check	cannot-check	exit 2	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
-schema-bom	p2	gen-rules	cannot-check	exit 2	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
-schema-bom	p2	gen-chart-check	cannot-check	exit 2	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
-schema-bom	p2	gen-chart	cannot-check	exit 2	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
-schema-bom	p2	import-rules	error	crash 1	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	5xx
-schema-bom	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=current commit=current gen-rules=? gen-chart=?	
+schema-bom	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
+schema-bom	p2	gen-rules	listed	exit 0	values.yaml	no	<T>/values.schema.json	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+schema-bom	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+schema-bom	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+schema-bom	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
+schema-bom	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=current commit=current gen-rules=current gen-chart=current	
 schema-hand-keyword	p2	open	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	drift=stale rules=4 templates=3	
 schema-hand-keyword	p2	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=3 version=0.1.0	
 schema-hand-keyword	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
@@ -1124,12 +1124,12 @@ schema-hand-keyword	p2	init	refused	409	charts/p2/values.schema.json	no	-	fails	
 schema-hand-keyword	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 schema-hand-keyword	p2	commit	refused	409	values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	drift-stale	
 schema-hand-keyword	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-schema-hand-keyword	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn,DIFFERS	
-schema-hand-keyword	p2	gen-rules	listed	exit 0	values.yaml	no	<T>/values.schema.json	fails	after	changed	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-schema-hand-keyword	p2	gen-chart-check	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-schema-hand-keyword	p2	gen-chart	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-schema-hand-keyword	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
-schema-hand-keyword	p2	products-current	differ	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=behind preview=? commit=behind gen-rules=behind gen-chart=current	entries-disagree
+schema-hand-keyword	p2	gen-rules-check	refused	exit 1	charts/p2/values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	warn,DIFFERS	
+schema-hand-keyword	p2	gen-rules	listed	exit 0	charts/p2/values.schema.json	no	<T>/values.schema.json	fails	after	changed	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+schema-hand-keyword	p2	gen-chart-check	refused	exit 1	charts/p2/values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	warn,DIFFERS	
+schema-hand-keyword	p2	gen-chart	ok	exit 0	charts/p2/values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
+schema-hand-keyword	p2	import-rules	listed	exit 0	charts/p2/values.schema.json	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
+schema-hand-keyword	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=behind preview=? commit=behind gen-rules=behind gen-chart=behind	
 schema-unreadable	p2	open	unreadable	409	charts/p2/values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	-	
 schema-unreadable	p2	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=3 version=0.1.0	
 schema-unreadable	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
@@ -1151,7 +1151,7 @@ schema-unreadable	p2	gen-rules-check	cannot-check	exit 2	values.schema.json	no	-
 schema-unreadable	p2	gen-rules	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	-	-	-	-	-	-	
 schema-unreadable	p2	gen-chart-check	cannot-check	exit 2	values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
 schema-unreadable	p2	gen-chart	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	-	-	-	-	-	-	
-schema-unreadable	p2	import-rules	error	crash 1	values.schema.json	no	-	fails	would-be	-	-	-	-	-	-	-	5xx
+schema-unreadable	p2	import-rules	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	-	-	-	-	-	-	
 schema-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 legacy-schema-not-json	legacy	open	unreadable	409	charts/legacy/values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	-	
 legacy-schema-not-json	legacy	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=1 version=2.0.0	
@@ -1170,11 +1170,11 @@ legacy-schema-not-json	legacy	init	refused	409	charts/legacy/values.schema.json	
 legacy-schema-not-json	legacy	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 legacy-schema-not-json	legacy	commit	refused	409	charts/legacy/values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	chart-unreadable	
 legacy-schema-not-json	legacy	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-legacy-schema-not-json	legacy	gen-rules-check	cannot-check	exit 2	-	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
-legacy-schema-not-json	legacy	gen-rules	cannot-check	exit 2	-	no	-	fails	would-be	-	-	-	-	-	-	-	
-legacy-schema-not-json	legacy	gen-chart-check	cannot-check	exit 2	-	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
-legacy-schema-not-json	legacy	gen-chart	cannot-check	exit 2	-	no	-	fails	would-be	-	-	-	-	-	-	-	
-legacy-schema-not-json	legacy	import-rules	error	crash 1	-	no	-	fails	would-be	-	-	-	-	-	-	-	5xx
+legacy-schema-not-json	legacy	gen-rules-check	cannot-check	exit 2	values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+legacy-schema-not-json	legacy	gen-rules	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	-	-	-	-	-	-	
+legacy-schema-not-json	legacy	gen-chart-check	cannot-check	exit 2	values.schema.json	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+legacy-schema-not-json	legacy	gen-chart	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	-	-	-	-	-	-	
+legacy-schema-not-json	legacy	import-rules	cannot-check	exit 2	values.schema.json	no	-	fails	would-be	-	-	-	-	-	-	-	
 legacy-schema-not-json	legacy	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 tvalues-absent	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 tvalues-absent	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
@@ -1218,10 +1218,10 @@ tvalues-not-yaml	p2	commit	refused	409	charts/p2/values.yaml	no	-	fails	disk	-	f
 tvalues-not-yaml	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
 tvalues-not-yaml	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
 tvalues-not-yaml	p2	gen-rules	refused	exit 1	values.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
-tvalues-not-yaml	p2	gen-chart-check	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-tvalues-not-yaml	p2	gen-chart	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-tvalues-not-yaml	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
-tvalues-not-yaml	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=current	
+tvalues-not-yaml	p2	gen-chart-check	refused	exit 1	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+tvalues-not-yaml	p2	gen-chart	refused	exit 1	charts/p2/values.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+tvalues-not-yaml	p2	import-rules	refused	exit 1	charts/p2/values.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+tvalues-not-yaml	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 tvalues-trailing-dashes	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 tvalues-trailing-dashes	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 tvalues-trailing-dashes	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -1307,13 +1307,13 @@ tvalues-cannot-tell	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	CpuH
 tvalues-cannot-tell	p2	init	refused	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 tvalues-cannot-tell	p2	preview	refused	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=ok	refuses-what-helm-renders
 tvalues-cannot-tell	p2	commit	refused	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	chart-unreadable	refuses-what-helm-renders
-tvalues-cannot-tell	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-cannot-tell	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
-tvalues-cannot-tell	p2	gen-rules	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-cannot-tell	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-cannot-tell	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-cannot-tell	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
-tvalues-cannot-tell	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=current commit=? gen-rules=current gen-chart=current	
+tvalues-cannot-tell	p2	check-deployment	refused	exit 1	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-cannot-tell	p2	gen-rules-check	refused	exit 1	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+tvalues-cannot-tell	p2	gen-rules	refused	exit 1	values.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-cannot-tell	p2	gen-chart-check	refused	exit 1	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+tvalues-cannot-tell	p2	gen-chart	refused	exit 1	charts/p2/values.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-cannot-tell	p2	import-rules	refused	exit 1	charts/p2/values.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-cannot-tell	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=current commit=? gen-rules=? gen-chart=?	
 tvalues-common	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 tvalues-common	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 tvalues-common	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -1377,12 +1377,12 @@ tvalues-unreadable	p2	init	refused	409	charts/p2/values.yaml	no	-	fails	disk	-	f
 tvalues-unreadable	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 tvalues-unreadable	p2	commit	refused	409	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	file-unreadable	
 tvalues-unreadable	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-tvalues-unreadable	p2	gen-rules-check	cannot-check	exit 2	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
-tvalues-unreadable	p2	gen-rules	cannot-check	exit 2	values.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
-tvalues-unreadable	p2	gen-chart-check	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-tvalues-unreadable	p2	gen-chart	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-tvalues-unreadable	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
-tvalues-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=current	
+tvalues-unreadable	p2	gen-rules-check	cannot-check	exit 2	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+tvalues-unreadable	p2	gen-rules	cannot-check	exit 2	charts/p2/values.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+tvalues-unreadable	p2	gen-chart-check	refused	exit 1	charts/p2/values.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+tvalues-unreadable	p2	gen-chart	refused	exit 1	charts/p2/values.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+tvalues-unreadable	p2	import-rules	refused	exit 1	charts/p2/values.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+tvalues-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 tvalues-folder	p2	open	unreadable	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 tvalues-folder	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 tvalues-folder	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -1400,12 +1400,12 @@ tvalues-folder	p2	init	refused	409	charts/p2/values.yaml	no	-	renders	disk	-	ren
 tvalues-folder	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=ok	
 tvalues-folder	p2	commit	refused	409	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	chart-unreadable	refuses-what-helm-renders
 tvalues-folder	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-folder	p2	gen-rules-check	cannot-check	exit 2	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
-tvalues-folder	p2	gen-rules	cannot-check	exit 2	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
-tvalues-folder	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-folder	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-tvalues-folder	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
-tvalues-folder	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=current commit=? gen-rules=? gen-chart=current	
+tvalues-folder	p2	gen-rules-check	cannot-check	exit 2	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+tvalues-folder	p2	gen-rules	cannot-check	exit 2	charts/p2/values.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-folder	p2	gen-chart-check	refused	exit 1	charts/p2/values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+tvalues-folder	p2	gen-chart	refused	exit 1	charts/p2/values.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-folder	p2	import-rules	refused	exit 1	charts/p2/values.yaml	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+tvalues-folder	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=current commit=? gen-rules=? gen-chart=?	
 chart-absent	p2	open	ok	200	-	no	<T>/Chart.yaml	fails	disk	-	fails	1	-	-	-	drift=ok rules=4 templates=3	
 chart-absent	p2	list	not-listed	200	-	no	-	fails	disk	-	fails	1	-	-	-	not listed	
 chart-absent	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
@@ -1423,10 +1423,10 @@ chart-absent	p2	init	refused	400	-	no	-	fails	disk	-	fails	1	-	-	-	-
 chart-absent	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-absent	p2	commit	refused	409	deployments/p2/d	no	-	fails	disk	-	fails	1	-	-	-	template-missing	
 chart-absent	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-chart-absent	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	
-chart-absent	p2	gen-rules	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-absent	p2	gen-chart-check	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-absent	p2	gen-chart	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
+chart-absent	p2	gen-rules-check	listed	exit 0	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	
+chart-absent	p2	gen-rules	listed	exit 0	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
+chart-absent	p2	gen-chart-check	ok	exit 0	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	accepts-what-helm-fails
+chart-absent	p2	gen-chart	ok	exit 0	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
 chart-absent	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
 chart-absent	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=current preview=? commit=? gen-rules=current gen-chart=current	
 chart-unreadable	p2	open	unreadable	409	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
@@ -1439,19 +1439,19 @@ chart-unreadable	p2	file-delete	ok	200	-	no	<T>/templates/notes.yaml	fails	after
 chart-unreadable	p2	save-rules	unreadable	409	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	body=disk	
 chart-unreadable	p2	migration-preview	listed	200	-	no	-	fails	disk	-	fails	1	-	-	-	problems=1	
 chart-unreadable	p2	save-values	unreadable	409	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	body=disk	
-chart-unreadable	p2	chart-meta	refused	400	Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
+chart-unreadable	p2	chart-meta	unreadable	409	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-unreadable	p2	clone	unreadable	409	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-unreadable	p2	delete	refused	409	-	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-unreadable	p2	init	unreadable	409	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-unreadable	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-unreadable	p2	commit	refused	409	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	file-unreadable	
 chart-unreadable	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-chart-unreadable	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	
-chart-unreadable	p2	gen-rules	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-unreadable	p2	gen-chart-check	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-unreadable	p2	gen-chart	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-unreadable	p2	import-rules	error	crash 1	Chart.yaml	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	would-be	-	fails	1	-	-	-	-	5xx
-chart-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=current gen-chart=current	
+chart-unreadable	p2	gen-rules-check	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+chart-unreadable	p2	gen-rules	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-unreadable	p2	gen-chart-check	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+chart-unreadable	p2	gen-chart	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-unreadable	p2	import-rules	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-unreadable	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 chart-not-yaml	p2	open	unreadable	409	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-not-yaml	p2	list	not-listed	200	-	no	-	fails	disk	-	fails	1	-	-	-	not listed	
 chart-not-yaml	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
@@ -1469,12 +1469,12 @@ chart-not-yaml	p2	init	unreadable	409	charts/p2/Chart.yaml	no	-	fails	disk	-	fai
 chart-not-yaml	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-not-yaml	p2	commit	refused	409	deployments/p2/d	no	-	fails	disk	-	fails	1	-	-	-	template-version	
 chart-not-yaml	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-chart-not-yaml	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	
-chart-not-yaml	p2	gen-rules	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-not-yaml	p2	gen-chart-check	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-not-yaml	p2	gen-chart	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-not-yaml	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-not-yaml	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=current gen-chart=current	
+chart-not-yaml	p2	gen-rules-check	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+chart-not-yaml	p2	gen-rules	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-not-yaml	p2	gen-chart-check	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+chart-not-yaml	p2	gen-chart	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-not-yaml	p2	import-rules	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-not-yaml	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
 chart-version-not-semver	p2	open	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	drift=ok rules=4 templates=3	
 chart-version-not-semver	p2	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=3 version=one	
 chart-version-not-semver	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
@@ -1492,12 +1492,12 @@ chart-version-not-semver	p2	init	refused	409	charts/p2/Chart.yaml	no	-	fails	dis
 chart-version-not-semver	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-version-not-semver	p2	commit	refused	409	deployments/p2/d	no	-	fails	disk	-	fails	1	-	-	-	template-version	
 chart-version-not-semver	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-chart-version-not-semver	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	
-chart-version-not-semver	p2	gen-rules	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-version-not-semver	p2	gen-chart-check	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-version-not-semver	p2	gen-chart	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-version-not-semver	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-version-not-semver	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=current preview=? commit=? gen-rules=current gen-chart=current	
+chart-version-not-semver	p2	gen-rules-check	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+chart-version-not-semver	p2	gen-rules	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-version-not-semver	p2	gen-chart-check	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+chart-version-not-semver	p2	gen-chart	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-version-not-semver	p2	import-rules	refused	exit 1	charts/p2/Chart.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-version-not-semver	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=current preview=? commit=? gen-rules=? gen-chart=?	
 chart-version-other-than-asked	legacy	open	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	drift=legacy rules=none templates=1	
 chart-version-other-than-asked	legacy	list	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	templates=1 version=2.1.0	
 chart-version-other-than-asked	legacy	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/legacy/d	
@@ -1517,10 +1517,10 @@ chart-version-other-than-asked	legacy	commit	refused	409	deployments/legacy/d	no
 chart-version-other-than-asked	legacy	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-version-other-than-asked	legacy	gen-rules-check	refused	exit 1	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn,ORPHANED,MISSING,DIFFERS	
 chart-version-other-than-asked	legacy	gen-rules	listed	exit 0	values.yaml	no	<T>/rules/_common.yaml,<T>/rules/mariadb_errors_aborted_clients.yaml,<T>/rules/mariadb_errors_aborted_connects.yaml,<T>/rules/mariadb_errors_connections.yaml,<T>/rules/mariadb_latency_slow_queries.yaml,<T>/rules/mariadb_saturation_buffer_pool.yaml,<T>/rules/mariadb_saturation_connections.yaml,<T>/rules/mariadb_saturation_cpu.yaml,<T>/rules/mariadb_saturation_disk.yaml,<T>/rules/mariadb_saturation_memory.yaml,<T>/rules/mariadb_traffic_network_receive.yaml,<T>/rules/mariadb_traffic_network_transmit.yaml,<T>/rules/mariadb_traffic_qps_high.yaml,<T>/rules/mariadb_traffic_qps_low.yaml,<T>/templates/mariadb-errors-aborted-clients.yaml,<T>/templates/mariadb-errors-aborted-connects.yaml,<T>/templates/mariadb-errors-connections.yaml,<T>/templates/mariadb-latency-slow-queries.yaml,<T>/templates/mariadb-saturation-buffer-pool.yaml,<T>/templates/mariadb-saturation-connections.yaml,<T>/templates/mariadb-saturation-cpu.yaml,<T>/templates/mariadb-saturation-disk.yaml,<T>/templates/mariadb-saturation-memory.yaml,<T>/templates/mariadb-traffic-network-receive.yaml,<T>/templates/mariadb-traffic-network-transmit.yaml,<T>/templates/mariadb-traffic-qps-high.yaml,<T>/templates/mariadb-traffic-qps-low.yaml,<T>/templates/prometheus-rule.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-version-other-than-asked	legacy	gen-chart-check	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	MISSING	
-chart-version-other-than-asked	legacy	gen-chart	ok	exit 0	-	no	<T>/templates/mariadb-errors-aborted-clients.yaml,<T>/templates/mariadb-errors-aborted-connects.yaml,<T>/templates/mariadb-errors-connections.yaml,<T>/templates/mariadb-latency-slow-queries.yaml,<T>/templates/mariadb-saturation-buffer-pool.yaml,<T>/templates/mariadb-saturation-connections.yaml,<T>/templates/mariadb-saturation-cpu.yaml,<T>/templates/mariadb-saturation-disk.yaml,<T>/templates/mariadb-saturation-memory.yaml,<T>/templates/mariadb-traffic-network-receive.yaml,<T>/templates/mariadb-traffic-network-transmit.yaml,<T>/templates/mariadb-traffic-qps-high.yaml,<T>/templates/mariadb-traffic-qps-low.yaml	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-version-other-than-asked	legacy	import-rules	ok	exit 0	-	no	<T>/rules/_common.yaml,<T>/rules/imported.yaml,<T>/rules/mariadb_errors_aborted_clients.yaml,<T>/rules/mariadb_errors_aborted_connects.yaml,<T>/rules/mariadb_errors_connections.yaml,<T>/rules/mariadb_latency_slow_queries.yaml,<T>/rules/mariadb_saturation_buffer_pool.yaml,<T>/rules/mariadb_saturation_connections.yaml,<T>/rules/mariadb_saturation_cpu.yaml,<T>/rules/mariadb_saturation_disk.yaml,<T>/rules/mariadb_saturation_memory.yaml,<T>/rules/mariadb_traffic_network_receive.yaml,<T>/rules/mariadb_traffic_network_transmit.yaml,<T>/rules/mariadb_traffic_qps_high.yaml,<T>/rules/mariadb_traffic_qps_low.yaml,<T>/templates/imported.yaml,<T>/templates/mariadb-errors-aborted-clients.yaml,<T>/templates/mariadb-errors-aborted-connects.yaml,<T>/templates/mariadb-errors-connections.yaml,<T>/templates/mariadb-latency-slow-queries.yaml,<T>/templates/mariadb-saturation-buffer-pool.yaml,<T>/templates/mariadb-saturation-connections.yaml,<T>/templates/mariadb-saturation-cpu.yaml,<T>/templates/mariadb-saturation-disk.yaml,<T>/templates/mariadb-saturation-memory.yaml,<T>/templates/mariadb-traffic-network-receive.yaml,<T>/templates/mariadb-traffic-network-transmit.yaml,<T>/templates/mariadb-traffic-qps-high.yaml,<T>/templates/mariadb-traffic-qps-low.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-version-other-than-asked	legacy	products-current	differ	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=legacy preview=? commit=? gen-rules=behind gen-chart=behind	entries-disagree
+chart-version-other-than-asked	legacy	gen-chart-check	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	ERROR	
+chart-version-other-than-asked	legacy	gen-chart	refused	exit 1	-	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-version-other-than-asked	legacy	import-rules	refused	exit 1	-	no	-	fails	would-be	-	fails	1	-	-	-	-	
+chart-version-other-than-asked	legacy	products-current	differ	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=legacy preview=? commit=? gen-rules=behind gen-chart=?	entries-disagree
 chart-name-not-folder	p2	open	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	drift=ok rules=4 templates=3	
 chart-name-not-folder	p2	list	not-listed	200	-	no	-	fails	disk	-	fails	1	-	-	-	not listed (also: other)	
 chart-name-not-folder	p2	usage	ok	200	-	no	-	fails	disk	-	fails	1	-	-	-	deployments=deployments/p2/d	
@@ -1538,11 +1538,11 @@ chart-name-not-folder	p2	init	refused	409	charts/p2/Chart.yaml	no	-	fails	disk	-
 chart-name-not-folder	p2	preview	refused	200	helm-message	no	-	fails	disk	-	fails	1	-	-	-	-	
 chart-name-not-folder	p2	commit	refused	409	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	template-chart-name	
 chart-name-not-folder	p2	check-deployment	refused	exit 1	-	no	-	fails	disk	-	fails	1	-	-	-	-	
-chart-name-not-folder	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	
-chart-name-not-folder	p2	gen-rules	listed	exit 0	values.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-name-not-folder	p2	gen-chart-check	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-name-not-folder	p2	gen-chart	ok	exit 0	-	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
-chart-name-not-folder	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
+chart-name-not-folder	p2	gen-rules-check	listed	exit 0	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	
+chart-name-not-folder	p2	gen-rules	listed	exit 0	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
+chart-name-not-folder	p2	gen-chart-check	ok	exit 0	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	warn	accepts-what-helm-fails
+chart-name-not-folder	p2	gen-chart	ok	exit 0	charts/p2/Chart.yaml	no	-	fails	disk	-	fails	1	-	-	-	-	accepts-what-helm-fails
+chart-name-not-folder	p2	import-rules	listed	exit 0	charts/p2/Chart.yaml	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	fails	after	same	fails	1	-	-	-	-	accepts-what-helm-fails
 chart-name-not-folder	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=current preview=? commit=? gen-rules=current gen-chart=current	
 chart-no-annotation	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 chart-no-annotation	p2	list	not-listed	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	not listed	hides-what-helm-renders
@@ -1583,13 +1583,13 @@ name-dot	p2.v2	delete	refused	400	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	
 name-dot	p2.v2	init	refused	400	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	
 name-dot	p2.v2	preview	refused	400	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	
 name-dot	p2.v2	commit	refused	409	charts/p2.v2	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	template-name-dot	
-name-dot	p2.v2	check-deployment	ok	exit 0	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	accepts-what-helm-fails
-name-dot	p2.v2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	warn	
-name-dot	p2.v2	gen-rules	listed	exit 0	values.yaml	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	accepts-what-helm-fails
-name-dot	p2.v2	gen-chart-check	ok	exit 0	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	accepts-what-helm-fails
-name-dot	p2.v2	gen-chart	ok	exit 0	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	accepts-what-helm-fails
-name-dot	p2.v2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders-fewer	after	changed	renders-fewer	0	2	Down ImportedDown #95d787f3	promtool=ok	-	accepts-what-helm-fails
-name-dot	p2.v2	products-current	same	-	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	open=? preview=? commit=? gen-rules=current gen-chart=current	
+name-dot	p2.v2	check-deployment	refused	exit 1	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	
+name-dot	p2.v2	gen-rules-check	refused	exit 1	charts/p2.v2	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	ERROR	
+name-dot	p2.v2	gen-rules	refused	exit 1	charts/p2.v2	no	-	renders-fewer	would-be	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	
+name-dot	p2.v2	gen-chart-check	refused	exit 1	charts/p2.v2	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	ERROR	
+name-dot	p2.v2	gen-chart	refused	exit 1	charts/p2.v2	no	-	renders-fewer	would-be	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	
+name-dot	p2.v2	import-rules	refused	exit 1	charts/p2.v2	no	-	renders-fewer	would-be	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	-	
+name-dot	p2.v2	products-current	same	-	-	no	-	renders-fewer	disk	-	renders-fewer	0	1	Down #5f45b6a6	promtool=ok	open=? preview=? commit=? gen-rules=? gen-chart=?	
 folder-link-inside	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 folder-link-inside	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 folder-link-inside	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -1623,16 +1623,16 @@ folder-link-outside	p2	file-delete	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuH
 folder-link-outside	p2	save-rules	unreadable	409	charts/p2	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=disk	refuses-what-helm-renders
 folder-link-outside	p2	migration-preview	unreadable	409	charts/p2	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 folder-link-outside	p2	save-values	unreadable	409	charts/p2	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=disk	refuses-what-helm-renders
-folder-link-outside	p2	chart-meta	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+folder-link-outside	p2	chart-meta	unreadable	409	charts/p2/Chart.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 folder-link-outside	p2	clone	unreadable	409	charts/p2	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 folder-link-outside	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 folder-link-outside	p2	init	unreadable	409	charts/p2	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 folder-link-outside	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=undefined	
-folder-link-outside	p2	commit	refused	409	charts/p2	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	chart-unreadable	refuses-what-helm-renders
-folder-link-outside	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-outside	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
-folder-link-outside	p2	gen-rules	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-outside	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-outside	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-outside	p2	import-rules	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-outside	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=? commit=? gen-rules=current gen-chart=current	
+folder-link-outside	p2	commit	refused	409	charts/p2	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	chart-unreadable,template-version	refuses-what-helm-renders
+folder-link-outside	p2	check-deployment	refused	exit 1	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+folder-link-outside	p2	gen-rules-check	cannot-check	exit 2	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+folder-link-outside	p2	gen-rules	cannot-check	exit 2	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+folder-link-outside	p2	gen-chart-check	cannot-check	exit 2	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	ERROR	refuses-what-helm-renders
+folder-link-outside	p2	gen-chart	cannot-check	exit 2	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+folder-link-outside	p2	import-rules	cannot-check	exit 2	-	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+folder-link-outside	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=? preview=? commit=? gen-rules=? gen-chart=?	

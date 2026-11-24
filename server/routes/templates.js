@@ -14,7 +14,6 @@ import { ensureChartYaml } from '../../src/utils/chartYaml.js'
 import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
 import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
@@ -448,13 +447,15 @@ export default function templatesRouter() {
     if (description !== undefined && description !== null && typeof description !== 'string') {
       return res.status(400).json({ error: 'description must be text' })
     }
-    let onDisk
-    try {
-      onDisk = yaml.load(await fs.readFile(chartYamlFile, 'utf-8'))
-    } catch (err) {
-      if (err.code === 'ENOENT') return res.status(404).json({ error: `${req.params.chart} has no Chart.yaml` })
-      return res.status(400).json({ error: `Chart.yaml is not valid YAML (${err.reason || err.message}) — fix it by hand; Save would lose what it holds` })
+    // Read as Helm reads it, through the repo loader.
+    const read = await openRepo(req.gitopsDir).helmYaml(path.relative(req.gitopsDir, chartYamlFile).replace(/\\/g, '/'))
+    if (read.state === 'absent') return res.status(404).json({ error: `${req.params.chart} has no Chart.yaml` })
+    if (read.state === 'unreadable') {
+      const { status, body } = errorAnswer(new UnreadableError(chartYamlFile, { reason: read.why }))
+      return res.status(status).json(body)
     }
+    if (read.state === 'invalid') return res.status(400).json({ error: `Chart.yaml is not valid YAML (${read.findings[0].message}) — fix it by hand; Save would lose what it holds` })
+    const onDisk = read.value
     if (!onDisk || typeof onDisk !== 'object' || Array.isArray(onDisk)) {
       return res.status(400).json({ error: 'Chart.yaml is not a map — fix it by hand; Save would lose what it holds' })
     }

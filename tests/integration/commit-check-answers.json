@@ -6,25 +6,25 @@
           "severity": "commit",
           "deployment": "deployments/team/a",
           "kind": "template-version",
-          "description": "deployments/team/a: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+          "description": "deployments/team/a: its Template demo's Chart.yaml: line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document — write it as plain YAML"
         },
         {
           "severity": "commit",
           "deployment": "deployments/team/b",
           "kind": "template-version",
-          "description": "deployments/team/b: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+          "description": "deployments/team/b: its Template demo's Chart.yaml: line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document — write it as plain YAML"
         },
         {
           "severity": "commit",
           "deployment": "deployments/team/c",
           "kind": "template-version",
-          "description": "deployments/team/c: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+          "description": "deployments/team/c: its Template demo's Chart.yaml: line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document — write it as plain YAML"
         },
         {
           "severity": "commit",
           "deployment": "deployments/team/d",
           "kind": "template-version",
-          "description": "deployments/team/d: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+          "description": "deployments/team/d: its Template demo's Chart.yaml: line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document — write it as plain YAML"
         }
       ],
       "routingProblems": [],
@@ -43,25 +43,25 @@
             "severity": "commit",
             "deployment": "deployments/team/a",
             "kind": "template-version",
-            "description": "deployments/team/a: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+            "description": "deployments/team/a: its Template demo's Chart.yaml: line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document — write it as plain YAML"
           },
           {
             "severity": "commit",
             "deployment": "deployments/team/b",
             "kind": "template-version",
-            "description": "deployments/team/b: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+            "description": "deployments/team/b: its Template demo's Chart.yaml: line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document — write it as plain YAML"
           },
           {
             "severity": "commit",
             "deployment": "deployments/team/c",
             "kind": "template-version",
-            "description": "deployments/team/c: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+            "description": "deployments/team/c: its Template demo's Chart.yaml: line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document — write it as plain YAML"
           },
           {
             "severity": "commit",
             "deployment": "deployments/team/d",
             "kind": "template-version",
-            "description": "deployments/team/d: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+            "description": "deployments/team/d: its Template demo's Chart.yaml: line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document — write it as plain YAML"
           }
         ],
         "regenerable": 0

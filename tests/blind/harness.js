@@ -81,7 +81,9 @@ function yaml11Value(text) {
   if (/^0[0-7]+$/.test(digits)) return sign * parseInt(digits, 8)
   return Number(plain)
 }
-const KUBERNETES_SCHEMA = yaml.DEFAULT_SCHEMA.extend({
+// Core, not js-yaml's default: go-yaml v2 hands Kubernetes a timestamp
+// (`2026-11-22`) as the text it is, not a date.
+const KUBERNETES_SCHEMA = yaml.CORE_SCHEMA.extend({
   implicit: [new yaml.Type('tag:yaml.org,2002:yaml11', {
     kind: 'scalar',
     resolve: data => data !== null && isYaml11NonString(data),

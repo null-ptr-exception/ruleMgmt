@@ -13,6 +13,7 @@ import { profileFor } from './outputs.js'
 import { metaForProfile } from './objectMeta.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { selectorLabelsFor } from './selectorContract.js'
+import { groupName } from './rulesFile.js'
 
 const columnsOf = group => group?.items?.properties || {}
 const requiredOf = group => new Set(group?.items?.required || [])
@@ -195,6 +196,7 @@ const DESCRIPTIONS = {
   'group-once-changed': c => c.to === 'once'
     ? `${c.group}: now renders once per deployment — its objects are renamed (no chunk index): the old ones are deleted and new ones created, and its rows are no longer read`
     : `${c.group}: now renders once per row — its objects are renamed (with a chunk index): the old ones are deleted and new ones created`,
+  'group-name-changed': c => `${c.group}: rule-group name changed from "${c.from}" to "${c.to}" — values and object names stay, but Prometheus and vmalert start it as a new group: a pending alert waits its full \`for\` again, and on vmalert every alert's alertgroup label changes — a route or silence matching it has to change too`,
   'group-type-changed': c => {
     const from = c.fromWritten ?? c.from
     const to = c.toWritten ?? c.to
@@ -242,6 +244,23 @@ export function groupTypeChanges(beforeModel, afterModel, objectMeta = null) {
       if (labels.length || annotations.length) change.metaLost = { labels, annotations, key: objectMeta.profileKeys?.[from.name] ?? from.name }
     }
     changes.push(change)
+  }
+  return changes
+}
+
+/**
+ * Groups whose rule-group name — their own `name:`, or the key's — changed.
+ * values.yaml and the object names stay, so nothing is breaking; but an
+ * evaluator knows a group by its name, so it is always said.
+ */
+export function groupNameChanges(beforeModel, afterModel) {
+  const changes = []
+  for (const [group, after] of Object.entries(afterModel?.groups || {})) {
+    const before = beforeModel?.groups && Object.hasOwn(beforeModel.groups, group) ? beforeModel.groups[group] : undefined
+    if (!before || before.custom || after.custom) continue
+    const from = groupName(group, before)
+    const to = groupName(group, after)
+    if (from !== to) changes.push({ kind: 'group-name-changed', group, from, to })
   }
   return changes
 }

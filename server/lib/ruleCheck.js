@@ -39,6 +39,7 @@ export function objectsByValidator(renderedYaml, profileOf = profileOfObject) {
   const objects = []
   const notes = []
   let unchecked = 0
+  // As text, never a date: a name `2026-11-22` reaches the checker as it is.
   yaml.loadAll(renderedYaml, doc => {
     const profile = profileOf(doc)
     if (!profile || !Array.isArray(doc?.spec?.groups)) return
@@ -48,7 +49,7 @@ export function objectsByValidator(renderedYaml, profileOf = profileOfObject) {
     if (mark) notes.push(`${doc.metadata?.name || 'an object'}: annotation ${mark.key} is "${mark.value}", which names no output profile — checked as ${profile.name}${VALIDATORS[profile.validate] ? `, with ${VALIDATORS[profile.validate].label}` : ''}`)
     if (VALIDATORS[profile.validate]) objects.push({ doc, validator: profile.validate })
     else unchecked++
-  })
+  }, { schema: yaml.CORE_SCHEMA })
   return { objects, unchecked, notes }
 }
 

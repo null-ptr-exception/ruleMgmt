@@ -1,0 +1,22 @@
+{{- $chunks := chunk 100 ($.Values.sexa | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: {{ $.Release.Name }}-sexa-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: "1:30"
+      type: prometheus
+      labels:
+        when: "2026-11-22"
+      rules:
+        {{- range $rows }}
+        - alert: "="
+          expr: |-
+            up{db="{{ .db }}"} == 0
+        {{- end }}
+{{- end }}

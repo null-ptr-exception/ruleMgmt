@@ -48,7 +48,7 @@ import { helmMerge } from './helmMerge.js'
 
 // The keys of each part of a rules file. schema/rules-file.schema.json is
 // generated from these (rulesFileSchema.js), so an editor offers the same.
-export const GROUP_KEYS = ['group', 'once', 'type', ...GROUP_FIELD_NAMES, 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
+export const GROUP_KEYS = ['group', 'name', 'once', 'type', ...GROUP_FIELD_NAMES, 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
 export const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
 // A recording rule has no `for`, `keep_firing_for` or annotations in
 // Prometheus — only these.
@@ -375,6 +375,9 @@ export function groupGenDef(group, common = {}) {
   // `type` is JSON Schema's here (`array`), so the group's output type rides
   // as groupType — in memory only, never written.
   if (group.type !== undefined) def.groupType = group.type
+  // The rule group's name in the rendered resource: its own `name:`, or
+  // the key's, as always.
+  if (group.name !== undefined) def.groupName = group.name
   // The evaluator's group fields (#182), as they are.
   def.groupFields = Object.fromEntries(GROUP_FIELD_NAMES.filter(k => group[k] !== undefined).map(k => [k, group[k]]))
   def.items = { type: 'object', properties }
@@ -414,6 +417,7 @@ export function groupFileText(group) {
   // Names go through js-yaml, which quotes one YAML reads as something else
   // (`null`, `true`, `1`) and leaves an ordinary name bare (#155).
   const lines = [`group: ${scalar(group.group)}`]
+  if (group.name !== undefined) lines.push(`name: ${scalar(group.name)}`)
   if (group.once) lines.push('once: true')
   if (group.type !== undefined) lines.push(`type: ${scalar(group.type)}`)
   for (const key of GROUP_FIELD_NAMES) {
@@ -481,6 +485,51 @@ export function modelToFiles(model) {
  * and never a leading `_`, which is the system's (`_common`).
  */
 export const GROUP_KEY_RE = /^[a-z][a-z0-9_]*$/
+
+/** Longest `name:` a group may have, in characters: AlertForge's limit, not an evaluator's. */
+export const GROUP_NAME_MAX = 200
+// Line breaks and the other control characters, YAML 1.1's (NEL, U+2028,
+// U+2029) included: a rule group's name is one line of text.
+const NAME_BREAKS = '\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029'
+/**
+ * A `name:` as a pattern (with the `u` flag): no space at either end — `\s`
+ * is the white space `trim()` removes — and no line break. The JSON Schema
+ * has the same one.
+ */
+export const GROUP_NAME_PATTERN = `^[^\\s${NAME_BREAKS}](?:[^${NAME_BREAKS}]*[^\\s${NAME_BREAKS}])?$`
+const GROUP_NAME_RE = new RegExp(GROUP_NAME_PATTERN, 'u')
+const BREAK_RE = new RegExp(`[${NAME_BREAKS}]`, 'u')
+
+/**
+ * The rule group's name in the rendered resource (`spec.groups[].name`):
+ * the file's `name:` when it has one, else the key with `_` → `-`, as it has
+ * always been. Values key, template file and object names stay the key's.
+ */
+export const groupName = (key, group) => (typeof group?.name === 'string' ? group.name : key.replace(/_/g, '-'))
+
+/**
+ * Why a group's `name:` is refused, or null. `written` is the value as the
+ * file has it (`010`), for the hint: what YAML made of it (10) is never
+ * echoed back as if it were what was written.
+ */
+export function groupNameProblem(name, written) {
+  if (name === null) return 'name: is empty — write the name, or remove the line to keep the default'
+  if (typeof name !== 'string') {
+    const what = name instanceof Date ? 'a date' : Array.isArray(name) ? 'a list' : typeof name === 'object' ? 'a mapping' : typeof name === 'boolean' ? 'true or false' : 'a number'
+    const asWritten = typeof written === 'string' && written !== '' && !/^["'[{|>]/.test(written) && !(typeof name === 'object' && !(name instanceof Date))
+      ? `: name: ${JSON.stringify(written)}` : ''
+    return name instanceof Date || typeof name !== 'object'
+      ? `name must be text, and YAML reads this one as ${what} — quote it as written${asWritten}`
+      : `name must be text, not ${what}`
+  }
+  if (name === '') return 'name must not be empty — write the name, or remove the line to keep the default'
+  if (BREAK_RE.test(name)) return `name ${JSON.stringify(name)} has a line break or another control character — a rule group's name is one line`
+  if (name !== name.trim()) return `name ${JSON.stringify(name)} starts or ends with a space`
+  if ([...name].length > GROUP_NAME_MAX) return `name is ${[...name].length} characters long — at most ${GROUP_NAME_MAX}`
+  // What the pattern says and the checks above do not: nothing, kept in step.
+  if (!GROUP_NAME_RE.test(name)) return `name ${JSON.stringify(name)} is not one line of text`
+  return null
+}
 
 const isMapping = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 // A user-named key's value, never Object.prototype's (`constructor`, `valueOf`).
@@ -580,6 +629,13 @@ function checkSelectorLabelsShape(value, where, errors) {
   }
 }
 
+// A top-level key's value as the file writes it (`name: 010` → "010"), for
+// a message; undefined when it is not on the key's own line.
+function writtenScalar(text, key) {
+  const m = new RegExp(`^${key}:[ \\t]*(.*?)[ \\t]*(?:[ \\t]#.*)?$`, 'm').exec(typeof text === 'string' ? text : '')
+  return m ? m[1] : undefined
+}
+
 /** One group file. `filename` is the stem, without `.yaml`. */
 export function parseGroupFile(text, filename) {
   const errors = []
@@ -589,6 +645,12 @@ export function parseGroupFile(text, filename) {
 
   if (doc.group !== undefined && doc.group !== filename) {
     errors.push(`${filename}.yaml: group "${doc.group}" does not match the filename`)
+  }
+  // The rule group's own name. Written empty (`name:`) is refused, not read
+  // as left out: a value lost by hand never turns into the default unseen.
+  if (Object.hasOwn(doc, 'name')) {
+    const why = groupNameProblem(doc.name, writtenScalar(text, 'name'))
+    if (why) errors.push(`${filename}.yaml: ${why}`)
   }
 
   const columns = parseColumns(doc.columns, `${filename}.yaml columns`, errors)
@@ -701,6 +763,8 @@ export function parseGroupFile(text, filename) {
   checkSelectorLabelsShape(doc.selectorLabels, `${filename}.yaml`, errors)
 
   const group = { group: filename, columns, rules }
+  // Kept when it is text, refused or not, so the editor shows what the file says.
+  if (typeof doc.name === 'string') group.name = doc.name
   if (doc.once === true) group.once = true
   if (Array.isArray(doc.selectors) && doc.selectors.length) group.selectors = doc.selectors.map(String)
   const selectorLabels = isMapping(doc.selectorLabels) ? normalizeMap(doc.selectorLabels) : undefined
@@ -772,6 +836,28 @@ export function parseRulesDir(files) {
       }
     }
     model.groups[filename] = group
+  }
+
+  // One rule-group name per group of the chart, the defaults included. The
+  // evaluators take two (each is its own object), but Preview's summary and
+  // whoever reads an alert's group (vmalert's alertgroup label) could not
+  // tell them apart. Only the case differing (CPU, cpu) is two names.
+  const byName = new Map()
+  for (const [key, g] of Object.entries(model.groups)) {
+    if (g.name !== undefined && groupNameProblem(g.name)) continue
+    const n = groupName(key, g)
+    if (!byName.has(n)) byName.set(n, [])
+    byName.get(n).push(key)
+  }
+  // Said on each file that wrote the name — whatever the files' order; two
+  // defaults are never one (a key has no "-").
+  const byDefault = key => (model.groups[key].name === undefined ? ' (its default, from the file name)' : '')
+  for (const [n, keys] of byName) {
+    if (keys.length < 2) continue
+    for (const key of keys.filter(k => model.groups[k].name !== undefined)) {
+      const others = keys.filter(k => k !== key).map(k => `${k}.yaml${byDefault(k)}`).join(', ')
+      errors.push(`${key}.yaml: name "${n}" is already the rule-group name of ${others} — two groups of a chart need two names`)
+    }
   }
 
   return { model, errors }

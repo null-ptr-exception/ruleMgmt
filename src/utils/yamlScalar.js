@@ -30,6 +30,24 @@ export function readsAsNonStringInYaml11(value) {
   return YAML11_PREFIXED_INT.test(plain) || YAML11_FLOAT.test(plain)
 }
 
+// YAML 1.1's other implicit types. Kubernetes keeps each of these as the
+// text (go-yaml v2 hands a timestamp to an interface{} as a string; kubectl
+// v1.36 reads `1:30` and `=` as text), but other readers of the same output
+// do not: helm-unittest (go-yaml v3) and js-yaml read `2026-11-22` as a
+// date, a YAML 1.1 reader such as PyYAML reads `1:30` as 90 and refuses `=`.
+const YAML11_TIMESTAMP = /^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::?[0-9]{2})?))?)?$/
+const YAML11_SEXAGESIMAL = /^[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+(?:\.[0-9_]*)?$/
+
+/**
+ * Whether some reader of generated YAML takes this bare scalar for
+ * something other than this text: Kubernetes (readsAsNonStringInYaml11), or
+ * another YAML 1.1 type — a timestamp, a sexagesimal number, `=`.
+ */
+export function readsAsNonTextSomewhere(value) {
+  const v = String(value)
+  return readsAsNonStringInYaml11(v) || v === '=' || YAML11_TIMESTAMP.test(v) || YAML11_SEXAGESIMAL.test(v)
+}
+
 /**
  * When a string written into generated YAML has to be quoted to stay a
  * string. A value made only of word characters is written bare, the way a
@@ -84,12 +102,13 @@ function doubleQuoted(v) {
 /**
  * A name as YAML has it — bare, as a hand-written file has it, unless
  * Kubernetes or Helm, which read YAML 1.1, would read it bare as something
- * other than this text (`yes`, `on`, `n`, `0_7`, `null`), or it would not
+ * other than this text (`yes`, `on`, `n`, `0_7`, `null`), or another reader
+ * would (`2026-11-22`, `1:30`, `=`: readsAsNonTextSomewhere), or it would not
  * parse bare (`CPU: high`). Only YAML: Chart.yaml is not a template.
  */
 export function yamlName(value) {
   const v = String(value)
-  return plainSafe(v) && !readsAsNonStringInYaml11(v) ? v : doubleQuoted(v)
+  return plainSafe(v) && !readsAsNonTextSomewhere(v) ? v : doubleQuoted(v)
 }
 
 /**

@@ -586,3 +586,20 @@ describe('a value the rules format refuses', () => {
     expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
   })
 })
+
+// Imported groups whose names make one key are each written, none dropped.
+describe('import-rules with groups whose names make one key', () => {
+  it('writes a file for each, with every rule, and the chart reads back', async () => {
+    const file = path.join(tmpDir, 'collide.yaml')
+    await fs.writeFile(file, 'groups:\n  - name: a-b\n    rules:\n      - alert: AlertX\n        expr: up\n  - name: a b\n    rules:\n      - alert: AlertY\n        expr: up\n  - name: A_B\n    rules:\n      - alert: AlertZ\n        expr: up\n')
+    const imported = run(IMPORT_RULES, [file, chartDir])
+    expect(imported.status, imported.stdout).toBe(0)
+    expect(imported.stdout).toContain('taken in as a_b_2')
+    const rules = Object.fromEntries(await Promise.all(['a_b', 'a_b_2', 'a_b_3'].map(async k => [k, await fs.readFile(path.join(chartDir, 'rules', `${k}.yaml`), 'utf-8')])))
+    expect(rules.a_b).toContain('alert: AlertX')
+    expect(rules.a_b_2).toContain('alert: AlertY')
+    expect(rules.a_b_2).toContain('name: a b')
+    expect(rules.a_b_3).toContain('alert: AlertZ')
+    expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
+  })
+})

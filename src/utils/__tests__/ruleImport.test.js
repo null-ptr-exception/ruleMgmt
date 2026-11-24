@@ -398,3 +398,33 @@ describe('the raw toggle round-trips a rule', () => {
     expect(error).toMatch(/for/)
   })
 })
+
+// Groups whose names make one key used to be one file, the last one's: the
+// others' rules were gone with only a "replaces" line. Each now gets a key
+// of its own, said; no rule is lost.
+describe('groups whose names make one key', () => {
+  const text = 'groups:\n  - name: a-b\n    rules:\n      - alert: X\n        expr: up\n  - name: a b\n    rules:\n      - alert: Y\n        expr: up\n  - name: A_B\n    rules:\n      - alert: Z\n        expr: up\n'
+
+  it('get keys of their own, keep their names, and lose no rule', () => {
+    const { groups, warnings } = importRules(text)
+    expect(groups.map(g => g.key)).toEqual(['a_b', 'a_b_2', 'a_b_3'])
+    expect(groups.flatMap(g => g.rules.map(r => r.alert))).toEqual(['X', 'Y', 'Z'])
+    expect(groups.map(g => modelGroupFromImport(g).name)).toEqual([undefined, 'a b', 'A_B'])
+    expect(warnings).toEqual([
+      'a b: a_b is already the key of a-b in this import — taken in as a_b_2',
+      'A_B: a_b is already the key of a-b in this import — taken in as a_b_3',
+    ])
+  })
+
+  it('two groups of one name (two source files): the second renders under its key\'s name, said', () => {
+    const { groups, warnings } = importRules('groups:\n  - name: cpu\n    rules:\n      - alert: A\n        expr: up\n---\ngroups:\n  - name: cpu\n    rules:\n      - alert: B\n        expr: up\n')
+    expect(groups.map(g => [g.key, modelGroupFromImport(g).name])).toEqual([['cpu', undefined], ['cpu_2', undefined]])
+    expect(warnings).toContain('cpu: another group of this import is already named cpu — this one is named cpu-2')
+  })
+
+  it('a single group is as before', () => {
+    const { groups, warnings } = importRules('groups:\n  - name: MariaDB traffic\n    rules:\n      - alert: A\n        expr: up\n')
+    expect(groups.map(g => [g.key, modelGroupFromImport(g).name])).toEqual([['mariadb_traffic', 'MariaDB traffic']])
+    expect(warnings).toEqual([])
+  })
+})

@@ -3,6 +3,7 @@ import { varsIn, danglingRefs } from './ruleModel.js'
 import { GROUP_FIELD_NAMES } from './groupFields.js'
 import { ROW_IDENTITY_LABEL } from './reservedNames.js'
 import { profileNames, typeNames, profileFor, profileOfObject, unknownProfileMark, PROFILES, PROFILE_ANNOTATION_KEYS, DEFAULT_TYPE } from './outputs.js'
+import { groupNameProblem } from './rulesFile.js'
 
 /**
  * Import Prometheus alerting rules into an editor schema — see issue #57.
@@ -216,7 +217,22 @@ export function importRules(yamlText) {
         warnings.push(`${where}: ${theirs.join(', ')} not taken — a ${group.type ?? own.name} group has no such field${others.length ? ` (a ${others.join(' or ')} group has)` : ''}`)
       }
       if (unknown.length) warnings.push(`${where}: ${unknown.join(', ')} not taken — AlertForge does not write ${unknown.length > 1 ? 'these group fields' : 'this group field'}`)
-      groups.push({ key: toGroupKey(group.name, groups.length), name: group.name, ...fields, rules, columns: columnsOf(rules) })
+      // Two groups whose names make one key (`a-b`, `a b`, `A_B`) would be
+      // one file, the last one's: each gets a key of its own instead.
+      const base = toGroupKey(group.name, groups.length)
+      let key = base
+      for (let n = 2; groups.some(g => g.key === key); n++) key = `${base}_${n}`
+      if (key !== base) warnings.push(`${where}: ${base} is already the key of ${groups.find(g => g.key === base).name ?? 'another group'} in this import — taken in as ${key}`)
+      const entry = { key, name: group.name, ...fields, rules, columns: columnsOf(rules) }
+      // Its rule-group name, if another imported group already renders it
+      // (two source files with a group `cpu`), would be refused at save:
+      // this one renders under its key's name, and says so.
+      const rendered = g => (keptName(g) ? g.name : g.key.replace(/_/g, '-'))
+      if (keptName(entry) && groups.some(g => rendered(g) === entry.name)) {
+        entry.nameTaken = true
+        warnings.push(`${where}: another group of this import is already named ${entry.name} — this one is named ${key.replace(/_/g, '-')}`)
+      }
+      groups.push(entry)
     }
   }
   return { groups, warnings }
@@ -237,6 +253,11 @@ function columnType(name, rules) {
   return comparison.test(text) ? 'number' : 'string'
 }
 
+// Whether an imported group keeps its source's rule-group name (`name:`):
+// one the format takes, that the key alone would not render, and not
+// already another imported group's.
+const keptName = group => typeof group.name === 'string' && !group.nameTaken && !groupNameProblem(group.name) && group.name !== group.key.replace(/_/g, '-')
+
 /**
  * One imported group as a rules-model group — what rules/<key>.yaml holds.
  * Its columns are the placeholders its rules reference, less any the chart
@@ -248,8 +269,13 @@ export function modelGroupFromImport(group, commonNames = []) {
   const columns = Object.fromEntries(group.columns
     .filter(name => !common.has(name))
     .map(name => [name, { type: columnType(name, group.rules) }]))
+  // The source's rule-group name stays what it was when the key alone would
+  // render another (`MariaDB traffic`, not mariadb-traffic); one the rules
+  // format refuses (a number, a line break) is left to the key's.
+  const keepName = keptName(group)
   return {
     group: group.key,
+    ...(keepName ? { name: group.name } : {}),
     // A group with no columns of its own renders once in its source file, so
     // it is imported as once (#70) — what it renders stays the same. Nothing
     // is guessed: the template owner turns it per-row when they add columns.

@@ -60,7 +60,10 @@ rules:
 ```
 
 The filename is the group: `network_traffic.yaml` is read from
-`.Values.network_traffic`. Everything under `rules` borrows its field names
+`.Values.network_traffic`, and the rule group is named `network-traffic` —
+unless the file says another name (`name: Network traffic`), which only
+changes `spec.groups[].name`; see
+[names, one source](rules-format.md#names-one-source). Everything under `rules` borrows its field names
 from a Prometheus rule group's `rules[]`, so what you already know about
 writing rules carries over. It is not a loadable rules file, though — the
 values carry placeholders, and it is a template.
@@ -514,6 +517,18 @@ arrives hand-written rather than losing it.
 A placeholder naming a column the chart already has in `_common` reads it
 from there; it does not become a second column of the group.
 
+A group keeps the name it had: `- name: MariaDB traffic` becomes
+`rules/mariadb_traffic.yaml` with `name: MariaDB traffic`, so it renders under
+that name again. A name that renders the same from the file name
+(`mariadb-traffic`) is not written; one the rules format refuses (a line
+break, a space at either end) is left to the file name's.
+
+Groups whose names make one file name — `a-b`, `a b` and `A_B` are all
+`a_b` — each get one of their own: `a_b.yaml`, `a_b_2.yaml`, `a_b_3.yaml`,
+each keeping its name, and the import says so. Two groups with the very same
+name (from two source files) are taken in the same way; the second renders
+under its file's name (`cpu-2`), since a chart's groups need two names.
+
 Multi-line expressions and descriptions arrive as they are, and render as
 they are. To check an imported chart against the file it came from, compare
 the rendered rules as YAML (`dyff`, or parse both), not as text: the generator
@@ -594,6 +609,10 @@ Group `type` now has four values — `prometheus2`, `prometheus3`, `vm`,
   group brings the group fields its type has, saying which it left out.
 
 ## Changing a chart that people are already using
+
+Changing a group's `name:` only renames the rule group: no `values.yaml`
+changes, so the save goes through and says what the evaluator does with it
+(pending alerts start over; vmalert's `alertgroup` label changes).
 
 Removing a column or a group or a rule, renaming a group, narrowing a type,
 making a column required, or removing or changing a default all affect

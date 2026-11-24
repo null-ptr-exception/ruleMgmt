@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import yaml from 'js-yaml'
-import { readsAsNonStringInYaml11, nameScalar, keyScalar, yamlName, helmLiteralText, needsQuote, KUBERNETES_DUMP_SCHEMA } from '../yamlScalar.js'
+import { readsAsNonStringInYaml11, readsAsNonTextSomewhere, nameScalar, keyScalar, yamlName, helmLiteralText, needsQuote, KUBERNETES_DUMP_SCHEMA } from '../yamlScalar.js'
 
 // What `kubectl create --dry-run=client -o json` (kubectl v1.36) makes of
 // each one written bare: Kubernetes reads YAML 1.1.
@@ -13,11 +13,26 @@ describe('readsAsNonStringInYaml11', () => {
   it.each(TEXT)('%s is text', v => expect(readsAsNonStringInYaml11(v)).toBe(false))
 })
 
+// Text to Kubernetes (kubectl v1.36 keeps each as written), but not to every
+// reader of the same output: helm-unittest and js-yaml read the timestamps
+// as dates, a YAML 1.1 reader (PyYAML) reads 1:30 as 90 and refuses =.
+const OTHER_READERS = ['2026-11-22', '2026-1-2', '2026-11-22 10:00:00', '2026-11-22T10:00:00Z', '2026-11-22t10:00:00.5+08:00', '1:30', '190:20:30', '-1:30', '1:30.5', '=']
+const STILL_TEXT = ['cpu', 'yEs', 'High CPU', '5xx', '0.1.0', '30s', 'job:rate:5m', '中文', '1:3x', '2026-11-22x', '2026-11', '1:60', 'a=b', '==']
+
+describe('readsAsNonTextSomewhere', () => {
+  it.each([...NOT_TEXT, ...OTHER_READERS])('%s is not text to some reader', v => expect(readsAsNonTextSomewhere(v)).toBe(true))
+  it.each(STILL_TEXT)('%s is text to all', v => expect(readsAsNonTextSomewhere(v)).toBe(false))
+  it.each(OTHER_READERS)('%s is still text to Kubernetes', v => expect(readsAsNonStringInYaml11(v)).toBe(false))
+})
+
 describe('nameScalar', () => {
-  it.each(NOT_TEXT)('quotes %s', v => expect(nameScalar(v)).toBe(JSON.stringify(v)))
+  it.each([...NOT_TEXT, ...OTHER_READERS])('quotes %s', v => expect(nameScalar(v)).toBe(JSON.stringify(v)))
 
   // Bare as before: existing charts generate the same templates.
-  it.each(TEXT.filter(v => v !== '='))('leaves %s bare', v => expect(nameScalar(v)).toBe(v))
+  it.each(STILL_TEXT)('leaves %s bare', v => expect(nameScalar(v)).toBe(v))
+
+  // Read back with js-yaml's default schema, a quoted date is the text.
+  it.each(OTHER_READERS.filter(v => v !== '='))('%s quoted reads back as the text', v => expect(yaml.load(`k: ${nameScalar(v)}`).k).toBe(v))
 
   // promtool takes any text as an alert name; bare, these do not parse or
   // lose part of the name (helm template + kubectl, v1.36).

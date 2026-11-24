@@ -1,0 +1,10 @@
+# A vm group: its name and a group label value, as text.
+type: vm
+name: "1:30"
+labels: { when: "2026-11-22" }
+columns:
+  db: { type: string, required: true }
+
+rules:
+  - alert: "="
+    expr: up{db="${db}"} == 0

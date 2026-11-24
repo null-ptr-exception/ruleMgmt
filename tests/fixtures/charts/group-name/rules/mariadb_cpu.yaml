@@ -1,0 +1,11 @@
+# A rule-group name of its own: only spec.groups[].name says it. The values
+# key, the template file and the object names stay the file name's. 101 rows:
+# the group renders as two objects, and both carry the name.
+name: MariaDB CPU 使用率
+columns:
+  db: { type: string, required: true }
+
+rules:
+  - alert: MariaDBCpuHigh
+    expr: cpu{db="${db}"} > 90
+    labels: { severity: warning }

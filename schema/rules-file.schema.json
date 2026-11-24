@@ -8,6 +8,13 @@
       "pattern": "^[a-z][a-z0-9_]*$",
       "description": "The group's key: the same as the file name, without .yaml. Optional."
     },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\s\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029](?:[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*[^\\s\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029])?$",
+      "description": "The rule group's name in the rendered resource (spec.groups[].name), e.g. \"MariaDB CPU\". Left out, it is the file name with _ as -. Values key, template and object names stay the file name's. One line, no space at either end, at most 200 characters, not another group's name. Changing it starts the group anew in the evaluator."
+    },
     "once": {
       "type": "boolean",
       "description": "true: the rules render once per deployment, outside the row loop. A once group has no columns and takes no rows."

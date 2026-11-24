@@ -32,7 +32,7 @@
 
 import { parseDerived, evalDerived } from './derived.js'
 import yaml from 'js-yaml'
-import { groupGenDef, modelToSchema } from './rulesFile.js'
+import { groupGenDef, groupName, modelToSchema } from './rulesFile.js'
 import { createHash } from 'crypto'
 import { normalizeRules, groupShardSizes, rowIdentityColumns, ROW_IDENTITY_LABEL } from './templateGenerator.js'
 import { profileFor } from './outputs.js'
@@ -282,7 +282,7 @@ export function generateHelmUnittestSuite(model) {
           { isKind: { of: profile.kind } },
           { isAPIVersion: { of: profile.apiVersion } },
           { equal: { path: 'metadata.name', value: doc.name } },
-          { equal: { path: 'spec.groups[0].name', value: base } },
+          { equal: { path: 'spec.groups[0].name', value: groupName(key, group) } },
           ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
           // The template owner's group fields (#182), as the evaluator reads them.
           ...groupFieldAsserts(group),

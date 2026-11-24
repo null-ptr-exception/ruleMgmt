@@ -5,7 +5,7 @@ import { getDepName, unwrapValues } from '../lib/subchart.js'
 import { resolveStack, readStackValues, mergeValues } from '../lib/stack.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
-import { derivedTable } from '../../src/utils/rulesFile.js'
+import { derivedTable, groupName } from '../../src/utils/rulesFile.js'
 import { logger } from '../lib/logger.js'
 import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
@@ -62,11 +62,13 @@ async function buildSummary(renderedYaml, { model, schema }, readValues, readDef
 
   const types = Object.fromEntries(Object.entries(model?.groups || {}).map(([k, g]) => [k, g.type]))
   const onceGroups = Object.entries(model?.groups || {}).filter(([, g]) => g.once).map(([k]) => k)
+  // The rule-group name each group renders as: its own `name:`, or the key's.
+  const names = Object.fromEntries(Object.entries(model?.groups || {}).map(([k, g]) => [k, groupName(k, g)]))
   // Each row's derived values (#118), computed as the save check computes
   // them, from what Helm reads: the Template's values.yaml under the
   // deployment's (its Common Values too), on a stack what the layers add.
   const derived = model && values ? derivedTable(mergeValues(await readDefaults(), values), model) : {}
-  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema, types, onceGroups, derived })
+  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema, types, onceGroups, derived, names })
   return { total: rendered.total, groups, unmatchedGroups, orphanFields: [...orphanFields] }
 }
 

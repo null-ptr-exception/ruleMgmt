@@ -470,14 +470,14 @@ test.describe('New → From rules…', () => {
     for (const c of [EXISTING, FRESH]) await removeChart(request, c)
   })
 
-  async function importAs(page, name) {
+  async function importAs(page, name, rules = RULES) {
     await page.goto('/')
     await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
     await page.getByRole('button', { name: /New/ }).first().click()
     await page.getByText('From rules…').click()
     const dialog = page.locator('.ant-modal').filter({ hasText: 'New chart from rules' })
     await dialog.locator('input').first().fill(name)
-    await dialog.locator('textarea').fill(RULES)
+    await dialog.locator('textarea').fill(rules)
     await dialog.getByRole('button', { name: 'Create' }).click()
     return dialog
   }
@@ -487,6 +487,17 @@ test.describe('New → From rules…', () => {
     await expect(page.getByText(`A chart named "${EXISTING}" already exists`)).toBeVisible({ timeout: 5000 })
     await expect(dialog).toBeVisible()
     expect(Object.keys(await rulesOf(request, EXISTING))).toEqual(['keep.yaml'])
+  })
+
+  // Groups whose names make one key: one file each, every rule kept.
+  test('groups named a-b, a b and A_B become three groups, none lost', async ({ page, request }) => {
+    const rules = 'groups:\n  - name: a-b\n    rules:\n      - alert: AlertX\n        expr: up\n  - name: a b\n    rules:\n      - alert: AlertY\n        expr: up\n  - name: A_B\n    rules:\n      - alert: AlertZ\n        expr: up\n'
+    await importAs(page, FRESH, rules)
+    await expect.poll(async () => Object.keys(await rulesOf(request, FRESH) || {}).sort(), { timeout: 8000 }).toEqual(['a_b.yaml', 'a_b_2.yaml', 'a_b_3.yaml'])
+    const files = await rulesOf(request, FRESH)
+    expect(files['a_b.yaml']).toContain('alert: AlertX')
+    expect(files['a_b_2.yaml']).toContain('alert: AlertY')
+    expect(files['a_b_3.yaml']).toContain('alert: AlertZ')
   })
 
   test('a save the server refuses says why, and leaves no empty chart behind', async ({ page, request }) => {

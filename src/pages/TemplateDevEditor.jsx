@@ -8,7 +8,7 @@ import KVEditor from '../components/KVEditor'
 import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { syncFailedNotice } from '../utils/syncNotice'
-import { parseRulesDir, schemaToModel, groupFileText, commonFileText, hasCommonFile, GROUP_KEY_RE, RESERVED_NAMES } from '../utils/rulesFile'
+import { parseRulesDir, schemaToModel, groupFileText, commonFileText, hasCommonFile, GROUP_KEY_RE, RESERVED_NAMES, groupName, groupNameProblem } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { columnUsage, commonColumnUsage, ruleVars, varsIn } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
@@ -150,7 +150,45 @@ function GroupFieldInput({ name, value, onSet, onUnreadable }) {
 const CHECKER_NAMES = { promtool: 'promtool', promtool3: 'promtool 3', vmalert: 'vmalert' }
 const QUERY_NAMES = { promql: 'PromQL', metricsql: 'MetricsQL', logsql: 'LogsQL' }
 
-function GroupSettings({ group, commonColumns = {}, onChange, onUnreadable }) {
+/**
+ * The rule group's own name (`name:`). Empty is no name: the key's default,
+ * shown as the placeholder. What is typed is taken on Enter or when the field
+ * is left, its ends trimmed; a field only looked at, or left as it was once
+ * trimmed, changes nothing. A name
+ * the save refuses — another group's, a line break — is said here too.
+ */
+function GroupNameInput({ groupKey, value, groups, onSet }) {
+  const [draft, setDraft] = useState(value ?? '')
+  useEffect(() => { setDraft(value ?? '') }, [value, groupKey])
+  const commit = () => {
+    const text = draft.trim()
+    // What it was (a space typed and left, or the same name again): the
+    // group, and so its file, is not touched.
+    if (draft === (value ?? '') || text === (value ?? '')) { setDraft(value ?? ''); return }
+    onSet(text === '' ? undefined : text)
+    if (text !== draft) setDraft(text)
+  }
+  const shown = draft !== (value ?? '') ? draft.trim() || undefined : value
+  let problem = shown === undefined ? null : groupNameProblem(shown)
+  if (!problem) {
+    const mine = groupName(groupKey, { name: shown })
+    const other = Object.entries(groups || {}).find(([k, g]) => k !== groupKey && !g.custom && groupName(k, g) === mine)
+    if (other) problem = `"${mine}" is already the rule-group name of ${other[0]} — Save refuses it`
+  }
+  return (
+    <span>
+      <Tooltip title="The rule group's name in Prometheus / vmalert (spec.groups[].name). Values keys, template and object names stay the key's. Changing it starts the group anew: pending alerts wait their for again.">
+        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Name</Text>
+      </Tooltip>
+      <Input size="small" aria-label="Group name" style={{ width: 200 }} placeholder={groupKey.replace(/_/g, '-')}
+        status={problem ? 'error' : undefined} value={draft}
+        onChange={e => setDraft(e.target.value)} onBlur={commit} onPressEnter={commit} />
+      {problem && <Text type="danger" data-testid="group-name-problem" style={{ fontSize: 12, marginLeft: 6 }}>{problem}</Text>}
+    </span>
+  )
+}
+
+function GroupSettings({ groupKey, groups, group, commonColumns = {}, onChange, onUnreadable }) {
   // once (#70): the group renders once per deployment and has no rows, so it
   // cannot have columns — turned on only once they are gone.
   const hasColumns = Object.keys(group.columns || {}).length > 0
@@ -164,6 +202,7 @@ function GroupSettings({ group, commonColumns = {}, onChange, onUnreadable }) {
   })
   return (
     <div data-testid="group-settings" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+      <GroupNameInput key={groupKey} groupKey={groupKey} value={group.name} groups={groups} onSet={v => set('name', v)} />
       <span>
         <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Type</Text>
         <Select size="small" aria-label="Group type" style={{ width: 130 }}
@@ -1043,7 +1082,7 @@ export default function TemplateDevEditor() {
                   <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeGroup(activeGroup)}>Remove</Button>
                 </div>
 
-                {!group.custom && <GroupSettings group={group} commonColumns={model.common.columns} onChange={fn => updateGroup(activeGroup, fn)}
+                {!group.custom && <GroupSettings groupKey={activeGroup} groups={model.groups} group={group} commonColumns={model.common.columns} onChange={fn => updateGroup(activeGroup, fn)}
                   onUnreadable={(key, text) => { const at = `${activeGroup}.${key}`; if (text === null) delete unreadableFields.current[at]; else unreadableFields.current[at] = text }} />}
 
                 {group.custom ? (

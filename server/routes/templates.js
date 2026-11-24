@@ -1,6 +1,6 @@
 import express from 'express'
 import { holdSyncRegistryLock } from '../lib/sync.js'
-import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
+import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupNameChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing, findChartUsage } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
 import { readTextIfThere, readDirIfThere, parseIfThere, UnreadableError, errorAnswer } from '../lib/readIfThere.js'
@@ -257,7 +257,7 @@ export default function templatesRouter() {
       })
       // A group changing output profile replaces its objects (#65): a notice,
       // shown with a breaking change or on its own after the save.
-      notices.push(...groupTypeChanges(beforeModel, model, objectMetaFromEnv()), ...groupOnceChanges(beforeModel, model), ...groupSelectorChanges(beforeModel, model), ...groupSelectorLabelChanges(beforeModel, model))
+      notices.push(...groupTypeChanges(beforeModel, model, objectMetaFromEnv()), ...groupNameChanges(beforeModel, model), ...groupOnceChanges(beforeModel, model), ...groupSelectorChanges(beforeModel, model), ...groupSelectorLabelChanges(beforeModel, model))
       const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
       if (!confirmBreaking && isBreaking) {
         const { deployments, unreadable } = await findChartUsage(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)

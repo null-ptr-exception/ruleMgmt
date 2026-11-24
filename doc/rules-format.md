@@ -36,6 +36,7 @@ direction.
 
 ```yaml
 group: mariadb_traffic          # optional; if present it must equal the filename
+name: MariaDB traffic           # optional; the rule group's name, see below
 interval: 1m                    # optional, Prometheus rule group field
 limit: 0                        # optional, Prometheus rule group field
 
@@ -78,6 +79,7 @@ the query lives in `vars` so there is only ever one copy of it.
 | Field | Required | Meaning |
 |---|---|---|
 | `group` | no | Must equal the filename if present |
+| `name` | no | The rule group's name in the rendered resource (`spec.groups[].name`), e.g. `MariaDB CPU`. Left out, it is the filename with `_` as `-` (`mariadb-cpu`). Only that name changes: the values key, template file and object names stay the filename's, so no deployment changes — see [names, one source](#names-one-source). Text on one line, no space at either end, at most 200 characters, and not the name of another group of the chart (another group's default included; `CPU` and `cpu` are two names). `name:` with nothing after it is refused rather than read as left out. Spaces, `{{`, `: ` and any language go through as written. In the editor: the Name field of the group's settings row, empty for the default. Names are compared as written, character by character, as Prometheus and vmalert compare them: `Café` with `é` and with `e` and a combining accent are two names, which look alike. A clash with a group of a hand-written template (`x-custom-template`) cannot be seen at save — what it renders is only known to Helm; Preview counts each group from its own template file, and shows the other apart |
 | `once` | no | `true`: the rules render **once per deployment** instead of once per row — see [once groups](#once-groups). A once group has no `columns` |
 | `type` | no | Which kind of rules these are, and so what they are wrapped in: `prometheus2` (the default — `expr` is PromQL for Prometheus 2.x, emitted as a `PrometheusRule`; `prometheus` is the same), `prometheus3` (PromQL for Prometheus 3.13 or later, a `PrometheusRule` marked with the annotation `alertforge.io/profile: prometheus3`, checked with promtool 3), `vm` (`expr` is MetricsQL, evaluated by VMAlert against VictoriaMetrics, emitted as a `VMRule` with `type: prometheus` on the group) or `vlogs` (`expr` is LogsQL, evaluated against VictoriaLogs, emitted as a `VMRule`). The choices are the profiles in `config/outputs.json` — see [output profiles](#output-profiles) |
 | `interval` | no | How often the group is evaluated — a [duration](#durations) such as `30s`, `1m`, `1h30m`. Left out, the evaluator's own default applies |
@@ -653,6 +655,10 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
   something else; the file and the rule are named
 - An optional column with no default referenced from the middle of a string
 - `group:` not matching the filename
+- A group's `name:` that is empty or written with nothing after it, not
+  text (`name: 5` — quote it), with a space at either end, a line break or
+  another control character, longer than 200 characters, or the rule-group
+  name of another group of the chart (its `name:` or its default)
 - A `derived` without a `unit`, with an expression that does not parse or
   reads anything but an integer column (or one whose default is not a whole
   number), used in a `raw` rule, or — in PromQL — compared as a number
@@ -792,6 +798,12 @@ bare, as a hand-written file has it, and double-quotes it only when:
 - a group's, an alert's or a recording rule's name would not be text bare:
   `yes`, `true`, `null`, `123`, `0_7` — so a group `rules/yes.yaml` is
   written `- name: "yes"`
+- a group's own `name:`, an alert's or a recording rule's name, or a
+  group label's value is a YAML 1.1 timestamp, a sexagesimal number or `=`:
+  `2026-11-22`, `2026-11-22 10:00:00`, `1:30`. Kubernetes keeps these as
+  text, but helm-unittest reads a bare date as a date, and another YAML 1.1
+  reader takes `1:30` for 90; quoted, every reader gets the text. (A rule's
+  label value starting with a digit is quoted anyway.)
 - a label's or annotation's key — on a rule, or one the site puts on every
   object — is a YAML 1.1 boolean, null or number other than `true`, `false`,
   a whole number such as `123`, `.inf`, `-.inf` or `.nan`, which read back
@@ -892,11 +904,24 @@ Everything about a group is derived from the filename:
 ```
 rules/mariadb_traffic.yaml
   ├─ values key         .Values.mariadb_traffic
-  ├─ group name         mariadb-traffic
+  ├─ group name         mariadb-traffic   (or the file's name:)
   ├─ template file      templates/mariadb-traffic.yaml
   ├─ object name        {release}-mariadb-traffic-1-1
   └─ shown in the UI    mariadb_traffic
 ```
+
+`group:` and `name:` are two different things. `group:` is the key, and has
+to be the filename when written. `name:` (`name: MariaDB traffic`) is only
+the rule group's name in the resource, what Prometheus and vmalert call the
+group; nothing else changes with it, so it can be set or changed without
+touching a deployment. A group split into several objects has the same name
+in each.
+
+Changing `name:` (or setting it, or taking it away) is still renaming the
+rule group for the evaluator: it starts the group anew, so an alert that is
+pending waits its full `for` again, and vmalert's `alertgroup` label on every
+alert of the group changes — a route or silence that matches it has to
+change too. The save says so; it is not a breaking change.
 
 Renaming a group means renaming the file. Every deployment's values key changes
 with it, so it goes through the breaking-change dialog like any other rename —

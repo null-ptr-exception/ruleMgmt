@@ -1,0 +1,16 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# Every value is the text written, as Kubernetes reads it.
+blind-dated-1-1:
+  - name: "2026-11-22"
+    rules:
+      - alert: "2026-11-22 10:00:00"
+        expr: up{db="db1"} == 0
+        labels: { since: "1:30", op: "=", day: "2026-11-22" }
+        annotations: { at: "2026-11-22T10:00:00Z" }
+VMRule blind-sexa-1-1:
+  - name: "1:30"
+    type: prometheus
+    labels: { when: "2026-11-22" }
+    rules:
+      - alert: "="
+        expr: up{db="db1"} == 0

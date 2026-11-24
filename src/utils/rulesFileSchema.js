@@ -18,7 +18,7 @@
  * repository, and every value of a boundary list, through both.
  */
 
-import { GROUP_KEYS, RULE_KEYS, RECORD_KEYS, COLUMN_KEYS, COLUMN_TYPES, DERIVED_KEYS, COMMON_KEYS, RESERVED_NAMES, DERIVED_NAME_RE, GROUP_KEY_RE } from './rulesFile.js'
+import { GROUP_KEYS, RULE_KEYS, RECORD_KEYS, COLUMN_KEYS, COLUMN_TYPES, DERIVED_KEYS, COMMON_KEYS, RESERVED_NAMES, DERIVED_NAME_RE, GROUP_KEY_RE, GROUP_NAME_PATTERN, GROUP_NAME_MAX } from './rulesFile.js'
 import { GROUP_FIELDS, GROUP_FIELD_NAMES } from './groupFields.js'
 import { typeNames, profileFor, profileNames, DEFAULT_TYPE, TOP_KEYS, PROFILE_KEYS, QUERY, ROUTING_KEYS, VALIDATE, ANNOTATION_KEY_RE, NAME_RE, RESERVED_GROUP_FIELDS, ROUTING_KIND } from './outputs.js'
 import { DERIVED_UNITS } from './derived.js'
@@ -30,6 +30,7 @@ const DRAFT = 'http://json-schema.org/draft-07/schema#'
 // generator stops on a key without, so a new key is described when it lands.
 const GROUP_DOC = {
   group: 'The group\'s key: the same as the file name, without .yaml. Optional.',
+  name: `The rule group's name in the rendered resource (spec.groups[].name), e.g. "MariaDB CPU". Left out, it is the file name with _ as -. Values key, template and object names stay the file name's. One line, no space at either end, at most ${GROUP_NAME_MAX} characters, not another group's name. Changing it starts the group anew in the evaluator.`,
   once: 'true: the rules render once per deployment, outside the row loop. A once group has no columns and takes no rows.',
   type: `The output profile (config/outputs.json) the group is written as. No type is ${DEFAULT_TYPE}.`,
   selectors: 'The columns that pick the series a row is about, coarsest first, e.g. [namespace, workload].',
@@ -201,6 +202,7 @@ export function rulesFileSchema() {
   }
   Object.assign(properties, {
     group: { type: 'string', pattern: GROUP_KEY_RE.source, description: doc('group') },
+    name: { type: 'string', minLength: 1, maxLength: GROUP_NAME_MAX, pattern: GROUP_NAME_PATTERN, description: doc('name') },
     once: { type: 'boolean', description: doc('once') },
     type: { enum: typeNames(), description: doc('type') },
     selectors: { type: 'array', items: { type: 'string' }, description: doc('selectors') },

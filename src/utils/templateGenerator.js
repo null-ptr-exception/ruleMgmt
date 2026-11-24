@@ -514,7 +514,8 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
   if (ruleTexts.length === 0) return null
 
   return {
-    groupName: alertGroup.replace(/_/g, '-'),
+    // The group's own `name:` (groupGenDef), or the key's, as always.
+    groupName: typeof alertDef.groupName === 'string' ? alertDef.groupName : alertGroup.replace(/_/g, '-'),
     // From the model (groupGenDef), or a 1.x schema's two.
     groupFields: alertDef.groupFields ?? { interval: alertDef.interval, limit: alertDef.limit },
     // The parser has already refused a type with no profile.

@@ -13,6 +13,10 @@ import yaml from 'js-yaml'
 import { profileOfObject, profileFor } from './outputs.js'
 import { expandVars, prometheusTemplatesIn } from './ruleModel.js'
 
+// Helm's output as text, never a date: Kubernetes keeps `2026-11-22` as the
+// text it is, and so does this (js-yaml's default schema would make it a Date).
+const READ = { schema: yaml.CORE_SCHEMA }
+
 // Checks promtool structurally can't make: it only knows valid vs invalid
 // PromQL, not "this isn't what you meant". `<no value>` is Helm rendering a
 // key that has no value and no default — syntactically fine and silently
@@ -87,7 +91,7 @@ function lostTemplates(renderedYaml, model) {
           }
         }
       }
-    })
+    }, READ)
   } catch {
     // Unparseable output is promtool's to report, not this check's.
   }
@@ -98,30 +102,66 @@ function lostTemplates(renderedYaml, model) {
 // (alert name, severity) pair, and the grand total. Recording rules (#70) are
 // counted apart, per group — they are not alerts, and adding them to the
 // total would make "N alerts" untrue.
+// Helm writes `# Source: <chart>/templates/<file>` above each document of
+// `helm template`: which template rendered a group, so a generated group is
+// counted from its own template only — a hand-written template (an
+// x-custom-template group) may render a group of the same name.
+const SOURCE_RE = /^# Source: (.+)$/m
+// A template that emits several documents gets one Source line, above the
+// first: the ones after it are its too.
+function documentsWithSource(renderedYaml) {
+  let last = null
+  return String(renderedYaml ?? '').split(/^---[ \t]*$/m).map(text => {
+    const own = SOURCE_RE.exec(text)?.[1]?.trim()
+    if (own) last = own
+    return { text, source: last }
+  })
+}
+
 export function tallyRendered(renderedYaml) {
   const byGroup = new Map()
   const recordsByGroup = new Map()
+  // Per template and group: `${source}\u0000${name}` → (alert, severity) → count.
+  const bySource = new Map()
   let total = 0
-  // Every output profile's objects (#65), not only PrometheusRule: a vlogs
-  // group's alerts count like any other.
-  yaml.loadAll(renderedYaml, doc => {
-    if (!profileOfObject(doc)) return
-    for (const g of doc?.spec?.groups || []) {
-      const m = byGroup.get(g.name) || new Map()
-      for (const r of g?.rules || []) {
-        if (r?.record) recordsByGroup.set(g.name, (recordsByGroup.get(g.name) || 0) + 1)
-        if (!r?.alert) continue
-        // A rule's own severity, else its group's (#182): the evaluator gives
-        // every rule the group's labels, its own winning.
-        const key = `${r.alert}\u0000${r?.labels?.severity ?? g?.labels?.severity ?? ''}`
-        m.set(key, (m.get(key) || 0) + 1)
-        total++
+  const parts = documentsWithSource(renderedYaml)
+  // Without a Source line anywhere (not helm template's output), the whole
+  // text as one: a parse error then is reported as before.
+  const chunks = parts.some(p => p.source) ? parts : [{ text: renderedYaml, source: null }]
+  for (const { text, source } of chunks) {
+    // Every output profile's objects (#65), not only PrometheusRule: a vlogs
+    // group's alerts count like any other.
+    yaml.loadAll(text, doc => {
+      if (!profileOfObject(doc)) return
+      for (const g of doc?.spec?.groups || []) {
+        const m = byGroup.get(g.name) || new Map()
+        const sKey = `${source ?? ''}\u0000${g.name}`
+        const sm = bySource.get(sKey) || new Map()
+        for (const r of g?.rules || []) {
+          if (r?.record) recordsByGroup.set(g.name, (recordsByGroup.get(g.name) || 0) + 1)
+          if (!r?.alert) continue
+          // A rule's own severity, else its group's (#182): the evaluator gives
+          // every rule the group's labels, its own winning.
+          const key = `${r.alert}\u0000${r?.labels?.severity ?? g?.labels?.severity ?? ''}`
+          m.set(key, (m.get(key) || 0) + 1)
+          sm.set(key, (sm.get(key) || 0) + 1)
+          total++
+        }
+        byGroup.set(g.name, m)
+        bySource.set(sKey, sm)
       }
-      byGroup.set(g.name, m)
-    }
-  })
-  return { byGroup, recordsByGroup, total }
+    }, READ)
+  }
+  return { byGroup, recordsByGroup, total, bySource }
 }
+
+// The rendered group a generated group is: by its name, from its own
+// template file when Helm said which file rendered what.
+const ownTemplate = valuesKey => `templates/${valuesKey.replace(/_/g, '-')}.yaml`
+// A deployment renders the Template as a dependency
+// (`<deployment>/charts/<template>/templates/<file>`), so only the file is compared.
+const isOwnSource = (source, valuesKey) => source !== null && source !== '' && source.endsWith(`/${ownTemplate(valuesKey)}`)
+
 
 const alertsFor = rMap => [...rMap.entries()]
   .map(([k, count]) => {
@@ -137,26 +177,41 @@ const alertsFor = rMap => [...rMap.entries()]
  * group's row count, respectively); `schema` is only consulted for
  * `x-custom-template`.
  *
- * The rendered `spec.groups[].name` is guessed from the values key (`_` ->
- * `-`, matching what the generator itself does in templateGenerator.js).
+ * The rendered `spec.groups[].name` is the group's own `name:` (`names`,
+ * values key → name), else guessed from the values key (`_` -> `-`,
+ * matching what the generator itself does in templateGenerator.js).
  * That guess is only good for a generated group — an `x-custom-template`
  * group is a hand-written CR free to use any group name, so guessing for it
  * and reporting a mismatch as "no-alerts" would be reporting our own wrong
  * guess as the chart's problem. Those are left unmatched here instead of
  * force-matched — see `unmatchedGroups`.
  */
-export function summarizeGroups({ rendered, possible, groupRows, schema, types = {}, onceGroups = [], derived = {} }) {
+export function summarizeGroups({ rendered, possible, groupRows, schema, types = {}, onceGroups = [], derived = {}, names = {} }) {
   const once = new Set(onceGroups)
   const keys = new Set([...Object.keys(possible), ...Object.keys(groupRows), ...once])
   const matchedNames = new Set()
+  const hasSources = [...(rendered.bySource?.keys() || [])].some(k => !k.startsWith('\u0000'))
+  const claimed = new Set()
   const groups = [...keys].map(valuesKey => {
-    const name = valuesKey.replace(/_/g, '-')
+    // A group's own `name:` is what it renders as; else the key's.
+    const name = Object.hasOwn(names, valuesKey) ? names[valuesKey] : valuesKey.replace(/_/g, '-')
     const rowCount = groupRows[valuesKey] || 0
     const custom = Boolean(schema?.properties?.[valuesKey]?.['x-custom-template'])
     if (custom) return { name, valuesKey, rowCount, state: 'custom', alerts: [], missing: [] }
 
     matchedNames.add(name)
-    const rMap = rendered.byGroup.get(name) || new Map()
+    // From its own template when the sources are known; another template
+    // rendering a group of that name stays apart (unmatched).
+    let rMap = rendered.byGroup.get(name) || new Map()
+    if (hasSources) {
+      rMap = new Map()
+      for (const [sKey, m] of rendered.bySource) {
+        const [source, gName] = sKey.split('\u0000')
+        if (gName !== String(name) || !isOwnSource(source, valuesKey)) continue
+        claimed.add(sKey)
+        for (const [k, c] of m) rMap.set(k, (rMap.get(k) || 0) + c)
+      }
+    }
     const alerts = alertsFor(rMap)
     const renderedCount = alerts.reduce((n, a) => n + a.count, 0)
     const records = rendered.recordsByGroup?.get(name) || 0
@@ -175,10 +230,24 @@ export function summarizeGroups({ rendered, possible, groupRows, schema, types =
   // Rendered groups no group above claimed — every x-custom-template group's
   // actual output lands here, plus anything else whose rendered name simply
   // never matched a guess (an import with an unconventional group name).
-  const unmatchedGroups = [...rendered.byGroup.entries()]
-    .filter(([name]) => !matchedNames.has(name))
+  let unmatched
+  if (hasSources) {
+    // By name, from the templates no generated group claimed.
+    const left = new Map()
+    for (const [sKey, m] of rendered.bySource) {
+      if (claimed.has(sKey)) continue
+      const name = sKey.split('\u0000')[1]
+      const into = left.get(name) || new Map()
+      for (const [k, c] of m) into.set(k, (into.get(k) || 0) + c)
+      left.set(name, into)
+    }
+    unmatched = [...left.entries()]
+  } else {
+    unmatched = [...rendered.byGroup.entries()].filter(([name]) => !matchedNames.has(name))
+  }
+  const unmatchedGroups = unmatched
     .map(([name, rMap]) => ({ name, alerts: alertsFor(rMap) }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
 
   return { groups, unmatchedGroups }
 }

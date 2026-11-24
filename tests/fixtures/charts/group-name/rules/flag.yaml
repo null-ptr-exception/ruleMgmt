@@ -1,0 +1,7 @@
+# A name Kubernetes (YAML 1.1) would read as true when written bare. In this
+# file it is text: rules files are read as YAML 1.2.
+name: yes
+once: true
+rules:
+  - alert: FlagDown
+    expr: up{job="flag"} == 0

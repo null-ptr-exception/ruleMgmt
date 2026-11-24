@@ -1,0 +1,29 @@
+{{- $chunks := chunk 100 ($.Values.svc | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-svc-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: svc
+      rules:
+        {{- range $rows }}
+        - alert: Down
+          expr: |-
+            label_replace(up{host="{{ .host }}"}, "tag", "a{{ `{{` }}", "", "") == 0
+          labels:
+            quoted: "{{ "{{ `a\\\"b` }}" }}"
+            wrapped: "{{ `{` }}{{ .host }}}"
+          annotations:
+            raw: |-
+              {{ "{{ `raw` }}" }} is {{ `{{ $value }}` }}
+            printf: |-
+              {{ "{{ printf \"%s/%s\" `x` $labels.host }}" }}
+            next: |-
+              {{ `{{ $labels.host }}` }}{{ .host }}{{ `{` }}{{ .host }}}
+        {{- end }}
+{{- end }}

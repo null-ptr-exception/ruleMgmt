@@ -1,0 +1,16 @@
+# Braces in a rule's text that Helm has to leave as written: a template with
+# a backtick or quotes in it, a { or {{ right next to a ${column}, a {{ in a
+# PromQL string.
+columns:
+  host: { type: string, required: true }
+
+rules:
+  - alert: Down
+    expr: label_replace(up{host="${host}"}, "tag", "a{{", "", "") == 0
+    labels:
+      quoted: '{{ `a"b` }}'
+      wrapped: '{${host}}'
+    annotations:
+      raw: '{{ `raw` }} is {{ $value }}'
+      printf: '{{ printf "%s/%s" `x` $labels.host }}'
+      next: '{{ $labels.host }}${host}{${host}}'

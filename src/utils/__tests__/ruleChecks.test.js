@@ -137,6 +137,34 @@ describe('${} nested inside {{ }}', () => {
   })
 })
 
+// promtool check rules refuses an alert whose label or annotation has a {{
+// that no }} follows ("template: __alert_A:1: unexpected ..."), and takes
+// one in a recording rule's label, which is no template.
+describe('a {{ with no }} after it', () => {
+  const found = rule => checkRules(chart([rule])).filter(f => f.kind === 'unclosed-template')
+
+  it.each(['a {{', 'x{{{', '}}{{', '{{ $value }} then {{', '{{${warn}'])('%s in an annotation or a label is refused at save', text => {
+    for (const where of ['annotations', 'labels']) {
+      expect(found({ alert: 'A', expr: 'cpu > ${warn}', [where]: { s: text } }), `${where}: ${text}`)
+        .toEqual([expect.objectContaining({ severity: 'save', message: 'rule "A": "s" has a {{ with no }} after it — Prometheus cannot read it as a template' })])
+    }
+  })
+
+  it.each(['{{ $value }}', 'a }}', '{}}', '{{ "}}" }}', '{{ `raw` }}'])('%s is not', text => {
+    expect(found({ alert: 'A', expr: 'cpu > ${warn}', annotations: { s: text }, labels: { s: text } })).toEqual([])
+  })
+
+  it('is not refused in a recording rule\'s label, or in an expression', () => {
+    expect(found({ record: 'r:x', expr: 'cpu > ${warn}', labels: { s: 'a {{' } })).toEqual([])
+    expect(found({ alert: 'A', expr: 'cpu{x="{{"} > ${warn}' })).toEqual([])
+  })
+
+  it('is caught when a vars entry brings it', () => {
+    const schema = chart([{ alert: 'A', expr: 'cpu > ${warn}', annotations: { s: '${open}' } }], undefined, { vars: { open: 'a {{' } })
+    expect(kinds(checkRules(schema))).toContain('unclosed-template')
+  })
+})
+
 describe('optional column with no default, mid-string', () => {
   it('rejects it in the middle of an annotation value', () => {
     const findings = checkRules(chart([

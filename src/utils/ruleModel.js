@@ -23,13 +23,36 @@
 const VAR_RE = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 const HELM_PASSTHROUGH_RE = /\{\{([\s\S]*?)\}\}/g
 
+// What escapePrometheusTemplates rewrites, leftmost first: a whole
+// `{{ … }}`; else a run of `{` holding a `{{` that no `}}` follows; else one
+// `{` right before a `${var}`, which becomes `{{ … }}` and would make `{{{`.
+const ESCAPED_RE = new RegExp(`${HELM_PASSTHROUGH_RE.source}|\\{\\{+|\\{(?=${VAR_RE.source})`, 'g')
+
 /**
- * Wrap Prometheus templates so `helm template` emits them verbatim.
- * The backtick form is used rather than `{{ "..." }}` because annotation
- * values are usually already inside YAML double quotes.
+ * Wrap Prometheus templates — and any other `{{` — so `helm template` emits
+ * them verbatim. A `}}` on its own is text to Helm and stays.
+ *
+ * A raw string (backticks) holds the text as it is; one holding a backtick
+ * (`{{ \`raw\` }}`) or a carriage return, which a raw string drops, is
+ * written as a quoted string instead. Helm replaces the action before YAML
+ * reads the line, so either form is fine inside a YAML double-quoted label.
  */
 export function escapePrometheusTemplates(str) {
-  return String(str).replace(HELM_PASSTHROUGH_RE, (_, inner) => '{{ `{{' + inner + '}}` }}')
+  return String(str).replace(ESCAPED_RE, text => (/[`\r]/.test(text)
+    ? `{{ ${JSON.stringify(text)} }}`
+    : '{{ `' + text + '` }}'))
+}
+
+/**
+ * Whether a text has a `{{` with no `}}` after it — a template Prometheus,
+ * vmalert and Alertmanager cannot read. A `}}` on its own is plain text to
+ * them.
+ */
+export function hasUnclosedTemplate(value) {
+  for (let at = value.indexOf('{{'); at >= 0; at = value.indexOf('{{', value.indexOf('}}', at + 2) + 2)) {
+    if (value.indexOf('}}', at + 2) < 0) return true
+  }
+  return false
 }
 
 /**
@@ -118,6 +141,9 @@ export function nestedPlaceholders(str) {
 export function prometheusTemplatesIn(str) {
   return String(str).match(HELM_PASSTHROUGH_RE) || []
 }
+
+/** A string with its `${var}` references taken out. */
+export const withoutVars = str => String(str).replace(VAR_RE, '')
 
 /** Every `${var}` name referenced by a string. */
 export function varsIn(str) {

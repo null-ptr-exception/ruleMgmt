@@ -20,7 +20,7 @@ import { profileFor } from './outputs.js'
 import { parseDerived, derivedColumns, derivedPosition, withoutStrings } from './derived.js'
 import { durationCellFault } from './duration.js'
 import { normalizeRules, columnFallbacks } from './templateGenerator.js'
-import { danglingRefs, ruleVars, varsIn, nestedPlaceholders } from './ruleModel.js'
+import { danglingRefs, ruleVars, varsIn, nestedPlaceholders, hasUnclosedTemplate } from './ruleModel.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { selectorTemplateProblems } from './selectorContract.js'
 
@@ -142,6 +142,22 @@ export function checkRules(schema) {
             group,
             alert: rule.alert,
             message: `${where}: \`${span}\` has a \${…} inside a {{ … }} — write the two separately`,
+          })
+        }
+      }
+
+      // An alert's labels and annotations are templates to Prometheus and
+      // vmalert (a recording rule's labels are not): one with a {{ that no }}
+      // follows cannot be read, and the whole object is refused.
+      if (rule.alert !== undefined && !rule.raw) {
+        for (const entry of entries) {
+          if (!hasUnclosedTemplate(String(entry.value ?? ''))) continue
+          findings.push({
+            severity: 'save',
+            kind: 'unclosed-template',
+            group,
+            alert: rule.alert,
+            message: `${where}: "${entry.key}" has a {{ with no }} after it — Prometheus cannot read it as a template`,
           })
         }
       }

@@ -341,7 +341,12 @@ Two syntaxes coexist and must not be confused.
 
 `{{ $value }}`, `{{ $labels.pod }}` and the rest are passed through untouched —
 write them exactly as you would in a hand-written rule. The escaping that keeps
-Helm from eating them is added by the generator; you never see it.
+Helm from eating them is added by the generator; you never see it. That holds
+for any brace in any field: a template with a backtick or quotes in it
+(`` {{ printf "%s" `x` }} ``), a `{` or `{{` right next to a `${column}`
+(`{${host}}` renders `{h1}`), a `"{{"` in a PromQL string. Whether the text is
+right for Prometheus is Prometheus's question — Preview checks it with promtool —
+except for the one case below that is refused at save.
 
 ### Resolution
 
@@ -489,6 +494,11 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 - A key that is not in the whitelist, at any level
 - `${…}` naming something that is not a column
 - `${…}` inside `{{ … }}`
+- In an alerting rule's label or annotation, a `{{` with no `}}` after it
+  (`a {{`): Prometheus reads them as templates and refuses the whole object. A
+  `}}` alone is plain text, and a recording rule's labels are no template
+- In `for` or `keep_firing_for`, a brace next to a `${column}` (`{${window}}`):
+  it can only make the duration something no evaluator reads
 - A name shared between `vars` and a column, or a name that is `selector`
 - A `vars` entry referencing another `vars` entry
 - An optional column with no default referenced from the middle of a string

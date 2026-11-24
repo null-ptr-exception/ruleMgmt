@@ -1,0 +1,14 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# Every text exactly as the rules file has it, ${host} filled in.
+blind-svc-1-1:
+  - name: svc
+    rules:
+      - alert: Down
+        expr: label_replace(up{host="h1"}, "tag", "a{{", "", "") == 0
+        labels:
+          quoted: '{{ `a"b` }}'
+          wrapped: '{h1}'
+        annotations:
+          raw: '{{ `raw` }} is {{ $value }}'
+          printf: '{{ printf "%s/%s" `x` $labels.host }}'
+          next: '{{ $labels.host }}h1{h1}'

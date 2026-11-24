@@ -328,6 +328,16 @@ rules:
       expect(errorsOf(rule('    for: ${n}m\n'))).toEqual([])
     })
 
+    // The row's value takes the reference's place; a brace beside it can
+    // only make the result something that is no duration.
+    it('refuses a brace beside a reference in for and keep_firing_for', () => {
+      for (const key of ['for', 'keep_firing_for']) {
+        for (const bad of ["'{${window}}'", "'${window}}}'", "'{{${window}'", "'{{ $value }}${window}'"]) {
+          expect(errorsOf(rule(`    ${key}: ${bad}\n`)).join(), `${key}: ${bad}`).toMatch(new RegExp(`${key} .* is not a duration — a brace beside`))
+        }
+      }
+    })
+
     it('checks a value that only looks like it has a placeholder', () => {
       expect(errorsOf(rule("    for: '30m${'\n")).join()).toMatch(/for .* is not a duration/)
     })

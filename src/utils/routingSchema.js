@@ -19,6 +19,7 @@
 
 import { z } from 'zod'
 import { durationFault, DURATION_PATTERN } from './duration.js'
+import { hasUnclosedTemplate } from './ruleModel.js'
 
 export const DROP_RECEIVER = '_drop'
 export const TIMING_KEYS = ['groupWait', 'groupInterval', 'repeatInterval']
@@ -158,14 +159,8 @@ const bool = key => z.boolean({ error: `${key} must be true or false` })
 
 // Alertmanager reads these fields as templates when it sends. One whose `{{`
 // has no `}}` after it cannot be read, and every notification through the
-// config fails. A `}}` on its own is plain text to Alertmanager.
-const unclosedTemplate = value => {
-  for (let at = value.indexOf('{{'); at >= 0; at = value.indexOf('{{', value.indexOf('}}', at + 2) + 2)) {
-    if (value.indexOf('}}', at + 2) < 0) return true
-  }
-  return false
-}
-const templated = (key, schema) => schema.refine(v => typeof v !== 'string' || !unclosedTemplate(v), {
+// config fails.
+const templated = (key, schema) => schema.refine(v => typeof v !== 'string' || !hasUnclosedTemplate(v), {
   error: `${key} has a {{ with no }} after it: Alertmanager cannot read the template`,
 })
 

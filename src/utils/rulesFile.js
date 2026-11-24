@@ -41,7 +41,7 @@ import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { SELECTOR_PATTERN } from './selectorContract.js'
 import { durationFault, durationCellFault, DURATION_COLUMN_PATTERN } from './duration.js'
-import { varsIn, expandVars } from './ruleModel.js'
+import { varsIn, expandVars, withoutVars } from './ruleModel.js'
 import { parseDerived, derivedColumns, DERIVED_UNITS, evalDerived, derivedPosition, mergePosition } from './derived.js'
 import { profileFor } from './outputs.js'
 
@@ -594,7 +594,12 @@ export function parseGroupFile(text, filename) {
         // Not written, or written empty or as a bare 0, is no `for` at all,
         // as it has always been read.
         if (value === undefined || value === null || value === '' || value === 0) continue
-        if (typeof value === 'string' && varsIn(value).length) continue
+        if (typeof value === 'string' && varsIn(value).length) {
+          // The row gives the duration; a brace beside the reference can only
+          // make it something no evaluator reads as one.
+          if (/[{}]/.test(withoutVars(value))) errors.push(`${where}: ${key} ${JSON.stringify(value)} is not a duration — a brace beside \${…} cannot be part of one`)
+          continue
+        }
         const why = ruleDurationProblem(key, value)
         if (why) errors.push(`${where}: ${why}`)
       }

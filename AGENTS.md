@@ -78,6 +78,10 @@ Every change is held to this; an issue's acceptance criteria refer to it rather 
    - `allowlist.tsv` lists every cell that disagrees with Helm today (accepts what Helm fails, what promtool refuses, or values whose rows do not all render — fewer alerts than the rows written, as with values not under the chart's name; refuses what Helm renders; a 5xx, the editor showing another value), each with a category — `bug` (its issue, or "no issue yet"), `policy` (deliberate), `out-of-scope` — and a reason. It is edited by hand only. A new disagreement fails until it is fixed or listed; a fix fails until its line is removed, so the list only shrinks visibly.
    - Run it with each Helm version (`HELM_BIN`); the baseline is the same for both, so a difference fails. Without helm or promtool every cell is skipped, and the count is printed; skipped is not passed.
 
+## Disk boundary
+
+The server is moving to one repo loader (`server/repo/`): only it reads the gitops repo's files and parses their YAML, so every entry point sees an unreadable or broken file the same way. Until the move is done, `npm run lint` warns (`boundary/disk`, in `eslint.config.js`) wherever other code uses `fs`, a YAML parser, `child_process`, or a read helper (`readIfThere.js`, `loadValues`). `tests/pin/counts.mjs` counts those warnings, YAML parse sites by kind of file, catches that swallow a failed read and own `ENOENT` checks; `tests/pin/counts.json` holds the numbers, and `tests/unit/boundaryLint.test.js` fails when a use, a parse, a child process, a swallowing catch or an `ENOENT` check is added. Import lines, the kind of file a parse is guessed to read and per-file numbers are recorded, not held down. When your change lowers a number, or moves code between files, run `node tests/pin/counts.mjs --write` and commit `counts.json` with it; `--list` shows each site.
+
 ## Test output
 
 Never pipe test output through grep. Redirect to a temp file first, then grep the file:

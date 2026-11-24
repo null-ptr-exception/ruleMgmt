@@ -506,6 +506,26 @@ Request: `POST /api/v2/folders/common (application/json) {"action":"create","fol
 
 Request: `GET /api/v2/folders/common/users?path=team%2F_common`
 
+## commonsAbove
+
+| answer | the caller gets |
+|---|---|
+| 200 with its body | returns [{"chart":"c","path":"team/_common/c"}] |
+| 400 with field problems | returns [] |
+| 409 naming a file | returns [] |
+| 500 with a reason | returns [] |
+| 504 HTML from a proxy | returns [] |
+| 409 null | returns [] |
+| 409 HTML | returns [] |
+| network failure | returns [] |
+| 200 with no body | throws AnswerCutOff (uncertain: false) |
+| 200 null | throws AnswerCutOff (uncertain: false) |
+| 200 a string | throws AnswerCutOff (uncertain: false) |
+| 200 an array | returns [] |
+| 204 | throws AnswerCutOff (uncertain: false) |
+
+Request: `GET /api/v2/folders/tree?path=team%2F_common`
+
 ## getSyncRegistry
 
 | answer | the caller gets |

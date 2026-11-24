@@ -188,6 +188,7 @@ const append = (ws, rel, line) => fs.appendFile(path.join(ws.root, rel), line)
 const openedText = async (ws, dep) => ((await ws.api('GET', vals(dep))).status === 200 ? fs.readFile(path.join(ws.root, dep, 'values.yaml'), 'utf-8') : undefined)
 const textSave = (dep, marker) => async (ws, ctx) => ({ method: 'POST', url: vals(dep), body: { values: `${await openedText(ws, dep)}# ${marker}\n`, ...(ctx.version ? { version: ctx.version } : {}) } })
 const valuesVersion = dep => async ws => (await ws.api('GET', vals(dep))).data.version
+const NEW_COMMON_FOLDER = 'deployments/v/w'
 const commonPlan = async (ws, query) => (await ws.api('GET', `/api/v2/folders/common/plan?${query}`)).data
 const rel = (base, list) => (list || []).map(f => path.posix.normalize(`${base}/${f.startsWith('- ') ? f.slice(2) : f}`))
 
@@ -236,6 +237,16 @@ export const PATHS = [
     said: res => [...(res.data?.files || []), `${D.s}/_common/`],
     failAt: { first: `${D.x}/Chart.yaml`, middle: `${D.x}/values.yaml`, last: `dir:${D.layer}` }, chartFile: `${D.x}/Chart.yaml`, depFolder: D.x, commonChart: `${D.layer}/Chart.yaml`,
     files: [`${D.s}/`] },
+  // A _common in a folder that is not there yet (the New Deployment dialog):
+  // the folders are made with it; no deployment is under it to rewrite.
+  { name: 'common-create-new',
+    version: async ws => (await commonPlan(ws, `folder=${NEW_COMMON_FOLDER}&chart=demo`)).expected,
+    req: (ws, ctx) => ({ method: 'POST', url: '/api/v2/folders/common', body: { action: 'create', folder: NEW_COMMON_FOLDER, chart: 'demo', ...(ctx.version ? { expected: ctx.version } : {}) } }),
+    newFolder: kind => ({ method: 'POST', url: '/api/v2/folders/common', body: { action: 'create', folder: kind === 'reserved' ? 'deployments/t/_new/w' : '../escape', chart: 'demo', expected: {} } }),
+    said: res => [...(res.data?.files || []), `${NEW_COMMON_FOLDER}/_common/demo/`],
+    // The folder its new folders are made in, read-only.
+    failAt: { first: 'dir:deployments' },
+    files: ['deployments/v/'] },
   { name: 'init', primary: 'deployments/t/n/Chart.yaml', second: 'deployments/t/n/values.yaml', secondNew: true, absent: 'deployments/t',
     req: () => ({ method: 'POST', url: '/api/v2/folders/init', body: { folder: 'deployments/t/n', chart: 'demo' } }),
     prepare: async ws => { await fs.mkdir(path.join(ws.root, 'deployments/t/n'), { recursive: true }); await fs.writeFile(path.join(ws.root, 'deployments/t/n/Chart.yaml'), 'apiVersion: v2\nname: n\nversion: 0.1.0\n') },

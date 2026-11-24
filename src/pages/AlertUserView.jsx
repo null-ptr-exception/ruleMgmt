@@ -10,10 +10,11 @@ import { isMissingRequired, buildNewRow } from '../utils/valueUtils'
 import { durationCellFault } from '../utils/duration'
 import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
 import PreviewModal from '../components/PreviewModal'
+import NewDeploymentModal from '../components/NewDeploymentModal'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
 import { pruneAllValues } from '../utils/valueUtils'
 import { parseRulesDir } from '../utils/rulesFile'
-import { isReservedName, RESERVED_HINT, isCommonChartPath, COMMON_DIR } from '../utils/reservedNames'
+import { isCommonChartPath, COMMON_DIR } from '../utils/reservedNames'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import { syncFailedNotice } from '../utils/syncNotice'
 import { valuesInEffect, inheritedFromOf, rowsOf } from '../utils/valuesInEffect'
@@ -21,7 +22,6 @@ import {
   getChartInfo,
   getDeployment, saveDeployment,
   renderDeployment,
-  listCharts,
   initDeploymentFolder,
   getSyncSource,
   getCommonUsers
@@ -105,8 +105,6 @@ export default function AlertUserView() {
 
   const [newDeployOpen, setNewDeployOpen] = useState(false)
   const [newDeployPath, setNewDeployPath] = useState('')
-  const [newDeployChart, setNewDeployChart] = useState(null)
-  const [availableCharts, setAvailableCharts] = useState([])
 
   const [mainScrollContainer, setMainScrollContainer] = useState(null)
 
@@ -296,33 +294,27 @@ export default function AlertUserView() {
     if (unmet) setActiveAlert('__common_vars__')
   }, [schema, commonValues])
 
-  async function handleNewDeployOpen() {
-    const charts = await listCharts()
-    setAvailableCharts(charts)
+  // The dialog asks for the Templates itself; the path starts at the folder open.
+  function handleNewDeployOpen() {
     setNewDeployPath(selectedFolder ? selectedFolder + '/' : '')
-    setNewDeployChart(charts.length > 0 ? charts[0].name : null)
     setNewDeployOpen(true)
   }
 
-  // The deployment being created is the last segment; a reserved one is
-  // refused (#99). An existing folder higher up is the server's to judge.
-  const newDeployReserved = isReservedName(newDeployPath.split('/').filter(Boolean).pop())
-
-  async function handleNewDeployCreate() {
-    if (!newDeployPath || !newDeployChart) return
+  async function handleNewDeployCreate(folderPath, chartName) {
+    if (!folderPath || !chartName) return
     // Creating a deployment jumps the workspace to it — same silent-discard
     // hazard as switching folders in the tree.
     if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
-    const result = await initDeploymentFolder(newDeployPath, newDeployChart)
+    const result = await initDeploymentFolder(folderPath, chartName)
     if (result.error) {
       message.error(result.error)
       return
     }
     setNewDeployOpen(false)
     if (result.status === 'created' || result.status === 'existing') {
-      const chart = result.chart || newDeployChart
+      const chart = result.chart || chartName
       clearSaveStatus()
-      setSelectedFolder(newDeployPath)
+      setSelectedFolder(folderPath)
       setSelectedChart(chart)
       setActiveAlert(null)
       // A fresh deployment has no _common filled in; clear any left over from
@@ -332,8 +324,8 @@ export default function AlertUserView() {
       pendingCommonCheckRef.current = true
       setTreeRefreshKey(k => k + 1)
       message.success(result.inheritsFrom
-        ? `Deployment created at ${newDeployPath}, inheriting everything from ${result.inheritsFrom}`
-        : `Deployment created at ${newDeployPath}`)
+        ? `Deployment created at ${folderPath}, inheriting everything from ${result.inheritsFrom}`
+        : `Deployment created at ${folderPath}`)
     }
   }
 
@@ -1078,24 +1070,22 @@ export default function AlertUserView() {
         valueWarnings={previewValueWarnings}
       />
 
-      <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}
-        onOk={handleNewDeployCreate} okText="Create"
-        okButtonProps={{ disabled: !newDeployPath || !newDeployChart || newDeployReserved }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-          <div>
-            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Folder Path</Text>
-            <Input placeholder="deployments/my-app/production" value={newDeployPath}
-              status={newDeployReserved ? 'error' : undefined}
-              onChange={e => setNewDeployPath(e.target.value)} />
-            {newDeployReserved && <Text type="danger" style={{ fontSize: 12 }}>{RESERVED_HINT}</Text>}
-          </div>
-          <div>
-            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Chart</Text>
-            <Select style={{ width: '100%' }} value={newDeployChart} onChange={setNewDeployChart}
-              options={availableCharts.map(c => ({ value: c.name, label: c.name }))} />
-          </div>
-        </div>
-      </Modal>
+      <NewDeploymentModal
+        open={newDeployOpen}
+        initialPath={newDeployPath}
+        onClose={() => setNewDeployOpen(false)}
+        onCreateDeployment={handleNewDeployCreate}
+        confirmLeave={async () => !dirty || !!frozenSource || confirmDiscardEdits()}
+        onCommonDone={() => {
+          // As after the tree's "Add _common...": the tree and the page
+          // open are read again.
+          setNewDeployOpen(false)
+          setDirty(false)
+          setTreeRefreshKey(k => k + 1)
+          setReloadKey(k => k + 1)
+          setUsersKey(k => k + 1)
+        }}
+      />
     </div>
   )
 }

@@ -353,10 +353,19 @@ checked.
 ### Create a deployment
 
 **Alerts** → **+** → type the folder path (e.g. `shop/prod`) and pick the
-chart → **Create**.
+Template → **Create**.
 
-Under a folder with a `_common` for that chart, it inherits from it and
+Under a folder with a `_common` for that Template, it inherits from it and
 writes nothing of its own (see [Share settings across a folder](#share-settings-across-a-folder)).
+The dialog looks at the folders above the path as you type:
+
+| Above the path | Template field |
+|---|---|
+| A `_common` of one Template (`shop/_common/mariadb-alerts`, for `shop/prod` or `shop/eu/prod`) | Filled in with it, and the dialog says "Inherits from shop/_common/mariadb-alerts". You may pick another |
+| `_common`s of several Templates | Not filled in; those Templates are listed first, the nearest first |
+| No `_common` | Not filled in: pick one (a repo with one Template has it filled in) |
+
+A Template you picked yourself stays when the path changes.
 
 It is made only where it can deploy: when the chart's own `values.yaml` or
 `rules/` cannot be read, or what the chart or the `_common` gives stops Helm
@@ -444,8 +453,13 @@ share: Common Values (an owner, a cluster) and whole groups of rows. Each
 deployment inherits them unless it writes its own.
 
 **Make one:** in the tree, the folder's **⋯** → **Add _common...** → pick the
-Template. Before anything is written, the dialog lists every deployment it
-changes, how, and every file. **Create** writes all of it or nothing.
+Template. Or **Alerts** → **+** → **_common for a folder** → type the folder
+and pick the Template: the folder need not be there yet (`shop/eu` before
+any deployment is in it) — it is made with its `_common`, and the
+deployments made under it later inherit from it. Either way, before
+anything is written the dialog lists every deployment it changes, how, and
+every file. **Create** writes all of it or nothing: when a file cannot be
+written, a folder made for it is removed again.
 
 | What | What happens |
 |---|---|

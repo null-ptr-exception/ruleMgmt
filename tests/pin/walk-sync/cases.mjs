@@ -37,6 +37,13 @@ export const CASES = [
   W('in-common-folder', 'deployments/s/_common/d', DEP('deployments/s/_common/d')),
   W('under-common-stack', 'deployments/s/y', { 'deployments/s/y/Chart.yaml': { copy: `${X}/Chart.yaml` }, 'deployments/s/y/values.yaml': 'common:\n  demo:\n    cpu:\n      - job: yy\n' }),
   W('common-two-levels', 'deployments/s/deeper/z', { ...DEP('deployments/s/deeper/z'), 'deployments/s/deeper/_common/demo/Chart.yaml': chartAt('deployments/s/deeper/_common/demo', ['demo'], { name: 'demo' }), 'deployments/s/deeper/_common/demo/values.yaml': 'demo: {}\n' }),
+  // A folder that holds only a _common, as the New Deployment dialog makes
+  // one before the folder has a deployment.
+  W('common-only-folder', 'deployments/n/_common/demo', {
+    'deployments/n/_common/demo/Chart.yaml': "apiVersion: v2\nname: common\ndescription: What the deployments under deployments/n/ inherit\nversion: 0.1.0\ndependencies:\n  - name: demo\n    version: '>=0.0.0-0'\n",
+    'deployments/n/_common/demo/charts/demo': { link: '../../../../../charts/demo' },
+    'deployments/n/_common/demo/values.yaml': 'demo:\n  cpu: []\n',
+  }),
   W('common-chart-link-gone', X, {}, { files: { 'deployments/s/_common/demo/charts/demo': { remove: true } } }),
   W('name-dots', 'deployments/w/d.v1', DEP('deployments/w/d.v1')),
   W('name-dash-underscore', 'deployments/w/my_dep-2', DEP('deployments/w/my_dep-2')),

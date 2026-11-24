@@ -15,6 +15,7 @@ import express from 'express'
 import yaml from 'js-yaml'
 import { renderChart } from '../../server/lib/ruleCheck.js'
 import { deploymentCommitBlockers } from '../../server/lib/commitChecks.js'
+import { hooks } from '../../server/repo/write.js'
 
 const HELM = process.env.HELM_BIN || 'helm'
 const HAS_HELM = (() => { try { execFileSync(HELM, ['version'], { stdio: 'ignore' }); return true } catch { return false } })()
@@ -46,6 +47,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  hooks.beforeRename = null
   if (server) await new Promise(r => server.close(r))
   if (tmpDir) {
     await fs.chmod(path.join(tmpDir, 'shop/stg'), 0o755).catch(() => {})
@@ -262,6 +264,75 @@ describe.skipIf(!HAS_HELM)('making a _common', { timeout: 60000 }, () => {
     expect(done).toEqual({ status: 409, data: { error: 'shop/stg/Chart.yaml cannot be written: permission denied', file: 'shop/stg/Chart.yaml' } })
     expect(done.data.error).not.toContain(tmpDir)
     await fs.chmod(abs('shop/stg/Chart.yaml'), 0o644)
+    expect(await snapshot()).toEqual(files)
+  })
+})
+
+// From the New Deployment dialog a _common is made before its folder has a
+// deployment — before the folder is there at all.
+describe.skipIf(!HAS_HELM)('making a _common in a folder that is not there yet', { timeout: 60000 }, () => {
+  it('makes the folder with it; a deployment then made under it inherits and deploys what the _common gives', async () => {
+    const shown = await plan({ action: 'create', folder: 'new/team', chart: C })
+    expect(shown.status, JSON.stringify(shown.data)).toBe(200)
+    expect(shown.data).toMatchObject({ common: `new/team/_common/${C}`, newFolder: true, changes: [], inheritsFrom: null })
+    expect(shown.data.files).toEqual([`new/team/_common/${C}/Chart.yaml`, `new/team/_common/${C}/charts/${C}`, `new/team/_common/${C}/values.yaml`])
+    // The plan writes nothing.
+    await expect(fs.access(abs('new'))).rejects.toThrow()
+    const done = await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'new/team', chart: C, expected: shown.data.expected })
+    expect(done.status, JSON.stringify(done.data)).toBe(200)
+    expect(await fs.readlink(abs(`new/team/_common/${C}/charts/${C}`))).toBe(`../../../../../charts/${C}`)
+    // A folder that is there is not said to be new.
+    await fs.mkdir(abs('there'))
+    expect((await plan({ action: 'create', folder: 'there', chart: C })).data.newFolder).toBeUndefined()
+
+    await write(`new/team/_common/${C}/values.yaml`, { [C]: { ...empty, _common: { owner: 'team-n', namespace: 'n' }, [DISK]: [{ warn_pct: 81, critical_pct: 93 }] } })
+    const made = await api('POST', '/api/v2/folders/init', { folder: 'new/team/prod', chart: C })
+    expect(made).toMatchObject({ status: 200, data: { status: 'created', inheritsFrom: `new/team/_common/${C}` } })
+    expect(await helm('new/team/prod')).toEqual([
+      'MariadbSaturationDisk_CriticalPct team-n n 93',
+      'MariadbSaturationDisk_WarnPct team-n n 81',
+    ])
+  })
+
+  it('a file that cannot be written leaves no folder and no file', async () => {
+    await fs.mkdir(abs('keep'))
+    const files = await snapshot()
+    const shown = await plan({ action: 'create', folder: 'keep/a/b', chart: C })
+    // Its Chart.yaml is written, then the disk is full.
+    hooks.beforeRename = async rel => { if (rel.endsWith('/values.yaml')) throw Object.assign(new Error('full'), { code: 'ENOSPC' }) }
+    const done = await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'keep/a/b', chart: C, expected: shown.data.expected })
+    expect(done).toEqual({ status: 409, data: { error: `keep/a/b/_common/${C}/values.yaml cannot be written: the disk is full`, file: `keep/a/b/_common/${C}/values.yaml` } })
+    expect(await snapshot()).toEqual(files)
+    expect(await fs.readdir(abs('keep'))).toEqual([])
+  })
+
+  it('is refused where a _common in a folder that is there is refused, and for a reserved name; nothing is made', async () => {
+    await shop()
+    await make('shop')
+    await write('afile', 'x\n')
+    await write('_shared/notification-configs.yaml', 'configs: {}\n')
+    await fs.symlink('shop', abs('lnk'))
+    const files = await snapshot()
+    const refused = async (folder, why) => {
+      const shown = await plan({ action: 'create', folder, chart: C })
+      expect(shown.status, `${folder}: ${JSON.stringify(shown.data)}`).toBe(400)
+      expect(shown.data.error).toMatch(why)
+      // Without a plan nothing is written either.
+      const done = await api('POST', '/api/v2/folders/common', { action: 'create', folder, chart: C, expected: {} })
+      expect(done.status, `${folder}: ${JSON.stringify(done.data)}`).toBe(400)
+    }
+    await refused('shop/prod/sub', /inside the deployment shop\/prod/)
+    await refused(`shop/_common/${C}/sub`, /inside the _common chart/)
+    await refused('shop/_common/sub', /inside a _common folder/)
+    await refused('charts/new', /the Templates folder/)
+    await refused(`charts/${C}/new`, /the Templates folder/)
+    await refused('_shared/new', /_shared/)
+    await refused('_mine/team', /"_mine": Names starting with _ are reserved/)
+    await refused('team/_mine', /"_mine": Names starting with _ are reserved/)
+    await refused('.hidden/team', /Invalid folder path/)
+    await refused('lnk/new', /lnk is a link to shop .* no _common through a link: ask for shop\/new/)
+    await refused('afile/new', /afile\/new is not a folder of the repo/)
+    await refused('afile', /afile is not a folder of the repo/)
     expect(await snapshot()).toEqual(files)
   })
 })

@@ -60,6 +60,7 @@ const FUNCTIONS = [
   ['getCommonPlan', () => api.getCommonPlan({ action: 'create', folder: 'team', chart: 'c' }), OBJ],
   ['applyCommon', () => api.applyCommon({ action: 'create', folder: 'team', chart: 'c' }, ['team/_common/c-values.yaml']), OBJ],
   ['getCommonUsers', () => api.getCommonUsers('team/_common'), LIST],
+  ['commonsAbove', () => api.commonsAbove('team/d'), [{ name: 'c', path: 'team/_common/c', isCommon: true }]],
   ['getSyncRegistry', () => api.getSyncRegistry(), OBJ],
   ['getSyncSource', () => api.getSyncSource('team/d'), OBJ],
   ['createSync', () => api.createSync('team/a', 'team/b'), OBJ],

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
+import { pickOption } from './charts.js'
 
 // No new deployment is made inside another one. One that is already there
 // (made by hand, or pulled) is flagged in the tree and still opens.
@@ -83,6 +84,9 @@ test.describe('A deployment inside another', () => {
     const modal = page.getByRole('dialog')
     await expect(modal).toBeVisible()
     await modal.getByRole('textbox').fill(`${OUTER}/new`)
+    // No _common is above the path: the Template is picked.
+    await modal.locator('.ant-select').click()
+    await pickOption(page, CHART)
     await modal.getByRole('button', { name: 'Create' }).click()
     await expect(page.getByText(`inside another deployment (${OUTER})`)).toBeVisible({ timeout: 5000 })
     await expect(fs.access(path.join(WORKSPACE, OUTER, 'new'))).rejects.toThrow()

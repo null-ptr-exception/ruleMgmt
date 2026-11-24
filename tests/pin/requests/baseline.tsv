@@ -335,10 +335,10 @@ encoded-slash	render.preview:deployment	any	refused	400	same	no	same	no	free		-	
 encoded-slash	render.preview:folder	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	git.diff:file	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	git.diff:file@HEAD	any	ok	200	same	no	same	no	free		-	-	-	
-encoded-slash	folders.common-plan:folder	any	refused	400	same	no	same	no	free		-	-	-	
+encoded-slash	folders.common-plan:folder	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	folders.common-plan:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	folders.common-plan:path	any	not-found	404	same	no	same	no	free		-	-	-	
-encoded-slash	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-	
+encoded-slash	folders.common:folder	any	conflict	409	same	no	same	no	free		-	-	-	
 encoded-slash	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	folders.common:path	any	not-found	404	same	no	same	no	free		-	-	-	
 encoded-slash	folders.common-users:path	any	ok	200	same	no	same	no	free		-	-	-	
@@ -649,10 +649,10 @@ long-twin	render.preview:deployment	any	ok	200	same	no	same	no	free		-	-	-
 long-twin	render.preview:folder	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	git.diff:file	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	git.diff:file@HEAD	any	ok	200	same	no	same	no	free		-	-	-	
-long-twin	folders.common-plan:folder	any	refused	400	same	no	same	no	free		-	-	-	
+long-twin	folders.common-plan:folder	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	folders.common-plan:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long-twin	folders.common-plan:path	any	not-found	404	same	no	same	no	free		-	-	-	
-long-twin	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-	
+long-twin	folders.common:folder	any	conflict	409	same	no	same	no	free		-	-	-	
 long-twin	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long-twin	folders.common:path	any	not-found	404	same	no	same	no	free		-	-	-	
 long-twin	folders.common-users:path	any	ok	200	same	no	same	no	free		-	-	-	
@@ -1240,7 +1240,7 @@ field:text	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free
 field:text	git.commit{message}	any	ok	200	same	no	same	no	free		-	-	-	
 field:text	folders.common{action}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:text	folders.common{folder}	any	refused	400	same	no	same	no	free		-	-	-	
+field:text	folders.common{folder}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:text	folders.common{chart}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	folders.common{path}	any	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	
 field:text	folders.init{folder}	any	ok	200	same	no	same	no	free	x/Chart.yaml,x/values.yaml	-	-	-	

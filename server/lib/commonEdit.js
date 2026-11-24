@@ -52,6 +52,7 @@ import { chartsDir } from '../repo/template.js'
 import { coalesce } from '../repo/coalesce.js'
 import { parseChart, chartNotRead } from '../repo/chart.js'
 import { stateOf, folderState } from '../repo/diskState.js'
+import { newReservedSegment, reservedError } from './reservedNames.js'
 
 /** The name every `_common` chart has: the key its deployments' values are under. */
 export const COMMON_CHART = 'common'
@@ -200,7 +201,15 @@ async function folderProblem(repo, folder) {
   if (!segments.length) return 'Name a folder: a _common is made in a folder, for the deployments under it'
   const link = await linkOnTheWay(repo.root, folder)
   if (link) return `${folder}: ${link.why} — AlertForge makes no ${COMMON_DIR} through a link${link.use}`
-  if ((await repo.dir(segments.join('/'))).state !== 'ok') return `${folder} is not a folder of the repo`
+  // A folder that is not there yet is made with its _common: every folder
+  // on the way is a folder or not there, and none made has a reserved name.
+  for (let i = 1; i <= segments.length; i++) {
+    const state = (await repo.dir(segments.slice(0, i).join('/'))).state
+    if (state === 'absent') break
+    if (state !== 'ok') return `${folder} is not a folder of the repo`
+  }
+  const reserved = await newReservedSegment(repo.root, folder)
+  if (reserved) return reservedError(reserved)
   for (let i = 1; i <= segments.length; i++) {
     const prefix = segments.slice(0, i).join('/')
     const excluded = await excludedFolder(repo, prefix)
@@ -482,6 +491,8 @@ export async function planCreate(repo, folderIn, chart) {
       folder,
       chart,
       inheritsFrom: nextRel,
+      // The folder is not there yet: it is made with the _common.
+      ...((await repo.dir(folder)).state === 'absent' ? { newFolder: true } : {}),
       checkedWith: checked.checkedWith,
       changes: changes.sort((a, b) => (a.path < b.path ? -1 : 1)),
       untouched: untouched.sort((a, b) => (a.path < b.path ? -1 : 1)),

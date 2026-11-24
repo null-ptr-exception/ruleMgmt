@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
+import { pickOption } from './charts.js'
 
 // #99: names starting with `_` are reserved for AlertForge. A new one is
 // refused; a folder that already has one is flagged and keeps working.
@@ -55,6 +56,9 @@ test.describe('Reserved folder names', () => {
     const modal = page.getByRole('dialog')
     await expect(modal).toBeVisible()
 
+    // No _common is above the path: the Template is picked.
+    await modal.locator('.ant-select').click()
+    await pickOption(page, CHART)
     await modal.getByRole('textbox').fill('deployments/shop/_common')
     await expect(modal.getByText('Names starting with _ are reserved for AlertForge')).toBeVisible()
     await expect(modal.getByRole('button', { name: 'Create' })).toBeDisabled()

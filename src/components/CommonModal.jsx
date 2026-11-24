@@ -15,41 +15,27 @@ const CHANGE_TEXT = {
 }
 
 /**
- * Make (`mode: 'create'`, in `folder`) or remove (`mode: 'delete'`, the
- * _common at `commonPath`) a folder's _common (#101). What it changes is
- * listed first — every deployment and every file — and written only on OK,
- * all of it or nothing.
+ * The plan of a _common made or removed, and its write: `query` is what
+ * the plan is asked (`{ action: 'create', folder, chart }` or `{ action:
+ * 'delete', path }`; null while there is nothing to ask). The plan is
+ * read again whenever the query changes; `apply` writes the plan shown,
+ * sending its `expected` back, and answers the result (or null: refused,
+ * said in `refusal`, with the new plan when the repo changed).
  */
-export default function CommonModal({ open, mode, folder, commonPath, onClose, onDone }) {
-  const [charts, setCharts] = useState([])
-  const [chart, setChart] = useState(null)
+export function useCommonChange(open, query) {
   const [plan, setPlan] = useState(null)
   const [refusal, setRefusal] = useState(null)
   const [loading, setLoading] = useState(false)
   const [writing, setWriting] = useState(false)
-
-  const query = mode === 'delete' ? { action: 'delete', path: commonPath } : (chart ? { action: 'create', folder, chart } : null)
   const queryKey = JSON.stringify(query)
 
   useEffect(() => {
-    if (!open) return
     setPlan(null)
     setRefusal(null)
-    if (mode === 'create') {
-      setChart(null)
-      listCharts().then(list => {
-        setCharts(list)
-        if (list.length === 1) setChart(list[0].name)
-      })
-    }
-  }, [open, mode, folder, commonPath])
-
-  useEffect(() => {
+    setLoading(false)
     if (!open || !query) return
     let stale = false
     setLoading(true)
-    setPlan(null)
-    setRefusal(null)
     getCommonPlan(query).then(result => {
       if (stale) return
       setLoading(false)
@@ -59,8 +45,8 @@ export default function CommonModal({ open, mode, folder, commonPath, onClose, o
     return () => { stale = true }
   }, [open, queryKey])
 
-  async function handleOk() {
-    if (!plan) return
+  async function apply() {
+    if (!plan) return null
     setWriting(true)
     let result
     try {
@@ -73,36 +59,20 @@ export default function CommonModal({ open, mode, folder, commonPath, onClose, o
     if (result.error || !result.ok) {
       if (result.plan) setPlan(result.plan)
       setRefusal(result)
-      return
+      return null
     }
-    message.success(mode === 'delete' ? `Removed ${result.common}` : `Made ${result.common}`)
-    onDone?.(result)
+    message.success(query.action === 'delete' ? `Removed ${result.common}` : `Made ${result.common}`)
+    return result
   }
 
-  const title = mode === 'delete' ? `Remove ${commonPath}?` : `Add a ${COMMON_DIR} to ${folder}`
-  const rows = plan ? plan.changes.map(c => ({ ...c, key: c.path })) : []
+  return { plan, refusal, loading, writing, apply }
+}
 
+/** What a _common's plan says: why it is refused, or every deployment and file it changes. */
+export function CommonPlan({ mode, plan, refusal, loading }) {
+  const rows = plan ? plan.changes.map(c => ({ ...c, key: c.path })) : []
   return (
-    <Modal
-      title={title}
-      open={open}
-      onCancel={onClose}
-      onOk={handleOk}
-      okText={mode === 'delete' ? 'Remove' : 'Create'}
-      okButtonProps={{ disabled: !plan || loading, loading: writing, danger: mode === 'delete', 'data-testid': 'common-ok' }}
-      width={720}
-      destroyOnHidden
-    >
-      {mode === 'create' && (
-        <div style={{ marginBottom: 12 }}>
-          <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Template</Text>
-          <Select aria-label="Template" style={{ width: '100%' }} value={chart} onChange={setChart} placeholder="Pick the Template"
-            options={charts.map(c => ({ value: c.name, label: c.name }))} />
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
-            The deployments under {folder}/ of this Template inherit from it: what they deploy stays the same until the {COMMON_DIR} is changed.
-          </Text>
-        </div>
-      )}
+    <>
       {loading && <Text type="secondary">Working out what changes…</Text>}
       {refusal && (
         <Alert type="error" showIcon data-testid="common-refusal" message={refusal.error}
@@ -113,7 +83,7 @@ export default function CommonModal({ open, mode, folder, commonPath, onClose, o
           <Text style={{ display: 'block', marginBottom: 8 }}>
             {mode === 'delete'
               ? <>{plan.common} is removed. {plan.changes.length ? 'Each deployment below gets what it inherited copied into its own values, as written there.' : 'No deployment inherits from it.'}</>
-              : <>Makes <b>{plan.common}</b>{plan.inheritsFrom ? <>, which inherits from <b>{plan.inheritsFrom}</b></> : null}. {plan.changes.length ? 'Each deployment\'s values are moved as written, not rewritten.' : 'No deployment is under it yet.'}</>}
+              : <>Makes <b>{plan.common}</b>{plan.inheritsFrom ? <>, which inherits from <b>{plan.inheritsFrom}</b></> : null}. {plan.newFolder ? <span data-testid="common-new-folder">The folder <b>{plan.folder}</b> is not there yet: it is made with it. </span> : null}{plan.changes.length ? 'Each deployment\'s values are moved as written, not rewritten.' : 'No deployment is under it yet.'}</>}
           </Text>
           <Text type="secondary" data-testid="common-checked" style={{ display: 'block', fontSize: 12, marginBottom: 8 }}>
             {plan.checkedWith === 'helm'
@@ -155,6 +125,63 @@ export default function CommonModal({ open, mode, folder, commonPath, onClose, o
           </details>
         </div>
       )}
+    </>
+  )
+}
+
+/**
+ * Make (`mode: 'create'`, in `folder`) or remove (`mode: 'delete'`, the
+ * _common at `commonPath`) a folder's _common (#101). What it changes is
+ * listed first — every deployment and every file — and written only on OK,
+ * all of it or nothing.
+ */
+export default function CommonModal({ open, mode, folder, commonPath, onClose, onDone }) {
+  const [charts, setCharts] = useState([])
+  const [chart, setChart] = useState(null)
+
+  const query = mode === 'delete' ? { action: 'delete', path: commonPath } : (chart ? { action: 'create', folder, chart } : null)
+  const { plan, refusal, loading, writing, apply } = useCommonChange(open, query)
+
+  useEffect(() => {
+    if (!open) return
+    if (mode === 'create') {
+      setChart(null)
+      listCharts().then(list => {
+        setCharts(list)
+        if (list.length === 1) setChart(list[0].name)
+      })
+    }
+  }, [open, mode, folder, commonPath])
+
+  async function handleOk() {
+    const result = await apply()
+    if (result) onDone?.(result)
+  }
+
+  const title = mode === 'delete' ? `Remove ${commonPath}?` : `Add a ${COMMON_DIR} to ${folder}`
+
+  return (
+    <Modal
+      title={title}
+      open={open}
+      onCancel={onClose}
+      onOk={handleOk}
+      okText={mode === 'delete' ? 'Remove' : 'Create'}
+      okButtonProps={{ disabled: !plan || loading, loading: writing, danger: mode === 'delete', 'data-testid': 'common-ok' }}
+      width={720}
+      destroyOnHidden
+    >
+      {mode === 'create' && (
+        <div style={{ marginBottom: 12 }}>
+          <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Template</Text>
+          <Select aria-label="Template" style={{ width: '100%' }} value={chart} onChange={setChart} placeholder="Pick the Template"
+            options={charts.map(c => ({ value: c.name, label: c.name }))} />
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }}>
+            The deployments under {folder}/ of this Template inherit from it: what they deploy stays the same until the {COMMON_DIR} is changed.
+          </Text>
+        </div>
+      )}
+      <CommonPlan mode={mode} plan={plan} refusal={refusal} loading={loading} />
     </Modal>
   )
 }

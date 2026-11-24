@@ -1,4 +1,5 @@
 import { apiFetch, AnswerCutOff, cutOffMessage } from '../lib/apiFetch.js'
+import { COMMON_DIR } from './reservedNames.js'
 
 const BASE = '/api/v2'
 
@@ -317,6 +318,22 @@ export async function applyCommon(query, expected) {
   if (a.kind === 'ok') return a.body
   const body = carried(a)
   return { error: body.error || `HTTP ${a.status}`, problems: body.problems || [], plan: body.plan }
+}
+
+// The `_common`s above the folder path `folder`, as a new deployment there
+// would find them: for each Template the nearest one going up, nearest
+// first — `[{ chart, path }]`. Each folder above is asked for the charts of
+// its `_common` (the tree's own listing); one that is not there has none.
+export async function commonsAbove(folder) {
+  const segments = String(folder ?? '').split('/').filter(Boolean)
+  const holders = []
+  for (let i = segments.length - 1; i >= 1; i--) holders.push(`${segments.slice(0, i).join('/')}/${COMMON_DIR}`)
+  const listed = await Promise.all(holders.map(h => getFolderTree(h)))
+  const found = new Map()
+  for (const nodes of listed) {
+    for (const n of nodes) if (n.isCommon && !found.has(n.name)) found.set(n.name, { chart: n.name, path: n.path })
+  }
+  return [...found.values()]
 }
 
 // The deployments that inherit from a _common, with where each group comes from.

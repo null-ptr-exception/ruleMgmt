@@ -115,6 +115,16 @@ common-two-levels	W	sync-to	ok	200	-	no	deployments/s/deeper/z/routing.yaml,depl
 common-two-levels	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 common-two-levels	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 common-two-levels	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+common-only-folder	W	tree	common	200	-	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
+common-only-folder	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found	
+common-only-folder	W	routing-get	absent	400	deployments/n/_common/demo	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
+common-only-folder	W	check-deployment	cannot-check	exit 2	-	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	sync-to	refused	400	deployments/n/_common/demo	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	sync-from	refused	400	deployments/n/_common/demo	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	commit	ok	200	-	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	check-repo	ok	exit 0	-	no	-	folder	renders-empty	0	0	-	-	
 common-chart-link-gone	W	tree	deployment	200	-	no	-	folder	renders-empty	0	0	-	-	
 common-chart-link-gone	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=null	
 common-chart-link-gone	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found problems=1	

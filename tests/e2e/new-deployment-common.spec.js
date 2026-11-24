@@ -100,7 +100,7 @@ test.describe.serial('New Deployment: a _common, and the Template a folder gives
     await expect(dialog.getByRole('button', { name: 'Create' })).toBeDisabled()
   })
 
-  test('a deployment under it: the Template is filled in, it inherits and deploys what the _common gives', async ({ page, request }) => {
+  test('a deployment under it: no Template to pick, one line names the _common and its Template; it inherits and deploys what the _common gives', async ({ page, request }) => {
     // The _common as it was made (every group []), with an owner and one disk row.
     const made = yaml.load(await fs.readFile(at(`${COMMON}/values.yaml`), 'utf-8'))[CHART]
     const values = { ...made, _common: { owner: 'team-a', namespace: 'c1' }, [DISK]: [{ warn_pct: 85, critical_pct: 95 }] }
@@ -108,8 +108,10 @@ test.describe.serial('New Deployment: a _common, and the Template a folder gives
 
     const dialog = await openDialog(page)
     await dialog.getByPlaceholder('deployments/my-app/production').fill(`${TEAM}/prod`)
-    await expect(template(dialog)).toContainText(CHART, { timeout: 8000 })
-    await expect(dialog.getByTestId('new-deploy-inherits')).toContainText(`Inherits from ${COMMON}`)
+    // One line says it all: there is no Template to pick.
+    await expect(dialog.getByTestId('new-deploy-inherits')).toContainText(`Inherits from ${COMMON} (Template: ${CHART})`, { timeout: 8000 })
+    await expect(template(dialog)).toHaveCount(0)
+    await expect(dialog.getByText('Template', { exact: true })).toHaveCount(0)
     await dialog.getByRole('button', { name: 'Create' }).click()
     await expect(page.getByText(`inheriting everything from ${COMMON}`)).toBeVisible({ timeout: 8000 })
     expect(yaml.load(await fs.readFile(at(`${TEAM}/prod/values.yaml`), 'utf-8'))).toEqual({ common: { [CHART]: {} } })
@@ -119,6 +121,48 @@ test.describe.serial('New Deployment: a _common, and the Template a folder gives
     await expect(page.getByTestId('inherited-group')).toContainText(`Inherited from ${COMMON}: 1 row`)
     await page.getByRole('button', { name: 'Preview' }).click()
     await expect(page.getByRole('dialog').getByText('2 alerts total')).toBeVisible({ timeout: 15000 })
+  })
+
+  test('"Use another Template" brings the Template back to pick; another one is made on that Template, not inheriting', async ({ page }) => {
+    const dialog = await openDialog(page)
+    const path = dialog.getByPlaceholder('deployments/my-app/production')
+    const line = dialog.getByTestId('new-deploy-inherits')
+    await path.fill(`${TEAM}/apart`)
+    await expect(line).toContainText(`Inherits from ${COMMON} (Template: ${CHART})`, { timeout: 8000 })
+    await expect(template(dialog)).toHaveCount(0)
+
+    // The select is back, as it was: the _common's Template in it, and the note.
+    await dialog.getByRole('button', { name: 'Use another Template' }).click()
+    await expect(template(dialog)).toContainText(CHART)
+    await expect(line).toContainText(`Inherits from ${COMMON}`)
+    await pickTemplate(page, dialog, OTHER)
+    await expect(dialog.getByTestId('new-deploy-commons')).toContainText(`No _common of ${OTHER} above this folder: it is made on the Template itself.`)
+    await expect(line).toHaveCount(0)
+
+    // The _common's Template picked again is as if no other was asked for.
+    await template(dialog).click()
+    await pickOption(page, CHART)
+    await expect(line).toContainText(`Inherits from ${COMMON} (Template: ${CHART})`)
+    await expect(template(dialog)).toHaveCount(0)
+
+    // Another Template, kept when the path changes, and made on it.
+    await dialog.getByRole('button', { name: 'Use another Template' }).click()
+    await pickTemplate(page, dialog, OTHER)
+    await path.fill(`${TEAM}/apart2`)
+    await expect(dialog.getByTestId('new-deploy-commons')).toContainText(`No _common of ${OTHER} above this folder`, { timeout: 8000 })
+    await expect(template(dialog)).toContainText(OTHER)
+    await dialog.getByRole('button', { name: 'Create' }).click()
+    await expect(page.getByText(`Deployment created at ${TEAM}/apart2`, { exact: true })).toBeVisible({ timeout: 8000 })
+    const made = yaml.load(await fs.readFile(at(`${TEAM}/apart2/Chart.yaml`), 'utf-8'))
+    expect(made.dependencies.map(d => d.name)).toEqual([OTHER])
+    // Its values are the Template's own, not under the _common's key.
+    expect(Object.keys(yaml.load(await fs.readFile(at(`${TEAM}/apart2/values.yaml`), 'utf-8')))).toEqual([OTHER])
+
+    // Opened again, the dialog starts without the select.
+    const again = await openDialog(page)
+    await again.getByPlaceholder('deployments/my-app/production').fill(`${TEAM}/apart3`)
+    await expect(again.getByTestId('new-deploy-inherits')).toContainText(`Inherits from ${COMMON} (Template: ${CHART})`, { timeout: 8000 })
+    await expect(template(again)).toHaveCount(0)
   })
 
   test('after the path is changed, Create waits until the new path has been looked up', async ({ page }) => {
@@ -152,6 +196,8 @@ test.describe.serial('New Deployment: a _common, and the Template a folder gives
     await path.fill(NONE)
     await page.waitForTimeout(1500)
     await expect(create).toBeDisabled()
+    // The line of the path before stays in place, marked as being looked up.
+    await expect(dialog.getByTestId('new-deploy-looking')).toHaveAttribute('aria-busy', 'true')
     await expect(dialog.getByTestId('new-deploy-inherits')).toHaveCount(0)
     await create.click({ force: true, timeout: 1000 }).catch(() => {})
     await expect(template(dialog)).toContainText('Pick the Template', { timeout: 10000 })
@@ -214,6 +260,8 @@ test.describe.serial('New Deployment: a _common, and the Template a folder gives
     // Only the other Template's _common is above this path: the pick stays.
     await dialog.getByPlaceholder('deployments/my-app/production').fill(`${FOLDER}/solo`)
     await expect(dialog.getByTestId('new-deploy-inherits')).toContainText(`Inherits from ${FOLDER}/_common/${OTHER}`)
+    await expect(template(dialog)).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Use another Template' }).click()
     await pickTemplate(page, dialog, CHART)
     await dialog.getByPlaceholder('deployments/my-app/production').fill(`${FOLDER}/solo2`)
     await page.waitForTimeout(1000)

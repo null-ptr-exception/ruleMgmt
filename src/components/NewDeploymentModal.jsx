@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Modal, Input, Select, Typography, Segmented } from 'antd'
+import { Modal, Input, Select, Typography, Segmented, Button } from 'antd'
 import { listCharts, commonsAbove } from '../utils/chartApi'
 import { isReservedName, RESERVED_HINT, COMMON_DIR } from '../utils/reservedNames'
 import { useCommonChange, CommonPlan } from './CommonModal'
@@ -20,10 +20,11 @@ const folderOf = typed => typed.split('/').filter(Boolean).join('/')
  * The New Deployment dialog: makes a deployment, or a folder's _common.
  *
  * A deployment: the folder path and its Template. While the path is typed
- * the `_common`s above it are looked up: under one Template's, the Template
- * is filled in and the dialog says where the deployment will inherit from;
- * under several Templates', none is filled and those are listed first. A
- * Template picked by hand is kept.
+ * the `_common`s above it are looked up: under one Template's, there is no
+ * Template to pick — one line says which `_common` the deployment will
+ * inherit from and its Template, with "Use another Template" to pick one
+ * after all; under several Templates', none is filled and those are listed
+ * first. A Template picked by hand is kept.
  *
  * A _common: the folder (made with it when it is not there yet) and its
  * Template. Its plan is shown before anything is written, and Create
@@ -46,6 +47,9 @@ export default function NewDeploymentModal({ open, initialPath, onClose, onCreat
   const [settled, setSettled] = useState('')
   // The _commons above a path, and the path they were answered for.
   const [looked, setLooked] = useState(NOT_LOOKED)
+  // "Use another Template" was pressed: the Template is shown to pick,
+  // though the folder gives one.
+  const [other, setOther] = useState(false)
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
@@ -54,6 +58,7 @@ export default function NewDeploymentModal({ open, initialPath, onClose, onCreat
     setTyped(initialPath)
     setSettled(initialPath)
     setPicked(null)
+    setOther(false)
     setLooked(NOT_LOOKED)
     setFresh(true)
     listCharts().then(setCharts)
@@ -88,6 +93,14 @@ export default function NewDeploymentModal({ open, initialPath, onClose, onCreat
   const only = charts.length === 1 ? charts[0].name : null
   const given = kind === 'common' ? only : commons.length === 1 ? commons[0].chart : commons.length === 0 ? only : null
   const chart = picked ?? given
+  // The path is under the _common of one Template and no other was asked
+  // for: there is nothing to pick, and one line says what will happen.
+  const single = kind === 'deployment' && commons.length === 1 ? commons[0] : null
+  const oneLine = !!single && !other && chart === single.chart
+  // Picking the _common's own Template again is not having asked for another.
+  const pick = name => {
+    if (single && name === single.chart) { setPicked(null); setOther(false) } else setPicked(name)
+  }
 
   // Typing has paused and the plan is for what is in the field.
   const upToDate = folderOf(typed) === folder
@@ -141,28 +154,38 @@ export default function NewDeploymentModal({ open, initialPath, onClose, onCreat
             </Text>
           )}
         </div>
-        <div>
-          <Text style={LABEL}>Template</Text>
-          <Select aria-label="Template" style={{ width: '100%' }} value={chart} onChange={setPicked} placeholder="Pick the Template" options={options} />
-          {kind === 'deployment' && inherits && (
-            <Text type="secondary" style={NOTE} data-testid="new-deploy-inherits">
-              Inherits from <b>{inherits.path}</b>: it writes nothing of its own until you override something.
-            </Text>
-          )}
-          {kind === 'deployment' && answered && !inherits && commons.length > 0 && (
-            <Text type="secondary" style={NOTE} data-testid="new-deploy-commons">
-              {chart
-                ? <>No {COMMON_DIR} of <b>{chart}</b> above this folder: it is made on the Template itself. </>
-                : null}
-              The folders above have a {COMMON_DIR} for {commons.map((c, i) => <span key={c.chart}>{i > 0 ? ', ' : ''}<b>{c.chart}</b> ({c.path})</span>)}{chart ? '.' : ': pick one of them to inherit from it, or another Template.'}
-            </Text>
-          )}
-          {kind === 'common' && (
-            <Text type="secondary" style={NOTE}>
-              The deployments under the folder of this Template inherit from it: what they deploy stays the same until the {COMMON_DIR} is changed.
-            </Text>
-          )}
-        </div>
+        {oneLine ? (
+          // While the path typed now is still being looked up the line stays
+          // where it is, dimmed: it is the path before's, and Create waits.
+          <Text style={{ fontSize: 13, display: 'block', opacity: answered ? 1 : 0.45 }} aria-busy={!answered}
+            data-testid={answered ? 'new-deploy-inherits' : 'new-deploy-looking'}>
+            Inherits from <b>{single.path}</b> (Template: <b>{single.chart}</b>): it writes nothing of its own until you override something.{' '}
+            <Button type="link" size="small" style={{ padding: 0, height: 'auto', fontSize: 'inherit' }} onClick={() => setOther(true)}>Use another Template</Button>
+          </Text>
+        ) : (
+          <div>
+            <Text style={LABEL}>Template</Text>
+            <Select aria-label="Template" style={{ width: '100%' }} value={chart} onChange={pick} placeholder="Pick the Template" options={options} />
+            {kind === 'deployment' && inherits && (
+              <Text type="secondary" style={NOTE} data-testid="new-deploy-inherits">
+                Inherits from <b>{inherits.path}</b>: it writes nothing of its own until you override something.
+              </Text>
+            )}
+            {kind === 'deployment' && answered && !inherits && commons.length > 0 && (
+              <Text type="secondary" style={NOTE} data-testid="new-deploy-commons">
+                {chart
+                  ? <>No {COMMON_DIR} of <b>{chart}</b> above this folder: it is made on the Template itself. </>
+                  : null}
+                The folders above have a {COMMON_DIR} for {commons.map((c, i) => <span key={c.chart}>{i > 0 ? ', ' : ''}<b>{c.chart}</b> ({c.path})</span>)}{chart ? '.' : ': pick one of them to inherit from it, or another Template.'}
+              </Text>
+            )}
+            {kind === 'common' && (
+              <Text type="secondary" style={NOTE}>
+                The deployments under the folder of this Template inherit from it: what they deploy stays the same until the {COMMON_DIR} is changed.
+              </Text>
+            )}
+          </div>
+        )}
         {kind === 'common' && (
           <div>
             <CommonPlan mode="create" plan={common.plan} refusal={common.refusal} loading={common.loading} />

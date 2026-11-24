@@ -371,12 +371,13 @@ Under a folder with a `_common` for that Template, it inherits from it and
 writes nothing of its own (see [Share settings across a folder](#share-settings-across-a-folder)).
 The dialog looks at the folders above the path as you type:
 
-| Above the path | Template field |
+| Above the path | What the dialog shows |
 |---|---|
-| A `_common` of one Template (`shop/_common/mariadb-alerts`, for `shop/prod` or `shop/eu/prod`) | Filled in with it, and the dialog says "Inherits from shop/_common/mariadb-alerts". You may pick another |
-| `_common`s of several Templates | Not filled in; those Templates are listed first, the nearest first |
-| No `_common` | Not filled in: pick one (a repo with one Template has it filled in) |
+| A `_common` of one Template (`shop/_common/mariadb-alerts`, for `shop/prod` or `shop/eu/prod`) | No Template to pick: one line, "Inherits from shop/_common/mariadb-alerts (Template: mariadb-alerts)". **Use another Template** brings the Template field back; a deployment of another Template there is made on that Template and inherits nothing |
+| `_common`s of several Templates | The Template field, not filled in; those Templates are listed first, the nearest first |
+| No `_common` | The Template field, not filled in: pick one (a repo with one Template has it filled in) |
 
+**Create** waits until the path as typed has been looked up.
 A Template you picked yourself stays when the path changes.
 
 It is made only where it can deploy: when the chart's own `values.yaml` or

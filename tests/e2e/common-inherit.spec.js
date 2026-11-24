@@ -49,8 +49,9 @@ test.describe.serial('A deployment under a _common', () => {
     await page.getByRole('button', { name: 'plus' }).first().click()
     const dialog = page.getByRole('dialog')
     await dialog.getByPlaceholder('deployments/my-app/production').fill(QA)
-    await dialog.locator('.ant-select').click()
-    await page.locator('.ant-select-dropdown').getByTitle(CHART, { exact: true }).click()
+    // Under the folder's _common there is no Template to pick.
+    await expect(dialog.getByTestId('new-deploy-inherits')).toContainText(`Inherits from ${COMMON} (Template: ${CHART})`, { timeout: 8000 })
+    await expect(dialog.locator('.ant-select')).toHaveCount(0)
     await dialog.getByRole('button', { name: 'Create' }).click()
     await expect(page.getByText(`inheriting everything from ${COMMON}`)).toBeVisible({ timeout: 8000 })
     expect(await ownValues()).toEqual({})

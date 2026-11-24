@@ -7,6 +7,7 @@ import { checkRules } from '../../src/utils/ruleChecks.js'
 import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
 import { blocksCommit } from '../../src/utils/drift.js'
 import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
+import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
 
 /**
  * Reasons a commit should be refused, across every chart in the gitops repo —
@@ -117,6 +118,18 @@ export default function gitRouter() {
     }
   })
 
+  // Make every routing resource that is behind again, and copy each sync
+  // target's from its source (#179). Writes files, commits nothing: the
+  // diff is there to look at before committing.
+  router.post('/routing/regenerate', async (req, res) => {
+    try {
+      res.json(await regenerateRouting(req.gitopsDir))
+    } catch (err) {
+      console.error('Routing regenerate failed', err)
+      res.status(500).json({ error: 'Could not regenerate the routing' })
+    }
+  })
+
   router.post('/commit', async (req, res) => {
     const cwd = req.gitopsDir
     const { message } = req.body
@@ -129,14 +142,19 @@ export default function gitRouter() {
         return res.status(400).json({ error: 'no changes to commit' })
       }
 
-      const { findings, unconverted } = await chartCommitBlockers(cwd)
+      const charts = await chartCommitBlockers(cwd)
+      // Notification routing, sync.yaml and the Template each deployment
+      // renders are checked too: a resource behind its routing.yaml would
+      // silently stop notifying (#179).
+      const deployments = await deploymentCommitBlockers(cwd)
+      const findings = [...charts.findings, ...deployments.findings]
       if (findings.length) {
-        return res.status(409).json({ error: 'Rule checks failed', findings })
+        return res.status(409).json({ error: 'Commit refused', findings, regenerable: deployments.regenerable })
       }
 
       await git(cwd, 'commit', '-m', message)
       const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
-      res.json({ sha, message, unconverted })
+      res.json({ sha, message, unconverted: charts.unconverted, ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}) })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

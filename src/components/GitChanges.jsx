@@ -9,6 +9,25 @@ import {
 
 const { Text } = Typography
 
+// A chart still in the 1.x format does not stop a commit (#79), but the
+// person committing should know it is there to convert.
+function unconvertedNote(unconverted) {
+  return (
+    <>
+      <div style={{ marginTop: 8 }}>
+        {unconverted.length === 1 ? '1 chart still uses' : `${unconverted.length} charts still use`} the old format:
+      </div>
+      <ul style={{ paddingLeft: 18, margin: '4px 0 8px' }}>
+        {unconverted.map(name => <li key={name}>{name}</li>)}
+      </ul>
+      <Text type="secondary">
+        Editing, Preview and deploys work as before. Convert one chart at a time when ready: open it in
+        Templates and save, or run <Text code>gen-rules</Text>.
+      </Text>
+    </>
+  )
+}
+
 export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
   const [commitMessage, setCommitMessage] = useState('')
   const [loading, setLoading] = useState(null)
@@ -26,23 +45,24 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
       })
       if (res.ok) {
         const data = await res.json().catch(() => ({}))
-        // A chart still in the 1.x format does not stop a commit (#79), but
-        // the person committing should know it is there to convert.
-        if (data.unconverted?.length) {
+        // A routing.yaml with errors does not stop a commit (#179), but it
+        // is not what deploys: say which, to fix on their Routing page.
+        if (data.routingProblems?.length || data.unconverted?.length) {
           Modal.warning({
             title: 'Changes committed',
             content: (
               <>
-                <div style={{ marginTop: 8 }}>
-                  {data.unconverted.length === 1 ? '1 chart still uses' : `${data.unconverted.length} charts still use`} the old format:
-                </div>
-                <ul style={{ paddingLeft: 18, margin: '4px 0 8px' }}>
-                  {data.unconverted.map(name => <li key={name}>{name}</li>)}
-                </ul>
-                <Text type="secondary">
-                  Editing, Preview and deploys work as before. Convert one chart at a time when ready: open it in
-                  Templates and save, or run <Text code>gen-rules</Text>.
-                </Text>
+                {data.routingProblems?.length > 0 && (
+                  <>
+                    <div style={{ marginTop: 8 }}>
+                      {data.routingProblems.length === 1 ? 'This routing.yaml has' : 'These routing.yaml files have'} problems — fix them on the Routing page:
+                    </div>
+                    <ul data-testid="commit-routing-problems" style={{ paddingLeft: 18, margin: '4px 0 8px' }}>
+                      {data.routingProblems.map(p => <li key={p.deployment}>{p.deployment}: {p.errors.join('; ')}</li>)}
+                    </ul>
+                  </>
+                )}
+                {data.unconverted?.length > 0 && unconvertedNote(data.unconverted)}
               </>
             ),
           })
@@ -56,14 +76,24 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
         // A refused commit says which chart and why — "Rule checks failed"
         // alone leaves the person committing nothing to go and fix.
         if (data.findings?.length) {
-          Modal.error({
-            title: data.error || 'Commit refused',
-            content: (
-              <ul style={{ paddingLeft: 18, marginTop: 8 }}>
-                {data.findings.map((f, i) => <li key={i}>{f.description || f.message}</li>)}
-              </ul>
-            ),
-          })
+          const list = (
+            <ul data-testid="commit-findings" style={{ paddingLeft: 18, marginTop: 8 }}>
+              {data.findings.map((f, i) => <li key={i}>{f.description || f.message}</li>)}
+            </ul>
+          )
+          // Routing behind its routing.yaml is made again here, as files to
+          // look at in the diff before committing (#179).
+          if (data.regenerable > 0) {
+            Modal.confirm({
+              title: data.error || 'Commit refused',
+              content: list,
+              okText: `Regenerate ${data.regenerable}`,
+              cancelText: 'Close',
+              onOk: regenerateRouting,
+            })
+          } else {
+            Modal.error({ title: data.error || 'Commit refused', content: list })
+          }
         } else {
           message.error(data.error || 'Commit failed')
         }
@@ -73,6 +103,29 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
     } finally {
       setLoading(null)
     }
+  }
+
+  async function regenerateRouting() {
+    const res = await apiFetch('/api/v2/git/routing/regenerate', { method: 'POST' })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      message.error(data.error || 'Could not regenerate the routing')
+      return
+    }
+    const made = data.regenerated?.length || 0
+    if (data.failed?.length) {
+      Modal.error({
+        title: `Regenerated ${made}; ${data.failed.length} could not be`,
+        content: (
+          <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+            {data.failed.map(f => <li key={f.deployment}>{f.deployment}: {f.error}</li>)}
+          </ul>
+        ),
+      })
+    } else {
+      message.success(`Regenerated ${made} — look at the changes, then commit`)
+    }
+    onRefresh()
   }
 
   async function handleDiscard() {

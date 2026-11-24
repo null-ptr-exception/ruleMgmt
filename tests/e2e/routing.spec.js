@@ -246,6 +246,29 @@ test('a synced target is read-only', async ({ page, request }) => {
   await expect(page.getByRole('button', { name: 'Remove routing' })).toBeDisabled()
 })
 
+// #179: a sync target's Save is off, and its source may not be behind at all:
+// the page names the source and points to Regenerate in the Git panel.
+test('a synced target whose resource is behind points to its source and Regenerate', async ({ page, request }) => {
+  const routing = {
+    labels: { severity: ['critical'] },
+    configs: { oncall: { type: 'email', to: 'oncall@example.com' } },
+    cells: [{ match: { severity: 'critical' }, configs: ['oncall'] }],
+  }
+  expect((await request.put(routingUrl(FOLDER), { data: { routing } })).ok()).toBeTruthy()
+  expect((await request.post('/api/v2/sync', { data: { source: FOLDER, target: OTHER } })).ok()).toBeTruthy()
+  const cr = path.join(process.env.GITOPS_DIR || 'gitops', OTHER, 'templates', 'alertmanagerconfig.yaml')
+  await fs.writeFile(cr, `# edited by hand\n${await fs.readFile(cr, 'utf8')}`)
+
+  await openRouting(page, OTHER)
+  await expect(page.getByText(`Synced from ${FOLDER}`)).toBeVisible({ timeout: 8000 })
+  await expect(page.getByTestId('routing-stale')).toContainText('use Regenerate there')
+  await expect(page.getByTestId('routing-stale-source')).toHaveText(FOLDER)
+  await page.getByTestId('routing-stale-source').click()
+  await expect(page.getByText(`Synced from ${FOLDER}`)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Remove routing' })).toBeEnabled({ timeout: 8000 })
+  await expect(page.getByTestId('routing-stale')).toHaveCount(0)
+})
+
 // #158: only a routing.yaml that passes the checks is edited here. One that
 // fails — a hand edit, a merge, a sync — is listed, not drawn, and fixed by hand.
 const failing = [

@@ -282,6 +282,66 @@ rules:
   })
 })
 
+// #179: a commit refused for routing behind its routing.yaml offers to make
+// it again; the files are written, not committed, and the panel refreshes.
+// Both calls are stubbed, so nothing here touches the shared gitops repo.
+test.describe('A commit refused for routing that is behind', () => {
+  test('offers Regenerate, and says what it made', async ({ page }) => {
+    let regenerated = 0
+    let statusCalls = 0
+    await page.route('**/api/v2/git/status', route => {
+      statusCalls++
+      return route.fulfill({ json: { branch: 'main', changes: { modified: ['deployments/shop/prod/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false } })
+    })
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ status: 409, json: {
+      error: 'Commit refused', regenerable: 1,
+      findings: [{ kind: 'routing-stale', deployment: 'deployments/shop/prod', regenerable: true, description: 'deployments/shop/prod: its AlertmanagerConfig is not what routing.yaml says — regenerate before committing' }],
+    } }))
+    await page.route('**/api/v2/git/routing/regenerate', route => {
+      regenerated++
+      return route.fulfill({ json: { regenerated: ['deployments/shop/prod'], failed: [] } })
+    })
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: refused for routing')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.locator('.ant-modal-confirm').filter({ hasText: 'Commit refused' })
+    await expect(dialog).toBeVisible({ timeout: 8000 })
+    await expect(dialog.getByTestId('commit-findings')).toContainText('deployments/shop/prod: its AlertmanagerConfig is not what routing.yaml says')
+    const before = statusCalls
+    await dialog.getByRole('button', { name: 'Regenerate 1' }).click()
+    await expect(page.getByText('Regenerated 1 — look at the changes, then commit')).toBeVisible({ timeout: 5000 })
+    expect(regenerated).toBe(1)
+    await expect.poll(() => statusCalls).toBeGreaterThan(before)
+  })
+})
+
+// #179: a commit that goes through names a routing.yaml with problems, and
+// the charts still in the old format, both at once. Stubbed: nothing is
+// committed into the shared gitops repo.
+test.describe('A commit that goes through with things to fix', () => {
+  test('names a routing.yaml with problems and an old-format chart together', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({
+      json: { branch: 'main', changes: { modified: ['deployments/shop/prod/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false },
+    }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ json: {
+      sha: 'abc1234', message: 'e2e', unconverted: ['old-format'],
+      routingProblems: [{ deployment: 'deployments/shop/prod', errors: ['routing.yaml is not valid YAML: x'] }],
+    } }))
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: both reminders')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Changes committed' })
+    await expect(dialog.getByTestId('commit-routing-problems')).toContainText('deployments/shop/prod: routing.yaml is not valid YAML', { timeout: 8000 })
+    await expect(dialog).toContainText('old-format')
+  })
+})
+
 // #79: a chart still in the 1.x format renders as it always did, so it no
 // longer stops a commit — the commit goes through and names it. The server
 // side is in tests/integration/git-api.test.js; here the commit is stubbed,

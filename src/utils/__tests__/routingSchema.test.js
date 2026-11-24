@@ -81,6 +81,19 @@ describe('the shape of routing.yaml', () => {
     ])
   })
 
+  // #179: a shape problem in one part does not hide the checks past the
+  // shape in another — a URL with a password in it, a value listed twice.
+  it('lists the checks past the shape alongside a shape problem elsewhere', () => {
+    const routing = full()
+    routing.defaults.groupWait = 'soon'
+    routing.labels.env = ['prod', 'prod']
+    routing.configs.hook = { type: 'webhook', url: 'https://user:secret@example.com/x' }
+    const errors = checkRouting(routing)
+    expect(errors).toContain('defaults: groupWait must be a duration such as 30s, 5m or 4h')
+    expect(errors).toContain('labels.env: a value is listed twice')
+    expect(errors.some(e => e.startsWith('configs.hook: url is refused because'))).toBe(true)
+  })
+
   it('refuses a file that is not a map, with one message', () => {
     for (const bad of [null, [], 'labels', 5]) {
       expect(checkRouting(bad)).toEqual(['routing.yaml must be a map with labels, configs and cells'])

@@ -149,6 +149,8 @@ export async function routingState(dir) {
   const { text, cr } = await readRouting(dir)
   if (text === null) return null
   const built = buildRouting(text)
-  if (built.errors) return { text, errors: built.errors, stale: false }
+  // A routing.yaml with errors makes no resource: one that is there was
+  // made from an older text, so it is behind too (#179).
+  if (built.errors) return { text, errors: built.errors, stale: cr !== null }
   return { text, errors: [], stale: built.cr !== cr }
 }

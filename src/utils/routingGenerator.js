@@ -110,42 +110,58 @@ export function configProblems(name, config) {
  */
 export function checkRouting(routing) {
   const shape = schemaProblems(routingSchema, routing)
-  if (shape.length) return shape
+
+  // The checks past the shape run on whatever part is well formed, so a
+  // shape problem does not hide the others (#179). A part that is not well
+  // formed is left to the shape check: judging cells against labels that
+  // are not a map of lists would only add noise.
+  const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
+  // A part the shape check already names (its messages start with its path).
+  const named = where => shape.some(m => m === where || m.startsWith(`${where}:`) || m.startsWith(`${where}.`) || m.startsWith(`${where}[`))
+  const r = isMap(routing) ? routing : {}
+  const labelsOk = isMap(r.labels) && Object.values(r.labels).every(Array.isArray) && !named('labels')
+  // One config with a problem leaves the others, and the names, usable.
+  const configsOk = r.configs === undefined || (isMap(r.configs) && !shape.some(m => m.startsWith('configs:')))
+  const labels = labelsOk ? r.labels : {}
+  const configs = configsOk && r.configs ? r.configs : {}
 
   const errors = []
-  const { labels } = routing
-  const configs = routing.configs || {}
   for (const [name, values] of Object.entries(labels)) {
     if (new Set(values).size !== values.length) errors.push(`labels.${name}: a value is listed twice`)
   }
   for (const [name, config] of Object.entries(configs)) {
+    if (!isMap(config) || named(`configs.${name}`)) continue
     const credential = credentialProblem(`configs.${name}`, config)
     if (credential) errors.push(credential)
   }
 
   const seen = new Map()
-  ;(routing.cells || []).forEach((cell, i) => {
+  ;(Array.isArray(r.cells) ? r.cells : []).forEach((cell, i) => {
+    if (!isMap(cell)) return
     const where = `cells[${i}]`
-    // A cell that leaves a label out would match every value of it and
-    // cover its neighbours' combinations.
-    // Own keys only: a label may be named constructor or __proto__.
-    for (const name of Object.keys(labels)) {
-      if (!Object.hasOwn(cell.match, name)) errors.push(`${where}: match has no ${name} — a cell names every label`)
+    if (labelsOk && isMap(cell.match) && !named(`${where}.match`)) {
+      // A cell that leaves a label out would match every value of it and
+      // cover its neighbours' combinations.
+      // Own keys only: a label may be named constructor or __proto__.
+      for (const name of Object.keys(labels)) {
+        if (!Object.hasOwn(cell.match, name)) errors.push(`${where}: match has no ${name} — a cell names every label`)
+      }
+      for (const [name, value] of Object.entries(cell.match)) {
+        if (!Object.hasOwn(labels, name)) errors.push(`${where}: match names ${name}, which is not in labels`)
+        else if (!labels[name].includes(value)) errors.push(`${where}: ${name}=${value} is not one of labels.${name}`)
+      }
+      const key = JSON.stringify(Object.keys(labels).map(name => cell.match[name]))
+      if (seen.has(key)) errors.push(`${where}: same match as cells[${seen.get(key)}]`)
+      else seen.set(key, i)
     }
-    for (const [name, value] of Object.entries(cell.match)) {
-      if (!Object.hasOwn(labels, name)) errors.push(`${where}: match names ${name}, which is not in labels`)
-      else if (!labels[name].includes(value)) errors.push(`${where}: ${name}=${value} is not one of labels.${name}`)
+    if (configsOk && Array.isArray(cell.configs) && !named(`${where}.configs`)) {
+      for (const name of cell.configs) {
+        if (!Object.hasOwn(configs, name)) errors.push(`${where}: config "${name}" is not in configs`)
+      }
+      if (new Set(cell.configs).size !== cell.configs.length) errors.push(`${where}: a config is listed twice`)
     }
-    const key = JSON.stringify(Object.keys(labels).map(name => cell.match[name]))
-    if (seen.has(key)) errors.push(`${where}: same match as cells[${seen.get(key)}]`)
-    else seen.set(key, i)
-
-    for (const name of cell.configs) {
-      if (!Object.hasOwn(configs, name)) errors.push(`${where}: config "${name}" is not in configs`)
-    }
-    if (new Set(cell.configs).size !== cell.configs.length) errors.push(`${where}: a config is listed twice`)
   })
-  return errors
+  return [...shape, ...errors]
 }
 
 function receiverFor(name, config) {

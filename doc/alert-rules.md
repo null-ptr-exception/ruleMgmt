@@ -392,7 +392,10 @@ so.
 
 Changing the configuration does not rewrite templates that already exist. They
 are a product and turn stale; regenerate them, and `gen-rules --check` reports
-the drift until you do.
+the drift until you do. A deployment's routing resource is one too: until it
+is made again it keeps the old labels, and an Alertmanager selecting on the
+new ones stops loading it. A commit through AlertForge is refused until both
+are regenerated — see [Commit](how-to.md#commit).
 
 ## Importing existing rules
 
@@ -439,7 +442,9 @@ that drops a column is a warning there rather than the breaking-change dialog.
 The products are regenerated from `rules/`, so a release that changes how the
 generator writes them makes every migrated chart `stale` at once — the editor
 shows the banner, and a commit is refused — even though no rule changed
-(moving `expr` and annotations to block scalars was one such change).
+(moving `expr` and annotations to block scalars was one such change). The
+same holds for each deployment's routing resource: a commit is refused until
+it is regenerated, which the refusal offers (**Regenerate**).
 
 Coming from 1.x is a different, one-time upgrade — charts are converted, not
 regenerated: see [upgrade-2.0.md](upgrade-2.0.md).

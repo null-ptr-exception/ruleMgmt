@@ -360,7 +360,10 @@ or config, and writes nothing. `stale: true` — shown on the page too — means
 the AlertmanagerConfig is not what `routing.yaml` says: after a hand edit to
 the file, or after the site's object labels changed. Saving again
 regenerates it; with nothing edited, the page saves the file as it is,
-comments and all.
+comments and all. A `routing.yaml` with problems makes no resource, so one
+that is there is `stale` too. On a sync target, `stale` also means its
+routing is not its source's (`differsFromSource`); its Save is off, so the
+page names the source and points to **Regenerate** in the Git panel.
 
 ### Work across many groups at once
 
@@ -443,6 +446,36 @@ A chart that is not migrated yet does not stop a commit: it renders as it
 always has, so the commit goes through and names it as a reminder — see
 [Move an old chart onto the new model](#move-an-old-chart-onto-the-new-model).
 
+A commit is refused, too, while any deployment:
+
+- has a routing resource that is not what its `routing.yaml` says: either
+  file edited by hand, or the object labels changed (`RULE_OBJECT_LABELS`
+  and the rest) since it was made — Alertmanager would stop loading it and
+  its notifications stop without a word
+- has a routing resource with no `routing.yaml` left — remove it, or put
+  `routing.yaml` back
+- follows another through sync, and its routing is not its source's
+- uses a Template that is no longer in the repo (deleted outside AlertForge)
+
+and while `sync.yaml` has an entry that cannot be right: one deployment
+following another that follows a third, a target with two sources, a path
+that is not a deployment, an entry with no `targets` list, a source listed
+twice. The refusal names each
+deployment or entry. **Regenerate N** makes the routing that is behind again
+from each `routing.yaml` (the text stays as written) and copies each sync
+target's from its source; it writes the files and commits nothing, so look
+at the changes, then commit. One that cannot be made is listed, and the
+commit stays refused.
+
+A `routing.yaml` with problems does not stop a commit: the commit goes
+through and names it, to fix on its Routing page.
+
+These checks are AlertForge's commit button only. A commit made with git, or
+in the Gitea web editor, is left to CI: `check-deployment` (see below) fails
+a deployment whose routing resource is behind, whose `routing.yaml` has
+problems (which AlertForge's commit only names), or whose Template does not
+render; `sync.yaml` is not checked there.
+
 ---
 
 ## Command line
@@ -497,7 +530,10 @@ Worth wiring into CI or a pre-commit hook if files are ever committed by hand
 When a release changes the generated format (moving `expr` and annotations
 to block scalars was one such change), every migrated chart turns `stale` and
 commits are refused until its products are regenerated. Coming from 1.x, see
-[upgrade-2.0.md](upgrade-2.0.md) instead.
+[upgrade-2.0.md](upgrade-2.0.md) instead. A change to the routing resource's
+format, or to the object labels, turns every deployment's routing behind the
+same way: commit, and use **Regenerate** in the refusal (see
+[Commit](#commit)).
 
 ```bash
 for c in charts/*/; do [ -d "$c/rules" ] && node scripts/gen-rules.mjs "$c"; done

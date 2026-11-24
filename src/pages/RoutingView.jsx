@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Alert, Button, Empty, Modal, Segmented, Typography, message } from 'antd'
+import { Alert, Button, Empty, Modal, Segmented, Space, Typography, message } from 'antd'
 import { SaveOutlined, EyeOutlined, DeleteOutlined, EditOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import NotificationConfigs from '../components/NotificationConfigs'
@@ -228,6 +228,18 @@ export default function RoutingView() {
   const hasTable = routing && Object.keys(routing.labels).length > 0
   const canSave = !readOnly && hasTable && (dirty || loaded?.stale)
   const shownView = view || (routing && Object.keys(routing.labels).length >= 3 ? 'list' : 'grid')
+  // A sync target's Save is off: it is made again from its source (#179).
+  const staleAlert = frozenSource
+    ? (
+      <Alert type="warning" showIcon data-testid="routing-stale"
+        message={<>This routing is not its source's ({' '}
+          <a data-testid="routing-stale-source" onClick={() => handleFolderSelect({ path: frozenSource, chart: selectedChart })}>{frozenSource}</a>
+          {' '}) — commit from the Git panel and use Regenerate there, which copies the source's again.</>} />
+    )
+    : (
+      <Alert type="warning" showIcon data-testid="routing-stale"
+        message="The AlertmanagerConfig is not what routing.yaml says — Save to generate it again." />
+    )
 
   function main() {
     if (!selectedFolder) return <Empty style={{ margin: 'auto' }} description="Select a deployment from the folder tree" />
@@ -249,16 +261,16 @@ export default function RoutingView() {
     // file. Remove routing stays, in the footer.
     if (!routing) {
       return (
-        <Alert type="error" showIcon data-testid="routing-problems" message="routing.yaml has problems — fix it by hand"
-          description={<ul style={{ paddingLeft: 18, margin: 0 }}>{(loaded.errors || []).map((e, i) => <li key={i}>{e}</li>)}</ul>} />
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Alert type="error" showIcon data-testid="routing-problems" message="routing.yaml has problems — fix it by hand"
+            description={<ul style={{ paddingLeft: 18, margin: 0 }}>{(loaded.errors || []).map((e, i) => <li key={i}>{e}</li>)}</ul>} />
+          {loaded.stale && staleAlert}
+        </Space>
       )
     }
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100 }}>
-        {loaded.stale && !dirty && (
-          <Alert type="warning" showIcon data-testid="routing-stale"
-            message="The AlertmanagerConfig is not what routing.yaml says — Save to generate it again." />
-        )}
+        {loaded.stale && !dirty && staleAlert}
         <section>
           <Title level={5} style={{ marginTop: 0 }}>Notify</Title>
           <NotificationConfigs routing={routing} onChange={edit} readOnly={readOnly} describeMatch={describeMatch} />

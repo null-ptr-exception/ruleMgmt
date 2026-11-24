@@ -48,7 +48,8 @@ export async function readSyncRegistry(gitopsDir) {
     if (targets.length < s.targets.length) {
       console.warn(`${SYNC_FILE}: ${s.source}: skipping ${s.targets.length - targets.length} target(s) that are not a path (the next sync change drops them)`)
     }
-    syncs.push({ source: s.source, targets })
+    // As every route spells a path, so `a/src/` and `./a/src` are `a/src`.
+    syncs.push({ source: normalizeSyncPath(s.source), targets: targets.map(normalizeSyncPath) })
   }
   return { syncs }
 }

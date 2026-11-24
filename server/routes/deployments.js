@@ -4,8 +4,8 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
 import { valuesRefusal, saveValues, copyToTargets, okWith } from '../lib/deploymentWrite.js'
-import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink, normalizeSyncPath, isDeploymentDir } from '../lib/sync.js'
-import { buildRouting, writeRouting, removeRouting, routingState } from '../lib/routingFiles.js'
+import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink, normalizeSyncPath, isDeploymentDir, getSourceForTarget } from '../lib/sync.js'
+import { buildRouting, writeRouting, removeRouting, routingState, readRouting } from '../lib/routingFiles.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -226,6 +226,13 @@ export default function deploymentsRouter() {
       if (!at) return
       const state = await routingState(at.dir)
       if (!state) return res.status(404).json({ error: 'This deployment has no routing.yaml' })
+      // A sync target is held to its source's files (#179): one that is not
+      // its source's is behind as well, though its own two files agree.
+      const source = getSourceForTarget(await readSyncRegistry(req.gitopsDir), syncFolder(req))
+      if (source) {
+        const [mine, theirs] = await Promise.all([readRouting(at.dir), readRouting(path.join(req.gitopsDir, source))])
+        if (mine.text !== theirs.text || mine.cr !== theirs.cr) return res.json({ ...state, stale: true, differsFromSource: true })
+      }
       res.json(state)
     } catch (err) {
       res.status(500).json({ error: err.message })

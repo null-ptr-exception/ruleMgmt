@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -41,42 +42,87 @@ def discover_chart_targets(root: Path) -> list[RenderTarget]:
     return targets
 
 
-def is_relative_to(path: Path, parent: Path) -> bool:
+# The same rules as AlertForge's own walk (server/lib/deploymentWalk.js), so
+# what this renders is what AlertForge lists and checks:
+# - a deployment is a folder with a Chart.yaml naming a dependency and a
+#   values.yaml; a folder right inside a _common/ is a _common chart, which
+#   renders as part of the deployments under it, never on its own;
+# - hidden folders and node_modules are not looked into, nor the Templates
+#   folder at the root, nor the shared notification configs' folder;
+# - right inside a deployment or a _common chart, its templates/ and
+#   charts/ are its own, not folders of the tree; deeper they are.
+CHART_OWN_DIRS = {"templates", "charts"}
+SHARED_DIR = "_shared"
+SHARED_FILE = "notification-configs.yaml"
+
+
+def chart_dependencies(folder: Path) -> list:
+    chart_yaml = folder / "Chart.yaml"
+    if not chart_yaml.is_file():
+        return []
     try:
-        path.relative_to(parent)
-    except ValueError:
+        chart = yaml.safe_load(chart_yaml.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    deps = chart.get("dependencies") if isinstance(chart, dict) else None
+    return deps if isinstance(deps, list) else []
+
+
+def is_common_chart(folder: Path) -> bool:
+    return folder.parent.name == "_common" and (folder / "Chart.yaml").is_file()
+
+
+def is_deployment(folder: Path) -> bool:
+    if folder.parent.name == "_common":
         return False
-    return True
+    return bool(chart_dependencies(folder)) and (folder / "values.yaml").is_file()
 
 
-def should_skip_deployment_chart(chart_yaml: Path, root: Path) -> bool:
-    parts = set(chart_yaml.relative_to(root).parts[:-1])
-    if parts.intersection({".git", "node_modules", "__pycache__"}):
-        return True
-
-    chart_dir = chart_yaml.parent
-    charts_root = root / "charts"
-    if is_relative_to(chart_dir, charts_root):
-        return True
-
-    dependency_parent = chart_yaml.parent.parent
-    if dependency_parent.name != "charts":
+def is_shared_dir(folder: Path) -> bool:
+    try:
+        names = [p.name for p in folder.iterdir()]
+    except OSError:
         return False
+    return all(n == SHARED_FILE or n.startswith(f"_{SHARED_FILE}.") for n in names)
 
-    deployment_chart_dir = dependency_parent.parent
-    return (deployment_chart_dir / "Chart.yaml").exists()
+
+def skipped(entry: Path, root: Path, in_chart: bool) -> bool:
+    name = entry.name
+    if name.startswith(".") or name == "node_modules":
+        return True
+    if in_chart and name in CHART_OWN_DIRS:
+        return True
+    charts_dir = root / os.environ.get("CHARTS_DIR", "charts")
+    if entry.resolve() == charts_dir.resolve():
+        return True
+    if entry.parent == root and name == SHARED_DIR and is_shared_dir(entry):
+        return True
+    return False
 
 
 def discover_deployment_targets(root: Path) -> list[RenderTarget]:
     targets: list[RenderTarget] = []
-    for chart_yaml in sorted(root.glob("**/Chart.yaml")):
-        if should_skip_deployment_chart(chart_yaml, root):
-            continue
-        chart_dir = chart_yaml.parent
-        values_file = chart_dir / "values.yaml"
-        if values_file.exists():
-            targets.append(RenderTarget(release_name(chart_dir), root, chart_dir, values_file))
-    return targets
+
+    def walk(folder: Path, in_chart: bool) -> None:
+        try:
+            entries = sorted(folder.iterdir())
+        except OSError as exc:
+            print(f"{folder.relative_to(root)}: cannot be read ({exc.strerror}); not checked", file=sys.stderr)
+            return
+        for entry in entries:
+            # A link is not followed, as AlertForge does not.
+            if entry.is_symlink() or not entry.is_dir() or skipped(entry, root, in_chart):
+                continue
+            if is_common_chart(entry):
+                walk(entry, True)
+                continue
+            deployment = is_deployment(entry)
+            if deployment:
+                targets.append(RenderTarget(release_name(entry), root, entry, entry / "values.yaml"))
+            walk(entry, deployment)
+
+    walk(root, False)
+    return sorted(targets, key=lambda t: t.chart_dir)
 
 
 def run_command(command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:

@@ -1,7 +1,7 @@
 import express from 'express'
 import { holdSyncRegistryLock } from '../lib/sync.js'
 import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
-import { findDeploymentsUsing } from '../lib/chartUsage.js'
+import { findDeploymentsUsing, findChartUsage } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
@@ -14,6 +14,7 @@ import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
+import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 // A rules/ filename: a group file, or _common.yaml. Guards path traversal in
@@ -228,14 +229,17 @@ export default function templatesRouter() {
       notices.push(...groupTypeChanges(beforeModel, model), ...groupOnceChanges(beforeModel, model), ...groupSelectorChanges(beforeModel, model), ...groupSelectorLabelChanges(beforeModel, model))
       const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
       if (!confirmBreaking && isBreaking) {
-        const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
-        if (deployments.length > 0) {
+        const { deployments, unreadable } = await findChartUsage(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
+        // A folder that cannot be read may hold one: said, so the change is
+        // confirmed knowing it.
+        if (deployments.length > 0 || unreadable.length > 0) {
           return res.status(409).json({
             error: 'Breaking schema change',
             breaking: withDesc(breaking),
             notices: withDesc(notices),
             added: addedInSchema(before, newSchema),
             deployments: await withReadonly(req.gitopsDir, deployments),
+            ...(unreadable.length ? { unreadable } : {}),
           })
         }
       }
@@ -378,7 +382,7 @@ export default function templatesRouter() {
     const { valuesFile } = chartPaths(req, req.params.chart)
     const { values } = req.body
     try {
-      const content = typeof values === 'string' ? values : yaml.dump(values, { lineWidth: -1 })
+      const content = typeof values === 'string' ? values : dumpForHelm(values, { lineWidth: -1 })
       await fs.writeFile(valuesFile, content, 'utf-8')
       res.json({ ok: true })
     } catch (err) {
@@ -415,7 +419,7 @@ export default function templatesRouter() {
     if (description) next.description = description
     else if (description !== undefined) delete next.description
     try {
-      await fs.writeFile(chartYamlFile, yaml.dump(next, { lineWidth: -1 }), 'utf-8')
+      await fs.writeFile(chartYamlFile, dumpForHelm(next, { lineWidth: -1 }), 'utf-8')
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })

@@ -21,6 +21,17 @@ from render_and_check import (
 )
 
 
+DEPLOYMENT_CHART = "name: prod\ndependencies:\n  - name: cpu-alerts\n    version: '>=0.0.0-0'\n"
+
+
+def deployment(root: Path, rel: str) -> Path:
+    folder = root / rel
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "Chart.yaml").write_text(DEPLOYMENT_CHART, encoding="utf-8")
+    (folder / "values.yaml").write_text("cpu-alerts: {}\n", encoding="utf-8")
+    return folder
+
+
 class RenderAndCheckTest(unittest.TestCase):
     def test_discovers_chart_targets(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -41,7 +52,7 @@ class RenderAndCheckTest(unittest.TestCase):
             root = Path(tmp)
             deploy_dir = root / "my-product" / "site-a" / "unit-1" / "PROD"
             deploy_dir.mkdir(parents=True)
-            (deploy_dir / "Chart.yaml").write_text("name: prod\n", encoding="utf-8")
+            (deploy_dir / "Chart.yaml").write_text(DEPLOYMENT_CHART, encoding="utf-8")
             (deploy_dir / "values.yaml").write_text("rule: value\n", encoding="utf-8")
 
             targets = discover_deployment_targets(root)
@@ -59,7 +70,7 @@ class RenderAndCheckTest(unittest.TestCase):
 
             deploy_dir = root / "teams" / "alpha" / "prod"
             deploy_dir.mkdir(parents=True)
-            (deploy_dir / "Chart.yaml").write_text("name: prod\n", encoding="utf-8")
+            (deploy_dir / "Chart.yaml").write_text(DEPLOYMENT_CHART, encoding="utf-8")
             (deploy_dir / "values.yaml").write_text("rule: value\n", encoding="utf-8")
 
             vendored_dir = deploy_dir / "charts" / "cpu-alerts"
@@ -76,7 +87,45 @@ class RenderAndCheckTest(unittest.TestCase):
             root = Path(tmp)
             deploy_dir = root / "teams" / "charts" / "prod"
             deploy_dir.mkdir(parents=True)
-            (deploy_dir / "Chart.yaml").write_text("name: prod\n", encoding="utf-8")
+            (deploy_dir / "Chart.yaml").write_text(DEPLOYMENT_CHART, encoding="utf-8")
+            (deploy_dir / "values.yaml").write_text("rule: value\n", encoding="utf-8")
+
+            targets = discover_deployment_targets(root)
+
+        self.assertEqual([target.chart_dir for target in targets], [deploy_dir])
+
+    def test_deployment_discovery_follows_the_walk_alertforge_lists_and_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            found = [deployment(root, rel) for rel in ["one", "nest/prod", "nest/prod/canary", "app", "app/envs/charts/prod", "team/charts/prod", "deep/a/b/c/d/e/f"]]
+            for rel in [".hidden/dep", "x/.cache/dep", "x/node_modules/dep", "nest/prod/templates/inner", "nest/prod/charts/inner2", "charts/tpl", "shop/_common/cpu-alerts"]:
+                deployment(root, rel)
+            nodeps = root / "nodeps"
+            nodeps.mkdir()
+            (nodeps / "Chart.yaml").write_text("name: nodeps\n", encoding="utf-8")
+            (nodeps / "values.yaml").write_text("{}\n", encoding="utf-8")
+            fileish = root / "fileish"
+            (fileish / "Chart.yaml").mkdir(parents=True)
+            (fileish / "values.yaml").write_text("{}\n", encoding="utf-8")
+            shared = root / "_shared"
+            shared.mkdir()
+            (shared / "notification-configs.yaml").write_text("configs: {}\n", encoding="utf-8")
+
+            targets = discover_deployment_targets(root)
+
+            self.assertEqual(sorted(t.chart_dir for t in targets), sorted(found))
+
+    def test_deployment_discovery_skips_a_common_chart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            common_dir = root / "shop" / "_common" / "cpu-alerts"
+            common_dir.mkdir(parents=True)
+            (common_dir / "Chart.yaml").write_text("name: common\n", encoding="utf-8")
+            (common_dir / "values.yaml").write_text("rule: value\n", encoding="utf-8")
+
+            deploy_dir = root / "shop" / "prod"
+            deploy_dir.mkdir(parents=True)
+            (deploy_dir / "Chart.yaml").write_text(DEPLOYMENT_CHART, encoding="utf-8")
             (deploy_dir / "values.yaml").write_text("rule: value\n", encoding="utf-8")
 
             targets = discover_deployment_targets(root)

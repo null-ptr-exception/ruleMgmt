@@ -214,12 +214,15 @@ export default function gitRouter() {
         }
         const findings = [...charts.findings, ...deployments.findings]
         if (findings.length) {
-          return { status: 409, body: { error: 'Commit refused', findings, regenerable: deployments.regenerable } }
+          return { status: 409, body: { error: 'Commit refused', findings, regenerable: deployments.regenerable,
+            ...(deployments.unreadable.length ? { unreadable: deployments.unreadable } : {}) } }
         }
 
         await git(cwd, 'commit', '-m', message)
         const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
-        return { status: 200, body: { sha, message, unconverted: charts.unconverted, ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}) } }
+        return { status: 200, body: { sha, message, unconverted: charts.unconverted,
+          ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}),
+          ...(deployments.unreadable.length ? { unreadable: deployments.unreadable } : {}) } }
       })
       res.status(outcome.status).json(outcome.body)
     } catch (err) {

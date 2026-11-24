@@ -7,8 +7,10 @@ import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { wrapValues, countAlerts } from '../lib/subchart.js'
 import { isDeploymentDir, isCommonChartDir, isSafeSyncPath } from '../lib/sync.js'
 import { walkDeployments, skippedDir, placementOf, newDeploymentProblem } from '../lib/deploymentWalk.js'
+import { resolveStack } from '../lib/stack.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
+import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 
 // What a new deployment asks of its Template's version: any.
 export const ANY_TEMPLATE_VERSION = '>=0.0.0-0'
@@ -70,12 +72,21 @@ async function listChildren(baseDir, parentPath) {
     const hasDeps = chartData && Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
     const isCommon = await isCommonChartDir(absPath)
     if (isCommon) node.isCommon = true
+    // Helm deploys it with the Template's example rows: flagged, and
+    // counted as using its Template (a breaking change, a chart's delete).
+    if (chartData && hasDeps && !hasValues && !isCommon) {
+      node.noValues = true
+      node.chart = (await resolveStack(baseDir, absPath)).chart || chartData.dependencies[0]?.name
+    }
     if (chartData && hasDeps && hasValues && !isCommon) {
       node.isDeployment = true
-      node.chart = chartData.dependencies[0].name
+      // The Template at the bottom of its `_common` stack (#100), which
+      // Preview and the editor open: not the `_common` chart it names.
+      const stack = await resolveStack(baseDir, absPath)
+      node.chart = stack.chart || chartData.dependencies[0].name
       try {
         const valuesYaml = await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')
-        node.alertCount = countAlerts(yaml.load(valuesYaml) || {}, node.chart)
+        node.alertCount = countAlerts(yaml.load(valuesYaml) || {}, stack.keys.length ? stack.keys : node.chart)
       } catch { node.alertCount = 0 }
       // Where no new deployment can be made (inside another, inside a
       // _common folder): still shown and used, and flagged.
@@ -87,8 +98,10 @@ async function listChildren(baseDir, parentPath) {
     try {
       const subEntries = await fs.readdir(absPath, { withFileTypes: true })
       node.isLeaf = !subEntries.some(s => s.isDirectory() && !skippedDir(s.name, { inChart: node.isDeployment || isCommon }))
-    } catch {
+    } catch (err) {
       node.isLeaf = true
+      // Nothing in it is listed, checked or migrated: said in the tree.
+      if (err?.code !== 'ENOENT' && err?.code !== 'ENOTDIR') node.unreadable = err?.code || 'error'
     }
 
     folders.push(node)
@@ -110,10 +123,10 @@ async function collectDeployments(baseDir) {
     // null when values.yaml cannot be read: unknown, not none.
     let alertCount = null
     try {
-      const chartYaml = yaml.load(await fs.readFile(path.join(absPath, 'Chart.yaml'), 'utf-8')) || {}
-      chart = chartYaml.dependencies?.[0]?.name || null
+      const stack = await resolveStack(baseDir, absPath)
+      chart = stack.chart
       const valuesYaml = yaml.load(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
-      alertCount = countAlerts(valuesYaml, chart)
+      alertCount = countAlerts(valuesYaml, stack.keys)
     } catch { /* leave defaults */ }
     results.push({ name: path.basename(d.path), path: d.path, chart, alertCount })
   }
@@ -194,7 +207,8 @@ export default function foldersRouter() {
       // depends on: its Chart.yaml and values.yaml are someone's.
       if (await isDeploymentDir(deployDir)) {
         const existing = yaml.load(await fs.readFile(path.join(deployDir, 'Chart.yaml'), 'utf-8')) || {}
-        return res.json({ status: 'existing', chart: existing.dependencies?.[0]?.name ?? null })
+        const { chart: template } = await resolveStack(req.gitopsDir, deployDir)
+        return res.json({ status: 'existing', chart: template ?? existing.dependencies?.[0]?.name ?? null })
       }
       await fs.mkdir(deployDir, { recursive: true })
 
@@ -235,7 +249,7 @@ export default function foldersRouter() {
           repository: `file://${relPath}`,
         }]
       }
-      await fs.writeFile(path.join(deployDir, 'Chart.yaml'), yaml.dump(deployChart, { lineWidth: -1 }), 'utf-8')
+      await fs.writeFile(path.join(deployDir, 'Chart.yaml'), dumpForHelm(deployChart, { lineWidth: -1 }), 'utf-8')
 
       let emptyValues = {}
       try {
@@ -245,7 +259,7 @@ export default function foldersRouter() {
         }
       } catch { /* no default values */ }
       const wrapped = wrapValues(emptyValues, chart)
-      await fs.writeFile(path.join(deployDir, 'values.yaml'), yaml.dump(wrapped, { lineWidth: -1 }), 'utf-8')
+      await fs.writeFile(path.join(deployDir, 'values.yaml'), dumpForHelm(wrapped, { lineWidth: -1 }), 'utf-8')
 
       res.json({ status: 'created', chart, folder })
     } catch (err) {

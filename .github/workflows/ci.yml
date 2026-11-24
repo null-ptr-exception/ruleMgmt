@@ -19,6 +19,8 @@ jobs:
       - run: git config --global user.name "CI"
       # promtool, vmalert, amtool, and helm at the image's version.
       - run: sudo scripts/install-checkers.sh
+      # Here, not only in install-checkers.sh: that checks the binary it
+      # installed; this, the helm this job's PATH finds first.
       - name: helm is the image's version
         run: |
           command -v helm && helm version
@@ -43,6 +45,8 @@ jobs:
       - run: git config --global user.email "ci@test.com"
       - run: git config --global user.name "CI"
       - run: sudo scripts/install-checkers.sh
+      # Here, not only in install-checkers.sh: that checks the binary it
+      # installed; this, the helm this job's PATH finds first.
       - name: helm is the image's version
         run: |
           command -v helm && helm version

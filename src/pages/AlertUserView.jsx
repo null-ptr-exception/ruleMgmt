@@ -61,6 +61,7 @@ export default function AlertUserView() {
   const [previewCheck, setPreviewCheck] = useState(null)
   const [previewSelfCheck, setPreviewSelfCheck] = useState(null)
   const [previewSummary, setPreviewSummary] = useState(null)
+  const [previewValueWarnings, setPreviewValueWarnings] = useState(null)
 
   const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
   // Deployments of the selected chart viewed together in Overview (#91), in
@@ -488,6 +489,7 @@ export default function AlertUserView() {
     setPreviewCheck(result.ok ? result.check : null)
     setPreviewSelfCheck(result.ok ? result.selfCheck : null)
     setPreviewSummary(result.ok ? result.summary : null)
+    setPreviewValueWarnings(result.ok ? result.valueWarnings : null)
     setPreviewOpen(true)
   }
 
@@ -730,6 +732,7 @@ export default function AlertUserView() {
         check={previewCheck}
         selfCheck={previewSelfCheck}
         summary={previewSummary}
+        valueWarnings={previewValueWarnings}
       />
 
       <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}

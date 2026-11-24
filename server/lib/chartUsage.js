@@ -1,8 +1,8 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { getDeploymentsDir } from './chartDiscovery.js'
-import yaml from 'js-yaml'
 import { walkDeployments } from './deploymentWalk.js'
+import { resolveStack } from './stack.js'
 
 /**
  * Which deployments are using a chart — see issue #57.
@@ -40,41 +40,52 @@ async function fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv) {
 
 /**
  * A deployment anywhere in the tree (the one walk: any depth, inside another
- * deployment too), or a `_common` chart, bound through any of its Chart.yaml
- * dependencies. `depName` is the dependency the values are wrapped under.
+ * deployment too), a `_common` chart, or a folder with a Chart.yaml and no
+ * values.yaml (`kind: 'chart-only'`: Helm deploys it with the Template's
+ * example rows), that renders the chart: at the bottom of its `_common`
+ * stack (#100), or as any of its Chart.yaml dependencies. Hidden folders
+ * are looked into too (`hidden: true`): ArgoCD deploys whatever folder it
+ * is pointed at. `keys` are the keys its values are wrapped under. Folders
+ * that cannot be read are returned apart.
  */
 async function fromFolders(gitopsDir, chart) {
   const found = []
-  for (const d of await walkDeployments(gitopsDir)) {
+  const unreadable = []
+  for (const d of await walkDeployments(gitopsDir, { chartOnly: true, hidden: true })) {
+    if (d.kind === 'unreadable') { unreadable.push({ path: d.path || '.', error: d.error }); continue }
     const dir = path.join(gitopsDir, d.path)
-    const dependencies = await dependencyNames(dir)
-    if (!dependencies.includes(chart)) continue
-    found.push({ chart, deployment: path.basename(d.path), path: d.path, depName: chart, ...(d.kind === 'common' ? { kind: 'common' } : {}) })
+    const stack = await resolveStack(gitopsDir, dir)
+    // A stack that does not reach its Template (a _common missing, a link
+    // gone) still uses the one it is for: counted, and named as broken.
+    const uses = stack.chart ?? stack.claims
+    const keys = uses === chart ? stack.keys : stack.dependencyNames.includes(chart) ? [chart] : null
+    if (!keys) continue
+    const hidden = d.path.split('/').some(s => s.startsWith('.'))
+    found.push({ chart, deployment: path.basename(d.path), path: d.path, keys,
+      ...(d.kind === 'deployment' ? {} : { kind: d.kind }), ...(hidden ? { hidden: true } : {}),
+      ...(!stack.chart && stack.problems.length ? { broken: stack.problems[0].description } : {}) })
   }
-  return found
+  return { found, unreadable }
 }
 
-// Every dependency's name in a folder's Chart.yaml; none when it has none or
-// cannot be read (the walk read it a moment ago).
-async function dependencyNames(dir) {
-  try {
-    const chartYaml = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8'))
-    const deps = Array.isArray(chartYaml?.dependencies) ? chartYaml.dependencies : []
-    return deps.map(d => d?.name).filter(n => typeof n === 'string')
-  } catch {
-    return []
-  }
-}
-
-export async function findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv) {
+/**
+ * Who uses `chart`: `{ deployments, unreadable }`, `unreadable` the folders
+ * that could not be read (who is in them is not known).
+ */
+export async function findChartUsage(gitopsDir, chart, deploymentsDirEnv) {
   const [byPath, byDependency] = await Promise.all([
     fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv),
     fromFolders(gitopsDir, chart)
   ])
   const seen = new Set()
-  return [...byPath, ...byDependency].filter(d => {
+  const deployments = [...byPath, ...byDependency.found].filter(d => {
     if (seen.has(d.path)) return false
     seen.add(d.path)
     return true
   })
+  return { deployments, unreadable: byDependency.unreadable }
+}
+
+export async function findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv) {
+  return (await findChartUsage(gitopsDir, chart, deploymentsDirEnv)).deployments
 }

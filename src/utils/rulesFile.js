@@ -750,6 +750,9 @@ const typeOk = (value, type) =>
  *
  * @returns [{ group, row, column, message }] — row is null for _common
  */
+// A required cell left out or empty: `required: true` on the problem.
+const REQUIRED = 'required — fill it in'
+
 export function valueProblems(values, model) {
   const problems = []
   const isEmpty = v => v === null || v === ''
@@ -760,7 +763,7 @@ export function valueProblems(values, model) {
 
   // What is wrong with one cell, or null. `present` is whether the key is there.
   const cellProblem = (col, present, value, quoted, position) => {
-    if (col?.required && (!present || isEmpty(value))) return 'required — fill it in'
+    if (col?.required && (!present || isEmpty(value))) return REQUIRED
     if (!present) return null
     if (isEmpty(value)) return 'empty — fill it in, or leave the cell out'
     if (hasNewline(value)) return 'contains a line break — values are one line'
@@ -807,7 +810,7 @@ export function valueProblems(values, model) {
       const cells = new Set([...Object.keys(columns), ...Object.keys(row || {}).filter(k => !(k in commonCols))])
       for (const name of cells) {
         const why = cellProblem(columns[name], name in (row || {}), row?.[name], quoted.has(name), positionHere(name))
-        if (why) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}` })
+        if (why) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}`, ...(why === REQUIRED ? { required: true } : {}) })
       }
       for (const { name, d, tree, position } of derived) {
         // A cell as Helm reads it: the row's, then _common's, then the default.
@@ -836,7 +839,7 @@ export function valueProblems(values, model) {
   const commonCells = new Set([...(rendersAnything ? Object.keys(commonCols) : []), ...Object.keys(common)])
   for (const name of commonCells) {
     const why = cellProblem(commonCols[name], name in common, common[name], quotedCommon.has(name), commonPosition(name))
-    if (why) problems.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${why}` })
+    if (why) problems.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${why}`, ...(why === REQUIRED ? { required: true } : {}) })
   }
   return problems
 }

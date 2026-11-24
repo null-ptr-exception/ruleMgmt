@@ -13,11 +13,14 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
-import { getDepName, wrapValues, unwrapValues } from './subchart.js'
+import { getDepName } from './subchart.js'
+import { unwrapPath, wrapPath, replaceAtPath, resolveStack, stackValues } from './stack.js'
+import { isInherited } from './deploymentWrite.js'
 import { readSyncRegistry, isTarget, getSourceForTarget } from './sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'
 import { valueProblems } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
+import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 
 // Everything a values save would refuse, both kinds at once (a save stops at
 // the first kind). Each names its cell in its message.
@@ -61,14 +64,15 @@ function rowsReplaced(before, after) {
 }
 
 /** Where a deployment's values live, and whether it is a subchart wrap. */
-async function locate(gitopsDir, relPath, depName) {
+async function locate(gitopsDir, relPath, keys) {
   const abs = path.join(gitopsDir, relPath)
   let isFolder = false
   try { isFolder = (await fs.stat(abs)).isDirectory() } catch { /* a file */ }
   return {
     valuesFile: isFolder ? path.join(abs, 'values.yaml') : abs,
-    // The dependency the chart was found under, which need not be the first.
-    depName: isFolder ? depName ?? await getDepName(abs) : undefined,
+    // Every key of its `_common` stack (#100): the chart's rows are under
+    // all of them, in a `_common` chart's values as in a deployment's.
+    keys: isFolder ? keys ?? [await getDepName(abs)].filter(Boolean) : [],
   }
 }
 
@@ -102,9 +106,27 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
   const befores = new Map() // deployment path → its rows before
   const afters = new Map()  // deployment path → its rows after
   const missing = new Set() // deployments with no values file yet
+  const docs = new Map()    // deployment path → the migrated file, parsed
+  const kinds = new Map()   // deployment path → 'common' for a _common chart
   for (const dep of found) {
     const readonly = isTarget(registry, dep.path)
-    const { valuesFile, depName } = await locate(gitopsDir, dep.path, dep.depName)
+    // A Chart.yaml with no values.yaml: Helm renders the Template's own
+    // values, which the Template change carries. Listed, nothing written —
+    // a values.yaml made here would make it a deployment.
+    // A stack that does not reach its Template: where its rows are cannot
+    // be told, so nothing is written, and the change waits until the stack
+    // is fixed — written later, its old columns would render no alerts.
+    // Only checking (a change that writes no deployment), it is only said.
+    if (dep.broken) {
+      deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], noValues: true,
+        problems: [{ message: `${dep.path}: ${dep.broken} — fix its _common first`, before: checkOnly }] })
+      continue
+    }
+    if (dep.kind === 'chart-only') {
+      deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], problems: [], noValues: true })
+      continue
+    }
+    const { valuesFile, keys } = await locate(gitopsDir, dep.path, dep.keys)
 
     // Only a missing file is empty. One that cannot be read or parsed stops
     // the plan: migrating `{}` would write an empty file over its data.
@@ -121,13 +143,9 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
       if (err?.code !== 'ENOENT') throw new Error(`${dep.path}: values cannot be read (${err.message})`, { cause: err })
       missing.add(dep.path)
     }
-    const before = unwrapValues(parsed, depName)
+    const before = unwrapPath(parsed, keys)
 
     const { values: after, orphaned } = migrateValues(before, migration, targetSchema)
-    // With no model to say what the values were valid against (rules/ that
-    // does not parse), nothing can be told to be new: none is refused.
-    const had = beforeModel ? new Set(allProblems(before, beforeModel).map(problemKey)) : null
-    const problems = model ? allProblems(after, model).map(p => ({ ...p, before: had ? had.has(problemKey(p)) : true })) : []
     deployments.push({
       deployment: dep.deployment,
       path: dep.path,
@@ -135,18 +153,47 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
       rowsChanged: rowsChanged(before, after),
       losses: migrationLosses(before, migration, targetSchema),
       orphaned,
-      problems,
+      problems: [],
     })
+    kinds.set(dep.path, dep.kind)
 
     // Only the chart's own block is replaced; anything else at the top of a
     // folder deployment's values.yaml (global:, other dependencies) stays.
-    const doc = depName && parsed && typeof parsed === 'object' && depName in parsed
-      ? { ...parsed, [depName]: after }
-      : wrapValues(after, depName)
-    texts.set(dep.path, yaml.dump(doc, { lineWidth: -1 }))
+    // On a stack, everything beside the chart's rows stays too, wherever it is.
+    const wrapped = keys.length > 1 || (keys.length && parsed && typeof parsed === 'object' && keys[0] in parsed)
+    const doc = wrapped ? replaceAtPath(parsed, keys, after) : wrapPath(after, keys)
+    docs.set(dep.path, doc)
+    texts.set(dep.path, dumpForHelm(doc, { lineWidth: -1 }))
     files.set(dep.path, valuesFile)
     befores.set(dep.path, before)
     afters.set(dep.path, after)
+  }
+
+  // Each migrated file is checked as a values save checks it, on its stack:
+  // what its _common layers give counts, migrated too when they are in this
+  // plan; what is a layer's own is the layer's. A _common chart need not
+  // give a required Common Value, its deployments may; its rows are whole.
+  if (model) {
+    for (const entry of deployments) {
+      if (entry.noValues) continue
+      const before = befores.get(entry.path)
+      const after = afters.get(entry.path)
+      const dir = path.join(gitopsDir, entry.path)
+      const stack = docs.has(entry.path) && (await fs.stat(dir).then(s => s.isDirectory(), () => false)) ? await resolveStack(gitopsDir, dir) : null
+      const onStack = stack && stack.layers.length
+      const now = onStack ? stackValues(stack, { own: before }) : null
+      const then = onStack
+        ? stackValues({ ...stack, layers: stack.layers.map(l => (docs.has(l.path) ? { ...l, doc: docs.get(l.path) } : l)) }, { own: after })
+        : null
+      const keep = (p, own, values) => !(onStack && isInherited(p, own, values.layers)) && !(kinds.get(entry.path) === 'common' && p.required && p.group === '_common')
+      // With no model to say what the values were valid against (rules/
+      // that does not parse), nothing can be told to be new: none is refused.
+      const had = beforeModel
+        ? new Set(allProblems(onStack ? now.merged : before, beforeModel).filter(p => keep(p, before, now ?? {})).map(problemKey))
+        : null
+      entry.problems = allProblems(onStack ? then.merged : after, model).filter(p => keep(p, after, then ?? {}))
+        .map(p => ({ ...p, before: had ? had.has(problemKey(p)) : true }))
+    }
   }
 
   // A sync follower is a copy of its source: it gets the source's migrated
@@ -156,6 +203,7 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
   // still renders. So is one whose source has no values.yaml: a values save
   // copies only that file, and copying an empty one would wipe the follower.
   for (const entry of deployments) {
+    if (entry.noValues) { entry.copiedFrom = null; continue }
     const source = entry.readonly ? getSourceForTarget(registry, entry.path) : null
     entry.copiedFrom = source && texts.has(source) && !missing.has(source) && !isTarget(registry, source) ? source : null
     if (entry.copiedFrom) {

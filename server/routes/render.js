@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { chartDrift, readChartModel } from '../lib/chartFiles.js'
 import { getDepName, unwrapValues } from '../lib/subchart.js'
+import { resolveStack, readStackValues, mergeValues } from '../lib/stack.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
 import { logger } from '../lib/logger.js'
@@ -17,7 +18,7 @@ const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
 // of the template's alerts produced nothing, and whether a group is empty
 // (no rows) versus filled-but-silent (rows, zero alerts). Plus any value keys
 // the schema no longer has — orphans left by a migration that didn't finish.
-async function buildSummary(renderedYaml, { model, schema }, valuesFilePaths) {
+async function buildSummary(renderedYaml, { model, schema }, readValues) {
   let rendered
   try {
     rendered = tallyRendered(renderedYaml)
@@ -40,14 +41,8 @@ async function buildSummary(renderedYaml, { model, schema }, valuesFilePaths) {
 
   const groupRows = {}
   const orphanFields = new Set()
-  for (const candidate of valuesFilePaths) {
-    let parsed
-    try {
-      parsed = yaml.load(await fs.readFile(candidate, 'utf-8'))
-    } catch {
-      continue
-    }
-    const values = unwrapValues(parsed || {}, await getDepName(path.dirname(candidate)))
+  const values = await readValues()
+  if (values) {
     for (const [k, v] of Object.entries(values || {})) {
       if (k === '_common') {
         if (schema) for (const f of Object.keys(v || {})) if (!commonSchemaProps.has(f)) orphanFields.add(f)
@@ -59,7 +54,6 @@ async function buildSummary(renderedYaml, { model, schema }, valuesFilePaths) {
       const groupFields = new Set(Object.keys(schema?.properties?.[k]?.items?.properties || {}))
       if (schema) for (const row of v) for (const f of Object.keys(row || {})) if (!groupFields.has(f)) orphanFields.add(f)
     }
-    break
   }
 
   const types = Object.fromEntries(Object.entries(model?.groups || {}).map(([k, g]) => [k, g.type]))
@@ -90,10 +84,19 @@ export default function renderRouter() {
       deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments', chart)
     }
 
-    const chartDir = path.join(chartsDir, chart)
-    const releaseName = `${chart}-${deployment}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-
+    // A folder deployment renders the Template at the bottom of its stack
+    // (#100): through a `_common`, the dependency it names is not it.
+    let template = chart
     try {
+      const stack = folder ? await resolveStack(req.gitopsDir, deploymentsDir) : null
+      template = stack?.chart || chart
+      const chartDir = path.join(chartsDir, template)
+      const releaseName = `${template}-${deployment}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+      // A link gone, a `_common` chart missing: Helm renders nothing and
+      // says nothing, which would read as passed.
+      if (stack?.problems.length) {
+        return res.json({ ok: false, error: stack.problems.map(p => `${folder}: ${p.description}`).join('\n') })
+      }
       const templateDir = folder ? deploymentsDir : chartDir
 
       let templateArgs
@@ -109,7 +112,7 @@ export default function renderRouter() {
       // Like the summary and drift below: optional, so a failure here cannot
       // turn a good render into { ok: false }.
       const chartModel = await readChartModel(chartDir).catch(err => {
-        logger.error({ err, chart, deployment }, 'readChartModel failed, rendering without a model')
+        logger.error({ err, chart: template, deployment }, 'readChartModel failed, rendering without a model')
         return { model: null, fromRules: false, schema: null }
       })
       let selfCheck = null
@@ -120,18 +123,36 @@ export default function renderRouter() {
       }
       // Same file the frontend saves: `values.yaml` in folder mode, the legacy
       // `<deployment>-values.yaml` otherwise. Both are tried; the first that
-      // parses wins.
-      const valuesFilePaths = folder
-        ? [path.join(deploymentsDir, 'values.yaml'), path.join(deploymentsDir, `${deployment}-values.yaml`)]
-        : [path.join(deploymentsDir, `${deployment}-values.yaml`)]
-      const summary = await buildSummary(output, chartModel, valuesFilePaths).catch(err => {
-        logger.error({ err, chart, deployment }, 'buildSummary failed, falling back to raw YAML')
+      // parses wins. On a `_common` stack, what the layers and the deployment
+      // add up to — and the Template's own values under a group none of them
+      // gives, which Helm renders too.
+      let valueWarnings = []
+      const readValues = async () => {
+        if (stack?.layers.length) {
+          const stacked = await readStackValues(req.gitopsDir, deploymentsDir, stack)
+          valueWarnings = stacked.nulls
+          const defaults = yaml.load(await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8').catch(() => '')) || {}
+          return mergeValues(defaults, stacked.merged)
+        }
+        const candidates = folder
+          ? [path.join(deploymentsDir, 'values.yaml'), path.join(deploymentsDir, `${deployment}-values.yaml`)]
+          : [path.join(deploymentsDir, `${deployment}-values.yaml`)]
+        for (const candidate of candidates) {
+          try {
+            const parsed = yaml.load(await fs.readFile(candidate, 'utf-8'))
+            return unwrapValues(parsed || {}, stack?.keys[0] ?? await getDepName(path.dirname(candidate)))
+          } catch { /* the next one */ }
+        }
+        return null
+      }
+      const summary = await buildSummary(output, chartModel, readValues).catch(err => {
+        logger.error({ err, chart: template, deployment }, 'buildSummary failed, falling back to raw YAML')
         return null
       })
       // The rule owner is looking at products; if they are older than the
       // chart's rules/ source, what they see here may not be current.
       const drift = await chartDrift(chartDir).catch(() => ({ state: 'ok' }))
-      res.json({ ok: true, output, check, selfCheck, summary, drift })
+      res.json({ ok: true, output, check, selfCheck, summary, drift, ...(valueWarnings.length ? { valueWarnings } : {}) })
     } catch (err) {
       res.json({ ok: false, error: err.stderr || err.stdout || err.message })
     }

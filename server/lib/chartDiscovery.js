@@ -1,6 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
+import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 
 export function getChartsDir(gitopsDir, chartsDirEnv) {
   return path.join(gitopsDir, chartsDirEnv || 'charts')
@@ -74,7 +75,7 @@ export async function scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsD
         changed = true
       }
       if (changed) {
-        await fs.writeFile(chartYamlPath, yaml.dump(meta, { lineWidth: -1 }), 'utf-8')
+        await fs.writeFile(chartYamlPath, dumpForHelm(meta, { lineWidth: -1 }), 'utf-8')
       }
     } catch { /* skip */ }
   }

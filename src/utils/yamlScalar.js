@@ -155,3 +155,12 @@ export const KUBERNETES_DUMP_SCHEMA = yaml.DEFAULT_SCHEMA.extend({
 export function durationScalar(value) {
   return /^[0-9]+$/.test(String(value)) ? `'${value}'` : value
 }
+
+/**
+ * yaml.dump for a file Helm reads (values.yaml, Chart.yaml): every string
+ * YAML 1.1 would read as something else — `1_000`, `0_7`, `on` — quoted, so
+ * Helm reads what was written. Text that holds none dumps exactly as before.
+ */
+export function dumpForHelm(doc, options = {}) {
+  return yaml.dump(doc, { ...options, schema: KUBERNETES_DUMP_SCHEMA })
+}

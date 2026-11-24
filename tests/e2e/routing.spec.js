@@ -4,6 +4,16 @@ import path from 'node:path'
 import yaml from 'js-yaml'
 import { removeChart } from './charts.js'
 
+
+// A choice in the config dialog, picked by its radio and seen
+// picked: a click that is lost fails here at once, not later at a field
+// that never shows.
+async function choose(scope, name) {
+  const option = scope.getByRole('radio', { name })
+  await option.check()
+  await expect(option).toBeChecked()
+}
+
 // Routing page (#93): routing.yaml (#92) edited as a table — labels, the
 // configs a cell can notify, and the cells — saved through #92's endpoints
 // and previewed with the AlertmanagerConfig rendered by Helm.
@@ -164,8 +174,9 @@ test('a webhook URL can live in a Secret, with a reminder that it must exist', a
   await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
   await openRouting(page)
   await addConfig(page, 'pager', async dialog => {
-    await dialog.getByText('URL in a Secret').click()
+    await choose(dialog, 'URL in a Secret')
     await expect(dialog.getByText(/Make sure the Secret exists in this deployment's namespace/)).toBeVisible()
+    await expect(dialog.getByLabel('URL Secret name')).toBeVisible()
     await dialog.getByLabel('URL Secret name').fill('pager')
     await dialog.getByLabel('URL Secret key').fill('url')
     await dialog.getByRole('button', { name: 'Add' }).click()
@@ -182,7 +193,8 @@ test('a config Alertmanager would refuse cannot be added, and says why', async (
     await dialog.getByLabel('Webhook URL').fill('http:alert-relay.monitoring.svc')
     await expect(dialog.getByTestId('config-problems')).toContainText('url must be an http:// or https:// address')
     await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
-    await dialog.getByText('URL in a Secret').click()
+    await choose(dialog, 'URL in a Secret')
+    await expect(dialog.getByLabel('URL Secret name')).toBeVisible()
     await dialog.getByLabel('URL Secret name').fill('My Secret')
     await dialog.getByLabel('URL Secret key').fill('url')
     await expect(dialog.getByTestId('config-problems')).toContainText('name must be a Kubernetes name')
@@ -697,9 +709,11 @@ test('a webhook config takes a Bearer token, a CA and a timeout from the dialog,
   await openRouting(page)
   await addConfig(page, 'ops-webhook', async dialog => {
     // With More settings open, each Secret's inputs are told apart.
-    await dialog.getByText('URL in a Secret').click()
+    await choose(dialog, 'URL in a Secret')
     await dialog.getByText('More settings').click()
-    await dialog.getByText('Bearer token').click()
+    await choose(dialog, 'Bearer token')
+    await expect(dialog.getByLabel('URL Secret name')).toBeVisible()
+    await expect(dialog.getByLabel('Token Secret name')).toBeVisible()
     await dialog.getByLabel('URL Secret name').fill('ops')
     await dialog.getByLabel('URL Secret key').fill('url')
     await dialog.getByLabel('Token Secret name').fill('ops')

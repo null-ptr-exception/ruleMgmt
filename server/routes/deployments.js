@@ -2,12 +2,14 @@ import express from 'express'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
-import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subchart.js'
+import { countAlerts } from '../lib/subchart.js'
+import { resolveStack, unwrapPath, wrapPath } from '../lib/stack.js'
 import { valuesRefusal, saveValues, copyToTargets, okWith } from '../lib/deploymentWrite.js'
 import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink, normalizeSyncPath, isDeploymentDir, getSourceForTarget } from '../lib/sync.js'
 import { buildRouting, writeRouting, removeRouting, routingState, readRouting } from '../lib/routingFiles.js'
 import { readSharedConfigs } from '../lib/sharedConfigs.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
+import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
@@ -55,6 +57,16 @@ async function resolveValuesFile(dir, deployment) {
   return { file: legacyFile, direct: false, legacyFile }
 }
 
+// A Chart.yaml naming a dependency, and no values.yaml.
+async function chartOnly(dir) {
+  try {
+    const chart = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8'))
+    return Array.isArray(chart?.dependencies) && chart.dependencies.length > 0 && !(await exists(path.join(dir, 'values.yaml')))
+  } catch {
+    return false
+  }
+}
+
 async function exists(file) {
   try { await fs.access(file); return true } catch { return false }
 }
@@ -80,14 +92,14 @@ export default function deploymentsRouter() {
       await fs.mkdir(dir, { recursive: true })
       const files = await fs.readdir(dir)
       const deployments = []
-      const depName = await getDepName(dir)
+      const { keys } = await resolveStack(req.gitopsDir, dir)
 
       if (files.includes('values.yaml')) {
         const folderName = path.basename(dir)
         let alertCount = 0
         try {
           const raw = await fs.readFile(path.join(dir, 'values.yaml'), 'utf-8')
-          alertCount = countAlerts(yaml.load(raw) || {}, depName)
+          alertCount = countAlerts(yaml.load(raw) || {}, keys)
         } catch { /* skip unreadable */ }
         deployments.push({ name: folderName, file: 'values.yaml', alertCount })
       }
@@ -98,7 +110,7 @@ export default function deploymentsRouter() {
         let alertCount = 0
         try {
           const raw = await fs.readFile(path.join(dir, f), 'utf-8')
-          alertCount = countAlerts(yaml.load(raw) || {}, depName)
+          alertCount = countAlerts(yaml.load(raw) || {}, keys)
         } catch { /* skip unreadable */ }
         deployments.push({ name, file: f, alertCount })
       }
@@ -117,7 +129,8 @@ export default function deploymentsRouter() {
     try {
       const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
       const content = await fs.readFile(file, 'utf-8')
-      const parsed = unwrapValues(yaml.load(content) || {}, await getDepName(dir))
+      // Only the deployment's own values, under every key of its stack (#100).
+      const parsed = unwrapPath(yaml.load(content) || {}, (await resolveStack(req.gitopsDir, dir)).keys)
       // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
       // anything; say so, or it looks like the file being edited.
       const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
@@ -165,12 +178,12 @@ export default function deploymentsRouter() {
       }
 
       // A legacy `<name>-values.yaml`: the same checks, and no sync.
-      const depName = await getDepName(dir)
       let values = req.body.values
-      const refusal = await valuesRefusal(req.gitopsDir, depName || req.params.chart, depName, values)
+      const stack = await resolveStack(req.gitopsDir, dir)
+      const refusal = await valuesRefusal(req.gitopsDir, dir, values, { chartName: req.params.chart, stack })
       if (refusal) return res.status(400).json(refusal)
       if (typeof values !== 'string') {
-        values = yaml.dump(wrapValues(values, depName), { lineWidth: -1 })
+        values = dumpForHelm(wrapPath(values, stack.keys), { lineWidth: -1 })
       }
       await fs.writeFile(file, values, 'utf-8')
 
@@ -305,8 +318,12 @@ export default function deploymentsRouter() {
       return res.status(400).json({ error: 'Invalid deployment name' })
     }
     try {
-      const { direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
+      const resolved = await resolveValuesFile(dir, req.params.deployment)
+      const { legacyFile } = resolved
       const folder = syncFolder(req)
+      // A folder with a Chart.yaml and no values.yaml is removed whole too:
+      // it renders the Template, and keeps the Template from being deleted.
+      const direct = resolved.direct || (!!folder && req.params.deployment === path.basename(dir) && await chartOnly(dir))
       // Deleting a legacy sibling leaves the folder's deployment, and so its
       // sync link, in place. A deleted target leaves its source; a deleted
       // source lets go of its targets, which keep what they have and become

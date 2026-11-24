@@ -10,6 +10,7 @@ const CHART = 'mariadb-alerts'
 const FOLDER = 'deployments/e2e-nest'
 const OUTER = `${FOLDER}/prod`
 const INNER = `${OUTER}/canary`
+const NO_VALUES = `${FOLDER}/bare`
 
 async function expand(page, segments) {
   const tree = page.locator('.ant-tree')
@@ -33,6 +34,11 @@ test.describe('A deployment inside another', () => {
     const chart = await fs.readFile(path.join(outer, 'Chart.yaml'), 'utf-8')
     await fs.writeFile(path.join(inner, 'Chart.yaml'), chart.replace('file://', 'file://../'))
     await fs.writeFile(path.join(inner, 'values.yaml'), await fs.readFile(path.join(outer, 'values.yaml'), 'utf-8'))
+    // A Chart.yaml with no values.yaml beside it: Helm deploys the
+    // Template's example rows.
+    const bare = path.join(WORKSPACE, NO_VALUES)
+    await fs.mkdir(bare, { recursive: true })
+    await fs.writeFile(path.join(bare, 'Chart.yaml'), chart)
   })
 
   test.afterAll(async () => {
@@ -56,6 +62,18 @@ test.describe('A deployment inside another', () => {
 
     await canary.locator('.ant-tree-node-content-wrapper').click()
     await expect(page.getByText('Single', { exact: true })).toBeVisible({ timeout: 8000 })
+  })
+
+  test('a Chart.yaml with no values.yaml is flagged in the tree', async ({ page }) => {
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = await expand(page, ['deployments', 'e2e-nest'])
+    const bare = tree.locator('.ant-tree-treenode').filter({ hasText: /^bare/ }).first()
+    await expect(bare).toBeVisible({ timeout: 8000 })
+    const flag = bare.getByRole('img', { name: 'no values of its own' })
+    await expect(flag).toBeVisible()
+    await flag.hover()
+    await expect(page.getByRole('tooltip')).toContainText("Helm deploys the Template's example rows")
   })
 
   test('a new one cannot be created inside it', async ({ page }) => {

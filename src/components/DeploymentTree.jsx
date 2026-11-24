@@ -49,7 +49,17 @@ function toTreeNode(node, registry, handlers) {
           <WarningOutlined aria-label="misplaced deployment" style={{ color: '#d97706' }} />
         </Tooltip>
       )}
-      {isReservedName(node.name) && (
+      {node.noValues && (
+        <Tooltip title={`A Chart.yaml for ${node.chart} with no values.yaml: Helm deploys the Template's example rows. Add a values.yaml, or remove the folder`}>
+          <WarningOutlined aria-label="no values of its own" style={{ color: '#d97706' }} />
+        </Tooltip>
+      )}
+      {node.unreadable && (
+        <Tooltip title={`This folder cannot be read (${node.unreadable}): the deployments in it are not listed, checked or migrated`}>
+          <WarningOutlined aria-label="cannot be read" style={{ color: '#dc2626' }} />
+        </Tooltip>
+      )}
+      {isReservedName(node.name) && node.name !== COMMON_DIR && (
         // An existing folder with a reserved name (#99): flagged, still
         // usable. An icon, not a Tag: a Tag in a node marks a deployment.
         <Tooltip title={`${RESERVED_HINT} — rename this folder`}>

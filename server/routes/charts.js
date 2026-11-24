@@ -4,7 +4,8 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
-import { findDeploymentsUsing } from '../lib/chartUsage.js'
+import { findChartUsage } from '../lib/chartUsage.js'
+import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 
@@ -38,9 +39,9 @@ export default function chartsRouter() {
     } catch { /* free */ }
     try {
       await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
-      const chartYaml = yaml.dump({ apiVersion: 'v2', name, version: '0.1.0', type: 'application', annotations: { app: 'alertforge' } })
+      const chartYaml = dumpForHelm({ apiVersion: 'v2', name, version: '0.1.0', type: 'application', annotations: { app: 'alertforge' } })
       await fs.writeFile(path.join(chartDir, 'Chart.yaml'), chartYaml, 'utf-8')
-      await fs.writeFile(path.join(chartDir, 'values.yaml'), yaml.dump({}), 'utf-8')
+      await fs.writeFile(path.join(chartDir, 'values.yaml'), dumpForHelm({}), 'utf-8')
       const emptySchema = {
         $schema: 'https://json-schema.org/draft-07/schema#',
         type: 'object',
@@ -85,7 +86,7 @@ export default function chartsRouter() {
         const chartYamlFile = path.join(target, 'Chart.yaml')
         const chartYaml = yaml.load(await fs.readFile(chartYamlFile, 'utf-8')) || {}
         chartYaml.name = newName
-        await fs.writeFile(chartYamlFile, yaml.dump(chartYaml), 'utf-8')
+        await fs.writeFile(chartYamlFile, dumpForHelm(chartYaml), 'utf-8')
 
         const schemaFile = path.join(target, 'values.schema.json')
         const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
@@ -112,15 +113,19 @@ export default function chartsRouter() {
     try {
       // A deployment still bound to the chart would fail to render the moment
       // it is gone (#177), so the delete is refused and names them.
-      const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.name, process.env.DEPLOYMENTS_DIR)
+      // What Helm or ArgoCD would render from it blocks: a deployment, a
+      // _common chart, a folder with a Chart.yaml and no values.yaml, one in
+      // a hidden folder. A folder that cannot be read does not: who is in it
+      // is not known, and it is said.
+      const { deployments, unreadable } = await findChartUsage(req.gitopsDir, req.params.name, process.env.DEPLOYMENTS_DIR)
       if (deployments.length) {
         return res.status(409).json({
           error: `${req.params.name} is still used by ${deployments.length} deployment${deployments.length === 1 ? '' : 's'}`,
-          deployments: deployments.map(d => ({ deployment: d.deployment, path: d.path })),
+          deployments: deployments.map(d => ({ deployment: d.deployment, path: d.path, ...(d.kind ? { kind: d.kind } : {}) })),
         })
       }
       await fs.rm(chartDir, { recursive: true, force: true })
-      res.json({ ok: true })
+      res.json(unreadable.length ? { ok: true, unreadable } : { ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

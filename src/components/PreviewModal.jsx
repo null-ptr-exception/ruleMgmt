@@ -17,7 +17,7 @@ function checkLabel(check) {
 // — the cell that matters most — which of a group's alerts produced nothing,
 // because the rendered YAML never contains an alert that wasn't produced. Raw
 // YAML is one toggle away for when the summary isn't enough.
-export default function PreviewModal({ open, onClose, yaml, check, selfCheck, summary, heading = 'Rendered rules' }) {
+export default function PreviewModal({ open, onClose, yaml, check, selfCheck, summary, valueWarnings, heading = 'Rendered rules' }) {
   const [raw, setRaw] = useState(false)
 
   const failed = yaml && yaml.startsWith('Error:')
@@ -45,6 +45,18 @@ export default function PreviewModal({ open, onClose, yaml, check, selfCheck, su
           showIcon
           message="Rendered output has problems the syntax check can't see"
           description={<ul style={{ margin: 0, paddingLeft: 18 }}>{selfCheck.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>}
+        />
+      )}
+
+      {valueWarnings?.length > 0 && (
+        // A hand-written null on a _common stack (#100): Helm versions read
+        // it differently, so what this shows may not be what is deployed.
+        <Alert
+          style={{ marginBottom: 12 }}
+          type="warning"
+          showIcon
+          message="Some values are null — Helm versions read a null differently"
+          description={<ul style={{ margin: 0, paddingLeft: 18 }}>{valueWarnings.map((p, i) => <li key={i}>{p}</li>)}</ul>}
         />
       )}
 

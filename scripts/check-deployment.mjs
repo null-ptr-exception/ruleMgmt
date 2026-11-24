@@ -38,6 +38,8 @@ import { routingState, ROUTING_FILE, ROUTING_CR_FILE } from '../server/lib/routi
 import { readSharedConfigs } from '../server/lib/sharedConfigs.js'
 import { sharedNamesIn } from '../src/utils/routingGenerator.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
+import { resolveStack, readStackValues } from '../server/lib/stack.js'
+import { COMMON_DIR, isCommonChartPath } from '../src/utils/reservedNames.js'
 
 const USAGE = 'usage: node scripts/check-deployment.mjs [--repo <gitops repo root>] <deployment folder>'
 
@@ -51,6 +53,7 @@ async function notADeployment(dir) {
   const stat = await fs.stat(dir).catch(() => null)
   if (!stat) return `${dir} does not exist`
   if (!stat.isDirectory()) return `${dir} is not a folder: give the deployment's folder`
+  if (isCommonChartPath(dir)) return `${dir} is a ${COMMON_DIR} chart — what the deployments beside its ${COMMON_DIR}/ inherit — not a deployment: check one of them`
   if (await exists(path.join(dir, 'Chart.yaml')) && await exists(path.join(dir, 'values.yaml'))) return null
   const legacy = (await fs.readdir(dir)).filter(f => f.endsWith('-values.yaml'))
   if (legacy.length) {
@@ -72,17 +75,27 @@ async function helmHome() {
   return () => fs.rm(tmp, { recursive: true, force: true })
 }
 
-/** The release name Preview renders under: <chart>-<deployment>. */
-async function releaseName(dir) {
-  const chartYaml = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8')) || {}
-  const chart = chartYaml.dependencies?.[0]?.name || chartYaml.name || 'deployment'
-  return `${chart}-${path.basename(dir)}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+/** The release name Preview renders under: <Template>-<deployment>, the Template at the bottom of its stack. */
+function releaseName(dir, stack) {
+  return `${stack.chart || 'deployment'}-${path.basename(dir)}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 }
 
-async function checkRuleObjects(dir) {
+async function checkRuleObjects(dir, repo) {
+  // A `_common` stack (#100): a link gone or a layer missing renders
+  // nothing, which would read as passed; a hand-written null is read
+  // differently by each Helm version.
+  const root = await repoRoot(dir, repo).catch(() => null) ?? path.dirname(dir)
+  let stack, nulls
+  try {
+    stack = await resolveStack(root, dir)
+    nulls = stack.layers.length ? (await readStackValues(root, dir, stack)).nulls : []
+  } catch (err) {
+    return { ok: false, lines: [`Rules: not checked — its _common stack cannot be read (${err.code || err.message})`] }
+  }
+  if (stack.problems.length) return { ok: false, lines: ['Rules: not checked — Helm would not render it as it reads:', ...stack.problems.map(p => `  ${p.description}`)] }
   let rendered
   try {
-    rendered = await renderChart(dir, ['template', await releaseName(dir), dir])
+    rendered = await renderChart(dir, ['template', releaseName(dir, stack), dir])
   } catch (err) {
     if (err.code === 'ENOENT') throw new CannotCheck(`helm is not available: ${process.env.HELM_BIN || 'helm'}`)
     // A template error, or helm unable to write Chart.lock and charts/ into
@@ -94,7 +107,9 @@ async function checkRuleObjects(dir) {
   const tools = check.tools?.length ? ` (${check.tools.join(', ')})` : ''
   // A lint finding passes, as in Preview, but is not a clean pass.
   const title = !check.passed ? `failed${tools}` : check.warned ? `passed with warnings${tools}` : `passed${tools}`
-  return { ok: check.passed, lines: [`Rules: ${title}`, check.output].filter(Boolean) }
+  const lines = [`Rules: ${title}`, check.output].filter(Boolean)
+  if (nulls.length) lines.push('Values: some are null — Helm versions read a null differently:', ...nulls.map(n => `  ${n}`))
+  return { ok: check.passed && !nulls.length, lines }
 }
 
 // The shared notification configs (#123) are at the gitops repo's root, the

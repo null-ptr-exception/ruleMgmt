@@ -294,12 +294,90 @@ A deployment is a folder of its own, beside the others:
 | Inside another deployment (`shop/prod/canary`) | refused |
 | On a folder that already holds a deployment (`shop`, with `shop/prod` in it) | refused |
 | Inside a `_common` folder (`shop/_common/…`) | refused: `_common` holds what the deployments beside it inherit |
-| Under a folder starting with `.`, or `node_modules` | refused: AlertForge does not look there |
+| On a folder that holds a `_common` (`shop`, with `shop/_common`) | refused: its deployments go under it (`shop/prod`) |
+| Under a folder starting with `.`, `node_modules`, the Templates folder, the shared configs' `_shared/`, or a deployment's own `templates/` or `charts/` | refused: AlertForge does not look there |
 
 The same holds for a new sync target. A deployment already in such a place
 (made by hand, or pulled) is marked with a warning in the tree and keeps
 working: it is listed, synced, checked before a commit and migrated like any
 other. Move it to a folder of its own when you can.
+
+Two more kinds of folder are flagged in the tree:
+
+| Folder | What it means | Counts as using its Template |
+|---|---|---|
+| A `Chart.yaml` and no `values.yaml` | Helm deploys the Template's example rows | Yes: listed for a breaking change (nothing is written in it), and the Template cannot be deleted while it is there. Delete it like a deployment, or add a `values.yaml` |
+| One AlertForge cannot read (permissions) | The deployments in it are not listed, checked or migrated | Not known: named when a commit goes through, when a breaking change is confirmed and when the Template is deleted, and blocks none of them |
+
+A deployment in a hidden folder (`.something/…`) is not in the tree, but
+counts as using its Template, and a breaking change migrates it: ArgoCD
+deploys whatever folder it is pointed at.
+
+### Inherit from a folder's `_common` (written by hand for now)
+
+A folder's `_common/<chart>/` holds what the deployments beside it share. It
+is a small chart named `common`, reading the Template through a link in its
+own `charts/`; a deployment depends on it instead of on the Template, and
+wraps its values under one more `common:` per layer:
+
+```
+shop/_common/mariadb-alerts/Chart.yaml   name: common, dependencies: [{name: mariadb-alerts, version: ">=0.0.0-0"}]
+shop/_common/mariadb-alerts/charts/mariadb-alerts → ../../../../charts/mariadb-alerts
+shop/_common/mariadb-alerts/values.yaml  mariadb-alerts: {_common: {owner: team-a}, mariadb_saturation_disk: [...]}
+shop/prod/Chart.yaml                     dependencies: [{name: common, version: ">=0.0.0-0", repository: file://../_common/mariadb-alerts}]
+shop/prod/values.yaml                    common: {mariadb-alerts: {...prod's own...}}
+```
+
+Helm renders `prod` with `_common`'s values under its own: Common Values key
+by key, a group's rows as a whole — a group `prod` writes replaces the
+inherited one, `[]` clears it. Give `_common` every group (`[]` where it has
+no rows), or a group it leaves out renders the chart's example rows. A
+second layer (`shop/team-b/_common/…`) depends on the first through its link
+`charts/common`, and its deployments wrap under `common: {common: {…}}`.
+
+What Helm needs (the same on Helm 3.15 and 3.19):
+
+- Only the deployment's own dependency is fetched (`file://`). A `_common`
+  passes its values only to the chart linked in its own `charts/`; a
+  `repository:` there is not fetched, and with no link Helm renders nothing
+  without an error.
+- A chart in `charts/` is known by its Chart.yaml `name`; its values go
+  under that name, or under the dependency's `alias:`.
+- The deployment's dependency names the `_common` by its Chart.yaml `name`
+  (`common`), or Helm stops with an error.
+
+AlertForge reports, naming the layer, a stack Helm renders nothing from (no
+link, a `condition:` or `tags:` that is false, a `_common` missing), one it
+stops on, and one it cannot show as one stack: a deployment depending on a
+Template and a `_common` at once, or a `_common` linking two charts, or a
+packed chart (`.tgz`) in a `_common`'s `charts/`.
+
+AlertForge reads the stack wherever it uses a deployment:
+
+| | What it does |
+|---|---|
+| Tree, editor | Opens the Template at the bottom; shows and saves only the deployment's own values, under every key of the stack |
+| Save | A required value a layer gives need not be filled again |
+| Preview | Counts the rows the deployment renders with, its layers' included. A link gone or a `_common` missing is an error naming the layer, not "passed" |
+| Commit | Refused while a deployment's layer is missing or has lost its link |
+| Breaking change | Every `_common` and every deployment on it is migrated, each checked with what its layers give. One whose stack is broken (a `_common` gone, a link gone) holds the change until it is fixed |
+| Deleting the Template | Refused while a deployment uses it, through a `_common` too — a broken one included |
+| `check-deployment` | Checks a deployment on a stack; refuses the `_common` chart itself |
+
+Never write `null` in a deployment's or a `_common`'s values: Helm versions
+read it differently. Write `[]` to clear a group, or remove the key to
+inherit it. On a deployment with a `_common` — in its own values.yaml and in
+every `_common` it renders on — a null, a group that is not a list of rows
+(`false`, `0`, a map) and Common Values that are not a map are:
+
+| Where | What happens |
+|---|---|
+| Save (from the editor, or as text) | Refused |
+| Preview | Listed above the result |
+| Commit | Refused, naming the file |
+
+A deployment with no `_common` is not checked for them: what it renders is
+what Preview shows.
 
 ### Fill in a deployment
 

@@ -23,6 +23,13 @@ helm_sha256() {
   esac
 }
 
+# Only the linux-amd64 release has a checksum here: say so on another
+# machine rather than install a binary that does not run.
+if [ "$(uname -s)-$(uname -m)" != "Linux-x86_64" ]; then
+  echo "helm: this script installs helm-v$HELM_VERSION-linux-amd64 only; on $(uname -s)-$(uname -m) install helm $HELM_VERSION yourself (get.helm.sh, checked against its .sha256sum)" >&2
+  exit 1
+fi
+
 copy_out() { # image, path in image, installed name
   local id
   id="$(docker create "$1")"

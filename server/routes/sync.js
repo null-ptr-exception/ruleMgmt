@@ -17,7 +17,6 @@ import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { readRouting, restoreRouting, checkedRouting } from '../lib/routingFiles.js'
 import { readSharedConfigs, inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
-import { getDepName } from '../lib/subchart.js'
 import { newDeploymentProblem } from '../lib/deploymentWalk.js'
 
 function chartsDirName() {
@@ -108,8 +107,7 @@ export default function syncRouter() {
         // What a values save would refuse is not copied either: the target
         // is read-only and could not fix it (#180).
         const content = await fs.readFile(path.join(sourceDir, 'values.yaml'), 'utf-8')
-        const depName = await getDepName(sourceDir)
-        const refusal = await valuesRefusal(req.gitopsDir, depName, depName, content)
+        const refusal = await valuesRefusal(req.gitopsDir, sourceDir, content)
         // Nor routing the save checks would refuse: the whole sync is
         // refused, not half of it, with both files' problems at once. A
         // resource behind its routing.yaml is made again rather than copied

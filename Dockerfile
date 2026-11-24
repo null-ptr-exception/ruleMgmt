@@ -7,7 +7,11 @@ ARG VMALERT_VERSION=v1.156.0
 # Helm renders every Preview and check: the image, CI and a developer's
 # machine run this one version (scripts/install-checkers.sh), so what
 # Preview shows is what the same chart renders elsewhere. Alpine's package
-# of it, built with Alpine's Go; a base image without it fails the build.
+# of it, built with Alpine's Go. `helm~3.19.0` takes what node:22-alpine's
+# Alpine branch has: when the base image moves to an Alpine release with
+# another Helm, the build stops at the version test below. Then either move
+# HELM_VERSION (and its checksum in install-checkers.sh) to that Helm, after
+# running the tests on it, or install the upstream release here instead.
 ARG HELM_VERSION=3.19.0
 
 FROM node:22-alpine AS builder

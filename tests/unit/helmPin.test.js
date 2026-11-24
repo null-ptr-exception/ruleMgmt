@@ -31,6 +31,8 @@ describe('the pinned Helm', () => {
     expect(script).toContain('HELM_VERSION="$(arg HELM_VERSION)"')
     expect(script).toMatch(new RegExp(`^\\s*${version().replace(/\./g, '\\.')}\\) echo [0-9a-f]{64} ;;$`, 'm'))
     expect(script).toContain('sha256sum -c')
+    // Another machine is told, not given a binary that does not run.
+    expect(script).toContain('"$(uname -s)-$(uname -m)" != "Linux-x86_64"')
   })
 
   it('CI installs no helm of its own, and checks the one it runs', () => {

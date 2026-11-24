@@ -17,12 +17,13 @@
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
-import { getDepName, wrapValues, unwrapValues } from './subchart.js'
+import { resolveStack, stackValues, unwrapPath, wrapPath, valueIssuesIn } from './stack.js'
 import { readChartModel } from './chartFiles.js'
 import { copyRouting, writeWhole } from './routingFiles.js'
 import { getTargetsForSource, isSafeSyncPath, isDeploymentDir } from './sync.js'
 import { valueProblems } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
+import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
@@ -31,37 +32,70 @@ const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
  * group with selectors (#60) whose cells cannot be matched on or whose rows
  * overlap. `null`, or the refusal's body: `{ error, problems, proposals? }`.
  */
-export function problemsOf(bare, model) {
-  const problems = valueProblems(bare, model)
+export function problemsOf(bare, model, keep = () => true) {
+  const problems = valueProblems(bare, model).filter(keep)
   if (problems.length) return { error: 'Some values cannot be rendered', problems }
   const selectors = selectorValueProblems(bare, model)
-  if (selectors.problems.length) {
-    const cells = selectors.problems.filter(p => p.cell).length
-    const error = cells === selectors.problems.length ? 'Some selector cells cannot be used'
+  const found = selectors.problems.filter(keep)
+  if (found.length) {
+    const cells = found.filter(p => p.cell).length
+    const error = cells === found.length ? 'Some selector cells cannot be used'
       : cells ? 'Some selector cells cannot be used, and some rows overlap' : 'Some rows overlap'
-    return { error, problems: selectors.problems, proposals: selectors.proposals }
+    return { error, problems: found, proposals: selectors.proposals.filter(keep) }
   }
   return null
 }
 
+// A problem that is a `_common` layer's, not this deployment's: in a group
+// the deployment does not write (it inherits the whole group), or in a
+// Common Values key a layer gives and the deployment does not. Each layer's
+// own save and the commit checks report it there.
+export function isInherited(p, own, layers) {
+  if (p.group === '_common') {
+    const mine = own?._common && typeof own._common === 'object' ? own._common : {}
+    return !(p.column in mine) && layers.some(l => l.values?._common && typeof l.values._common === 'object' && p.column in l.values._common)
+  }
+  return p.group !== undefined && p.group !== null && !(own && p.group in own)
+}
+
 /**
- * `values` is the bare object the editor sends, or a values.yaml's text.
- * Text that is not YAML is refused: written, it fails every render after.
- * Only a chart with a model is checked against it. `null` when it may be written.
+ * `values` is the bare object the editor sends, or a values.yaml's text,
+ * for the deployment in `dir`. Text that is not YAML is refused: written,
+ * it fails every render after. Only a chart with a model is checked against
+ * it. A deployment on a `_common` stack (#100) is checked with what it
+ * inherits: a required value a layer gives need not be filled here, and a
+ * hand-written null is refused (its meaning changes between Helm versions).
+ * `chartName` is the Template when the folder names none (a legacy file);
+ * `stack` the folder's, when the caller has resolved it already.
+ * `null` when it may be written.
  */
-export async function valuesRefusal(gitopsDir, chartName, depName, values) {
+export async function valuesRefusal(gitopsDir, dir, values, { chartName, stack: resolved } = {}) {
+  const stack = resolved ?? await resolveStack(gitopsDir, dir)
   let bare = values
   if (typeof values === 'string') {
+    let parsed
     try {
-      bare = unwrapValues(yaml.load(values) || {}, depName)
+      parsed = yaml.load(values) || {}
     } catch (err) {
       return { error: 'values.yaml is not valid YAML', problems: [{ message: err.reason || 'not valid YAML' }] }
     }
+    bare = unwrapPath(parsed, stack.keys)
   }
-  if (!chartName) return null
-  const { model } = await readChartModel(path.join(gitopsDir, chartsDirName(), chartName))
+  // On a stack, a null (or a group that is not a list) is refused in both
+  // forms: written, it would block every commit after (#100).
+  if (stack.layers.length) {
+    const issues = typeof values === 'string'
+      ? valueIssuesIn(yaml.load(values) || {}, stack.keys, 'values.yaml', stack.groups)
+      : valueIssuesIn(bare, [], 'values.yaml', stack.groups)
+    if (issues.length) return { error: 'Some values are null, or not what Helm reads', problems: issues.map(message => ({ message })) }
+  }
+  const chart = stack.chart || chartName
+  if (!chart) return null
+  const { model } = await readChartModel(path.join(gitopsDir, chartsDirName(), chart))
   if (!model || !bare || typeof bare !== 'object') return null
-  return problemsOf(bare, model)
+  if (!stack.layers.length) return problemsOf(bare, model)
+  const { merged, layers } = stackValues(stack, { own: bare })
+  return problemsOf(merged, model, p => !isInherited(p, bare, layers))
 }
 
 /**
@@ -118,7 +152,7 @@ export async function copyChartDependencies(srcDir, dstDir) {
   const doc = dst ? { ...dst, dependencies } : { ...src, name: path.basename(dstDir), dependencies }
   // Whole or not at all: a Preview rendering the target meanwhile reads
   // either file, never half of one.
-  await writeWhole(file, yaml.dump(doc, { lineWidth: -1 }))
+  await writeWhole(file, dumpForHelm(doc, { lineWidth: -1 }))
   return true
 }
 
@@ -183,10 +217,13 @@ export const okWith = syncFailed => (syncFailed.length ? { ok: true, syncFailed 
  */
 export async function saveValues(gitopsDir, registry, folder, values, { chartName } = {}) {
   const dir = path.join(gitopsDir, folder)
-  const depName = await getDepName(dir)
-  const refusal = await valuesRefusal(gitopsDir, depName || chartName, depName, values)
+  const stack = await resolveStack(gitopsDir, dir)
+  const refusal = await valuesRefusal(gitopsDir, dir, values, { chartName, stack })
   if (refusal) return { status: 400, body: refusal }
-  const text = typeof values === 'string' ? values : yaml.dump(wrapValues(values, depName), { lineWidth: -1 })
+  // Under every key of its stack (#100): one level less, and Helm reads
+  // none of it.
+  const { keys } = stack
+  const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, keys), { lineWidth: -1 })
   await fs.writeFile(path.join(dir, 'values.yaml'), text, 'utf-8')
   const syncFailed = await copyToTargets(gitopsDir, registry, folder, { values: true, routing: false })
   return { status: 200, body: okWith(syncFailed) }

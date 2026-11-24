@@ -20,7 +20,9 @@ import { readRouting, buildRouting, writeRouting, checkedRouting, copyRouting, R
 import { isDeploymentDir, isSafeSyncPath, normalizeSyncPath, readSyncRegistry, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
 import { readSharedConfigs, SHARED_FILE } from './sharedConfigs.js'
 import { sharedRefProblems } from '../../src/utils/routingGenerator.js'
-import { listDeploymentPaths } from './deploymentWalk.js'
+import { listDeploymentPaths, walkDeployments } from './deploymentWalk.js'
+import { resolveStack } from './stack.js'
+import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 const SYNC_FILE = 'sync.yaml'
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
@@ -54,42 +56,63 @@ const exactWanted = v => {
  * at another version than the one exact version the deployment asks for.
  * A range (`>=0.0.0-0`, which AlertForge writes) is not judged.
  */
-async function templateProblem(gitopsDir, dep) {
+async function templateProblem(gitopsDir, dep, stack) {
   const dir = path.join(gitopsDir, dep)
+  const own = await fileDependencyProblem(gitopsDir, dir, dep)
+  // Gone since the walk: not there to commit.
+  if (own === undefined) return null
+  if (own) return own
+  // Its `_common` stack (#100): what Helm renders nothing from, or stops
+  // on. Below the deployment Helm fetches nothing, so a version or a
+  // repository a `_common` asks for is not checked: Helm does not read it.
+  if (stack.problems.length) return { ...stack.problems[0], description: `${dep}: ${stack.problems[0].description}` }
+  return null
+}
+
+// The first problem with a chart folder's file:// dependencies, null when
+// there is none, undefined when its Chart.yaml is gone (deleted since the
+// walk, #187: not there to commit).
+async function fileDependencyProblem(gitopsDir, dir, dep) {
   let chart
   try {
     chart = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8')) || {}
   } catch (err) {
-    // Deleted since the walk (#187): not there to commit.
-    if (err.code === 'ENOENT') return null
+    if (err.code === 'ENOENT') return undefined
     throw err
   }
   for (const d of chart.dependencies || []) {
     const repo = typeof d?.repository === 'string' ? d.repository : ''
     const at = repo.startsWith('file://') ? path.resolve(dir, repo.slice('file://'.length)) : null
     if (!at) continue
-    const name = d.name || repo
+    // A `_common` chart is named as one, not as a Template.
+    const common = isCommonChartPath(at)
+    const what = common ? `${COMMON_DIR} chart` : 'Template'
+    const noun = `${what} ${common ? path.relative(gitopsDir, at).replace(/\\/g, '/') : d.name || repo}`
     const problem = description => ({ kind: 'template-version', description: `${dep}: ${description}, so Helm cannot render it` })
     let template
     try {
       template = yaml.load(await fs.readFile(path.join(at, 'Chart.yaml'), 'utf-8'))
     } catch (err) {
-      if (err.code === 'ENOENT') return { kind: 'template-missing', description: `${dep}: its Template ${name} is not in the repo` }
-      return problem(`its Template ${name}'s Chart.yaml is not valid YAML (${err.reason || err.message})`)
+      if (err.code === 'ENOENT') return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
+      return problem(`its ${noun}'s Chart.yaml is not valid YAML (${err.reason || err.message})`)
     }
     const has = template && typeof template === 'object' ? parseVersion(template.version ?? '') : null
-    if (!has) return problem(`its Template ${name}'s Chart.yaml has no version Helm reads (${JSON.stringify(template?.version ?? null)})`)
+    if (!has) return problem(`its ${noun}'s Chart.yaml has no version Helm reads (${JSON.stringify(template?.version ?? null)})`)
     const wants = d.version
     if (wants === undefined || wants === null || wants === false || String(wants).trim() === '') {
-      return problem(`its Chart.yaml gives no version for the Template ${name} — write version: ">=0.0.0-0" (any version)`)
+      return problem(`its Chart.yaml gives no version for the ${noun} — write version: ">=0.0.0-0" (any version)`)
     }
     const exact = exactWanted(wants)
     if (exact && exact.at !== has.at) {
-      return problem(`its Chart.yaml asks for the Template ${name} at version ${wants}, but the Template is ${template.version} — write version: ">=0.0.0-0" (any version), or ${template.version}`)
+      return problem(`its Chart.yaml asks for the ${noun} at version ${wants}, but the ${what} is ${template.version} — write version: ">=0.0.0-0" (any version), or ${template.version}`)
     }
   }
   return null
 }
+
+// A hand-written null in a stacked deployment's values or a layer's (#100):
+// Helm versions read it differently, so what is deployed cannot be told.
+const stackNulls = stack => (stack.layers.length ? stack.valueIssues : [])
 
 /**
  * sync.yaml as written, entry by entry: what readSyncRegistry would skip,
@@ -169,7 +192,12 @@ export async function deploymentCommitBlockers(gitopsDir) {
   const findings = [...sync.findings]
   const routingProblems = []
   const registry = sync.readable ? await readSyncRegistry(gitopsDir) : { syncs: [] }
-  const deployments = await listFolderDeployments(gitopsDir)
+  const walked = await walkDeployments(gitopsDir)
+  const deployments = walked.filter(d => d.kind === 'deployment').map(d => d.path)
+  // A folder that cannot be read: its deployments are not checked. Listed,
+  // as a routing.yaml's own problems are, not a reason to refuse a commit
+  // of everything else.
+  const unreadable = walked.filter(d => d.kind === 'unreadable').map(d => ({ path: d.path || '.', error: d.error }))
   // A routing.yaml using a shared config is made with it (#123): a change to
   // the shared file leaves every resource made from it behind.
   const shared = await readSharedConfigs(gitopsDir)
@@ -182,8 +210,12 @@ export async function deploymentCommitBlockers(gitopsDir) {
   const fixes = new Set()
   const brokenSources = new Set()
   for (const dep of deployments) {
-    const template = await templateProblem(gitopsDir, dep)
+    // Read once for both.
+    const stack = await resolveStack(gitopsDir, path.join(gitopsDir, dep))
+    const template = await templateProblem(gitopsDir, dep, stack)
     if (template) findings.push({ severity: 'commit', deployment: dep, ...template })
+    const nulls = stackNulls(stack)
+    if (nulls.length) findings.push({ severity: 'commit', kind: 'values-null', deployment: dep, regenerable: false, description: `${dep}: ${nulls.join('; ')}` })
     // A target is held to its source below. One listed as its own target is
     // no target (sync.yaml is refused for it too): its routing is checked.
     const followed = getSourceForTarget(registry, dep)
@@ -242,7 +274,7 @@ export async function deploymentCommitBlockers(gitopsDir) {
       fixes.add(dep)
     }
   }
-  return { findings, routingProblems, regenerable: fixes.size, readable: sync.readable }
+  return { findings, routingProblems, unreadable, regenerable: fixes.size, readable: sync.readable }
 }
 
 /**

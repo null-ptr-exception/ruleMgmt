@@ -5,26 +5,13 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { wrapValues, countAlerts } from '../lib/subchart.js'
-import { isDeploymentDir, isSafeSyncPath } from '../lib/sync.js'
+import { isDeploymentDir, isCommonChartDir, isSafeSyncPath } from '../lib/sync.js'
+import { walkDeployments, skippedDir, placementOf, newDeploymentProblem } from '../lib/deploymentWalk.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 
-const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
 // What a new deployment asks of its Template's version: any.
 export const ANY_TEMPLATE_VERSION = '>=0.0.0-0'
-
-function isExcluded(name) {
-  return EXCLUDED_DIRS.has(name) || name.startsWith('.')
-}
-
-// A deployment folder is a Helm chart: its templates/ (the notification
-// routing, #92) and charts/ (what `helm dependency update` fetches for
-// Preview) are the chart's own, not folders of the tree.
-const CHART_DIRS = new Set(['templates', 'charts'])
-
-function isChartDir(name, inDeployment) {
-  return inDeployment && CHART_DIRS.has(name)
-}
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -51,14 +38,16 @@ async function listChildren(baseDir, parentPath) {
   } catch {
     return []
   }
-  const inDeployment = parentPath ? await isDeploymentDir(dir) : false
+  // Inside a deployment or a `_common` chart, its own templates/ and
+  // charts/ are no folders of the tree — the walk's rules (deploymentWalk).
+  const inChart = parentPath ? (await isDeploymentDir(dir) || await isCommonChartDir(dir)) : false
   // The shared notification configs' folder (#123) is no folder of the tree
   // — unless it is one of the repo's own, with other things in it.
   const hideShared = !parentPath && await inSharedDir(baseDir, SHARED_DIR)
 
   const folders = []
   for (const e of entries) {
-    if (!e.isDirectory() || isExcluded(e.name) || isChartDir(e.name, inDeployment)) continue
+    if (!e.isDirectory() || skippedDir(e.name, { inChart })) continue
     if (hideShared && e.name === SHARED_DIR) continue
     const nodePath = parentPath ? `${parentPath}/${e.name}` : e.name
     const absPath = path.join(baseDir, nodePath)
@@ -79,19 +68,25 @@ async function listChildren(baseDir, parentPath) {
     } catch { /* no values.yaml */ }
 
     const hasDeps = chartData && Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
-    if (chartData && hasDeps && hasValues) {
+    const isCommon = await isCommonChartDir(absPath)
+    if (isCommon) node.isCommon = true
+    if (chartData && hasDeps && hasValues && !isCommon) {
       node.isDeployment = true
       node.chart = chartData.dependencies[0].name
       try {
         const valuesYaml = await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')
         node.alertCount = countAlerts(yaml.load(valuesYaml) || {}, node.chart)
       } catch { node.alertCount = 0 }
+      // Where no new deployment can be made (inside another, inside a
+      // _common folder): still shown and used, and flagged.
+      const placement = await placementOf(baseDir, nodePath)
+      if (placement) Object.assign(node, placement)
     }
 
     // Check if has subdirectories
     try {
       const subEntries = await fs.readdir(absPath, { withFileTypes: true })
-      node.isLeaf = !subEntries.some(s => s.isDirectory() && !isExcluded(s.name) && !isChartDir(s.name, node.isDeployment))
+      node.isLeaf = !subEntries.some(s => s.isDirectory() && !skippedDir(s.name, { inChart: node.isDeployment || isCommon }))
     } catch {
       node.isLeaf = true
     }
@@ -101,44 +96,28 @@ async function listChildren(baseDir, parentPath) {
   return folders.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// Recursive, on-demand flat listing of every deployment folder in the repo —
-// used to populate the Sync to/from modals' candidate lists. Deliberately
-// not cached: this only runs when a sync modal opens (not a hot path like
-// the lazy-loaded tree above), so a fresh scan each time is simplest and
-// avoids the risk of a cache silently drifting from the filesystem.
-async function collectDeployments(baseDir, parentPath, chartsDirName, results) {
-  const dir = parentPath ? path.join(baseDir, parentPath) : baseDir
-  let entries
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true })
-  } catch {
-    return
+// Every deployment in the repo, flat — the Sync to/from modals' candidate
+// lists. The one walk (deploymentWalk), so one inside another, or deeper
+// than a few folders, is a candidate like any other. Deliberately not
+// cached: this only runs when a sync modal opens, so a fresh scan each time
+// is simplest and cannot drift from the filesystem.
+async function collectDeployments(baseDir) {
+  const results = []
+  for (const d of await walkDeployments(baseDir)) {
+    if (d.kind !== 'deployment') continue
+    const absPath = path.join(baseDir, d.path)
+    let chart = null
+    // null when values.yaml cannot be read: unknown, not none.
+    let alertCount = null
+    try {
+      const chartYaml = yaml.load(await fs.readFile(path.join(absPath, 'Chart.yaml'), 'utf-8')) || {}
+      chart = chartYaml.dependencies?.[0]?.name || null
+      const valuesYaml = yaml.load(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
+      alertCount = countAlerts(valuesYaml, chart)
+    } catch { /* leave defaults */ }
+    results.push({ name: path.basename(d.path), path: d.path, chart, alertCount })
   }
-
-  for (const e of entries) {
-    if (!e.isDirectory() || isExcluded(e.name)) continue
-    if (!parentPath && e.name === chartsDirName) continue
-    if (!parentPath && await inSharedDir(baseDir, e.name)) continue
-
-    const nodePath = parentPath ? `${parentPath}/${e.name}` : e.name
-    const absPath = path.join(baseDir, nodePath)
-
-    if (await isDeploymentDir(absPath)) {
-      let chart = null
-      // null when values.yaml cannot be read: unknown, not none.
-      let alertCount = null
-      try {
-        const chartYaml = yaml.load(await fs.readFile(path.join(absPath, 'Chart.yaml'), 'utf-8')) || {}
-        chart = chartYaml.dependencies?.[0]?.name || null
-        const valuesYaml = yaml.load(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
-        alertCount = countAlerts(valuesYaml, chart)
-      } catch { /* leave defaults */ }
-      results.push({ name: e.name, path: nodePath, chart, alertCount })
-      continue
-    }
-
-    await collectDeployments(baseDir, nodePath, chartsDirName, results)
-  }
+  return results
 }
 
 export default function foldersRouter() {
@@ -160,9 +139,7 @@ export default function foldersRouter() {
 
   router.get('/deployments', async (req, res) => {
     try {
-      const results = []
-      await collectDeployments(req.gitopsDir, '', chartsDirName(), results)
-      res.json(results)
+      res.json(await collectDeployments(req.gitopsDir))
     } catch (err) {
       res.status(500).json({ error: err.message })
     }
@@ -211,6 +188,14 @@ export default function foldersRouter() {
     try {
       const reserved = await newReservedSegment(req.gitopsDir, folder)
       if (reserved) return res.status(400).json({ error: reservedError(reserved) })
+      const misplaced = await newDeploymentProblem(req.gitopsDir, folder)
+      if (misplaced) return res.status(400).json({ error: misplaced })
+      // A deployment already there is never written over, whatever it
+      // depends on: its Chart.yaml and values.yaml are someone's.
+      if (await isDeploymentDir(deployDir)) {
+        const existing = yaml.load(await fs.readFile(path.join(deployDir, 'Chart.yaml'), 'utf-8')) || {}
+        return res.json({ status: 'existing', chart: existing.dependencies?.[0]?.name ?? null })
+      }
       await fs.mkdir(deployDir, { recursive: true })
 
       try {

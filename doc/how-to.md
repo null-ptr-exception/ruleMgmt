@@ -286,6 +286,21 @@ A folder or deployment name cannot start with `_`: those are reserved for
 AlertForge's own folders. A folder that already has such a name is marked with
 a warning in the tree and keeps working — rename it when you can.
 
+A deployment is a folder of its own, beside the others:
+
+| Where | |
+|---|---|
+| `shop/prod`, `shop/eu/stg`, any depth | yes |
+| Inside another deployment (`shop/prod/canary`) | refused |
+| On a folder that already holds a deployment (`shop`, with `shop/prod` in it) | refused |
+| Inside a `_common` folder (`shop/_common/…`) | refused: `_common` holds what the deployments beside it inherit |
+| Under a folder starting with `.`, or `node_modules` | refused: AlertForge does not look there |
+
+The same holds for a new sync target. A deployment already in such a place
+(made by hand, or pulled) is marked with a warning in the tree and keeps
+working: it is listed, synced, checked before a commit and migrated like any
+other. Move it to a folder of its own when you can.
+
 ### Fill in a deployment
 
 1. **Alerts** → pick a deployment in the tree

@@ -18,6 +18,7 @@ import { readRouting, restoreRouting, checkedRouting } from '../lib/routingFiles
 import { readSharedConfigs, inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
 import { getDepName } from '../lib/subchart.js'
+import { newDeploymentProblem } from '../lib/deploymentWalk.js'
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'
@@ -86,6 +87,12 @@ export default function syncRouter() {
     const targetExists = await fs.access(targetDir).then(() => true).catch(() => false)
     if (targetExists && !(await isDeploymentDir(targetDir))) {
       return res.status(400).json({ error: `${target} exists but is not a valid deployment` })
+    }
+    // A new target is made where any new deployment may be: not inside
+    // another deployment (the source too), around one, or in a _common folder.
+    if (!targetExists) {
+      const misplaced = await newDeploymentProblem(req.gitopsDir, target)
+      if (misplaced) return res.status(400).json({ error: misplaced })
     }
 
     try {

@@ -61,13 +61,14 @@ function rowsReplaced(before, after) {
 }
 
 /** Where a deployment's values live, and whether it is a subchart wrap. */
-async function locate(gitopsDir, relPath) {
+async function locate(gitopsDir, relPath, depName) {
   const abs = path.join(gitopsDir, relPath)
   let isFolder = false
   try { isFolder = (await fs.stat(abs)).isDirectory() } catch { /* a file */ }
   return {
     valuesFile: isFolder ? path.join(abs, 'values.yaml') : abs,
-    depName: isFolder ? await getDepName(abs) : undefined,
+    // The dependency the chart was found under, which need not be the first.
+    depName: isFolder ? depName ?? await getDepName(abs) : undefined,
   }
 }
 
@@ -103,7 +104,7 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
   const missing = new Set() // deployments with no values file yet
   for (const dep of found) {
     const readonly = isTarget(registry, dep.path)
-    const { valuesFile, depName } = await locate(gitopsDir, dep.path)
+    const { valuesFile, depName } = await locate(gitopsDir, dep.path, dep.depName)
 
     // Only a missing file is empty. One that cannot be read or parsed stops
     // the plan: migrating `{}` would write an empty file over its data.

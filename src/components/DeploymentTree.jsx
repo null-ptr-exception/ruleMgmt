@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Tree, Tag, Dropdown, Modal, Tooltip, message } from 'antd'
 import { FolderOutlined, MoreOutlined, WarningOutlined } from '@ant-design/icons'
-import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
+import { isReservedName, RESERVED_HINT, COMMON_DIR } from '../utils/reservedNames'
 import { getFolderTree, getSyncRegistry, unlinkSync, deleteDeployment } from '../utils/chartApi'
 import SyncToModal from './SyncToModal'
 import SyncFromModal from './SyncFromModal'
@@ -40,6 +40,15 @@ function toTreeNode(node, registry, handlers) {
         </Tag>
       )}
       {badge}
+      {node.isDeployment && (node.nestedIn || node.inCommon) && (
+        // An existing deployment where no new one can be made: flagged,
+        // still usable. Every list and the migration still find it.
+        <Tooltip title={node.nestedIn
+          ? `Inside the deployment ${node.nestedIn}: a deployment cannot hold another — move it to a folder of its own`
+          : `Inside a ${COMMON_DIR} folder, which holds what the deployments beside it inherit — move it out`}>
+          <WarningOutlined aria-label="misplaced deployment" style={{ color: '#d97706' }} />
+        </Tooltip>
+      )}
       {isReservedName(node.name) && (
         // An existing folder with a reserved name (#99): flagged, still
         // usable. An icon, not a Tag: a Tag in a node marks a deployment.

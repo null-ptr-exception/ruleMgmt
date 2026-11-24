@@ -1,7 +1,8 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { getDeploymentsDir } from './chartDiscovery.js'
-import { getDepName } from './subchart.js'
+import yaml from 'js-yaml'
+import { walkDeployments } from './deploymentWalk.js'
 
 /**
  * Which deployments are using a chart — see issue #57.
@@ -9,11 +10,8 @@ import { getDepName } from './subchart.js'
  * This is what makes a breaking schema change a decision rather than a silent
  * rewrite, and it is what tells anyone whether an old chart is finally free to
  * retire. Nothing new is stored: the default layout puts the chart name in the
- * path, and a deployment in a folder names it in Chart.yaml's first dependency.
+ * path, and a deployment in a folder names it in a Chart.yaml dependency.
  */
-
-const SKIP = new Set(['.git', 'node_modules', 'charts'])
-const MAX_DEPTH = 4
 
 // Only an absent directory is empty. Any other error has to surface: an
 // empty result here reads as "no deployment uses this chart", which lets a
@@ -40,24 +38,32 @@ async function fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv) {
     }))
 }
 
-/** A deployment anywhere in the tree, bound through Chart.yaml's dependency. */
-async function fromFolders(gitopsDir, chart, dir = gitopsDir, depth = 0) {
-  if (depth > MAX_DEPTH) return []
+/**
+ * A deployment anywhere in the tree (the one walk: any depth, inside another
+ * deployment too), or a `_common` chart, bound through any of its Chart.yaml
+ * dependencies. `depName` is the dependency the values are wrapped under.
+ */
+async function fromFolders(gitopsDir, chart) {
   const found = []
-  for (const entry of await readDir(dir)) {
-    if (!entry.isDirectory() || SKIP.has(entry.name)) continue
-    const child = path.join(dir, entry.name)
-    if (await getDepName(child) === chart) {
-      found.push({
-        chart,
-        deployment: entry.name,
-        path: path.relative(gitopsDir, child).replace(/\\/g, '/')
-      })
-      continue
-    }
-    found.push(...await fromFolders(gitopsDir, chart, child, depth + 1))
+  for (const d of await walkDeployments(gitopsDir)) {
+    const dir = path.join(gitopsDir, d.path)
+    const dependencies = await dependencyNames(dir)
+    if (!dependencies.includes(chart)) continue
+    found.push({ chart, deployment: path.basename(d.path), path: d.path, depName: chart, ...(d.kind === 'common' ? { kind: 'common' } : {}) })
   }
   return found
+}
+
+// Every dependency's name in a folder's Chart.yaml; none when it has none or
+// cannot be read (the walk read it a moment ago).
+async function dependencyNames(dir) {
+  try {
+    const chartYaml = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8'))
+    const deps = Array.isArray(chartYaml?.dependencies) ? chartYaml.dependencies : []
+    return deps.map(d => d?.name).filter(n => typeof n === 'string')
+  } catch {
+    return []
+  }
 }
 
 export async function findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv) {

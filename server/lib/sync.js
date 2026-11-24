@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
+import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 const SYNC_FILE = 'sync.yaml'
 
@@ -213,10 +214,21 @@ export function applyUnlink(registry, target) {
   return { ok: true }
 }
 
+/**
+ * A folder right inside a `_common/` with a Chart.yaml: what the deployments
+ * beside the `_common/` inherit from (#75). It is a chart, not a deployment.
+ */
+export async function isCommonChartDir(absDir) {
+  if (!isCommonChartPath(absDir)) return false
+  return fs.access(path.join(absDir, 'Chart.yaml')).then(() => true, () => false)
+}
+
 // Same recognition rule used by the folder tree (Chart.yaml with a
 // dependency + values.yaml) — a sync source/target must resolve to an
-// actual deployment, not an arbitrary directory.
+// actual deployment, not an arbitrary directory. A `_common` chart is not
+// one, whatever it holds: it is not synced, listed or checked as one.
 export async function isDeploymentDir(absDir) {
+  if (isCommonChartPath(absDir)) return false
   let chartData
   try {
     const raw = await fs.readFile(path.join(absDir, 'Chart.yaml'), 'utf-8')

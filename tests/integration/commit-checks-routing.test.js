@@ -277,8 +277,11 @@ describe('more that a commit checks', () => {
   })
 
   it('a deployment inside another\'s folder is checked too', async () => {
+    // One made by hand, or pulled: AlertForge makes none there.
     const inner = `${SRC}/inner`
-    expect((await api('POST', '/api/v2/folders/init', { folder: inner, chart: 'demo' })).status).toBe(200)
+    await fs.mkdir(path.join(tmpDir, inner), { recursive: true })
+    await write(`${inner}/Chart.yaml`, (await read(`${SRC}/Chart.yaml`)).replace('file://', 'file://../'))
+    await write(`${inner}/values.yaml`, 'demo: {}\n')
     expect((await api('PUT', `/api/v2/deployments/demo/inner/routing${q(inner)}`, { routing: ROUTING })).status).toBe(200)
     await write(`${inner}/${CR}`, `# hand edit\n${await read(`${inner}/${CR}`)}`)
     expect(kinds((await commit()).data)).toEqual([`routing-stale ${inner}`])

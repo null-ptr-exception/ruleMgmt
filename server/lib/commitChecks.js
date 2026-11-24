@@ -18,41 +18,19 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { readRouting, buildRouting, writeRouting, checkedRouting, copyRouting, ROUTING_CR_FILE } from './routingFiles.js'
 import { isDeploymentDir, isSafeSyncPath, normalizeSyncPath, readSyncRegistry, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
-import { readSharedConfigs, inSharedDir, SHARED_FILE } from './sharedConfigs.js'
+import { readSharedConfigs, SHARED_FILE } from './sharedConfigs.js'
 import { sharedRefProblems } from '../../src/utils/routingGenerator.js'
+import { listDeploymentPaths } from './deploymentWalk.js'
 
 const SYNC_FILE = 'sync.yaml'
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
 /**
  * Every folder deployment, relative to the gitops repo, sorted — one inside
- * another's folder too, as the tree shows it. A deployment's own templates/
- * and charts/ are not walked into.
+ * another's folder too, as the tree shows it (the one walk, deploymentWalk).
  */
 export async function listFolderDeployments(gitopsDir) {
-  const chartsDir = path.resolve(gitopsDir, chartsDirName())
-  const found = []
-  async function walk(rel, inDeployment) {
-    let entries
-    try {
-      entries = await fs.readdir(path.join(gitopsDir, rel), { withFileTypes: true })
-    } catch {
-      return
-    }
-    for (const e of entries) {
-      if (!e.isDirectory() || e.name.startsWith('.') || e.name === 'node_modules') continue
-      if (inDeployment && (e.name === 'templates' || e.name === 'charts')) continue
-      const child = rel ? `${rel}/${e.name}` : e.name
-      if (path.resolve(gitopsDir, child) === chartsDir) continue
-      // The shared configs' folder holds no deployment (#123).
-      if (!rel && await inSharedDir(gitopsDir, child)) continue
-      const isDeployment = await isDeploymentDir(path.join(gitopsDir, child))
-      if (isDeployment) found.push(child)
-      await walk(child, isDeployment)
-    }
-  }
-  await walk('', false)
-  return found.sort()
+  return listDeploymentPaths(gitopsDir)
 }
 
 // A version as Helm's semver library reads one: a leading v, a part left

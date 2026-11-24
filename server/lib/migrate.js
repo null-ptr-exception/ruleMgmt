@@ -17,7 +17,7 @@ import { readRegistry } from '../repo/sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'
 import { syncTargets } from './deploymentWrite.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
-import { loadDeployment, isFlatFile } from '../repo/deployment.js'
+import { loadDeployment, loadOwnValues, isFlatFile } from '../repo/deployment.js'
 import { findingsOf } from '../repo/loaded.js'
 import { decide } from '../repo/policy.js'
 import { schemaProblem, schemaValidator } from '../repo/schema.js'
@@ -99,6 +99,10 @@ async function locate(repo, relPath, keys) {
  *                A value or key the file writes in a form Helm (YAML 1.1)
  *                reads otherwise is listed first, `before: true`: the
  *                migrated file holds Helm's reading of it.
+ *                A deployment (or `_common`) whose values are not under the
+ *                chart's name is listed with the sentence a save of it
+ *                says, not `before`: its file is not written, and the
+ *                change is refused until it is fixed.
  *                `copiedFrom` is the source a sync follower's file is
  *                copied from, or null when the follower is migrated on its
  *                own (its source is not among the deployments using this
@@ -196,6 +200,20 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
       // there before the change.
       const said = decide(read.findings, 'migration').refuse.filter(f => f.code === 'yaml.read-differently')
       if (said.length) readOtherwise.set(dep.path, said.map(f => ({ message: f.message, before: true })))
+    }
+    // Values not under the chart's name: Helm passes none of them to the
+    // Template, so the rows written there deploy nothing, and wrapping them
+    // here would start deploying them with the Template change. The file is
+    // not written, the save's own sentence is said, and the change waits
+    // until the file is fixed. Only checking (a change that writes no
+    // deployment), it is only said: rows no Template gets cannot get a new
+    // problem from the change.
+    const own = await loadOwnValues(repo, dep.path, { chart })
+    const stray = own.state === 'ok' ? own.findings.filter(f => f.code === 'values.not-under-chart-key') : []
+    if (stray.length) {
+      deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], noValues: true,
+        problems: stray.map(f => ({ message: f.message, before: checkOnly })) })
+      continue
     }
     const before = unwrapPath(parsed, keys)
 

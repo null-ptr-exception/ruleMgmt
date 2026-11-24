@@ -273,6 +273,44 @@ rules:
     }
   })
 
+  // Values not under the chart's name deploy nothing; a breaking change
+  // does not wrap them: the preview says the save's sentence, the change
+  // stays off, and the file is left as it is.
+  test('the breaking dialog will not change in place while a deployment\'s values are not under the chart\'s name', async ({ page, request }) => {
+    const FOLDER = 'deployments/e2e-editor-rules-folders/unwrapped'
+    const file = `${FOLDER}/values.yaml`
+    const valuesUrl = `/api/v2/deployments/${CHART}/unwrapped?folder=${encodeURIComponent(FOLDER)}`
+    const unusedWarn = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number}
+rules:
+  - alert: A
+    expr: cpu{ns="\${namespace}"} > 1
+`
+    expect((await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': unusedWarn }, confirmBreaking: true } })).ok()).toBeTruthy()
+    expect((await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: CHART } })).status()).toBeLessThan(300)
+    const text = 'cpu:\n  - namespace: p\n    warn: 90\n'
+    await fs.writeFile(path.join(WORKSPACE, file), text)
+    try {
+      await openChart(page)
+      await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
+      await page.getByRole('button', { name: 'Save' }).first().click()
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+      await openedModal(dialog)
+      await dialog.getByRole('button', { name: 'Continue' }).click()   // step 1 -> map
+      await expect(dialog.locator('.ant-steps-item-process')).toContainText('Map')
+      await dialog.getByRole('button', { name: 'Continue' }).click()   // step 2 (warn -> Delete) -> preview
+      await expect(dialog.getByTestId('migration-problems')).toHaveText(`${file}: the values are not under ${CHART}: Helm passes none of them to the Template ${CHART}, and renders only its own. Write them under ${CHART}:`, { timeout: 8000 })
+      await expect(dialog.getByTestId('migration-refused')).toContainText(FOLDER)
+      await expect(dialog.getByRole('button', { name: 'Change in place' })).toBeDisabled()
+      expect(await valuesOnDisk(file)).toBe(text)
+    } finally {
+      await request.delete(valuesUrl)
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+    }
+  })
+
   // A deployment on a _common reached through a link made by hand is held
   // by the link: its row says the one sentence, and nothing says it "would
   // get values a save refuses" — no mapping changes a link. The preview is

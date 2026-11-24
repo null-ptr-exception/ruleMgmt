@@ -873,8 +873,8 @@ unwrapped	A	save-text	refused	400	deployments/t/a/values.yaml	no	-	renders-fewer
 unwrapped	A	sync	refused	400	deployments/t/a	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 unwrapped	A	common-plan	refused	409	deployments/t/a	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 unwrapped	A	common-apply	refused-other	plan 409	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
-unwrapped	A	migration-preview	ok	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	accepts-what-helm-fails
-unwrapped	A	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	after: renders 3	accepts-what-helm-fails
+unwrapped	A	migration-preview	listed	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
+unwrapped	A	migration-apply	refused	409	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 unwrapped	A	commit	listed	200	deployments/t/a	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 unwrapped	A	preview	refused	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	alerts=1	
 unwrapped	A	check-deployment	refused	exit 1	deployments/t/a/values.yaml	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
@@ -885,7 +885,7 @@ wrong-wrapper	A	sync	refused	400	deployments/t/a	no	-	renders-fewer	0	1	Down:up{
 wrong-wrapper	A	common-plan	refused	409	deployments/t/a	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 wrong-wrapper	A	common-apply	refused-other	plan 409	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 wrong-wrapper	A	migration-preview	listed	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
-wrong-wrapper	A	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	after: renders 1	accepts-what-helm-fails
+wrong-wrapper	A	migration-apply	refused	409	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 wrong-wrapper	A	commit	listed	200	deployments/t/a	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 wrong-wrapper	A	preview	refused	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	alerts=1	
 wrong-wrapper	A	check-deployment	refused	exit 1	deployments/t/a/values.yaml	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
@@ -1150,8 +1150,8 @@ stack-ok	S	check-repo	ok	exit 0	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team
 stack-unwrapped	S	get	ok	200	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	{}	
 stack-unwrapped	S	save-text	refused	400	deployments/s/x/values.yaml	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
 stack-unwrapped	S	init	ok	200	-	no	deployments/s/n/Chart.yaml,deployments/s/n/values.yaml	renders	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
-stack-unwrapped	S	migration-preview	ok	200	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	accepts-what-helm-fails
-stack-unwrapped	S	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/s/x/values.yaml,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	after: renders-fewer 1	accepts-what-helm-fails
+stack-unwrapped	S	migration-preview	listed	200	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
+stack-unwrapped	S	migration-apply	refused	409	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
 stack-unwrapped	S	commit	listed	200	deployments/s/x	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
 stack-unwrapped	S	preview	refused	200	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	alerts=1	
 stack-unwrapped	S	check-deployment	refused	exit 1	deployments/s/x/values.yaml	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
@@ -1294,8 +1294,8 @@ layer-link-outside	L	check-repo	refused	exit 1	deployments/s/x/Chart.yaml	no	-	r
 layer-unwrapped	L	get	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	{"_common":{"team":"shop"}}	
 layer-unwrapped	L	save-text	refused	400	deployments/s/_common/demo/values.yaml	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	refuses-what-helm-renders
 layer-unwrapped	L	init	ok	200	-	no	deployments/s/n/Chart.yaml,deployments/s/n/values.yaml	renders	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
-layer-unwrapped	L	migration-preview	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
-layer-unwrapped	L	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/s/_common/demo/values.yaml,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	after: renders 3	
+layer-unwrapped	L	migration-preview	listed	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
+layer-unwrapped	L	migration-apply	refused	409	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	refuses-what-helm-renders
 layer-unwrapped	L	commit	listed	200	deployments/s/x	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	
 layer-unwrapped	L	preview	ok	200	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	alerts=3	
 layer-unwrapped	L	check-deployment	ok	exit 0	-	no	-	renders	0	3	CpuHigh:rate(cpu{job="x",team=""}[5m]) > 80 | CpuRate:rate(cpu_total{job="x"}[4m]) > 0 | Down:up{team=""} == 0 | sev=warning	ok	promtool3=ok vmalert=ok	-	

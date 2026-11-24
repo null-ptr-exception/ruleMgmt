@@ -29,11 +29,6 @@ empty-file	save-text	refuses-what-helm-renders	policy	a required column must be 
 empty-file	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 null-doc	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 null-doc	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
-unwrapped	migration-preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-unwrapped	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-wrong-wrapper	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-stack-unwrapped	migration-preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-stack-unwrapped	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 common-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 common-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 common-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
@@ -51,11 +46,11 @@ tpl-common-zero	common-apply	accepts-what-helm-fails	policy	making a _common mov
 tpl-common-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 tpl-null-merge	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 tpl-null-merge	gen-rules	accepts-what-helm-fails	out-of-scope	gen-rules checks the Template's own values; the null that fails is the deployment's
-stack-x-null	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-stack-x-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+stack-x-null	migration-preview	accepts-what-helm-fails	bug	no issue yet: the migration does not check the values it lists or writes the way a save does
+stack-x-null	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not check the values it lists or writes the way a save does
 layer-common-zero	save-text	accepts-what-helm-fails	bug	no issue yet: the save's derived-value check does not count the Template's or the _common's values
-layer-common-zero	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-layer-common-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+layer-common-zero	migration-preview	accepts-what-helm-fails	bug	no issue yet: the migration does not check the values it lists or writes the way a save does
+layer-common-zero	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not check the values it lists or writes the way a save does
 layer-group-map	save-text	refuses-what-helm-renders	policy	a _common group that is not a list of rows is refused: every deployment that does not set the group fails
 flat-number-text	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-not-yaml	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
@@ -108,6 +103,7 @@ stack-x-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML
 stack-x-010	check-repo	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it) (#202)
 layer-link-outside	save-text	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 layer-unwrapped	save-text	refuses-what-helm-renders	policy	values not under the chart's name reach no Template: Helm renders only the Template's own, so a save refuses them (#203)
+layer-unwrapped	migration-apply	refuses-what-helm-renders	policy	values not under the chart's name reach no Template: Helm renders only the Template's own, and writing them under the name would change what deploys, so a breaking change waits until the file is fixed (#203)
 layer-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
 flat-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
 unreadable-dir	migration-apply	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo

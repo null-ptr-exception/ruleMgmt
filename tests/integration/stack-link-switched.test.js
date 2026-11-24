@@ -2,7 +2,8 @@
 // hand, or a pull) while a write to that Template is under way: the write
 // answers what it answers when the link was switched before it — a
 // Template in use is not deleted, a breaking change asks first, a
-// migration reaches the deployments that now use it. The switch is made
+// migration is refused for the deployments that now use it (their values
+// are under the other Template's name). The switch is made
 // at the writer's hooks (never by timing): after the plan is made, and
 // under the commit lock just before the repo is compared with the plan.
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest'
@@ -115,13 +116,18 @@ describe.each(['planned', 'locked'])('a _common\'s link switched to another Temp
     expect(now.rules).toBe(CPU())
   })
 
-  it('a migration of it reaches the deployments on the _common', async () => {
+  // The deployments' values are still under the first Template's name, so
+  // Helm passes none of them to the one the link now leads to: a breaking
+  // change of that one waits until they are fixed, and writes nothing.
+  it('a migration of it is refused for the deployments on the _common, whose values are under the other name', async () => {
     const MIGRATE = { files: { 'cpu.yaml': CPU('svc') }, confirmBreaking: true, migration: { columns: { cpu: { job: 'svc' } } } }
     const { serial, raced, after, now } = await bothOrders(hook, () => api('POST', '/api/v2/templates/lone/rules', MIGRATE))
-    expect(serial.status).toBe(200)
-    expect(serial.data.migrated.map(m => m.path).sort()).toEqual([COMMON, `${T}/a`, `${T}/b`])
+    expect(serial.status).toBe(409)
+    expect(serial.data.migrationProblems.map(m => [m.path, m.problems.map(x => x.message)])).toEqual(['a', 'b'].map(d => [`${T}/${d}`,
+      [`${T}/${d}/values.yaml: the values are not under common.lone: Helm passes none of them to the Template lone, and renders only its own. Write them under common:   lone:`]]))
     expect({ status: raced.status, data: raced.data }).toEqual({ status: serial.status, data: serial.data })
     expect(now).toEqual(after)
-    expect(now.rules).toBe(CPU('svc'))
+    expect(now.rules).toBe(CPU())
+    expect(now.a).toBe(git('show', `HEAD:${T}/a/values.yaml`))
   })
 })

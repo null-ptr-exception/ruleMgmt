@@ -212,7 +212,8 @@ they were, so comments added by hand survive. Four things can stop it:
   deployment and cell; change those rows first (a deployment synced from
   another is changed in its source, which the dialog names). A problem a
   deployment had before the change does not stop it, nor does a deployment
-  whose `values.yaml` cannot be read; the others are still checked.
+  whose `values.yaml` cannot be read or whose values are not under the
+  chart's name; the others are still checked.
   Each deployment is checked as its own save checks it — the new schema
   and columns, its `_common` and the Template's own values counted, every
   file the change migrates as it will be written. A value of a column the
@@ -246,6 +247,17 @@ already exist. Save opens a dialog instead of saving:
    read-only: unlink it first). Each problem a deployment already had before
    this change is marked *already there before* and does not stop it; a new
    one in the same deployment still does
+
+A deployment, or a `_common`, whose values are not under the chart's name
+(`cpu: […]` at the top, or under another name) also stops the change. Helm
+passes none of those values to the Template, so its rows deploy nothing
+today; rewriting the file under the chart's name would start deploying them
+with the Template change. The preview lists it with the sentence a save of
+it says, **Change in place** stays off, and nothing is written — not that
+file, not the other deployments, not the chart. Fix the file first (write
+the values under the name the sentence gives, or take them out), as for a
+`values.yaml` that cannot be read or a deployment whose `_common` does not
+reach its Template.
 
 A deployment that follows another through sync gets its source's new file in
 the same step, so the two stay identical; the preview says *copied from* the

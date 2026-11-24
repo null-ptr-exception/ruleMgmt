@@ -614,6 +614,22 @@ Label values are quoted strings, `for` and `keep_firing_for` plain. Leading
 and trailing whitespace of an expression or annotation is dropped — the
 trailing newline `expr: |` leaves in the source means nothing.
 
+How a value is written in a rules file — `|`, `|-`, `>`, `>-`, quoted, plain,
+flow `{ }` — is only how YAML spells the text. The cluster gets that text,
+spelled the generator's way:
+
+| You write | The cluster gets | The generated file shows |
+|---|---|---|
+| `expr: \|` or an annotation `\|` over several lines, one indented further | the lines, with that indentation kept; no trailing newline | a `\|-` block |
+| `>-` (folded) | the lines joined with spaces, as YAML folds them | a `\|-` block |
+| a label value `yes`, `1_000`, `0_7`, or a bare `true` | the text `yes`, `1_000`, `0_7`, `true` | double-quoted: `"yes"` |
+| `{{ $labels.pod }}`, `{{ range … }}…{{ end }}` | as written, for Prometheus to expand | escaped for Helm: ``{{ `{{ $labels.pod }}` }}`` |
+| a comment | — (it stays in the rules file) | — |
+
+Only a `{{` with no `}}` after it is refused; other template mistakes are not
+checked (see [Notification routing](#notification-routing-routingyaml), where
+the same holds).
+
 Kubernetes and Helm read YAML 1.1, where a bare `yes`, `on`, `y`, `n` or
 `off` is a boolean and `0_7` is the number 7. The generator writes a name
 bare, as a hand-written file has it, and double-quotes it only when:
@@ -1157,6 +1173,22 @@ deployment folder — a complete AlertmanagerConfig (`routing` in
 The file says it is generated; an edit to it is overwritten. Every value stays
 text as the cluster reads it: a label value such as `1_000` or `yes` is
 quoted, since YAML 1.1 reads them bare as 1000 and true.
+
+How a value is written in `routing.yaml` or the shared configs is only how
+YAML spells the text; the cluster gets that text, spelled the generator's way
+(measured with `helm template`, byte for byte):
+
+| You write | The cluster gets | The generated file shows |
+|---|---|---|
+| `text: \|` (or `html`) over several lines, one indented further | the lines, the indentation and the trailing newline as written (`\|-` has none) | a `\|` or `\|-` block |
+| a header written `>-`, a quoted or plain value, a long line, a tab | the same text | plain, quoted, or a block — whichever YAML needs |
+| a value `yes`, `1_000`, `0_7` | the text `yes`, `1_000`, `0_7` | quoted: `'yes'` |
+| a bare `true` where text is wanted (a header value) | refused at save: the value must be text — write `"true"` | — |
+| `{{ range .Alerts }}…{{ end }}`, `{{- }}`, `{{ if }}…{{ else }}` | as written, for Alertmanager to expand | escaped for Helm |
+| a comment | — (it stays in `routing.yaml`, or the shared file) | — |
+
+Only a `{{` with no `}}` after it is refused; other template mistakes are
+saved, as [said above](#e-mail-settings).
 
 | `routing.yaml` | AlertmanagerConfig |
 |---|---|

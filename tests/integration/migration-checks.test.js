@@ -3,7 +3,7 @@
 // says which deployment and which cell, and a deployment that was already
 // broken is pointed out without holding the change up. A sync target that
 // cannot be written is reported, not a 500 after the Template has changed.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
@@ -210,7 +210,8 @@ describe('a sync target migrated on its own', () => {
     await fs.writeFile(path.join(tmpDir, SRC, 'Chart.yaml'), chart)
     const m = await migrate(NS_RENAMED, { columns: { cpu: {} } })
     expect(m.status).toBe(409)
-    expect(m.data.migrationProblems).toEqual([expect.objectContaining({ path: TGT, readonly: true })])
+    // It names its source: its own Save is off, so that is the one to change.
+    expect(m.data.migrationProblems).toEqual([expect.objectContaining({ path: TGT, readonly: true, source: SRC })])
   })
 })
 
@@ -233,4 +234,77 @@ describe('a flat sync target that cannot be written', () => {
     expect(m.status).toBe(200)
     expect(m.data.syncFailed).toEqual([{ target: flat, error: 'EACCES' }])
   })
+})
+
+// A Template change that is not breaking can still leave a deployment with
+// values a save refuses: a column made a selector, two rows the same.
+describe('a Template save that is not breaking', () => {
+  const SELECTED = APP.replace('group: cpu\n', 'group: cpu\nselectors: [namespace, app]\n')
+    .replace('app: {type: string}', 'app: {type: string, default: ".*"}')
+    .replace('expr: cpu{ns="${namespace}"} > ${threshold}', 'expr: cpu{${selector}} > ${threshold}')
+
+  it('is refused when it would leave a deployment\'s rows overlapping, naming it', async () => {
+    await start(APP, [{ namespace: 'p', app: 'api', threshold: 90 }, { namespace: 'p', app: 'api', threshold: 95 }])
+    const before = await read('charts/demo/rules/cpu.yaml')
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SELECTED } })
+    expect(status).toBe(409)
+    expect(data.migrationProblems).toEqual([expect.objectContaining({ path: SRC, problems: [expect.objectContaining({ message: expect.stringContaining('select the same thing') })] })])
+    expect(await read('charts/demo/rules/cpu.yaml')).toBe(before)
+  })
+
+  it('goes through when the rows do not overlap', async () => {
+    await start(APP, [{ namespace: 'p', app: 'api', threshold: 90 }, { namespace: 'p', app: 'web', threshold: 95 }])
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SELECTED } })).status).toBe(200)
+  })
+
+  it('goes through when a deployment\'s problem was there already', async () => {
+    await start(APP, [{ namespace: 'p', app: 'api', threshold: 90 }])
+    // A hand edit: no namespace, which is required, before this change too.
+    await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo:\n  cpu:\n    - app: api\n')
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SELECTED } })).status).toBe(200)
+  })
+
+  it('a deployment whose values.yaml cannot be read does not stop it', async () => {
+    await start(APP, [{ namespace: 'p', app: 'api', threshold: 90 }])
+    await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo: [\n')
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SELECTED } })).status).toBe(200)
+  })
+})
+
+describe('a Template save that is not breaking, checked deployment by deployment', () => {
+  const SELECTED = APP.replace('group: cpu\n', 'group: cpu\nselectors: [namespace, app]\n')
+    .replace('app: {type: string}', 'app: {type: string, default: ".*"}')
+    .replace('expr: cpu{ns="${namespace}"} > ${threshold}', 'expr: cpu{${selector}} > ${threshold}')
+
+  it('one deployment that cannot be read leaves the others checked', async () => {
+    await start(APP, [{ namespace: 'p', app: 'api', threshold: 90 }, { namespace: 'p', app: 'api', threshold: 95 }])
+    expect((await api('POST', '/api/v2/folders/init', { folder: OTHER, chart: 'demo' })).status).toBe(200)
+    await fs.writeFile(path.join(tmpDir, OTHER, 'values.yaml'), 'demo: [\n')
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': SELECTED } })
+      expect(status).toBe(409)
+      expect(data.migrationProblems.map(d => d.path)).toEqual([SRC])
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
+  it('an overlap that was there already is still the same one when a selector level is added', async () => {
+    const NS = APP.replace('group: cpu\n', 'group: cpu\nselectors: [namespace]\n').replace('expr: cpu{ns="${namespace}"} > ${threshold}', 'expr: cpu{${selector}} > ${threshold}')
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': NS } })).status).toBe(200)
+    expect((await api('POST', '/api/v2/folders/init', { folder: SRC, chart: 'demo' })).status).toBe(200)
+    // Two rows on namespace p: an overlap written by hand, before this change.
+    await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo:\n  cpu:\n    - {namespace: p, threshold: 90}\n    - {namespace: p, threshold: 95}\n')
+    const NS_APP = NS.replace('selectors: [namespace]', 'selectors: [namespace, app]').replace('app: {type: string}', 'app: {type: string, default: ".*"}')
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': NS_APP } })).status).toBe(200)
+  })
+
+  it('rules/ that does not parse on disk refuses nothing: what was there before cannot be told', async () => {
+    await start(APP, [{ namespace: 'p', app: 'api', threshold: 90 }])
+    await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo:\n  cpu:\n    - app: api\n')
+    await fs.writeFile(path.join(tmpDir, 'charts/demo/rules/cpu.yaml'), 'columns: [\n')
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': APP.replace('app: {type: string}', 'app: {type: string}\n  team: {type: string}') } })).status).toBe(200)
+  })
+
 })

@@ -139,7 +139,7 @@ converted one at a time (see [Commit](#commit)). From the command line,
 
 **Save** writes the rules files and regenerates `values.schema.json` and every
 template, all or nothing. Files you did not touch are written back exactly as
-they were, so comments added by hand survive. Three things can stop it:
+they were, so comments added by hand survive. Four things can stop it:
 
 - **The chart has a problem** — most often a `${var}` naming a column that
   does not exist. The dialog lists each one; one in another group is a link
@@ -150,6 +150,13 @@ they were, so comments added by hand survive. Three things can stop it:
   edited them outside the editor. **Save anyway** overwrites their change;
   cancel and reopen the chart to keep it.
 - **This change breaks deployments that already exist** — see below.
+- **This change would leave deployments with values a save refuses**, though
+  it breaks nothing in the table: for example, making a column a selector
+  when two rows of a deployment fill it the same. The dialog names each
+  deployment and cell; change those rows first (a deployment synced from
+  another is changed in its source, which the dialog names). A problem a
+  deployment had before the change does not stop it, nor does a deployment
+  whose `values.yaml` cannot be read; the others are still checked.
 
 ### Change a chart people are already using
 

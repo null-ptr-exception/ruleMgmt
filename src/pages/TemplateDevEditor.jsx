@@ -459,7 +459,8 @@ export default function TemplateDevEditor() {
   // reloading the chart after a failure would throw the edits away.
   function reportFailedSave(result, title = 'Save failed') {
     const lines = result?.errors ||
-      result?.migrationProblems?.flatMap(d => d.problems.map(p => `${d.path}: ${p.message}`)) ||
+      result?.migrationProblems?.flatMap(d => d.problems.map(p =>
+        `${d.path}${d.source ? ` (synced from ${d.source}: change it there)` : ''}: ${p.message}`)) ||
       (result?.findings || []).map(f => f.description || f.message)
     Modal.error({
       title: result?.error || title,

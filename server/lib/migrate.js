@@ -25,6 +25,13 @@ function allProblems(bare, model) {
   return [...valueProblems(bare, model), ...selectorValueProblems(bare, model).problems]
 }
 
+// One problem as the same one before and after a change: its group, row,
+// column and what it says, leaving out what it quotes in brackets — a
+// row overlap names the selected values, which a new selector level adds to.
+function problemKey(p) {
+  return [p.group, p.row, p.column, String(p.message || '').replace(/\([^)]*\)/g, '()')].join('|')
+}
+
 function rowsChanged(before, after) {
   let n = 0
   for (const [group, rows] of Object.entries(before || {})) {
@@ -70,9 +77,10 @@ async function locate(gitopsDir, relPath) {
  * With `model` (the new Template's) each migrated file is checked as a
  * values save would check it (#176): `problems` lists what a save would
  * refuse. One the file had already, against `beforeModel`, before this
- * change is marked `before: true` — reported, but no reason to refuse it.
- * A problem counts as the same when its message is: the message names the
- * group, the row and the column. A copied follower lists none: its
+ * change is marked `before: true` — reported, but no reason to refuse it
+ * (see problemKey for what counts as the same one); with no `beforeModel`
+ * every one is. `checkOnly` leaves out a deployment whose values cannot be
+ * read instead of failing the whole plan. A copied follower lists none: its
  * problems are its source's.
  * @returns { deployments: [{ deployment, path, readonly, copiedFrom, rowsChanged, losses, orphaned, problems: [{ message, before }] }], writes: [[file, text, isTarget, path]] }
  *          `copiedFrom` is the source a sync follower's file is copied from,
@@ -82,7 +90,7 @@ async function locate(gitopsDir, relPath) {
  *          with the source's migrated rows, which is what it ends up with;
  *          its `losses` and `orphaned` are the source's.
  */
-export async function planDeploymentMigration(gitopsDir, chart, targetSchema, migration, { deploymentsDirEnv, model, beforeModel } = {}) {
+export async function planDeploymentMigration(gitopsDir, chart, targetSchema, migration, { deploymentsDirEnv, model, beforeModel, checkOnly = false } = {}) {
   const found = await findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv)
   const registry = await readSyncRegistry(gitopsDir)
 
@@ -103,14 +111,22 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     try {
       parsed = yaml.load(await fs.readFile(valuesFile, 'utf-8')) || {}
     } catch (err) {
+      // Only checking (#176): one that cannot be read is left out, the rest
+      // are still checked; its own save says what is wrong with it.
+      if (checkOnly && err?.code !== 'ENOENT') {
+        console.error(`Template save check: ${dep.path} values cannot be read`, err.message)
+        continue
+      }
       if (err?.code !== 'ENOENT') throw new Error(`${dep.path}: values cannot be read (${err.message})`, { cause: err })
       missing.add(dep.path)
     }
     const before = unwrapValues(parsed, depName)
 
     const { values: after, orphaned } = migrateValues(before, migration, targetSchema)
-    const had = new Set(model && beforeModel ? allProblems(before, beforeModel).map(p => p.message) : [])
-    const problems = model ? allProblems(after, model).map(p => ({ ...p, before: had.has(p.message) })) : []
+    // With no model to say what the values were valid against (rules/ that
+    // does not parse), nothing can be told to be new: none is refused.
+    const had = beforeModel ? new Set(allProblems(before, beforeModel).map(problemKey)) : null
+    const problems = model ? allProblems(after, model).map(p => ({ ...p, before: had ? had.has(problemKey(p)) : true })) : []
     deployments.push({
       deployment: dep.deployment,
       path: dep.path,

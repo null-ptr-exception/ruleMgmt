@@ -166,6 +166,30 @@ rules:
     }
   })
 
+  // A change that is not breaking but would leave a deployment with values a
+  // save refuses (rows a new selector cannot tell apart) is refused, and the
+  // editor names the deployment and the cell. The refusal is stubbed.
+  test('a save refused for a deployment it would break names the deployment', async ({ page }) => {
+    await page.route(`**/api/v2/templates/${CHART}/rules`, route => route.request().method() === 'POST'
+      ? route.fulfill({ status: 409, json: {
+        error: 'This change would leave deployments with values a save refuses',
+        migrationProblems: [
+          { path: 'deployments/shop/prod', readonly: false, problems: [{ message: 'cpu rows 1 and 2 select the same thing (p / api) — which threshold applies has no answer' }] },
+          { path: 'deployments/shop/dr', readonly: true, source: 'deployments/shop/main', problems: [{ message: 'cpu row 1, "namespace": required' }] },
+        ],
+      } })
+      : route.continue())
+    await openChart(page)
+    await page.getByPlaceholder('alert name').fill('CpuRefused')
+    await page.getByRole('button', { name: 'Save' }).first().click()
+    const dialog = page.locator('.ant-modal').filter({ hasText: 'This change would leave deployments with values a save refuses' })
+    await expect(dialog).toBeVisible({ timeout: 5000 })
+    await expect(dialog).toContainText('deployments/shop/prod: cpu rows 1 and 2 select the same thing')
+    // A sync target says to change its source: its own Save is off.
+    await expect(dialog).toContainText('deployments/shop/dr (synced from deployments/shop/main: change it there): cpu row 1')
+    await expect(page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })).toHaveCount(0)
+  })
+
   // #185: "Save anyway" answers "the files changed on disk", not "this breaks
   // deployments" — the breaking dialog still has to come up.
   test('Save anyway over files changed on disk still asks about a breaking change', async ({ page, request }) => {

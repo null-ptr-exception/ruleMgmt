@@ -3,7 +3,7 @@ import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupOnceCha
 import { findDeploymentsUsing } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
-import { readSyncRegistry, isTarget } from '../lib/sync.js'
+import { readSyncRegistry, isTarget, getSourceForTarget } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
 import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
 import { generateProducts, staleTemplates } from '../../src/utils/drift.js'
@@ -42,7 +42,25 @@ async function withReadonly(gitopsDir, deployments) {
 
 // The Template's model as it is on disk, before a save: what a migrated
 // deployment's values were valid against (#176). null when it has none.
-const modelBefore = async chartDir => (await readChartModel(chartDir)).model
+// null when rules/ on disk does not parse: a partial model would make every
+// problem a deployment already had look new.
+async function modelBefore(chartDir) {
+  const { rulesFiles } = await readChartArtifacts(chartDir)
+  if (rulesFiles && Object.keys(rulesFiles).length && parseRulesDir(rulesFiles).errors.length) return null
+  return (await readChartModel(chartDir)).model
+}
+
+// A refused deployment's new problems; a sync target names its source, the
+// one to change (its own Save is off).
+async function withSources(gitopsDir, refused) {
+  const registry = await readSyncRegistry(gitopsDir)
+  return refused.map(d => ({
+    path: d.path,
+    readonly: d.readonly,
+    ...(d.readonly ? { source: getSourceForTarget(registry, d.path) } : {}),
+    problems: d.problems.filter(p => !p.before),
+  }))
+}
 
 export default function templatesRouter() {
   const router = express.Router()
@@ -241,7 +259,25 @@ export default function templatesRouter() {
         if (refused.length) {
           return res.status(409).json({
             error: 'The migration would write values a save refuses',
-            migrationProblems: refused.map(d => ({ path: d.path, readonly: d.readonly, problems: d.problems.filter(p => !p.before) })),
+            migrationProblems: await withSources(req.gitopsDir, refused),
+          })
+        }
+      }
+
+      // A change that is not breaking writes no deployment, but can still
+      // leave one with values a save refuses — a column made a selector
+      // that two rows fill the same (#176). Checked the same way, against
+      // the values as they are; one that cannot be read is no reason to
+      // stop this save.
+      if (!(confirmBreaking && migration && isBreaking)) {
+        const plan = await planDeploymentMigration(req.gitopsDir, req.params.chart, newSchema, {}, {
+          deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: await modelBefore(chartDir), checkOnly: true,
+        })
+        const refused = plan.deployments.filter(d => d.problems.some(p => !p.before))
+        if (refused.length) {
+          return res.status(409).json({
+            error: 'This change would leave deployments with values a save refuses',
+            migrationProblems: await withSources(req.gitopsDir, refused),
           })
         }
       }

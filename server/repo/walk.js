@@ -373,6 +373,24 @@ export async function linkOutOfTree(repo) {
   return e ? { rel: e.rel, why: e.why } : null
 }
 
+/**
+ * The first folder of the tree that cannot be listed (no permission), as
+ * the walk names it, or null: what is in it is not known, so a change that
+ * has to rewrite every deployment of a Template (a migration) is refused
+ * naming it rather than leaving a deployment in it behind. Whether it
+ * holds one cannot be told, so it is refused whatever it holds.
+ *   → { rel, why } | null
+ */
+export async function unreadableFolderOfTree(repo) {
+  const e = (await walk(repo, { hidden: true })).find(x => x.kind === 'unreadable' && x.cause === 'folder')
+  return e ? { rel: e.rel || '.', why: e.why } : null
+}
+
+/** The refusal of a migration that would leave a deployment in a folder that cannot be read behind (unreadableFolderOfTree). */
+export const unreadableFolderRefusal = ({ rel, why }) => ({ status: 409, body: {
+  error: `${rel} cannot be read (${why}) — a deployment in it would be left not migrated: nothing is written until it can be read`,
+  file: rel, unreadable: true } })
+
 /** The refusal of a change that would leave a deployment behind a link out of the repo (linkOutOfTree). */
 export const linkOutRefusal = ({ rel, why }, what) => ({ status: 409, body: {
   error: `${rel}: ${why} — a deployment behind it would be left ${what}: links made by hand are not followed; remove it in git, or make it a folder of the repo`,

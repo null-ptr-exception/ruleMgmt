@@ -46,7 +46,7 @@ export const TEMPLATE_ROWS = Object.freeze({
     'template.chart-cannot-tell': { action: 'ignore', why: 'named with each deployment of the Template' },
     'template.rules-gone': { action: 'list', why: 'what is on disk renders; a save or gen-rules would write no rules, and refuses' },
     'template.schema-unchecked': { action: 'list', why: CANNOT_TELL_LIST },
-    'template.chart-absent': { action: 'ignore', why: 'named with each deployment of the Template (its Template is not in the repo)' },
+    'template.chart-absent': { action: 'list', why: 'named with each deployment of the Template (its Template is not in the repo); a folder of rules with no Chart.yaml is how a Template is started by hand (gen-rules --init writes it), so it is not refused — but it is not in the Templates list, and may be what a delete stopped halfway left: said' },
     'template.chart-unreadable': { action: 'ignore', why: 'named with each deployment of the Template' },
     'template.chart-not-yaml': { action: 'ignore', why: 'named with each deployment of the Template' },
     'template.chart-version': { action: 'ignore', why: 'named with each deployment of the Template' },

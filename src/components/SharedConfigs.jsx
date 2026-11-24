@@ -5,6 +5,7 @@ import { ConfigDialog, configTarget } from './NotificationConfigs'
 import { sharedConfigProblems } from '../utils/routingGenerator'
 import { configNameProblem } from '../utils/routingSchema'
 import { overlapText } from '../utils/sharedOverlap'
+import { reasonLine } from '../utils/syncNotice'
 import { blankForm, toForm } from '../utils/configForm'
 import { getSharedConfigs, saveSharedConfigs, renameSharedConfig, regenerateShared } from '../utils/chartApi'
 
@@ -131,7 +132,7 @@ export default function SharedConfigs() {
     const result = await regenerateShared()
     if (!result.ok) return refused(result)
     if (result.failed.length) {
-      Modal.error({ title: 'Some could not be made again', content: <List items={result.failed.map(f => `${f.deployment}: ${f.error}`)} /> })
+      Modal.error({ title: 'Some could not be made again', content: <List items={result.failed.map(f => reasonLine(f.deployment, f.error))} /> })
     } else {
       message.success(`Made again: ${result.regenerated.join(', ')} — commit them from the Git panel`)
     }

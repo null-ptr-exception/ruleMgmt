@@ -175,6 +175,8 @@ export async function baseFiles(ws) {
 //   side: 'template'   a write of the Template side (rows only they get)
 //   last               the last file of the same write
 //   unreadableDir      a folder of what it removes or copies, made unreadable
+//   blindDir           a folder holding deployments it must rewrite, made unreadable
+//   legacyDir          the Template's legacy deployments folder, made unreadable
 //   commitRefusesBefore  Commit refuses the repo as the path finds it
 //   unnamed            the file its answer names is not pinned
 //   cli                a process: args(ws) → [script, ...args]
@@ -245,7 +247,7 @@ export const PATHS = [
     },
     failAt: { first: 'deployments/t/n/Chart.yaml' }, depFolder: 'deployments/t/n',
     files: ['deployments/t/n/'] },
-  { name: 'migration-apply', side: 'template', primary: `${T}/rules/cpu.yaml`, second: `${D.c}/values.yaml`, last: `${D.b}/values.yaml`,
+  { name: 'migration-apply', side: 'template', primary: `${T}/rules/cpu.yaml`, second: `${D.c}/values.yaml`, last: `${D.b}/values.yaml`, blindDir: D.u, legacyDir: 'deployments/demo',
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: { job: 'name' } } } } }),
     bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: {} } } } }),
     said: res => [...rel(T, res.data?.written), ...(res.data?.migrated || []).map(m => `${m.path}/values.yaml`)],
@@ -420,6 +422,8 @@ async function setUp(ws, c, p) {
     case 'second-readonly-file': await fs.chmod(abs(p.second), 0o444); break
     case 'last-readonly-file': await fs.chmod(abs(p.last), 0o444); break
     case 'unreadable-folder': await fs.chmod(abs(p.unreadableDir), 0); break
+    case 'deployments-folder-unreadable': await fs.chmod(abs(p.blindDir), 0); break
+    case 'legacy-folder-unreadable': await fs.chmod(abs(p.legacyDir), 0); break
     case 'dir-link-inside': {
       const dir = path.dirname(prim)
       const there = abs(`notes/linked-dir-${path.basename(dir)}`)

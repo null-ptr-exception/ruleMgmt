@@ -89,7 +89,8 @@ async function locate(repo, relPath, keys) {
  *   { deployments, files, strict, syncSkipped, refusal, linked }
  *   deployments  [{ deployment, path, readonly, copiedFrom, rowsChanged,
  *                losses, orphaned, problems: [{ message, before }] }]: the
- *                dialog's preview. With `model` (the new Template's) each
+ *                dialog's preview (`linked: true` on one whose only
+ *                problem is the sentence of `linked`, below). With `model` (the new Template's) each
  *                migrated file is checked as a values save would check it
  *                (#176): `problems` lists what a save would refuse. One the
  *                file had already, against `beforeModel`, is marked
@@ -141,7 +142,8 @@ export async function planMigration(repo, { chart, targetSchema, migration, depl
     // The preview lists it with the sentence, as a deployment not migrated.
     if (dep.linked) {
       if (!checkOnly) linked ??= dep.linked
-      deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], noValues: true,
+      // `linked`: its problem is the link, not values a save refuses.
+      deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], noValues: true, linked: true,
         problems: [{ message: dep.linked.body.error, before: checkOnly }] })
       continue
     }

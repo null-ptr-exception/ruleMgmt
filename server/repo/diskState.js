@@ -4,16 +4,12 @@
  * under the commit lock, and a snapshot would answer the second time with
  * what it read the first.
  *
- *   linkWritten(root, rel)  where the link at `rel` is written to lead (as
- *                           git keeps it), null when it is no link
  *   stateOf(abs)            { none } | { link } | { content }
  *   folderState(abs)        [[path under it, stateOf]] of every file and
  *                           link under a folder, in one order
  */
 import fs from 'fs/promises'
 import path from 'path'
-
-export const linkWritten = (root, rel) => fs.readlink(path.join(root, rel)).catch(() => null) // not a link, or gone: no link
 
 export async function stateOf(abs) {
   const stat = await fs.lstat(abs).catch(() => null) // nothing there (or not to be looked at): hashed as nothing

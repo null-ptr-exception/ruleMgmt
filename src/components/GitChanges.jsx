@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { apiFetch } from '../lib/apiFetch.js'
+import { reasonLine } from '../utils/syncNotice.js'
 import { Button, Input, Tag, Modal, Typography, Space, message } from 'antd'
 import {
   CheckOutlined,
@@ -152,7 +153,7 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
         title: `Regenerated ${made}; ${data.failed.length} could not be`,
         content: (
           <ul style={{ paddingLeft: 18, marginTop: 8 }}>
-            {data.failed.map(f => <li key={f.deployment}>{f.deployment}: {f.error}</li>)}
+            {data.failed.map(f => <li key={f.deployment}>{reasonLine(f.deployment, f.error)}</li>)}
           </ul>
         ),
       })

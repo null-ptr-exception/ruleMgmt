@@ -337,7 +337,9 @@ describe.skipIf(IS_ROOT)('what a plan reads besides the files it writes is held 
     }
     const res = await api('POST', '/api/v2/folders/common', { action: 'delete', path: `${U}/_common/demo`, expected: shown.data.expected })
     expect(res.status).toBe(409)
-    expect(res.data.error).toMatch(/changed since the list was made/)
+    // What the removal answers when the link led elsewhere before it was
+    // asked: the chart is planned again under the lock, as it is now.
+    expect(res.data.error).toMatch(/has a problem — fix it first/)
     expect(await exists(`${U}/_common/demo/Chart.yaml`)).toBe(true)
   })
 })

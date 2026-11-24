@@ -146,7 +146,7 @@ const stateOf = loaded => {
 
 // What a folder held when listed.
 const dirStateOf = loaded => (loaded.state === 'ok'
-  ? `ok:${JSON.stringify([...loaded.value.entries].sort())}:${JSON.stringify([...loaded.value.links].sort())}`
+  ? `ok:${JSON.stringify([...loaded.value.entries].sort())}:${JSON.stringify([...loaded.value.links].sort())}:${JSON.stringify([...(loaded.value.targets ?? [])].sort())}`
   : `${loaded.state}:${loaded.why ?? ''}`)
 
 // Where the folder `dirRel` really is now, or will be once made: the real
@@ -342,10 +342,19 @@ const parkName = (dir, base) => path.join(dir, `_${base}.${randomBytes(4).toStri
 // writers sharing one would find it gone at the second rename.
 const tempName = (dir, base) => path.join(dir, `_${base}.${randomBytes(4).toString('hex')}.tmp`)
 
+// Whether `dirRel` of the repo is there (through whatever leads to it).
+const folderThere = (root, dirRel) => fs.stat(path.join(root, dirRel)).then(() => true, err => {
+  if (err.code === 'ENOENT') return false
+  throw err
+})
+
 // One file; `step` records what it did, for writeFiles to take back.
 async function writeOne(root, { rel, text, link, removeFolder, removeWhole, makeFolder }, made, step, expected, asides) {
   const dirRel = path.posix.dirname(rel)
   const base = path.posix.basename(rel)
+  // A removal whose folder is not there is nothing to do: no folder is
+  // made for it (realFolder would make one, and leave it behind, empty).
+  if ((text === null || removeFolder || removeWhole) && !(await folderThere(root, dirRel))) return
   const dir = await realFolder(root, dirRel, made, expected)
   step.dir = dir
   step.dirRel = dirRel

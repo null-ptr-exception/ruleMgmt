@@ -73,7 +73,8 @@ describe('a Template delete killed after it moved two files aside', () => {
     expect(git('status', '--porcelain', '-uall')).toContain(rules.rel)
     const c = await commit()
     expect(c.status).toBe(409)
-    expect(c.data.findings.map(f => f.description)).toContain(`${rules.rel} is charts/demo/rules/cpu.yaml as it was, moved aside by a write that did not finish: rename it back to charts/demo/rules/cpu.yaml to keep it, or remove it, then commit`)
+    // Part of a delete (its Chart.yaml is aside too): put back, and the delete done again — never only removed.
+    expect(c.data.findings.map(f => f.description)).toContain(`${rules.rel} is charts/demo/rules/cpu.yaml as it was, moved aside by a write that did not finish: rename it back to charts/demo/rules/cpu.yaml, then delete the Template demo again if it is to go — removing it alone would leave the rest of the Template behind, then commit`)
     expect(git('log', '--oneline').trim().split('\n')).toHaveLength(1)
   })
 
@@ -99,5 +100,76 @@ describe('a routing removal killed after it moved routing.yaml aside', () => {
     expect(fs.readFileSync(path.join(root, left[0].rel), 'utf-8')).toBe('labels: {}\n')
     expect(await sweepTempFiles(root, { now: Date.now() + 3 * 60 * 60 * 1000 })).toEqual([])
     expect((await commit()).status).toBe(409)
+  })
+})
+
+// Only part of a change moved aside when the server was killed: what Commit
+// says to do leads to a whole Template — as it was, or the change done
+// again — never to the half that only removing the parked file would leave.
+describe('part of a Template change moved aside: what Commit says to do leaves a whole Template', () => {
+  const RULES = (group, metric) => `group: ${group}\ncolumns:\n  job: {type: string, required: true}\nrules:\n  - alert: ${group}High\n    expr: ${metric}{job="\${job}"} > 1\n    labels: {severity: critical}\n`
+  // Every file of the repo but .git, with its text.
+  const tree = () => {
+    const out = {}
+    const walk = rel => { for (const e of fs.readdirSync(path.join(root, rel), { withFileTypes: true })) { const r = rel ? `${rel}/${e.name}` : e.name; if (r === '.git') continue; if (e.isDirectory()) walk(r); else out[r] = fs.readFileSync(path.join(root, r), 'utf-8') } }
+    walk('')
+    return out
+  }
+  // The Template `two` with the groups cpu and mem, made by a save and committed.
+  const makeTwo = () => {
+    const made = killedAt({ kind: 'rules', chart: 'two', files: { 'cpu.yaml': RULES('cpu', 'cpu_used'), 'mem.yaml': RULES('mem', 'mem_used') } }, 999)
+    expect(made.status, made.stderr).toBe(0)
+    fs.rmSync(path.join(root, 'charts/demo'), { recursive: true })
+    git('add', '-A'); git('commit', '-qm', 'two')
+  }
+
+  it('a delete that moved only Chart.yaml aside: rename it back and delete again — the Template is whole, then gone', async () => {
+    makeTwo()
+    const before = tree()
+    expect(killedAt({ kind: 'chart-delete', name: 'two' }, 1).signal).toBe('SIGKILL')
+    const [p] = await parkedItems(root)
+    expect(p.original).toBe('charts/two/Chart.yaml')
+    const c = await commit()
+    expect(c.status).toBe(409)
+    expect(c.data.findings.map(f => f.description)).toEqual([`${p.rel} is charts/two/Chart.yaml as it was, moved aside by a write that did not finish: rename it back to charts/two/Chart.yaml, then delete the Template two again if it is to go — removing it alone would leave the rest of the Template behind, then commit`])
+    // Followed: as it was before the delete.
+    fs.renameSync(path.join(root, p.rel), path.join(root, p.original))
+    expect(tree()).toEqual(before)
+    // And the delete again: nothing of it left.
+    expect(killedAt({ kind: 'chart-delete', name: 'two' }, 999).status).toBe(0)
+    expect(fs.existsSync(path.join(root, 'charts/two'))).toBe(false)
+    expect((await commit()).status).toBe(200)
+  })
+
+  it('a rules save that moved only a removed group\'s rules file aside: rename it back, Commit holds until the save is done again, then nothing of the group is left', async () => {
+    makeTwo()
+    const without = { kind: 'rules', chart: 'two', files: { 'cpu.yaml': RULES('cpu', 'cpu_used') } }
+    expect(killedAt(without, 1).signal).toBe('SIGKILL')
+    const [p] = await parkedItems(root)
+    expect(p.original).toBe('charts/two/rules/mem.yaml')
+    // Half done: the group's generated template is still there.
+    expect(fs.existsSync(path.join(root, 'charts/two/templates/mem.yaml'))).toBe(true)
+    const c = await commit()
+    expect(c.status).toBe(409)
+    expect(c.data.findings.map(f => f.description)).toEqual([`${p.rel} is charts/two/rules/mem.yaml as it was, moved aside by a write that did not finish: rename it back to charts/two/rules/mem.yaml, then save the Template two again (or delete it again, if it was being deleted) — removing it alone would leave what was made from it behind, then commit`])
+    fs.renameSync(path.join(root, p.rel), path.join(root, p.original))
+    // Not yet whole (the schema the save wrote has no mem): Commit says so rather than commit it.
+    const held = await commit()
+    expect(held.status).toBe(409)
+    expect(held.data.findings.map(f => f.kind)).toEqual(['drift-stale'])
+    // The save again: whole.
+    expect(killedAt(without, 999).status).toBe(0)
+    expect(Object.keys(tree()).filter(f => f.includes('mem'))).toEqual([])
+    expect((await commit()).status).toBe(200)
+  })
+
+  it('a folder of rules under charts/ with no Chart.yaml is committed, and said: it is not listed as a Template', async () => {
+    makeTwo()
+    fs.rmSync(path.join(root, 'charts/two/Chart.yaml'))
+    // A folder that is no Template of AlertForge's (no rules/, no Chart.yaml) is not its to judge.
+    put('charts/notes/README.md', 'kept here\n')
+    const c = await commit()
+    expect(c.status).toBe(200)
+    expect(c.data.templateWarnings).toEqual([{ kind: 'template-chart-absent', chart: 'two', description: 'charts/two/Chart.yaml is not there: Helm renders no deployment of the Template without it — it is not listed as a Template until it has one: write it (gen-rules.mjs --init), or remove the folder if the Template was to go' }])
   })
 })

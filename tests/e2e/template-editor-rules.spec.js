@@ -237,6 +237,47 @@ rules:
     }
   })
 
+  // A deployment on a _common reached through a link made by hand is held
+  // by the link: its row says the one sentence, and nothing says it "would
+  // get values a save refuses" — no mapping changes a link. The preview is
+  // stubbed with the row the server answers for such a deployment.
+  test('the breaking dialog says only the one sentence for a deployment on a hand-linked _common', async ({ page, request }) => {
+    const orphanWarn = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  warn: {type: number}
+rules:
+  - alert: A
+    expr: cpu{ns="\${namespace}"} > 1
+`
+    await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': orphanWarn }, confirmBreaking: true } })
+    await request.post(`/api/v2/deployments/${CHART}/prod`, { data: { values: { cpu: [{ namespace: 'p', warn: 90 }] } } })
+    const DEP = 'team/a'
+    const SAID = `${DEP}: its _common chart team/_common/${CHART}: team/_common is a link to shop/_common — a _common reached through a link made by hand is not supported, and nothing is written to it: replace the link with a folder of its own in git, or depend on shop/_common/${CHART}`
+    try {
+      await page.route('**/migration-preview', route => route.fulfill({ json: { deployments: [
+        { deployment: 'prod', path: `deployments/${CHART}/prod-values.yaml`, readonly: false, rowsChanged: 1, losses: [{ group: 'cpu', columns: ['warn'] }], orphaned: [], problems: [], copiedFrom: null },
+        { deployment: 'a', path: DEP, readonly: false, rowsChanged: 0, losses: [], orphaned: [], noValues: true, linked: true, problems: [{ message: SAID, before: false }] },
+      ] } }))
+      await openChart(page)
+      await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
+      await page.getByRole('button', { name: 'Save' }).first().click()
+      const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+      await openedModal(dialog)
+      await dialog.getByRole('button', { name: 'Continue' }).click()   // step 1 -> map
+      await expect(dialog.locator('.ant-steps-item-process')).toContainText('Map')
+      await dialog.getByRole('button', { name: 'Continue' }).click()   // step 2 -> preview
+      await expect(dialog.getByTestId('migration-problems')).toHaveText(SAID, { timeout: 8000 })
+      await expect(dialog.getByText('would get values a save refuses')).toHaveCount(0)
+      await expect(dialog.getByTestId('migration-refused')).toHaveCount(0)
+      // Still not changed in place: the link holds it.
+      await expect(dialog.getByRole('button', { name: 'Change in place' })).toBeDisabled()
+    } finally {
+      await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU_RULES }, confirmBreaking: true } })
+      await request.delete(`/api/v2/deployments/${CHART}/prod`)
+    }
+  })
+
   // A change that is not breaking but would leave a deployment with values a
   // save refuses — rows a new selector cannot tell apart — is refused, and
   // the editor names the deployment and the cell. The editor opened the

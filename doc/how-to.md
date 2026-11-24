@@ -249,6 +249,12 @@ file that cannot be written — a sync target's read-only `values.yaml`, say
 — stops the change with nothing written, and the editor names the file. A folder of the
 deployments that is a link leading out of the repo (made by hand) may hold
 a deployment the change cannot reach: the change is refused, naming it.
+So is a folder that cannot be read (no permission): a deployment in it
+would keep the old columns and stop rendering. What is in such a folder
+cannot be told, so the change is refused (409, naming the folder, nothing
+written) even when the folder holds no deployment of this chart — make it
+readable, or remove it, then save again. The dialog's first step lists it
+under the deployments it could not look into.
 
 A removed rule is found by counting the rules of each name, raw rules
 included (a raw rule is read for the `alert:` or `record:` in it, and one
@@ -397,7 +403,7 @@ Two more kinds of folder are flagged in the tree:
 | Folder | What it means | Counts as using its Template |
 |---|---|---|
 | A `Chart.yaml` and no `values.yaml` | Helm deploys the Template's example rows | Yes: listed for a breaking change (nothing is written in it), and the Template cannot be deleted while it is there. Delete it like a deployment, or add a `values.yaml` |
-| One AlertForge cannot read (permissions), a deployment whose `Chart.yaml` cannot be read or used (no permission, a folder, a link to nothing or out of the repo, not YAML, empty, `dependencies` that is not a list), a folder that is a link leading outside the repo, or one that is a link round in a circle | The deployments in it (or it) are not listed for sync, checked or migrated | Not known: named in the tree, in the list of who uses a Template, when a commit goes through, when a breaking change is confirmed and when the Template is deleted, and blocks none of them (`check-deployment` and `check-repo` cannot check it: exit 2) |
+| One AlertForge cannot read (permissions), a deployment whose `Chart.yaml` cannot be read or used (no permission, a folder, a link to nothing or out of the repo, not YAML, empty, `dependencies` that is not a list), a folder that is a link leading outside the repo, or one that is a link round in a circle | The deployments in it (or it) are not listed for sync, checked or migrated | Not known: named in the tree, in the list of who uses a Template, when a commit goes through, in a breaking change's dialog and when the Template is deleted, and blocks none of them — but a breaking change that migrates deployments is refused while a folder cannot be read or is a link leading outside the repo (`check-deployment` and `check-repo` cannot check it: exit 2) |
 | A `Chart.yaml` that names no Template beside a `values.yaml` that writes values | Not a deployment: none of its rows is deployed | Named when a commit goes through (not refused); `check-repo` refuses it (exit 1) |
 
 A folder that is a link — or is reached through one — is never a
@@ -1041,7 +1047,18 @@ leave what it was removing moved aside, beside where it was, as
 such names too, so the path each came from is in them). It is your
 content: nothing deletes it, the server's log names it when it starts, git
 shows it, and Commit and Push refuse while it is there, naming it and
-where it came from — rename it back to keep it, or remove it.
+where it came from — rename it back to keep it, or remove it. A file or
+folder from inside a Template (`charts/<name>/…`) is only part of a delete
+or a save that was stopped halfway, so the message does not offer to
+remove it: rename it back, then delete the Template again (when its
+`Chart.yaml` or anything but a rules file or a generated template was
+moved aside) or save it again — removing it alone would leave half a
+Template: a folder with no `Chart.yaml`, or a generated file with no rules.
+
+A folder under `charts/` that holds `rules/` (or a 1.x `values.schema.json`)
+and no `Chart.yaml` is committed — it is how a Template is started by hand —
+and Commit's answer lists it: it is in no list of Templates until it has
+one (`gen-rules.mjs --init` writes it).
 
 Nothing leaves the working tree until you commit, which is why Save is safe to
 experiment with.

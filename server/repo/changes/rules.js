@@ -15,7 +15,9 @@
  * the Template (409 with the dialog's facts), a migration or a change that
  * would leave a deployment with values a save refuses (409), what the
  * Template would not render as written (409), a file that cannot be read
- * (409, named), a folder on the way that is a link (409, named).
+ * (409, named), a folder on the way that is a link (409, named); a
+ * migration while a folder of the tree cannot be read or is a link out of
+ * the repo (409, named: a deployment in it would be left behind).
  *
  * Only files whose content changes are written. The migration's files come
  * from `planMigration(repo, …)` (lib/migrate.js): its `files`
@@ -34,7 +36,7 @@ import { linkedFolderProblem, writeRefusal } from '../writePath.js'
 import { decide } from '../policy.js'
 import { TEMPLATE_POLICIES } from '../findings/template.js'
 import { readRegistry } from '../sync.js'
-import { linkOutOfTree, linkOutRefusal } from '../walk.js'
+import { linkOutOfTree, linkOutRefusal, unreadableFolderOfTree, unreadableFolderRefusal } from '../walk.js'
 import { NotLoadedError, isLinkKind } from '../loaded.js'
 import { readTemplate } from '../../lib/chartFiles.js'
 import { UnreadableError, errorAnswer } from '../../lib/readIfThere.js'
@@ -123,8 +125,9 @@ async function migrationFiles(repo, { chart, newSchema, migration, model, before
   try {
     m = await planMigration(repo, { chart, targetSchema: newSchema, migration, model, beforeModel, deploymentsDirEnv: process.env.DEPLOYMENTS_DIR })
   } catch (err) {
-    // A file it could not read is named.
-    if (err instanceof NotLoadedError) return { refusal: errorAnswer(err) }
+    // A file or folder it could not read is named: a refusal (409), as
+    // the save not yet confirmed and the preview answer the same state.
+    if (err instanceof NotLoadedError || err instanceof UnreadableError) return { refusal: errorAnswer(err) }
     return no(500, { error: `Deployment migration failed: ${err.message}` })
   }
   // A deployment on a _common reached through a link made by hand: the
@@ -214,6 +217,10 @@ defineChange('rules', {
     if (migrating) {
       const out = await linkOutOfTree(repo)
       if (out) return { refusal: linkOutRefusal(out, 'not migrated') }
+      // A folder that cannot be read may hold one too: what must be
+      // rewritten and cannot be read fails the whole change.
+      const blind = await unreadableFolderOfTree(repo)
+      if (blind) return { refusal: unreadableFolderRefusal(blind) }
       migrated = await migrationFiles(repo, { chart, newSchema, migration, model, beforeModel: modelBefore(onDisk) })
       if (migrated.refusal) return { refusal: migrated.refusal }
     }

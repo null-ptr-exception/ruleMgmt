@@ -182,4 +182,25 @@ test.describe('Git Panel', () => {
       await expect(page.locator('text=Select a file to view diff')).not.toBeVisible()
     }
   })
+  // Regenerate lists what it could not make. A reason that starts with the
+  // deployment (one on a _common reached through a link made by hand) is
+  // shown as it is: the path once. The answers are stubbed: nothing of the
+  // workspace is written, and the list is what the dialog shows of them.
+  test('Regenerate names a deployment it could not make once', async ({ page }) => {
+    const DEP = 'deployments/t/a'
+    const SAID = `${DEP}: its _common chart deployments/t/_common/demo: deployments/t/_common is a link to deployments/s/_common — a _common reached through a link made by hand is not supported`
+    await page.route('**/api/v2/git/status', route => route.fulfill({ json: { branch: 'main', changes: { modified: [`${DEP}/routing.yaml`], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false } }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ status: 400, json: { error: 'Routing is behind', findings: [{ description: `${DEP}: its resource is behind its routing.yaml` }], regenerable: 1 } }))
+    await page.route('**/api/v2/git/routing/regenerate', route => route.fulfill({ json: { regenerated: [], failed: [{ deployment: DEP, error: SAID }, { deployment: 'deployments/t/b', error: 'routing.yaml cannot be read' }] } }))
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e')
+    await page.getByRole('button', { name: /Commit$/ }).click()
+    await page.getByRole('button', { name: 'Regenerate 1' }).click()
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Regenerated 0; 2 could not be' })
+    await expect(dialog.getByText(SAID, { exact: true })).toBeVisible({ timeout: 5000 })
+    await expect(dialog.getByText('deployments/t/b: routing.yaml cannot be read', { exact: true })).toBeVisible()
+    await expect(dialog.getByText(`${DEP}: ${DEP}:`)).toHaveCount(0)
+  })
 })

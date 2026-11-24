@@ -494,3 +494,89 @@ describe('a deployment folder that is a link leading out of the repo', () => {
     expect(await tree()).toEqual(before)
   })
 })
+
+describe('a removal where there is nothing to remove makes no folder', () => {
+  it('a deployment with no routing and no templates/: removing its routing answers 200 and leaves the repo as it was', async () => {
+    for (const d of [A, B]) {
+      await fs.rm(path.join(root, d, 'routing.yaml'))
+      await fs.rm(path.join(root, d, 'templates'), { recursive: true })
+    }
+    const before = await tree()
+    expect(before[`${A}/templates`]).toBeUndefined()
+    const { status, data } = await api('DELETE', route(A))
+    expect(status).toBe(200)
+    expect(data).toEqual({ ok: true })
+    expect(await tree()).toEqual(before)
+  })
+
+  it('every form of removal — a file, an emptied folder, a folder with all it holds — under a folder that is not there: written, nothing made', async () => {
+    const { writeFiles } = await import('../../server/repo/write.js')
+    const before = await tree()
+    const wrote = await writeFiles(root, [
+      { rel: 'gone/deep/file.yaml', text: null },
+      { rel: 'gone/deep/folder', removeFolder: true },
+      { rel: 'gone/other/whole', removeWhole: true },
+      { rel: `${C}/nothing/here.yaml`, text: null },
+    ])
+    expect(wrote.ok).toBe(true)
+    expect(await tree()).toEqual(before)
+  })
+})
+
+describe('the legacy folder deployments/<Template>/ cannot be read', () => {
+  const MIGRATE = { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: { job: 'name' } } } }
+  it.skipIf(IS_ROOT)('a confirmed migration is refused as the save not yet confirmed and the preview are: 409 naming the folder, nothing written', async () => {
+    await fs.mkdir(path.join(root, 'deployments/demo'))
+    await fs.writeFile(path.join(root, 'deployments/demo/old-values.yaml'), 'demo:\n  cpu:\n    - job: old\n')
+    const before = await tree()
+    await fs.chmod(path.join(root, 'deployments/demo'), 0)
+    const said = { error: 'deployments/demo cannot be read: permission denied', unreadable: true }
+    const unconfirmed = await api('POST', '/api/v2/templates/demo/rules', { files: MIGRATE.files })
+    expect([unconfirmed.status, unconfirmed.data]).toEqual([409, said])
+    const preview = await api('POST', '/api/v2/templates/demo/migration-preview', { files: MIGRATE.files, migration: MIGRATE.migration })
+    expect([preview.status, preview.data]).toEqual([409, said])
+    const confirmed = await api('POST', '/api/v2/templates/demo/rules', MIGRATE)
+    // Confirmed, it is the refusal of any folder that cannot be read: a deployment in it would be left behind.
+    expect(confirmed.status).toBe(409)
+    expect(confirmed.data).toEqual({ error: 'deployments/demo cannot be read (permission denied) — a deployment in it would be left not migrated: nothing is written until it can be read', file: 'deployments/demo', unreadable: true })
+    expect(confirmed.text).not.toContain(work)
+    await fs.chmod(path.join(root, 'deployments/demo'), 0o755)
+    expect(await tree()).toEqual(before)
+  })
+})
+
+describe('a folder of the deployments that cannot be read', () => {
+  const MIGRATE = { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: { job: 'name' } } } }
+  it.skipIf(IS_ROOT)('a confirmed migration is refused naming it, nothing written: a deployment in it would be left on the old columns', async () => {
+    // deployments/s/x uses the Template; deployments/s cannot be looked into.
+    await api('POST', '/api/v2/folders/init', { folder: 'deployments/s/x', chart: 'demo' })
+    await api('POST', vals('deployments/s/x'), { values: { cpu: [{ job: 'x' }] } })
+    const before = await tree()
+    await fs.chmod(path.join(root, 'deployments/s'), 0)
+    const { status, data, text } = await api('POST', '/api/v2/templates/demo/rules', MIGRATE)
+    await fs.chmod(path.join(root, 'deployments/s'), 0o755)
+    expect(status).toBe(409)
+    expect(data).toEqual({ error: 'deployments/s cannot be read (permission denied) — a deployment in it would be left not migrated: nothing is written until it can be read', file: 'deployments/s', unreadable: true })
+    expect(text).not.toContain(work)
+    expect(await tree()).toEqual(before)
+  })
+
+  it.skipIf(IS_ROOT)('one that holds no deployment cannot be told apart: refused the same', async () => {
+    await fs.mkdir(path.join(root, 'notes/private'), { recursive: true })
+    const before = await tree()
+    await fs.chmod(path.join(root, 'notes/private'), 0)
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', MIGRATE)
+    await fs.chmod(path.join(root, 'notes/private'), 0o755)
+    expect(status).toBe(409)
+    expect(data.file).toBe('notes/private')
+    expect(await tree()).toEqual(before)
+  })
+
+  it.skipIf(IS_ROOT)('a save that migrates nothing is not held by it', async () => {
+    await fs.mkdir(path.join(root, 'notes/private'), { recursive: true })
+    await fs.chmod(path.join(root, 'notes/private'), 0)
+    const { status } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU(2) } })
+    await fs.chmod(path.join(root, 'notes/private'), 0o755)
+    expect(status).toBe(200)
+  })
+})

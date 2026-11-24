@@ -286,6 +286,8 @@ last-readonly-file	routing-remove	ok	200	-	no	deployments/t/a/routing.yaml,deplo
 last-readonly-file	shared-rename	refused	409	deployments/t/c/templates/alertmanagerconfig.yaml	no	-	-	-	-	released	answered	-	
 unreadable-folder	chart-clone	refused	409	charts/spare/templates	no	-	-	-	-	released	answered	-	
 unreadable-folder	chart-delete	refused	409	charts/spare/templates	no	-	-	-	-	released	answered	-	
+deployments-folder-unreadable	migration-apply	refused	409	deployments/u	no	-	-	-	-	released	answered	-	
+legacy-folder-unreadable	migration-apply	refused	409	deployments/demo	no	-	-	-	-	released	answered	-	
 dir-absent	save-json	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	deployments/t/a,deployments/t/a/a-values.yaml	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a/a-values.yaml	released	answered	-	changed-unsaid
 dir-absent	save-text	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	deployments/t/a,deployments/t/a/a-values.yaml	-	D deployments/t/a/Chart.yaml,D deployments/t/a/routing.yaml,D deployments/t/a/templates/alertmanagerconfig.yaml,D deployments/t/a/values.yaml,?? deployments/t/a/a-values.yaml	released	answered	-	changed-unsaid
 dir-absent	save-legacy	ok	200	-	no	deployments/demo/old-values.yaml	deployments/demo,deployments/demo/old-values.yaml	-	M deployments/demo/old-values.yaml	released	answered	-	

@@ -159,6 +159,10 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
   // Problems this change would cause stop it; ones a deployment already had
   // are shown, but are no reason to hold the change up.
   const refused = (preview?.deployments || []).filter(d => d.problems?.some(p => !p.before))
+  // One on a _common reached through a link made by hand is held by the
+  // link, which its row says in full: no mapping changes that, so it is
+  // not named among those that "would get values a save refuses".
+  const valuesRefused = refused.filter(d => !d.linked)
 
   // No deployment moves to the clone by itself (#57, #178): it is said here,
   // where the choice is made.
@@ -194,9 +198,9 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
         </>
       )}
       {step === 2 && previewView}
-      {step === 2 && refused.length > 0 && (
+      {step === 2 && valuesRefused.length > 0 && (
         <Alert style={{ marginTop: 12 }} type="error" data-testid="migration-refused"
-          message={`${refused.map(d => d.path).join(', ')} would get values a save refuses. Change the mapping, or fix ${refused.length === 1 ? 'that deployment' : 'those deployments'} first${refused.some(d => d.readonly) ? ' (one synced from another deployment is read-only: unlink it first)' : ''}.`} />
+          message={`${valuesRefused.map(d => d.path).join(', ')} would get values a save refuses. Change the mapping, or fix ${valuesRefused.length === 1 ? 'that deployment' : 'those deployments'} first${valuesRefused.some(d => d.readonly) ? ' (one synced from another deployment is read-only: unlink it first)' : ''}.`} />
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', marginTop: 20 }}>

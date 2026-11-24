@@ -51,6 +51,10 @@ export const CASES = [
   { id: 'last-readonly-file', applies: p => !!p.last, nonRoot: true },
   // A folder of what the write removes or copies cannot be read.
   { id: 'unreadable-folder', applies: p => !!p.unreadableDir, nonRoot: true },
+  // A folder that holds deployments the write must rewrite cannot be read.
+  { id: 'deployments-folder-unreadable', applies: p => !!p.blindDir, nonRoot: true },
+  // The folder of the Template's legacy deployments (deployments/<chart>/) cannot be read.
+  { id: 'legacy-folder-unreadable', applies: p => !!p.legacyDir, nonRoot: true },
   // The folder the write goes into is not there yet.
   { id: 'dir-absent', applies: p => !!p.absent },
   // The new folder is refused: a reserved name, not a valid path.

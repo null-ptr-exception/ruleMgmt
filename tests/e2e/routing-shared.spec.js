@@ -410,6 +410,24 @@ test('the shared file edited with git: the resources behind are listed, and Rege
   expect(await urlIn(B)).toBe('http://relay.example.com:9090')
 })
 
+// A reason that starts with the deployment (one on a _common reached
+// through a link made by hand) is shown as it is: the path once. The
+// answer is stubbed; the list is what the dialog shows of it.
+test('Regenerate names a deployment it could not make once', async ({ page, request }) => {
+  expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
+  expect((await request.put(routingUrl(A), { data: { routing: routing('  relay-webhook: { shared: true }\n') } })).ok()).toBeTruthy()
+  await fs.writeFile(SHARED, 'configs:\n  relay-webhook: { type: webhook, url: http://relay.example.com:9090 }\n')
+  const SAID = `${A}: its _common chart e2e-shared/_common/${CHART}: e2e-shared/_common is a link to other/_common — a _common reached through a link made by hand is not supported`
+  await page.route('**/api/v2/routing/shared/regenerate', route => route.fulfill({ json: { regenerated: [], failed: [{ deployment: A, error: SAID }, { deployment: B, error: 'routing.yaml cannot be read' }] } }))
+
+  await openShared(page)
+  await page.getByTestId('shared-stale').getByRole('button', { name: 'Regenerate' }).click()
+  const dialog = page.getByRole('dialog').filter({ hasText: 'Some could not be made again' })
+  await expect(dialog.getByText(SAID, { exact: true })).toBeVisible({ timeout: 5000 })
+  await expect(dialog.getByText(`${B}: routing.yaml cannot be read`, { exact: true })).toBeVisible()
+  await expect(dialog.getByText(`${A}: ${A}:`)).toHaveCount(0)
+})
+
 test('a routing.yaml that cannot be read is named, and no shared config can be changed meanwhile', async ({ page, request }) => {
   expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
   for (const folder of [A, B]) expect((await request.put(routingUrl(folder), { data: { routing: routing('  relay-webhook: { shared: true }\n') } })).ok()).toBeTruthy()

@@ -10,6 +10,8 @@ import { getSourceForTarget, getTargetsForSource } from '../lib/sync.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../repo/lock.js'
 import { syncAnswer } from '../repo/sync.js'
 import { TEMP_PATHSPEC_EXCLUDE, parkedItems } from '../repo/write.js'
+import { parkedSaid } from '../lib/parkedSaid.js'
+import { chartsDir } from '../repo/template.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { parsePath, pathProblem } from '../repo/paths.js'
 import { repoGit, filesChanging } from '../repo/git.js'
@@ -56,7 +58,7 @@ const COMMIT_MESSAGE = 'message required: the commit message, as text'
 const count = (fallback, min, max) => z.any().transform(v => Math.min(max, Math.max(min, parseInt(v, 10) || fallback))).default(fallback)
 
 // The refusal of a Commit (or Push) while parked content is in the repo:
-// each named, with what to do. Null when there is none. A parked
+// each named, with what to do (parkedSaid). Null when there is none. A parked
 // deployment sync.yaml still names (a delete stopped before sync.yaml was
 // written) is not done with by removing it: the message says to unlink too.
 async function parkedRefusal(cwd) {
@@ -71,8 +73,9 @@ async function parkedRefusal(cwd) {
     const what = source ? `a sync target of ${source}` : `the sync source of ${targets.join(', ')}`
     return ` — sync.yaml still lists ${original} as ${what}: removed, unlink ${source ? 'it' : 'them'} too (Unlink sync), or Commit refuses that next`
   }
-  return { status: 409, body: { error: 'Commit refused', findings: parked.map(p => ({ severity: 'commit', kind: 'parked', regenerable: false, file: p.rel,
-    description: `${p.rel} is ${p.original} as it was, moved aside by a write that did not finish: ${p.free ? `rename it back to ${p.original} to keep it` : `${p.original} is there again: keep one of the two`}, or remove it, then commit${inSync(p.original)}` })) } }
+  const said = parkedSaid(parked, chartsDir())
+  return { status: 409, body: { error: 'Commit refused', findings: parked.map((p, i) => ({ severity: 'commit', kind: 'parked', regenerable: false, file: p.rel,
+    description: `${said[i]}, then commit${inSync(p.original)}` })) } }
 }
 
 export default function gitRouter() {

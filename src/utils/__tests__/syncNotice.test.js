@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { syncFailedNotice, syncResultLine } from '../syncNotice.js'
+import { syncFailedNotice, syncResultLine, reasonLine } from '../syncNotice.js'
 
 describe('syncFailedNotice', () => {
   it('is nothing when every target was updated', () => {
@@ -34,5 +34,18 @@ describe('syncResultLine', () => {
   it('a reason that starts with the target is said as it is: the path once', () => {
     const error = 'team/dr: its _common chart team/_common/demo: team/_common is a link to shop/_common — a _common reached through a link made by hand is not supported'
     expect(syncResultLine({ target: 'team/dr', ok: false, error })).toBe(error)
+  })
+})
+
+describe('reasonLine', () => {
+  it('a reason that does not name the deployment is put after it', () => {
+    expect(reasonLine('team/a', 'routing.yaml cannot be read')).toBe('team/a: routing.yaml cannot be read')
+  })
+  it('a reason that starts with the deployment is said as it is: the path once', () => {
+    const reason = 'team/a: its _common chart team/_common/demo: team/_common is a link to shop/_common — a _common reached through a link made by hand is not supported'
+    expect(reasonLine('team/a', reason)).toBe(reason)
+  })
+  it('a deployment whose path only begins another\'s is still named', () => {
+    expect(reasonLine('team/a', 'team/a2: something')).toBe('team/a: team/a2: something')
   })
 })

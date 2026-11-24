@@ -9,11 +9,16 @@ export function syncFailedNotice(syncFailed, done = 'Saved') {
   return `${done}, but ${one ? 'this sync target' : 'these sync targets'} could not be updated and may not match the source: ${list}`
 }
 
+// A reason said of `name` (a deployment, a sync target) in a list:
+// "<name>: <reason>". A reason that names it itself at its start (one that
+// is a link, or on a _common reached through one) is said as it is: the
+// path once. The one rule for every dialog that lists such reasons.
+export function reasonLine(name, reason) {
+  return typeof reason === 'string' && reason.startsWith(`${name}: `) ? reason : `${name}: ${reason}`
+}
+
 // One target's outcome in the Sync dialog: "<target>: OK", or the server's
-// reason. A reason that names the target itself at its start (a target
-// that is a link, or on a _common reached through one) is said as it is:
-// the path once.
+// reason (reasonLine).
 export function syncResultLine({ target, ok, error }) {
-  if (ok) return `${target}: OK`
-  return typeof error === 'string' && error.startsWith(`${target}: `) ? error : `${target}: ${error}`
+  return ok ? `${target}: OK` : reasonLine(target, error)
 }

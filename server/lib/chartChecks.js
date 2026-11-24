@@ -116,6 +116,8 @@ export async function collectChartChecks(gitopsDir, { policy = 'commit', repo = 
     }
     for (const f of [...list, ...warn]) {
       if (UNCONVERTED.has(f.code)) unconverted.push(name)
+      // No Chart.yaml: committed, and said — the folder is in no list of Templates.
+      else if (f.code === 'template.chart-absent') warnings.push({ kind: kindOf(f.code), chart: name, description: `${f.message} — it is not listed as a Template until it has one: write it (gen-rules.mjs --init), or remove the folder if the Template was to go` })
       else warnings.push({ kind: kindOf(f.code), chart: name, description: f.message })
     }
   }

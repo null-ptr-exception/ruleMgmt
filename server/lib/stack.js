@@ -34,7 +34,6 @@ import { openRepo } from '../repo/openRepo.js'
 import { linkOnTheWay } from '../repo/paths.js'
 import { folderEntry } from '../repo/walk.js'
 import { chartDoc } from '../repo/chart.js'
-import { linkWritten } from '../repo/diskState.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 // More hops than this is a loop of links, not a stack.
@@ -44,20 +43,18 @@ const rel = (gitopsDir, abs) => path.relative(gitopsDir, abs).replace(/\\/g, '/'
 const isPlainObject = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const problem = (kind, description) => ({ kind, description })
 
-// Where a layer's or a Template's files are read: `{ repo, rel }`, a
-// snapshot kept beside the request's own for as long as that one lives. A
-// file is read once, through the loader — but not as part of the request's
-// snapshot: these reads were never among what a write holds the repo to
-// (its snapshot's read log), and never saw a planned overlay. Reading them
-// in it changes what a write answers when a layer changes under it: to do
-// with a behaviour change. A folder outside the repo given (a dependency
-// that leads out of it; a deployment checked with no root told) is read by
-// its place on the machine, as it always was.
+// Where a layer's or a Template's files are read: `{ repo, rel }`. In the
+// repo, the request's own snapshot: what a stack is resolved from — a
+// `_common`'s Chart.yaml, its charts/ folder and where its links lead — is
+// among what a write holds the repo to under the lock, and a planned file
+// is read as planned. A folder outside the repo given (a dependency that
+// leads out of it; a deployment checked with no root told) is read by its
+// place on the machine, as it always was.
 function placeIn(repo, gitopsDir, abs) {
   const inRepo = rel(gitopsDir, abs)
-  if (!inRepo.startsWith('../')) return { repo: repo.memo('stackReads', '', () => openRepo(repo.root)), rel: inRepo === '.' ? '' : inRepo }
+  if (!inRepo.startsWith('../')) return { repo, rel: inRepo === '.' ? '' : inRepo }
   const root = path.parse(path.resolve(abs)).root
-  return { repo: repo.memo('stackReads', root, () => openRepo(root)), rel: path.relative(root, path.resolve(abs)).split(path.sep).join('/') }
+  return { repo: repo.memo('outside', root, () => openRepo(root)), rel: path.relative(root, path.resolve(abs)).split(path.sep).join('/') }
 }
 
 /** The Chart.yaml of the chart folder `dir`: the document, undefined when there is none, null when it cannot be read. */
@@ -139,7 +136,8 @@ async function chartsIn(repo, gitopsDir, dir) {
     }
     // A folder, or a link that leads to one.
     if (kind !== 'dir') continue
-    const to = link ? await linkWritten(from.root, `${at.rel}/${name}`) : null
+    // Where the link is written to lead (so a `_common` is still one), as listed.
+    const to = link ? listed.value.targets.get(name) ?? null : null
     const target = to !== null ? path.resolve(folder, to) : abs
     const chart = await readChart(repo, gitopsDir, abs)
     out.push({ name: typeof chart?.name === 'string' ? chart.name : null, at: target, file: name })

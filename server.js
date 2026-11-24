@@ -18,6 +18,8 @@ import { jsonBody } from './server/http/body.js'
 import { answerUncaught } from './server/http/route.js'
 import { userRoute, unknownApiRoute } from './server/routes/own.js'
 import { sweepTempFiles, parkedItems } from './server/repo/write.js'
+import { parkedSaid } from './server/lib/parkedSaid.js'
+import { chartsDir as templatesDirRel } from './server/repo/template.js'
 import { sweepTempCopies } from './server/repo/copyRepo.js'
 import { objectMetaFromEnv } from './src/utils/objectMeta.js'
 
@@ -80,7 +82,7 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
   // And the copies of the repo a plan checks in, left by a server killed meanwhile.
   // Content a write moved aside and did not put back or remove is never
   // removed: said, and Commit refuses while it is there.
-  for (const p of await parkedItems(GITOPS_DIR_V2)) logger.warn(`${p.rel} is ${p.original} as it was, moved aside by a write that did not finish${p.free ? `: rename it back to ${p.original} to keep it, or remove it` : `; ${p.original} is there again`}`)
+  for (const said of parkedSaid(await parkedItems(GITOPS_DIR_V2), templatesDirRel())) logger.warn(said)
   const copies = await sweepTempCopies()
   if (copies.length) logger.info(`Removed ${copies.length} temp cop${copies.length > 1 ? 'ies' : 'y'} of the repo left by a stopped server`)
 }

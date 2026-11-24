@@ -51,7 +51,7 @@ import { decide } from '../repo/policy.js'
 import { chartsDir } from '../repo/template.js'
 import { coalesce } from '../repo/coalesce.js'
 import { parseChart } from '../repo/chart.js'
-import { linkWritten, stateOf, folderState } from '../repo/diskState.js'
+import { stateOf, folderState } from '../repo/diskState.js'
 
 /** The name every `_common` chart has: the key its deployments' values are under. */
 export const COMMON_CHART = 'common'
@@ -126,13 +126,13 @@ async function valuesText(repo, item) {
 
 // The link in a `_common` chart's charts/ that leads to `toAbs`: listed
 // through the snapshot (a link made or removed meanwhile is a change the
-// writer sees), where each leads read from the link.
+// writer sees), with where each is written to lead.
 async function linkTo(repo, item, toAbs) {
   const listed = await repo.dir(`${item.path}/charts`)
   if (listed.state !== 'ok') return null
   const folder = path.join(item.abs, 'charts')
   for (const name of [...listed.value.links.keys()].sort()) {
-    const to = await linkWritten(repo.root, `${item.path}/charts/${name}`)
+    const to = listed.value.targets.get(name) ?? null
     if (to !== null && path.resolve(folder, to) === path.resolve(toAbs)) return name
   }
   return null

@@ -95,7 +95,9 @@ describe('a deployment on a _common reached through a hand-made link, and the Te
   it('the migration\'s preview lists it with the sentence, as a deployment it does not migrate', async () => {
     const r = await api('POST', '/api/v2/templates/demo/migration-preview', { files: { 'cpu.yaml': CPU('name') }, migration: { columns: { cpu: { job: 'name' } } } })
     expect(r.status).toBe(200)
-    expect(r.data.deployments.find(d => d.path === A)).toMatchObject({ rowsChanged: 0, problems: [{ message: `${A}: ${SAID}`, before: false }] })
+    expect(r.data.deployments.find(d => d.path === A)).toMatchObject({ rowsChanged: 0, linked: true, problems: [{ message: `${A}: ${SAID}`, before: false }] })
+    // Only it: a deployment held by values a save refuses is not marked so.
+    expect(r.data.deployments.filter(d => d.linked).map(d => d.path)).toEqual([A])
   })
 
   it('its routing is not saved', async () => {

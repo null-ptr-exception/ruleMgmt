@@ -4,11 +4,15 @@
  *   absent(dir)            not there
  *   unreadable(dir, why)   no permission, a file where the folder should be,
  *                          a link to nothing, a link that leads out of the repo
- *   ok({ entries, links }) entries: Map name → 'file' | 'dir' | 'other',
+ *   ok({ entries, links, targets })
+ *                          entries: Map name → 'file' | 'dir' | 'other',
  *                          a link counted as what it leads to ('file' when it
  *                          leads nowhere: reading it says why); links: Map
  *                          name → where each entry that is a link leads:
- *                          'inside' (the repo), 'outside', 'git' (into .git), 'nowhere', 'circle'
+ *                          'inside' (the repo), 'outside', 'git' (into .git), 'nowhere', 'circle';
+ *                          targets: Map name → what each link is written
+ *                          to lead to (as git keeps it): two links that
+ *                          lead to different folders of the repo differ
  *
  * `rel` '' is the repo's own folder.
  *
@@ -86,7 +90,7 @@ async function readOnce(root, rel, { overlay, realRoot } = {}) {
     if (err.code !== 'ENOENT') return unreadable(key, reason(err), KIND[err.code] ?? 'other')
     const link = await fs.lstat(abs).catch(() => null)
     if (link) return unreadable(key, 'a link to a folder that is not there', 'dangling-link')
-    return overlaid(key, overlay, entries) ? ok({ entries, links: new Map() }) : absent(key)
+    return overlaid(key, overlay, entries) ? ok({ entries, links: new Map(), targets: new Map() }) : absent(key)
   }
   if (!st.isDirectory()) return unreadable(key, 'a file is where a folder should be', 'not-a-folder')
   let place
@@ -117,16 +121,19 @@ async function readOnce(root, rel, { overlay, realRoot } = {}) {
     await dh?.close().catch(() => {})
   }
   const links = new Map()
+  const targets = new Map()
   for (const e of list) {
     let kind = e.isDirectory() ? 'dir' : e.isFile() ? 'file' : 'other'
     if (e.isSymbolicLink()) {
       const to = await fs.stat(path.join(abs, e.name)).catch(err => err)
       kind = to instanceof Error || to.isFile() ? 'file' : to.isDirectory() ? 'dir' : 'other'
       links.set(e.name, await leadsTo(root, key ? `${key}/${e.name}` : e.name, to))
+      // Gone or replaced at this instant: no target to tell, as for no link.
+      targets.set(e.name, await fs.readlink(path.join(abs, e.name)).catch(() => null))
     }
     entries.set(e.name, kind)
   }
   overlaid(key, overlay, entries)
-  for (const name of links.keys()) if (!entries.has(name)) links.delete(name)
-  return ok({ entries, links })
+  for (const name of links.keys()) if (!entries.has(name)) { links.delete(name); targets.delete(name) }
+  return ok({ entries, links, targets })
 }

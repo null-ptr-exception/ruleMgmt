@@ -185,27 +185,36 @@ it('an entry of cells that is not a cell stays, after the cells', () => {
   expect(parseRouting(saved(routing)).cells).toHaveLength(7)
 })
 
-// A large table: 20 values in each of three labels, 8000 cells. Taking a
-// label away looked every merged cell's options up across the whole table,
-// about 5 s here; each cell is found once now.
+// A large table: 12 values in each of three labels, 1728 cells. Taking a
+// label away looked every merged cell's options up across the whole table
+// (on 8000 cells about 5 s); each cell is found once now. Counted as reads
+// of a cell's match, which does not depend on how fast the machine is.
 describe('taking a label away from a large table', () => {
-  const values = Array.from({ length: 20 }, (_, i) => `v${i}`)
+  const values = Array.from({ length: 12 }, (_, i) => `v${i}`)
   const labels = { a: values, b: values, c: values }
+  let reads = 0
   const cells = []
-  for (const a of values) for (const b of values) for (const c of values) cells.push({ match: { a, b, c }, configs: [cells.length % 3 ? 'x' : 'y'] })
+  for (const a of values) for (const b of values) for (const c of values) {
+    const cell = { configs: [cells.length % 3 ? 'x' : 'y'] }
+    const match = { a, b, c }
+    Object.defineProperty(cell, 'match', { get: () => { reads++; return match }, enumerable: true })
+    cells.push(cell)
+  }
   const routing = { labels, configs: { x: {}, y: {} }, cells }
   const rows = [{ name: 'a', values, was: 'a' }, { name: 'b', values, was: 'b' }]
 
-  it('asks about each merged cell, and keeps the option chosen, in well under a second', () => {
-    const started = Date.now()
+  it('asks about each merged cell, and keeps the option chosen, reading each cell a bounded number of times', () => {
+    reads = 0
     const { conflicts } = reshapeLabels(routing, rows)
-    expect(conflicts).toHaveLength(400)
+    expect(conflicts).toHaveLength(144)
     const keep = Object.fromEntries(conflicts.map(c => [c.key, c.options[1].key]))
     const { routing: merged } = reshapeLabels(routing, rows, { keep })
-    expect(Date.now() - started).toBeLessThan(1000)
-    expect(merged.cells).toHaveLength(400)
+    // About 25 reads per cell here; a lookup across the table per option
+    // was about 3500.
+    expect(reads).toBeLessThan(100 * cells.length)
+    expect(merged.cells).toHaveLength(144)
     // Each merged cell is the one at c = v1: the option kept.
     const at = (a, b) => cells.find(x => x.match.a === a && x.match.b === b && x.match.c === 'v1')
-    expect(merged.cells.find(x => x.match.a === 'v3' && x.match.b === 'v7')).toEqual({ ...at('v3', 'v7'), match: { a: 'v3', b: 'v7' } })
+    expect(merged.cells.find(x => x.match.a === 'v3' && x.match.b === 'v7')).toEqual({ configs: at('v3', 'v7').configs, match: { a: 'v3', b: 'v7' } })
   })
 })

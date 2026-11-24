@@ -694,6 +694,6 @@ rules:
 
   it('refuses a limit past what is held exactly', async () => {
     const { parseGroupFile: parse } = await import('../rulesFile.js')
-    expect(parse('limit: 99999999999999999999\ncolumns: {}\nrules: []\n', 'g').errors).toContain('g.yaml: limit "100000000000000000000" must be a whole number, 0 or more')
+    expect(parse('limit: 99999999999999999999\ncolumns: {}\nrules: []\n', 'g').errors).toContain('g.yaml: limit 100000000000000000000 must be a whole number, 0 or more')
   })
 })

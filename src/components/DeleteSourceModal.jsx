@@ -4,6 +4,9 @@ import { deleteDeployment } from '../utils/chartApi'
 
 const { Text } = Typography
 
+// What a failure leaves said: the targets marked Delete that are gone already.
+const alreadyGone = paths => (paths.length ? `; ${paths.join(', ')} ${paths.length === 1 ? 'was' : 'were'} deleted already` : '')
+
 export default function DeleteSourceModal({ open, source, targets, onClose, onSuccess }) {
   const [decisions, setDecisions] = useState({})
   const [submitting, setSubmitting] = useState(false)
@@ -38,7 +41,7 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
         if (decisions[targetPath] !== 'delete') continue
         const result = await deleteDeployment(source.chart, targetPath.split('/').pop(), targetPath)
         if (!result.ok) {
-          message.error(`Failed to delete ${targetPath}: ${result.error}${deletedPaths.length ? `; ${deletedPaths.join(', ')} deleted already` : ''}`)
+          message.error(`Failed to delete ${targetPath}: ${result.error}${alreadyGone(deletedPaths)}`)
           return
         }
         anyChange = true
@@ -49,8 +52,7 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
       if (!result.ok) {
         // The targets marked Delete are gone already: said, so the tree
         // without them is no surprise. The source keeps its other targets.
-        const gone = deletedPaths.length ? `; ${deletedPaths.join(', ')} ${deletedPaths.length === 1 ? 'was' : 'were'} deleted already` : ''
-        message.error(`Failed to delete ${source.name}: ${result.error}${gone}`)
+        message.error(`Failed to delete ${source.name}: ${result.error}${alreadyGone(deletedPaths)}`)
         return
       }
       const kept = result.unlinked?.length || 0

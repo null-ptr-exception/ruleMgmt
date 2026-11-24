@@ -61,19 +61,29 @@ Do this on a copy of your gitops repository first, then for real.
 `gen-rules` ships in the AlertForge image: run the image of the release you
 are upgrading to from the gitops repo's root, mounted at `/work`, as
 yourself so the files it writes stay yours. `-e RULE_OBJECT_LABELS` passes
-on the value set in your shell:
+on the value your shell **exports**; one set without `export` is left out,
+and the templates are written without the labels your evaluator selects
+on. One chart:
 
 ```bash
 export RULE_OBJECT_LABELS='{"release":"kube-prometheus-stack"}'   # step 1
 IMAGE=ghcr.io/null-ptr-exception/rulemgmt:<version>
 
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -e RULE_OBJECT_LABELS \
-  "$IMAGE" node scripts/gen-rules.mjs /work/charts/<name>       # one chart
+  "$IMAGE" node scripts/gen-rules.mjs /work/charts/<name>
+```
 
-for chart in charts/*/; do                                     # or all of them
+Or all of them, as a script (`bash convert.sh`, with the same two lines at
+its top): it goes through every chart and exits non-zero when any one
+failed.
+
+```bash
+status=0
+for chart in charts/*/; do
   docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" -e RULE_OBJECT_LABELS \
-    "$IMAGE" node scripts/gen-rules.mjs "/work/$chart"
+    "$IMAGE" node scripts/gen-rules.mjs "/work/$chart" || status=1
 done
+exit "$status"
 ```
 
 Pass the other `RULE_OBJECT_*` variables the same way if the site sets them.

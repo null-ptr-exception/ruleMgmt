@@ -63,3 +63,20 @@ export function durationCellFault(value, position) {
   if (zero && position?.includes('offset')) return `"${value}" is 0, and an offset cannot be 0`
   return null
 }
+
+/**
+ * Why a duration written in a rules file is refused, or null (#172). One
+ * format for both evaluators: vmalert reads more (30m1h, 1.5h, a bare 21),
+ * but everything Prometheus reads it reads the same way.
+ */
+export function ruleDurationProblem(key, value) {
+  const { reason } = durationFault(value)
+  if (reason === 'number') {
+    return value === 0
+      ? `${key} 0 is a number — a duration is text: write '0' or 0s`
+      : `${key} ${value} is a number — a duration is text with a unit, e.g. ${Number.isInteger(value) && value > 0 && durationFault(`${value}s`).reason === null ? value : 30}s`
+  }
+  if (reason === 'format') return `${key} ${JSON.stringify(value)} is not a duration — units from the largest down, each once, e.g. 30s, 5m, 1h30m`
+  if (reason === 'too-long') return `${key} "${value}" is longer than a duration can be (about 292 years)`
+  return null
+}

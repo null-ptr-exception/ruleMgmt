@@ -31,8 +31,8 @@ export const MAX_ROWS_PER_OBJECT = 100
 // Anything inspecting the output reads the same profiles (outputs.js), so it
 // cannot drift from what is emitted.
 import { profileFor } from './outputs.js'
-import { durationScalar, nameScalar } from './yamlScalar.js'
-import { EXTRA_GROUP_FIELDS, renderGroupField } from './groupFields.js'
+import { nameScalar } from './yamlScalar.js'
+import { GROUP_FIELD_NAMES, renderGroupField } from './groupFields.js'
 
 // The generator runs in the browser as well as in scripts, so size is measured
 // with TextEncoder rather than Buffer.
@@ -96,17 +96,13 @@ export function rowLoopHeader(hasCommon) {
  * (groupFields.js). They belong to the group, so every object the group is
  * split into carries them.
  */
-function renderGroupFields({ interval, limit, ...extra } = {}, profile) {
+function renderGroupFields(fields = {}, profile) {
   let out = ''
   // The profile's own group fields first (e.g. `type: vlogs`), then the
-  // template owner's.
+  // template owner's (#182), in a fixed order. A 1.x schema's empty
+  // interval or limit is none.
   for (const [key, value] of Object.entries(profile?.groupFields || {})) out += `      ${key}: ${value}\n`
-  // '0' is a duration; written bare YAML reads it as a number, and the
-  // resource's field is text (#172).
-  if (interval !== undefined && interval !== '') out += `      interval: ${durationScalar(interval)}\n`
-  if (limit !== undefined && limit !== '') out += `      limit: ${limit}\n`
-  // The evaluator's other fields (#182), in a fixed order.
-  for (const key of EXTRA_GROUP_FIELDS) if (extra[key] !== undefined) out += renderGroupField(key, extra[key])
+  for (const key of GROUP_FIELD_NAMES) if (fields[key] !== undefined && fields[key] !== '') out += renderGroupField(key, fields[key])
   return out
 }
 

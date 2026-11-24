@@ -134,7 +134,7 @@ const B_EXPECT = {
     'limit-huge': ['must be a whole number, 0 or more', 'refuses'],
     'qo-negative': ['query_offset -30s is negative', 'refuses'],
     // promtool takes a negative limit (as no limit); AlertForge asks for 0 or more.
-    'limit-negative': ['limit "-1" must be a whole number, 0 or more', 'takes'],
+    'limit-negative': ['limit -1 must be a whole number, 0 or more', 'takes'],
   },
   prometheus3: {
     'labels-empty': [OK], 'labels-utf8': [OK], 'labels-dash': [OK], 'labels-template': [OK], 'labels-quote': [OK], 'labels-yes': [OK],
@@ -154,7 +154,7 @@ const B_EXPECT = {
     'qo-number': ['query_offset 0 is a number', 'takes'], 'bogus': ['unknown key "bogus_field"', 'refuses'],
     'limit-huge': ['must be a whole number, 0 or more', 'refuses'],
     'qo-negative': ['query_offset -30s is negative', 'refuses'],
-    'limit-negative': ['limit "-1" must be a whole number, 0 or more', 'takes'],
+    'limit-negative': ['limit -1 must be a whole number, 0 or more', 'takes'],
   },
   vm: {
     'labels-empty': [OK], 'labels-template': [OK], 'labels-quote': [OK], 'labels-yes': [OK],
@@ -181,7 +181,7 @@ const B_EXPECT = {
     'eo-negative': ['eval_offset -30s is negative', 'takes'], 'ed-negative': ['eval_delay -30s is negative', 'takes'],
     // An empty list is no values: not written (vmalert takes `q: []` and `q:` alike).
     'params-empty-list': [OK],
-    'limit-negative': ['limit "-1" must be a whole number, 0 or more', 'refuses'],
+    'limit-negative': ['limit -1 must be a whole number, 0 or more', 'refuses'],
   },
 }
 const fieldOf = sample => Object.keys(yaml.load(sample)).find(k => !['interval', 'selectors'].includes(k))

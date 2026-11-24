@@ -515,7 +515,8 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
 
   return {
     groupName: alertGroup.replace(/_/g, '-'),
-    groupFields: { interval: alertDef.interval, limit: alertDef.limit, ...(alertDef.groupFieldsExtra || {}) },
+    // From the model (groupGenDef), or a 1.x schema's two.
+    groupFields: alertDef.groupFields ?? { interval: alertDef.interval, limit: alertDef.limit },
     // The parser has already refused a type with no profile.
     profile: profileFor(alertDef.groupType),
     valuesKey: alertGroup,

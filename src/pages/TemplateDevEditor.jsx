@@ -14,7 +14,7 @@ import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import SelectorLabelsList, { SelectorLabelsHint } from '../components/SelectorLabelsList'
 import { profileNames, profileFor, isPromQLType, canonicalType, DEFAULT_TYPE } from '../utils/outputs'
-import { GROUP_FIELDS, EXTRA_GROUP_FIELDS } from '../utils/groupFields'
+import { GROUP_FIELDS, GROUP_FIELD_NAMES, BASE_GROUP_FIELDS } from '../utils/groupFields'
 import yaml from 'js-yaml'
 import { renameSelectorColumn } from '../utils/selectorContract'
 import { repeatsText, REPEATS_FIX } from '../utils/drift'
@@ -108,11 +108,11 @@ function SelectorsEditor({ group, commonColumns, onChange }) {
 const asFieldText = v => (v === undefined ? '' : (typeof v === 'object' ? yaml.dump(v, { flowLevel: 0, lineWidth: -1 }).trim() : String(v)))
 const FIELD_PLACEHOLDER = { labels: '{team: shop}', list: '["X-Scope-OrgID: 1"]', params: '{nocache: ["1"]}', duration: 'default', integer: 'default' }
 
-// One input per group field the group's type has beyond interval and limit
-// (#182), by what its value is. What a value may be is the save's to say,
-// as for interval and limit.
+// One input per group field the group's type has (#182), by what its value
+// is. What a value may be is the save's to say. A duration takes effect as
+// it is typed; a map or a list once it is YAML.
 function GroupFieldInput({ name, value, onSet, onUnreadable }) {
-  const kind = GROUP_FIELDS[name].kind
+  const { kind, label: shown = name, placeholder, width = 80 } = GROUP_FIELDS[name]
   const [draft, setDraft] = useState(asFieldText(value))
   const [unreadable, setUnreadable] = useState(false)
   useEffect(() => { setDraft(asFieldText(value)); setUnreadable(false) }, [value])
@@ -121,24 +121,26 @@ function GroupFieldInput({ name, value, onSet, onUnreadable }) {
   // the field (another type, another group), it shows the group's value again.
   useEffect(() => { onUnreadable?.(unreadable ? draft : null) }, [unreadable])
   useEffect(() => () => onUnreadable?.(null), [])
-  const label = <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>{name}</Text>
+  const label = <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>{shown}</Text>
   if (kind === 'integer') {
-    return <span>{label}<InputNumber size="small" aria-label={`Group ${name}`} style={{ width: 80 }} placeholder="default" min={0} precision={0}
+    return <span>{label}<InputNumber size="small" aria-label={`Group ${name}`} style={{ width }} placeholder={placeholder ?? 'default'} min={0} precision={0}
       value={value ?? null} onChange={v => onSet(v)} /></span>
+  }
+  if (kind === 'duration') {
+    return <span>{label}<Input size="small" aria-label={`Group ${name}`} style={{ width }} placeholder={placeholder ?? FIELD_PLACEHOLDER[kind]}
+      value={value ?? ''} onChange={e => onSet(e.target.value.trim() || undefined)} /></span>
   }
   if (kind === 'boolean') {
     return <span>{label}<Select size="small" aria-label={`Group ${name}`} style={{ width: 90 }} allowClear placeholder="default"
       value={value === undefined ? undefined : String(value)} options={[{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }]}
       onChange={v => onSet(v === undefined ? undefined : v === 'true')} /></span>
   }
-  const structured = kind !== 'duration'
   const commit = () => {
     const text = draft.trim()
     if (text === '') { setUnreadable(false); onSet(undefined); return }
-    if (!structured) { onSet(text); return }
     try { onSet(yaml.load(text)); setUnreadable(false) } catch { setUnreadable(true) }
   }
-  return <span>{label}<Input size="small" aria-label={`Group ${name}`} style={{ width: structured ? 200 : 80 }} status={unreadable ? 'error' : undefined}
+  return <span>{label}<Input size="small" aria-label={`Group ${name}`} style={{ width: 200 }} status={unreadable ? 'error' : undefined}
     title={unreadable ? 'Not YAML — e.g. {team: shop}' : undefined}
     placeholder={FIELD_PLACEHOLDER[kind]} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onPressEnter={commit} /></span>
 }
@@ -151,6 +153,8 @@ function GroupSettings({ group, commonColumns = {}, onChange, onUnreadable }) {
   // once (#70): the group renders once per deployment and has no rows, so it
   // cannot have columns — turned on only once they are gone.
   const hasColumns = Object.keys(group.columns || {}).length > 0
+  // The type's fields; a type that is none has the ones every group has.
+  const fieldsOfType = profileFor(group.type)?.groupKeys || BASE_GROUP_FIELDS
   const set = (field, value) => onChange(g => {
     const next = { ...g }
     if (value === undefined || value === null || value === '') delete next[field]
@@ -175,21 +179,11 @@ function GroupSettings({ group, commonColumns = {}, onChange, onUnreadable }) {
           <Text type="secondary" style={{ fontSize: 12 }}>Once per deployment</Text>
         </label>
       </Tooltip>
-      <span>
-        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Interval</Text>
-        <Input size="small" aria-label="Group interval" style={{ width: 90 }} placeholder="default"
-          value={group.interval ?? ''} onChange={e => set('interval', e.target.value.trim())} />
-      </span>
-      <span>
-        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Limit</Text>
-        <InputNumber size="small" aria-label="Group limit" style={{ width: 90 }} placeholder="none" min={0} precision={0}
-          value={group.limit ?? null} onChange={v => set('limit', v)} />
-      </span>
-      {(profileFor(group.type)?.groupKeys || []).filter(k => EXTRA_GROUP_FIELDS.includes(k)).map(key => (
+      {fieldsOfType.map(key => (
         <GroupFieldInput key={key} name={key} value={group[key]} onSet={v => set(key, v)} onUnreadable={text => onUnreadable?.(key, text)} />
       ))}
       {/* Left from another type: shown, never dropped unseen — the save refuses it until it is taken off. */}
-      {EXTRA_GROUP_FIELDS.filter(k => group[k] !== undefined && !(profileFor(group.type)?.groupKeys || []).includes(k)).map(key => (
+      {GROUP_FIELD_NAMES.filter(k => group[k] !== undefined && !fieldsOfType.includes(k)).map(key => (
         <Tag key={key} color="red" closable data-testid={`group-field-not-of-type-${key}`} closeIcon={<span aria-label={`Remove ${key}`}>×</span>}
           onClose={e => { e.preventDefault(); set(key, undefined) }}>
           {key}: not a {profileFor(group.type)?.name} field — Save refuses it

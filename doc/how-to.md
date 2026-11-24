@@ -928,32 +928,46 @@ same way: commit, and use **Regenerate** in the refusal (see
 
 Run it from the gitops repo's root with the new release's image (see
 [Run them from the image](#run-them-from-the-image)), with the site's
-`RULE_OBJECT_*` variables set in your shell to what the editor runs with:
-`-e NAME` passes each one on, and one not set is left out.
+`RULE_OBJECT_*` variables **exported** in your shell, set to what the
+editor runs with. `-e NAME` passes on a variable the shell exports; one
+only set (`NAME=…` without `export`), or not set at all, is left out, and
+the templates are written without the site's labels — every chart then
+reads as different from what the editor makes.
+
+Each loop below is a script: save it as a file and run it with `bash`, or
+as a CI step. It goes through every chart and exits non-zero when any one
+failed.
 
 ```bash
+export RULE_OBJECT_LABELS='{"release":"kube-prometheus-stack"}'   # and the others the site sets
 IMAGE=ghcr.io/null-ptr-exception/rulemgmt:<version>
 
+status=0
 for c in charts/*/; do
   [ -d "$c/rules" ] || continue
   docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" \
     -e RULE_OBJECT_LABELS -e RULE_OBJECT_ANNOTATIONS \
     -e RULE_OBJECT_LABELS_BY_PROFILE -e RULE_OBJECT_ANNOTATIONS_BY_PROFILE \
-    "$IMAGE" node scripts/gen-rules.mjs "/work/$c"
+    "$IMAGE" node scripts/gen-rules.mjs "/work/$c" || status=1
 done
+exit "$status"
 ```
 
-Then spot-check one chart the same way with `--check`: no `DIFFERS`.
+A chart that fails is named with `ERROR` and left as it was. Then run the
+`--check` loop [below](#check-every-chart) over every chart: it should
+exit 0, with no `DIFFERS`.
 
 From an AlertForge source checkout of the same release (after `npm ci`,
 with the same variables exported), it is the same loop over the gitops
 repo's path:
 
 ```bash
+status=0
 for c in /path/to/gitops/charts/*/; do
   [ -d "$c/rules" ] || continue
-  node scripts/gen-rules.mjs "$c"
+  node scripts/gen-rules.mjs "$c" || status=1
 done
+exit "$status"
 ```
 
 Commit that on its own, with nothing else in it. The rendered rules are the
@@ -965,11 +979,16 @@ A release can also refuse a value it used to accept — a rules file with
 ([durations](rules-format.md#durations)). Such a chart cannot be regenerated
 until the file is corrected, and commits are refused meanwhile, naming the
 file and the value. Find them before upgrading, with the new release's image
-(`IMAGE` set to the new version, the same variables as above). A chart it
-lists as `ERROR` needs correcting; one only listed as `DIFFERS` is what
-regenerating fixes. The loop exits non-zero when any chart is either:
+(`IMAGE` set to the new version, the same variables exported as above).
+
+<a id="check-every-chart"></a>
+A chart it lists as `ERROR` needs correcting; one only listed as `DIFFERS`
+is what regenerating fixes. The script exits non-zero when any chart is
+either:
 
 ```bash
+IMAGE=ghcr.io/null-ptr-exception/rulemgmt:<version>
+
 status=0
 for c in charts/*/; do
   [ -d "$c/rules" ] || continue
@@ -978,12 +997,19 @@ for c in charts/*/; do
     -e RULE_OBJECT_LABELS_BY_PROFILE -e RULE_OBJECT_ANNOTATIONS_BY_PROFILE \
     "$IMAGE" node scripts/gen-rules.mjs "/work/$c" --check || status=1
 done
-echo "exit $status"
+exit "$status"
 ```
 
-From a source checkout of the new release, run
-`node scripts/gen-rules.mjs /path/to/gitops/charts/<name> --check` the same
-way for each chart.
+From a source checkout of the new release:
+
+```bash
+status=0
+for c in /path/to/gitops/charts/*/; do
+  [ -d "$c/rules" ] || continue
+  node scripts/gen-rules.mjs "$c" --check || status=1
+done
+exit "$status"
+```
 
 A chart still in the old schema-only format is checked when it is converted:
 a column of a type other than `string`, `number`, `integer`, `boolean` or `duration`

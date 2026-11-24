@@ -16,7 +16,7 @@
  * refuses, and in three places is stricter — said where.
  */
 
-import { durationFault, durationNs } from './duration.js'
+import { durationFault, durationNs, ruleDurationProblem } from './duration.js'
 import { ROW_IDENTITY_LABEL } from './reservedNames.js'
 import { durationScalar, keyScalar, nameScalar } from './yamlScalar.js'
 import { hasUnclosedTemplate } from './ruleModel.js'
@@ -33,18 +33,17 @@ const CLASSIC_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 // does not, as for every other duration it writes.
 const isNegative = value => typeof value === 'string' && value.startsWith('-') && durationFault(value.slice(1)).reason === null
 
+// Otherwise as every duration in a rules file is read and worded.
 function duration(key, value) {
   if (isNegative(value)) return `${key} ${value} is negative — a group's ${key} is 0s or more here`
-  const { reason } = durationFault(value)
-  if (reason === 'number') return `${key} ${value} is a number — a duration is text with a unit, e.g. 30s`
-  if (reason === 'format') return `${key} ${JSON.stringify(value)} is not a duration — units from the largest down, each once, e.g. 30s, 5m, 1h30m`
-  if (reason === 'too-long') return `${key} "${value}" is longer than a duration can be (about 292 years)`
-  return null
+  return ruleDurationProblem(key, value)
 }
 
 // A whole number the evaluator reads as one; JavaScript holds one exactly up
 // to 2^53, far past any limit or concurrency anyone sets.
-const wholeNumber = (key, value) => (Number.isSafeInteger(value) && value >= 0 ? null : `${key} ${JSON.stringify(value)} must be a whole number, 0 or more`)
+// The value as written: text in quotes, anything else as JSON.
+const shownValue = value => (typeof value === 'string' ? `"${value}"` : JSON.stringify(value))
+const wholeNumber = (key, value) => (Number.isSafeInteger(value) && value >= 0 ? null : `${key} ${shownValue(value)} must be a whole number, 0 or more`)
 
 function headerList(key, value) {
   if (!Array.isArray(value) || !value.every(v => typeof v === 'string')) return `${key} must be a list of "Name: value" texts, e.g. ["X-Scope-OrgID: 1"]`
@@ -88,11 +87,15 @@ function groupLabels(value, group, profile) {
 
 /**
  * Every field, in the order it is written. `kind` is what the editor offers
- * for it; `check(value, group, profile)` says what is wrong, or null.
+ * for it and how it is written; `check(value, group, profile)` says what is
+ * wrong, or null. `label`, `placeholder` and `width` are the editor's, when
+ * they are not the field's name, 'default' and its kind's width.
  */
 export const GROUP_FIELDS = {
-  interval: { kind: 'duration' },
-  limit: { kind: 'integer' },
+  interval: { kind: 'duration', check: v => duration('interval', v), label: 'Interval', width: 90 },
+  // A whole number JavaScript holds exactly: 1e20 is one to YAML, and
+  // promtool refuses it.
+  limit: { kind: 'integer', check: v => wholeNumber('limit', v), label: 'Limit', placeholder: 'none', width: 90 },
   query_offset: { kind: 'duration', check: v => duration('query_offset', v) },
   labels: { kind: 'labels', check: groupLabels },
   eval_offset: {
@@ -129,16 +132,22 @@ export const GROUP_FIELD_NAMES = Object.keys(GROUP_FIELDS)
 /** The fields a group of no profile's choosing has always had. */
 export const BASE_GROUP_FIELDS = ['interval', 'limit']
 
-/** The rest — what a profile opens beyond interval and limit. */
-export const EXTRA_GROUP_FIELDS = GROUP_FIELD_NAMES.filter(k => !BASE_GROUP_FIELDS.includes(k))
-
 /** What is wrong with a group's fields for its profile, one message each. */
 // `shown` is the type as the file says it (`prometheus` for prometheus2);
 // `typesWith(key)` the other types that have a field, to say where it is.
-export function groupFieldProblems(group, profile, { shown = profile.name, typesWith = () => [] } = {}) {
+// With no profile (a type that is none), only the fields every group has
+// are checked: which others it has cannot be told.
+export function groupFieldProblems(group, profile, { shown = profile?.name, typesWith = () => [] } = {}) {
   const out = []
   for (const key of GROUP_FIELD_NAMES) {
     if (group[key] === undefined) continue
+    if (!profile) {
+      if (BASE_GROUP_FIELDS.includes(key)) {
+        const why = GROUP_FIELDS[key].check(group[key], group, profile)
+        if (why) out.push(why)
+      }
+      continue
+    }
     if (!profile.groupKeys.includes(key)) {
       const others = typesWith(key).filter(t => t !== profile.name)
       out.push(`${key} is not a group field of a ${shown} group — it has ${profile.groupKeys.join(', ')}${others.length ? `; ${others.join(', ')} ${others.length > 1 ? 'have' : 'has'} ${key}` : ''}`)
@@ -172,6 +181,8 @@ export function renderedGroupValue(key, value) {
 export function renderGroupField(key, given) {
   const kind = GROUP_FIELDS[key].kind
   const value = renderedGroupValue(key, given)
+  // '0' is a duration; written bare YAML reads it as a number, and the
+  // resource's field is text (#172).
   if (kind === 'duration') return `      ${key}: ${durationScalar(value)}\n`
   if (kind === 'integer' || kind === 'boolean') return `      ${key}: ${value}\n`
   if (kind === 'list') {

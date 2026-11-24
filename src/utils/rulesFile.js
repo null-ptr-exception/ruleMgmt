@@ -38,14 +38,14 @@
 import yaml from 'js-yaml'
 import { normalizeRules, columnsInQuotedValues, rowIdentityColumns, ROW_IDENTITY_LABEL } from './templateGenerator.js'
 import { typeNames, profileFor, profileNames, isPromQLType, refusesZeroOffset } from './outputs.js'
-import { EXTRA_GROUP_FIELDS, groupFieldProblems } from './groupFields.js'
+import { GROUP_FIELD_NAMES, groupFieldProblems } from './groupFields.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { SELECTOR_PATTERN } from './selectorContract.js'
-import { durationFault, durationCellFault, DURATION_COLUMN_PATTERN } from './duration.js'
+import { durationCellFault, DURATION_COLUMN_PATTERN, ruleDurationProblem } from './duration.js'
 import { varsIn, expandVars, withoutVars } from './ruleModel.js'
 import { parseDerived, derivedColumns, DERIVED_UNITS, evalDerived, derivedPosition, mergePosition } from './derived.js'
 
-const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', ...EXTRA_GROUP_FIELDS, 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
+const GROUP_KEYS = ['group', 'once', 'type', ...GROUP_FIELD_NAMES, 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
 const RULE_KEYS = ['alert', 'record', 'selectorLabels', 'expr', 'for', 'keep_firing_for', 'labels', 'annotations', 'raw', 'note']
 // A recording rule has no `for`, `keep_firing_for` or annotations in
 // Prometheus — only these.
@@ -56,23 +56,6 @@ const RESERVED = new Set(['selector'])
 // has a cell for. Anything else — a typo — is not a type Helm knows, and it
 // refuses every deployment of the chart.
 export const COLUMN_TYPES = ['string', 'number', 'integer', 'boolean', 'duration']
-
-/**
- * Why a duration written in a rules file is refused, or null (#172). One
- * format for both evaluators: vmalert reads more (30m1h, 1.5h, a bare 21),
- * but everything Prometheus reads it reads the same way.
- */
-export function ruleDurationProblem(key, value) {
-  const { reason } = durationFault(value)
-  if (reason === 'number') {
-    return value === 0
-      ? `${key} 0 is a number — a duration is text: write '0' or 0s`
-      : `${key} ${value} is a number — a duration is text with a unit, e.g. ${Number.isInteger(value) && value > 0 ? value : 30}s`
-  }
-  if (reason === 'format') return `${key} ${JSON.stringify(value)} is not a duration — units from the largest down, each once, e.g. 30s, 5m, 1h30m`
-  if (reason === 'too-long') return `${key} "${value}" is longer than a duration can be (about 292 years)`
-  return null
-}
 
 const DUMP = { lineWidth: -1, noRefs: true }
 
@@ -218,6 +201,7 @@ export function schemaToModel(schema) {
     }
 
     const entry = { group: key }
+    // The two group fields a 1.x schema could hold.
     if (group.interval !== undefined) entry.interval = group.interval
     if (group.limit !== undefined) entry.limit = group.limit
 
@@ -318,7 +302,7 @@ export function customTemplateGroups(schema) {
  * built straight from the model. This is what decouples template generation
  * from `modelToSchema`'s output: the persisted `values.schema.json` carries
  * no rule data (see above), but the generator still needs `x-rules` / `vars`
- * / `interval` / `limit` in the shape it already understands, so this builds
+ * and the group fields in the shape it already understands, so this builds
  * that in memory without ever writing it to disk.
  */
 export function groupGenDef(group, common = {}) {
@@ -337,11 +321,8 @@ export function groupGenDef(group, common = {}) {
   // `type` is JSON Schema's here (`array`), so the group's output type rides
   // as groupType — in memory only, never written.
   if (group.type !== undefined) def.groupType = group.type
-  if (group.interval !== undefined) def.interval = group.interval
-  if (group.limit !== undefined) def.limit = group.limit
-  // The rest of the evaluator's group fields (#182), as they are.
-  const extra = Object.fromEntries(EXTRA_GROUP_FIELDS.filter(k => group[k] !== undefined).map(k => [k, group[k]]))
-  if (Object.keys(extra).length) def.groupFieldsExtra = extra
+  // The evaluator's group fields (#182), as they are.
+  def.groupFields = Object.fromEntries(GROUP_FIELD_NAMES.filter(k => group[k] !== undefined).map(k => [k, group[k]]))
   def.items = { type: 'object', properties }
   if (required.length) def.items.required = required
   return def
@@ -381,9 +362,7 @@ export function groupFileText(group) {
   const lines = [`group: ${scalar(group.group)}`]
   if (group.once) lines.push('once: true')
   if (group.type !== undefined) lines.push(`type: ${scalar(group.type)}`)
-  if (group.interval !== undefined) lines.push(`interval: ${scalar(group.interval)}`)
-  if (group.limit !== undefined) lines.push(`limit: ${scalar(group.limit)}`)
-  for (const key of EXTRA_GROUP_FIELDS) {
+  for (const key of GROUP_FIELD_NAMES) {
     const v = group[key]
     if (v === undefined) continue
     lines.push(`${key}: ${v !== null && typeof v === 'object' ? yaml.dump(v, { ...DUMP, flowLevel: 0 }).trimEnd() : scalar(v)}`)
@@ -627,30 +606,17 @@ export function parseGroupFile(text, filename) {
   if (!Array.isArray(doc.rules)) errors.push(`${filename}.yaml: rules is required and must be a list`)
 
   // Rule-group fields, the template owner's (#57 §一). `type` picks the output
-  // profile (config/outputs.json, #65); the other two are Prometheus's own
-  // and were never checked — a bad one only surfaced in promtool, or not at
-  // all under a profile promtool does not check.
+  // profile (config/outputs.json, #65); the rest are the evaluator's (#182):
+  // only those the group's profile has, each checked as its evaluator reads
+  // it (groupFields.js).
   if (doc.type !== undefined && !typeNames().includes(doc.type)) {
     errors.push(`${filename}.yaml: type "${doc.type}" is not an output profile — one of ${typeNames().join(', ')}`)
   }
-  if (doc.interval !== undefined) {
-    const why = ruleDurationProblem('interval', doc.interval)
-    if (why) errors.push(`${filename}.yaml: ${why}`)
-  }
-  // A whole number JavaScript holds exactly: 1e20 is one to YAML, and
-  // promtool refuses it.
-  if (doc.limit !== undefined && !(Number.isSafeInteger(doc.limit) && doc.limit >= 0)) {
-    errors.push(`${filename}.yaml: limit "${doc.limit}" must be a whole number, 0 or more`)
-  }
-  // The evaluator's other group fields (#182): only those the group's
-  // profile has, each checked as its evaluator reads it.
-  const profile = profileFor(doc.type)
-  if (profile) {
-    const fields = { ...doc, rules: Array.isArray(doc.rules) ? doc.rules : [], selectorLabels: isMapping(doc.selectorLabels) ? normalizeMap(doc.selectorLabels) : undefined }
-    const typesWith = key => profileNames().filter(n => profileFor(n).groupKeys.includes(key))
-    for (const why of groupFieldProblems(fields, profile, { shown: doc.type ?? profile.name, typesWith })) {
-      errors.push(`${filename}.yaml: ${why}`)
-    }
+  const profile = profileFor(doc.type) ?? null
+  const fields = { ...doc, rules: Array.isArray(doc.rules) ? doc.rules : [], selectorLabels: isMapping(doc.selectorLabels) ? normalizeMap(doc.selectorLabels) : undefined }
+  const typesWith = key => profileNames().filter(n => profileFor(n).groupKeys.includes(key))
+  for (const why of groupFieldProblems(fields, profile, { shown: doc.type ?? profile?.name, typesWith })) {
+    errors.push(`${filename}.yaml: ${why}`)
   }
   // once (#70): the group renders once per deployment, outside the row loop.
   // Columns would be read from rows it never has, so it cannot have any —
@@ -677,9 +643,7 @@ export function parseGroupFile(text, filename) {
   const selectorLabels = isMapping(doc.selectorLabels) ? normalizeMap(doc.selectorLabels) : undefined
   if (selectorLabels) group.selectorLabels = selectorLabels
   if (doc.type !== undefined) group.type = doc.type
-  if (doc.interval !== undefined) group.interval = doc.interval
-  if (doc.limit !== undefined) group.limit = doc.limit
-  for (const key of EXTRA_GROUP_FIELDS) if (doc[key] !== undefined) group[key] = doc[key]
+  for (const key of GROUP_FIELD_NAMES) if (doc[key] !== undefined) group[key] = doc[key]
   if (vars) group.vars = vars
   if (derived && Object.keys(derived).length) group.derived = derived
 

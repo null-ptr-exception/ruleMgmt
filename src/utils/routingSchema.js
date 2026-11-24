@@ -104,32 +104,70 @@ const duration = key => z.string({ error: iss => timingProblem(key, iss.input) }
 
 const timing = Object.fromEntries(TIMING_KEYS.map(key => [key, duration(key).optional()]))
 
-function isHttpUrl(url) {
-  if (url !== url.trim()) return false
+// Alertmanager and the operator read the address as it is written. The URL
+// parser here repairs some forms they refuse (`http:example.com`, a tab
+// inside), so the written form is checked too (#171); the operator also puts
+// the address into JSON as it is, so `"` and `\` break it.
+// A tab, a line break or another control character (U+0000–U+001F, U+007F).
+const hasControl = text => [...text].some(c => c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f)
+const URL_START_RE = /^https?:\/\/([^/?#]*)/i
+
+const URL_MESSAGE = 'url must be an http:// or https:// address'
+
+/** Why a webhook address is refused, or null. */
+export function urlProblem(url) {
+  if (url !== url.trim()) return `${URL_MESSAGE}, with no spaces around it`
+  if (hasControl(url) || /["\\]/.test(url)) return `${URL_MESSAGE}, with no tab, line break, " or \\ in it`
+  const start = url.match(URL_START_RE)
+  if (!start) return `${URL_MESSAGE}, starting with one of them as written`
+  // The host is what follows a user name and password, if any (those are
+  // refused by the credential check, with their own reason).
+  const host = start[1].slice(start[1].lastIndexOf('@') + 1)
+  if (!host || /[\s%]/.test(host)) return `${URL_MESSAGE} naming a host, with no space or % in the host`
+  // Alertmanager refuses an escape that is not % and two hex digits, anywhere.
+  if (/%(?![0-9a-fA-F]{2})/.test(url)) return `${URL_MESSAGE}, with each % followed by two hex digits (%20)`
   try {
-    return ['http:', 'https:'].includes(new URL(url).protocol)
+    new URL(url)
   } catch {
-    return false
+    return URL_MESSAGE
   }
+  return null
 }
 
-const URL_MESSAGE = 'url must be an http:// or https:// address, with no spaces around it'
+// What Kubernetes accepts as a Secret's name and a key in it: the operator
+// cannot read the Secret otherwise, and drops the whole resource.
+const K8S_NAME_RE = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/
+const SECRET_KEY_RE = /^[-._a-zA-Z0-9]+$/
+const secretKeyOk = key => key.length <= 253 && SECRET_KEY_RE.test(key) && key !== '.' && !key.startsWith('..')
 
 const secretRef = strictMap({
-  name: text('name is required'),
-  key: text('key is required'),
+  name: text('name is required').refine(v => !TEXT_RE.test(v) || (v.length <= 253 && K8S_NAME_RE.test(v)), {
+    error: 'name must be a Kubernetes name: lower-case letters, digits, "-" and ".", at most 253',
+  }),
+  key: text('key is required').refine(v => !TEXT_RE.test(v) || secretKeyOk(v), {
+    error: 'key must be letters, digits, "-", "_" and ".", and not "." or start with ".."',
+  }),
 }, 'urlSecret needs a Secret\'s name and key')
 
+// Nothing can tell whether an address exists; this only refuses what cannot
+// be one, and a line break, which would let `to` add mail headers. A `to`
+// written as an Alertmanager template (`{{ .CommonLabels.owner }}`) is only
+// known when an alert is sent, so it needs no @.
 const email = strictMap({
   type: z.literal('email'),
-  to: text('to is required'),
+  to: text('to is required')
+    .refine(v => !hasControl(v), { error: 'to must not contain a line break or other control character' })
+    .refine(v => !TEXT_RE.test(v) || v.includes('{{') || /[^@\s]@[^@\s]/.test(v), { error: 'to must be an e-mail address, such as db-team@example.com' }),
 }, 'must be a map with a "type"')
 
 const webhook = strictMap({
   type: z.literal('webhook'),
   url: z.string({ error: 'url must be text' })
     // An address that does not parse would also skip the credential check.
-    .refine(isHttpUrl, { error: URL_MESSAGE })
+    .superRefine((url, ctx) => {
+      const why = urlProblem(url)
+      if (why) ctx.addIssue({ code: 'custom', message: why })
+    })
     .optional(),
   urlSecret: secretRef.optional(),
 }, 'must be a map with a "type"').superRefine((config, ctx) => {

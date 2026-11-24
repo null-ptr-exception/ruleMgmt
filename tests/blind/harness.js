@@ -301,10 +301,21 @@ export function readAmtoolTests(name) {
  * this one never keeps an alert from the rest. Alertmanager's root itself may
  * not say `continue`.
  *
- * Matcher objects become strings and the field names snake case; receivers
- * keep only their names, which is all a route test needs. The operator's
- * prefixing of receiver names is left out: it renames, it does not reroute.
+ * Matcher objects become strings and the field names snake case. Receivers
+ * keep their e-mail and webhook configs, so amtool checks `to` and `url`
+ * (#171); a webhook's urlSecret becomes a fixed address, since the Secret is
+ * not here, and e-mail gets a placeholder server, which the cluster's
+ * Alertmanager has. The operator's prefixing of receiver names is left out:
+ * it renames, it does not reroute.
  */
+const SECRET_URL_STAND_IN = 'http://from-a-secret.example.invalid/'
+
+const receiver = r => ({
+  name: r.name,
+  ...(r.emailConfigs ? { email_configs: r.emailConfigs.map(c => ({ to: c.to })) } : {}),
+  ...(r.webhookConfigs ? { webhook_configs: r.webhookConfigs.map(c => ({ url: c.url ?? SECRET_URL_STAND_IN })) } : {}),
+})
+
 export function toAlertmanagerConfig(spec) {
   const route = r => ({
     ...(r.receiver ? { receiver: r.receiver } : {}),
@@ -320,7 +331,8 @@ export function toAlertmanagerConfig(spec) {
       receiver: 'platform-default',
       routes: [route(spec.route), { receiver: 'other-team', matchers: ['severity="critical"'] }],
     },
-    receivers: [{ name: 'platform-default' }, { name: 'other-team' }, ...spec.receivers.map(r => ({ name: r.name }))],
+    global: { smtp_smarthost: 'smtp.example.invalid:25', smtp_from: 'alertforge@example.invalid' },
+    receivers: [{ name: 'platform-default' }, { name: 'other-team' }, ...spec.receivers.map(receiver)],
   }
 }
 

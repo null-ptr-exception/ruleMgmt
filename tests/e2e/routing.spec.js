@@ -172,6 +172,31 @@ test('a webhook URL can live in a Secret, with a reminder that it must exist', a
   await expect(page.getByTestId('notification-configs')).toContainText('Secret pager / url')
 })
 
+// #171: what Alertmanager or the operator would refuse, dropping every
+// notification of the deployment, is refused in the dialog, saying why.
+test('a config Alertmanager would refuse cannot be added, and says why', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'relay', async dialog => {
+    await dialog.getByLabel('Webhook URL').fill('http:alert-relay.monitoring.svc')
+    await expect(dialog.getByTestId('config-problems')).toContainText('url must be an http:// or https:// address')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByText('URL in a Secret').click()
+    await dialog.getByLabel('Secret name').fill('My Secret')
+    await dialog.getByLabel('Secret key').fill('url')
+    await expect(dialog.getByTestId('config-problems')).toContainText('name must be a Kubernetes name')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Config type').click()
+    await page.locator('.ant-select-item-option').filter({ hasText: /^email$/ }).click()
+    await dialog.getByLabel('Email address').fill('db-team')
+    await expect(dialog.getByTestId('config-problems')).toContainText('to must be an e-mail address')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Email address').fill('db-team@example.com')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await expect(page.getByTestId('notification-configs')).toContainText('db-team@example.com')
+})
+
 test('unsaved changes are confirmed before switching deployments', async ({ page }) => {
   await openRouting(page)
   await setUp(page)

@@ -804,9 +804,14 @@ What is refused when it is saved, and reported when it is read back:
 | Two cells with the same `match` | One of them would never be reached |
 | A cell naming a config that is not in `configs` | Nobody to send to |
 | A cell's `configs` entry that is not a name — a number, `~`, a list | It would name a receiver that is not there |
-| A webhook `url` that is not an `http://` or `https://` address, or has spaces around it — `relay:8080` without a scheme | Alertmanager cannot send to it, and the credential check below cannot read it |
+| A webhook `url` that is not an `http://` or `https://` address as written, or has spaces around it — `relay:8080` without a scheme, `http:relay`, `http:/relay`, a tab, a line break, `"` or `\` anywhere, a space or `%` in the host, a `%` not followed by two hex digits | Alertmanager or the operator refuses it, and the operator then drops the whole AlertmanagerConfig: every notification of the deployment stops, with only a Warning event. The credential check below cannot read it either |
+| A `urlSecret` whose `name` is not a Kubernetes name (lower-case letters, digits, `-` and `.`, at most 253), or whose `key` has anything but letters, digits, `-`, `_` and `.`, is `.`, or starts with `..` | The operator cannot read the Secret, and drops the whole AlertmanagerConfig |
+| An e-mail `to` with no address in it (`@`, `db-team`), or with a line break. A `to` written as an Alertmanager template (`{{ .CommonLabels.owner }}`) needs no `@` | Nothing can tell whether an address exists, so only what cannot be one is refused; a line break would add mail headers (`Bcc:`) |
 | A webhook `url` with a user name or password, a credential-like query parameter (`token=`, `key=` …) or a token-like path segment | Credentials belong in a Secret: use `urlSecret`. An in-cluster address such as `http://alert-relay.monitoring.svc:8080` is fine |
 | Any other key — under `urlSecret` too, which takes only `name` and `key` | Probably a typo; it would be left out of the AlertmanagerConfig |
+
+A `routing.yaml` saved before these three checks, with such a value, is
+listed as failing them and is not edited: fix the value in the file.
 
 The shape and types are checked first: every key, its type, and what is
 required. A value of the wrong type — a list where a name goes, a number where

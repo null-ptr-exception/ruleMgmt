@@ -22,6 +22,7 @@ import { NAME_RE, isFileName, insideReal } from '../lib/safePath.js'
 import { openRepo } from '../repo/openRepo.js'
 import { decide } from '../repo/policy.js'
 import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
+import { writeProblems, writeRefusal } from '../repo/writePath.js'
 
 // What a save refuses: what it writes. What another file of the Template
 // keeps Helm from rendering is said with the save, not a reason to lose it.
@@ -97,6 +98,15 @@ export default function templatesRouter() {
   })
   // Where the file really is, through a link: in the repo.
   const templateFile = req => insideReal(chartPaths(req, req.params.chart).tmplDir, `${req.params.template}.yaml`)
+  // A template file as the repo names it: charts/<chart>/templates/<name>.yaml.
+  const templateRel = (req, name) => path.relative(req.gitopsDir, path.join(chartPaths(req, req.params.chart).tmplDir, `${name}.yaml`)).replace(/\\/g, '/')
+  // A write to a template file never lands outside the repo: a chart folder
+  // or a templates/ folder that is a link leading out is refused (409, the
+  // file named), as the Template's other routes refuse it.
+  const outsideRefusal = async (req, names) => {
+    const problem = await writeProblems(req.gitopsDir, names.map(n => templateRel(req, n)))
+    return problem ? writeRefusal(problem) : null
+  }
 
   function chartPaths(req, chart) {
     const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
@@ -507,8 +517,15 @@ export default function templatesRouter() {
       return res.status(400).json({ error: 'Invalid newName' })
     }
     try {
+      const refused = await outsideRefusal(req, [req.params.template, newName])
+      if (refused) return res.status(refused.status).json(refused.body)
       const oldFile = await templateFile(req)
       if (!oldFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
+      // A file already at the new name is not written over, as a chart's
+      // clone and a shared config's rename are not.
+      const newRel = templateRel(req, newName)
+      const listed = await openRepo(req.gitopsDir).dir(path.posix.dirname(newRel))
+      if (listed.state === 'ok' && listed.value.entries.has(`${newName}.yaml`)) return res.status(409).json({ error: `${newRel} already exists`, file: newRel })
       await fs.rename(oldFile, path.join(tmplDir, `${newName}.yaml`))
       res.json({ ok: true })
     } catch (err) {
@@ -541,6 +558,8 @@ export default function templatesRouter() {
     const { content } = req.body || {}
     if (typeof content !== 'string') return res.status(400).json({ error: 'content is required: the template file\'s text' })
     try {
+      const refused = await outsideRefusal(req, [req.params.template])
+      if (refused) return res.status(refused.status).json(refused.body)
       const tmplFile = await templateFile(req)
       if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
       await fs.mkdir(tmplDir, { recursive: true })
@@ -555,6 +574,8 @@ export default function templatesRouter() {
   // Delete a template file
   router.delete('/:chart/:template', async (req, res) => {
     try {
+      const refused = await outsideRefusal(req, [req.params.template])
+      if (refused) return res.status(refused.status).json(refused.body)
       const tmplFile = await templateFile(req)
       if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
       await fs.rm(tmplFile, { force: true })

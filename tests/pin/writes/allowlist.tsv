@@ -2,7 +2,6 @@
 # category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
 # Edited by hand: a fix removes its line; a new disagreement needs one.
 id	entry	kind	category	reason
-race-same	template-file-rename	5xx	bug	no issue yet: a rename of a template that is no longer there (renamed meanwhile) answers 500 ENOENT, not 404
 while-locked	save-legacy	not-locked	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 while-locked	deployment-clone	not-locked	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 second-readonly-file	save-json	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
@@ -51,9 +50,6 @@ dangling-link	sync-create	5xx	bug	no issue yet: a sync whose files cannot be wri
 dangling-link	deployment-clone	5xx	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 dangling-link	deployment-delete	5xx	bug	no issue yet: a deployment whose values.yaml is a link to nothing cannot be deleted: 500 "cannot be read"
 dangling-link	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
-dir-link-outside	template-file-save	wrote-outside	bug	no issue yet: the template file routes (save, rename, delete) write through a templates folder that is a link leading out of the repo; the Template's other routes, the deployment and routing paths and the CLIs refuse it
-dir-link-outside	template-file-rename	wrote-outside	bug	no issue yet: the template file routes (save, rename, delete) write through a templates folder that is a link leading out of the repo; the Template's other routes, the deployment and routing paths and the CLIs refuse it
-dir-link-outside	template-file-delete	wrote-outside	bug	no issue yet: the template file routes (save, rename, delete) write through a templates folder that is a link leading out of the repo; the Template's other routes, the deployment and routing paths and the CLIs refuse it
 dir-link-outside	deployment-clone	wrote-outside	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 dir-link-outside	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 is-folder	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)

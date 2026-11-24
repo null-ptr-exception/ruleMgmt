@@ -1618,8 +1618,8 @@ folder-link-outside	p2	list	not-listed	200	-	no	-	renders	disk	-	renders	0	6	Cpu
 folder-link-outside	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
 folder-link-outside	p2	file-get	unreadable	409	charts/p2/templates/cpu.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 folder-link-outside	p2	file-save	not-seen	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-outside	p2	file-rename	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
-folder-link-outside	p2	file-delete	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+folder-link-outside	p2	file-rename	refused	409	charts/p2/templates/notes.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
+folder-link-outside	p2	file-delete	refused	409	charts/p2/templates/notes.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	refuses-what-helm-renders
 folder-link-outside	p2	save-rules	unreadable	409	charts/p2	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=disk	refuses-what-helm-renders
 folder-link-outside	p2	migration-preview	unreadable	409	charts/p2	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
 folder-link-outside	p2	save-values	unreadable	409	charts/p2	no	-	renders	would-be	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=disk	refuses-what-helm-renders

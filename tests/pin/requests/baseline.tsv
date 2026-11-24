@@ -1158,13 +1158,13 @@ link-out	templates.rules:chart	any	conflict	409	same	no	same	no	free		-	-	-
 link-out	templates.migration-preview:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.values:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.chart-meta:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-out	templates.rename:chart	any	error	500	same	no	same	no	free		-	-	-	5xx
+link-out	templates.rename:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	templates.template-get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
 link-out	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-link-out	templates.template-save:chart	any	ok	200	changed	no	same	no	free		-	-	-	outside-changed
+link-out	templates.template-save:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-link-out	templates.template-delete:chart	any	ok	200	same	no	same	no	free		-	-	-	
+link-out	templates.template-delete:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	deployments.list:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	

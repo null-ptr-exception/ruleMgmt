@@ -24,8 +24,6 @@ reserved-common	sync.create:source	refuses-legit	policy	a _common chart opens in
 link-in	templates.rename:chart	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
 link-in	folders.common-plan:folder	refuses-legit	policy	no _common is made through a link, even one that stays in the repo: whether it does is not checked there
 link-in	folders.common:folder	refuses-legit	policy	no _common is made through a link, even one that stays in the repo: whether it does is not checked there
-link-out	templates.rename:chart	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
-link-out	templates.template-save:chart	outside-changed	bug	no issue yet: the template file routes (save, rename, delete) do not check where the Template folder really is: one that is a link out of the repo is written through, while the Template's own routes refuse it
 link-out	git.diff:file	server-path	policy	the diff shows a link as git keeps it, its target; the target the repo holds is an absolute path of this machine
 link-out	git.diff:file@HEAD	server-path	policy	the diff shows a link as git keeps it, its target; the target the repo holds is an absolute path of this machine
 link-via	git.diff:file	outside-read	bug	no issue yet: without a ref the diff reads the working file through a folder on the way that is a link out of the repo (only a link that is the file itself is not followed)

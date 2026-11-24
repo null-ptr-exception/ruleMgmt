@@ -1208,8 +1208,8 @@ link-via	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free	
 link-via	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	render.preview:folder	any	refused	400	same	no	same	no	free		-	-	-	
-link-via	git.diff:file	any	ok	200	same	answer	same	no	free		-	-	-	outside-read
-link-via	git.diff:file@HEAD	any	ok	200	same	no	same	no	free		-	-	-	
+link-via	git.diff:file	any	refused	400	same	no	same	no	free		-	-	-	
+link-via	git.diff:file@HEAD	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	folders.common-plan:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	folders.common-plan:path	any	not-found	404	same	no	same	no	free		-	-	-	
 link-via	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1247,9 +1247,9 @@ ref:HEAD	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-
 ref:HEAD~1	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	
 ref:HEAD^	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	
 ref:branch	git.diff:ref	git	refused	400	same	no	same	no	free		accepts	-	-	refuses-what-git-accepts
-ref:missing	git.diff:ref	git	ok	200	same	no	same	no	free		refuses	-	-	accepts-what-git-refuses
-ref:tree	git.diff:ref	git	ok	200	same	no	same	no	free		refuses	-	-	accepts-what-git-refuses
-ref:past-root	git.diff:ref	git	ok	200	same	no	same	no	free		refuses	-	-	accepts-what-git-refuses
+ref:missing	git.diff:ref	git	refused	400	same	no	same	no	free		refuses	-	-	
+ref:tree	git.diff:ref	git	refused	400	same	no	same	no	free		refuses	-	-	
+ref:past-root	git.diff:ref	git	refused	400	same	no	same	no	free		refuses	-	-	
 ref:HEAD~	git.diff:ref	git	ok	200	same	no	same	no	free		accepts	-	-	
 ref:dash	git.diff:ref	git	refused	400	same	no	same	no	free		refuses	-	-	
 ref:option	git.diff:ref	git	refused	400	same	no	same	no	free		refuses	-	-	

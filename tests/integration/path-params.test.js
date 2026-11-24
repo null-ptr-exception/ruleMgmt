@@ -308,3 +308,40 @@ describe('a name longer than 255 bytes', () => {
     expect(status, text).toBe(200)
   })
 })
+
+// A diff is shown at a commit only when git has it as one, and the work
+// tree's file only when the folder it is in is really in the repo.
+describe('a diff', () => {
+  it.each([
+    ['a commit id the repo has not', 'deadbeefdeadbeef'],
+    ['a commit further back than the history', 'HEAD~99'],
+  ])('at %s → 400', async (_, ref) => {
+    const { status, text } = await api('GET', `/api/v2/git/diff?file=.gitignore&ref=${q(ref)}`)
+    expect(status, text).toBe(400)
+    expect(JSON.parse(text).error).toContain('no commit of this repo')
+  })
+
+  it('at a tree id → 400: it is no commit', async () => {
+    const tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: repo, encoding: 'utf-8' }).trim()
+    const { status, text } = await api('GET', `/api/v2/git/diff?file=.gitignore&ref=${tree}`)
+    expect(status, text).toBe(400)
+  })
+
+  it('of a file reached through a folder that is a link out of the repo → 400, nothing of it read', async () => {
+    await fs.writeFile(path.join(root, 'outdir', 'secret.yaml'), SENTINEL)
+    try {
+      const { status, text } = await api('GET', `/api/v2/git/diff?file=${q('deployments/out-link/secret.yaml')}`)
+      expect(status, text).toBe(400)
+      expect(text).not.toContain('sentinel: outside')
+      expect(text).not.toContain(root)
+    } finally {
+      await fs.rm(path.join(root, 'outdir', 'secret.yaml'))
+    }
+  })
+
+  it('of a file reached through a link in the repo is read there', async () => {
+    const { status, text } = await api('GET', `/api/v2/git/diff?file=${q('deployments/in-link/a/values.yaml')}`)
+    expect(status, text).toBe(200)
+    expect(JSON.parse(text).modified).not.toBe('')
+  })
+})

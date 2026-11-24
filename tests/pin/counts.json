@@ -1,10 +1,10 @@
 {
   "lint": {
-    "total": 199,
+    "total": 196,
     "byKind": {
       "childProcess": 1,
       "fs": 32,
-      "fsUse": 132,
+      "fsUse": 129,
       "helper": 6,
       "yaml": 12,
       "yamlParse": 16
@@ -38,7 +38,7 @@
       "server/routes/deployments/values.js": 2,
       "server/routes/folders/create.js": 8,
       "server/routes/folders/tree.js": 6,
-      "server/routes/git.js": 9,
+      "server/routes/git.js": 6,
       "server/routes/sync.js": 6,
       "server/routes/templates.js": 5
     }
@@ -58,7 +58,7 @@
     }
   },
   "swallowingCatches": {
-    "total": 34,
+    "total": 33,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
@@ -73,7 +73,6 @@
       "server/routes/deployments/list.js": 2,
       "server/routes/deployments/resolve.js": 1,
       "server/routes/folders/tree.js": 2,
-      "server/routes/git.js": 1,
       "server/routes/sync.js": 3,
       "src/utils/renderSummary.js": 1,
       "src/utils/schemaCompat.js": 1

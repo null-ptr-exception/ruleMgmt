@@ -391,7 +391,10 @@ which folder is the link and, when it stays in the repo, the path to ask
 for instead: with `deployments/in-link` a link to `deployments/team`,
 `deployments/in-link/a` is refused with "ask for deployments/team/a" (a new
 deployment or `_common` there: "make it in …"). One leading out of the
-repo is said to do so, without where.
+repo is said to do so, without where. The Git panel's diff of a file in
+such a folder is refused too (400), and so is a diff at a commit the repo
+does not have — an id it has not, a tree, `HEAD~9` in a shorter history —
+instead of an empty one.
 
 A name — of a Template, a deployment, a template file, a folder — is at
 most 255 bytes, what the file system and git take for one name; a longer

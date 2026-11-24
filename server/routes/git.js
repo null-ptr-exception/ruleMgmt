@@ -8,7 +8,8 @@ import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
-import { pathProblem } from '../repo/paths.js'
+import { parsePath } from '../repo/paths.js'
+import { repoGit } from '../repo/git.js'
 
 export { withoutPath }
 
@@ -147,7 +148,7 @@ export default function gitRouter() {
             ...(deployments.unreadable.length ? { unreadable: deployments.unreadable } : {}) } }
         }
 
-        await git(cwd, 'commit', '-m', message)
+        await repoGit(cwd).commit(message)
         const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
         return { status: 200, body: { sha, message, unconverted: charts.unconverted,
           ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}),
@@ -260,15 +261,15 @@ export default function gitRouter() {
     const file = req.query.file
     const ref = req.query.ref
 
-    // A tracked file, dot-files and dot-folders among them; never git's own.
-    if (pathProblem(file, 'read')) {
-      return res.status(400).json({ error: 'Invalid file path' })
-    }
-    // A commit as git log names it (or HEAD, HEAD~1), never an option or an
-    // expression; and what git is given after it is never read as an option
-    // either.
-    if (ref !== undefined && (typeof ref !== 'string' || !/^(HEAD|[0-9a-f]{4,64})(~\d*|\^\d*)*$/i.test(ref))) {
-      return res.status(400).json({ error: 'Invalid commit' })
+    // A tracked file, dot-files and dot-folders among them; never git's
+    // own; the folder it is in really in the repo (paths.js).
+    const where = await parsePath(file, 'read', { root: cwd, what: 'file path' })
+    if (!where.ok) return res.status(400).json({ error: where.error })
+    const g = repoGit(cwd)
+    // A commit the policy allows and git has (repo/git.js).
+    if (ref !== undefined) {
+      const commit = await g.commitOf(ref)
+      if (!commit.ok) return res.status(400).json({ error: `Invalid commit: ${commit.why}` })
     }
 
     try {
@@ -276,16 +277,11 @@ export default function gitRouter() {
       let modified = ''
 
       if (ref) {
-        try { original = await git(cwd, 'show', '--end-of-options', `${ref}~1:${file}`) } catch { original = '' }
-        try { modified = await git(cwd, 'show', '--end-of-options', `${ref}:${file}`) } catch { modified = '' }
+        original = await g.show(`${ref}~1`, where.rel)
+        modified = await g.show(ref, where.rel)
       } else {
-        try { original = await git(cwd, 'show', '--end-of-options', `HEAD:${file}`) } catch { original = '' }
-        try {
-          const filePath = path.join(cwd, file)
-          // A link is shown as git keeps it — where it points — never read
-          // through: it may lead outside the repo.
-          modified = (await fs.lstat(filePath)).isSymbolicLink() ? await fs.readlink(filePath) : await fs.readFile(filePath, 'utf8')
-        } catch { modified = '' }
+        original = await g.show('HEAD', where.rel)
+        modified = await g.working(where.rel)
       }
 
       res.json({ file, original, modified })

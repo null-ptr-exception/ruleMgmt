@@ -7,6 +7,7 @@ import TemplateTree from '../components/TemplateTree'
 import OverviewTemplateTree from '../components/OverviewTemplateTree'
 import AlertTable, { RequiredMark } from '../components/AlertTable'
 import { isMissingRequired } from '../utils/valueUtils'
+import { durationCellFault } from '../utils/duration'
 import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
 import PreviewModal from '../components/PreviewModal'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
@@ -641,6 +642,8 @@ export default function AlertUserView() {
                   </Text>
                   {commonVarDefs.map(v => {
                     const missing = !frozenSource && isMissingRequired(v, commonValues[v.name])
+                    const badDuration = !missing && !frozenSource && v.type === 'duration' && commonValues[v.name]
+                      ? durationCellFault(commonValues[v.name], null) : null
                     const field = v.enum ? (
                         <Select size="small" value={commonValues[v.name] ?? ''}
                           status={missing ? 'error' : undefined}
@@ -654,7 +657,7 @@ export default function AlertUserView() {
                       ) : (
                         <Input size="small" value={commonValues[v.name] ?? ''}
                           disabled={!!frozenSource}
-                          status={missing ? 'error' : undefined}
+                          status={missing || badDuration ? 'error' : undefined}
                           onChange={e => {
                             if (e.target.value) {
                               setCommonValues({ ...commonValues, [v.name]: e.target.value }); setDirty(true)
@@ -668,7 +671,7 @@ export default function AlertUserView() {
                     return (
                       <div key={v.name} data-testid={`common-value-${v.name}`} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                         <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}{v.required && <RequiredMark />}</Text>
-                        {missing ? <Tooltip title="Required">{field}</Tooltip> : field}
+                        {missing ? <Tooltip title="Required">{field}</Tooltip> : badDuration ? <Tooltip title={badDuration}>{field}</Tooltip> : field}
                       </div>
                     )
                   })}

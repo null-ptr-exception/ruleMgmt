@@ -1,3 +1,4 @@
+import { DURATION_COLUMN_PATTERN } from './duration.js'
 /**
  * A schema `properties` key that names an alert group — not a `$`-prefixed
  * meta key (`$schema` and friends) and not `_common` (chart-level variables,
@@ -29,12 +30,16 @@ export function schemaAlertNames(schema) {
   return Object.keys(schema.properties).filter(isAlertGroup)
 }
 
+// A duration column (#117) is a string with a pattern in the schema; its
+// x-type is what says so.
+const uiTypeOf = prop => prop.enum ? 'enum' : prop['x-type'] === 'duration' ? 'duration' : (prop.type || 'string')
+
 export function getCommonVars(schema) {
   const vars = getCommonSchema(schema)
   if (!vars || !vars.properties) return []
   const required = new Set(vars.required || [])
   return Object.entries(vars.properties).map(([name, prop]) => {
-    const uiType = prop.enum ? 'enum' : (prop.type || 'string')
+    const uiType = uiTypeOf(prop)
     const v = { name, type: uiType, description: prop.description || '', required: required.has(name) }
     if (prop.default !== undefined) v.default = prop.default
     if (prop.enum) v.enum = prop.enum
@@ -86,7 +91,7 @@ export function schemaToVars(schema, alertName) {
   const groupVars = Object.entries(props)
     .filter(([name]) => !commonNames.has(name))
     .map(([name, prop]) => {
-      const uiType = prop.enum ? 'enum' : (prop.type || 'string')
+      const uiType = uiTypeOf(prop)
       const v = { name, type: uiType, description: prop.description || '', required: required.has(name) }
       if (prop.default !== undefined) v.default = prop.default
       if (prop.enum) v.enum = prop.enum
@@ -103,7 +108,9 @@ export function schemaToVars(schema, alertName) {
  */
 function varToSchemaProp(v) {
   const isEnum = v.type === 'enum'
-  const prop = { type: isEnum ? 'string' : (v.type || 'string') }
+  const prop = v.type === 'duration'
+    ? { type: 'string', pattern: DURATION_COLUMN_PATTERN, minLength: 1, 'x-type': 'duration' }
+    : { type: isEnum ? 'string' : (v.type || 'string') }
   if (v.description) prop.description = v.description
   if (v.default !== undefined) prop.default = v.default
   if (isEnum) prop.enum = v.enum || []

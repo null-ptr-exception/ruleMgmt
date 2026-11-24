@@ -17,7 +17,8 @@
  */
 
 import { profileFor } from './outputs.js'
-import { parseDerived, derivedColumns } from './derived.js'
+import { parseDerived, derivedColumns, derivedPosition } from './derived.js'
+import { durationCellFault } from './duration.js'
 import { normalizeRules, columnFallbacks } from './templateGenerator.js'
 import { danglingRefs, ruleVars, varsIn, nestedPlaceholders } from './ruleModel.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
@@ -112,6 +113,7 @@ export function checkRules(schema) {
     }))
     const columnsOf = name => (Object.hasOwn(derived, name) ? derived[name].columns : [name])
     const promql = profileFor(alertDef.groupType)?.validate === 'promtool'
+    const zeroDefaults = new Set()
 
     for (const rule of rules) {
       const where = rule.alert ? `rule "${rule.alert}"`
@@ -170,6 +172,37 @@ export function checkRules(schema) {
       // rule that belongs once per deployment goes in a `once: true` group
       // (#70). An empty `columns` is the just-imported state and is left
       // alone.
+      // A duration column (#117) carries its unit: one written after it
+      // renders `5mm`, which PromQL reads as something else or refuses.
+      const durationCols = Object.entries({ ...commonProps, ...(alertDef?.items?.properties || {}) })
+        .filter(([, p]) => p?.['x-type'] === 'duration').map(([n]) => n)
+      for (const name of durationCols) {
+        // A unit right after it, whatever follows: `[${win}m30s]` renders
+        // [5mm30s] too. Not followed by another letter, so `${win}more` is
+        // a word, not a unit.
+        const after = new RegExp(`\\$\\{\\s*${name}\\s*\\}(ms|[smhdwy])(?![a-zA-Z])`)
+        for (const str of strings) {
+          const m = after.exec(str || '')
+          if (m) {
+            findings.push({ severity: 'save', kind: 'duration-unit-after', group, alert: rule.alert,
+              message: `${where}: \${${name}} is a duration column and has its unit — "${m[0]}" would render 5${m[1]}${m[1]}; write \${${name}} alone` })
+            break
+          }
+        }
+        // Its default stands in for an empty cell, so a 0s one goes where
+        // 0 is refused (a range, an offset) in every row that leaves it out.
+        const prop = alertDef?.items?.properties?.[name] || commonProps[name]
+        const key = `${group}|${name}`
+        if (!rule.raw && prop?.default !== undefined && !zeroDefaults.has(key)) {
+          const why = durationCellFault(prop.default, derivedPosition(name, [rule], promql))
+          if (why) {
+            zeroDefaults.add(key)
+            findings.push({ severity: 'save', kind: 'duration-default', group, alert: rule.alert,
+              message: `${where}: \${${name}}'s default ${why}` })
+          }
+        }
+      }
+
       if (!rule.raw) findings.push(...derivedPositionProblems(rule, derived, promql, group, where))
       else {
         // A raw rule is written out as it is: where a value goes in it is not

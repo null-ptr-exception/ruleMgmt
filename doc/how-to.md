@@ -570,7 +570,7 @@ for c in charts/*/; do [ -d "$c/rules" ] && node scripts/gen-rules.mjs "$c" --ch
 ```
 
 A chart still in the old schema-only format is checked when it is converted:
-a column of a type other than `string`, `number`, `integer` or `boolean`
+a column of a type other than `string`, `number`, `integer`, `boolean` or `duration`
 stops the conversion until the schema is corrected.
 
 ### Import rules into a chart

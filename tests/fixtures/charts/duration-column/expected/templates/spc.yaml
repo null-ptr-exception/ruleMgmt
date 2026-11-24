@@ -1,0 +1,22 @@
+{{- $chunks := chunk 100 ($.Values.spc | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-spc-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: spc
+      rules:
+        {{- range $rows }}
+        - alert: SpcErrors
+          expr: |-
+            rate(spc_errors_total{job="{{ .job }}"}[{{ .win }}]) > 0
+          for: {{ dig "hold" `5m` . }}
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

@@ -5,6 +5,7 @@ import { selectorCells, directChildren, parentOf, selectorPath, selectorCellProb
 import { matchesFilter, getFilterOperators } from '../utils/filterUtils'
 import { SelectorLabelsHint } from './SelectorLabelsList'
 import { buildNewRow, isMissingRequired } from '../utils/valueUtils'
+import { durationCellFault } from '../utils/duration'
 
 const REGEX_HINT = 'Matched exactly, not as a regex. For a regex, use a column that is not a selector, in the expr'
 
@@ -96,10 +97,16 @@ export default function AlertTable({
     // A selector cell that reads like a regex is still saved, but matched
     // exactly (#120) — said here, not refused.
     const literal = !missing && !readOnly && selectors?.includes(v.name) && looksLikeRegex(val)
-    const status = missing ? 'error' : literal ? 'warning' : undefined
+    // A duration cell that is not one (#117): said here as the server says
+    // it, which is what refuses the save. Whether 0s may be used is the
+    // server's to say: it depends on where the rule puts the column.
+    const badDuration = !missing && !readOnly && !v.common && v.type === 'duration' && val != null && val !== ''
+      ? durationCellFault(val, null) : null
+    const status = missing || badDuration ? 'error' : literal ? 'warning' : undefined
     const hint = input => missing ? <Tooltip title="Required">{input}</Tooltip>
-      : literal ? <Tooltip title={REGEX_HINT}>{input}</Tooltip>
-        : input
+      : badDuration ? <Tooltip title={badDuration}>{input}</Tooltip>
+        : literal ? <Tooltip title={REGEX_HINT}>{input}</Tooltip>
+          : input
     if (plain) {
       const text = v.type === 'boolean' ? (val ? '✓' : '') : (val ?? '')
       return <span style={{ fontSize: 13, padding: '0 7px' }}>{String(text)}</span>

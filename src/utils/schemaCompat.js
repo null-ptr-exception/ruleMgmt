@@ -71,6 +71,10 @@ function defaultChange(before, after) {
 
 function typeNarrowed(before, after) {
   if (!before?.type || !after?.type) return false
+  // A string column made a duration (#117) — in the schema, a string with a
+  // pattern — rejects text it took. Only that pattern: a column made a
+  // selector gets one too, and its rows are checked by the save instead.
+  if (after['x-type'] === 'duration' && before['x-type'] !== 'duration') return true
   if (before.type === after.type) {
     // An enum that loses options rejects values that used to validate.
     if (Array.isArray(before.enum) && Array.isArray(after.enum)) {

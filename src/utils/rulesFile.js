@@ -40,9 +40,9 @@ import { normalizeRules, columnsInQuotedValues } from './templateGenerator.js'
 import { profileNames } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { SELECTOR_PATTERN } from './selectorContract.js'
-import { durationFault } from './duration.js'
+import { durationFault, durationCellFault, DURATION_COLUMN_PATTERN } from './duration.js'
 import { varsIn, expandVars } from './ruleModel.js'
-import { parseDerived, derivedColumns, DERIVED_UNITS, evalDerived, derivedPosition } from './derived.js'
+import { parseDerived, derivedColumns, DERIVED_UNITS, evalDerived, derivedPosition, mergePosition } from './derived.js'
 import { profileFor } from './outputs.js'
 
 const GROUP_KEYS = ['group', 'once', 'type', 'interval', 'limit', 'selectors', 'selectorLabels', 'vars', 'columns', 'derived', 'rules']
@@ -55,7 +55,7 @@ const RESERVED = new Set(['selector'])
 // What a column may hold (#172): JSON Schema's own names, the ones the table
 // has a cell for. Anything else — a typo — is not a type Helm knows, and it
 // refuses every deployment of the chart.
-export const COLUMN_TYPES = ['string', 'number', 'integer', 'boolean']
+export const COLUMN_TYPES = ['string', 'number', 'integer', 'boolean', 'duration']
 
 /**
  * Why a duration written in a rules file is refused, or null (#172). One
@@ -83,7 +83,8 @@ const sortedGroups = groups => Object.entries(groups || {}).sort(([a], [b]) => (
 
 /** A schema `items.properties` entry, minus the x- markers the format drops. */
 function columnFromSchemaProp(prop, required) {
-  const col = { type: prop?.type || 'string' }
+  // A duration column is a string in the schema, marked so it reads back (#117).
+  const col = { type: prop?.['x-type'] === 'duration' ? 'duration' : (prop?.type || 'string') }
   if (required) col.required = true
   if (prop?.default !== undefined) col.default = prop.default
   if (Array.isArray(prop?.enum)) col.enum = prop.enum
@@ -110,7 +111,11 @@ function columnsToSchema(columns = {}, selectorColumns = new Set()) {
   const properties = {}
   const required = []
   for (const [name, col] of Object.entries(columns)) {
-    const prop = { type: col.type || 'string' }
+    // A duration column (#117) is text Helm checks against the duration
+    // format itself, so a bad value fails `helm template`, not Prometheus.
+    const prop = col.type === 'duration'
+      ? { type: 'string', pattern: DURATION_COLUMN_PATTERN, minLength: 1, 'x-type': 'duration' }
+      : { type: col.type || 'string' }
     if (col.description) prop.description = col.description
     if (col.default !== undefined) prop.default = col.default
     if (Array.isArray(col.enum)) prop.enum = col.enum
@@ -473,6 +478,17 @@ function parseColumns(columns, where, errors) {
     if (clean.description !== undefined && typeof clean.description !== 'string') {
       errors.push(`${where}.${name}: description must be text, not ${JSON.stringify(clean.description)}`)
     }
+    // A duration column's default is a duration too (#117); a 0s one where
+    // 0 is refused (a range, an offset) is a save check (ruleChecks).
+    // An enum goes into the schema next to the pattern, and the editor shows
+    // it as a string enum: for fixed choices, a string enum is all there is.
+    if (clean.type === 'duration' && clean.enum !== undefined) {
+      errors.push(`${where}.${name}: a duration column has no enum — for a fixed list of durations, use type: string with the enum`)
+    }
+    if (clean.type === 'duration' && clean.default !== undefined) {
+      const why = durationCellFault(clean.default)
+      if (why) errors.push(`${where}.${name}: default ${why}`)
+    }
     out[name] = clean
   }
   return out
@@ -695,7 +711,8 @@ export function parseRulesDir(files) {
 // ── values check ────────────────────────────────────────────────────────────
 
 const typeOk = (value, type) =>
-  type === 'number' ? typeof value === 'number'
+  type === 'duration' ? typeof value === 'string'
+  : type === 'number' ? typeof value === 'number'
     : type === 'boolean' ? typeof value === 'boolean'
       : true
 
@@ -736,14 +753,27 @@ export function valueProblems(values, model) {
   const quotedCommon = new Set()
 
   // What is wrong with one cell, or null. `present` is whether the key is there.
-  const cellProblem = (col, present, value, quoted) => {
+  const cellProblem = (col, present, value, quoted, position) => {
     if (col?.required && (!present || isEmpty(value))) return 'required — fill it in'
     if (!present) return null
     if (isEmpty(value)) return 'empty — fill it in, or leave the cell out'
     if (hasNewline(value)) return 'contains a line break — values are one line'
     if (quoted && quoteBreaks(value)) return 'contains " or \\, which a label cannot take'
+    if (col?.type === 'duration') return durationCellFault(value, position)
     return null
   }
+
+  // Where each name goes in a group's rules as rendered (vars expanded):
+  // a duration in a range cannot be 0 (#117), nor a derived value (#118).
+  const positionOf = entry => {
+    const expanded = (entry.rules || []).map(r => ({
+      ...r, ...Object.fromEntries(['expr', 'for', 'keep_firing_for'].filter(k => r[k] !== undefined).map(k => [k, expandVars(r[k], entry.vars)])),
+    }))
+    const promql = profileFor(entry.type)?.validate === 'promtool'
+    return name => derivedPosition(name, expanded, promql)
+  }
+  const commonPosition = name => Object.values(model.groups || {}).filter(g => !g.custom)
+    .map(g => positionOf(g)(name)).reduce(mergePosition, null)
 
   // _common is read whenever anything renders: any row, or a once group,
   // which renders with none (#70).
@@ -754,6 +784,7 @@ export function valueProblems(values, model) {
     const columns = entry.columns || {}
     const quoted = columnsInQuotedValues(entry)
     for (const name of quoted) if (name in commonCols && !(name in columns)) quotedCommon.add(name)
+    const positionHere = positionOf(entry)
     // derived (#118): each row's value computed as Helm will, so 0 in a
     // range, a negative or overflowing value, or a duration past what Go
     // holds is refused here rather than deployed.
@@ -762,17 +793,14 @@ export function valueProblems(values, model) {
       try { tree = parseDerived(d.expr) } catch { /* the rules file says so */ }
       // Where it goes is read from the rules as rendered: a vars entry can
       // put it in a range.
-      const expanded = (entry.rules || []).map(r => ({
-        ...r, ...Object.fromEntries(['expr', 'for', 'keep_firing_for'].filter(k => r[k] !== undefined).map(k => [k, expandVars(r[k], entry.vars)])),
-      }))
-      return { name, d, tree, position: derivedPosition(name, expanded, profileFor(entry.type)?.validate === 'promtool') }
+      return { name, d, tree, position: positionHere(name) }
     }).filter(x => x.tree)
     const rows = values?.[group]
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
       rendersAnything = true
       const cells = new Set([...Object.keys(columns), ...Object.keys(row || {}).filter(k => !(k in commonCols))])
       for (const name of cells) {
-        const why = cellProblem(columns[name], name in (row || {}), row?.[name], quoted.has(name))
+        const why = cellProblem(columns[name], name in (row || {}), row?.[name], quoted.has(name), positionHere(name))
         if (why) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}` })
       }
       for (const { name, d, tree, position } of derived) {
@@ -801,7 +829,7 @@ export function valueProblems(values, model) {
   const common = values?._common || {}
   const commonCells = new Set([...(rendersAnything ? Object.keys(commonCols) : []), ...Object.keys(common)])
   for (const name of commonCells) {
-    const why = cellProblem(commonCols[name], name in common, common[name], quotedCommon.has(name))
+    const why = cellProblem(commonCols[name], name in common, common[name], quotedCommon.has(name), commonPosition(name))
     if (why) problems.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${why}` })
   }
   return problems
@@ -826,7 +854,9 @@ export function validateValues(values, model) {
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
       for (const [name, value] of Object.entries(row || {})) {
         if (!(name in known)) problems.push(`values.yaml: ${group}[${i}] has "${name}", which no column defines`)
-        else if (!typeOk(value, known[name].type)) problems.push(`values.yaml: ${group}[${i}] "${name}" should be ${known[name].type}`)
+        // A duration cell's problems, a number among them, are said once, by
+        // valueProblems below, with what to write instead.
+        else if (known[name].type !== 'duration' && !typeOk(value, known[name].type)) problems.push(`values.yaml: ${group}[${i}] "${name}" should be ${known[name].type}`)
       }
     }
   }

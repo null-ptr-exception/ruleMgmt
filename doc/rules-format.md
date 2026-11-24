@@ -105,7 +105,7 @@ Different groups in one chart may have different types.
 
 | Field | Meaning |
 |---|---|
-| `type` | `string`, `number`, `integer` or `boolean` — decides the field the rule owner gets, and what Helm accepts. Left out, it is `string`; anything else is refused |
+| `type` | `string`, `number`, `integer`, `boolean` or `duration` — decides the field the rule owner gets, and what Helm accepts. Left out, it is `string`; anything else is refused. See [a duration column](#a-duration-column) |
 | `required` | Helm refuses values that leave it out |
 | `default` | Used when a row leaves the cell empty. See [empty cells](#empty-cells) |
 | `enum` | A fixed set of choices — the rule owner gets a dropdown instead of a free text field |
@@ -147,6 +147,53 @@ an `interval: 0` is refused, and a `for: 0` is read as no `for`.
 
 A value with a placeholder in it (`for: ${window}`) is the row's and is not
 checked here; nor is anything inside a `raw` entry.
+
+### A duration column
+
+A column a rule uses as a duration — a range, a subquery, an `offset`, `for`
+— can be `type: duration`. Its cells are then checked as durations are,
+with the unit written in the cell:
+
+```yaml
+columns:
+  win:  { type: duration, required: true }
+  hold: { type: duration, default: 5m }
+rules:
+  - alert: SpcErrors
+    expr: rate(errors{job="${job}"}[${win}]) > 0
+    for: ${hold}
+```
+
+| Cell | |
+|---|---|
+| `90s`, `21m`, `1h30m` | written into the rule as they are: `[21m]` |
+| `21` | refused: a number — write it with a unit, `21s` |
+| `"21"` | refused: no unit — write `21s` or `21m` |
+| `10.5m`, `21 m`, `30m1h`, `$__interval` | refused: not a duration |
+| `0` | refused: no unit — write `0s` |
+| `0s` | fine for `for`; refused in a range (it has to be more than 0) and in a PromQL `offset` (promtool refuses `offset 0s`) |
+
+- The cell is checked in the table as it is typed, when the deployment is
+  saved (naming the row and the column), and by Helm itself: the schema
+  holds the format, so `helm template` refuses a value written by hand.
+- The rule writes the column with no unit after it: `[${win}m]` is refused
+  at save time, since a `5m` cell would render `[5mm]`.
+- Its `default` stands in for every empty cell, so a `0s` default is refused
+  at save time where `0s` is: in a range or an offset.
+- It has no `enum`. For a fixed list of durations, use `type: string` with
+  the `enum`: the values are yours, so they are checked when you write them.
+- Turning a `string` column into a `duration` is a
+  breaking change for deployments that fill it (Save asks, as for any other);
+  back to `string` is not.
+- A [`derived`](#derived) value cannot read a duration column: Helm has no
+  way to compute with `21m`. For a computed window, use an integer column
+  and a `derived` with a `unit`.
+- In a LogsQL group (`type: vlogs`) a time value — `for`, `keep_firing_for`,
+  `_time:${w}` — belongs in a duration column too: vmalert, which evaluates
+  these groups, does not check `for` at all (`for: 21`, `-5m` and `30m1h`
+  pass it and act as 0 or less), so this column's check is the only one.
+  `0s` is fine anywhere in such a group: only a PromQL range or offset
+  refuses it.
 
 ### Once groups
 
@@ -261,7 +308,8 @@ rate(x[60m])`. The generator writes it as Sprig, reading each cell the way
 - **It reads integer columns** (`type: integer`) of its group or of
   `_common`, whose `default`, if any, is a whole number. A `number` column
   could hold `2.5`, which Helm would cut to 2 before computing. It does not
-  read a `vars` entry or another `derived`.
+  read a `vars` entry, another `derived` or a
+  [duration column](#a-duration-column).
 - **`unit`** is required, one of `ms s m h d w y`, written after the
   number: a derived value is a duration, for a range, a subquery, an offset
   (`OFFSET` too, or negative), `for` or `keep_firing_for`. In PromQL it
@@ -275,8 +323,9 @@ rate(x[60m])`. The generator writes it as Sprig, reading each cell the way
   line (a label, an annotation or `keep_firing_for` that is nothing but the
   reference), as an [empty cell](#empty-cells) would.
 - **Saving a deployment computes it for every row** and refuses a row where
-  it overflows a 64-bit integer, comes to 0 or less in a range, is negative
-  as a duration, or is longer than a duration can be (about 292 years),
+  it overflows a 64-bit integer, comes to 0 or less in a range, to 0 in a
+  PromQL `offset` (a negative one is fine), is negative as a `for` or
+  `keep_firing_for`, or is longer than a duration can be (about 292 years),
   naming the row.
 - A `once` group has no rows, so it has no `derived`. A `derived` name may
   not be a column's, a `vars` entry's, a `_common` column's or `selector`.
@@ -447,6 +496,10 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 - A `derived` without a `unit`, with an expression that does not parse or
   reads anything but an integer column (or one whose default is not a whole
   number), used in a `raw` rule, or — in PromQL — compared as a number
+- A unit written right after a [duration column](#a-duration-column)
+  (`[${win}m]`); a duration column's `default` that is not a duration, or
+  is `0s` where it goes into a range or an offset; a duration column with
+  an `enum`
 
 And, before a commit:
 

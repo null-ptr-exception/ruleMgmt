@@ -352,9 +352,10 @@ rules:
     const col = body => `group: cpu\ncolumns:\n  c: ${body}\nrules:\n  - alert: A\n    expr: up == 0\n`
 
     it('refuses a type that is not one the table has a cell for', () => {
-      for (const bad of ['strng', 'String', 'duration', 'array', 'object', '1']) {
+      // duration became one with #117.
+      for (const bad of ['strng', 'String', 'Duration', 'array', 'object', '1']) {
         expect(parseGroupFile(col(`{type: ${bad}}`), 'cpu').errors.join(), bad)
-          .toMatch(/cpu\.yaml columns\.c: type .* is not a column type — one of string, number, integer, boolean/)
+          .toMatch(/cpu\.yaml columns\.c: type .* is not a column type — one of string, number, integer, boolean, duration/)
       }
     })
 

@@ -85,6 +85,8 @@ function testValues(columns) {
     if (col.enum?.length) values[name] = col.enum[0]
     else if (col.type === 'number' || col.type === 'integer') values[name] = next++
     else if (col.type === 'boolean') values[name] = true
+    // A distinct duration the schema's pattern takes (#117).
+    else if (col.type === 'duration') values[name] = `${next++}m`
     else values[name] = `test-${name.replace(/_/g, '-')}`
   }
   return values

@@ -117,9 +117,9 @@ export function compileSprig(tree, cell) {
  * checked against int64 after every step: Helm would wrap a value past it
  * into a negative one, which Prometheus then takes.
  *
- * `position` is where the value goes: 'range' (a range selector: more than
- * 0), 'duration' (for, keep_firing_for, offset: 0 or more), or nothing (a
- * label or annotation). In a time position the value with its unit must fit
+ * `position` is where the value goes (see derivedPosition): 'range' (more
+ * than 0), 'offset' (not 0; may be negative), 'duration' (0 or more),
+ * 'offset+duration' (both), or nothing (a label or annotation). In a time position the value with its unit must fit
  * a Go duration, about 292 years.
  *
  * @returns { value: <decimal string> } | { problem }
@@ -146,24 +146,42 @@ export function evalDerived(tree, row, { unit, position } = {}) {
   const value = walk(tree)
   if (problem) return { problem }
   if (position === 'range' && value <= 0n) return { problem: `it comes to ${value}, and a range has to be more than 0` }
-  if (position === 'duration' && value < 0n) return { problem: `it comes to ${value}, and a duration cannot be negative` }
+  if (zeroRefused(position) && value === 0n) return { problem: 'it comes to 0, and an offset cannot be 0' }
+  if (position?.includes('duration') && value < 0n) return { problem: `it comes to ${value}, and a duration cannot be negative` }
   if (position && unit && value * UNIT_NS[unit] > I64_MAX) return { problem: `it comes to ${value}${unit}, longer than a duration can be (about 292 years)` }
   return { value: value.toString() }
 }
 
+/** Whether 0 is refused where a value goes: a range, or an offset. */
+export const zeroRefused = position => position === 'range' || !!position?.includes('offset')
+
 /**
- * Where a group's rules put a derived value: 'range' if any range selector
- * holds it (PromQL only), else 'duration' if a `for`, `keep_firing_for` or
- * offset does, else null (a label, an annotation, a LogsQL query).
+ * Two places a value goes, as one: the stricter of both. A range is the
+ * strictest; an offset (not 0) and a `for` (not negative) make
+ * 'offset+duration'.
+ */
+export function mergePosition(a, b) {
+  if (a === 'range' || b === 'range') return 'range'
+  const offset = !!(a?.includes('offset') || b?.includes('offset'))
+  const duration = !!(a?.includes('duration') || b?.includes('duration'))
+  return offset && duration ? 'offset+duration' : offset ? 'offset' : duration ? 'duration' : null
+}
+
+/**
+ * Where a group's rules put a value: 'range' if any range selector holds it
+ * (PromQL only); else 'offset' for an offset (PromQL only: promtool refuses
+ * `offset 0s`), 'duration' for a `for` or `keep_firing_for`, or
+ * 'offset+duration' for both; else null (a label, an annotation, a LogsQL
+ * query).
  */
 export function derivedPosition(name, rules, promql) {
   const ref = `\\$\\{\\s*${name}\\s*\\}`
-  let duration = false
+  let position = null
   for (const rule of rules || []) {
     if (rule.raw) continue
     if (promql && new RegExp(`\\[[^\\]]*${ref}[^\\]]*\\]`).test(rule.expr || '')) return 'range'
-    if (new RegExp(ref).test(`${rule.for || ''} ${rule.keep_firing_for || ''}`)) duration = true
-    if (promql && new RegExp(`\\boffset\\s+-?\\s*${ref}`, 'i').test(rule.expr || '')) duration = true
+    if (new RegExp(ref).test(`${rule.for || ''} ${rule.keep_firing_for || ''}`)) position = mergePosition(position, 'duration')
+    if (promql && new RegExp(`\\boffset\\s+-?\\s*${ref}`, 'i').test(rule.expr || '')) position = mergePosition(position, 'offset')
   }
-  return duration ? 'duration' : null
+  return position
 }

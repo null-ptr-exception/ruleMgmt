@@ -1,0 +1,12 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-spc-1-1:
+  - name: spc
+    rules:
+      - alert: SpcErrors
+        expr: rate(spc_errors_total{job="api"}[5m]) > 0
+        for: 5m
+        labels: { severity: warning }
+      - alert: SpcErrors
+        expr: rate(spc_errors_total{job="worker"}[1h30m]) > 0
+        for: 0s
+        labels: { severity: warning }

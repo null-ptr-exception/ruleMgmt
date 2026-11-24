@@ -29,6 +29,7 @@ const TYPE_OPTIONS = [
   { value: 'number', label: 'number' },
   { value: 'integer', label: 'integer' },
   { value: 'boolean', label: 'boolean' },
+  { value: 'duration', label: 'duration' },
   { value: 'enum', label: 'enum' },
 ]
 

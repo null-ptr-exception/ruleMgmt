@@ -1,0 +1,8 @@
+spc:
+  # hold left out: its default 5m
+  - job: api
+    win: 5m
+  # 0s holds nothing: it fires at once
+  - job: worker
+    win: 1h30m
+    hold: 0s

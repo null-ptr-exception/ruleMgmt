@@ -90,6 +90,18 @@ describe('evalDerived', () => {
     expect(value('a - 5', { a: 5 }, { unit: 'm', position: 'duration' })).toEqual({ value: '0' })
   })
 
+  // promtool refuses `offset 0s` (2.54.1: "duration
+  // must be greater than 0"); a negative offset it takes.
+  it('an offset is not 0, and may be negative', () => {
+    expect(value('a - 5', { a: 5 }, { unit: 'm', position: 'offset' })).toEqual({ problem: 'it comes to 0, and an offset cannot be 0' })
+    expect(value('a - 6', { a: 5 }, { unit: 'm', position: 'offset' })).toEqual({ value: '-1' })
+  })
+
+  it('in an offset and a for both, it is neither 0 nor negative', () => {
+    expect(value('a - 5', { a: 5 }, { unit: 'm', position: 'offset+duration' })).toEqual({ problem: 'it comes to 0, and an offset cannot be 0' })
+    expect(value('a - 6', { a: 5 }, { unit: 'm', position: 'offset+duration' })).toEqual({ problem: 'it comes to -1, and a duration cannot be negative' })
+  })
+
   it('a duration longer than Go can hold is a problem; just under is not', () => {
     expect(value('a', { a: 292 }, { unit: 'y', position: 'range' })).toEqual({ value: '292' })
     expect(value('a', { a: 293 }, { unit: 'y', position: 'range' })).toEqual({ problem: 'it comes to 293y, longer than a duration can be (about 292 years)' })

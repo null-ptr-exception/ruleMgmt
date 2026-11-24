@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
+import { isRepoPath } from './safePath.js'
 
 const SYNC_FILE = 'sync.yaml'
 
@@ -159,6 +160,8 @@ export function normalizeSyncPath(candidate) {
 // below under a different spelling than what ends up on disk.
 export function isSafeSyncPath(candidate, chartsDirName) {
   if (!candidate || typeof candidate !== 'string') return false
+  // No `..`, no folder starting with a dot, no backslash or NUL (safePath.js).
+  if (!isRepoPath(candidate)) return false
   if (path.isAbsolute(candidate)) return false
   const normalized = normalizeSyncPath(candidate)
   if (normalized === '.' || normalized === '' || normalized === '..' || normalized.startsWith('../')) return false

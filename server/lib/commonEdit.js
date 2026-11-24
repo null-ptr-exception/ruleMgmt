@@ -38,6 +38,7 @@ import { loadMap, wrapEntry, liftEntry, addMissing, setDependency } from './valu
 import { helmAvailable, renderAll, sameRender } from './helmCheck.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
+import { isRepoPath } from './safePath.js'
 
 /** The name every `_common` chart has: the key its deployments' values are under. */
 export const COMMON_CHART = 'common'
@@ -244,7 +245,7 @@ export async function planCreate(gitopsDir, folderIn, chart) {
     return refuse(400, 'A folder and a Template are needed')
   }
   const folder = segmentsOf(normalizeSyncPath(folderIn)).join('/')
-  if (folderIn.includes('..') || path.isAbsolute(folderIn)) return refuse(400, 'Invalid folder path')
+  if (!isRepoPath(folderIn)) return refuse(400, 'Invalid folder path')
   const why = await folderProblem(gitopsDir, folder)
   if (why) return refuse(400, why)
   if (!(await isAlertTemplate(gitopsDir, chart))) return refuse(400, `${chart} is not an alert Template of this repo`)
@@ -444,7 +445,7 @@ async function expectedOf(gitopsDir, writes, removed) {
  * those loses one level of wrapping.
  */
 export async function planDelete(gitopsDir, commonRelIn) {
-  if (typeof commonRelIn !== 'string' || commonRelIn.includes('..') || path.isAbsolute(commonRelIn)) return refuse(400, 'Invalid path')
+  if (!isRepoPath(commonRelIn)) return refuse(400, 'Invalid path')
   const commonRel = segmentsOf(normalizeSyncPath(commonRelIn)).join('/')
   if (!isCommonChartPath(commonRel) || !(await isCommonChartDir(path.join(gitopsDir, commonRel)))) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
   const link = await linkOnPath(gitopsDir, commonRel)

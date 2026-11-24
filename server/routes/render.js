@@ -11,9 +11,10 @@ import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import yaml from 'js-yaml'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { readTextIfThere, parseIfThere } from '../lib/readIfThere.js'
+import { NAME_RE, isRepoPath, inside } from '../lib/safePath.js'
 
-const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
-const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
+// One segment of a file name: not a path, not hidden.
+const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
 
 // The Preview summary the rule owner sees instead of raw YAML: per group, how
 // many alerts it actually produced (by name and severity, never merged), which
@@ -86,8 +87,8 @@ export default function renderRouter() {
 
     let deploymentsDir
     if (folder) {
-      if (folder.includes('..')) return res.status(400).json({ error: 'Invalid folder path' })
-      deploymentsDir = path.join(req.gitopsDir, folder)
+      deploymentsDir = isRepoPath(folder) ? inside(req.gitopsDir, folder) : null
+      if (!deploymentsDir) return res.status(400).json({ error: 'Invalid folder path' })
     } else {
       deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments', chart)
     }

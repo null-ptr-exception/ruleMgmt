@@ -15,6 +15,7 @@ import { planCreate, planDelete, applyPlan, commonUsers, deploymentOnCommon, fol
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { parseIfThere } from '../lib/readIfThere.js'
+import { isRepoPath, repoPathProblem } from '../lib/safePath.js'
 
 // What a new deployment asks of its Template's version: any.
 export const ANY_TEMPLATE_VERSION = ANY_VERSION
@@ -166,7 +167,7 @@ export default function foldersRouter() {
   router.get('/tree', async (req, res) => {
     try {
       const parentPath = req.query.path || ''
-      if (parentPath.includes('..')) {
+      if (parentPath && !isRepoPath(parentPath)) {
         return res.status(400).json({ error: 'Invalid path' })
       }
       const children = await listChildren(req.gitopsDir, parentPath)
@@ -188,7 +189,7 @@ export default function foldersRouter() {
   router.get('/', async (req, res) => {
     try {
       const parentPath = req.query.path || ''
-      if (parentPath.includes('..')) {
+      if (parentPath && !isRepoPath(parentPath)) {
         return res.status(400).json({ error: 'Invalid path' })
       }
       const children = await listChildren(req.gitopsDir, parentPath)
@@ -200,6 +201,8 @@ export default function foldersRouter() {
 
   router.post('/', async (req, res) => {
     const { path: folderPath } = req.body
+    const pathWhy = repoPathProblem(folderPath)
+    if (pathWhy) return res.status(400).json({ error: `Invalid folder path: ${pathWhy}` })
     if (!isSafeFolderPath(folderPath, req.gitopsDir)) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }
@@ -252,7 +255,7 @@ export default function foldersRouter() {
   router.get('/common/users', async (req, res) => {
     try {
       const rel = String(req.query.path || '')
-      if (rel.includes('..') || path.isAbsolute(rel)) return res.status(400).json({ error: 'Invalid path' })
+      if (rel && !isRepoPath(rel)) return res.status(400).json({ error: 'Invalid path' })
       if (await linkOnPath(req.gitopsDir, rel)) return res.status(400).json({ error: `${rel} goes through a link` })
       res.json(await commonUsers(req.gitopsDir, rel.replace(/\/+$/, '')))
     } catch (err) {
@@ -262,6 +265,8 @@ export default function foldersRouter() {
 
   router.post('/init', async (req, res) => {
     const { folder, chart } = req.body
+    const folderWhy = repoPathProblem(folder)
+    if (folderWhy) return res.status(400).json({ error: `Invalid folder path: ${folderWhy}` })
     if (!isSafeFolderPath(folder, req.gitopsDir)) {
       return res.status(400).json({ error: 'Invalid folder path' })
     }

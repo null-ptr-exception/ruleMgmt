@@ -11,6 +11,7 @@ import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
 import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
+import { isRepoPath } from '../lib/safePath.js'
 
 export { withoutPath }
 
@@ -304,7 +305,7 @@ export default function gitRouter() {
         const [sha, shortSha, message, author, date] = line.split(SEP)
         let files = []
         try {
-          const diffTree = await git(cwd, 'diff-tree', '--no-commit-id', '-r', '--name-status', sha)
+          const diffTree = await git(cwd, 'diff-tree', '--no-commit-id', '-r', '--name-status', '--end-of-options', sha)
           files = diffTree.trim().split('\n').filter(Boolean).map(l => {
             const [statusCode, ...parts] = l.split('\t')
             const file = parts.join('\t')
@@ -326,8 +327,13 @@ export default function gitRouter() {
     const file = req.query.file
     const ref = req.query.ref
 
-    if (!file || typeof file !== 'string' || file.includes('..') || path.isAbsolute(file)) {
+    if (!isRepoPath(file)) {
       return res.status(400).json({ error: 'Invalid file path' })
+    }
+    // A commit as git log names it, never an option or an expression; and
+    // what git is given after it is never read as an option either.
+    if (ref !== undefined && (typeof ref !== 'string' || !/^[0-9a-f]{4,64}$/i.test(ref))) {
+      return res.status(400).json({ error: 'Invalid commit' })
     }
 
     try {
@@ -335,10 +341,10 @@ export default function gitRouter() {
       let modified = ''
 
       if (ref) {
-        try { original = await git(cwd, 'show', `${ref}~1:${file}`) } catch { original = '' }
-        try { modified = await git(cwd, 'show', `${ref}:${file}`) } catch { modified = '' }
+        try { original = await git(cwd, 'show', '--end-of-options', `${ref}~1:${file}`) } catch { original = '' }
+        try { modified = await git(cwd, 'show', '--end-of-options', `${ref}:${file}`) } catch { modified = '' }
       } else {
-        try { original = await git(cwd, 'show', `HEAD:${file}`) } catch { original = '' }
+        try { original = await git(cwd, 'show', '--end-of-options', `HEAD:${file}`) } catch { original = '' }
         try {
           const filePath = path.join(cwd, file)
           modified = await fs.readFile(filePath, 'utf8')

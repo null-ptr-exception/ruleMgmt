@@ -14,9 +14,10 @@ import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath, COMMON_DIR } from '../../src/utils/reservedNames.js'
 import { writeWhole } from '../lib/routingFiles.js'
+import { NAME_RE, isRepoPath, inside } from '../lib/safePath.js'
 
-const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
-const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
+// One segment of a file name: not a path, not hidden.
+const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
 
 function isValidDeploymentParam(req) {
   const deployment = req.params.deployment
@@ -33,8 +34,9 @@ const syncFolder = req => (req.query.folder ? normalizeSyncPath(req.query.folder
 function resolveDeploymentDir(req) {
   const folder = req.query.folder
   if (folder) {
-    if (folder.includes('..')) return null
-    return path.join(req.gitopsDir, folder)
+    // A path in the repo, staying in it (safePath.js).
+    if (!isRepoPath(folder)) return null
+    return inside(req.gitopsDir, folder)
   }
   const deploymentsDir = path.join(req.gitopsDir, process.env.DEPLOYMENTS_DIR || 'deployments')
   return path.join(deploymentsDir, req.params.chart)

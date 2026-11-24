@@ -1,10 +1,10 @@
 {
   "lint": {
-    "total": 183,
+    "total": 177,
     "byKind": {
       "childProcess": 1,
-      "fs": 31,
-      "fsUse": 120,
+      "fs": 30,
+      "fsUse": 115,
       "helper": 5,
       "yaml": 12,
       "yamlParse": 14
@@ -25,7 +25,7 @@
       "server/lib/helmCheck.js": 2,
       "server/lib/migrate.js": 2,
       "server/lib/reservedNames.js": 2,
-      "server/lib/routingFiles.js": 13,
+      "server/lib/routingFiles.js": 7,
       "server/lib/ruleCheck.js": 6,
       "server/lib/sharedConfigs.js": 9,
       "server/lib/stack.js": 8,
@@ -77,13 +77,13 @@
     }
   },
   "ownEnoentChecks": {
-    "total": 12,
+    "total": 11,
     "byFile": {
       "server/lib/chartUsage.js": 1,
       "server/lib/commit/template.js": 1,
       "server/lib/deploymentCheck.js": 2,
       "server/lib/deploymentWrite.js": 1,
-      "server/lib/routingFiles.js": 2,
+      "server/lib/routingFiles.js": 1,
       "server/lib/ruleCheck.js": 1,
       "server/lib/sharedConfigs.js": 1,
       "server/lib/stack.js": 1,

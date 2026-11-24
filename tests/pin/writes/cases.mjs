@@ -25,6 +25,13 @@ export const CASES = [
   { id: 'race-commit', applies: p => !p.cli && p.name !== 'commit' },
   // Sent while another write holds the commit lock: whether it waits.
   { id: 'while-locked', applies: p => !p.cli },
+  // Sent without a version while another write holds the commit lock; the
+  // file it writes is changed while it waits (by a write that does not take
+  // the lock): is the change written over?
+  { id: 'changed-while-waiting', applies: p => !p.cli && !!p.primary && !p.noStale },
+  // The folder the file is written into is swapped for a link leading
+  // outside the repo at the moment the write makes its temp file there.
+  { id: 'dir-swapped-at-write', applies: p => !p.cli && !!p.primary && p.primary.includes('/') },
   // The second file of a multi-file write cannot be written: the file is
   // read-only; its folder is read-only; it is a folder.
   { id: 'second-readonly-file', applies: p => !!p.second && !p.secondNew, nonRoot: true },

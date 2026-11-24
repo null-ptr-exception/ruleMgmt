@@ -8,15 +8,16 @@
  * is a values file beside others and has nowhere to put one.
  */
 
-import { constants as fsConstants } from 'fs'
 import fs from 'fs/promises'
-import { randomBytes } from 'crypto'
 import path from 'path'
 import { ROUTING_FILE, ROUTING_CR_FILE, buildRouting, loadRouting, routingFiles } from '../repo/routing.js'
 import { decide } from '../repo/policy.js'
+import { writeWhole } from '../repo/write.js'
 import { ROUTING_POLICIES } from '../repo/routingPolicy.js'
 
 export { ROUTING_FILE, ROUTING_CR_FILE, buildRouting }
+// One file, whole or not at all: the writer's (repo/write.js).
+export { writeWhole }
 
 // Only for a write's own snapshot of what to put back (writeRouting, a
 // sync's rollback): every check reads the repo through server/repo.
@@ -93,28 +94,6 @@ export async function copyRouting(srcDir, dstDir, routing) {
 
 /** Put back what readRouting read — a rollback. */
 export const restoreRouting = (dir, before) => putRouting(dir, before)
-
-// Temp file + rename, so a crash mid-write can't leave a cut-off file that
-// breaks `helm template` for the deployment. The temp name starts with `_`:
-// Helm renders every other file in templates/. Each write has its own temp
-// file: two writers sharing one would find it gone at the second rename.
-export async function writeWhole(abs, content) {
-  // A file that is there and read-only stays a refusal (EACCES), as a plain
-  // write would be: a rename alone would quietly replace it.
-  try {
-    await fs.access(abs, fsConstants.W_OK)
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err
-  }
-  const tmp = path.join(path.dirname(abs), `_${path.basename(abs)}.${randomBytes(4).toString('hex')}.tmp`)
-  try {
-    await fs.writeFile(tmp, content, 'utf-8')
-    await fs.rename(tmp, abs)
-  } catch (err) {
-    await fs.rm(tmp, { force: true })
-    throw err
-  }
-}
 
 async function putRouting(dir, { text, cr }) {
   if (text === null && cr === null) return removeRouting(dir)

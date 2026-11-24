@@ -18,7 +18,7 @@ import { createHash } from 'crypto'
 import { execFileSync } from 'child_process'
 import express from 'express'
 import { run, oneLine } from '../lib/tools.mjs'
-import { withSyncRegistryLock } from '../../../server/lib/sync.js'
+import { withSyncRegistryLock, lockWaiters } from '../../../server/lib/sync.js'
 
 // Where the dir-link-git row puts the folder it links to.
 const GIT_PIN_DIR = 'pin-dir'
@@ -28,6 +28,17 @@ const WT = path.resolve(import.meta.dirname, '../../..')
 const NO_HELM = path.join(os.tmpdir(), 'writes-pin-has-no-helm')
 let helmWas
 let open = 0
+
+// One hook on fs.writeFile for the dir-swapped-at-write row (rows run side
+// by side: each hook is for its own workspace's folder, and runs once).
+const writeHooks = new Set()
+const plainWriteFile = fs.writeFile
+fs.writeFile = async function (file, ...rest) {
+  for (const h of writeHooks) {
+    if (typeof file === 'string' && h.matches(file)) { writeHooks.delete(h); await h.run() }
+  }
+  return plainWriteFile.call(this, file, ...rest)
+}
 
 const CPU = (limit = 1, col = 'job') => `group: cpu\ncolumns:\n  ${col}: {type: string, required: true}\nrules:\n  - alert: CpuHigh\n    expr: cpu{job="\${${col}}"} > ${limit}\n    labels: {severity: critical}\n`
 const ROUTING = to => `labels:\n  severity: [critical]\nconfigs:\n  ops: { type: email, to: ${to}@example.com }\ncells:\n  - match: { severity: critical }\n    configs: [ops]\n`
@@ -403,6 +414,7 @@ async function reset(ws) {
   execFileSync('chmod', ['-R', 'u+rwX', work])
   await fs.rm(outside, { recursive: true, force: true }); await fs.mkdir(outside)
   await fs.rm(path.join(work, 'escape'), { recursive: true, force: true })
+  for (const e of await fs.readdir(work)) if (e.startsWith('parked-')) await fs.rm(path.join(work, e), { recursive: true, force: true })
   await fs.rm(path.join(root, '.git', GIT_PIN_DIR), { recursive: true, force: true })
   // A link or folder where git keeps a file: gone first, git puts it back.
   for (const e of await fs.readdir(root)) if (e !== '.git') await fs.rm(path.join(root, e), { recursive: true, force: true })
@@ -475,19 +487,19 @@ async function runCell(ws, c, p) {
   const ctx = { version: p.version ? await p.version(ws) : undefined }
   // The request is made from the state before the row's change: a page
   // loaded before it.
-  const r = await make(ws, c.id === 'no-version' ? {} : ctx)
+  const r = await make(ws, c.id === 'no-version' || c.id === 'changed-while-waiting' ? {} : ctx)
   const r2 = c.id === 'race-same' ? await sameRequest(ws, p, ctx) : null
   await setUp(ws, c, p)
   // Outside the repo, and what a row put in git's own folder.
   const outsideOf = async () => {
-    const out = await snapshot(work, f => f === 'repo' || f === 'import.yaml')
+    const out = await snapshot(work, f => f === 'repo' || f === 'import.yaml' || f.startsWith('parked-'))
     const inGit = await snapshot(path.join(root, '.git', GIT_PIN_DIR)).catch(() => new Map())
     for (const [k, v] of inGit) out.set(`repo/.git/${GIT_PIN_DIR}/${k}`, v)
     return out
   }
   if (c.id === 'race-commit') await fs.writeFile(path.join(root, 'notes/commit-marker.txt'), 'commit\n')
-  const pre = await snapshot(root)
-  const preOut = await outsideOf()
+  let pre = await snapshot(root)
+  let preOut = await outsideOf()
 
   let answers
   if (c.id === 'race-same') {
@@ -496,6 +508,48 @@ async function runCell(ws, c, p) {
     answers = await Promise.all([send(ws, p, r), send(ws, PATHS.find(x => x.name === 'commit'), { method: 'POST', url: '/api/v2/git/commit', body: { message: 'at the same time' } })])
     const written = diff(pre, soloOne).filter(f => f !== 'notes/commit-marker.txt')
     extra = answers[1].status === '200' ? `committed=${await headState(ws, written, pre, soloOne)}` : 'committed=-'
+  } else if (c.id === 'changed-while-waiting') {
+    // Another write holds the lock; once this one waits for it, the file
+    // is changed, and the lock let go.
+    let letGo
+    const holding = new Promise(resolve => { letGo = resolve })
+    const lock = withSyncRegistryLock(root, () => holding)
+    await new Promise(res => setTimeout(res, 20))
+    const pending = send(ws, p, r)
+    const until = Date.now() + 4000
+    while (lockWaiters(root) === 0 && Date.now() < until) await new Promise(res => setTimeout(res, 5))
+    if (lockWaiters(root) > 0) {
+      extra = 'waited'
+      await fs.appendFile(path.join(root, p.primary), p.primary.endsWith('.json') ? '\n' : '# changed meanwhile\n')
+      pre = await snapshot(root)
+    } else {
+      extra = 'did-not-wait'
+    }
+    letGo(); await lock
+    answers = [await pending]
+  } else if (c.id === 'dir-swapped-at-write') {
+    // When the write makes a temp file in the folder, the folder is moved
+    // away and a link to a copy of it outside the repo put in its place;
+    // after the answer, the folder is put back.
+    const dir = path.join(root, path.dirname(p.primary))
+    const realDir = await fs.realpath(dir)
+    const there = path.join(ws.outside, `swap-${path.basename(dir)}`)
+    const parked = path.join(work, `parked-${path.basename(dir)}`)
+    await fs.cp(dir, there, { recursive: true })
+    preOut = await outsideOf()
+    let swapped = false
+    const hook = {
+      matches: f => /\.tmp$/.test(f) && (path.dirname(f) === dir || path.dirname(f) === realDir),
+      run: async () => { await fs.rename(dir, parked); await fs.symlink(there, dir); swapped = true },
+    }
+    writeHooks.add(hook)
+    try {
+      answers = [await send(ws, p, r)]
+    } finally {
+      writeHooks.delete(hook)
+    }
+    extra = swapped ? 'swapped' : 'not-swapped'
+    if (swapped) { await fs.rm(dir); await fs.rename(parked, dir) }
   } else if (c.id === 'while-locked') {
     // Another write holds the lock until this one answers, or 4 s.
     let letGo

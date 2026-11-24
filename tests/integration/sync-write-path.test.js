@@ -286,19 +286,21 @@ describe('a values save refuses text that is not YAML', () => {
   })
 })
 
-describe.skipIf(IS_ROOT)('a target that cannot be written is reported, and the source is saved', () => {
-  it('saving the values', async () => {
+describe.skipIf(IS_ROOT)('a target that cannot be written', () => {
+  // A values save writes the source and its copies together, or none.
+  it('fails the values save, naming the file, and nothing is written', async () => {
     await setup([TGT, T2])
     await fs.chmod(path.join(tmpDir, TGT, 'values.yaml'), 0o444)
+    const before = await Promise.all([SRC, TGT, T2].map(d => read(`${d}/values.yaml`)))
 
     const { status, data } = await saveSrc(50)
 
-    expect(status).toBe(200)
-    expect(data).toEqual({ ok: true, syncFailed: [{ target: TGT, error: 'EACCES' }], version: expect.any(String) })
-    expect(await read(`${SRC}/values.yaml`)).toContain('warn: 50')
-    expect(await read(`${T2}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
-    expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not be copied to ${TGT}`), expect.anything())
+    expect(status).toBe(409)
+    expect(data).toEqual({ error: `${TGT}/values.yaml cannot be written: permission denied`, file: `${TGT}/values.yaml` })
+    expect(await Promise.all([SRC, TGT, T2].map(d => read(`${d}/values.yaml`)))).toEqual(before)
   })
+
+  // A routing save still saves the source and reports the target.
 
   it.each([
     ['saving the routing', async () => api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: await routingFixture() })],
@@ -500,6 +502,8 @@ describe('saves racing sync changes leave the target a copy of its source', () =
       const t = `deployments/team/r${i}`
       expect((await api('POST', '/api/v2/folders/init', { folder: t, chart: 'demo' })).status).toBe(200)
       const [s, y] = await Promise.all([saveSrc(100 + i), api('POST', '/api/v2/sync', { source: SRC, target: t })])
+      // A save planned before the link was made is planned again under the
+      // lock, and writes the new target too.
       expect([s.status, y.status]).toEqual([200, 200])
       if ((await read(`${t}/values.yaml`)) !== (await read(`${SRC}/values.yaml`))) behind++
     }
@@ -562,7 +566,7 @@ describe('saves racing sync changes leave the target a copy of its source', () =
 // is put back — the source's Template over values under the old Template's
 // name renders none of its alerts.
 describe.skipIf(IS_ROOT)('a target whose values cannot be written keeps its own Template', () => {
-  it('and is reported', async () => {
+  it('and the save is refused, the source as it was', async () => {
     await setup([])
     expect((await api('POST', '/api/v2/templates/other/rules', { files: { 'cpu.yaml': CPU } })).status).toBe(200)
     expect((await api('POST', '/api/v2/folders/init', { folder: TGT, chart: 'other' })).status).toBe(200)
@@ -570,11 +574,13 @@ describe.skipIf(IS_ROOT)('a target whose values cannot be written keeps its own 
     const chartBefore = await read(`${TGT}/Chart.yaml`)
     const valuesBefore = await read(`${TGT}/values.yaml`)
     await fs.chmod(path.join(tmpDir, TGT, 'values.yaml'), 0o444)
+    const srcBefore = await read(`${SRC}/values.yaml`)
 
     const { status, data } = await saveSrc(70)
 
-    expect(status).toBe(200)
-    expect(data.syncFailed).toEqual([{ target: TGT, error: 'EACCES' }])
+    expect(status).toBe(409)
+    expect(data.file).toBe(`${TGT}/values.yaml`)
+    expect(await read(`${SRC}/values.yaml`)).toBe(srcBefore)
     expect(await read(`${TGT}/Chart.yaml`)).toBe(chartBefore)
     expect(await read(`${TGT}/values.yaml`)).toBe(valuesBefore)
   })

@@ -206,17 +206,23 @@ describe('links', () => {
 })
 
 describe('a sync target through a link', () => {
-  it('outside the repo: refused, and an existing sync.yaml link to it is not copied to', async () => {
+  // A target reached through a link is not followed: the values save is
+  // refused, naming it, and nothing is written.
+  it('outside the repo: refused, and an existing sync.yaml link to it fails the values save', async () => {
     const { status, text } = await api('POST', '/api/v2/sync', { source: 'deployments/team/a', target: 'deployments/out-link/new' })
     expect(status, text).toBe(400)
     await fs.mkdir(path.join(root, 'outdir', 'old'), { recursive: true })
     await fs.writeFile(path.join(root, 'outdir', 'old', 'Chart.yaml'), 'apiVersion: v2\nname: old\nversion: 0.1.0\ndependencies:\n  - name: demo\n    version: ">=0.0.0-0"\n    repository: file://../../../charts/demo\n')
     await fs.writeFile(path.join(root, 'outdir', 'old', 'values.yaml'), SENTINEL)
     await fs.writeFile(path.join(repo, 'sync.yaml'), 'syncs:\n  - source: deployments/team/a\n    targets:\n      - deployments/out-link/old\n')
+    const sourceBefore = await fs.readFile(path.join(repo, 'deployments/team/a/values.yaml'), 'utf-8')
     const save = await api('POST', `/api/v2/deployments/demo/a?folder=${q('deployments/team/a')}`, { values: { cpu: [{ namespace: 'z' }] } })
-    expect(save.status, save.text).toBe(200)
-    expect(JSON.parse(save.text).syncFailed?.[0]?.target ?? JSON.stringify(JSON.parse(save.text).syncFailed)).toContain('deployments/out-link/old')
+    expect(save.status, save.text).toBe(409)
+    expect(JSON.parse(save.text).file).toBe('deployments/out-link/old')
+    expect(JSON.parse(save.text).error).toContain('deployments/out-link is a link')
+    expect(save.text).not.toContain(root)
     expect(await fs.readFile(path.join(root, 'outdir', 'old', 'values.yaml'), 'utf-8')).toBe(SENTINEL)
+    expect(await fs.readFile(path.join(repo, 'deployments/team/a/values.yaml'), 'utf-8')).toBe(sourceBefore)
     await fs.rm(path.join(repo, 'sync.yaml'))
   })
 })

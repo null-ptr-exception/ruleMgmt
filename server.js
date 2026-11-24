@@ -18,6 +18,7 @@ import { logger, httpLogger } from './server/lib/logger.js'
 import { jsonBody } from './server/http/body.js'
 import { answerUncaught } from './server/http/route.js'
 import { userRoute, unknownApiRoute } from './server/routes/own.js'
+import { sweepTempFiles } from './server/repo/write.js'
 import { objectMetaFromEnv } from './src/utils/objectMeta.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -77,6 +78,13 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
   const sampleDir = path.join(__dirname, 'sample')
   const scaffolded = await scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir)
   if (scaffolded) logger.info(`Scaffolded sample data into ${chartsDir}`)
+}
+
+// A write killed between its temp file and its rename leaves the temp file:
+// old ones are removed (Commit never adds them either).
+{
+  const swept = await sweepTempFiles(GITOPS_DIR_V2)
+  if (swept.length) logger.info(`Removed ${swept.length} temp file(s) a write left: ${swept.join(', ')}`)
 }
 
 // ─── V2 API (base path router) ──────────────────────────────────────────────

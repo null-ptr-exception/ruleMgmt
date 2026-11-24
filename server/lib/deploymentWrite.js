@@ -2,16 +2,20 @@
  * The one place a deployment's values are checked before they are written,
  * and a sync target is made a copy of its source (#180).
  *
- *   valuesWrite     whether values may be written: the repo as it will be
- *                   after the write, loaded and decided by a policy table
+ *   valuesCheck     the repo as it will be after a values write, loaded
+ *   valuesWrite     whether values may be written: valuesCheck decided by a
+ *                   policy table
+ *   valuesVersion   what a deployment's page was loaded from
+ *   chartCopyText   a target's Chart.yaml with its source's dependencies
  *   copyChartDependencies  the target's Chart.yaml depends on what the source's does
  *   copyToTarget    make one target a copy of its source's files
  *   copyToTargets   every target of a source; returns the ones that failed
- *   saveValues      check → write → copy → report
+ *   syncTargets     the targets a source's values save writes to
  *
- * None of these take the registry lock. The route holds it around the whole
- * read-registry → write → copy sequence, so a sync link made at the same
- * moment either is copied to or copies the new file.
+ * A values save is a change of the writer (repo/changes/set-values.js).
+ * None of these take the registry lock: the routes that copy hold it around
+ * the whole read-registry → write → copy sequence, so a sync link made at
+ * the same moment either is copied to or copies the new file.
  */
 
 import fs from 'fs/promises'
@@ -25,7 +29,7 @@ import { isDeployment } from '../repo/walk.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { readTextIfThere } from './readIfThere.js'
-import { insideReal } from '../repo/paths.js'
+import { insideReal, deploymentLinkProblem } from '../repo/paths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment, isFlatFile } from '../repo/deployment.js'
 import { decide } from '../repo/policy.js'
@@ -44,21 +48,37 @@ const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
  *         or, for a file that cannot be read, { error, unreadable: true }
  */
 export async function valuesWrite(gitopsDir, rel, values, { chartName, policy = 'save', repo = openRepo(gitopsDir) } = {}) {
+  const check = await valuesCheck(gitopsDir, rel, values, { chartName, repo })
+  if (check.refusal) return check.text === undefined ? { refusal: check.refusal } : { text: check.text, refusal: check.refusal }
+  const { text, loaded } = check
+  const d = decide(loaded.findings, valuesTable(rel, policy))
+  const warnings = d.warn.map(f => f.message)
+  if (!d.refuse.length) return { text, refusal: null, warnings }
+  return { text, refusal: { status: 400, body: refusalBody(d.refuse, loaded.state === "ok" ? loaded.value : null) }, warnings }
+}
+
+/** The policy table a values write of `rel` is decided by: a `_common`'s own for a save. */
+export const valuesTable = (rel, policy = 'save') => (isCommonChartPath(rel) && policy === 'save' ? 'saveLayer' : policy)
+
+/**
+ * valuesWrite before its policy: the file written (`file`), its text, the
+ * deployment as it will be after the write (`loaded`), and the files it
+ * was worked out from (`reads`: the file, its Chart.yaml, each `_common`'s
+ * Chart.yaml and values.yaml); or the refusal of a file that cannot be read.
+ */
+export async function valuesCheck(gitopsDir, rel, values, { chartName, repo = openRepo(gitopsDir) } = {}) {
   const flat = isFlatFile(rel)
   const file = flat ? rel : `${rel}/values.yaml`
   // What is there now: one that cannot be read is named, not written over.
   const now = await repo.file(file)
-  if (now.state === 'unreadable') return { refusal: { status: 409, body: { error: `${file} cannot be read: ${now.why}`, unreadable: true } } }
-  const keys = flat ? [] : (await resolveStack(gitopsDir, path.join(gitopsDir, rel), { repo })).keys
-  const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, keys), { lineWidth: -1 })
+  if (now.state === 'unreadable') return { file, refusal: { status: 409, body: { error: `${file} cannot be read: ${now.why}`, unreadable: true } } }
+  const stack = flat ? null : await resolveStack(gitopsDir, path.join(gitopsDir, rel), { repo })
+  const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, stack ? stack.keys : []), { lineWidth: -1 })
   const after = repo.with([[file, text]])
   const loaded = await loadDeployment(after, rel, { chart: chartName })
-  const table = isCommonChartPath(rel) && policy === 'save' ? 'saveLayer' : policy
-  if (loaded.state === 'unreadable') return { text, refusal: { status: 400, body: { error: `${file} cannot be read: ${loaded.why}`, problems: [{ message: loaded.why, code: 'values.unreadable' }] } } }
-  const d = decide(loaded.findings, table)
-  const warnings = d.warn.map(f => f.message)
-  if (!d.refuse.length) return { text, refusal: null, warnings }
-  return { text, refusal: { status: 400, body: refusalBody(d.refuse, loaded.state === "ok" ? loaded.value : null) }, warnings }
+  if (loaded.state === 'unreadable') return { file, text, refusal: { status: 400, body: { error: `${file} cannot be read: ${loaded.why}`, problems: [{ message: loaded.why, code: 'values.unreadable' }] } } }
+  const reads = [file, ...(stack ? [`${rel}/Chart.yaml`, ...stack.layers.flatMap(l => [`${l.path}/Chart.yaml`, `${l.path}/values.yaml`])] : [])]
+  return { file, text, loaded, reads, refusal: null }
 }
 
 // Today's headline for each kind of refusal.
@@ -118,12 +138,42 @@ export function sameDependencies(srcDeps, srcDir, dst, dstDir) {
 }
 
 export async function copyChartDependencies(srcDir, dstDir) {
-  const src = yaml.load(await fs.readFile(path.join(srcDir, 'Chart.yaml'), 'utf-8')) || {}
-  const srcDeps = Array.isArray(src.dependencies) ? src.dependencies : []
-  // A source whose Chart.yaml names no Template (a hand edit, a pull midway)
-  // would leave every target with none: no longer a deployment, gone from
-  // the tree. The target is left as it is, and the copy reported as failed.
-  if (!srcDeps.length) throw Object.assign(new Error('the source\'s Chart.yaml names no Template'), { code: 'SOURCE_HAS_NO_TEMPLATE' })
+  const src = sourceChart(await fs.readFile(path.join(srcDir, 'Chart.yaml'), 'utf-8'))
+  const file = path.join(dstDir, 'Chart.yaml')
+  let dstText = null
+  try {
+    dstText = await fs.readFile(file, 'utf-8')
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
+  }
+  const text = chartCopyText(src, srcDir, dstText, dstDir)
+  if (text === null) return false
+  // Whole or not at all: a Preview rendering the target meanwhile reads
+  // either file, never half of one.
+  await writeWhole(file, text)
+  return true
+}
+
+/**
+ * A source's Chart.yaml (its text), read for its dependencies. A source
+ * whose Chart.yaml names no Template (a hand edit, a pull midway) would
+ * leave every target with none: no longer a deployment, gone from the
+ * tree. It throws (SOURCE_HAS_NO_TEMPLATE): the target is left as it is,
+ * and the copy reported as failed.
+ */
+export function sourceChart(text) {
+  const src = yaml.load(text) || {}
+  const deps = Array.isArray(src.dependencies) ? src.dependencies : []
+  if (!deps.length) throw Object.assign(new Error('the source\'s Chart.yaml names no Template'), { code: 'SOURCE_HAS_NO_TEMPLATE' })
+  return { src, deps }
+}
+
+/**
+ * The target's Chart.yaml (`dstText`, null when there is none) given the
+ * dependencies of its source's (`sourceChart`), or null when it already
+ * depends on the same (copyChartDependencies, without the disk).
+ */
+export function chartCopyText({ src, deps: srcDeps }, srcDir, dstText, dstDir) {
   const dependencies = srcDeps.map(d => {
     const rel = relativeFilePath(d?.repository)
     if (rel === null) return d
@@ -131,23 +181,17 @@ export async function copyChartDependencies(srcDir, dstDir) {
     const abs = path.resolve(srcDir, rel)
     return { ...d, repository: `file://${path.relative(dstDir, abs).replace(/\\/g, '/')}` }
   })
-  const file = path.join(dstDir, 'Chart.yaml')
   // A target Chart.yaml that is not a mapping (a hand edit, a pull) has no
   // fields of its own to keep: it is made again from the source's, under the
   // target's name — not written as a bare `dependencies:` Helm cannot load.
   let dst = null
-  try {
-    const loaded = yaml.load(await fs.readFile(file, 'utf-8'))
+  if (dstText !== null) {
+    const loaded = yaml.load(dstText)
     dst = isPlainObject(loaded) ? loaded : null
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err
   }
-  if (sameDependencies(srcDeps, srcDir, dst, dstDir)) return false
+  if (sameDependencies(srcDeps, srcDir, dst, dstDir)) return null
   const doc = dst ? { ...dst, dependencies } : { ...src, name: path.basename(dstDir), dependencies }
-  // Whole or not at all: a Preview rendering the target meanwhile reads
-  // either file, never half of one.
-  await writeWhole(file, dumpForHelm(doc, { lineWidth: -1 }))
-  return true
+  return dumpForHelm(doc, { lineWidth: -1 })
 }
 
 /**
@@ -219,13 +263,9 @@ export async function copyToTargets(gitopsDir, registry, source, what) {
     if (seen.has(target)) continue
     seen.add(target)
     try {
-      if (target === source) throw new Error('listed as its own sync target')
-      if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
-      // Through a link, still in the repo.
-      if (!(await insideReal(gitopsDir, target))) throw new Error('not a path sync may write to: it leads outside the repo')
-      const dstDir = path.join(gitopsDir, target)
-      if (!(await isDeployment(openRepo(gitopsDir), target))) throw new Error('not a deployment on disk')
-      await copyToTarget(srcDir, dstDir, what)
+      const problem = await targetProblem(openRepo(gitopsDir), source, target)
+      if (problem) throw new Error(problem)
+      await copyToTarget(srcDir, path.join(gitopsDir, target), what)
     } catch (err) {
       // A file error's message carries the server's absolute path; the
       // response gets only its code.
@@ -236,41 +276,72 @@ export async function copyToTargets(gitopsDir, registry, source, what) {
   return failed
 }
 
+// Why sync may not write to `target` of `source`, or null. sync.yaml can be
+// hand-edited or arrive by `git pull`, so an entry is not trusted.
+async function targetProblem(repo, source, target) {
+  if (target === source) return 'listed as its own sync target'
+  if (!isSafeSyncPath(target, chartsDirName())) return 'not a path sync may write to'
+  // Through a link, still in the repo.
+  if (!(await insideReal(repo.root, target))) return 'not a path sync may write to: it leads outside the repo'
+  if (!(await isDeployment(repo, target))) return 'not a deployment on disk'
+  return null
+}
+
+/**
+ * The targets of `source` a values save writes to, in sync.yaml's order,
+ * each once; the entries it may not write to (as copyToTargets refuses
+ * them: not a path sync writes to, a folder that is no deployment or is
+ * gone) are logged and returned, `failed: [{ target, error }]`. A target
+ * that is there and cannot be used fails the whole save instead
+ * (`refusal`): one reached through a link (in the repo or out of it: a
+ * hand-made link is not followed), or whose Chart.yaml or values.yaml
+ * cannot be read.
+ */
+export async function syncTargets(repo, registry, source) {
+  const targets = []
+  const failed = []
+  for (const target of new Set(getTargetsForSource(registry, source))) {
+    try {
+      if (target === source) throw new Error('listed as its own sync target')
+      if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
+      const link = await deploymentLinkProblem(repo.root, target)
+      if (link) return { refusal: { status: 409, body: { error: `${target} cannot be written: ${link}`, file: target } } }
+      for (const f of ['Chart.yaml', 'values.yaml']) {
+        const read = await repo.file(`${target}/${f}`)
+        if (read.state === 'unreadable') return { refusal: { status: 409, body: { error: `${target}/${f} cannot be read: ${read.why}`, file: `${target}/${f}`, unreadable: true } } }
+      }
+      const problem = await targetProblem(repo, source, target)
+      if (problem) throw new Error(problem)
+      targets.push(target)
+    } catch (err) {
+      console.error(`Sync: ${source} could not be copied to ${target}`, err)
+      failed.push({ target, error: err.code || err.message })
+    }
+  }
+  return { targets, failed, refusal: null }
+}
+
 /**
  * What a deployment's page was loaded from (#102): its values.yaml, the keys
- * of its stack and each `_common`'s values.yaml. A save that sends another
- * is refused — a `_common` was made, removed or changed underneath, or
- * someone else saved — or it would write values of the old shape, or
- * override with inherited rows that are no longer there.
+ * of its stack and each `_common`'s values.yaml, as the snapshot the stack
+ * was read from has them (a file that cannot be read is said so, not taken
+ * for an empty one). A save that sends another is refused — a `_common` was
+ * made, removed or changed underneath, or someone else saved — or it would
+ * write values of the old shape, or override with inherited rows that are
+ * no longer there.
  */
 export async function valuesVersion(gitopsDir, dir, stack) {
-  const read = file => fs.readFile(file, 'utf-8').catch(() => '')
+  const repo = stack.repo ?? openRepo(gitopsDir)
+  const read = async rel => {
+    const f = await repo.file(rel)
+    return f.state === 'ok' ? f.value.text : f.state === 'absent' ? '' : `\0${f.state}\0${f.why ?? ''}`
+  }
   const hash = createHash('sha256')
-  hash.update(await read(path.join(dir, 'values.yaml')))
+  hash.update(await read(`${path.relative(gitopsDir, dir).replace(/\\/g, '/')}/values.yaml`))
   hash.update(`\0${JSON.stringify(stack.keys)}`)
-  for (const layer of stack.layers) hash.update(`\0${layer.path}\0${await read(path.join(gitopsDir, layer.path, 'values.yaml'))}`)
+  for (const layer of stack.layers) hash.update(`\0${layer.path}\0${await read(`${layer.path}/values.yaml`)}`)
   return hash.digest('hex').slice(0, 20)
 }
 
 /** `{ ok: true }`, with the targets that were not copied to when there are any. */
 export const okWith = syncFailed => (syncFailed.length ? { ok: true, syncFailed } : { ok: true })
-
-/**
- * A folder deployment's values save: check, write values.yaml, copy it to
- * the sync targets. `values` as valuesRefusal takes it.
- * @returns {{ status: number, body: object }} 400 with the refusal, or 200
- */
-export async function saveValues(gitopsDir, registry, folder, values, { chartName, version } = {}) {
-  const dir = path.join(gitopsDir, folder)
-  const repo = openRepo(gitopsDir)
-  const stack = await resolveStack(gitopsDir, dir, { repo })
-  if (version !== undefined && version !== await valuesVersion(gitopsDir, dir, stack)) {
-    return { status: 409, body: { error: `${folder} changed since you opened it: reload it to see what is there now`, changed: true } }
-  }
-  const answer = await valuesWrite(gitopsDir, folder, values, { chartName, repo })
-  if (answer.refusal) return answer.refusal
-  await writeWhole(path.join(dir, 'values.yaml'), answer.text)
-  const syncFailed = await copyToTargets(gitopsDir, registry, folder, { values: true, routing: false })
-  const { warnings } = answer
-  return { status: 200, body: { ...okWith(syncFailed), version: await valuesVersion(gitopsDir, dir, await resolveStack(gitopsDir, dir)), ...(warnings.length ? { warnings } : {}) } }
-}

@@ -1,10 +1,10 @@
 {
   "lint": {
-    "total": 177,
+    "total": 174,
     "byKind": {
       "childProcess": 1,
-      "fs": 30,
-      "fsUse": 115,
+      "fs": 29,
+      "fsUse": 113,
       "helper": 5,
       "yaml": 12,
       "yamlParse": 14
@@ -21,7 +21,7 @@
       "server/lib/commit/template.js": 4,
       "server/lib/commonEdit.js": 28,
       "server/lib/deploymentCheck.js": 10,
-      "server/lib/deploymentWrite.js": 11,
+      "server/lib/deploymentWrite.js": 10,
       "server/lib/helmCheck.js": 2,
       "server/lib/migrate.js": 2,
       "server/lib/reservedNames.js": 2,
@@ -34,7 +34,6 @@
       "server/routes/charts.js": 9,
       "server/routes/deployments/lifecycle.js": 4,
       "server/routes/deployments/resolve.js": 4,
-      "server/routes/deployments/values.js": 2,
       "server/routes/folders/create.js": 7,
       "server/routes/folders/tree.js": 6,
       "server/routes/git.js": 6,
@@ -46,25 +45,24 @@
     "serverAndScripts": 14,
     "src": 9,
     "byFileKind": {
-      "Chart.yaml": 8,
+      "Chart.yaml": 6,
       "Template values.yaml": 0,
       "deployment values": 2,
       "routing.yaml": 0,
       "rules files": 0,
       "shared configs": 0,
       "sync.yaml": 0,
-      "unknown": 4
+      "unknown": 6
     }
   },
   "swallowingCatches": {
-    "total": 31,
+    "total": 30,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
       "server/lib/chartDiscovery.js": 3,
       "server/lib/commonEdit.js": 7,
       "server/lib/deploymentCheck.js": 3,
-      "server/lib/deploymentWrite.js": 1,
       "server/lib/migrate.js": 1,
       "server/lib/stack.js": 3,
       "server/lib/subchart.js": 1,

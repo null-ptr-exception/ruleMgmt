@@ -8,6 +8,7 @@ import git from '../lib/git.js'
 import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
 import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
+import { TEMP_PATHSPEC_EXCLUDE } from '../repo/write.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { parsePath, pathProblem } from '../repo/paths.js'
 import { repoGit } from '../repo/git.js'
@@ -127,7 +128,7 @@ export default function gitRouter() {
         let charts, deployments
         try {
           try {
-            await git(cwd, 'add', '-A')
+            await git(cwd, 'add', '-A', '--', '.', TEMP_PATHSPEC_EXCLUDE)
           } catch (err) {
             // A file git cannot read: the commit is refused naming it, as
             // the checks name one they cannot read.
@@ -135,7 +136,7 @@ export default function gitRouter() {
             if (unreadable) return { status: 409, body: { error: 'Commit refused', findings: [{ severity: 'commit', kind: 'file-unreadable', regenerable: false, description: `${unreadable[1]} cannot be read (${unreadable[2].toLowerCase()})` }] } }
             throw err
           }
-          const statusRaw = await git(cwd, 'status', '--porcelain')
+          const statusRaw = await git(cwd, 'status', '--porcelain', '--', '.', TEMP_PATHSPEC_EXCLUDE)
           if (!statusRaw.trim()) return { status: 400, body: { error: 'no changes to commit' } }
 
           charts = await chartCommitBlockers(cwd)
@@ -184,8 +185,8 @@ export default function gitRouter() {
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
     try {
-      await git(cwd, 'add', '-A')
-      const statusRaw = await git(cwd, 'status', '--porcelain')
+      await git(cwd, 'add', '-A', '--', '.', TEMP_PATHSPEC_EXCLUDE)
+      const statusRaw = await git(cwd, 'status', '--porcelain', '--', '.', TEMP_PATHSPEC_EXCLUDE)
       if (statusRaw.trim()) {
         return res.status(400).json({ error: 'commit changes before pushing' })
       }

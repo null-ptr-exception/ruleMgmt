@@ -8,6 +8,8 @@
 //   applies(path)  → whether the row means anything for that path
 //   nonRoot        the row needs a file or folder root could write anyway
 
+const path = f => f.split('/').slice(0, -1).join('/')
+
 export const CASES = [
   // The control row: a plain write, nothing in the way.
   { id: 'ok', applies: () => true },
@@ -32,6 +34,12 @@ export const CASES = [
   // The folder the file is written into is swapped for a link leading
   // outside the repo at the moment the write makes its temp file there.
   { id: 'dir-swapped-at-write', applies: p => !p.cli && !!p.primary && p.primary.includes('/') },
+  // The folder of the second file is swapped for a link to another
+  // deployment of the repo while the first file is written.
+  { id: 'second-dir-swapped-inside', applies: p => !p.cli && !!p.primary && !!p.second && p.second.includes('/') && p.second.split('/').length > 2 && path(p.primary) !== path(p.second) },
+  // A values save waits for the lock while the Template is saved by hand
+  // so that it refuses the save's values.
+  { id: 'template-changed-while-waiting', applies: p => /^save-/.test(p.name) },
   // The second file of a multi-file write cannot be written: the file is
   // read-only; its folder is read-only; it is a folder.
   { id: 'second-readonly-file', applies: p => !!p.second && !p.secondNew, nonRoot: true },

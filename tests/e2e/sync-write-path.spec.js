@@ -1,6 +1,6 @@
 // What the user sees when a sync cannot do what it should (#180): Sync to...
-// says why a source is refused, and a save says which sync target was not
-// updated.
+// says why a source is refused, and a save says which sync target's file it
+// could not write.
 import { test, expect } from '@playwright/test'
 import fs from 'fs/promises'
 import path from 'path'
@@ -128,7 +128,8 @@ test.describe.serial('sync write path', () => {
     }
   })
 
-  test('a save names the sync target it could not update', async ({ page, request }) => {
+  // A values save writes the source and its targets together, or none.
+  test('a save refused by a sync target it cannot write names the file, and nothing is saved', async ({ page, request }) => {
     test.skip(IS_ROOT, 'chmod does not stop root')
     expect((await request.post('/api/v2/sync', { data: { source: SRC, target: TGT } })).status()).toBe(200)
     await fs.chmod(onDisk(`${TGT}/values.yaml`), 0o444)
@@ -138,10 +139,14 @@ test.describe.serial('sync write path', () => {
     await page.getByText('Common Values').click()
     const input = page.locator('input.ant-input:visible').first()
     await input.fill('e2e-sync-write-owner')
+    const before = await fs.readFile(onDisk(`${SRC}/values.yaml`), 'utf8')
     await page.getByRole('button', { name: 'Save' }).click()
 
-    await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText(`Saved, but this sync target could not be updated and may not match the source: ${TGT} (EACCES)`)).toBeVisible({ timeout: 5000 })
+    const failed = page.locator('.ant-modal-confirm').filter({ hasText: 'Save failed' })
+    await expect(failed).toBeVisible({ timeout: 5000 })
+    await expect(failed.getByText(`${TGT}/values.yaml cannot be written: permission denied`)).toBeVisible()
+    await expect(page.getByText(/Saved at/)).toHaveCount(0)
+    expect(await fs.readFile(onDisk(`${SRC}/values.yaml`), 'utf8')).toBe(before)
     expect(await fs.readFile(onDisk(`${TGT}/values.yaml`), 'utf8')).not.toContain('e2e-sync-write-owner')
   })
 })

@@ -509,7 +509,15 @@ A page saves only over what it was opened on. When the deployment changed
 since — a `_common` made or removed above it, its `_common` edited, or
 someone else saved it — Save is refused ("changed since you opened it") and
 nothing is written; **Reload** shows what is there now, and the edits on the
-page are discarded. Making or removing a `_common` from the tree asks first
+page are discarded. A save sent without the version it was opened on (a
+script calling the API) is checked too, from the moment it reads the files:
+one changed before it writes is refused ("changed while it was being
+saved"). A Template saved meanwhile is what the save is checked against:
+values it refuses are refused, naming the field. A file the server cannot
+write (no permission, a folder in its place, a read-only disk) refuses the
+save with 409, naming the file, and nothing is written; a save to a new
+folder that is refused leaves no folder behind. A saved file keeps its
+permissions. Making or removing a `_common` from the tree asks first
 when the page open has unsaved edits.
 
 ### How a `_common` is laid out
@@ -914,12 +922,20 @@ copied to it.
   routing is held to its source's the same way (**Regenerate** copies it
   again). `check-repo` refuses it too. A source whose files cannot be read
   is named as such, not the target.
-- When a save cannot write a target (a permission error, or a `sync.yaml`
-  entry that is not a deployment on disk), the source is still saved and the
-  page names the target, which may not match the source. Fix the cause and
-  save the source again. A target on another Template whose `values.yaml`
-  cannot be written keeps its own Template too, so it still renders its
-  alerts.
+- A values save writes the source and every target together, or none of
+  them: when a target's file cannot be read or written (a permission
+  error, a folder in its place), nothing is saved and the page names that
+  file. Fix the cause and save again. So does a target reached through a
+  link (a folder that is a link, or is in one): links made by hand are not
+  followed. A `sync.yaml` entry whose folder is gone is not written to: the
+  source is saved, and the page names the entry. A target linked while the
+  save is on its way is written too. If the server is killed in the middle
+  of a save, the source and some targets may be written and others not:
+  Commit then refuses (a target differs from its source), and saving the
+  source again puts it right.
+- A routing save that cannot write a target still saves the source and
+  names the target, which may not match the source until the source is
+  saved again.
 
 ---
 

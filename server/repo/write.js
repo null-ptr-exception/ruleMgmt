@@ -20,7 +20,12 @@
  *   version   what a page that loaded the change's files sends back
  *             (`expect`), from this snapshot; undefined for a kind without one
  *   reads     rel → what it was when planned, for every file the plan was
- *             made from (the kind's `reads` and every file it writes)
+ *             made from: every file its snapshot read (repo.readLog), the
+ *             kind's `reads` and every file it writes
+ *   dirs      rel → what each folder its snapshot listed held
+ *   places    rel → the real folder each file is to be written in, as it
+ *             was when planned (where a folder is not there yet: where it
+ *             will be made)
  *   facts     the kind's own, for its answer
  *
  * applyChange:
@@ -28,10 +33,15 @@
  *      answered at once: nothing is written, the lock is not taken
  *   2. `expect` sent and not the plan's version → the kind's 409 "changed"
  *   3. under the commit lock: the repo is opened again, and every file of
- *      `reads` compared with what the plan read, and the version worked out
- *      again; anything different → the same 409, whether or not `expect`
- *      was sent (a change between the read and the write is never written
- *      over)
+ *      `reads` and folder of `dirs` compared with what the plan read, and
+ *      the version worked out again. A change to a file the kind names as
+ *      its own (`strict`: the file it is about, what its version is made
+ *      of) → the same 409, whether or not `expect` was sent: a change
+ *      between the read and the write is never written over. A change only
+ *      elsewhere (sync.yaml, a target, the Template the values are checked
+ *      against) → the change is planned once more, under the lock, from the
+ *      repo as it is now, and that plan is decided and written instead (its
+ *      refusal answered); never more than once
  *   4. the files are written, one after another, each whole (writeFiles);
  *      one that cannot be written puts every file written before it back as
  *      it was, removes the folders the write made, and answers 409 naming
@@ -55,7 +65,8 @@
  * Where a file is written (writeFiles), as far as Node lets a write keep to
  * its place: under the lock, right before each file, the folder it goes in
  * is resolved to where it really is (realPlace: in the repo, not in git's
- * own folder); folders not there yet are made one at a time, each checked;
+ * own folder), and must be the real folder the plan found (`places`);
+ * folders not there yet are made one at a time, each checked;
  * the file is written to a new temp file in that real folder (never through
  * what is at the name), checked again, renamed over the file, and the
  * folder checked once more. A folder whose real place changed at any of
@@ -65,8 +76,11 @@
  * next step is followed by that step (Node has no openat/renameat); the
  * check after it sees the swap and the write is taken back, but the temp
  * file, or the file put back, may have been written where the link led
- * for that moment. The lock only orders AlertForge's own writes: a program
- * outside it that writes the repo is not held by it.
+ * for that moment. A temp file that cannot be removed (its folder made
+ * read-only, the process killed between write and rename) is left: its
+ * name (TEMP_FILE) is one Commit never adds, and sweepTempFiles removes
+ * old ones when the server starts. The lock only orders AlertForge's own
+ * writes: a program outside it that writes the repo is not held by it.
  */
 import fs from 'fs/promises'
 import { constants as fsConstants } from 'fs'
@@ -91,6 +105,8 @@ const CHANGES = new Map()
  *   changed(plan, { expected }) → { status, body }: the 409 of a file changed
  *   answer(plan, decided) → body of the 200
  *   policy: the policy a caller gets when it names none
+ *   strict?(plan) → the rels whose change is always a 409; without it, any
+ *     change is (no second plan)
  */
 export function defineChange(kind, spec) {
   if (CHANGES.has(kind)) throw new Error(`the change ${kind} is defined twice`)
@@ -119,27 +135,64 @@ const stateOf = loaded => {
   return `${loaded.state}:${loaded.why ?? ''}`
 }
 
-export async function planChange(repo, change) {
+// What a folder held when listed.
+const dirStateOf = loaded => (loaded.state === 'ok'
+  ? `ok:${JSON.stringify([...loaded.value.entries].sort())}:${JSON.stringify([...loaded.value.links].sort())}`
+  : `${loaded.state}:${loaded.why ?? ''}`)
+
+// Where the folder `dirRel` really is now, or will be once made: the real
+// place of its deepest folder that is there, and the rest of it; null when
+// that cannot be worked out (writeFiles then refuses it by itself).
+async function expectedFolder(root, dirRel) {
+  const parts = dirRel === '.' ? [] : dirRel.split('/')
+  for (let i = parts.length; i >= 0; i--) {
+    const real = await fs.realpath(path.join(root, ...parts.slice(0, i))).catch(() => null)
+    if (real !== null) return path.join(real, ...parts.slice(i))
+  }
+  return null
+}
+
+async function makePlan(repo, change) {
   const spec = CHANGES.get(change?.kind)
   if (!spec) throw new TypeError(`no such change: ${change?.kind}`)
   const made = await spec.plan(repo, change)
   const files = (made.files ?? []).map(f => ({ rel: repoRel(f.rel), text: f.text }))
-  const reads = new Map()
-  for (const rel of new Set([...(made.reads ?? []).map(repoRel), ...files.map(f => f.rel)])) {
-    reads.set(rel, stateOf(await repo.file(rel)))
-  }
   const facts = made.facts ?? {}
   const version = !made.refusal && spec.version ? await spec.version(repo, change, facts) : undefined
-  const plan = Object.freeze({
+  // Everything its snapshot read, as it read it: what is compared again
+  // under the lock.
+  const log = repo.readLog()
+  const reads = new Map()
+  for (const rel of new Set([...log.files, ...(made.reads ?? []).map(repoRel), ...files.map(f => f.rel)])) {
+    reads.set(rel, stateOf(await repo.file(rel)))
+  }
+  const dirs = new Map()
+  for (const rel of log.dirs) dirs.set(rel, dirStateOf(await openRepo(repo.root).dir(rel)))
+  const places = new Map()
+  for (const f of files) places.set(f.rel, await expectedFolder(repo.root, path.posix.dirname(f.rel)))
+  return Object.freeze({
     kind: change.kind, change, root: repo.root,
     refusal: made.refusal ?? null,
     files: Object.freeze(files),
     after: repo.with(files.map(f => [f.rel, f.text])),
     findings: made.findings ?? [],
-    version, reads, facts,
+    version, reads, dirs, places, facts,
   })
+}
+
+export async function planChange(repo, change) {
+  const plan = await makePlan(repo, change)
   await hooks.planned?.(plan)
   return plan
+}
+
+// What changed since the plan read it: the files and folders, by rel.
+async function changedSince(plan) {
+  const now = openRepo(plan.root)
+  const out = []
+  for (const [rel, was] of plan.reads) if (stateOf(await now.file(rel)) !== was) out.push(rel)
+  for (const [rel, was] of plan.dirs) if (dirStateOf(await now.dir(rel)) !== was) out.push(`${rel}/`)
+  return { now, changed: out }
 }
 
 export async function applyChange(plan, { policy, expect } = {}) {
@@ -148,18 +201,28 @@ export async function applyChange(plan, { policy, expect } = {}) {
   const decided = decide(plan.findings, spec.table(policy ?? spec.policy, plan))
   if (decided.refuse.length) return spec.refused(plan, decided)
   if (expect !== undefined && expect !== plan.version) return spec.changed(plan, { expected: true })
+  const changedAnswer = () => spec.changed(plan, { expected: expect !== undefined })
   const run = async () => {
     await hooks.locked?.(plan)
-    const now = openRepo(plan.root)
-    for (const [rel, was] of plan.reads) {
-      if (stateOf(await now.file(rel)) !== was) return spec.changed(plan, { expected: expect !== undefined })
+    const { now, changed } = await changedSince(plan)
+    let p = plan
+    let d = decided
+    if (changed.length) {
+      const strict = spec.strict ? spec.strict(plan) : null
+      if (!strict || changed.some(rel => strict.has(rel))) return changedAnswer()
+      // Only what the change was checked against or copies to: planned once
+      // more, from the repo as it is now, under the lock.
+      p = await makePlan(openRepo(plan.root), plan.change)
+      if (p.refusal) return p.refusal
+      d = decide(p.findings, spec.table(policy ?? spec.policy, p))
+      if (d.refuse.length) return spec.refused(p, d)
+      if (p.version !== plan.version) return changedAnswer()
+    } else if (spec.version && await spec.version(now, plan.change, plan.facts) !== plan.version) {
+      return changedAnswer()
     }
-    if (spec.version && await spec.version(now, plan.change, plan.facts) !== plan.version) {
-      return spec.changed(plan, { expected: expect !== undefined })
-    }
-    const wrote = await writeFiles(plan.root, plan.files)
+    const wrote = await writeFiles(p.root, p.files, { places: p.places })
     if (!wrote.ok) return wrote.answer
-    return { status: 200, body: spec.answer(plan, decided) }
+    return { status: 200, body: spec.answer(p, d) }
   }
   return holdsLock(plan.root) ? run() : withSyncRegistryLock(plan.root, run)
 }
@@ -182,16 +245,19 @@ const WRITE_WHY = {
 }
 const whyOf = err => err?.why ?? WRITE_WHY[err?.code] ?? 'it could not be written'
 const placeError = why => Object.assign(new Error(why), { code: 'PLACE', why })
+const moved = () => Object.assign(new Error('moved'), { code: 'MOVED' })
 
 // The folder `dirRel` of the repo, made when it is not there (one folder at
 // a time, each checked), as it really is: an absolute path in the repo's
-// real place, outside git's own folder. Folders made are added to `made`.
-async function realFolder(root, dirRel, made) {
+// real place, outside git's own folder, and — when the plan said where it
+// was to be (`expected`) — that folder. Folders made are added to `made`.
+async function realFolder(root, dirRel, made, expected) {
   const check = async rel => {
     const { why } = rel === '.' ? { why: null } : await realPlace(root, rel)
     if (why) throw placeError(why === 'git-dir' ? "a folder on the way to it is a link into git's own folder" : 'a folder on the way to it is a link that leads outside the repo')
   }
   await check(dirRel)
+  if (expected && await expectedFolder(root, dirRel) !== expected) throw moved()
   if (dirRel !== '.') {
     const parts = dirRel.split('/')
     for (let i = 1; i <= parts.length; i++) {
@@ -205,14 +271,16 @@ async function realFolder(root, dirRel, made) {
       await check(rel)
     }
   }
-  return fs.realpath(path.join(root, dirRel))
+  const real = await fs.realpath(path.join(root, dirRel))
+  if (expected && real !== expected) throw moved()
+  return real
 }
 
 // The folder is still where it was found: by its path in the repo, and by
 // its real path (no folder above it swapped since).
 async function samePlace(root, dirRel, real) {
   const [byRel, byReal] = await Promise.all([fs.realpath(path.join(root, dirRel)), fs.realpath(real)].map(p => p.catch(() => null)))
-  if (byRel !== real || byReal !== real) throw Object.assign(new Error('moved'), { code: 'MOVED' })
+  if (byRel !== real || byReal !== real) throw moved()
 }
 
 // What is at `abs` now, not following a link: what putting it back writes.
@@ -225,6 +293,14 @@ async function before(abs) {
   return { kind: 'file', bytes: await fs.readFile(abs), mode: st.mode & 0o7777 }
 }
 
+/**
+ * The name of the writer's temp files: `_<file>.<8 hex>.tmp`, beside the
+ * file. As a regular expression for a file name, and as a git pathspec that
+ * leaves them out (Commit adds with it).
+ */
+export const TEMP_FILE = /^_.+\.[0-9a-f]{8}\.tmp$/
+export const TEMP_PATHSPEC_EXCLUDE = `:(exclude,glob)**/_*.${'[0-9a-f]'.repeat(8)}.tmp`
+
 // A temp file beside the file, so a crash mid-write cannot leave a cut-off
 // file that breaks `helm template`. Its name starts with `_`: Helm renders
 // every other file in templates/. Each write has its own temp file: two
@@ -232,10 +308,10 @@ async function before(abs) {
 const tempName = (dir, base) => path.join(dir, `_${base}.${randomBytes(4).toString('hex')}.tmp`)
 
 // One file; `step` records what it did, for writeFiles to take back.
-async function writeOne(root, { rel, text }, made, step) {
+async function writeOne(root, { rel, text }, made, step, expected) {
   const dirRel = path.posix.dirname(rel)
   const base = path.posix.basename(rel)
-  const dir = await realFolder(root, dirRel, made)
+  const dir = await realFolder(root, dirRel, made, expected)
   step.dir = dir
   step.dirRel = dirRel
   step.abs = path.join(dir, base)
@@ -254,6 +330,8 @@ async function writeOne(root, { rel, text }, made, step) {
   step.tmp = tempName(dir, base)
   // 'wx': made new, never written through a file or link already there.
   await fs.writeFile(step.tmp, text, { flag: 'wx' })
+  // The file keeps its mode; a new one gets the default.
+  if (step.before.kind === 'file') await fs.chmod(step.tmp, step.before.mode)
   await samePlace(root, dirRel, dir)
   await hooks.beforeRename?.(rel)
   await samePlace(root, dirRel, dir)
@@ -263,10 +341,21 @@ async function writeOne(root, { rel, text }, made, step) {
   await samePlace(root, dirRel, dir)
 }
 
-// Put one file back as it was; throws when it cannot.
+// Remove a step's temp file, if it has one; false when it cannot be.
+async function dropTemp(step) {
+  if (!step.tmp) return true
+  try {
+    await fs.rm(step.tmp, { force: true })
+    step.tmp = null
+    return true
+  } catch (err) {
+    logger.error(`the temp file of ${step.rel} could not be removed (${err.code || err.message}): ${path.basename(step.tmp)}`)
+    return false
+  }
+}
+
+// Put one changed file back as it was; throws when it cannot.
 async function putBack(root, step) {
-  if (step.tmp) await fs.rm(step.tmp, { force: true })
-  if (!step.changed) return
   // Only in the folder it was written in, found where it was.
   await samePlace(root, step.dirRel, step.dir)
   const b = step.before
@@ -277,26 +366,27 @@ async function putBack(root, step) {
     else { await fs.writeFile(tmp, b.bytes, { flag: 'wx' }); await fs.chmod(tmp, b.mode) }
     await fs.rename(tmp, step.abs)
   } catch (err) {
-    await fs.rm(tmp, { force: true })
+    await fs.rm(tmp, { force: true }).catch(e => logger.error(`a temp file could not be removed (${e.code || e.message}): ${path.basename(tmp)}`))
     throw err
   }
 }
 
 /**
  * Write `files` ([{ rel, text }], text null to remove) into the repo at
- * `root`, all or none. The caller holds the commit lock.
+ * `root`, all or none; `places` (rel → real folder) the folders they must
+ * be written in. The caller holds the commit lock.
  *   → { ok: true, written: [rel] }
  *   → { ok: false, answer: { status: 409, body: { error, file } } }   nothing changed
  *   → { ok: false, answer: { status: 500, body: { error, file, notRestored } } }
  */
-export async function writeFiles(root, files) {
+export async function writeFiles(root, files, { places } = {}) {
   const made = []
   const steps = []
   for (const f of files) {
     const step = { rel: f.rel }
     steps.push(step)
     try {
-      await writeOne(root, f, made, step)
+      await writeOne(root, f, made, step, places?.get(f.rel) ?? null)
     } catch (err) {
       if (!err?.code) logger.error(`${f.rel}: the write failed (${err?.message})`)
       const notRestored = await takeBack(root, steps, made)
@@ -311,10 +401,14 @@ export async function writeFiles(root, files) {
 }
 
 // Every step put back, last first, then the folders made, deepest first.
-// The files and folders that could not be: by their path in the repo.
+// The files and folders left changed, by their path in the repo; a temp
+// file that cannot be removed is logged, not listed: no file of the repo
+// was changed by it.
 async function takeBack(root, steps, made) {
   const left = []
   for (const step of [...steps].reverse()) {
+    await dropTemp(step)
+    if (!step.changed) continue
     try {
       await putBack(root, step)
     } catch (err) {
@@ -330,6 +424,31 @@ async function takeBack(root, steps, made) {
     }
   }
   return left
+}
+
+/**
+ * Remove the writer's temp files (TEMP_FILE) older than `olderThanMs`
+ * anywhere in the repo but .git: what a write killed between its temp file
+ * and its rename leaves. A younger one may be a write going on now, and is
+ * left. Links are not followed. Returns the paths removed, in the repo.
+ */
+export async function sweepTempFiles(root, { olderThanMs = 60 * 60 * 1000, now = Date.now() } = {}) {
+  const removed = []
+  async function walk(rel) {
+    let entries
+    try { entries = await fs.readdir(path.join(root, rel), { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      const r = rel ? `${rel}/${e.name}` : e.name
+      if (!rel && e.name === '.git') continue
+      if (e.isDirectory()) { await walk(r); continue }
+      if (!e.isFile() || !TEMP_FILE.test(e.name)) continue
+      const st = await fs.lstat(path.join(root, r)).catch(() => null)
+      if (!st || now - st.mtimeMs < olderThanMs) continue
+      await fs.rm(path.join(root, r), { force: true }).then(() => removed.push(r), err => logger.error(`${r} could not be removed (${err.code || err.message})`))
+    }
+  }
+  await walk('')
+  return removed
 }
 
 /**

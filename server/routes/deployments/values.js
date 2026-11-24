@@ -3,15 +3,14 @@
 import { reasonOf } from '../../repo/finding.js'
 import { z } from 'zod'
 import { route, map } from '../../http/route.js'
-import fs from 'fs/promises'
 import path from 'path'
 import { resolveStack, unwrapPath, readStackValues, stackValues } from '../../lib/stack.js'
 import { originsOf, folderCommonOf, inheritsFromOf } from '../../lib/commonEdit.js'
-import { valuesWrite, saveValues, valuesVersion } from '../../lib/deploymentWrite.js'
-import { withSyncRegistryLock, isTarget } from '../../lib/sync.js'
+import { valuesVersion } from '../../lib/deploymentWrite.js'
+import { isTarget } from '../../lib/sync.js'
 import { syncAnswer } from '../../repo/sync.js'
 import { newReservedSegment, reservedError } from '../../lib/reservedNames.js'
-import { writeWhole } from '../../lib/routingFiles.js'
+import { planChange, applyChange } from '../../repo/changes/index.js'
 import { UnreadableError, errorAnswer } from '../../lib/readIfThere.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { loadDeployment } from '../../repo/deployment.js'
@@ -106,31 +105,17 @@ export function valuesRoutes(router) {
         if (reserved) return res.status(400).json({ error: reservedError(reserved) })
       }
 
-      await fs.mkdir(dir, { recursive: true })
       const { file, direct } = await resolveValuesFile(dir, deployment)
-
-      // The folder's own deployment: check, write, copy to its sync targets
-      // and report the ones that could not be written (#180), all under the
-      // registry lock.
-      if (folder && direct) {
-        const outcome = await withSyncRegistryLock(gitopsDir, async () => {
-          const { registry, refusal } = await syncAnswer(openRepo(gitopsDir))
-          if (refusal) return refusal
-          if (isTarget(registry, folder)) return readOnly()
-          return saveValues(gitopsDir, registry, folder, given.values, { chartName: chart, version: given.version })
-        })
-        return res.status(outcome.status).json(outcome.body)
-      }
-
-      // A legacy `<name>-values.yaml`: the same checks, and no sync.
-      const common = commonRefused(folder, 'given another values file')
+      // The folder's own deployment: its values.yaml and its sync targets'
+      // copies, written all or none (repo/changes/set-values.js). A legacy
+      // `<name>-values.yaml`: the same checks, and no sync.
+      const own = !!(folder && direct)
+      const common = own ? null : commonRefused(folder, 'given another values file')
       if (common) return res.status(common.status).json(common.body)
-      const rel = path.relative(gitopsDir, file).replace(/\\/g, '/')
-      const answer = await valuesWrite(gitopsDir, direct ? path.relative(gitopsDir, dir).replace(/\\/g, '/') : rel, given.values, { chartName: chart })
-      if (answer.refusal) return res.status(answer.refusal.status).json(answer.refusal.body)
-      await writeWhole(file, answer.text)
-
-      res.json({ ok: true })
+      const rel = own ? folder : path.relative(gitopsDir, direct ? dir : file).replace(/\\/g, '/')
+      const plan = await planChange(openRepo(gitopsDir), { kind: 'set-values', deployment: rel, values: given.values, chart, sync: own })
+      const { status, body } = await applyChange(plan, { expect: own ? given.version : undefined })
+      res.status(status).json(body)
     } catch (err) {
       const { status, body } = errorAnswer(err)
       res.status(status).json(body)

@@ -20,6 +20,10 @@
  *                           A build that throws (a bug, not a file's state:
  *                           those are Loaded values) is not kept, so the
  *                           next call builds again
+ *   repo.readLog()        → { files, dirs }: every file and folder read from
+ *                           disk by this snapshot and those made from it
+ *                           with with() (what a writer compares again
+ *                           before it writes)
  *   repo.with(overlay)    → the repo as it will be after writing `overlay`
  *                           (Map rel → text or null). Files it does not
  *                           name are shared with this snapshot; everything
@@ -53,7 +57,7 @@ export function readerNotes(file, r) {
 }
 
 export function openRepo(root, { overlay } = {}) {
-  return makeRepo(root, normalizeOverlay(overlay), new Map())
+  return makeRepo(root, normalizeOverlay(overlay), new Map(), { files: new Set(), dirs: new Set() })
 }
 
 function normalizeOverlay(overlay) {
@@ -62,7 +66,7 @@ function normalizeOverlay(overlay) {
   return out
 }
 
-function makeRepo(root, overlay, sharedFiles) {
+function makeRepo(root, overlay, sharedFiles, log) {
   const files = new Map()
   const built = new Map() // kind → key → Promise
   const memo = (kind, key, build) => {
@@ -88,6 +92,7 @@ function makeRepo(root, overlay, sharedFiles) {
     file(rel) {
       const key = repoRel(rel)
       const cache = overlay.has(key) ? files : sharedFiles
+      if (!overlay.has(key)) log.files.add(key)
       return once(cache, key, () => readRepoFile(root, key, { overlay }))
     },
     helmYaml(rel) {
@@ -116,6 +121,7 @@ function makeRepo(root, overlay, sharedFiles) {
     },
     dir(rel) {
       const key = rel === '' ? '' : repoRel(rel)
+      log.dirs.add(key)
       return memo('dir', key, () => readRepoDir(root, key, { overlay }))
     },
     templateFiles(dir) {
@@ -123,10 +129,11 @@ function makeRepo(root, overlay, sharedFiles) {
       return memo('templateFiles', key, () => loadTemplateFiles(repo, key))
     },
     memo,
+    readLog: () => ({ files: [...log.files], dirs: [...log.dirs] }),
     with(more) {
       const next = new Map(overlay)
       for (const [rel, text] of normalizeOverlay(more)) next.set(rel, text)
-      return makeRepo(root, next, sharedFiles)
+      return makeRepo(root, next, sharedFiles, log)
     },
   }
   return Object.freeze(repo)

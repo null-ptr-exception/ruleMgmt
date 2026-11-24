@@ -42,6 +42,21 @@ fs.writeFile = async function (file, ...rest) {
 
 const CPU = (limit = 1, col = 'job') => `group: cpu\ncolumns:\n  ${col}: {type: string, required: true}\nrules:\n  - alert: CpuHigh\n    expr: cpu{job="\${${col}}"} > ${limit}\n    labels: {severity: critical}\n`
 const ROUTING = to => `labels:\n  severity: [critical]\nconfigs:\n  ops: { type: email, to: ${to}@example.com }\ncells:\n  - match: { severity: critical }\n    configs: [ops]\n`
+// cpu.yaml with job one of [only]: no deployment's values are.
+const CPU_ONLY = CPU().replace('job: {type: string, required: true}', 'job: {type: string, required: true, enum: [only]}')
+// Every file under a folder: path in it → its bytes.
+async function snapshotFiles(dir) {
+  const out = new Map()
+  async function walk(r) {
+    for (const e of await fs.readdir(path.join(dir, r), { withFileTypes: true })) {
+      const f = r ? `${r}/${e.name}` : e.name
+      if (e.isDirectory()) await walk(f)
+      else if (e.isFile()) out.set(f, await fs.readFile(path.join(dir, f)))
+    }
+  }
+  await walk('')
+  return out
+}
 const SHARED_USE = 'labels:\n  severity: [critical]\nconfigs:\n  relay: { shared: true }\ncells:\n  - match: { severity: critical }\n    configs: [relay]\n'
 const SHARED = (port = 8080, spare = true) => `configs:\n  relay: { type: webhook, url: "http://relay.example.com:${port}" }\n${spare ? '  spare: { type: email, to: spare@example.com }\n' : ''}`
 const IMPORT = 'groups:\n  - name: mem\n    rules:\n      - alert: MemHigh\n        expr: mem > 1\n        labels: {severity: warning}\n'
@@ -414,7 +429,7 @@ async function reset(ws) {
   execFileSync('chmod', ['-R', 'u+rwX', work])
   await fs.rm(outside, { recursive: true, force: true }); await fs.mkdir(outside)
   await fs.rm(path.join(work, 'escape'), { recursive: true, force: true })
-  for (const e of await fs.readdir(work)) if (e.startsWith('parked-')) await fs.rm(path.join(work, e), { recursive: true, force: true })
+  for (const e of await fs.readdir(work)) if (e.startsWith('parked-') || e === 'tpl-new') await fs.rm(path.join(work, e), { recursive: true, force: true })
   await fs.rm(path.join(root, '.git', GIT_PIN_DIR), { recursive: true, force: true })
   // A link or folder where git keeps a file: gone first, git puts it back.
   for (const e of await fs.readdir(root)) if (e !== '.git') await fs.rm(path.join(root, e), { recursive: true, force: true })
@@ -492,7 +507,7 @@ async function runCell(ws, c, p) {
   await setUp(ws, c, p)
   // Outside the repo, and what a row put in git's own folder.
   const outsideOf = async () => {
-    const out = await snapshot(work, f => f === 'repo' || f === 'import.yaml' || f.startsWith('parked-'))
+    const out = await snapshot(work, f => f === 'repo' || f === 'import.yaml' || f === 'tpl-new' || f.startsWith('parked-'))
     const inGit = await snapshot(path.join(root, '.git', GIT_PIN_DIR)).catch(() => new Map())
     for (const [k, v] of inGit) out.set(`repo/.git/${GIT_PIN_DIR}/${k}`, v)
     return out
@@ -550,6 +565,50 @@ async function runCell(ws, c, p) {
     }
     extra = swapped ? 'swapped' : 'not-swapped'
     if (swapped) { await fs.rm(dir); await fs.rename(parked, dir) }
+  } else if (c.id === 'second-dir-swapped-inside') {
+    // When the write makes its first file's temp file, the second file's
+    // folder is moved away and a link to deployments/t/d put in its place;
+    // after the answer, the folder is put back.
+    const firstDir = path.join(root, path.dirname(p.primary))
+    const firstReal = await fs.realpath(firstDir)
+    const dir = path.join(root, path.dirname(p.second))
+    const parked = path.join(work, `parked-${path.basename(dir)}`)
+    let swapped = false
+    const hook = {
+      matches: f => /\.tmp$/.test(f) && (path.dirname(f) === firstDir || path.dirname(f) === firstReal),
+      run: async () => { await fs.rename(dir, parked); await fs.symlink(path.join(root, D.d), dir); swapped = true },
+    }
+    writeHooks.add(hook)
+    try {
+      answers = [await send(ws, p, r)]
+    } finally {
+      writeHooks.delete(hook)
+    }
+    extra = swapped ? 'swapped' : 'not-swapped'
+    if (swapped) { await fs.rm(dir); await fs.rename(parked, dir) }
+  } else if (c.id === 'template-changed-while-waiting') {
+    // The Template as a save of its rules would leave it (job one of
+    // [only]), written by hand while the values save waits for the lock.
+    // Made from a copy of the Template by gen-rules, outside the repo.
+    const copy = path.join(work, 'tpl-new')
+    await fs.rm(copy, { recursive: true, force: true })
+    await fs.cp(path.join(root, T), copy, { recursive: true, verbatimSymlinks: true })
+    await fs.writeFile(path.join(copy, 'rules/cpu.yaml'), CPU_ONLY)
+    const made = await run('node', [path.join(WT, 'scripts/gen-rules.mjs'), copy], { cwd: work, timeout: 120_000 })
+    if (made.status !== 0) throw new Error(`setup: gen-rules exited ${made.status}: ${made.stderr.slice(0, 200)}`)
+    const tpl = await snapshotFiles(copy)
+    let letGo
+    const holding = new Promise(resolve => { letGo = resolve })
+    const lock = withSyncRegistryLock(root, () => holding)
+    await new Promise(res => setTimeout(res, 20))
+    const pending = send(ws, p, r)
+    const until = Date.now() + 4000
+    while (lockWaiters(root) === 0 && Date.now() < until) await new Promise(res => setTimeout(res, 5))
+    extra = lockWaiters(root) > 0 ? 'waited' : 'did-not-wait'
+    for (const [f, data] of tpl) await fs.writeFile(path.join(root, T, f), data)
+    pre = await snapshot(root)
+    letGo(); await lock
+    answers = [await pending]
   } else if (c.id === 'while-locked') {
     // Another write holds the lock until this one answers, or 4 s.
     let letGo

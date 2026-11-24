@@ -1176,7 +1176,9 @@ write moved aside may be in it unseen". Make the folder readable and
 commit again. The server's log names such a folder when it starts. A
 folder that cannot be entered at all (`000`) is not refused: git sees
 nothing in it either, so the commit goes through without it and its
-answer lists the folder as not checked.
+answer lists the folder as not checked. Nor is a folder git ignores (one
+`.gitignore` names, such as `scratch/`) and holds no committed file of:
+git never looks into it, so nothing in it can be committed away.
 
 When the server starts, it removes the temp files a stopped write left in
 the repo — files named `_<name>.<8 hex>.tmp`, anywhere but `.git`, made more
@@ -1711,6 +1713,36 @@ When log alerts need a different value for the same key, add it for their
 profile: `RULE_OBJECT_LABELS_BY_PROFILE='{"vlogs":{"release":"vm-logs"}}'`
 (and `RULE_OBJECT_ANNOTATIONS_BY_PROFILE`). See
 [alert-rules.md](alert-rules.md#different-values-per-output-profile).
+
+A variable that cannot be read — not JSON (`release=kps`), or JSON that is
+not an object of pairs (`["release"]`) — is not ignored: the server does not
+start, and `gen-rules`, `gen-chart` and `import-rules` (exit 1),
+`check-deployment` and `check-repo` (exit 2) stop before doing anything, each
+naming the variable. Ignored, every object would be generated without the
+labels the cluster selects by, and never loaded, with no error. A set-up that
+ran with such a value until now was running without those labels: correct the
+value, then regenerate.
+
+The same holds for content Kubernetes would refuse, in these variables and in
+a profile's map of the `_BY_PROFILE` ones: a value that is not text
+(`{"release":1}`, `true`, `null`, an object or a list), a key that is not a
+label or annotation name (an optional DNS prefix and `/`, then at most 63
+letters, digits, `-`, `_` or `.`, starting and ending with a letter or digit),
+and for labels a value that is not a label value (at most 63 of those
+characters, starting and ending with a letter or digit, or empty; an
+annotation value is any text). Each fault is said on a line of its own, so all
+are fixed in one go:
+
+```
+RULE_OBJECT_LABELS: the value of "release" must be text, like "1"
+RULE_OBJECT_LABELS: "bad key!" is not a label name — an optional DNS prefix and "/", then …
+```
+
+Such a value used to be dropped with a note (a value that is not text) or
+written into the generated files as it was (a key or a label value Kubernetes
+refuses). A set-up running with one today does not start after the upgrade
+until the value is fixed. A variable that is unset, empty or only whitespace
+is not set.
 
 Values are literal; one containing `{{ }}` is dropped with a warning. Existing
 templates are not rewritten — they turn stale, and commits are refused until

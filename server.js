@@ -12,7 +12,7 @@ import foldersRouter from './server/routes/folders.js'
 import syncRouter from './server/routes/sync.js'
 import routingSharedRouter from './server/routes/routingShared.js'
 import { getChartsDir, getDeploymentsDir, findAlertTemplateCharts } from './server/lib/chartDiscovery.js'
-import { initGitIfNone, scaffoldSamplesIfNeeded, hasCommittedContent, writeGitignoreIfNone, StartRefused } from './server/repo/setup.js'
+import { initGitIfNone, placeSample, placeSampleOrUndo, hasCommittedContent, StartRefused } from './server/repo/setup.js'
 import { logger, httpLogger } from './server/lib/logger.js'
 import { jsonBody } from './server/http/body.js'
 import { answerUncaught } from './server/http/route.js'
@@ -59,14 +59,26 @@ logger.info(process.env.GITOPS_DIR
   ? `Serving the gitops repo in ${GITOPS_DIR_V2} (GITOPS_DIR)`
   : `Serving the gitops repo in ${GITOPS_DIR_V2} — the default, as GITOPS_DIR is not set: a repo mounted or kept anywhere else is not read`)
 
-// Auto-init git in local dev mode (no JupyterHub)
+const CHARTS_DIR_V2 = getChartsDir(GITOPS_DIR_V2, process.env.CHARTS_DIR)
+const DEPLOYMENTS_DIR_V2 = getDeploymentsDir(GITOPS_DIR_V2, process.env.DEPLOYMENTS_DIR)
+
+const SAMPLE_AT = { root: GITOPS_DIR_V2, chartsDir: CHARTS_DIR_V2, deploymentsDir: DEPLOYMENTS_DIR_V2, sampleDir: path.join(__dirname, 'sample') }
+const sayInfo = (line, level = 'info') => logger[level](line)
+// A start that cannot finish is said in one line (StartRefused), and stops.
+const refusedAtStart = err => {
+  if (!(err instanceof StartRefused)) throw err
+  logger.error(err.message)
+  process.exit(1)
+}
+
+// Auto-init git in local dev mode (no JupyterHub): a folder that is no repo
+// becomes one, its first commit holding the sample when it was empty.
 if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
   try {
-    if (await initGitIfNone(GITOPS_DIR_V2)) logger.info(`Git initialized in ${GITOPS_DIR_V2}`)
+    const made = await initGitIfNone(GITOPS_DIR_V2, { fill: made => placeSample(SAMPLE_AT, made, sayInfo) })
+    if (made) logger.info(`Git initialized in ${GITOPS_DIR_V2}${made.filled ? ', with the sample data in its first commit' : ''}`)
   } catch (err) {
-    if (!(err instanceof StartRefused)) throw err
-    logger.error(err.message)
-    process.exit(1)
+    refusedAtStart(err)
   }
 }
 
@@ -76,27 +88,17 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
   if (note) logger.warn(note)
 }
 
-// The sample Templates and deployments, when there is no Template — only in
-// a repo with no commit of its own content. One that has such commits is
-// somebody's: a Templates folder that is empty, or looked for under another
-// name (CHARTS_DIR), is said, and nothing is copied in.
-{
-  const chartsDir = getChartsDir(GITOPS_DIR_V2, process.env.CHARTS_DIR)
-  const deploymentsDir = getDeploymentsDir(GITOPS_DIR_V2, process.env.DEPLOYMENTS_DIR)
-  const sampleDir = path.join(__dirname, 'sample')
-  if (await hasCommittedContent(GITOPS_DIR_V2)) {
-    if ((await findAlertTemplateCharts(chartsDir)).length === 0) {
-      logger.info(`No Template in ${chartsDir}: the sample data is only copied into a repo with no commit of its own content, and this one has some. If the Templates are in another folder, set CHARTS_DIR (and DEPLOYMENTS_DIR)`)
-    }
-  } else {
-    const scaffolded = await scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir)
-    if (scaffolded) {
-      logger.info(`Scaffolded sample data into ${chartsDir}`)
-      // With it, the .gitignore a gitops repo should have: left for the
-      // first Commit, as the sample is.
-      if (await writeGitignoreIfNone(GITOPS_DIR_V2)) logger.info(`Wrote ${path.join(GITOPS_DIR_V2, '.gitignore')}: Helm's Chart.lock and charts/*.tgz are not committed`)
-    }
+// A repo that was there already, with no Template: the sample is put in
+// only when it has no commit of its own content, and left for the first
+// Commit — the repo is not the server's to commit into. One that has such
+// commits is somebody's: a Templates folder that is empty, or looked for
+// under another name (CHARTS_DIR), is said, and nothing is copied in.
+if (await hasCommittedContent(GITOPS_DIR_V2)) {
+  if ((await findAlertTemplateCharts(CHARTS_DIR_V2)).length === 0) {
+    logger.info(`No Template in ${CHARTS_DIR_V2}: the sample data is only copied into a repo with no commit of its own content, and this one has some. If the Templates are in another folder, set CHARTS_DIR (and DEPLOYMENTS_DIR)`)
   }
+} else {
+  await placeSampleOrUndo(SAMPLE_AT, sayInfo).catch(refusedAtStart)
 }
 
 // A write killed between its temp file and its rename leaves the temp file:

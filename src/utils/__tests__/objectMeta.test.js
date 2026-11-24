@@ -47,20 +47,97 @@ describe('what it refuses, and says so', () => {
     expect(parseObjectMeta({ labels: '{"team":"  "}' }).labels).toEqual(BUILT_IN_LABELS)
   })
 
-  it('drops a non-string value', () => {
-    const { labels, warnings } = parseObjectMeta({ labels: '{"replicas":3}' })
-    expect(labels).toEqual(BUILT_IN_LABELS)
-    expect(warnings[0]).toMatch(/replicas/)
+  // Content Kubernetes would refuse, or that is no text, stops as a value
+  // that is not JSON does: each fault on a line of its own.
+  const VARIABLES = [
+    ['labels', 'RULE_OBJECT_LABELS', 'label'],
+    ['annotations', 'RULE_OBJECT_ANNOTATIONS', 'annotation'],
+    ['labelsByProfile', 'RULE_OBJECT_LABELS_BY_PROFILE', 'label'],
+    ['annotationsByProfile', 'RULE_OBJECT_ANNOTATIONS_BY_PROFILE', 'annotation'],
+  ]
+  const set = (key, pairs) => ({ [key]: JSON.stringify(key.endsWith('ByProfile') ? { vlogs: pairs } : pairs) })
+  const at = (variable, key) => (key.endsWith('ByProfile') ? `${variable}.vlogs` : variable)
+
+  describe.each(VARIABLES)('%s (%s)', (key, variable, kind) => {
+    it.each([
+      ['a number', 1, '"1"'], ['true', true, '"true"'], ['null', null, '"kps"'], ['an object', { a: 1 }, '"kps"'], ['a list', ['a'], '"kps"'],
+    ])('a value that is %s: an error naming the variable and the key', (_, value, like) => {
+      const { errors, warnings } = parseObjectMeta(set(key, { release: value }))
+      expect(errors).toEqual([`${at(variable, key)}: the value of "release" must be text, like ${like}`])
+      expect(warnings).toEqual([])
+    })
+
+    it.each(['bad key!', 'a/b/c', '-team', 'team-', `${'a'.repeat(64)}`, `${'a'.repeat(254)}/team`, 'Example.com/team', '/team', ''])('a key that is not a name (%j): an error', bad => {
+      const { errors } = parseObjectMeta(set(key, { [bad]: 'x' }))
+      expect(errors).toHaveLength(1)
+      expect(errors[0]).toMatch(new RegExp(`^${at(variable, key).replace(/\./g, '\\.')}: ".*" is not an? ${kind} name — `))
+    })
+
+    it.each(['team', 'app.kubernetes.io/part-of', 'example.com/a_b.c-d', 'A1', `${'a'.repeat(63)}`, `${'a'.repeat(253)}/team`])('a key that is a name (%s): taken', good => {
+      expect(parseObjectMeta(set(key, { [good]: 'x' })).errors).toEqual([])
+    })
+
+    it('several faults: each said, on a line of its own', () => {
+      const { errors } = parseObjectMeta(set(key, { 'bad key!': 'x', n: 3, 'ok-key': 'fine' }))
+      expect(errors).toEqual([
+        `${at(variable, key)}: "bad key!" is not ${kind === 'label' ? 'a label' : 'an annotation'} name — an optional DNS prefix and "/", then at most 63 letters, digits, "-", "_" or ".", starting and ending with a letter or digit`,
+        `${at(variable, key)}: the value of "n" must be text, like "3"`,
+      ])
+    })
   })
 
-  it('ignores invalid JSON and says which variable', () => {
-    const { labels, warnings } = parseObjectMeta({ labels: '{oops' })
-    expect(labels).toEqual(BUILT_IN_LABELS)
-    expect(warnings[0]).toMatch(/RULE_OBJECT_LABELS/)
+  describe.each(VARIABLES.filter(([, , kind]) => kind === 'label'))('a label value, %s', (key, variable) => {
+    it.each(['has spaces', 'a/b', '-x', 'x-', 'ü', 'a'.repeat(64)])('that is no label value (%j): an error', bad => {
+      expect(parseObjectMeta(set(key, { team: bad })).errors).toEqual([`${at(variable, key)}: the value of "team" is not a label value — at most 63 letters, digits, "-", "_" or ".", starting and ending with a letter or digit, or empty`])
+    })
+    it.each(['kps', 'a.b_c-d', 'A', 'a'.repeat(63)])('that is one (%j): taken', good => {
+      expect(parseObjectMeta(set(key, { team: good })).errors).toEqual([])
+    })
   })
 
-  it('ignores a JSON array, which is not a set of pairs', () => {
-    expect(parseObjectMeta({ labels: '["a"]' }).warnings[0]).toMatch(/key\/value/)
+  it.each(VARIABLES.filter(([, , kind]) => kind === 'annotation'))('an annotation value is free text, %s', key => {
+    expect(parseObjectMeta(set(key, { note: 'has spaces / and: colons, ü' })).errors).toEqual([])
+  })
+
+  // A variable that cannot be read is a mistake to stop on, as its
+  // _BY_PROFILE variant is: ignored, the objects would go out without the
+  // labels the cluster selects them by, and nothing would say so.
+  it.each([
+    ['labels', 'RULE_OBJECT_LABELS'],
+    ['annotations', 'RULE_OBJECT_ANNOTATIONS'],
+  ])('%s that are not JSON: an error naming the variable, not a warning', (key, variable) => {
+    const { errors, warnings } = parseObjectMeta({ [key]: 'release=kps' })
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toMatch(new RegExp(`^${variable} is not valid JSON \\(`))
+    expect(warnings).toEqual([])
+  })
+
+  it.each(['', ' ', '  \t\n '])('labels and annotations of only whitespace (%j): not set, as an empty value is', json => {
+    const { labels, annotations, errors, warnings } = parseObjectMeta({ labels: json, annotations: json })
+    expect(errors).toEqual([])
+    expect(warnings).toEqual([])
+    expect(labels).toEqual(BUILT_IN_LABELS)
+    expect(annotations).toEqual({})
+  })
+
+  it('not JSON: the one line says what the value has to look like', () => {
+    const { errors } = parseObjectMeta({ labels: 'release=kps' })
+    expect(errors).toEqual([expect.stringMatching(/^RULE_OBJECT_LABELS is not valid JSON \(.+\): it must be a JSON object of key\/value pairs, such as \{"release":"kps"\}$/)])
+  })
+
+  it.each([['a list', '["a"]'], ['a text', '"release"'], ['null', 'null'], ['a number', '3']])('JSON that is %s, not a set of pairs: an error naming the variable', (_, json) => {
+    const { errors, warnings } = parseObjectMeta({ labels: json, annotations: json })
+    expect(errors).toEqual([
+      'RULE_OBJECT_ANNOTATIONS must be a JSON object of key/value pairs, such as {"release":"kps"}',
+      'RULE_OBJECT_LABELS must be a JSON object of key/value pairs, such as {"release":"kps"}',
+    ])
+    expect(warnings).toEqual([])
+  })
+
+  it('a value carrying a template is still dropped with a warning, not an error', () => {
+    const { errors, warnings } = parseObjectMeta({ labels: '{"instance":"{{ x }}","release":"kps"}' })
+    expect(errors).toEqual([])
+    expect(warnings).toHaveLength(1)
   })
 })
 
@@ -243,9 +320,8 @@ describe('values for one output profile', () => {
   })
 
   it('checks the values inside like any other, naming the profile', () => {
-    const { byProfile, warnings, errors } = parseObjectMeta({ labelsByProfile: '{"vlogs":{"n":3}}' })
-    expect(errors).toEqual([])
-    expect(byProfile.vlogs.labels).toEqual({})
-    expect(warnings[0]).toMatch(/RULE_OBJECT_LABELS_BY_PROFILE\.vlogs: "n"/)
+    const { warnings, errors } = parseObjectMeta({ labelsByProfile: '{"vlogs":{"n":3}}' })
+    expect(errors).toEqual(['RULE_OBJECT_LABELS_BY_PROFILE.vlogs: the value of "n" must be text, like "3"'])
+    expect(warnings).toEqual([])
   })
 })

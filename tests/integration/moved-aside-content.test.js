@@ -250,6 +250,65 @@ describe.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('a fol
     expect(seen.data.findings.map(f => f.kind)).toEqual(['parked'])
   })
 
+  // git never looks into a folder it ignores (and holds no file of), so
+  // nothing parked in it can be committed away: no refusal for it.
+  // Nothing else for Commit to refuse (the Template's checks): as above.
+  const noTemplate = () => { fs.rmSync(path.join(root, 'charts/demo'), { recursive: true }); git('add', '-A'); git('commit', '-qm', 'no template') }
+  const ignoredScratch = () => {
+    noTemplate()
+    put('.gitignore', 'scratch/\n')
+    git('add', '-A'); git('commit', '-qm', 'ignore scratch')
+    put('scratch/x/notes.txt', 'mine\n')
+    fs.chmodSync(path.join(root, 'scratch'), 0o311)
+  }
+  const unlock = () => { try { fs.chmodSync(path.join(root, 'scratch'), 0o755) } catch { /* gone */ } }
+
+  it('a folder git ignores, that cannot be listed: Commit goes through, and parkedSearch does not name it', async () => {
+    ignoredScratch()
+    try {
+      put('notes.md', 'something to commit\n')
+      expect(await parkedSearch(root)).toEqual({ parked: [], unlisted: [] })
+      const c = await commit()
+      expect(c.status, JSON.stringify(c.data)).toBe(200)
+      expect(git('show', '--name-status', '--format=', 'HEAD').trim()).toBe('A\tnotes.md')
+    } finally { unlock() }
+  })
+
+  it('a folder git ignores but holds a file of (added by force): still refused', async () => {
+    noTemplate()
+    put('.gitignore', 'scratch/\n')
+    put('scratch/kept.txt', 'kept\n')
+    git('add', '-A'); git('add', '-f', 'scratch/kept.txt'); git('commit', '-qm', 'scratch, one file kept')
+    fs.chmodSync(path.join(root, 'scratch'), 0o311)
+    try {
+      put('notes.md', 'something to commit\n')
+      expect((await parkedSearch(root)).unlisted).toEqual([{ rel: 'scratch', why: 'permission denied' }])
+      const c = await commit()
+      expect(c.status).toBe(409)
+      expect(c.data.findings.map(f => [f.kind, f.file])).toEqual([['parked-unknown', 'scratch']])
+    } finally { unlock() }
+  })
+
+  it('a folder git does not ignore, with nothing of it committed yet: still refused', async () => {
+    noTemplate()
+    put('scratch/x/notes.txt', 'mine\n')
+    fs.chmodSync(path.join(root, 'scratch'), 0o311)
+    try {
+      put('notes.md', 'something to commit\n')
+      const c = await commit()
+      expect(c.status).toBe(409)
+      expect(c.data.findings.map(f => [f.kind, f.file])).toEqual([['parked-unknown', 'scratch']])
+    } finally { unlock() }
+  })
+
+  it('one ignored and one tracked folder that cannot be listed: only the tracked one is named', async () => {
+    ignoredScratch()
+    fs.chmodSync(dir(), 0o311)
+    try {
+      expect((await parkedSearch(root)).unlisted).toEqual([{ rel: 'deployments/t/a', why: 'permission denied' }])
+    } finally { unlock() }
+  })
+
   it('a folder gone while it was looked for is not one that cannot be listed', async () => {
     expect(await parkedSearch(path.join(root, 'no-such-folder'))).toEqual({ parked: [], unlisted: [] })
   })

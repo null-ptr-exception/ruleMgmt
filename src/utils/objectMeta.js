@@ -34,38 +34,74 @@
  */
 
 import { readsAsNonString, keyScalar } from './yamlScalar.js'
-import { ROUTING_KIND, typeNames, canonicalType, PROFILE_ANNOTATION_KEYS } from './outputs.js'
+import { ROUTING_KIND, typeNames, canonicalType, PROFILE_ANNOTATION_KEYS, ANNOTATION_KEY_RE } from './outputs.js'
 
 /** Always present: this is the product's own statement about the resource. */
 export const BUILT_IN_LABELS = { 'app.kubernetes.io/managed-by': 'Helm' }
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 
-function parseMap(json, source, warnings) {
-  if (!json) return {}
+// A variable that cannot be read is an error, as a _BY_PROFILE one is:
+// ignored, every object would go out without what the site set — rules
+// the cluster's selector does not match are never loaded, with no error.
+// A value of only whitespace is not set, as an empty one is.
+const PAIRS = 'a JSON object of key/value pairs, such as {"release":"kps"}'
+function parseMap(json, source, warnings, errors, kind) {
+  if (!json?.trim()) return {}
   let parsed
   try {
     parsed = JSON.parse(json)
   } catch (err) {
-    warnings.push(`${source} is not valid JSON and was ignored: ${err.message}`)
+    errors.push(`${source} is not valid JSON (${err.message}): it must be ${PAIRS}`)
     return {}
   }
   if (!isMap(parsed)) {
-    warnings.push(`${source} must be a JSON object of key/value pairs; it was ignored`)
+    errors.push(`${source} must be ${PAIRS}`)
     return {}
   }
-  return cleanMap(parsed, source, warnings)
+  return cleanMap(parsed, source, warnings, errors, kind)
 }
 
-// `removable`: a profile's empty value is kept as null — it takes the
-// site-wide key off that profile's objects rather than being dropped.
-function cleanMap(parsed, source, warnings, removable = false) {
+// What Kubernetes takes in an object's metadata (its rules for labels and
+// annotations):
+// - a key, of a label or an annotation alike, is a qualified name: an
+//   optional prefix — a DNS subdomain, lower case, at most 253 characters —
+//   and "/", then a name of at most 63 characters: letters, digits, "-",
+//   "_" and ".", beginning and ending with a letter or digit
+//   (ANNOTATION_KEY_RE is that form; the lengths are checked here);
+// - a label value is at most 63 characters of that same set, beginning and
+//   ending with a letter or digit, or empty;
+// - an annotation value is any text.
+const LABEL_VALUE_RE = /^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$/
+const NAME_RULE = 'an optional DNS prefix and "/", then at most 63 letters, digits, "-", "_" or ".", starting and ending with a letter or digit'
+const VALUE_RULE = 'at most 63 letters, digits, "-", "_" or ".", starting and ending with a letter or digit, or empty'
+function isQualifiedName(key) {
+  if (!ANNOTATION_KEY_RE.test(key)) return false
+  const slash = key.indexOf('/')
+  const prefix = slash < 0 ? '' : key.slice(0, slash)
+  return prefix.length <= 253 && key.slice(slash + 1).length <= 63
+}
+
+// `kind` is 'label' or 'annotation': what a key (and, for a label, its
+// value) must be. A value that is not text, a key that is not a name and a
+// label value Kubernetes refuses are errors, each its own line; a value
+// carrying a template is dropped with a warning. `removable`: a profile's
+// empty value is kept as null — it takes the site-wide key off that
+// profile's objects rather than being dropped.
+function cleanMap(parsed, source, warnings, errors, kind, removable = false) {
   const entries = {}
   for (const [key, value] of Object.entries(parsed)) {
+    let bad = false
+    if (!isQualifiedName(key)) {
+      errors.push(`${source}: ${JSON.stringify(key)} is not ${kind === 'label' ? 'a label' : 'an annotation'} name — ${NAME_RULE}`)
+      bad = true
+    }
     if (typeof value !== 'string') {
-      warnings.push(`${source}: "${key}" was dropped — values must be strings`)
+      const like = typeof value === 'number' || typeof value === 'boolean' ? JSON.stringify(String(value)) : '"kps"'
+      errors.push(`${source}: the value of ${JSON.stringify(key)} must be text, like ${like}`)
       continue
     }
+    if (bad) continue
     // An empty value would render as an empty label rather than no label.
     if (value.trim() === '') {
       if (removable) entries[key] = null
@@ -73,6 +109,10 @@ function cleanMap(parsed, source, warnings, removable = false) {
     }
     if (value.includes('{{') || value.includes('}}')) {
       warnings.push(`${source}: "${key}" was dropped — values are literal, and this one contains a template`)
+      continue
+    }
+    if (kind === 'label' && !(value.length <= 63 && LABEL_VALUE_RE.test(value))) {
+      errors.push(`${source}: the value of ${JSON.stringify(key)} is not a label value — ${VALUE_RULE}`)
       continue
     }
     entries[key] = value
@@ -84,7 +124,7 @@ function cleanMap(parsed, source, warnings, removable = false) {
  * A _BY_PROFILE variable: profile name → key/value pairs. Its shape and its
  * profile names are errors; the values inside are checked like any other.
  */
-function parseByProfile(json, source, warnings, errors, written = {}) {
+function parseByProfile(json, source, kind, warnings, errors, written = {}) {
   if (!json) return {}
   let parsed
   try {
@@ -112,7 +152,7 @@ function parseByProfile(json, source, warnings, errors, written = {}) {
       const name = profile === ROUTING_KIND ? profile : canonicalType(profile)
       // Said with the keys as the site wrote them.
       if (Object.hasOwn(out, name)) errors.push(`${source}: "${keyOf[name]}" and "${profile}" are one profile (${name}) — write it once`)
-      else { out[name] = cleanMap(pairs, `${source}.${profile}`, warnings, true); keyOf[name] = profile; written[name] ??= profile }
+      else { out[name] = cleanMap(pairs, `${source}.${profile}`, warnings, errors, kind, true); keyOf[name] = profile; written[name] ??= profile }
     }
   }
   return out
@@ -121,19 +161,24 @@ function parseByProfile(json, source, warnings, errors, written = {}) {
 /**
  * Read the site's policy. Returns what to write plus what was thrown away, so
  * a misconfiguration is visible instead of silently doing nothing. `errors`
- * are mistakes the server refuses to start with.
+ * are mistakes the server refuses to start with, and the command-line tools
+ * stop on: a variable that is not JSON or not an object of pairs, a profile
+ * that does not exist, a value that is not text, a key that is not a label
+ * or annotation name, a label value Kubernetes refuses — each its own line.
+ * `warnings` are values carrying a template, dropped from a variable that
+ * was read.
  */
 export function parseObjectMeta({ labels, annotations, labelsByProfile, annotationsByProfile } = {}) {
   const warnings = []
   const errors = []
   // Each profile's key as the site wrote it (`prometheus`), for messages.
   const profileKeys = {}
-  const byLabels = parseByProfile(labelsByProfile, 'RULE_OBJECT_LABELS_BY_PROFILE', warnings, errors, profileKeys)
-  const byAnnotations = parseByProfile(annotationsByProfile, 'RULE_OBJECT_ANNOTATIONS_BY_PROFILE', warnings, errors, profileKeys)
+  const byLabels = parseByProfile(labelsByProfile, 'RULE_OBJECT_LABELS_BY_PROFILE', 'label', warnings, errors, profileKeys)
+  const byAnnotations = parseByProfile(annotationsByProfile, 'RULE_OBJECT_ANNOTATIONS_BY_PROFILE', 'annotation', warnings, errors, profileKeys)
   // The annotation a profile tells its objects apart by (prometheus3's) is
   // AlertForge's: a site's value would make Preview and import read the
   // object as another profile, or take the mark off.
-  const siteAnnotations = parseMap(annotations, 'RULE_OBJECT_ANNOTATIONS', warnings)
+  const siteAnnotations = parseMap(annotations, 'RULE_OBJECT_ANNOTATIONS', warnings, errors, 'annotation')
   const marked = [['RULE_OBJECT_ANNOTATIONS', siteAnnotations],
     ...Object.entries(byAnnotations).map(([name, map]) => [`RULE_OBJECT_ANNOTATIONS_BY_PROFILE.${name}`, map])]
   for (const [source, map] of marked) {
@@ -146,7 +191,7 @@ export function parseObjectMeta({ labels, annotations, labelsByProfile, annotati
     byProfile[name] = { labels: byLabels[name] || {}, annotations: byAnnotations[name] || {} }
   }
   return {
-    labels: { ...BUILT_IN_LABELS, ...parseMap(labels, 'RULE_OBJECT_LABELS', warnings) },
+    labels: { ...BUILT_IN_LABELS, ...parseMap(labels, 'RULE_OBJECT_LABELS', warnings, errors, 'label') },
     annotations: siteAnnotations,
     byProfile,
     profileKeys,

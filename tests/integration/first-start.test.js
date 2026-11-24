@@ -137,6 +137,9 @@ describe('the sample data at start', () => {
     expect(s.up, s.output()).toBe(true)
     expect(said(s, /Scaffolded sample data/)).toHaveLength(1)
     expect((await (await fetch(`${s.base}/api/v2/charts`)).json()).map(c => c.name)).toEqual(['mariadb-alerts'])
+    // The repo is not the server's to commit into: left for the first Commit.
+    expect(git(gitops, 'status', '--porcelain').split('\n').filter(Boolean)).toEqual(['?? .gitignore', '?? charts/', '?? deployments/'])
+    expect(git(gitops, 'log', '--format=%s').trim()).toBe('base')
   })
 
   it('a folder that was no repo: the sample is copied in', async () => {
@@ -165,7 +168,7 @@ describe('the .gitignore of a repo the server fills', () => {
     await fs.writeFile(path.join(dep, 'charts', 'mariadb-alerts-2.0.0.tgz'), 'x')
     await fs.writeFile(path.join(dep, 'Chart.lock'), 'x')
     const status = await (await fetch(`${s.base}/api/v2/git/status`)).json()
-    expect(status.changes.added).toEqual(['.gitignore', 'charts/', 'deployments/'])
+    expect(status.changeCount, JSON.stringify(status.changes)).toBe(0)
     expect(git(gitops, 'status', '--porcelain', '-uall')).not.toMatch(/Chart\.lock|\.tgz/)
   })
 
@@ -179,5 +182,101 @@ describe('the .gitignore of a repo the server fills', () => {
     expect(s.up, s.output()).toBe(true)
     expect(await fs.readFile(path.join(gitops, '.gitignore'), 'utf-8')).toBe('# mine\n')
     expect(await fs.stat(path.join(gitops, 'charts/mariadb-alerts/Chart.yaml')).catch(() => null)).not.toBe(null)
+  })
+})
+
+// The site's labels are read on every generation: a variable that cannot
+// be read stops the server at start, as its _BY_PROFILE variant does.
+describe('a RULE_OBJECT_* variable that cannot be read', () => {
+  it.each([
+    ['RULE_OBJECT_LABELS', 'release=kps', 'RULE_OBJECT_LABELS is not valid JSON'],
+    ['RULE_OBJECT_ANNOTATIONS', '["a"]', 'RULE_OBJECT_ANNOTATIONS must be a JSON object of key/value pairs'],
+    ['RULE_OBJECT_LABELS_BY_PROFILE', 'release=kps', 'RULE_OBJECT_LABELS_BY_PROFILE is not valid JSON'],
+    ['RULE_OBJECT_LABELS', '{"release":1}', 'RULE_OBJECT_LABELS: the value of "release" must be text, like "1"'],
+    ['RULE_OBJECT_ANNOTATIONS', '{"bad key!":"x"}', 'RULE_OBJECT_ANNOTATIONS: "bad key!" is not an annotation name'],
+    ['RULE_OBJECT_LABELS_BY_PROFILE', '{"vlogs":{"team":"a b"}}', 'RULE_OBJECT_LABELS_BY_PROFILE.vlogs: the value of "team" is not a label value'],
+  ])('%s=%s: the server does not start, naming it, and makes nothing', async (variable, value, message) => {
+    const gitops = path.join(tmp, 'gitops')
+    const s = await start(tmp, { GITOPS_DIR: gitops, ...IDENTITY, [variable]: value })
+    expect(s.up, s.output()).toBe(false)
+    expect((await s.ended).code).toBe(1)
+    const errors = logLines(s.output()).filter(l => l.level >= 50).map(l => l.msg)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain(message)
+    expect(await fs.stat(gitops).catch(() => null)).toBe(null)
+  })
+})
+
+// An unset or empty variable is not set; one of only whitespace is empty.
+describe('a RULE_OBJECT_* variable of only whitespace', () => {
+  it.each(['RULE_OBJECT_LABELS', 'RULE_OBJECT_ANNOTATIONS'])('%s=" ": the server starts, with no error', async variable => {
+    const gitops = path.join(tmp, 'gitops')
+    const s = await start(tmp, { GITOPS_DIR: gitops, ...IDENTITY, [variable]: '  ' })
+    expect(s.up, s.output()).toBe(true)
+    expect(logLines(s.output()).filter(l => l.level >= 40)).toEqual([])
+  })
+})
+
+// A first start in an empty folder ends with a repo of one commit that
+// holds the sample and the .gitignore: nothing is left to commit.
+describe('the repo a first start makes', () => {
+  const git = (cwd, ...a) => execFileSync('git', a, { cwd, encoding: 'utf-8', env: { ...process.env, ...IDENTITY } })
+
+  it.each([['a folder that is not there', false], ['an empty folder', true]])('%s: one commit with the sample and the .gitignore, a clean working tree', async (_, made) => {
+    const gitops = path.join(tmp, 'gitops')
+    if (made) await fs.mkdir(gitops)
+    const s = await start(tmp, { GITOPS_DIR: gitops, ...IDENTITY })
+    expect(s.up, s.output()).toBe(true)
+    expect(git(gitops, 'status', '--porcelain')).toBe('')
+    expect(git(gitops, 'log', '--format=%s').trim()).toBe('initial')
+    const tracked = git(gitops, 'ls-files').trim().split('\n')
+    for (const f of ['.gitignore', 'charts/mariadb-alerts/Chart.yaml', 'charts/mariadb-alerts/rules/_common.yaml', 'deployments/mariadb-1/production/values.yaml', 'deployments/mariadb-2/production/Chart.yaml']) expect(tracked).toContain(f)
+    const status = await (await fetch(`${s.base}/api/v2/git/status`)).json()
+    expect(status.changeCount).toBe(0)
+    const log = await (await fetch(`${s.base}/api/v2/git/log`)).json()
+    expect(log).toHaveLength(1)
+    expect(log[0].message).toBe('initial')
+    expect((await (await fetch(`${s.base}/api/v2/charts`)).json()).map(c => c.name)).toEqual(['mariadb-alerts'])
+  })
+
+  it('Discard in it: answered, takes back an edit and a new file, and the sample stays', async () => {
+    const gitops = path.join(tmp, 'gitops')
+    const s = await start(tmp, { GITOPS_DIR: gitops, ...IDENTITY })
+    expect(s.up, s.output()).toBe(true)
+    const values = path.join(gitops, 'deployments/mariadb-1/production/values.yaml')
+    const was = await fs.readFile(values, 'utf-8')
+    await fs.appendFile(values, '# an edit\n')
+    await fs.writeFile(path.join(gitops, 'deployments/new.txt'), 'x')
+    const res = await fetch(`${s.base}/api/v2/git/discard`, { method: 'POST' })
+    expect(res.status, await res.clone().text()).toBe(200)
+    expect(await fs.readFile(values, 'utf-8')).toBe(was)
+    expect(await fs.stat(path.join(gitops, 'deployments/new.txt')).catch(() => null)).toBe(null)
+    expect(git(gitops, 'status', '--porcelain')).toBe('')
+    expect((await (await fetch(`${s.base}/api/v2/charts`)).json()).map(c => c.name)).toEqual(['mariadb-alerts'])
+  })
+
+  it('a folder with files of its own: they are the first commit, with no sample and no .gitignore', async () => {
+    const gitops = path.join(tmp, 'gitops')
+    await fs.mkdir(path.join(gitops, 'notes'), { recursive: true })
+    await fs.writeFile(path.join(gitops, 'notes', 'mine.txt'), 'mine\n')
+    const s = await start(tmp, { GITOPS_DIR: gitops, ...IDENTITY })
+    expect(s.up, s.output()).toBe(true)
+    expect(git(gitops, 'ls-files').trim()).toBe('notes/mine.txt')
+    expect(git(gitops, 'status', '--porcelain')).toBe('')
+    expect(git(gitops, 'log', '--format=%s').trim()).toBe('initial')
+  })
+
+  // A commit that fails after the sample was put in (here: a hook of the
+  // machine's git template refuses it).
+  it('a first commit that fails after the sample is in: the folder is as it was, empty', async () => {
+    const template = path.join(tmp, 'git-template')
+    await fs.mkdir(path.join(template, 'hooks'), { recursive: true })
+    await fs.writeFile(path.join(template, 'hooks', 'pre-commit'), '#!/bin/sh\necho refused by the hook >&2\nexit 1\n', { mode: 0o755 })
+    const gitops = path.join(tmp, 'gitops')
+    await fs.mkdir(gitops)
+    const s = await start(tmp, { GITOPS_DIR: gitops, ...IDENTITY, GIT_TEMPLATE_DIR: template })
+    expect(s.up, s.output()).toBe(false)
+    expect(s.output()).toContain('refused by the hook')
+    expect(await fs.readdir(gitops)).toEqual([])
   })
 })

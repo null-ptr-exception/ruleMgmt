@@ -144,6 +144,26 @@ describe.skipIf(!CAN_RUN)('check-repo', () => {
     expect(data.problems[0].message.split('\n')).toHaveLength(2)
   })
 
+  // Catches: a site setting that cannot be read taken as none — every
+  // generated file would be compared with what no labels make.
+  it.each(['RULE_OBJECT_LABELS', 'RULE_OBJECT_ANNOTATIONS', 'RULE_OBJECT_LABELS_BY_PROFILE'])('%s that is not JSON: exit 2 naming it, nothing checked', variable => {
+    // run() takes every RULE_OBJECT_* out: set here, on top of it.
+    const r = spawnSync('node', [SCRIPT, repo], { cwd: work, encoding: 'utf-8', env: { ...env(), [variable]: 'release=kps' }, timeout: 120000 })
+    expect(r.status, r.stdout + r.stderr).toBe(2)
+    expect(r.stderr).toContain(`check-repo: ${variable} is not valid JSON`)
+    expect(r.stdout).toBe('')
+  })
+
+  it.each([
+    ['RULE_OBJECT_LABELS', '{"team":"has spaces"}', 'check-repo: RULE_OBJECT_LABELS: the value of "team" is not a label value'],
+    ['RULE_OBJECT_ANNOTATIONS_BY_PROFILE', '{"vlogs":{"n":null}}', 'check-repo: RULE_OBJECT_ANNOTATIONS_BY_PROFILE.vlogs: the value of "n" must be text'],
+  ])('%s=%s, whose content Kubernetes would refuse: exit 2 naming it, nothing checked', (variable, value, said) => {
+    const r = spawnSync('node', [SCRIPT, repo], { cwd: work, encoding: 'utf-8', env: { ...env(), [variable]: value }, timeout: 120000 })
+    expect(r.status, r.stdout + r.stderr).toBe(2)
+    expect(r.stderr).toContain(said)
+    expect(r.stdout).toBe('')
+  })
+
   // Catches: leaving the shared configs out when no deployment uses them.
   it('a shared configs file with problems that no deployment uses (Commit only lists it): exit 1', () => {
     write('_shared/notification-configs.yaml', 'configs:\n  relay: { type: nosuch }\n')

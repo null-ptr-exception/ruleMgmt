@@ -434,10 +434,23 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
 
 // Exit 2: the check could not be made, as opposed to 1, a problem found.
 describe.skipIf(!CAN_RUN)('check-deployment when it cannot check', () => {
-  it('only warns on site labels that are not JSON, as gen-rules does', () => {
-    const { code, out } = check(dir, { RULE_OBJECT_LABELS: '{team:a}' })
-    expect(out).toContain('note:')
-    expect(code).toBe(0)
+  // Ignored, the routing would be compared with what no labels make, and
+  // the rules checked as if the site set none.
+  it.each(['RULE_OBJECT_LABELS', 'RULE_OBJECT_ANNOTATIONS'])('stops on %s that is not JSON, naming it, as on its _BY_PROFILE variant', variable => {
+    const { code, out } = check(dir, { [variable]: 'release=kps' })
+    expect(out).toContain(`${variable} is not valid JSON`)
+    expect(out).not.toContain('Rules:')
+    expect(code).toBe(2)
+  })
+
+  it.each([
+    ['RULE_OBJECT_LABELS', '{"release":true}', 'RULE_OBJECT_LABELS: the value of "release" must be text, like "true"'],
+    ['RULE_OBJECT_ANNOTATIONS', '{"bad key!":"x"}', 'RULE_OBJECT_ANNOTATIONS: "bad key!" is not an annotation name'],
+  ])('stops on %s=%s, whose content Kubernetes would refuse, naming it', (variable, value, said) => {
+    const { code, out } = check(dir, { [variable]: value })
+    expect(out).toContain(said)
+    expect(out).not.toContain('Rules:')
+    expect(code).toBe(2)
   })
 
   // helm reads every file of the folder too, so it says so first.

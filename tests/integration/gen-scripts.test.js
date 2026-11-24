@@ -624,3 +624,34 @@ describe('--help of the generator scripts', () => {
     expect(r.stdout).toBe('')
   })
 })
+
+// The site's labels and annotations decide what is generated: a variable
+// that cannot be read stops each generator before it writes, with the exit
+// code its _BY_PROFILE variant gives.
+describe('RULE_OBJECT_LABELS or RULE_OBJECT_ANNOTATIONS that cannot be read', () => {
+  const tree = async dir => (await fs.readdir(dir, { recursive: true })).sort()
+  it.each([
+    ['gen-rules', 'RULE_OBJECT_LABELS', 'release=kps', /is not valid JSON/],
+    ['gen-rules', 'RULE_OBJECT_ANNOTATIONS', '["a"]', /must be a JSON object of key\/value pairs/],
+    ['gen-rules --check', 'RULE_OBJECT_LABELS', 'release=kps', /is not valid JSON/],
+    ['gen-chart', 'RULE_OBJECT_LABELS', 'release=kps', /is not valid JSON/],
+    ['import-rules', 'RULE_OBJECT_LABELS', 'release=kps', /is not valid JSON/],
+    ['import-rules --dry-run', 'RULE_OBJECT_ANNOTATIONS', 'release=kps', /is not valid JSON/],
+    ['gen-rules', 'RULE_OBJECT_LABELS', '{"release":1}', /RULE_OBJECT_LABELS: the value of "release" must be text, like "1"/],
+    ['gen-rules', 'RULE_OBJECT_LABELS', '{"bad key!":"x"}', /RULE_OBJECT_LABELS: "bad key!" is not a label name/],
+    ['gen-rules', 'RULE_OBJECT_ANNOTATIONS', '{"bad key!":"x"}', /RULE_OBJECT_ANNOTATIONS: "bad key!" is not an annotation name/],
+  ])('%s with %s=%s: exit 1 naming the variable, nothing written', async (tool, variable, value, why) => {
+    expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+    const rulesFile = path.join(tmpDir, 'in.yaml')
+    await fs.writeFile(rulesFile, 'groups:\n  - name: disk\n    rules:\n      - alert: DiskFull\n        expr: disk_free < 1\n')
+    const before = await tree(tmpDir)
+    const [name, flag] = tool.split(' ')
+    const args = name === 'import-rules' ? [rulesFile, chartDir] : [chartDir]
+    const script = { 'gen-rules': GEN_RULES, 'gen-chart': GEN_CHART, 'import-rules': IMPORT_RULES }[name]
+    const r = run(script, flag ? [...args, flag] : args, { [variable]: value })
+    expect(r.status, r.stdout).toBe(1)
+    expect(r.stdout).toMatch(new RegExp(`error {2}${variable}[ :]`))
+    expect(r.stdout).toMatch(why)
+    expect(await tree(tmpDir)).toEqual(before)
+  })
+})

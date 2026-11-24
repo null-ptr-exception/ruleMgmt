@@ -27,9 +27,12 @@
  * labels (RULE_OBJECT_LABELS and friends): pass them with -e, as for
  * `gen-rules --check`.
  *
- * Exit 0: both pass. 1: a problem in the deployment. 2: it could not be
- * checked — wrong arguments, not a folder deployment, site settings it cannot
- * read, helm or a checker missing, a file it cannot read.
+ * Exit 0: both pass. 1: a problem in the deployment — Helm or a rule check
+ * fails, or a file of its own cannot be read (its values.yaml, routing.yaml
+ * or routing resource). 2: it could not be checked — wrong arguments, not a
+ * folder deployment, a Chart.yaml that cannot be read or used (whether it is
+ * a deployment cannot be told), site settings it cannot read, helm or a
+ * checker missing, a repo root it cannot tell.
  */
 
 import path from 'path'

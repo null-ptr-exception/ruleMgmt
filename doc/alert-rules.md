@@ -468,7 +468,18 @@ RULE_OBJECT_ANNOTATIONS='{"alertforge.io/source":"generated"}'
 Both are JSON objects of string pairs, both optional. Values are literal: one
 containing `{{ }}` is dropped with a warning rather than escaped, since a label
 that silently reads `{{ $.Release.Name }}` in the cluster is worse than one
-that never appears. An empty value omits its key.
+that never appears. An empty value omits its key. Every key must be a label
+(or annotation) name Kubernetes takes, every value text, and a label's value a
+label value: anything else stops the server and the tools, one line per fault
+(see [how-to](how-to.md#put-your-own-labels-on-every-generated-resource)).
+
+A variable that is not JSON, or not a JSON object of pairs, stops the server
+at startup, and the scripts that generate or check with it: ignored, every
+object would go out without the labels, with nothing to say so. The message
+names the variable and what it must look like:
+`RULE_OBJECT_LABELS is not valid JSON (…): it must be a JSON object of
+key/value pairs, such as {"release":"kps"}`. A variable that is unset,
+empty or only whitespace is not set.
 
 > If your Prometheus has a `ruleSelector`, rules without the labels it matches
 > are **silently ignored** — no error, nothing in `/rules`. Check with:
@@ -619,6 +630,26 @@ every chart as in
 [how-to](how-to.md#regenerate-every-chart-after-an-upgrade). An ordinary
 number (`3`, `0.5`, `90`) renders as before; only one Helm used to print
 with an exponent changes in the cluster.
+
+### Upgrading to site labels that must be readable
+
+`RULE_OBJECT_LABELS` or `RULE_OBJECT_ANNOTATIONS` that is not JSON
+(`release=kps`), or not a JSON object of pairs, used to be ignored with a
+note in the log. It now stops the server at startup and the command-line
+tools, naming the variable, as the `_BY_PROFILE` variables always did. A
+site with such a value notices at the first start after the upgrade: its
+objects were being generated without those labels. Correct the value and
+regenerate every chart as in
+[how-to](how-to.md#regenerate-every-chart-after-an-upgrade). A site whose
+variables are valid JSON, or unset, sees no change.
+
+The same now holds for their content, and for a profile's map in the
+`_BY_PROFILE` variables: a value that is not text (`{"release":1}`), which
+was dropped with a note, and a key that is not a label or annotation name
+(`{"bad key!":"x"}`) or a label value Kubernetes refuses (`{"team":"a b"}`),
+which were written into the generated files as they were. A set-up running
+with such a value today does not start after the upgrade until the value is
+fixed; the message names the variable and the key, one line per fault.
 
 ### Upgrading to the four group types
 

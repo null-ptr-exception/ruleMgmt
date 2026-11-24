@@ -105,6 +105,7 @@ import { withSyncRegistryLock, holdsLock } from './lock.js'
 import { writeRefusal, placeProblem } from './writePath.js'
 import { repoRel } from './readRepoFile.js'
 import { whyNotListed } from './readRepoDir.js'
+import { ignoredByGit } from './git.js'
 import { logger } from '../lib/logger.js'
 
 const CHANGES = new Map()
@@ -254,7 +255,7 @@ export async function applyChange(plan, { policy, expect } = {}) {
 // ---- writing files -----------------------------------------------------
 
 // Plain words for why a file cannot be written; an errno code is never the reason shown.
-const WRITE_WHY = {
+export const WRITE_WHY = {
   EACCES: 'permission denied',
   EPERM: 'permission denied',
   EROFS: 'the file system is read-only',
@@ -688,8 +689,11 @@ export async function parkedSearch(root) {
     }
   }
   await walk('')
+  // A folder git ignores is one it never looks into: nothing parked in it
+  // can be committed away.
+  const ignored = await ignoredByGit(root, unlisted.map(u => u.rel).filter(Boolean))
   const byRel = (a, b) => (a.rel < b.rel ? -1 : 1)
-  return { parked: parked.sort(byRel), unlisted: unlisted.sort(byRel) }
+  return { parked: parked.sort(byRel), unlisted: unlisted.filter(u => !ignored.has(u.rel)).sort(byRel) }
 }
 
 /**

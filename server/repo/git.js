@@ -12,6 +12,7 @@
  *                                                        a link as git keeps it, its target
  *   await g.commit('Raise the threshold')               → git commit with that message
  *   await g.log(format, 20, 20)                         → commits 21–40, one line each
+ *   await ignoredByGit(root, ['scratch', 'deployments/a']) → Set { 'scratch' }
  *
  * A ref is taken exactly when it is one of the forms the policy allows (a
  * commit id, HEAD, HEAD~N, HEAD^ — no branch name, no expression) AND git
@@ -105,4 +106,19 @@ export async function filesChanging(err, cwd) {
   if (!/unable to stat|short read while indexing|No such file or directory|Not a directory/i.test(text)) return false
   const named = text.match(/(?:unable to stat|open\()\s*['"]([^'"]+)['"]/i)?.[1]
   return !named || await gone(path.resolve(cwd, named))
+}
+
+/**
+ * Which of the folders `rels` (paths in the repo) git ignores, asked in one
+ * `git check-ignore`: git never looks into such a folder, unless it holds
+ * a file of the repo — then check-ignore does not name it, as git still
+ * stats that file. A name git gives back quoted (an odd character) is not
+ * matched, and so taken as not ignored; so is every folder when git cannot
+ * answer.
+ */
+export async function ignoredByGit(root, rels) {
+  if (!rels.length) return new Set()
+  const out = await git(root, '-c', 'core.quotePath=false', 'check-ignore', '--end-of-options', ...rels)
+    .catch(() => '') // exit 1: none of them is ignored; any other failure: none taken as ignored
+  return new Set(out.split('\n').filter(Boolean))
 }

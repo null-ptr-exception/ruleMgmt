@@ -46,6 +46,8 @@ jobs:
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
       - run: npm test
+      # Every entry point against real Helm (tests/pin): apart from npm test, which stays short.
+      - run: npm run test:pin
 
   e2e:
     runs-on: ubuntu-24.04

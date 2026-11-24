@@ -8,6 +8,7 @@
     "preview": "vite preview",
     "server": "node server.js",
     "test": "vitest run",
+    "test:pin": "vitest run --config tests/pin/vitest.config.mjs",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

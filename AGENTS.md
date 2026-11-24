@@ -15,7 +15,8 @@ make init            # initialize Gitea (create user, OAuth app, repo) and confi
 make proxy           # start local proxy (127.0.0.1:12014 → minikube:30080)
 make down            # stop proxy and destroy minikube cluster
 make status          # show proxy and pod status
-npm test             # vitest unit + integration tests
+npm test             # vitest unit + integration tests (about a minute; no pins)
+npm run test:pin     # every pin (tests/pin/<slice>/*.pin.test.js): each entry point against real Helm
 npm run test:e2e     # playwright E2E tests
 npm run lint         # eslint
 ```
@@ -64,13 +65,18 @@ Every change is held to this; an issue's acceptance criteria refer to it rather 
    - add `promtool-tests.yaml` wherever the output is PromQL promtool can evaluate (it runs with promtool3 for a `prometheus3` case)
    - `expected/templates/` and the sample chart's golden may be regenerated (`node tests/blind/update.mjs`, `gen-rules`), and the diff is then reviewed line by line
 4. **Gate before merging:**
-   - `npm test`, `npm run test:e2e` and `npm run lint` all pass. There are no known failures to ignore; a red test is either fixed or the change is not done.
+   - `npm test`, `npm run test:pin`, `npm run test:e2e` and `npm run lint` all pass. There are no known failures to ignore; a red test is either fixed or the change is not done.
    - CI is green.
    - Every CodeRabbit finding is fixed, or answered with a reason. Reviews are triggered by commenting `@coderabbitai review` (about one per hour).
 5. **No high or critical advisory in a runtime dependency.** CI runs `npm audit --omit=dev --audit-level=high`; a fix is a dependency upgrade, and this check is its failing test. A new advisory turns every CI run after it red until main is fixed.
 6. **No fixable high or critical CVE in the image.** CI builds the image on every PR and scans it with trivy (`docker` job); it fails on one that has a fix. A CVE that cannot be fixed yet goes into `.trivyignore.yaml` with its reason, its issue and the binary it is in.
 7. **Anything the server imports must be in the runtime image.** `tests/unit/dockerImage.test.js` fails when a server import is outside what the `Dockerfile` copies.
 8. **A change in behaviour updates the docs in the same PR** (`doc/rules-format.md`, `doc/alert-rules.md`, `doc/how-to.md`).
+9. **The pins** (`npm run test:pin`, not part of `npm test`) run every entry point of one kind of file on every input of a table, next to what real Helm (and promtool) does with the same files. The expected side is what Helm does, never what the code does. Each slice is `tests/pin/<slice>/`: `cases.mjs` (the inputs), `harness.mjs` (how a row runs each entry point), `compare.mjs` (how a cell is judged against Helm), `<slice>.pin.test.js`, `baseline.tsv`, `allowlist.tsv`; what they share is `tests/pin/lib/` (`definePin`). Run your slice's pin and the deployment-values one before a commit (`npm run test:pin -- tests/pin/<slice>`); every pin runs after each merge on both Helm versions. A pin test may take up to 300 s (`tests/pin/vitest.config.mjs`), not the 30 s of `npm test`: under load one row runs every entry point and Helm several times. `PIN_POOL=<n>` sets how many rows run side by side (8); use 4 on a busy machine.
+   - The deployment-values pin runs open, list, save as text and as JSON, sync, a `_common`'s plan and write, a new deployment, the migration check and a migration, Commit, Preview, `check-deployment` and `gen-rules` on every input in `tests/pin/deployment-values/cases.mjs`.
+   - `baseline.tsv` holds today's answer of every cell (class, status, file named, server path shown, files changed, and Helm's exit, alert count and rendered value). A cell whose answer changes fails the test, naming it. When the change is meant: `PIN_UPDATE=1 npm run test:pin -- tests/pin/<slice>`, then review the diff of `baseline.tsv` line by line. `PIN_RECORD=<file>` also writes each cell with its message.
+   - `allowlist.tsv` lists every cell that disagrees with Helm today (accepts what Helm fails, what promtool refuses, or values whose rows do not all render — fewer alerts than the rows written, as with values not under the chart's name; refuses what Helm renders; a 5xx, the editor showing another value), each with a category — `bug` (its issue, or "no issue yet"), `policy` (deliberate), `out-of-scope` — and a reason. It is edited by hand only. A new disagreement fails until it is fixed or listed; a fix fails until its line is removed, so the list only shrinks visibly.
+   - Run it with each Helm version (`HELM_BIN`); the baseline is the same for both, so a difference fails. Without helm or promtool every cell is skipped, and the count is printed; skipped is not passed.
 
 ## Test output
 

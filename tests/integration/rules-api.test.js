@@ -106,6 +106,8 @@ describe('POST /:chart/rules', () => {
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': bad } })
     expect(status).toBe(400)
     expect(data.findings.some(f => f.kind === 'undefined-var')).toBe(true)
+    // What the editor lists (#131): the rule, by name.
+    expect(data.findings.find(f => f.kind === 'undefined-var').message).toMatch(/^rule "\w+" references \$\{ghost\}, which is not a column$/)
     expect(await exists('rules/cpu.yaml')).toBe(false)
   })
 

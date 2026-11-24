@@ -31,6 +31,34 @@ describe('reference integrity', () => {
     expect(findings[0].severity).toBe('save')
   })
 
+  // #131: a group has several rules; the finding names the one.
+  it('names the rule that references it, and only that one', () => {
+    const findings = checkRules(chart([
+      { alert: 'CpuOk', expr: 'cpu > ${warn}' },
+      { alert: 'CpuGhost', expr: 'cpu > ${ghost}' },
+    ])).filter(f => f.kind === 'undefined-var')
+    expect(findings).toEqual([expect.objectContaining({ group: 'cpu', alert: 'CpuGhost', message: 'rule "CpuGhost" references ${ghost}, which is not a column' })])
+  })
+
+  it('names a recording rule and a raw rule the way the other checks do', () => {
+    const messages = checkRules(chart([
+      { record: 'job:cpu:ghost', expr: 'cpu > ${ghost}' },
+      { raw: 'alert: Raw\nexpr: cpu > ${ghost}\n' },
+    ])).filter(f => f.kind === 'undefined-var').map(f => f.message)
+    expect(messages).toEqual([
+      'recording rule "job:cpu:ghost" references ${ghost}, which is not a column',
+      'a raw rule references ${ghost}, which is not a column',
+    ])
+  })
+
+  it('one name in two rules is reported for each', () => {
+    const findings = checkRules(chart([
+      { alert: 'A', expr: 'cpu > ${ghost}' },
+      { alert: 'B', expr: 'cpu < ${ghost}' },
+    ])).filter(f => f.kind === 'undefined-var')
+    expect(findings.map(f => f.alert)).toEqual(['A', 'B'])
+  })
+
   it('accepts a reference resolved by a _common column', () => {
     const schema = chart(
       [{ alert: 'A', expr: 'cpu{cluster="${cluster}"} > ${warn}' }],

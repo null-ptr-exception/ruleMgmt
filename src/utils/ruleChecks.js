@@ -75,13 +75,21 @@ export function checkRules(schema) {
 
     // Reference integrity — every ${var} resolves to a column. Applies to a
     // legacy x-promql group too, exactly as the CLI has always checked.
-    for (const name of danglingRefs(rules, definedColumns(schema, alertDef))) {
-      findings.push({
-        severity: 'save',
-        kind: 'undefined-var',
-        group,
-        message: `references \${${name}}, which is not a column`,
-      })
+    // Rule by rule, naming it (#131): a group has several.
+    const columnsHere = definedColumns(schema, alertDef)
+    for (const rule of rules) {
+      const where = rule.alert ? `rule "${rule.alert}"`
+        : rule.record ? `recording rule "${rule.record}"`
+          : 'a raw rule'
+      for (const name of danglingRefs([rule], columnsHere)) {
+        findings.push({
+          severity: 'save',
+          kind: 'undefined-var',
+          group,
+          alert: rule.alert,
+          message: `${where} references \${${name}}, which is not a column`,
+        })
+      }
     }
 
     if (!Array.isArray(alertDef['x-rules'])) continue

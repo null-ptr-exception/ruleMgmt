@@ -360,6 +360,8 @@ rules:
 
     await page.getByRole('button', { name: 'Save' }).first().click()
     await expect(page.locator('.ant-modal').filter({ hasText: /not a column|Rule checks failed/ })).toBeVisible({ timeout: 5000 })
+    // Which rule (#131): the group has the one, CpuWarn.
+    await expect(page.locator('.ant-modal')).toContainText('rule "CpuWarn" references ${ghost}, which is not a column')
   })
 })
 

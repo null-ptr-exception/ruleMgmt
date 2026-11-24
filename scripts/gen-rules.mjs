@@ -57,154 +57,161 @@ async function readIfExists(file) {
   }
 }
 
-const rulesDir = path.join(chartDir, 'rules')
-const schemaFile = path.join(chartDir, 'values.schema.json')
+// The flow is a function so an error can end it by returning (#132):
+// process.exit() does not wait for output still going to a pipe, which on
+// some platforms cut the error short (`gen-rules … | tee log`).
+async function main() {
+  const rulesDir = path.join(chartDir, 'rules')
+  const schemaFile = path.join(chartDir, 'values.schema.json')
 
-// rules/*.yaml already on disk.
-// Only a missing rules/ means "not migrated yet"; any other failure stops here.
-// Swallowing it read the files before the bad one as the whole of rules/, and
-// pruned the rest's templates.
-const onDisk = {}
-let names = []
-try {
-  names = (await fs.readdir(rulesDir)).filter(f => f.endsWith('.yaml')).sort()
-} catch (err) {
-  if (err.code !== 'ENOENT') throw err
-}
-for (const name of names) onDisk[name] = await fs.readFile(path.join(rulesDir, name), 'utf-8')
-
-// Once rules/ exists it is the source and the schema is a product; before that,
-// the schema is the source and this is the migration, which writes rules/ in
-// its canonical layout. Either way the schema is regenerated from the model.
-const migrating = !Object.keys(onDisk).length
-
-// Once rules/ exists the schema is a product, read only for the
-// x-custom-template groups it carries: a chart started from rules/ alone has
-// none yet (#116). Before that it is the only source.
-const schemaText = await readIfExists(schemaFile)
-if (schemaText === null && migrating) {
-  console.error(`ERROR  ${chartDir} has neither rules/ nor values.schema.json — nothing to generate from`)
-  process.exit(1)
-}
-const schema = schemaText === null ? { type: 'object', properties: {} } : JSON.parse(schemaText)
-let model, warnings
-if (!migrating) {
-  const parsed = parseRulesDir(onDisk)
-  if (parsed.errors.length) {
-    for (const e of parsed.errors) console.log(`ERROR  ${e}`)
-    process.exit(1)
-  }
-  model = parsed.model
-  warnings = ['rules/ already present — treating it as the source, regenerating values.schema.json and templates/ from it']
-} else {
-  ;({ model, warnings } = schemaToModel(schema))
-}
-
-// The checks a save makes (#115): the editor refuses these rules, so this
-// does not generate from them either — nor pass them under --check. A
-// 'commit' finding is printed and left for the commit, as a save does.
-const findings = checkRules(genSchema(model, schema))
-for (const f of findings) console.log(`${f.severity === 'save' ? 'ERROR ' : 'warn  '} ${f.group ? `${f.group}: ` : ''}${f.message}`)
-if (findings.some(f => f.severity === 'save')) {
-  console.log('\nRefusing to write: the rules would not pass the checks a save makes.')
-  process.exit(1)
-}
-
-// Only a migration writes rules files; an existing rules/ is left as it is.
-const files = migrating ? modelToFiles(model) : {}
-// What a migration writes has to read back: a value the old format let
-// through (a duration, a column type) is refused here, not on the next run.
-if (migrating) {
-  const written = parseRulesDir(files)
-  if (written.errors.length) {
-    for (const e of written.errors) console.log(`ERROR  ${e}`)
-    console.log('\nRefusing to write: the converted rules would not be read back.')
-    process.exit(1)
-  }
-}
-const objectMeta = objectMetaFromEnv()
-for (const w of objectMeta.warnings) console.log(`note   ${w}`)
-if (objectMeta.errors.length) {
-  for (const e of objectMeta.errors) console.log(`error  ${e}`)
-  process.exit(1)
-}
-const products = generateProducts(model, schema, objectMeta)
-const tmplDir = path.join(chartDir, 'templates')
-
-for (const w of warnings) console.log(`note   ${w}`)
-
-const results = []
-let failed = 0
-
-async function reconcile(relPath, want) {
-  const abs = path.join(chartDir, relPath)
-  const have = await readIfExists(abs)
-  if (check) {
-    if (have === want) results.push(['same', relPath])
-    else { results.push([have === null ? 'MISSING' : 'DIFFERS', relPath]); failed++ }
-    return
-  }
-  if (have === want) { results.push(['unchanged', relPath]); return }
-  await fs.mkdir(path.dirname(abs), { recursive: true })
-  await fs.writeFile(abs, want, 'utf-8')
-  results.push([have === null ? 'created' : 'updated', relPath])
-}
-
-// A templates/ file whose group has gone or no longer generates one is
-// removed, or under --check reported: Helm still renders it. Any other file
-// there is hand-written and kept (#114). rules/ is never pruned: it is either
-// being written for the first time or it is the source.
-{
-  if (migrating && !check) await fs.mkdir(rulesDir, { recursive: true })
-
-  let existingTemplates = []
-  try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
-  const stale = new Set(staleTemplates(existingTemplates, products.templates, { schemas: [schema], models: [model] }))
-  for (const name of existingTemplates) {
-    if (name in products.templates) continue
-    if (!stale.has(name)) {
-      results.push(['kept', `${path.join('templates', name)} (not generated)`])
-      continue
-    }
-    if (check) {
-      results.push(['ORPHANED', path.join('templates', name)])
-      failed++
-      continue
-    }
-    await fs.rm(path.join(tmplDir, name), { force: true })
-    results.push(['removed', path.join('templates', name)])
-  }
-}
-
-for (const [name, text] of Object.entries(files)) {
-  await reconcile(path.join('rules', name), text)
-}
-await reconcile('values.schema.json', products.schemaText)
-for (const [name, text] of Object.entries(products.templates)) {
-  await reconcile(path.join('templates', name), text)
-}
-
-if (init) {
-  const chartYamlFile = path.join(chartDir, 'Chart.yaml')
-  const { text, created } = ensureChartYaml(await readIfExists(chartYamlFile), path.basename(chartDir))
-  if (created && !check) { await fs.writeFile(chartYamlFile, text, 'utf-8'); results.push(['created', 'Chart.yaml']) }
-  else if (created && check) { results.push(['MISSING', 'Chart.yaml']); failed++ }
-}
-
-// Validate the chart's own values.yaml against the converted model — Helm does
-// the real check from the schema, this is the early warning.
-const valuesText = await readIfExists(path.join(chartDir, 'values.yaml'))
-if (valuesText) {
+  // rules/*.yaml already on disk.
+  // Only a missing rules/ means "not migrated yet"; any other failure stops here.
+  // Swallowing it read the files before the bad one as the whole of rules/, and
+  // pruned the rest's templates.
+  const onDisk = {}
+  let names = []
   try {
-    for (const problem of validateValues(yaml.load(valuesText) || {}, model)) {
-      console.log(`warn   ${problem}`)
-    }
+    names = (await fs.readdir(rulesDir)).filter(f => f.endsWith('.yaml')).sort()
   } catch (err) {
-    console.log(`warn   values.yaml did not parse: ${err.message}`)
+    if (err.code !== 'ENOENT') throw err
   }
+  for (const name of names) onDisk[name] = await fs.readFile(path.join(rulesDir, name), 'utf-8')
+
+  // Once rules/ exists it is the source and the schema is a product; before that,
+  // the schema is the source and this is the migration, which writes rules/ in
+  // its canonical layout. Either way the schema is regenerated from the model.
+  const migrating = !Object.keys(onDisk).length
+
+  // Once rules/ exists the schema is a product, read only for the
+  // x-custom-template groups it carries: a chart started from rules/ alone has
+  // none yet (#116). Before that it is the only source.
+  const schemaText = await readIfExists(schemaFile)
+  if (schemaText === null && migrating) {
+    console.error(`ERROR  ${chartDir} has neither rules/ nor values.schema.json — nothing to generate from`)
+    return 1
+  }
+  const schema = schemaText === null ? { type: 'object', properties: {} } : JSON.parse(schemaText)
+  let model, warnings
+  if (!migrating) {
+    const parsed = parseRulesDir(onDisk)
+    if (parsed.errors.length) {
+      for (const e of parsed.errors) console.log(`ERROR  ${e}`)
+      return 1
+    }
+    model = parsed.model
+    warnings = ['rules/ already present — treating it as the source, regenerating values.schema.json and templates/ from it']
+  } else {
+    ;({ model, warnings } = schemaToModel(schema))
+  }
+
+  // The checks a save makes (#115): the editor refuses these rules, so this
+  // does not generate from them either — nor pass them under --check. A
+  // 'commit' finding is printed and left for the commit, as a save does.
+  const findings = checkRules(genSchema(model, schema))
+  for (const f of findings) console.log(`${f.severity === 'save' ? 'ERROR ' : 'warn  '} ${f.group ? `${f.group}: ` : ''}${f.message}`)
+  if (findings.some(f => f.severity === 'save')) {
+    console.log('\nRefusing to write: the rules would not pass the checks a save makes.')
+    return 1
+  }
+
+  // Only a migration writes rules files; an existing rules/ is left as it is.
+  const files = migrating ? modelToFiles(model) : {}
+  // What a migration writes has to read back: a value the old format let
+  // through (a duration, a column type) is refused here, not on the next run.
+  if (migrating) {
+    const written = parseRulesDir(files)
+    if (written.errors.length) {
+      for (const e of written.errors) console.log(`ERROR  ${e}`)
+      console.log('\nRefusing to write: the converted rules would not be read back.')
+      return 1
+    }
+  }
+  const objectMeta = objectMetaFromEnv()
+  for (const w of objectMeta.warnings) console.log(`note   ${w}`)
+  if (objectMeta.errors.length) {
+    for (const e of objectMeta.errors) console.log(`error  ${e}`)
+    return 1
+  }
+  const products = generateProducts(model, schema, objectMeta)
+  const tmplDir = path.join(chartDir, 'templates')
+
+  for (const w of warnings) console.log(`note   ${w}`)
+
+  const results = []
+  let failed = 0
+
+  async function reconcile(relPath, want) {
+    const abs = path.join(chartDir, relPath)
+    const have = await readIfExists(abs)
+    if (check) {
+      if (have === want) results.push(['same', relPath])
+      else { results.push([have === null ? 'MISSING' : 'DIFFERS', relPath]); failed++ }
+      return
+    }
+    if (have === want) { results.push(['unchanged', relPath]); return }
+    await fs.mkdir(path.dirname(abs), { recursive: true })
+    await fs.writeFile(abs, want, 'utf-8')
+    results.push([have === null ? 'created' : 'updated', relPath])
+  }
+
+  // A templates/ file whose group has gone or no longer generates one is
+  // removed, or under --check reported: Helm still renders it. Any other file
+  // there is hand-written and kept (#114). rules/ is never pruned: it is either
+  // being written for the first time or it is the source.
+  {
+    if (migrating && !check) await fs.mkdir(rulesDir, { recursive: true })
+
+    let existingTemplates = []
+    try { existingTemplates = (await fs.readdir(tmplDir)).filter(f => f.endsWith('.yaml')) } catch { /* absent */ }
+    const stale = new Set(staleTemplates(existingTemplates, products.templates, { schemas: [schema], models: [model] }))
+    for (const name of existingTemplates) {
+      if (name in products.templates) continue
+      if (!stale.has(name)) {
+        results.push(['kept', `${path.join('templates', name)} (not generated)`])
+        continue
+      }
+      if (check) {
+        results.push(['ORPHANED', path.join('templates', name)])
+        failed++
+        continue
+      }
+      await fs.rm(path.join(tmplDir, name), { force: true })
+      results.push(['removed', path.join('templates', name)])
+    }
+  }
+
+  for (const [name, text] of Object.entries(files)) {
+    await reconcile(path.join('rules', name), text)
+  }
+  await reconcile('values.schema.json', products.schemaText)
+  for (const [name, text] of Object.entries(products.templates)) {
+    await reconcile(path.join('templates', name), text)
+  }
+
+  if (init) {
+    const chartYamlFile = path.join(chartDir, 'Chart.yaml')
+    const { text, created } = ensureChartYaml(await readIfExists(chartYamlFile), path.basename(chartDir))
+    if (created && !check) { await fs.writeFile(chartYamlFile, text, 'utf-8'); results.push(['created', 'Chart.yaml']) }
+    else if (created && check) { results.push(['MISSING', 'Chart.yaml']); failed++ }
+  }
+
+  // Validate the chart's own values.yaml against the converted model — Helm does
+  // the real check from the schema, this is the early warning.
+  const valuesText = await readIfExists(path.join(chartDir, 'values.yaml'))
+  if (valuesText) {
+    try {
+      for (const problem of validateValues(yaml.load(valuesText) || {}, model)) {
+        console.log(`warn   ${problem}`)
+      }
+    } catch (err) {
+      console.log(`warn   values.yaml did not parse: ${err.message}`)
+    }
+  }
+
+  const width = Math.max(...results.map(r => r[1].length), 0)
+  for (const [status, file] of results) console.log(`${status.padEnd(9)} ${file.padEnd(width)}`)
+  console.log(`\n${results.length} file(s), ${failed} problem(s)`)
+  return failed ? 1 : 0
 }
 
-const width = Math.max(...results.map(r => r[1].length), 0)
-for (const [status, file] of results) console.log(`${status.padEnd(9)} ${file.padEnd(width)}`)
-console.log(`\n${results.length} file(s), ${failed} problem(s)`)
-process.exit(failed ? 1 : 0)
+process.exitCode = await main()

@@ -315,6 +315,59 @@ describe('gen-rules.mjs on rules a save would refuse', () => {
   }
 })
 
+// #131: which rule references a column that is not there.
+describe('gen-rules.mjs on a reference to no column', () => {
+  it('names the group and the rule, and fails', async () => {
+    run(GEN_RULES, [chartDir])
+    const file = path.join(chartDir, 'rules', 'cpu.yaml')
+    const text = await fs.readFile(file, 'utf-8')
+    // The first expr only: the other rules stay as they were.
+    await fs.writeFile(file, text.replace(/^(\s+expr: .*?)$/m, '$1 > ${ghost}'))
+    const result = run(GEN_RULES, [chartDir, '--check'])
+    expect(result.status, result.stdout).toBe(1)
+    expect(result.stdout).toMatch(/ERROR\s+cpu: rule "\w+" references \$\{ghost\}, which is not a column/)
+    expect(result.stdout.match(/references \$\{ghost\}/g)).toHaveLength(1)
+  })
+})
+
+// #132: on an error gen-rules sets the exit code and ends, rather than
+// process.exit(), which does not wait for output going to a pipe (macOS:
+// `gen-rules … | tee log` could lose the error). Linux writes pipes at once,
+// so what is checked is that process.exit is not called.
+describe('gen-rules.mjs ending on an error', () => {
+  const PRELOAD = path.resolve('tests/fixtures/scripts/report-exit.cjs')
+  const runPiped = args => {
+    const r = spawnSync('node', ['--require', PRELOAD, GEN_RULES, ...args], { encoding: 'utf-8' })
+    return { status: r.status, stdout: r.stdout, stderr: r.stderr }
+  }
+  const breakRules = async (change) => {
+    run(GEN_RULES, [chartDir])
+    const file = path.join(chartDir, 'rules', 'cpu.yaml')
+    await fs.writeFile(file, change(await fs.readFile(file, 'utf-8')))
+  }
+
+  it.each([
+    ['rules/ that does not parse', () => breakRules(t => `${t}\nintervel: 1m\n`), [], /ERROR {2}cpu\.yaml.*unknown key "intervel"/],
+    ['a check a save makes', () => breakRules(t => t.replace(/^(\s+expr: .*?)$/m, '$1 > ${ghost}')), [], /Refusing to write: the rules would not pass the checks a save makes/],
+    ['RULE_OBJECT_LABELS_BY_PROFILE that is not JSON', async () => run(GEN_RULES, [chartDir]), ['env'], /error {2}RULE_OBJECT_LABELS_BY_PROFILE is not valid JSON/],
+  ])('on %s: exit code 1, the whole message, no process.exit', async (_, setUp, env, message) => {
+    await setUp()
+    const r = env.length
+      ? spawnSync('node', ['--require', PRELOAD, GEN_RULES, chartDir], { encoding: 'utf-8', env: { ...process.env, RULE_OBJECT_LABELS_BY_PROFILE: '{not json' } })
+      : runPiped([chartDir])
+    expect(r.status, r.stdout).toBe(1)
+    expect(r.stdout).toMatch(message)
+    expect(r.stderr).not.toContain('process.exit(')
+  })
+
+  it('a clean run still exits 0, and --check too', () => {
+    expect(runPiped([chartDir]).status).toBe(0)
+    const r = runPiped([chartDir, '--check'])
+    expect(r.status).toBe(0)
+    expect(r.stderr).not.toContain('process.exit(')
+  })
+})
+
 describe('import-rules.mjs', () => {
   const RULES = `groups:
   - name: disk

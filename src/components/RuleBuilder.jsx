@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, Input, Select, Button, Checkbox, Typography, Divider } from 'antd'
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 const { TextArea } = Input
 
 const TYPE_OPTIONS = [

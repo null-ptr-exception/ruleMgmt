@@ -232,7 +232,6 @@ export default function AlertUserView() {
         setViewedFailed(entries.filter(([, v]) => !v).map(([p]) => p))
       })
     return () => { stale = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [multi, viewedKey, selectedChart, viewedRetry])
 
   const viewedDeployments = multi && viewed.every(p => viewedValues[p])
@@ -335,7 +334,6 @@ export default function AlertUserView() {
   // effect (the ref check makes the duplicate fetch harmless).
   useEffect(() => {
     if (selectedFolder) refreshFrozenSource(selectedFolder)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFolder])
 
   // Unsaved edits live only in React state — switching folders resets them.
@@ -779,7 +777,6 @@ export default function AlertUserView() {
             checkedAlerts={checkedAlerts}
             allValues={allValues}
             commonValues={commonValues}
-            schema={schema}
             onAllValuesChange={updated => { setAllValues(updated); setDirty(true) }}
             onSave={handleOverviewSave}
             onPreview={onCommon ? undefined : handlePreview}

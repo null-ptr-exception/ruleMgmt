@@ -177,7 +177,7 @@ export default function PromQLEditor({ value = '', onChange, metrics = [], minHe
     const view = new EditorView({ state, parent: containerRef.current })
     viewRef.current = view
     return () => { view.destroy(); viewRef.current = null }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Sync external value changes (e.g. import replacing the expr)
   useEffect(() => {

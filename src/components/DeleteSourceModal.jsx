@@ -21,7 +21,6 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
     const initial = {}
     for (const t of targets) initial[t] = 'keep'
     setDecisions(initial)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, targetsKey])
 
   async function handleConfirm() {

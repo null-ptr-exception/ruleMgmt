@@ -290,7 +290,6 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     if (selectedFolder) return
     handledRefreshKey.current = refreshKey
     refreshAll()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, selectedFolder])
 
   // When selectedFolder is set (session restore, tree click, or a freshly
@@ -316,7 +315,6 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
       expandedKeysRef.current.includes(key) && Array.isArray(findNode(treeData, key)?.children))
     if (!refreshed && shown) return
     refreshAll(ancestors)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFolder, refreshKey])
 
   async function onLoadData(node) {

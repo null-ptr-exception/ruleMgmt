@@ -150,7 +150,6 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
     const hasFilters = Object.values(effectiveFilters).some(f => f && f.value !== '' && f.value != null)
     if (!hasFilters) return totalRows
     return parts.reduce((n, d) => n + (d.values[alertName] || []).filter(row => matchesFilter(row, effectiveFilters, vars, d.commonValues)).length, 0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, deployments, effectiveFilters, vars, commonValues])
 
   const activeSectionFilters = Object.values(sectionFilters).filter(f => f && f.value !== '' && f.value != null)
@@ -234,7 +233,6 @@ export default function AlertOverviewWorkspace({
   checkedAlerts,
   allValues,
   commonValues,
-  schema,
   onAllValuesChange,
   onSave,
   onPreview,

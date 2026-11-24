@@ -99,7 +99,6 @@ export default function RoutingView() {
       }
     })
     return () => { stale = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedChart, selectedFolder, reloadKey])
 
   // Only the latest folder's answer may freeze or unfreeze the page.
@@ -114,7 +113,6 @@ export default function RoutingView() {
   }
   useEffect(() => {
     if (selectedFolder) refreshFrozenSource(selectedFolder)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFolder])
 
   useEffect(() => {

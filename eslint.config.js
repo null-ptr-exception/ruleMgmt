@@ -367,6 +367,19 @@ export default [
       'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
+  // The React components: ESLint lints only the files some block names,
+  // so without this one it skipped them without a word.
+  {
+    files: ['**/*.jsx'],
+    languageOptions: {
+      globals: {
+        URLSearchParams: 'readonly',
+        Response: 'readonly',
+        prompt: 'readonly',
+        confirm: 'readonly',
+      },
+    },
+  },
   {
     files: ['server.js', 'server/**/*.js', 'scripts/**/*.mjs'],
     rules: { 'boundary/disk': 'warn' },

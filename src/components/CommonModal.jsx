@@ -57,7 +57,6 @@ export default function CommonModal({ open, mode, folder, commonPath, onClose, o
       else setPlan(result)
     })
     return () => { stale = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, queryKey])
 
   async function handleOk() {

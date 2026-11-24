@@ -3,7 +3,7 @@
 // beside one, in every position, is still shown.
 import { describe, it, expect } from 'vitest'
 import { createRequire } from 'node:module'
-import { withColumnRefs } from '../promqlLint.js'
+import { withColumnRefs, parsed } from '../promqlLint.js'
 
 // The package's CommonJS build with CodeMirror's: under Node its ES build
 // is read beside another copy of @codemirror/state, which CodeMirror refuses.
@@ -15,11 +15,8 @@ const { PromQLExtension } = require('@prometheus-io/codemirror-promql/dist/cjs/i
 const promql = new PromQLExtension()
 const extension = promql.asExtension()
 const lint = promql.getLinter().promQL()
-const diagnose = text => {
-  const state = EditorState.create({ doc: text, extensions: [extension] })
-  ensureSyntaxTree(state, text.length, 5000)
-  return lint({ state })
-}
+const diagnose = text => lint({ state: parsed(EditorState.create({ doc: text, extensions: [extension] }), ensureSyntaxTree) })
+
 const NUMBERS = new Set(['thr', 'v', 'warn', 'n', 'q', 'k', 't', 'a', 'b', 'win', 'w', 'o'])
 const kindOf = name => (NUMBERS.has(name) ? 'number' : undefined)
 const shown = text => withColumnRefs(text, diagnose, kindOf).map(d => `${d.from}-${d.to} ${d.message}`)
@@ -57,4 +54,33 @@ describe('a mistake beside a reference is shown', () => {
 
 it('with no reference, the linter on the text as it is', () => {
   expect(shown('rate(x[5m]) >> 1')).toEqual(diagnose('rate(x[5m]) >> 1').map(d => `${d.from}-${d.to} ${d.message}`))
+})
+
+// A new state parses for a few milliseconds only. On a busy machine that
+// leaves a tree of the first characters, which the linter then reads: a
+// clock that jumps 30 ms at every look stands for that machine: past the
+// few milliseconds a new state parses for, within what parsed() allows.
+describe('a machine too busy to parse at once', () => {
+  const slowly = fn => {
+    const now = Date.now
+    let t = now()
+    Date.now = () => (t += 30)
+    try { return fn() } finally { Date.now = now }
+  }
+  const text = 'rate(cpu_seconds_total{namespace="0000000000000"}[5m]) > 0000000'
+
+  it('the state as made holds a part of the tree, and the linter says a mistake that is not there', () => {
+    const state = slowly(() => EditorState.create({ doc: text, extensions: [extension] }))
+    ensureSyntaxTree(state, text.length, 5000)
+    expect(lint({ state }).length).toBeGreaterThan(0)
+  })
+
+  it('parsed() gives the whole tree: no mistake', () => {
+    const state = slowly(() => EditorState.create({ doc: text, extensions: [extension] }))
+    expect(lint({ state: parsed(state, ensureSyntaxTree) })).toEqual([])
+  })
+
+  it('a text with references is not a problem either', () => {
+    expect(slowly(() => shown('rate(cpu_seconds_total{namespace="${namespace}"}[5m]) > ${warn}'))).toEqual([])
+  })
 })

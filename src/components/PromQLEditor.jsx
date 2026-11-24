@@ -6,7 +6,7 @@ import { bracketMatching, syntaxHighlighting, HighlightStyle, ensureSyntaxTree }
 import { tags } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { PromQLExtension } from '@prometheus-io/codemirror-promql'
-import { withColumnRefs } from '../utils/promqlLint'
+import { withColumnRefs, parsed } from '../utils/promqlLint'
 
 const MONO = "'Fira Code', 'Cascadia Code', 'Consolas', 'DejaVu Sans Mono', monospace"
 
@@ -118,8 +118,7 @@ export default function PromQLEditor({ value = '', onChange, metrics = [], minHe
         return view => withColumnRefs(view.state.doc.toString(), text => {
           const state = text === view.state.doc.toString() ? view.state
             : view.state.update({ changes: { from: 0, to: view.state.doc.length, insert: text } }).state
-          ensureSyntaxTree(state, text.length, 1000)
-          return lint({ state })
+          return lint({ state: parsed(state, ensureSyntaxTree) })
         }, name => kindsRef.current?.[name])
       },
     })

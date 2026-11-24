@@ -18,6 +18,20 @@
  * `kindOf(name)` is 'number' for a reference known to hold one, else
  * anything.
  */
+/**
+ * A state whose syntax tree is the whole text's. A new state parses for a
+ * few milliseconds only; on a busy machine that leaves a tree of the first
+ * characters, and the linter, which reads the state's tree, then reports
+ * mistakes that are not there. `ensureSyntaxTree` finishes the parse but
+ * leaves the state's own tree as it was: the state after an empty
+ * transaction takes the finished one. `ensure` is CodeMirror's
+ * `ensureSyntaxTree`, of the same copy of CodeMirror as the state.
+ */
+export function parsed(state, ensure) {
+  ensure(state, state.doc.length, 5000)
+  return state.update({}).state
+}
+
 export const COLUMN_REF = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 
 export function withColumnRefs(doc, diagnose, kindOf = () => undefined) {

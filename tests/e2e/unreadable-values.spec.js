@@ -42,6 +42,12 @@ test.describe('a deployment whose values.yaml cannot be read', () => {
     await fs.mkdir(path.join(WORKSPACE, FOLDER, 'values.yaml'))
     await selectDeployment(page)
     await expect(page.getByTestId('values-load-error')).toContainText(`${FOLDER}/values.yaml cannot be read`, { timeout: 8000 })
+    // The tree marks it too, as it marks a folder it cannot read: no count, no guess.
+    const dev = page.locator('.ant-tree .ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' }).first()
+    const mark = dev.getByRole('img', { name: 'cannot be read' })
+    await expect(mark).toBeVisible({ timeout: 8000 })
+    await mark.hover()
+    await expect(page.getByRole('tooltip')).toContainText('This deployment cannot be read (its values.yaml cannot be read (it is a folder, not a file))', { timeout: 5000 })
     await page.getByText('cpu', { exact: true }).first().click()
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
   })

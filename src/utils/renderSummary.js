@@ -3,19 +3,18 @@
  *
  * Split out of server/routes/render.js so this logic is unit-testable without
  * an Express route, a fake helm binary and a temp gitops dir: everything here
- * takes plain data in and returns plain data out. Gathering that data (running
- * helm, reading values.yaml off disk, unwrapping subchart values) stays in
- * render.js, which needs server/lib helpers — this file, like the rest of
- * src/utils/, does not import from server/.
+ * takes plain data in and returns plain data out. Gathering that data
+ * (running helm, reading its output once — server/lib/ruleCheck.js
+ * renderedDocuments — and the deployment's values through the repo loader)
+ * stays on the server; this file, like the rest of src/utils/, reads and
+ * parses nothing.
+ *
+ * `rendered` below is Helm's output as renderedDocuments gives it:
+ * `{ text, docs: [{ doc, source }] }`.
  */
 
-import yaml from 'js-yaml'
 import { profileOfObject, profileFor } from './outputs.js'
 import { expandVars, prometheusTemplatesIn } from './ruleModel.js'
-
-// Helm's output as text, never a date: Kubernetes keeps `2026-11-22` as the
-// text it is, and so does this (js-yaml's default schema would make it a Date).
-const READ = { schema: yaml.CORE_SCHEMA }
 
 // Checks promtool structurally can't make: it only knows valid vs invalid
 // PromQL, not "this isn't what you meant". `<no value>` is Helm rendering a
@@ -37,13 +36,13 @@ const READ = { schema: yaml.CORE_SCHEMA }
 // lost it. `model` is the chart's rules/ model — pass it only for a chart that
 // has one: the legacy x-promql path is generated differently and is not held
 // to this.
-export function selfCheckRendered(renderedYaml, model) {
+export function selfCheckRendered(rendered, model) {
   const problems = []
-  const noValue = (renderedYaml.match(/<no value>/g) || []).length
+  const noValue = (rendered.text.match(/<no value>/g) || []).length
   if (noValue > 0) {
     problems.push(`Rendered output contains ${noValue} \`<no value>\` — a referenced field had no value and no default.`)
   }
-  if (model) problems.push(...lostTemplates(renderedYaml, model))
+  if (model) problems.push(...lostTemplates(rendered.docs, model))
   return { passed: problems.length === 0, problems }
 }
 
@@ -53,7 +52,7 @@ const ruleTexts = rule => [
   ...Object.values(rule?.annotations || {}),
 ].filter(t => t !== undefined && t !== null).map(String)
 
-function lostTemplates(renderedYaml, model) {
+function lostTemplates(docs, model) {
   // alert name -> one entry per source rule of that name (a name can repeat,
   // e.g. one per severity), with the labels whose value is fixed text — what
   // tells the rendered instances of same-named rules apart.
@@ -72,28 +71,24 @@ function lostTemplates(renderedYaml, model) {
   if (![...expected.values()].some(rules => rules.some(r => r.tokens.size))) return []
 
   const problems = new Set()
-  try {
-    yaml.loadAll(renderedYaml, doc => {
-      if (!profileOfObject(doc)) return
-      for (const g of doc?.spec?.groups || []) {
-        for (const r of g?.rules || []) {
-          const named = expected.get(r?.alert)
-          if (!named) continue
-          const labelsMatch = ({ fixedLabels }) => fixedLabels.every(([k, v]) => String(r.labels?.[k] ?? '') === v)
-          const candidates = named.filter(labelsMatch).length ? named.filter(labelsMatch) : named
-          const text = ruleTexts(r).join('\n')
-          // Still ambiguous after the labels: whichever it is missing least of.
-          const missing = candidates
-            .map(({ tokens }) => [...tokens].filter(t => !text.includes(t)))
-            .reduce((a, b) => (b.length < a.length ? b : a))
-          for (const t of missing) {
-            problems.add(`Alert "${r.alert}" rendered without \`${t}\` from its rules source — the generator's escaping lost it.`)
-          }
+  for (const { doc } of docs) {
+    if (!profileOfObject(doc)) continue
+    for (const g of doc?.spec?.groups || []) {
+      for (const r of g?.rules || []) {
+        const named = expected.get(r?.alert)
+        if (!named) continue
+        const labelsMatch = ({ fixedLabels }) => fixedLabels.every(([k, v]) => String(r.labels?.[k] ?? '') === v)
+        const candidates = named.filter(labelsMatch).length ? named.filter(labelsMatch) : named
+        const text = ruleTexts(r).join('\n')
+        // Still ambiguous after the labels: whichever it is missing least of.
+        const missing = candidates
+          .map(({ tokens }) => [...tokens].filter(t => !text.includes(t)))
+          .reduce((a, b) => (b.length < a.length ? b : a))
+        for (const t of missing) {
+          problems.add(`Alert "${r.alert}" rendered without \`${t}\` from its rules source — the generator's escaping lost it.`)
         }
       }
-    }, READ)
-  } catch {
-    // Unparseable output is promtool's to report, not this check's.
+    }
   }
   return [...problems]
 }
@@ -102,37 +97,19 @@ function lostTemplates(renderedYaml, model) {
 // (alert name, severity) pair, and the grand total. Recording rules (#70) are
 // counted apart, per group — they are not alerts, and adding them to the
 // total would make "N alerts" untrue.
-// Helm writes `# Source: <chart>/templates/<file>` above each document of
-// `helm template`: which template rendered a group, so a generated group is
-// counted from its own template only — a hand-written template (an
-// x-custom-template group) may render a group of the same name.
-const SOURCE_RE = /^# Source: (.+)$/m
-// A template that emits several documents gets one Source line, above the
-// first: the ones after it are its too.
-function documentsWithSource(renderedYaml) {
-  let last = null
-  return String(renderedYaml ?? '').split(/^---[ \t]*$/m).map(text => {
-    const own = SOURCE_RE.exec(text)?.[1]?.trim()
-    if (own) last = own
-    return { text, source: last }
-  })
-}
-
-export function tallyRendered(renderedYaml) {
+// Each document's source (the template that rendered it) is kept: a
+// generated group is counted from its own template only — a hand-written
+// template (an x-custom-template group) may render a group of the same name.
+export function tallyRendered(rendered) {
   const byGroup = new Map()
   const recordsByGroup = new Map()
   // Per template and group: `${source}\u0000${name}` → (alert, severity) → count.
   const bySource = new Map()
   let total = 0
-  const parts = documentsWithSource(renderedYaml)
-  // Without a Source line anywhere (not helm template's output), the whole
-  // text as one: a parse error then is reported as before.
-  const chunks = parts.some(p => p.source) ? parts : [{ text: renderedYaml, source: null }]
-  for (const { text, source } of chunks) {
+  for (const { doc, source } of rendered.docs) {
     // Every output profile's objects (#65), not only PrometheusRule: a vlogs
     // group's alerts count like any other.
-    yaml.loadAll(text, doc => {
-      if (!profileOfObject(doc)) return
+    if (profileOfObject(doc)) {
       for (const g of doc?.spec?.groups || []) {
         const m = byGroup.get(g.name) || new Map()
         const sKey = `${source ?? ''}\u0000${g.name}`
@@ -150,7 +127,7 @@ export function tallyRendered(renderedYaml) {
         byGroup.set(g.name, m)
         bySource.set(sKey, sm)
       }
-    }, READ)
+    }
   }
   return { byGroup, recordsByGroup, total, bySource }
 }
@@ -169,6 +146,31 @@ const alertsFor = rMap => [...rMap.entries()]
     return { alert, severity, count }
   })
   .sort((a, b) => a.alert.localeCompare(b.alert) || a.severity.localeCompare(b.severity))
+
+// A value a row (or a column's default) gives, or a Helm template: rendered
+// per row, so no one severity can be told from the rules.
+const PER_ROW = /\$\{|\{\{/
+
+/**
+ * The alerts each group of the Template can produce, by values key: `{
+ * alert, severity }`, a rule's own severity else its group's labels' (#182),
+ * the group's vars expanded. One whose severity each row gives
+ * (`severity: ${severity}`) is `{ alert, severity: '', perRow: true }`: what
+ * Helm renders is the row's value, never the placeholder.
+ */
+export function possibleAlerts(model) {
+  const out = {}
+  for (const [key, g] of Object.entries(model?.groups || {})) {
+    out[key] = (g.rules || []).filter(r => r.alert).map(r => {
+      const severity = expandVars(String(r.labels?.severity ?? g.labels?.severity ?? ''), g.vars)
+      return PER_ROW.test(severity) ? { alert: r.alert, severity: '', perRow: true } : { alert: r.alert, severity }
+    })
+  }
+  return out
+}
+
+// `obj[key]` when it is the object's own: a values key may be any name.
+const own = (obj, key) => (obj && Object.hasOwn(obj, key) ? obj[key] : undefined)
 
 /**
  * The per-group rows of the Preview summary, plus whatever rendered output no
@@ -195,8 +197,8 @@ export function summarizeGroups({ rendered, possible, groupRows, schema, types =
   const groups = [...keys].map(valuesKey => {
     // A group's own `name:` is what it renders as; else the key's.
     const name = Object.hasOwn(names, valuesKey) ? names[valuesKey] : valuesKey.replace(/_/g, '-')
-    const rowCount = groupRows[valuesKey] || 0
-    const custom = Boolean(schema?.properties?.[valuesKey]?.['x-custom-template'])
+    const rowCount = own(groupRows, valuesKey) || 0
+    const custom = Boolean(own(own(schema?.properties, valuesKey), 'x-custom-template'))
     if (custom) return { name, valuesKey, rowCount, state: 'custom', alerts: [], missing: [] }
 
     matchedNames.add(name)
@@ -215,16 +217,22 @@ export function summarizeGroups({ rendered, possible, groupRows, schema, types =
     const alerts = alertsFor(rMap)
     const renderedCount = alerts.reduce((n, a) => n + a.count, 0)
     const records = rendered.recordsByGroup?.get(name) || 0
-    const missing = (possible[valuesKey] || []).filter(p => !rMap.has(`${p.alert}\u0000${p.severity}`))
+    const mine = own(possible, valuesKey) || []
+    // A severity each row gives is produced by any rendered one of that
+    // alert a fixed-severity twin does not claim.
+    const fixed = new Set(mine.filter(p => !p.perRow).map(p => `${p.alert}\u0000${p.severity}`))
+    const missing = mine.filter(p => (p.perRow
+      ? ![...rMap.keys()].some(k => k.startsWith(`${p.alert}\u0000`) && !fixed.has(k))
+      : !rMap.has(`${p.alert}\u0000${p.severity}`))).map(({ alert, severity }) => ({ alert, severity }))
     let state = 'ok'
     // A once group (#70) takes no rows, so it is never "empty".
     if (rowCount === 0 && !once.has(valuesKey)) state = 'empty'
     else if (renderedCount === 0 && records === 0) state = 'no-alerts'
     // A group whose profile is not syntax-checked (`validate: none`, #65, #76)
     // says so on its own row: one "passed" must not read as all of the chart.
-    const checked = (profileFor(types[valuesKey])?.validate ?? 'promtool') !== 'none'
+    const checked = (profileFor(own(types, valuesKey))?.validate ?? 'promtool') !== 'none'
     // Each row's derived values (#118), when the group has any.
-    return { name, valuesKey, rowCount, state, alerts, missing, checked, records, once: once.has(valuesKey), ...(derived[valuesKey] ? { derived: derived[valuesKey] } : {}) }
+    return { name, valuesKey, rowCount, state, alerts, missing, checked, records, once: once.has(valuesKey), ...(own(derived, valuesKey) ? { derived: own(derived, valuesKey) } : {}) }
   }).sort((a, b) => a.valuesKey.localeCompare(b.valuesKey))
 
   // Rendered groups no group above claimed — every x-custom-template group's

@@ -1,7 +1,12 @@
 /** A folder's _common (#101): its plan, making or removing it, and who uses it. */
 
 import { withSyncRegistryLock } from '../../lib/sync.js'
-import { planCreate, planDelete, applyPlan, commonUsers } from '../../lib/commonEdit.js'
+import path from 'path'
+import { planCreate, planDelete, applyPlan, originsOf } from '../../lib/commonEdit.js'
+import { resolveStack, stackValues } from '../../lib/stack.js'
+import { walk } from '../../repo/walk.js'
+import { openRepo } from '../../repo/openRepo.js'
+import { loadDeployment } from '../../repo/deployment.js'
 import { z } from 'zod'
 import { linkOnTheWay } from '../../repo/paths.js'
 import { withoutPath } from '../../lib/answerPaths.js'
@@ -27,6 +32,30 @@ const APPLY_BODY = z.object({
 const USERS_QUERY = z.object({
   path: z.preprocess(v => (v === '' ? undefined : v), repoPath('list', { what: 'path' }).optional()),
 })
+
+/**
+ * The deployments that inherit from the `_common` at `commonRel`, for its
+ * page: each with, per group, how many rows it deploys and where they come
+ * from (its own file, a `_common`, or the Template) — its values as Helm
+ * renders them (repo/deployment.js). One whose own values cannot be read
+ * shows what the `_common`s give it.
+ */
+async function commonUsers(gitopsDir, commonRel) {
+  const repo = openRepo(gitopsDir)
+  const out = []
+  for (const d of await walk(repo)) {
+    if (d.kind !== 'deployment') continue
+    const stack = await resolveStack(gitopsDir, path.join(gitopsDir, d.rel), { repo })
+    const at = stack.layers.findIndex(l => l.path === commonRel)
+    if (at < 0) continue
+    const dep = await loadDeployment(repo, d.rel)
+    const values = dep.state === 'ok'
+      ? { own: dep.value.bare, layers: dep.value.layers, merged: dep.value.effective }
+      : stackValues(stack, { own: {} })
+    out.push({ path: d.rel, direct: at === 0, groups: originsOf(values, stack.groups).groups })
+  }
+  return out
+}
 
 export function commonRoutes(router) {
   // A folder's _common (#101): what making or removing one changes, listed

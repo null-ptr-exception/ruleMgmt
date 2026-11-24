@@ -1,5 +1,5 @@
-// The display pin: what each place that shows a deployment's alert count or
-// values shows (the folder tree, the deployment list, the Sync dialogs' list,
+// The display pin: what each place that shows a deployment's alert count,
+// values or marks shows (the folder tree, the deployment list, the Sync dialogs' list,
 // the rule owner page, Preview's summary, a _common's users), on every input
 // of the deployment-values pin, next to what real Helm deploys from the same
 // files. This module records; the test (display.pin.test.js, through
@@ -126,7 +126,8 @@ export async function runRow(ws, c) {
   // the same state (Preview's `helm dependency update` writes only what the
   // repo ignores).
 
-  // The folder tree: the deployment's node and its alertCount.
+  // The folder tree: the deployment's node and how it is marked (the tree
+  // shows no count).
   await record('tree', async () => {
     const parent = path.posix.dirname(dep)
     const res = await api('GET', `/api/v2/folders/tree?path=${encodeURIComponent(parent)}`)
@@ -134,7 +135,7 @@ export async function runRow(ws, c) {
     const marks = node ? ['problems', 'unreadable', 'noValues', 'nestedIn'].filter(k => node[k]) : []
     return {
       cls: res.status >= 400 ? cls(res) : !node ? 'absent' : node.isDeployment ? 'ok' : 'not-deployment',
-      status: res.status, rows: node ? shown(node.alertCount) : '-', mark: marks.join(',') || '-',
+      status: res.status, rows: 'n/a', mark: marks.join(',') || '-',
       note: node?.problems?.join(' / ') || res.data?.error, raw: res.text,
     }
   })

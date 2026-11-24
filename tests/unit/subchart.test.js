@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
-import { getDepName, wrapValues, unwrapValues, countAlerts } from '../../server/lib/subchart.js'
+import { getDepName, wrapValues, unwrapValues } from '../../server/lib/subchart.js'
 
 const BARE = {
   _common: { owner: 'app-a', namespace: 'prod' },
@@ -54,25 +54,6 @@ describe('subchart helper', () => {
 
     it('round-trips: unwrap(wrap(x)) === x', () => {
       expect(unwrapValues(wrapValues(BARE, 'mariadb-alerts'), 'mariadb-alerts')).toEqual(BARE)
-    })
-  })
-
-  describe('countAlerts', () => {
-    it('counts top-level arrays after unwrapping wrapped values', () => {
-      expect(countAlerts({ 'mariadb-alerts': BARE }, 'mariadb-alerts')).toBe(3)
-    })
-
-    it('counts legacy bare values (dep key absent)', () => {
-      expect(countAlerts(BARE, 'mariadb-alerts')).toBe(3)
-    })
-
-    it('ignores non-array keys such as _common', () => {
-      expect(countAlerts({ 'mariadb-alerts': { _common: { x: 1 }, a: [{}, {}] } }, 'mariadb-alerts')).toBe(2)
-    })
-
-    it('returns 0 for empty values', () => {
-      expect(countAlerts({}, 'mariadb-alerts')).toBe(0)
-      expect(countAlerts(null, null)).toBe(0)
     })
   })
 })

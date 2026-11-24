@@ -35,7 +35,7 @@
 # cpu:
 #   - job: f
 id	kind	entry	cls	status	file	leak	written	fs	helm	helmExit	alerts	copy	appValue	vsHelm
-plain	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+plain	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 plain	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 plain	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 plain	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -45,7 +45,7 @@ plain	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments/w/d/templat
 plain	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 plain	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 plain	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-deep	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+deep	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 deep	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 deep	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 deep	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -55,7 +55,7 @@ deep	W	sync-to	ok	200	-	no	deployments/w/n1/n2/n3/d/routing.yaml,deployments/w/n
 deep	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 deep	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 deep	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-top-level	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+top-level	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 top-level	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 top-level	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 top-level	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -65,7 +65,7 @@ top-level	W	sync-to	ok	200	-	no	sync.yaml,w/routing.yaml,w/templates/alertmanage
 top-level	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 top-level	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 top-level	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-inside-deployment	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1 nestedIn=deployments/t/a	
+inside-deployment	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	nestedIn=deployments/t/a	
 inside-deployment	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 inside-deployment	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 inside-deployment	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -75,7 +75,7 @@ inside-deployment	W	sync-to	ok	200	-	no	deployments/t/a/inner/routing.yaml,deplo
 inside-deployment	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 inside-deployment	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 inside-deployment	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-inside-deployment-templates	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1 nestedIn=deployments/t/a	
+inside-deployment-templates	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	nestedIn=deployments/t/a	
 inside-deployment-templates	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 inside-deployment-templates	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 inside-deployment-templates	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -95,7 +95,7 @@ in-common-folder	W	sync-to	refused	400	deployments/s/_common/d	no	-	folder	rende
 in-common-folder	W	sync-from	refused	400	deployments/s/_common/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 in-common-folder	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 in-common-folder	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-under-common-stack	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+under-common-stack	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 under-common-stack	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 under-common-stack	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 under-common-stack	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -105,7 +105,7 @@ under-common-stack	W	sync-to	ok	200	-	no	deployments/s/y/Chart.yaml,deployments/
 under-common-stack	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 under-common-stack	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 under-common-stack	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-common-two-levels	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+common-two-levels	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 common-two-levels	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 common-two-levels	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 common-two-levels	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -115,8 +115,8 @@ common-two-levels	W	sync-to	ok	200	-	no	deployments/s/deeper/z/routing.yaml,depl
 common-two-levels	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 common-two-levels	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 common-two-levels	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-common-chart-link-gone	W	tree	deployment	200	-	no	-	folder	renders-empty	0	0	-	alertCount=0	
-common-chart-link-gone	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=0	
+common-chart-link-gone	W	tree	deployment	200	-	no	-	folder	renders-empty	0	0	-	-	
+common-chart-link-gone	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=null	
 common-chart-link-gone	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found problems=1	
 common-chart-link-gone	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
 common-chart-link-gone	W	preview	refused	200	deployments/s/x	no	-	folder	renders-empty	0	0	-	-	
@@ -125,7 +125,7 @@ common-chart-link-gone	W	sync-to	ok	200	-	no	deployments/s/x/Chart.yaml,deployme
 common-chart-link-gone	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders-empty	0	0	copy	-	
 common-chart-link-gone	W	commit	refused	409	deployments/s/x	no	-	folder	renders-empty	0	0	-	template-missing	
 common-chart-link-gone	W	check-repo	refused	exit 1	deployments/s/x/Chart.yaml	no	-	folder	renders-empty	0	0	-	refuse:stack.template-missing	
-name-dots	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+name-dots	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 name-dots	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 name-dots	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-dots	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -135,7 +135,7 @@ name-dots	W	sync-to	ok	200	-	no	deployments/w/d.v1/routing.yaml,deployments/w/d.
 name-dots	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 name-dots	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 name-dots	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-name-dash-underscore	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+name-dash-underscore	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 name-dash-underscore	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 name-dash-underscore	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-dash-underscore	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -145,7 +145,7 @@ name-dash-underscore	W	sync-to	ok	200	-	no	deployments/w/my_dep-2/routing.yaml,d
 name-dash-underscore	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 name-dash-underscore	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 name-dash-underscore	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-name-space	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+name-space	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 name-space	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 name-space	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-space	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -155,7 +155,7 @@ name-space	W	sync-to	ok	200	-	no	deployments/w/my dep/routing.yaml,deployments/w
 name-space	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 name-space	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 name-space	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-name-non-ascii	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+name-non-ascii	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 name-non-ascii	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 name-non-ascii	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-non-ascii	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -165,7 +165,7 @@ name-non-ascii	W	sync-to	ok	200	-	no	deployments/w/部署/routing.yaml,deploymen
 name-non-ascii	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 name-non-ascii	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 name-non-ascii	W	check-repo	refused	exit 1	deployments/w/部署	no	-	folder	renders	0	1	-	refuse:deployment.render	refuses-what-helm-renders
-name-uppercase	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+name-uppercase	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 name-uppercase	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 name-uppercase	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-uppercase	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -175,7 +175,7 @@ name-uppercase	W	sync-to	ok	200	-	no	deployments/w/Prod/routing.yaml,deployments
 name-uppercase	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 name-uppercase	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 name-uppercase	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-hidden-folder	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+hidden-folder	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 hidden-folder	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 hidden-folder	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 hidden-folder	W	routing-get	absent	400	deployments/.w	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
@@ -195,7 +195,7 @@ hidden-deployment	W	sync-to	refused	400	deployments/w/.d	no	-	folder	renders	0	1
 hidden-deployment	W	sync-from	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 hidden-deployment	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 hidden-deployment	W	check-repo	listed	exit 0	deployments/w/.d	no	-	folder	renders	0	1	-	warn:walk.hidden	
-node-modules	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+node-modules	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 node-modules	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 node-modules	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 node-modules	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -255,7 +255,7 @@ link-self-loop	W	sync-to	unreadable	409	deployments/w	no	-	link	fails	1	-	-	-
 link-self-loop	W	sync-from	refused	400	deployments/w/self	no	-	link	fails	1	-	-	-	
 link-self-loop	W	commit	listed	200	deployments/w/self	no	-	link	fails	1	-	-	listed	
 link-self-loop	W	check-repo	cannot-check	exit 2	deployments/w/self	no	-	link	fails	1	-	-	refuse:walk.link-circle	
-charts-link-inside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+charts-link-inside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 charts-link-inside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 charts-link-inside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 charts-link-inside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -265,7 +265,7 @@ charts-link-inside	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployment
 charts-link-inside	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 charts-link-inside	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 charts-link-inside	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-chart-link-inside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
+chart-link-inside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
 chart-link-inside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 chart-link-inside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 chart-link-inside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -275,8 +275,8 @@ chart-link-inside	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments
 chart-link-inside	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 chart-link-inside	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 chart-link-inside	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-values-link-outside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
-values-link-outside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+values-link-outside	W	tree	unreadable	200	-	no	-	folder	renders	0	1	-	unreadable=its values.yaml cannot be read (it is a link that leads outside the repo)	
+values-link-outside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=null	count-differs
 values-link-outside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found problems=1	
 values-link-outside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 values-link-outside	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -285,7 +285,7 @@ values-link-outside	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deploymen
 values-link-outside	W	sync-from	unreadable	409	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 values-link-outside	W	commit	refused	409	deployments/w/d	no	-	folder	renders	0	1	-	values-unreadable	refuses-what-helm-renders
 values-link-outside	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	refuse:values.unreadable	refuses-what-helm-renders
-nested-two-deep	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1 nestedIn=deployments/t/a	
+nested-two-deep	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	nestedIn=deployments/t/a	
 nested-two-deep	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
 nested-two-deep	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 nested-two-deep	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
@@ -295,8 +295,8 @@ nested-two-deep	W	sync-to	ok	200	-	no	deployments/t/a/n/inner/routing.yaml,deplo
 nested-two-deep	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
 nested-two-deep	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
 nested-two-deep	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
-layer-chart-null	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	alertCount=1	
-layer-chart-null	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
+layer-chart-null	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	-	
+layer-chart-null	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=null	
 layer-chart-null	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found	
 layer-chart-null	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 layer-chart-null	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
@@ -345,7 +345,7 @@ chart-no-dependencies	W	sync-to	refused	400	deployments/w/d	no	-	folder	renders-
 chart-no-dependencies	W	sync-from	refused	400	deployments/w/d	no	-	folder	renders-empty	0	0	-	-	
 chart-no-dependencies	W	commit	listed	200	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	listed	
 chart-no-dependencies	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	refuse:walk.values-no-template	
-chart-template-gone	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	alertCount=1	
+chart-template-gone	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	-	
 chart-template-gone	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
 chart-template-gone	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-template-gone	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
@@ -355,8 +355,8 @@ chart-template-gone	W	sync-to	ok	200	-	no	deployments/w/d/Chart.yaml,deployments
 chart-template-gone	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	fails	1	-	source-fails	-	accepts-what-helm-fails
 chart-template-gone	W	commit	refused	409	deployments/w/d	no	-	folder	fails	1	-	-	template-missing	
 chart-template-gone	W	check-repo	refused	exit 1	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	refuse:deployment.template-missing	
-chart-two-templates	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
-chart-two-templates	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+chart-two-templates	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+chart-two-templates	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=null	count-differs
 chart-two-templates	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 chart-two-templates	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 chart-two-templates	W	preview	refused	200	deployments/w/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
@@ -425,8 +425,8 @@ values-only	W	sync-to	refused	400	deployments/w/d	no	-	folder	no-chart	-	-	-	-
 values-only	W	sync-from	refused	400	deployments/w/d	no	-	folder	no-chart	-	-	-	-	
 values-only	W	commit	ok	200	-	no	-	folder	no-chart	-	-	-	-	
 values-only	W	check-repo	ok	exit 0	-	no	-	folder	no-chart	-	-	-	-	
-values-yaml11	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	alertCount=1	
-values-yaml11	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
+values-yaml11	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	-	
+values-yaml11	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=null	
 values-yaml11	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found problems=1	
 values-yaml11	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
@@ -435,7 +435,7 @@ values-yaml11	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments/w/d
 values-yaml11	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
 values-yaml11	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	fails	1	-	-	refuse:yaml.read-differently,refuse:values.schema,refuse:deployment.render	
-values-is-folder	W	tree	deployment	200	-	no	-	folder	renders-empty	0	0	-	alertCount=0	
+values-is-folder	W	tree	unreadable	200	-	no	-	folder	renders-empty	0	0	-	unreadable=its values.yaml cannot be read (it is a folder, not a file)	
 values-is-folder	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=null	
 values-is-folder	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found problems=1	
 values-is-folder	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	

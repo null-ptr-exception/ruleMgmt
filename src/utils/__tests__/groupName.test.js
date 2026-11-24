@@ -8,6 +8,8 @@ import { generateProducts } from '../drift.js'
 import { groupNameChanges, describeChange } from '../schemaCompat.js'
 import { importRules, modelGroupFromImport } from '../ruleImport.js'
 import { summarizeGroups, tallyRendered } from '../renderSummary.js'
+// Helm's output is read once, on the server; the summary takes it read.
+import { renderedDocuments } from '../../../server/lib/ruleCheck.js'
 import { generateHelmUnittestSuite } from '../helmTestGenerator.js'
 
 const RULES = 'columns:\n  db: { type: string, required: true }\nrules:\n  - alert: CpuHigh\n    expr: cpu{db="${db}"} > 1\n'
@@ -196,10 +198,10 @@ describe('import', () => {
 })
 
 describe('Preview\'s summary', () => {
-  const rendered = tallyRendered(yaml.dump({
+  const rendered = tallyRendered(renderedDocuments(yaml.dump({
     apiVersion: 'monitoring.coreos.com/v1', kind: 'PrometheusRule', metadata: { name: 'r-cpu-1-1' },
     spec: { groups: [{ name: 'MariaDB CPU', rules: [{ alert: 'CpuHigh', expr: 'up', labels: { severity: 'warning' } }] }] },
-  }))
+  })))
 
   it('finds a group by the name it renders as', () => {
     const { groups, unmatchedGroups } = summarizeGroups({
@@ -231,7 +233,7 @@ describe('the generated helm-unittest suite', () => {
 // as Kubernetes reads it, not a date.
 describe('Preview\'s summary reading a date-like name', () => {
   it('finds the group by its text', () => {
-    const rendered = tallyRendered('apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata: { name: r-d-1-1 }\nspec:\n  groups:\n    - name: 2026-11-22\n      rules:\n        - alert: A\n          expr: up\n')
+    const rendered = tallyRendered(renderedDocuments('apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata: { name: r-d-1-1 }\nspec:\n  groups:\n    - name: 2026-11-22\n      rules:\n        - alert: A\n          expr: up\n'))
     expect([...rendered.byGroup.keys()]).toEqual(['2026-11-22'])
     const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible: { d: [{ alert: 'A', severity: '' }] }, groupRows: { d: 1 }, schema: null, names: { d: '2026-11-22' } })
     expect(groups[0]).toMatchObject({ name: '2026-11-22', state: 'ok' })
@@ -249,7 +251,7 @@ describe('Preview\'s summary reading a date-like name', () => {
 // helm template's `# Source:` lines, so each is counted from its own file.
 describe('Preview\'s summary with two templates rendering one group name', () => {
   const doc = (source, alert) => `---\n# Source: dep/charts/demo/templates/${source}\napiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata: { name: r }\nspec:\n  groups:\n    - name: Infra\n      rules:\n        - alert: ${alert}\n          expr: up\n`
-  const rendered = tallyRendered(doc('disk.yaml', 'DiskFull') + doc('foo.yaml', 'FooDown') + doc('foo.yaml', 'FooDown').replace(/^# Source.*\n/m, ''))
+  const rendered = tallyRendered(renderedDocuments(doc('disk.yaml', 'DiskFull') + doc('foo.yaml', 'FooDown') + doc('foo.yaml', 'FooDown').replace(/^# Source.*\n/m, '')))
 
   it('counts the generated group from its own template only, and leaves the other unmatched', () => {
     const { groups, unmatchedGroups } = summarizeGroups({

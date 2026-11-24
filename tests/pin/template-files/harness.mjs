@@ -372,11 +372,10 @@ export async function runRow(ws, c) {
   await record('preview', async () => {
     const res = await api('POST', `/api/v2/render/${enc}/d?folder=${encodeURIComponent(dep)}`)
     const d = res.data || {}
-    said.preview = d.ok ? d.drift?.state : '?'
     const cls = typeof res.status !== 'number' || res.status >= 500 ? 'error' : res.status >= 400 ? 'refused' : !d.ok ? 'refused' : d.check && !d.check.passed ? 'refused' : (d.valueWarnings?.length ? 'listed' : 'ok')
     // Helm's own message (it starts "Error:") is worded differently by each
     // Helm version: the file it names is not pinned.
-    return { cls, status: res.status, file: /^Error:/.test(String(d.error || '')) ? 'helm-message' : firstPath(d.error), note: d.ok ? `check ${d.check?.passed ? 'passed' : 'failed'}` : String(d.error || res.text).split('\n').filter(Boolean).pop(), appValue: d.ok ? `alerts=${d.summary?.total ?? '?'} drift=${d.drift?.state}` : '-', raw: res.text }
+    return { cls, status: res.status, file: /^Error:/.test(String(d.error || '')) ? 'helm-message' : firstPath(d.error), note: d.ok ? `check ${d.check?.passed ? 'passed' : 'failed'}` : String(d.error || res.text).split('\n').filter(Boolean).pop(), appValue: d.ok ? `alerts=${d.summary?.total ?? '?'}` : '-', raw: res.text }
   })
   await record('commit', async () => {
     await fs.writeFile(path.join(root, 'marker.txt'), c.id)
@@ -415,7 +414,7 @@ export async function runRow(ws, c) {
   // so says it: they are one question, so they give one answer.
   await record('products-current', async () => {
     const as = s => (s === 'ok' || s === 'empty' ? 'current' : s === 'stale' || s === 'missing' || s === 'behind' ? 'behind' : s === 'legacy' ? 'legacy' : '?')
-    const answers = { open: as(said.open), preview: as(said.preview), commit: as(said.commit), 'gen-rules': as(said.genRules), 'gen-chart': as(said.genChart) }
+    const answers = { open: as(said.open), commit: as(said.commit), 'gen-rules': as(said.genRules), 'gen-chart': as(said.genChart) }
     const known = Object.values(answers).filter(a => a !== '?')
     const all = Object.entries(answers).map(([k, v]) => `${k}=${v}`).join(' ')
     return { cls: new Set(known).size <= 1 ? 'same' : 'differ', status: '-', appValue: all, note: all }

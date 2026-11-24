@@ -129,7 +129,7 @@ describe.skipIf(!HAS_HELM)('what Helm renders from a stack', () => {
 describe.skipIf(!HAS_HELM)('Preview', () => {
   it('opens the Template from the tree, and renders under its name', async () => {
     const node = (await api('GET', '/api/v2/folders/tree?path=shop')).data.find(n => n.name === 'own')
-    expect(node).toMatchObject({ isDeployment: true, chart: CHART, alertCount: 1 })
+    expect(node).toMatchObject({ isDeployment: true, chart: CHART })
     const { data } = await api('POST', `/api/v2/render/${node.chart}/own${q('shop/own')}`)
     expect(data.ok).toBe(true)
     expect(data.output).toContain(`name: ${CHART}-own-`)

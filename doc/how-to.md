@@ -646,6 +646,9 @@ group produced, by alert name and severity. It also points out:
 - a group marked *once per deployment*, which needs no rows; recording rules
   are counted next to the alerts, not in the total
 - a group with rows but no alerts, usually a blank cell that drops a rule
+- an alert of the group that no row produced, greyed with a count of 0; one
+  whose severity each row gives (`severity: ${severity}`) is listed only when
+  no row produced it at all, without a severity
 - value fields the template no longer has, left over from an older version of
   the chart
 - for a group with derived values, each row's values (`21m`, `60m`) as Helm
@@ -873,7 +876,10 @@ copied to it.
   depends on what the source's does, with the `file://` path worked out from
   where the target is, so a target in a deeper or shallower folder renders
   too. A target on another Template is moved onto the source's, and its own
-  alert rows go; the dialog says so, with how many, before you confirm. A
+  alert rows go; the dialog says so, with how many, before you confirm. The
+  number is the rows Helm deploys for it now (those it inherits from a
+  `_common` too); it gives none when Helm stops on its values or they cannot
+  be read. A
   sync made before this, to a target on another Template, is moved at the
   next save of the source; **Sync to...** marks such a target the same way.
 - The target inherits what the source inherits: on a source under a

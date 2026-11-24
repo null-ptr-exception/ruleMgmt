@@ -216,3 +216,48 @@ rules:
     await expect(rows.filter({ hasText: 'critical' }).locator('td').last()).toHaveText('0')
   })
 })
+
+// A severity each row gives (`severity: ${severity}`): Helm renders the
+// row's value, so no faded row with the placeholder and a 0 is listed.
+test.describe('Preview summary — a severity each row gives', () => {
+  const SCHART = 'e2e-preview-row-severity'
+  const FOLDER = `deployments/${SCHART}/dev`
+  const CPU = `group: cpu
+columns:
+  namespace: {type: string, required: true}
+  severity: {type: string, default: warning, enum: [warning, critical]}
+rules:
+  - alert: CpuHigh
+    expr: cpu{ns="\${namespace}"} > 1
+    labels: {severity: "\${severity}"}
+`
+
+  test.beforeAll(async ({ request }) => {
+    await removeChart(request, SCHART)
+    expect((await request.post('/api/v2/charts', { data: { name: SCHART } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/templates/${SCHART}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
+    expect((await request.post('/api/v2/folders/init', { data: { folder: FOLDER, chart: SCHART } })).status()).toBeLessThan(300)
+    const save = await request.post(`/api/v2/deployments/${SCHART}/dev?folder=${FOLDER}`, {
+      data: { values: { cpu: [{ namespace: 'a' }, { namespace: 'b', severity: 'critical' }] } },
+    })
+    expect(save.status()).toBeLessThan(300)
+  })
+
+  test.afterAll(async ({ request }) => {
+    await removeChart(request, SCHART)
+  })
+
+  test('lists each severity the rows rendered, and no row for the placeholder', async ({ page }) => {
+    await selectDeployment(page, ['deployments', SCHART, 'dev'])
+    await page.getByText('cpu', { exact: true }).first().click()
+    await page.getByRole('button', { name: 'Preview' }).click()
+
+    const modal = page.getByRole('dialog')
+    await expect(modal.getByText('2 alerts total')).toBeVisible({ timeout: 15000 })
+    const rows = modal.locator('tr').filter({ hasText: 'CpuHigh' })
+    await expect(rows).toHaveCount(2)
+    await expect(rows.filter({ hasText: 'warning' }).locator('td').last()).toHaveText('1')
+    await expect(rows.filter({ hasText: 'critical' }).locator('td').last()).toHaveText('1')
+    await expect(modal.getByText('${severity}')).toHaveCount(0)
+  })
+})

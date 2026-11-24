@@ -2,16 +2,16 @@ import express from 'express'
 import path from 'path'
 import { readTemplate } from '../lib/chartFiles.js'
 import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
-import { resolveStack, mergeValues } from '../lib/stack.js'
+import { resolveStack } from '../lib/stack.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment } from '../repo/deployment.js'
 import { findingsOf, NotLoadedError } from '../repo/loaded.js'
 import { decide, explain } from '../repo/policy.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
-import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
+import { selfCheckRendered, tallyRendered, summarizeGroups, possibleAlerts } from '../../src/utils/renderSummary.js'
 import { derivedTable, groupName } from '../../src/utils/rulesFile.js'
 import { logger } from '../lib/logger.js'
-import { checkRules, renderChart } from '../lib/ruleCheck.js'
+import { checkRules, renderChart, renderedDocuments } from '../lib/ruleCheck.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { route, declaredRoutes } from '../http/route.js'
 import { UnreadableError } from '../lib/readIfThere.js'
@@ -23,29 +23,21 @@ import { LEGACY_VALUES_SUFFIX } from '../repo/paths.js'
 // of the template's alerts produced nothing, and whether a group is empty
 // (no rows) versus filled-but-silent (rows, zero alerts). Plus any value keys
 // the schema no longer has — orphans left by a migration that didn't finish.
-async function buildSummary(renderedYaml, { model, schema }, readValues, readDefaults = async () => ({})) {
-  let rendered
-  try {
-    rendered = tallyRendered(renderedYaml)
-  } catch {
-    return null
-  }
+// `output`: Helm's output as renderedDocuments read it; `values`: what the
+// Template sees as .Values (the repo loader's `effective`).
+async function buildSummary(output, { model, schema }, readValues) {
+  const rendered = tallyRendered(output)
 
   // Possible (alert, severity) pairs per group key, from the chart's rules/
   // (or a legacy schema through the upgrade adapter). With no schema yet there
   // is no possible-alert list and no orphan check.
-  const possible = {}
-  for (const [key, g] of Object.entries(model?.groups || {})) {
-    possible[key] = (g.rules || [])
-      .filter(r => r.alert)
-      // A rule without its own severity takes its group's labels' (#182).
-      .map(r => ({ alert: r.alert, severity: r.labels?.severity ?? g.labels?.severity ?? '' }))
-  }
+  const possible = possibleAlerts(model)
 
   const schemaGroups = new Set(schema ? Object.keys(schema.properties || {}).filter(isAlertGroup) : [])
   const commonSchemaProps = new Set(Object.keys(getCommonSchema(schema)?.properties || {}))
 
-  const groupRows = {}
+  // Keyed by the deployment's values keys, which may be any name.
+  const groupRows = Object.create(null)
   const orphanFields = new Set()
   const values = await readValues()
   if (values) {
@@ -57,7 +49,7 @@ async function buildSummary(renderedYaml, { model, schema }, readValues, readDef
       if (!Array.isArray(v)) continue
       groupRows[k] = v.length
       if (schema && !schemaGroups.has(k)) { orphanFields.add(k); continue }
-      const groupFields = new Set(Object.keys(schema?.properties?.[k]?.items?.properties || {}))
+      const groupFields = new Set(Object.keys((schema?.properties && Object.hasOwn(schema.properties, k) ? schema.properties[k] : null)?.items?.properties || {}))
       if (schema) for (const row of v) for (const f of Object.keys(row || {})) if (!groupFields.has(f)) orphanFields.add(f)
     }
   }
@@ -69,7 +61,7 @@ async function buildSummary(renderedYaml, { model, schema }, readValues, readDef
   // Each row's derived values (#118), computed as the save check computes
   // them, from what Helm reads: the Template's values.yaml under the
   // deployment's (its Common Values too), on a stack what the layers add.
-  const derived = model && values ? derivedTable(mergeValues(await readDefaults(), values), model) : {}
+  const derived = model && values ? derivedTable(values, model) : {}
   const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema, types, onceGroups, derived, names })
   return { total: rendered.total, groups, unmatchedGroups, orphanFields: [...orphanFields] }
 }
@@ -112,7 +104,7 @@ export default function renderRouter() {
       const output = await renderChart(templateDir, templateArgs)
       let check = await checkRules(output)
       // The Template's files, read once: its model for the summary and the
-      // self-check, the drift, and what Helm renders other than written
+      // self-check, and what Helm renders other than written
       // (a generated file missing, a partial holding rules, rules repeated)
       // said with the check. A Template that cannot be read renders all the
       // same (Helm said so): shown without them.
@@ -120,7 +112,7 @@ export default function renderRouter() {
       try {
         tmpl = await readTemplate(gitopsDir, template)
       } catch (err) {
-        // Optional, like the summary and drift below: Helm rendered, so a
+        // Optional, like the summary below: Helm rendered, so a
         // Template AlertForge cannot read (or a fault reading it) does not
         // turn the render into { ok: false }.
         if (err instanceof UnreadableError) logger.warn({ err, chart: template, deployment }, 'the Template cannot be read, rendering without its model')
@@ -132,17 +124,24 @@ export default function renderRouter() {
         const said = templateProblems.map(f => f.message).join('\n')
         check = { ...check, passed: false, output: check.output ? `${said}\n${check.output}` : said }
       }
+      // Helm's output, read once for the self-check and the summary. Output
+      // that is not YAML is promtool's to report: neither is made of it.
+      let rendered = null
+      try {
+        rendered = renderedDocuments(output)
+      } catch (err) {
+        logger.warn({ err, chart: template, deployment }, 'the rendered output is not YAML, showing it without a summary')
+      }
       let selfCheck = null
       try {
-        selfCheck = selfCheckRendered(output, chartModel.fromRules ? chartModel.model : null)
+        selfCheck = selfCheckRendered(rendered ?? { text: output, docs: [] }, chartModel.fromRules ? chartModel.model : null)
       } catch (err) {
         logger.error({ err, chart, deployment }, 'selfCheckRendered failed, skipping the self-check')
       }
-      // Same file the frontend saves: `values.yaml` in folder mode, the legacy
-      // `<deployment>-values.yaml` otherwise. Both are tried; the first that
-      // parses wins. On a `_common` stack, what the layers and the deployment
-      // add up to — and the Template's own values under a group none of them
-      // gives, which Helm renders too.
+      // The file Helm is given: `values.yaml` in folder mode, the legacy
+      // `<deployment>-values.yaml` otherwise. On a `_common` stack, what the
+      // layers and the deployment add up to — and the Template's own values
+      // under a group none of them gives, which Helm renders too.
       // The values as Helm coalesces them (repo/deployment.js): one that
       // cannot be read fails the summary (logged), rather than showing
       // another file's rows. What AlertForge cannot tell Helm renders from a
@@ -155,16 +154,11 @@ export default function renderRouter() {
         valueWarnings = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code) || explain(f, 'preview').action === 'warn').map(f => f.message)
         return dep.value.effective
       }
-      // The values read are what the Template sees, its own values.yaml in them.
-      const readDefaults = async () => ({})
-      const summary = await buildSummary(output, chartModel, readValues, readDefaults).catch(err => {
+      const summary = !rendered ? null : await buildSummary(rendered, chartModel, readValues).catch(err => {
         logger.error({ err, chart: template, deployment }, 'buildSummary failed, falling back to raw YAML')
         return null
       })
-      // The rule owner is looking at products; if they are older than the
-      // chart's rules/ source, what they see here may not be current.
-      const drift = tmpl?.drift ?? null
-      res.json({ ok: true, output, check, selfCheck, summary, drift, ...(valueWarnings.length ? { valueWarnings } : {}) })
+      res.json({ ok: true, output, check, selfCheck, summary, ...(valueWarnings.length ? { valueWarnings } : {}) })
     } catch (err) {
       res.json({ ok: false, error: err.stderr || err.stdout || err.message })
     }

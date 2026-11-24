@@ -1,8 +1,6 @@
 /** The folder tree and the flat list of deployments (sync's dialogs). */
 
-import fs from 'fs/promises'
 import path from 'path'
-import { countAlerts } from '../../lib/subchart.js'
 import { walk, childEntries } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { resolveStack } from '../../lib/stack.js'
@@ -10,7 +8,7 @@ import { folderCommonOf, folderCommons, inheritsFromOf } from '../../lib/commonE
 import { z } from 'zod'
 import { isName } from '../../repo/paths.js'
 import { route, repoPath } from '../../http/route.js'
-import { loadValues } from '../../../src/utils/valuesText.js'
+import { loadDeployment, deployedRows } from '../../repo/deployment.js'
 
 // One level of the tree: the walk's own folders (repo/walk.js), each with
 // what the tree shows of it.
@@ -26,7 +24,7 @@ async function listChildren(baseDir, parentPath) {
     if (e.kind === 'common') {
       node.isCommon = true
       // The Template it is for, which its page opens (#101).
-      const stack = await resolveStack(baseDir, absPath)
+      const stack = await resolveStack(baseDir, absPath, { repo })
       node.chart = stack.chart || stack.claims || e.name
       if (stack.problems.length) node.problems = stack.problems.map(p => p.description)
     }
@@ -34,22 +32,23 @@ async function listChildren(baseDir, parentPath) {
     // counted as using its Template (a breaking change, a chart's delete).
     if (e.chartOnly) {
       node.noValues = true
-      node.chart = (await resolveStack(baseDir, absPath)).chart || (await repo.helmYaml(`${nodePath}/Chart.yaml`)).value.dependencies[0]?.name
+      node.chart = (await resolveStack(baseDir, absPath, { repo })).chart || (await repo.helmYaml(`${nodePath}/Chart.yaml`)).value.dependencies[0]?.name
     }
     if (e.kind === 'deployment') {
       node.isDeployment = true
+      // Its values as Helm reads them (repo/deployment.js): one Helm cannot
+      // read is marked, as a folder that cannot be read is.
+      const dep = await loadDeployment(repo, nodePath)
+      if (dep.state === 'unreadable') node.unreadable = `its values.yaml cannot be read (${dep.why})`
+      else if (dep.state === 'invalid') node.unreadable = `its values.yaml cannot be used (${dep.findings.map(f => f.message).join('; ')})`
       // The Template at the bottom of its `_common` stack (#100), which
       // Preview and the editor open: not the `_common` chart it names.
-      const stack = await resolveStack(baseDir, absPath)
+      const stack = dep.state === 'ok' ? dep.value.stack : await resolveStack(baseDir, absPath, { repo })
       node.chart = stack.chart || (await repo.helmYaml(`${nodePath}/Chart.yaml`)).value.dependencies[0].name
       // The _common it renders on, and the one its folder has (#103): a sync
       // target follows its source's, which may be another.
       node.inheritsFrom = inheritsFromOf(stack)
       node.folderCommon = await folderCommonHere(stack.chart || stack.claims)
-      try {
-        const valuesYaml = await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')
-        node.alertCount = countAlerts(loadValues(valuesYaml) || {}, stack.keys.length ? stack.keys : node.chart)
-      } catch { node.alertCount = 0 }
       // Where no new deployment can be made (inside another, inside a
       // _common folder): still shown and used, and flagged.
       if (e.nestedIn) node.nestedIn = e.nestedIn
@@ -76,22 +75,17 @@ async function collectDeployments(baseDir, chartFor = null) {
   const repo = openRepo(baseDir)
   for (const e of await walk(repo)) {
     if (e.kind !== 'deployment') continue
-    const d = { path: e.rel }
-    const absPath = path.join(baseDir, d.path)
-    let chart = null
-    // null when values.yaml cannot be read: unknown, not none.
-    let alertCount = null
-    let inheritsFrom = null
-    let folderCommon = null
-    try {
-      const stack = await resolveStack(baseDir, absPath)
-      chart = stack.chart
-      inheritsFrom = inheritsFromOf(stack)
-      folderCommon = await folderCommonOf(baseDir, d.path, chartFor || chart || stack.claims, repo)
-      const valuesYaml = loadValues(await fs.readFile(path.join(absPath, 'values.yaml'), 'utf-8')) || {}
-      alertCount = countAlerts(valuesYaml, stack.keys)
-    } catch { /* leave defaults */ }
-    results.push({ name: path.basename(d.path), path: d.path, chart, alertCount, inheritsFrom, folderCommon })
+    // Its values as Helm renders them (repo/deployment.js): the rows it
+    // deploys, null when that cannot be said (unreadable, Helm stops on it).
+    const dep = await loadDeployment(repo, e.rel)
+    const stack = dep.state === 'ok' ? dep.value.stack : await resolveStack(baseDir, path.join(baseDir, e.rel), { repo })
+    results.push({
+      path: e.rel,
+      chart: stack.chart,
+      alertCount: deployedRows(dep),
+      inheritsFrom: inheritsFromOf(stack),
+      folderCommon: await folderCommonOf(baseDir, e.rel, chartFor || stack.chart || stack.claims, repo),
+    })
   }
   return results
 }

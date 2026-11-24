@@ -182,3 +182,25 @@ async function build(repo, rel, { chart, next }) {
   if (!merged.unsure.length) findings.push(...valueFindings(dep, { every: !!next?.every }))
   return ok(dep, findings)
 }
+
+/**
+ * The alert rows a loaded deployment deploys, as Helm renders them: the
+ * rows of each of the Template's groups in what the Template sees (its own
+ * values over each `_common`'s over the Template's defaults), 0 when its
+ * dependency is not rendered, null when Helm stops on it or AlertForge
+ * cannot tell what Helm makes of it. `dep` is loadDeployment's answer.
+ */
+export function deployedRows(dep) {
+  if (dep.state !== 'ok') return null
+  if (dep.findings.some(f => f.helm === 'fails' || f.helm === 'unknown')) return null
+  if (dep.findings.some(f => f.code === 'stack.stack-off')) return 0
+  const { effective, model } = dep.value
+  const groups = model?.groups
+  let rows = 0
+  for (const [k, v] of Object.entries(effective ?? {})) {
+    if (k === '_common' || !Array.isArray(v)) continue
+    if (groups && !(Object.hasOwn(groups, k) && !groups[k].once)) continue
+    rows += v.length
+  }
+  return rows
+}

@@ -32,6 +32,36 @@ export function runCommand(command, args, options = {}) {
   })
 }
 
+// Helm writes `# Source: <chart>/templates/<file>` above each document of
+// `helm template`: which template rendered it. A template that emits several
+// documents gets one Source line, above the first: the ones after it are its too.
+const SOURCE_RE = /^# Source: (.+)$/m
+
+/**
+ * Helm's output, read once: `{ text, docs: [{ doc, source }] }`, every
+ * document (null ones left out) with the template that rendered it (null
+ * without a Source line). As text, never a date: Kubernetes keeps
+ * `2026-11-22` as the text it is (js-yaml's default schema would make it a
+ * Date). Throws on text that is not YAML.
+ */
+export function renderedDocuments(text) {
+  const all = String(text ?? '')
+  let last = null
+  const parts = all.split(/^---[ \t]*$/m).map(chunk => {
+    const own = SOURCE_RE.exec(chunk)?.[1]?.trim()
+    if (own) last = own
+    return { chunk, source: last }
+  })
+  // Without a Source line anywhere (not helm template's output), the whole
+  // text as one: a parse error then is reported as for any YAML.
+  const chunks = parts.some(p => p.source) ? parts : [{ chunk: all, source: null }]
+  const docs = []
+  for (const { chunk, source } of chunks) {
+    yaml.loadAll(chunk, doc => { if (doc !== null && doc !== undefined) docs.push({ doc, source }) }, { schema: yaml.CORE_SCHEMA })
+  }
+  return { text: all, docs }
+}
+
 // Which checker reads an object is the output profile's call (#65, #76), not
 // a literal kind here: `validate: promtool` (Prometheus 2.x), `promtool3`
 // (Prometheus 3.x) and `vmalert` (MetricsQL and LogsQL) are checked; one marked `none` is
@@ -41,16 +71,16 @@ export function objectsByValidator(renderedYaml, profileOf = profileOfObject) {
   const notes = []
   let unchecked = 0
   // As text, never a date: a name `2026-11-22` reaches the checker as it is.
-  yaml.loadAll(renderedYaml, doc => {
+  for (const { doc } of renderedDocuments(renderedYaml).docs) {
     const profile = profileOf(doc)
-    if (!profile || !Array.isArray(doc?.spec?.groups)) return
+    if (!profile || !Array.isArray(doc?.spec?.groups)) continue
     // A mark no profile writes (by hand, or a newer AlertForge's): said,
     // with what the object was checked as.
     const mark = unknownProfileMark(doc)
     if (mark) notes.push(`${doc.metadata?.name || 'an object'}: annotation ${mark.key} is "${mark.value}", which names no output profile — checked as ${profile.name}${VALIDATORS[profile.validate] ? `, with ${VALIDATORS[profile.validate].label}` : ''}`)
     if (VALIDATORS[profile.validate]) objects.push({ doc, validator: profile.validate })
     else unchecked++
-  }, { schema: yaml.CORE_SCHEMA })
+  }
   return { objects, unchecked, notes }
 }
 

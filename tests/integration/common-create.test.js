@@ -286,6 +286,8 @@ describe.skipIf(!HAS_HELM)('editing a _common', { timeout: 60000 }, () => {
     const users = (await api('GET', `/api/v2/folders/common/users?path=${SHOP}`)).data
     expect(users.map(u => u.path)).toEqual(['shop/prod', 'shop/stg', 'shop/x/dev'])
     expect(users[0].groups[CPU]).toEqual({ from: 'own', rows: 0 })
+    // Only what its page shows: who, how directly, and each group's rows and origin.
+    expect(Object.keys(users[0]).sort()).toEqual(['direct', 'groups', 'path'])
     // A deployment that clears nothing of its own takes the _common's cpu row.
     await api('POST', `/api/v2/deployments/${C}/prod?folder=shop/prod`, { values: { _common: { owner: 'team-prod', namespace: 'p' }, [DISK]: [{ warn_pct: 80, critical_pct: 92 }] } })
     expect((await api('GET', `/api/v2/folders/common/users?path=${SHOP}`)).data[0].groups[CPU]).toEqual({ from: SHOP, rows: 1 })

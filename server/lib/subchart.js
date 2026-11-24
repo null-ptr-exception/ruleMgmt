@@ -43,15 +43,3 @@ export function unwrapPath(parsed, keys) {
   }
   return v
 }
-
-// Count alert-rule entries in a parsed values object, accounting for the
-// subchart wrap: unwrap first, then sum the length of each top-level array.
-// `depName` is the key, or every key of a `_common` stack (#100), outermost first.
-export function countAlerts(parsed, depName) {
-  const values = unwrapPath(parsed || {}, Array.isArray(depName) ? depName : [depName])
-  let count = 0
-  for (const val of Object.values(values || {})) {
-    if (Array.isArray(val)) count += val.length
-  }
-  return count
-}

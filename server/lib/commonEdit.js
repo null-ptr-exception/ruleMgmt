@@ -9,7 +9,6 @@
  *   planDelete   what removing a `_common` changes, or why it cannot be removed
  *   applyPlan    write all of it or nothing, then check that Helm renders
  *                every deployment it touched exactly as it did before
- *   commonUsers  the deployments that inherit from a `_common`, and how much
  *
  * Making one re-attaches what is under the folder: each deployment (or a
  * lower `_common`) whose stack leaves the folder is pointed at the new chart,
@@ -30,7 +29,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { isDeepStrictEqual } from 'util'
 import { createHash } from 'crypto'
-import { resolveStack, readStackValues, stackValues, readChart, wrapPath } from './stack.js'
+import { resolveStack, readChart, wrapPath } from './stack.js'
 import { walk, excludedFolder, isCommonChart, isDeployment } from '../repo/walk.js'
 import { getSourceForTarget, getTargetsForSource, normalizeSyncPath } from './sync.js'
 import { readRegistry } from '../repo/sync.js'
@@ -712,26 +711,6 @@ export async function deploymentOnCommon(gitopsDir, folder, chart) {
     valuesYaml: dump({ [COMMON_CHART]: wrapPath({}, layer.keys) }),
     inheritsFrom: commonRel,
   }
-}
-
-/**
- * The deployments that inherit from the `_common` at `commonRel`, for its
- * page: each with, per group, how many rows it deploys and where they come
- * from (its own file, a `_common`, or the Template), and the Common Values
- * keys it takes from a `_common`.
- */
-export async function commonUsers(gitopsDir, commonRel) {
-  const out = []
-  for (const d of await walk(openRepo(gitopsDir))) {
-    if (d.kind !== 'deployment') continue
-    const abs = path.join(gitopsDir, d.rel)
-    const stack = await resolveStack(gitopsDir, abs)
-    const at = stack.layers.findIndex(l => l.path === commonRel)
-    if (at < 0) continue
-    await readStackValues(gitopsDir, abs, stack)
-    out.push({ path: d.rel, direct: at === 0, ...originsOf(stackValues(stack), stack.groups) })
-  }
-  return out
 }
 
 /**

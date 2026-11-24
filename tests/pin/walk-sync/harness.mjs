@@ -268,7 +268,7 @@ export async function runRow(ws, c) {
     const node = (res.data || []).find(n => n.name === path.posix.basename(folder))
     if (!node) return { cls: 'absent', status: 200, appValue: 'not shown', raw: res.text }
     const cls = node.unreadable ? 'unreadable' : node.isDeployment ? 'deployment' : node.isCommon ? 'common' : node.noValues ? 'chart-only' : 'folder'
-    return { cls, status: 200, appValue: `${node.isDeployment ? `alertCount=${node.alertCount}` : ''}${node.nestedIn ? ` nestedIn=${node.nestedIn}` : ''}${node.inCommon ? ' inCommon' : ''}${node.unreadable ? ` unreadable=${node.unreadable}` : ''}`, raw: res.text }
+    return { cls, status: 200, appValue: [node.nestedIn && `nestedIn=${node.nestedIn}`, node.inCommon && 'inCommon', node.unreadable && `unreadable=${node.unreadable}`].filter(Boolean).join(' '), raw: res.text }
   })
   await record('list', async () => {
     const res = await api('GET', '/api/v2/folders/deployments')

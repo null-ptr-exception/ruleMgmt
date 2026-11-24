@@ -1,13 +1,13 @@
 {
   "lint": {
-    "total": 174,
+    "total": 168,
     "byKind": {
       "childProcess": 1,
-      "fs": 29,
-      "fsUse": 113,
-      "helper": 5,
+      "fs": 28,
+      "fsUse": 111,
+      "helper": 4,
       "yaml": 12,
-      "yamlParse": 14
+      "yamlParse": 12
     },
     "byFile": {
       "scripts/gen-chart.mjs": 3,
@@ -35,19 +35,18 @@
       "server/routes/deployments/lifecycle.js": 4,
       "server/routes/deployments/resolve.js": 4,
       "server/routes/folders/create.js": 7,
-      "server/routes/folders/tree.js": 6,
       "server/routes/git.js": 6,
       "server/routes/sync.js": 6,
       "server/routes/templates.js": 2
     }
   },
   "yamlParseSites": {
-    "serverAndScripts": 14,
-    "src": 9,
+    "serverAndScripts": 12,
+    "src": 6,
     "byFileKind": {
       "Chart.yaml": 6,
       "Template values.yaml": 0,
-      "deployment values": 2,
+      "deployment values": 0,
       "routing.yaml": 0,
       "rules files": 0,
       "shared configs": 0,
@@ -56,7 +55,7 @@
     }
   },
   "swallowingCatches": {
-    "total": 30,
+    "total": 27,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
@@ -68,9 +67,7 @@
       "server/lib/subchart.js": 1,
       "server/routes/charts.js": 2,
       "server/routes/deployments/resolve.js": 1,
-      "server/routes/folders/tree.js": 2,
       "server/routes/sync.js": 3,
-      "src/utils/renderSummary.js": 1,
       "src/utils/schemaCompat.js": 1
     }
   },

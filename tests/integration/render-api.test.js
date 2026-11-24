@@ -157,6 +157,8 @@ describe('POST /api/v2/render/:chart/:deployment', () => {
     expect(data.ok).toBe(true)
     expect(data.output).toContain('rendered')
     expect(data.check).toMatchObject({ passed: true, skipped: true, errors: [] })
+    // What Preview shows, and no more: the Template's drift is the Template page's.
+    expect(Object.keys(data).sort()).toEqual(['check', 'ok', 'output', 'selfCheck', 'summary'])
   })
 
   it('runs promtool check rules for rendered PrometheusRule groups', async () => {

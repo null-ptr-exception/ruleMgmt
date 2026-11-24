@@ -24,10 +24,12 @@ const RULES = {
   '_common.yaml': 'columns:\n  owner: {type: string}\n  tier: {type: string}\n',
   'disk.yaml': group('disk', NAMED),
   'cpu.yaml': group('cpu', NAMED),
-  'net.yaml': group('net', NAMED),
+  // A true/false column with a default: ticked and unticked, it is written false.
+  'net.yaml': group('net', `${NAMED}  strict: {type: boolean, default: false}\n`),
   'io.yaml': group('io', NAMED),
   // Only a number column: nothing tells its rows apart.
   'mem.yaml': group('mem', ''),
+  'swap.yaml': group('swap', NAMED),
 }
 const COMMON_VALUES = {
   _common: { owner: 'team-shop', tier: 'gold' },
@@ -36,6 +38,7 @@ const COMMON_VALUES = {
   net: [{ name: 'A', warn: 70 }],
   io: [{ name: 'A', warn: 70 }],
   mem: [{ warn: 70 }],
+  swap: [],
 }
 // prod: disk overridden (B changed, C added, D left out), cpu cleared, net
 // written with the same rows, mem changed, io inherited; its own owner.
@@ -45,6 +48,7 @@ const PROD = {
   cpu: [],
   net: [{ name: 'A', warn: 70 }],
   mem: [{ warn: 75 }],
+  swap: [],
 }
 const url = (name, folder = `${FOLDER}/${name}`) => `/api/v2/deployments/${CHART}/${name}?folder=${encodeURIComponent(folder)}`
 
@@ -104,6 +108,9 @@ test.describe('Marks against the _common', () => {
     await expect(page.getByTestId('group-mark-cpu')).toHaveText('clears')
     await expect(page.getByTestId('group-mark-io')).toHaveText('inherited')
     await expect(page.getByTestId('group-mark-io')).toHaveAttribute('title', `Inherited from ${COMMON}: 1 row`)
+    // No rows there, none here: nothing of its own is claimed.
+    await expect(page.getByTestId('group-mark-swap')).toHaveText('clears')
+    await expect(page.getByTestId('group-mark-swap')).toHaveAttribute('title', `This deployment writes no rows: ${COMMON} gives none either`)
     await expect(page.getByTestId('group-mark-common-values')).toHaveText('overrides')
     await expect(page.getByTestId('group-mark-common-values')).toHaveAttribute('title', `Sets owner here, over what ${COMMON} gives`)
 
@@ -170,6 +177,21 @@ test.describe('Marks against the _common', () => {
     await expect(page.getByTestId('overrides-summary')).toContainText('Differs from the rows there. Its rows are not marked one by one: mem has no text, true/false or selector column to tell them apart, so the two lists are compared as a whole.')
     await expect(page.getByText('vs _common')).toHaveCount(0)
     await expect(page.locator('tr.ant-table-row')).toHaveCount(1)
+  })
+
+  test('a true/false cell ticked and unticked again is the same row as the _common\'s, which leaves it out', async ({ page }) => {
+    await open(page, 'prod')
+    await openGroup(page, 'net')
+    await expect(page.getByTestId('overrides-group')).toContainText('· same rows')
+    const box = page.locator('tr.ant-table-row').first().locator('.ant-checkbox-input')
+    await box.check()
+    // Ticked, it is another row: true/false columns tell rows apart.
+    await expect(page.getByTestId('row-mark-0')).toHaveText('added here')
+    await box.uncheck()
+    // strict: false is written now; Helm deploys it as the default the _common's row takes.
+    await expect(page.getByTestId('overrides-group')).toContainText(`Overrides ${COMMON} (1 row there) · same rows`)
+    await expect(page.locator('[data-testid^="row-mark-"]')).toHaveCount(0)
+    await expect(page.getByTestId('not-taken-net')).toHaveCount(0)
   })
 
   test('a read-only sync target shows the marks, and no action', async ({ page }) => {
@@ -252,10 +274,23 @@ test.describe('Marks against the _common', () => {
     await expect(solo.getByText('vs _common')).toHaveCount(0)
   })
 
-  test('a click on the dimmed inherited rows says how to change them', async ({ page }) => {
+  test('a click on the dimmed inherited rows says how to change them; filtering them says nothing', async ({ page }) => {
     await open(page, 'stg')
     await openGroup(page, 'disk')
     await expect(page.getByTestId('inherited-group')).toContainText(`Inherited from ${COMMON}: 3 rows`)
+    // Filtering the dimmed rows is reading them: it works, and says nothing.
+    const hint = page.getByText('These rows are inherited from')
+    const dimmed = page.getByTestId('inherited-rows')
+    const filter = dimmed.locator('.ant-table-thead th').filter({ hasText: /^name/ }).getByPlaceholder('value').first()
+    await filter.click()
+    await filter.pressSequentially('B')
+    await expect(dimmed.locator('tr.ant-table-row')).toHaveCount(1)
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Tab')
+    await expect(hint).toHaveCount(0)
+    await filter.fill('')
+    await expect(dimmed.locator('tr.ant-table-row')).toHaveCount(3)
+    await expect(hint).toHaveCount(0)
     await page.getByTestId('inherited-rows').locator('tr.ant-table-row').first().click()
     await expect(page.getByText(`These rows are inherited from ${COMMON}. To change one, click "Override here": the 3 rows are copied into this deployment to edit.`)).toBeVisible()
     // Nothing was changed by the click.

@@ -18,7 +18,7 @@ import { isCommonChartPath, COMMON_DIR } from '../utils/reservedNames'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import { syncFailedNotice } from '../utils/syncNotice'
 import { valuesInEffect, inheritedFromOf, rowsOf } from '../utils/valuesInEffect'
-import { groupMark, commonValueMarks, identityColumnsOf } from '../utils/commonMarks'
+import { groupMark, commonValueMarks, identityColumnsOf, columnDefaultsOf } from '../utils/commonMarks'
 import CommonRowNotes, { marksSummary, sameWord } from '../components/CommonRowNotes'
 import {
   getChartInfo,
@@ -708,9 +708,11 @@ export default function AlertUserView() {
     message.info(`The ${inheritedRows.length} inherited row${inheritedRows.length === 1 ? ' was' : 's were'} copied here first: this deployment's ${activeAlert} replaces the one of ${groupFrom} whole`)
   }
   // The dimmed inherited rows take no edit: a click or a key on them says
-  // how to change them, and points at the button for a moment.
+  // how to change them, and points at the button for a moment. Their
+  // column filters are for reading them: a click or a key there says nothing.
   const [overrideHint, setOverrideHint] = useState(false)
-  function explainInherited() {
+  function explainInherited(e) {
+    if (!e?.target?.closest?.('.ant-table-tbody')) return
     const n = inheritedRows.length
     const readOnly = !!frozenSource || !!syncUnknown
     message.info({
@@ -752,7 +754,8 @@ export default function AlertUserView() {
   // _common gives, as the page stands (the open group's rows as edited).
   const ownNow = mode === 'single' && activeAlert && Object.hasOwn(allValues, activeAlert) ? { ...allValues, [activeAlert]: rows } : allValues
   const identityOf = group => identityColumnsOf(rulesModel, schema, group)
-  const groupMarks = Object.fromEntries(alertNames.map(g => [g, groupMark(ownNow, inherited, g, identityOf(g))]).filter(([, m]) => m))
+  const defaultsOf = group => columnDefaultsOf(rulesModel, schema, group)
+  const groupMarks = Object.fromEntries(alertNames.map(g => [g, groupMark(ownNow, inherited, g, identityOf(g), defaultsOf(g))]).filter(([, m]) => m))
   // The open group against its _common, row by row.
   const activeMark = !isCommonView && activeAlert ? ownOf(groupMarks, activeAlert) ?? null : null
   const commonMarks = commonValueMarks(commonValues, inherited)
@@ -939,7 +942,7 @@ export default function AlertUserView() {
             readOnly={locked}
             deployments={viewedDeployments && viewedDeployments.map(({ parsed, inherited: theirs, ...d }) => (theirs ? {
               ...d,
-              marks: Object.fromEntries(alertNames.map(g => [g, groupMark(parsed, theirs, g, identityOf(g))]).filter(([, m]) => m)),
+              marks: Object.fromEntries(alertNames.map(g => [g, groupMark(parsed, theirs, g, identityOf(g), defaultsOf(g))]).filter(([, m]) => m)),
               commonMarks: commonValueMarks(parsed?._common, theirs),
             } : d))}
             onOpenDeployment={openViewedDeployment}

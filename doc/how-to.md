@@ -570,14 +570,14 @@ On a deployment's page, what it inherits is marked:
 
 | | What you see | What you can do |
 |---|---|---|
-| A group it does not write | The inherited rows, dimmed, "Inherited from shop/_common/…: N rows" | The dimmed rows take no edit: a click on one says to use **Override here**. **Override here**: the rows are copied into the deployment, to edit. **Add instance** copies them first too, and says so: a group is inherited whole, so a deployment that writes one row of it writes all of them |
+| A group it does not write | The inherited rows, dimmed, "Inherited from shop/_common/…: N rows" | The dimmed rows take no edit: a click on one says to use **Override here**; their column filters work as on any table, and say nothing. **Override here**: the rows are copied into the deployment, to edit. **Add instance** copies them first too, and says so: a group is inherited whole, so a deployment that writes one row of it writes all of them |
 | A group it writes, that a `_common` gives too | "Overrides shop/_common/… (N rows there)", or "clears it" when it writes `[]` | **Reset to inherited**: shows its rows and the inherited ones; on OK the group is removed from the deployment (the key, never a `null`), and the inherited rows show. Save writes it |
 | A Common Value it does not set | The inherited value as the field's placeholder, and "from shop/_common/…" | Type a value to override it; **Reset** beside a value it sets removes it |
 
 The group list beside it says the same at a glance, one word per group:
 **inherited**, **overrides** (it writes its own rows where the `_common` gives
-some), **clears** (it writes `[]`), or **own** (its own rows, where the
-`_common` gives none). **Common Values** is marked **overrides** when the
+some), **clears** (it writes `[]`, also where the `_common` gives none
+either), or **own** (its own rows, where the `_common` gives none). **Common Values** is marked **overrides** when the
 deployment sets one the `_common` gives. Hover a word for the `_common` and
 its row count. The marks are worked out when the page opens, from the
 deployment's values and the `_common`'s as they are now: nothing is stored.
@@ -597,6 +597,13 @@ the `_common` until **Reset to inherited**.
 Example: the `_common` gives A 70, B 80, D 60 and the deployment writes A 70,
 B 95, C 50. A has no mark; B is "differs" with `_common: 80` under 95; C is
 "added here"; D is listed as not taken.
+
+A cell left out is its column's default, as Helm deploys it: a row that
+writes the default (a box ticked and unticked again writes `false`; `pod:
+".*"` for a selector column whose default is `.*`) is the same row as one
+that leaves it out. With the row identity label on, a text, true/false or
+selector cell written as its default is another row: the label is made of
+the cells a row writes.
 
 Rows are paired by what tells them apart — the group's selector columns and
 its text and true/false columns, as the rows are written — in any order;

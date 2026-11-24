@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupMark, groupMarkLabel, markCounts, commonValueMarks, identityColumnsOf } from '../commonMarks.js'
+import { groupMark, groupMarkLabel, markCounts, commonValueMarks, identityColumnsOf, columnDefaultsOf } from '../commonMarks.js'
 import { parseRulesDir, genSchema } from '../rulesFile.js'
 
 // What the server sends for a deployment on a _common: the values its layers
@@ -48,6 +48,8 @@ describe('the word the group list shows', () => {
     expect(groupMarkLabel(groupMark({ disk: [] }, ONE, 'disk'))).toEqual({ word: 'clears', title: `This deployment writes no rows: ${SHOP} gives 2` })
     const none = inheritedOf({ disk: [] }, { disk: SHOP })
     expect(groupMarkLabel(groupMark({ disk: [{ name: 'A' }] }, none, 'disk'))).toEqual({ word: 'own', title: `This deployment's own rows: ${SHOP} gives none` })
+    // No rows given, none written: it claims no rows it does not have.
+    expect(groupMarkLabel(groupMark({ disk: [] }, none, 'disk'))).toEqual({ word: 'clears', title: `This deployment writes no rows: ${SHOP} gives none either` })
   })
 })
 
@@ -158,5 +160,59 @@ describe('the rows of an overridden group against the _common\'s', () => {
     const m = groupMark({ disk: ['x', { name: 'A', warn: 70 }] }, AB, 'disk', ID)
     expect(marksOf(m)).toEqual(['added', 'same'])
     expect(m.notTaken).toEqual([{ name: 'B', warn: 80 }])
+  })
+})
+
+// Helm deploys a cell left out as its column's default (the generator digs
+// the cell with it): a row that writes the default is the row that leaves
+// it out, both to pair rows and to compare their cells.
+describe('a cell left out and one written as its column\'s default', () => {
+  const files = {
+    'disk.yaml': 'columns:\n  name: {type: string}\n  port: {type: string, default: p0}\n  strict: {type: boolean, default: false}\n  warn: {type: number, default: 80}\nrules:\n  - alert: D\n    expr: d{n="${name}",p="${port}",s="${strict}"} > ${warn}\n',
+    'sel.yaml': 'selectors: [namespace, pod]\ncolumns:\n  namespace: {type: string, required: true}\n  pod: {type: string, default: ".*"}\n  warn: {type: number, default: 80}\nrules:\n  - alert: S\n    expr: cpu{${selector}} > ${warn}\n',
+  }
+  const { model } = parseRulesDir(files)
+  const of = g => [identityColumnsOf(model, null, g), columnDefaultsOf(model, null, g)]
+  const given = (g, rows) => inheritedOf({ [g]: rows }, { [g]: SHOP })
+  const DISK = given('disk', [{ name: 'A', warn: 70 }, { name: 'E' }])
+
+  it('takes the defaults from the rules model, or from the schema without one', () => {
+    expect(columnDefaultsOf(model, null, 'disk')).toEqual({ port: 'p0', strict: false, warn: 80 })
+    expect(columnDefaultsOf(null, genSchema(model), 'sel')).toEqual({ pod: '.*', warn: 80 })
+    expect(columnDefaultsOf(null, null, 'disk')).toEqual({})
+  })
+
+  it('a true/false column written false, its default, is the row that leaves it out', () => {
+    const m = groupMark({ disk: [{ name: 'A', warn: 70, strict: false }, { name: 'E' }] }, DISK, 'disk', ...of('disk'))
+    expect(m).toMatchObject({ same: true, notTaken: [] })
+    expect(m.rows).toEqual([{ mark: 'same' }, { mark: 'same' }])
+  })
+
+  it('a text column written as its default is the row that leaves it out; another value differs from the default', () => {
+    expect(groupMark({ disk: [{ name: 'A', warn: 70 }, { name: 'E', port: 'p0' }] }, DISK, 'disk', ...of('disk'))).toMatchObject({ same: true, notTaken: [] })
+    const other = groupMark({ disk: [{ name: 'A', warn: 70 }, { name: 'E', port: 'p1' }] }, DISK, 'disk', ...of('disk'))
+    expect(other.rows[1]).toEqual({ mark: 'added' })
+    expect(other.notTaken).toEqual([{ name: 'E' }])
+  })
+
+  it('a number column written as its default is the same cell; on the other side too', () => {
+    expect(groupMark({ disk: [{ name: 'A', warn: 70 }, { name: 'E', warn: 80 }] }, DISK, 'disk', ...of('disk'))).toMatchObject({ same: true })
+    const common = given('disk', [{ name: 'A', warn: 80 }])
+    expect(groupMark({ disk: [{ name: 'A' }] }, common, 'disk', ...of('disk')).rows).toEqual([{ mark: 'same' }])
+    // A cell that differs shows what the _common deploys: its default.
+    expect(groupMark({ disk: [{ name: 'E', warn: 90 }] }, DISK, 'disk', ...of('disk')).rows).toEqual([{ mark: 'differs', there: { warn: 80 } }])
+  })
+
+  it('a selector column left out is the row that writes its default', () => {
+    const common = given('sel', [{ namespace: 'ns1', pod: '.*', warn: 70 }, { namespace: 'ns1', pod: 'api', warn: 90 }])
+    const m = groupMark({ sel: [{ namespace: 'ns1', warn: 70 }, { namespace: 'ns1', pod: 'api', warn: 90 }] }, common, 'sel', ...of('sel'))
+    expect(m).toMatchObject({ same: true, notTaken: [] })
+  })
+
+  it('with the row identity label, a telling column written as its default is another row: the label is made of the cells written', () => {
+    const { model: labelled } = parseRulesDir({ ...files, '_common.yaml': 'rowIdentity: true\n' })
+    expect(columnDefaultsOf(labelled, null, 'disk')).toEqual({ warn: 80 })
+    const m = groupMark({ disk: [{ name: 'A', warn: 70, strict: false }, { name: 'E', warn: 80 }] }, DISK, 'disk', identityColumnsOf(labelled, null, 'disk'), columnDefaultsOf(labelled, null, 'disk'))
+    expect(m.rows).toEqual([{ mark: 'added' }, { mark: 'same' }])
   })
 })

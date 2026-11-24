@@ -28,7 +28,10 @@
  * `ensureSyntaxTree`, of the same copy of CodeMirror as the state.
  */
 export function parsed(state, ensure) {
-  ensure(state, state.doc.length, 5000)
+  // The five seconds are counted on the computer's clock. One set forward
+  // meanwhile (a time sync) ends them at once, the parse unfinished: asked
+  // again, it goes on from where it stopped.
+  for (let asked = 0; asked < 5 && !ensure(state, state.doc.length, 5000); asked++);
   return state.update({}).state
 }
 

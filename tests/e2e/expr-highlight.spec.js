@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { removeChart, openTemplateChart } from './charts.js'
+import { removeChart, openTemplateChart, openedDropdown } from './charts.js'
 
 // The expr editor's colours and font (#72). They are read back from the page:
 // the dark palette was defined but never applied — the editor used
@@ -38,6 +38,17 @@ rules:
     labels: {severity: warning}
 `
 
+// A reference where a label name goes: no mistake while the column is a
+// string, one once it is a number.
+const LABEL = `group: labelname
+columns:
+  label: {type: string, description: a label name, required: true}
+rules:
+  - alert: Up
+    expr: up{\${label}="a"} > 0
+    labels: {severity: warning}
+`
+
 const CHART = 'e2e-expr-highlight'
 
 async function openGroup(page, group) {
@@ -57,7 +68,7 @@ test.describe('expr editor highlighting', () => {
   test.beforeAll(async ({ request }) => {
     await removeChart(request, CHART)
     expect((await request.post('/api/v2/charts', { data: { name: CHART } })).ok()).toBeTruthy()
-    const save = await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU, 'logs.yaml': LOGS, 'mem.yaml': MEM } } })
+    const save = await request.post(`/api/v2/templates/${CHART}/rules`, { data: { files: { 'cpu.yaml': CPU, 'logs.yaml': LOGS, 'mem.yaml': MEM, 'labelname.yaml': LABEL } } })
     expect(save.ok()).toBeTruthy()
   })
   test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
@@ -115,6 +126,75 @@ test.describe('expr editor highlighting', () => {
     await expect(editor).toHaveText('rate(cpu_seconds_total{namespace="${namespace}"}[5m]) > ${warn}')
     await expect(editor.locator('.cm-lintRange-error')).toHaveCount(0, { timeout: 5000 })
     await expect(refs).toHaveCount(2)
+  })
+
+  // CodeMirror counts its wait before a lint on the computer's clock: set
+  // back a minute right after a change (a time sync does this), the lint came
+  // a minute late, and until then the marks were those of the text before
+  // the change. The page's clock is in the test's hands here: it runs with
+  // elapsed time, and steps back a minute right after the n-th press of a key.
+  const steppingClock = page => page.addInitScript(() => {
+    const start = Date.now() - performance.now()
+    let back = 0
+    Date.now = () => start + performance.now() - back
+    window.clockSetBack = 0
+    window.setClockBackAfter = (key, nth) => {
+      const onKey = e => {
+        if (e.key !== key || --nth) return
+        document.removeEventListener('keydown', onKey, true)
+        // After this key's change is in the editor, long before its lint.
+        setTimeout(() => { back += 60000; window.clockSetBack++ }, 0)
+      }
+      document.addEventListener('keydown', onKey, true)
+    }
+  })
+
+  test('a mistake is marked on time when the clock is set back after it is typed', async ({ page }) => {
+    await steppingClock(page)
+    await openGroup(page, 'cpu')
+    const editor = page.locator('.cm-content').first()
+    await editor.click()
+    await page.keyboard.press('ControlOrMeta+End')
+    await page.evaluate(() => window.setClockBackAfter('1', 1))
+    await page.keyboard.type(' >> 1')
+    await expect(editor.locator('.cm-lintRange-error').first()).toBeVisible({ timeout: 5000 })
+    expect(await page.evaluate(() => window.clockSetBack)).toBe(1)
+  })
+
+  test('the mark of a corrected mistake goes on time when the clock is set back after the correction', async ({ page }) => {
+    await steppingClock(page)
+    await openGroup(page, 'cpu')
+    const editor = page.locator('.cm-content').first()
+    await editor.click()
+    await page.keyboard.press('ControlOrMeta+End')
+    await page.keyboard.type(' >> 1')
+    await expect(editor.locator('.cm-lintRange-error').first()).toBeVisible({ timeout: 5000 })
+    await page.evaluate(() => window.setClockBackAfter('Backspace', 5))
+    for (let i = 0; i < 5; i++) await page.keyboard.press('Backspace')
+    await expect(editor).toHaveText('rate(cpu_seconds_total{namespace="${namespace}"}[5m]) > ${warn}')
+    await expect(editor.locator('.cm-lintRange-error')).toHaveCount(0, { timeout: 5000 })
+    expect(await page.evaluate(() => window.clockSetBack)).toBe(1)
+  })
+
+  // The lint reads what each ${column} holds. A column's type changed on the
+  // page changes it with no key in the expr editor: the marks follow.
+  test('the marks follow a column\'s type changed on the page', async ({ page }) => {
+    await openGroup(page, 'labelname')
+    const marks = page.locator('.cm-content').first().locator('.cm-lintRange-error')
+    const type = page.locator('div').filter({ has: page.locator('input[value="label"]') }).last().locator('.ant-select').first()
+    const setType = async to => {
+      await type.click()
+      await openedDropdown(page)
+      await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: new RegExp(`^${to}$`) }).click()
+      await expect(type).toHaveText(to)
+    }
+    // Long enough for the lint of the text as opened: no mistake.
+    await page.waitForTimeout(1500)
+    await expect(marks).toHaveCount(0)
+    await setType('number')
+    await expect(marks.first()).toBeVisible({ timeout: 5000 })
+    await setType('string')
+    await expect(marks).toHaveCount(0, { timeout: 5000 })
   })
 
   test('a vlogs group has no PromQL colours, but its ${column} is still marked', async ({ page }) => {

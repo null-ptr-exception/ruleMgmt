@@ -84,3 +84,38 @@ describe('a machine too busy to parse at once', () => {
     expect(slowly(() => shown('rate(cpu_seconds_total{namespace="${namespace}"}[5m]) > ${warn}'))).toEqual([])
   })
 })
+
+// The parse's time allowance is counted on the computer's clock. Where that
+// clock is set forward while the lint parses (a time sync stepping it nine
+// seconds), the allowance is over at once. The state here is made on a busy
+// machine, so the whole parse is left to parsed(); the clock then steps once,
+// at each of the looks parsed() takes at it in turn.
+describe('the clock set forward while the lint parses', () => {
+  const text = 'sum by (namespace) (rate(cpu_seconds_total{namespace="0000"}[5m])) > 0000 >> 1'
+  const mistake = diagnose(text)
+  const steppedAt = (look, by) => {
+    const now = Date.now
+    let t = now(), busy = true, looks = 0
+    Date.now = () => {
+      if (busy) return (t += 30)
+      if (++looks === look) t += by
+      return (t += 0.01)
+    }
+    try {
+      const state = EditorState.create({ doc: text, extensions: [extension] })
+      busy = false
+      return { found: lint({ state: parsed(state, ensureSyntaxTree) }), looks }
+    } finally { Date.now = now }
+  }
+
+  it('the mistake at the end of the text is found', () => {
+    expect(mistake.length).toBeGreaterThan(0)
+    const looks = steppedAt(0, 0).looks
+    expect(looks).toBeGreaterThan(10)
+    for (let look = 1; look <= looks; look++) {
+      expect(steppedAt(look, 9300).found, `stepped forward at look ${look}`).toEqual(mistake)
+      expect(steppedAt(look, -6500).found, `stepped back at look ${look}`).toEqual(mistake)
+    }
+  })
+})
+

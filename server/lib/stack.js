@@ -32,6 +32,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { unwrapPath } from './subchart.js'
+import { isAbsent } from './readIfThere.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 // More hops than this is a loop of links, not a stack.
@@ -74,8 +75,8 @@ async function readValuesDoc(dir) {
     const doc = yaml.load(await fs.readFile(path.join(dir, 'values.yaml'), 'utf-8'))
     return { doc: doc ?? {} }
   } catch (err) {
-    if (err.code === 'ENOENT') return { doc: {} }
-    return { error: err.reason || err.code || err.message }
+    if (await isAbsent(path.join(dir, 'values.yaml'), err)) return { doc: {} }
+    return { error: err.code === 'ENOENT' ? 'a link to a file that is not there' : err.reason || err.code || err.message }
   }
 }
 

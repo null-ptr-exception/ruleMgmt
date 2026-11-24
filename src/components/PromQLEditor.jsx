@@ -68,7 +68,10 @@ const columnRefs = ViewPlugin.fromClass(class {
 // and keeps the rest: the ${column} marks, and the selection API variables
 // are marked with.
 // It is read once, when the editor mounts: remount (a `key`) to change it.
-export default function PromQLEditor({ value = '', onChange, metrics = [], minHeight = 56, apiRef, language = 'promql' }) {
+export default function PromQLEditor({ value = '', onChange, metrics = [], minHeight = 56, apiRef, language = 'promql', columnKinds }) {
+  // What each ${column} holds ('number' or not), read by the lint at each run.
+  const kindsRef = useRef(columnKinds)
+  kindsRef.current = columnKinds
   const containerRef = useRef(null)
   const viewRef      = useRef(null)
   const onChangeRef  = useRef(onChange)
@@ -117,7 +120,7 @@ export default function PromQLEditor({ value = '', onChange, metrics = [], minHe
             : view.state.update({ changes: { from: 0, to: view.state.doc.length, insert: text } }).state
           ensureSyntaxTree(state, text.length, 1000)
           return lint({ state })
-        })
+        }, name => kindsRef.current?.[name])
       },
     })
 

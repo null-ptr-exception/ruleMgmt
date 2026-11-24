@@ -1,24 +1,34 @@
 /**
  * The expr editor's PromQL lint, for an expression holding ${column}
  * references. PromQL does not know `${`, so linted as written every
- * reference outside a string is "unexpected expression" — the whole query
- * underlined in red a moment after the editor opens. Each reference is read
- * as a placeholder of the same length instead, twice: digits (`0000`, a
- * number or a duration where one goes) and letters (`xxxx`, a name where one
- * goes). A problem in both readings is one the query has whatever a row
- * fills in; one in only one reading is the placeholder's, and is dropped.
+ * reference outside a string is "unexpected expression". Each reference is
+ * read as a placeholder of its length instead, of the kind a row puts there:
+ * digits (`0000`) for a number or a duration — a number column, an integer,
+ * a duration, a derived value — and, for any other, digits unless they make
+ * a problem at the reference itself (a label or metric name goes there),
+ * then letters (`xxxx`). The expression is linted once so; a problem inside
+ * a letters placeholder is the placeholder's and is dropped, any other is
+ * shown.
  *
- *   rate(x[5m]) > ${warn}    → no problem
- *   rate(x[5m]) >> ${warn}   → the problem with `>>`, still shown
+ *   rate(x[5m]) > ${warn}          → no problem
+ *   sum(x) > ${thr} by (job)       → the problem with `by`, shown
+ *   x{${label}="a"}                → no problem (letters)
  *
- * `diagnose(text)` is the PromQL linter run on a text (PromQLEditor.jsx).
+ * `diagnose(text)` is the PromQL linter run on a text (PromQLEditor.jsx);
+ * `kindOf(name)` is 'number' for a reference known to hold one, else
+ * anything.
  */
-export const COLUMN_REF = /\$\{\s*[A-Za-z_][A-Za-z0-9_]*\s*\}/g
+export const COLUMN_REF = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 
-export function withColumnRefs(doc, diagnose) {
-  if (!doc.match(COLUMN_REF)) return diagnose(doc)
-  const as = ch => doc.replace(COLUMN_REF, ref => ch.repeat(ref.length))
-  const key = d => `${d.from}:${d.to}:${d.message}`
-  const withLetters = new Set(diagnose(as('x')).map(key))
-  return diagnose(as('0')).filter(d => withLetters.has(key(d)))
+export function withColumnRefs(doc, diagnose, kindOf = () => undefined) {
+  const refs = [...doc.matchAll(COLUMN_REF)].map(m => ({ from: m.index, to: m.index + m[0].length, name: m[1] }))
+  if (!refs.length) return diagnose(doc)
+  const fill = chars => refs.reduceRight((text, r, i) => text.slice(0, r.from) + chars[i].repeat(r.to - r.from) + text.slice(r.to), doc)
+  const touches = (d, r) => d.from <= r.to && r.from <= d.to
+  const asDigits = diagnose(fill(refs.map(() => '0')))
+  const chosen = refs.map(r => (kindOf(r.name) !== 'number' && asDigits.some(d => touches(d, r)) ? 'x' : '0'))
+  // Within a reference read as letters, a problem is the placeholder's; a
+  // number where one cannot go (`> ${v} ${v}`) is the query's.
+  const inLetters = d => refs.some((r, i) => chosen[i] === 'x' && d.from >= r.from && d.to <= r.to)
+  return diagnose(fill(chosen)).filter(d => !inLetters(d))
 }

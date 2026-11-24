@@ -242,7 +242,9 @@ export async function isDeploymentDir(absDir) {
   const hasDeps = Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
   if (!hasDeps) return false
   try {
-    await fs.access(path.join(absDir, 'values.yaml'))
+    // There, even as a link to nothing or a file that cannot be read: the
+    // checks then say what is wrong with it.
+    await fs.lstat(path.join(absDir, 'values.yaml'))
     return true
   } catch {
     return false

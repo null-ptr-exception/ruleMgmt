@@ -174,3 +174,12 @@ describe('the other ways in', () => {
     expect(await fs.readFile(path.join(tmpDir, 'charts/demo/rules/spc.yaml'), 'utf-8')).toBe(before)
   })
 })
+
+describe('a rules file edited by hand into one the parser refuses', () => {
+  it('a derived unit not one of ours: a deployment save says why, not a 500', async () => {
+    await fs.writeFile(path.join(tmpDir, 'charts/demo/rules/spc.yaml'), SPC.replace('unit: m', 'unit: q'))
+    const { status, data } = await save(DIRECT, { spc: [{ job: 'a', freq_num: 3 }] })
+    expect(status).toBe(400)
+    expect(data.problems.map(p => p.message)).toEqual(['spc row 1, derived "w": its unit "q" is not one of ms, s, m, h, d, w, y — fix the rules file'])
+  })
+})

@@ -43,13 +43,19 @@ export async function writeChanged(entries) {
  * folder named so, a file without permission), is an error naming it: read
  * as absent, a chart's rules/ would make it a legacy or empty chart.
  */
-async function readYamlDir(dir) {
+async function readYamlDir(dir, { skipFolders = false } = {}) {
   const names = await readDirIfThere(dir)
   if (names === null) return null
   const out = {}
   for (const name of names.filter(f => f.endsWith('.yaml'))) {
     const file = path.join(dir, name)
-    const text = await readTextIfThere(file)
+    let text
+    try {
+      text = await readTextIfThere(file)
+    } catch (err) {
+      if (skipFolders && err.cause?.code === 'EISDIR') continue
+      throw err
+    }
     if (text !== null) out[name] = text
     // Listed, and nothing to read: a link to a file that is not there is
     // there, and cannot be read. One gone since the listing is not there.
@@ -66,7 +72,9 @@ async function readYamlDir(dir) {
  */
 export async function readChartArtifacts(chartDir) {
   const rulesFiles = await readYamlDir(path.join(chartDir, 'rules'))
-  const templateFiles = (await readYamlDir(path.join(chartDir, 'templates'))) || {}
+  // A folder named *.yaml in templates/ is a folder to Helm, which reads
+  // the files in it: not a template here, as gen-rules and Save take it.
+  const templateFiles = (await readYamlDir(path.join(chartDir, 'templates'), { skipFolders: true })) || {}
 
   const schemaFile = path.join(chartDir, 'values.schema.json')
   const schemaText = await readTextIfThere(schemaFile)

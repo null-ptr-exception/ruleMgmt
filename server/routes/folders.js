@@ -14,7 +14,7 @@ import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { planCreate, planDelete, applyPlan, commonUsers, deploymentOnCommon, folderCommonOf, folderCommons, inheritsFromOf, linkOnPath, ANY_VERSION } from '../lib/commonEdit.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { writeWhole } from '../lib/routingFiles.js'
-import { parseIfThere } from '../lib/readIfThere.js'
+import { parseIfThere, errorAnswer } from '../lib/readIfThere.js'
 import { isRepoPath, repoPathProblem } from '../lib/safePath.js'
 
 // What a new deployment asks of its Template's version: any.
@@ -292,7 +292,6 @@ export default function foldersRouter() {
       // Asked before any folder is made: a refusal leaves the repo as it was.
       const onCommon = await deploymentOnCommon(req.gitopsDir, folder, chart)
       if (onCommon?.error) return res.status(409).json({ error: onCommon.error })
-      await fs.mkdir(deployDir, { recursive: true })
 
       // A Chart.yaml there without a values.yaml: someone's. Read as it is,
       // or the init stops naming it — one that cannot be read or parsed is
@@ -313,16 +312,20 @@ export default function foldersRouter() {
       const chartDir = path.join(chartsDir, chart)
       // The Template has to be there, and readable; its version is not
       // copied (below).
-      yaml.load(await fs.readFile(path.join(chartDir, 'Chart.yaml'), 'utf-8'))
+      const templateChart = await parseIfThere(path.join(chartDir, 'Chart.yaml'), yaml.load)
+      if (templateChart === null) return res.status(400).json({ error: `${chart} is not a Template of this repo` })
 
       // The Template's groups, from its values.yaml: none when it has none;
       // one that cannot be read or parsed is said, not taken for none.
       const emptyValues = {}
-      // Read before anything is written: a refusal leaves the folder as it was.
       const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)) || {}
       for (const [key, val] of Object.entries(defaults)) {
         if (Array.isArray(val)) emptyValues[key] = []
       }
+
+      // Everything is read: from here on it is written. A refusal above
+      // made no folder.
+      await fs.mkdir(deployDir, { recursive: true })
 
       // Under a folder with a _common for this Template (#102): on it, and
       // writing nothing of its own — it inherits everything, a group the
@@ -358,7 +361,8 @@ export default function foldersRouter() {
 
       res.json({ status: 'created', chart, folder })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 

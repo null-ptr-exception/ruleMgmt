@@ -645,8 +645,11 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 - A rule's or a group's label named `alertforge_row`, the
   [row identity label](#the-row-identity-label-rowidentity)'s
 - A `vars` entry referencing another `vars` entry
-- A rule's `labels` or `annotations` written as a list with an empty entry
-  (a `- ` with nothing after it), named by file and rule
+- A rule's `labels` or `annotations` that are not a mapping of name to text
+  (`labels: foo`, a list, a value that is `null`, a list or a mapping); a
+  number or `true` is taken as its text. A rule's `alert`, `record`, `expr`
+  or `raw` that is a list or a mapping. Read as written, each would deploy
+  something else; the file and the rule are named
 - An optional column with no default referenced from the middle of a string
 - `group:` not matching the filename
 - A `derived` without a `unit`, with an expression that does not parse or

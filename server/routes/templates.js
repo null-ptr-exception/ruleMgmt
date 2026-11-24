@@ -3,7 +3,7 @@ import { holdSyncRegistryLock } from '../lib/sync.js'
 import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
 import { findDeploymentsUsing, findChartUsage } from '../lib/chartUsage.js'
 import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts, readChartModel } from '../lib/chartFiles.js'
-import { readTextIfThere, readDirIfThere, parseIfThere, UnreadableError } from '../lib/readIfThere.js'
+import { readTextIfThere, readDirIfThere, parseIfThere, UnreadableError, errorAnswer } from '../lib/readIfThere.js'
 import { planDeploymentMigration } from '../lib/migrate.js'
 import { readSyncRegistry, isTarget, getSourceForTarget, withSyncRegistryLock } from '../lib/sync.js'
 import { parseRulesDir, modelToSchema, genSchema, valueChecksKey } from '../../src/utils/rulesFile.js'
@@ -117,9 +117,12 @@ export default function templatesRouter() {
 
   // null when values.schema.json is not there. One that cannot be read, or
   // is not JSON, is an error naming it: a save that took it for none would
-  // drop the x-custom-template groups it holds. Opening the chart (`shown`)
-  // takes a schema that is not JSON as none, so the editor still opens and
-  // the drift says so.
+  // drop the x-custom-template groups it holds. Opening a chart with rules/
+  // (`shown`) takes a schema that is not JSON as none — it is a product: the
+  // editor opens, the drift says it is missing, Save writes it again (with
+  // nothing to carry over: a save refuses it first, see above). On a chart
+  // without rules/ the schema is the source: opening it is refused naming
+  // the file (readChartArtifacts), as there is nothing to regenerate it from.
   async function readSchema(schemaFile, { shown = false } = {}) {
     const raw = await readTextIfThere(schemaFile)
     if (raw === null) return null
@@ -182,7 +185,8 @@ export default function templatesRouter() {
 
       res.json({ templateFiles, schema, values, chartMeta, drift, rulesFiles })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -382,7 +386,8 @@ export default function templatesRouter() {
         ...(syncFailed.length ? { syncFailed } : {}),
       })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -401,7 +406,8 @@ export default function templatesRouter() {
         { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: await modelBefore(chartPaths(req, req.params.chart).chartDir) })
       res.json({ deployments })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -487,7 +493,8 @@ export default function templatesRouter() {
       if (content === null) return res.status(404).json({ error: 'Template not found' })
       res.json({ content })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 

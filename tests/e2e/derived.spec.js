@@ -194,6 +194,6 @@ test.describe('derived values (#118)', () => {
     const editor = page.getByTestId('derived-editor')
     await editor.getByRole('button', { name: 'Add derived' }).click()
     await editor.getByLabel('Derived 1 name').fill('job')
-    await expect(editor).toContainText('"job" is already a name in this group')
+    await expect(editor).toContainText('"job" is already a column\'s name in this group')
   })
 })

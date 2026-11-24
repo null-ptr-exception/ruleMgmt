@@ -137,7 +137,7 @@ test.describe('Renaming a column', () => {
     await renamed.press('ControlOrMeta+A')
     await page.keyboard.type('namespace')
     await page.keyboard.press('Enter')
-    await expect(page.getByText('There is already a column named "namespace"')).toBeVisible()
+    await expect(page.getByText('"namespace" is already a column\'s name')).toBeVisible()
     await expect(page.locator('input[value="limit_pct"]')).toBeVisible()
   })
 })

@@ -5,13 +5,14 @@ import os from 'os'
 import git from '../lib/git.js'
 import { checkRules } from '../../src/utils/ruleChecks.js'
 import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
-import { UnreadableError } from '../lib/readIfThere.js'
+import { UnreadableError, parseIfThere } from '../lib/readIfThere.js'
 import { blocksCommit, repeatsText, REPEATS_FIX } from '../../src/utils/drift.js'
 import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
 import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { isRepoPath } from '../lib/safePath.js'
+import yaml from 'js-yaml'
 
 export { withoutPath }
 
@@ -67,6 +68,9 @@ async function checkChart(entry, chartDir, findings, unconverted) {
   // without writing it anywhere. A parse error here is left to the drift
   // check below (`stale`), which already blocks on it.
   const { rulesFiles, schema } = await readChartArtifacts(chartDir)
+  // The Template's own values.yaml is read by Helm for every deployment of
+  // it: one that cannot be read or is not YAML fails them all.
+  await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)
   if (rulesFiles && Object.keys(rulesFiles).length) {
     const { model, errors } = parseRulesDir(rulesFiles)
     if (!errors.length) {
@@ -188,8 +192,9 @@ export default function gitRouter() {
 
   router.post('/commit', async (req, res) => {
     const cwd = req.gitopsDir
-    const { message } = req.body
-    if (!message) return res.status(400).json({ error: 'message required' })
+    const { message } = req.body || {}
+    // Text: anything else would be committed as "[object Object]" or "5".
+    if (typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'message required: the commit message, as text' })
 
     try {
       // Add, check, commit in one go: a deployment save or a Regenerate in
@@ -197,7 +202,15 @@ export default function gitRouter() {
       const outcome = await withSyncRegistryLock(cwd, async () => {
         let charts, deployments
         try {
-          await git(cwd, 'add', '-A')
+          try {
+            await git(cwd, 'add', '-A')
+          } catch (err) {
+            // A file git cannot read: the commit is refused naming it, as
+            // the checks name one they cannot read.
+            const unreadable = /open\("([^"]+)"\): ([^\n]+)/.exec(`${err.stderr || err.message}`)
+            if (unreadable) return { status: 409, body: { error: 'Commit refused', findings: [{ severity: 'commit', kind: 'file-unreadable', regenerable: false, description: `${unreadable[1]} cannot be read (${unreadable[2].toLowerCase()})` }] } }
+            throw err
+          }
           const statusRaw = await git(cwd, 'status', '--porcelain')
           if (!statusRaw.trim()) return { status: 400, body: { error: 'no changes to commit' } }
 

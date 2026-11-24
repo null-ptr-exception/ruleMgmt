@@ -40,9 +40,11 @@ export async function deleteChart(name) {
 
 // ─── Templates / Chart Info ──────────────────────────────────────────────────
 
+// A chart that cannot be opened (a file of it that cannot be read) says
+// why: `{ failed: true, error }`, never an empty chart to save over.
 export async function getChartInfo(chart) {
   const res = await apiFetch(`${BASE}/templates/${encodeURIComponent(chart)}`)
-  if (!res.ok) return {}
+  if (!res.ok) return { failed: true, ...(await res.json().catch(() => ({ error: `the server answered ${res.status}` }))) }
   return res.json()
 }
 

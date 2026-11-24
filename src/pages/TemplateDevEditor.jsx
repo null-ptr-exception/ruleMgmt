@@ -8,9 +8,9 @@ import KVEditor from '../components/KVEditor'
 import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { syncFailedNotice } from '../utils/syncNotice'
-import { parseRulesDir, schemaToModel, groupFileText, commonFileText, hasCommonFile, GROUP_KEY_RE } from '../utils/rulesFile'
+import { parseRulesDir, schemaToModel, groupFileText, commonFileText, hasCommonFile, GROUP_KEY_RE, RESERVED_NAMES } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
-import { columnUsage, commonColumnUsage, ruleVars } from '../utils/ruleModel'
+import { columnUsage, commonColumnUsage, ruleVars, varsIn } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import SelectorLabelsList, { SelectorLabelsHint } from '../components/SelectorLabelsList'
 import { profileNames, profileFor, isPromQLType, canonicalType, DEFAULT_TYPE } from '../utils/outputs'
@@ -289,27 +289,46 @@ function VarsEditor({ vars, onChange }) {
 // common column, a vars entry, another derived value).
 function DerivedEditor({ derived, usage, taken, onChange }) {
   const [rows, setRows] = useState(() => Object.entries(derived || {}).map(([name, d]) => ({ name, expr: d.expr ?? '', unit: d.unit })))
-  // A column renamed elsewhere rewrites the expressions (renameColumn): the
-  // rows follow the model when only the expressions changed.
+  // Which row each name was sent from, and the expression sent: a row two
+  // share a name with (half-typed, or a clash) is never the one sent, and
+  // never takes the other's expression.
+  const sent = useRef(null)
+  if (sent.current === null) sent.current = Object.fromEntries(Object.entries(derived || {}).map(([name, d], row) => [name, { row, expr: d.expr ?? '' }]))
+  // A column renamed elsewhere rewrites an expression (renameColumn): the
+  // row it was sent from follows, the others are left as typed.
   useEffect(() => {
-    setRows(prev => prev.map(r => (derived?.[r.name] && derived[r.name].expr !== r.expr ? { ...r, expr: derived[r.name].expr } : r)))
+    setRows(prev => {
+      let next = prev
+      for (const [name, d] of Object.entries(derived || {})) {
+        const at = sent.current[name]
+        if (!at || d.expr === at.expr || prev[at.row]?.name !== name) continue
+        next = next === prev ? [...prev] : next
+        next[at.row] = { ...next[at.row], expr: d.expr }
+        sent.current[name] = { row: at.row, expr: d.expr }
+      }
+      return next
+    })
   }, [derived])
   const send = next => {
     setRows(next)
     const out = {}
-    for (const r of next) {
-      if (!r.name || Object.hasOwn(out, r.name)) continue
+    const from = {}
+    next.forEach((r, i) => {
+      // A clash or a reserved name is marked on the row and not sent.
+      if (!r.name || Object.hasOwn(out, r.name) || taken(r.name)) return
       let columns = []
       try { columns = derivedColumns(parseDerived(r.expr)) } catch { /* the save says what is wrong */ }
-      out[r.name] = { expr: r.expr, ...(r.unit ? { unit: r.unit } : {}), columns }
-    }
+      Object.defineProperty(out, r.name, { value: { expr: r.expr, ...(r.unit ? { unit: r.unit } : {}), columns }, enumerable: true, writable: true, configurable: true })
+      from[r.name] = { row: i, expr: r.expr }
+    })
+    sent.current = from
     onChange(Object.keys(out).length ? out : undefined)
   }
   const set = (i, patch) => send(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   return (
     <div data-testid="derived-editor">
       {rows.map((r, i) => {
-        const clash = r.name && (taken(r.name) || rows.some((o, j) => j !== i && o.name === r.name))
+        const clash = r.name && (taken(r.name) || (rows.some((o, j) => j !== i && o.name === r.name) && `another derived value`))
         let exprError = null
         if (r.expr) { try { parseDerived(r.expr) } catch (e) { exprError = e.message } }
         return (
@@ -327,7 +346,7 @@ function DerivedEditor({ derived, usage, taken, onChange }) {
               <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={`Remove derived ${i + 1}`}
                 onClick={() => send(rows.filter((_, j) => j !== i))} />
             </div>
-            {clash && <Text type="danger" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>{`"${r.name}" is already a name in this group`}</Text>}
+            {clash && <Text type="danger" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>{clash === 'reserved' ? `"${r.name}" is a reserved name` : `"${r.name}" is already ${clash}'s name in this group`}</Text>}
             {exprError && <Text type="danger" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>{exprError}</Text>}
             {!r.unit && <Text type="warning" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>⚠ a unit is needed: the value is a duration</Text>}
             {r.name && !clash && (
@@ -363,6 +382,11 @@ export default function TemplateDevEditor() {
   const [dirtyFiles, setDirtyFiles] = useState(() => new Set())
   const [parseErrors, setParseErrors] = useState([])
   const [drift, setDrift] = useState(null)
+  // Why the chart cannot be opened, when it cannot: nothing of it is shown to edit.
+  const [loadError, setLoadError] = useState(null)
+  // The chart and the time the model was loaded from disk: the Derived and
+  // Vars sections start again from the model each time.
+  const [loadedAs, setLoadedAs] = useState('')
   const [collapsedRules, setCollapsedRules] = useState({})
   const [importTarget, setImportTarget] = useState(null)
   const [breaking, setBreaking] = useState(null)   // the 409 payload while the dialog is open
@@ -410,6 +434,14 @@ export default function TemplateDevEditor() {
 
   const loadChart = useCallback(async (chart) => {
     const info = await getChartInfo(chart)
+    setLoadError(info.failed ? info.error || 'The chart cannot be opened' : null)
+    if (info.failed) {
+      setModel({ common: { columns: {} }, groups: {} })
+      setOrder([])
+      setDrift(null)
+      originalRef.current = {}
+      return
+    }
     setChartMeta(info.chartMeta || {})
     loadedDescription.current = info.chartMeta?.description
     setDrift(info.drift || null)
@@ -428,6 +460,7 @@ export default function TemplateDevEditor() {
     }
     setModel(m)
     setOrder(ord)
+    setLoadedAs(`${chart}@${Date.now()}`)
     setParseErrors(errors)
     setDirtyFiles(new Set())
     setDirty(false)
@@ -529,6 +562,10 @@ export default function TemplateDevEditor() {
 
     if (!overwrite && Object.keys(originalRef.current).length) {
       const fresh = await getChartInfo(activeChart)
+      if (fresh.failed) {
+        Modal.error({ title: 'The chart cannot be read now', content: fresh.error })
+        return
+      }
       if (JSON.stringify(fresh.rulesFiles || {}) !== JSON.stringify(originalRef.current)) {
         Modal.confirm({
           title: 'The rules files changed on disk since you opened this chart',
@@ -742,30 +779,40 @@ export default function TemplateDevEditor() {
   // Which rules use each derived value (#118), by its own name.
   const derivedUsage = Object.create(null)
   for (const r of (group && !group.custom ? group.rules : [])) {
-    for (const n of ruleVars(r)) if (Object.hasOwn(group.derived || {}, n)) (derivedUsage[n] ||= []).push(r.alert || r.record || '(unnamed)')
+    // Through a vars entry too, as the generator reads it.
+    const names = [...ruleVars(r)].flatMap(n => (Object.hasOwn(group.vars || {}, n) ? varsIn(String(group.vars[n])) : [n]))
+    for (const n of new Set(names)) if (Object.hasOwn(group.derived || {}, n)) (derivedUsage[n] ||= []).push(r.alert || r.record || '(unnamed)')
   }
   // A common column's usage spans every group.
   const commonUsage = commonColumnUsage(model.groups, model.common.columns)
 
   const missingDescriptions = cols => Object.values(cols).filter(c => !c.description).length
 
+  // What a name is already in `target`'s namespace (a group, or COMMON for
+  // every group's), or false: ${name} could not tell them apart. `derived`
+  // false leaves the group's derived values out (their own editor asks).
+  function nameTaken(target, name, { derived = true } = {}) {
+    if (RESERVED_NAMES.includes(name)) return 'reserved'
+    const groups = target === COMMON ? Object.values(model.groups) : [model.groups[target]].filter(Boolean)
+    if (target !== COMMON && Object.hasOwn(model.groups[target]?.columns || {}, name)) return 'a column'
+    if (Object.hasOwn(model.common.columns || {}, name)) return 'a common column'
+    if (target === COMMON && groups.some(g => Object.hasOwn(g.columns || {}, name))) return 'a column'
+    if (groups.some(g => Object.hasOwn(g.vars || {}, name))) return 'a vars entry'
+    if (derived && groups.some(g => Object.hasOwn(g.derived || {}, name))) return 'a derived value'
+    return false
+  }
+
   // Returns whether it renamed. A name has to be valid and free — among this
-  // group's columns and _common's, which share one namespace.
+  // group's columns, _common's, its vars and its derived values, which share
+  // one namespace.
   function renameColumn(target, oldName, newName) {
-    const own = target === COMMON ? model.common.columns : model.groups[target]?.columns || {}
-    // A derived value's name (#118) is taken too: ${name} could not tell
-    // them apart. For a common column, every group's.
-    const derivedNames = Object.values(target === COMMON ? model.groups : { [target]: model.groups[target] })
-      .flatMap(g => Object.keys(g?.derived || {}))
-    const taken = target === COMMON
-      ? [...Object.keys(own), ...derivedNames]
-      : [...Object.keys(own), ...Object.keys(model.common.columns || {}), ...derivedNames]
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
       message.warning(`"${newName}" is not a valid column name`)
       return false
     }
-    if (taken.includes(newName)) {
-      message.warning(`There is already a column named "${newName}"`)
+    const taken = nameTaken(target, newName)
+    if (taken) {
+      message.warning(taken === 'reserved' ? `"${newName}" is a reserved name` : `"${newName}" is already ${taken}'s name`)
       return false
     }
     patchColumn(target, oldName, newName, {})
@@ -899,7 +946,12 @@ export default function TemplateDevEditor() {
           message={<span>rules/*.yaml has problems: {parseErrors.join('; ')}</span>} />
       )}
 
-      {activeChart ? (
+      {activeChart && loadError && (
+        <Alert type="error" showIcon data-testid="chart-load-error" style={{ margin: '8px 20px 0' }}
+          message="This chart cannot be opened" description={loadError} />
+      )}
+
+      {activeChart && !loadError ? (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <div style={{ width: sidebarWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fafafa', position: 'relative' }}>
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1073,10 +1125,10 @@ export default function TemplateDevEditor() {
                           <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
                         </div>
                         <DerivedEditor
-                          key={activeGroup}
+                          key={`${loadedAs}:${activeGroup}`}
                           derived={group.derived}
                           usage={derivedUsage}
-                          taken={name => name === 'selector' || Object.hasOwn(group.columns, name) || Object.hasOwn(model.common.columns, name) || Object.hasOwn(group.vars || {}, name)}
+                          taken={name => nameTaken(activeGroup, name, { derived: false })}
                           onChange={d => updateGroup(activeGroup, g => {
                             const { derived: _, ...rest } = g
                             return d ? { ...rest, derived: d } : rest
@@ -1095,7 +1147,7 @@ export default function TemplateDevEditor() {
                         <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
                       </div>
                       <VarsEditor
-                        key={activeGroup}
+                        key={`${loadedAs}:${activeGroup}`}
                         vars={group.vars}
                         onChange={v => updateGroup(activeGroup, g => ({ ...g, vars: v }))}
                       />

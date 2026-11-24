@@ -79,3 +79,106 @@ describe('the other readers of a row merged with _common', () => {
     expect(rowIdentityRepeats({ _common: { cluster: 'c1' }, db: [{ db: 'a' }, { db: 'a', cluster: '' }] }, m).map(r => r.rows)).toEqual([[1, 2]])
   })
 })
+
+describe('derivedRows on a rules file the parser refuses (hand-edited)', () => {
+  const broken = unit => parseRulesDir({ 'g.yaml': `columns:\n  a: {type: integer}\nderived:\n  w: {expr: "a * 2"${unit}}\nrules:\n  - alert: A\n    expr: rate(x[\${w}]) > 0\n` }).model
+  it('a unit not one of ours is the reason, not a crash', () => {
+    expect(derivedRows({ g: [{ a: 1 }] }, broken(', unit: q')).g).toEqual([{ w: { problem: 'its unit "q" is not one of ms, s, m, h, d, w, y — fix the rules file' } }])
+  })
+  it('a unit left out is the reason, not a bare number', () => {
+    expect(derivedRows({ g: [{ a: 1 }] }, broken('')).g).toEqual([{ w: { problem: 'its unit is left out — fix the rules file' } }])
+  })
+})
+
+// Every pair of a row's value and a Common Value, empty or not — 0, false,
+// "", null, [], {}, a text, a number, left out — merged by
+// `helm template` (3.15.4 and 3.19.0 give the same): [row, _common, Helm's].
+const HELM_MERGE = [
+  [{"a": 0}, {"a": 0}, {"a": 0}],
+  [{"a": 0}, {"a": false}, {"a": false}],
+  [{"a": 0}, {"a": ""}, {"a": ""}],
+  [{"a": 0}, {"a": null}, {"a": 0}],
+  [{"a": 0}, {"a": []}, {"a": []}],
+  [{"a": 0}, {"a": {}}, {"a": {}}],
+  [{"a": 0}, {"a": "x"}, {"a": "x"}],
+  [{"a": 0}, {"a": 5}, {"a": 5}],
+  [{"a": 0}, {}, {"a": 0}],
+  [{"a": false}, {"a": 0}, {"a": 0}],
+  [{"a": false}, {"a": false}, {"a": false}],
+  [{"a": false}, {"a": ""}, {"a": ""}],
+  [{"a": false}, {"a": null}, {"a": false}],
+  [{"a": false}, {"a": []}, {"a": []}],
+  [{"a": false}, {"a": {}}, {"a": {}}],
+  [{"a": false}, {"a": "x"}, {"a": "x"}],
+  [{"a": false}, {"a": 5}, {"a": 5}],
+  [{"a": false}, {}, {"a": false}],
+  [{"a": ""}, {"a": 0}, {"a": 0}],
+  [{"a": ""}, {"a": false}, {"a": false}],
+  [{"a": ""}, {"a": ""}, {"a": ""}],
+  [{"a": ""}, {"a": null}, {"a": ""}],
+  [{"a": ""}, {"a": []}, {"a": []}],
+  [{"a": ""}, {"a": {}}, {"a": {}}],
+  [{"a": ""}, {"a": "x"}, {"a": "x"}],
+  [{"a": ""}, {"a": 5}, {"a": 5}],
+  [{"a": ""}, {}, {"a": ""}],
+  [{"a": null}, {"a": 0}, {"a": 0}],
+  [{"a": null}, {"a": false}, {"a": false}],
+  [{"a": null}, {"a": ""}, {"a": ""}],
+  [{"a": null}, {"a": null}, {"a": null}],
+  [{"a": null}, {"a": []}, {"a": []}],
+  [{"a": null}, {"a": {}}, {"a": {}}],
+  [{"a": null}, {"a": "x"}, {"a": "x"}],
+  [{"a": null}, {"a": 5}, {"a": 5}],
+  [{"a": null}, {}, {"a": null}],
+  [{"a": []}, {"a": 0}, {"a": 0}],
+  [{"a": []}, {"a": false}, {"a": false}],
+  [{"a": []}, {"a": ""}, {"a": ""}],
+  [{"a": []}, {"a": null}, {"a": []}],
+  [{"a": []}, {"a": []}, {"a": []}],
+  [{"a": []}, {"a": {}}, {"a": {}}],
+  [{"a": []}, {"a": "x"}, {"a": "x"}],
+  [{"a": []}, {"a": 5}, {"a": 5}],
+  [{"a": []}, {}, {"a": []}],
+  [{"a": {}}, {"a": 0}, {"a": 0}],
+  [{"a": {}}, {"a": false}, {"a": false}],
+  [{"a": {}}, {"a": ""}, {"a": ""}],
+  [{"a": {}}, {"a": null}, {"a": {}}],
+  [{"a": {}}, {"a": []}, {"a": []}],
+  [{"a": {}}, {"a": {}}, {"a": {}}],
+  [{"a": {}}, {"a": "x"}, {"a": "x"}],
+  [{"a": {}}, {"a": 5}, {"a": 5}],
+  [{"a": {}}, {}, {"a": {}}],
+  [{"a": "x"}, {"a": 0}, {"a": "x"}],
+  [{"a": "x"}, {"a": false}, {"a": "x"}],
+  [{"a": "x"}, {"a": ""}, {"a": "x"}],
+  [{"a": "x"}, {"a": null}, {"a": "x"}],
+  [{"a": "x"}, {"a": []}, {"a": "x"}],
+  [{"a": "x"}, {"a": {}}, {"a": "x"}],
+  [{"a": "x"}, {"a": "x"}, {"a": "x"}],
+  [{"a": "x"}, {"a": 5}, {"a": "x"}],
+  [{"a": "x"}, {}, {"a": "x"}],
+  [{"a": 5}, {"a": 0}, {"a": 5}],
+  [{"a": 5}, {"a": false}, {"a": 5}],
+  [{"a": 5}, {"a": ""}, {"a": 5}],
+  [{"a": 5}, {"a": null}, {"a": 5}],
+  [{"a": 5}, {"a": []}, {"a": 5}],
+  [{"a": 5}, {"a": {}}, {"a": 5}],
+  [{"a": 5}, {"a": "x"}, {"a": 5}],
+  [{"a": 5}, {"a": 5}, {"a": 5}],
+  [{"a": 5}, {}, {"a": 5}],
+  [{}, {"a": 0}, {"a": 0}],
+  [{}, {"a": false}, {"a": false}],
+  [{}, {"a": ""}, {"a": ""}],
+  [{}, {"a": null}, {}],
+  [{}, {"a": []}, {"a": []}],
+  [{}, {"a": {}}, {"a": {}}],
+  [{}, {"a": "x"}, {"a": "x"}],
+  [{}, {"a": 5}, {"a": 5}],
+  [{}, {}, {}],
+]
+
+describe('helmMerge against Helm, every empty and non-empty pair', () => {
+  it.each(HELM_MERGE.map(([row, common, helm]) => [JSON.stringify(row), JSON.stringify(common), helm, row, common]))('%s + %s', (_, __, helm, row, common) => {
+    expect(helmMerge(row, common)).toEqual(helm)
+  })
+})

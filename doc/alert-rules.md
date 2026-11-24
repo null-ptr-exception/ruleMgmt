@@ -341,7 +341,9 @@ chart, Save, making a deployment, a commit, and `gen-rules`, `gen-chart` and
 `import-rules`. A chart whose `rules/` cannot be read is not legacy. A
 `values.schema.json` that is not JSON still opens a chart with `rules/` (it
 is shown as a product to regenerate), but Save refuses it until it is fixed
-or removed: it may hold `x-custom-template` groups. A deployment's
+or removed: it may hold `x-custom-template` groups. On a chart without
+`rules/` it is the source, with nothing to regenerate it from: opening the
+chart says it cannot be read. A deployment's
 `values.yaml` that cannot be read refuses the commit too.
 
 ### Files of your own in templates/

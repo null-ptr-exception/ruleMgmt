@@ -83,7 +83,7 @@ describe('opening a Template', () => {
   it.skipIf(IS_ROOT)('rules/ without permission: refused, naming it — not a chart without rules', async () => {
     await lock('charts/demo/rules')
     const { status, data } = await api('GET', '/api/v2/templates/demo')
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/rules cannot be read: permission denied')
   })
 
@@ -91,29 +91,38 @@ describe('opening a Template', () => {
     await fs.rm(abs('charts/demo/rules'), { recursive: true })
     await write('charts/demo/rules', 'not a folder\n')
     const { status, data } = await api('GET', '/api/v2/templates/demo')
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/rules cannot be read: a file is where a folder should be')
   })
 
   it('a folder named rules/<group>.yaml: refused, naming it', async () => {
     await fs.mkdir(abs('charts/demo/rules/mem.yaml'))
     const { status, data } = await api('GET', '/api/v2/templates/demo')
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/rules/mem.yaml cannot be read: it is a folder, not a file')
   })
 
   it('a values.yaml that is not YAML: refused, naming it — not shown as empty for a Save to write over', async () => {
     await write('charts/demo/values.yaml', 'cpu: [\n')
     const { status, data } = await api('GET', '/api/v2/templates/demo')
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/values.yaml cannot be read: not valid YAML')
   })
 
   it.skipIf(IS_ROOT)('a Chart.yaml without permission: refused, naming it', async () => {
     await lock('charts/demo/Chart.yaml')
     const { status, data } = await api('GET', '/api/v2/templates/demo')
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/Chart.yaml cannot be read: permission denied')
+  })
+
+  it('a values.schema.json that is not JSON, on a chart without rules/ (its source): refused naming it, not a 500', async () => {
+    await fs.rm(abs('charts/demo/rules'), { recursive: true })
+    await write('charts/demo/values.schema.json', '{ not json')
+    const { status, data } = await api('GET', '/api/v2/templates/demo')
+    expect(status).toBe(409)
+    expect(data.unreadable).toBe(true)
+    names(data, 'charts/demo/values.schema.json cannot be read: not valid JSON')
   })
 
   it('a values.schema.json that is not JSON, on a chart with rules/: opens, and the drift says so', async () => {
@@ -128,8 +137,23 @@ describe('opening a Template', () => {
     const file = (await fs.readdir(abs('charts/demo/templates')))[0]
     await lock(`charts/demo/templates/${file}`)
     const { status, data } = await api('GET', `/api/v2/templates/demo/${file.replace(/\.yaml$/, '')}`)
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, `charts/demo/templates/${file} cannot be read: permission denied`)
+  })
+})
+
+describe('a folder named templates/<name>.yaml', () => {
+  // Helm reads it as a folder, and the files in it: on every path it is a
+  // folder, not a template that cannot be read.
+  it('opens, saves, commits and passes gen-rules --check', async () => {
+    await fs.mkdir(abs('charts/demo/templates/notes.yaml'))
+    expect((await api('GET', '/api/v2/templates/demo')).status).toBe(200)
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })).status).toBe(200)
+    await write('notes.txt', 'x\n')
+    const commit = await api('POST', '/api/v2/git/commit', { message: 'x' })
+    expect(commit.status, JSON.stringify(commit.data)).toBe(200)
+    const check = await run(process.execPath, [path.join(ROOT, 'scripts', 'gen-rules.mjs'), 'charts/demo', '--check'], { cwd: tmpDir }).then(() => 0, e => e.code)
+    expect(check).toBe(0)
   })
 })
 
@@ -138,7 +162,7 @@ describe('saving a Template', () => {
     const before = await read('charts/demo/Chart.yaml')
     await lock('charts/demo/Chart.yaml')
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU.replace('> 1', '> 2') } })
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/Chart.yaml cannot be read: permission denied')
     await unlock('charts/demo/Chart.yaml')
     expect(await read('charts/demo/Chart.yaml')).toBe(before)
@@ -148,7 +172,7 @@ describe('saving a Template', () => {
     await write('charts/demo/values.schema.json', '{ "properties": { "legacy": { "x-custom-template": true } }')
     const before = await snapshot('charts/demo')
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU.replace('> 1', '> 2') } })
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/values.schema.json cannot be read: not valid JSON')
     expect(await snapshot('charts/demo')).toEqual(before)
   })
@@ -158,7 +182,7 @@ describe('saving a Template', () => {
     await write('charts/demo/rules', 'not a folder\n')
     const before = await snapshot('charts/demo')
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU.replace('> 1', '> 2') } })
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/rules cannot be read')
     expect(await snapshot('charts/demo')).toEqual(before)
   })
@@ -170,7 +194,7 @@ describe('making a deployment', () => {
     await write('deployments/team/a/Chart.yaml', 'name: theirs\n')
     await lock('deployments/team/a/Chart.yaml')
     const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'deployments/team/a/Chart.yaml cannot be read: permission denied')
     await unlock('deployments/team/a/Chart.yaml')
     expect(await read('deployments/team/a/Chart.yaml')).toBe('name: theirs\n')
@@ -180,7 +204,7 @@ describe('making a deployment', () => {
     await fs.mkdir(abs('deployments/team/a'), { recursive: true })
     await write('deployments/team/a/Chart.yaml', 'name: [theirs\n')
     const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'deployments/team/a/Chart.yaml cannot be read: not valid YAML')
     expect(await read('deployments/team/a/Chart.yaml')).toBe('name: [theirs\n')
   })
@@ -188,9 +212,15 @@ describe('making a deployment', () => {
   it('the Template\'s values.yaml that is not YAML: refused before anything is written, not made with no groups', async () => {
     await write('charts/demo/values.yaml', 'cpu: [\n')
     const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })
-    expect(status).toBe(500)
+    expect(status).toBe(409)
     names(data, 'charts/demo/values.yaml cannot be read: not valid YAML')
-    expect(await fs.readdir(abs('deployments/team/a'))).toEqual([])
+    await expect(fs.access(abs('deployments/team/a'))).rejects.toThrow()
+  })
+
+  it('a Template that is not there: refused, and no folder made for it', async () => {
+    const { status } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/new/deep/a', chart: 'nochart' })
+    expect(status).toBeGreaterThanOrEqual(400)
+    await expect(fs.access(abs('deployments/new'))).rejects.toThrow()
   })
 })
 
@@ -209,6 +239,24 @@ describe('a commit', () => {
     names(data, 'charts/demo/rules cannot be read (permission denied)')
   })
 
+  describe.each([
+    ['rules/ without permission', async () => lock('charts/demo/rules'), 'charts/demo/rules cannot be read (permission denied)'],
+    ['a dangling link in rules/', async () => fs.symlink(abs('nowhere.yaml'), abs('charts/demo/rules/mem.yaml')), 'charts/demo/rules/mem.yaml cannot be read (a link to a file that is not there)'],
+    ['templates/ without permission', async () => lock('charts/demo/templates'), 'charts/demo/templates cannot be read (permission denied)'],
+    ['a legacy chart whose schema is not JSON', async () => { await fs.rm(abs('charts/demo/rules'), { recursive: true }); await write('charts/demo/values.schema.json', '{ not json') }, 'charts/demo/values.schema.json cannot be read (not valid JSON'],
+  ])('a Template a deployment uses, with %s', (_, breakIt, said) => {
+    it.skipIf(IS_ROOT)('refuses the commit naming it, not a 500', async () => {
+      expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })).status).toBe(200)
+      expect((await api('POST', `/api/v2/deployments/demo/a?folder=${encodeURIComponent('deployments/team/a')}`, { values: { cpu: [{ namespace: 'p' }] } })).status).toBe(200)
+      expect((await commit()).status).toBe(200)
+      await breakIt()
+      const { status, data } = await commit()
+      expect(status, JSON.stringify(data)).toBe(409)
+      expect(data.findings.map(f => f.kind)).toContain('chart-unreadable')
+      names(data, said)
+    })
+  })
+
   it('a deployment whose values.yaml is not YAML is refused, naming it', async () => {
     expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })).status).toBe(200)
     expect((await commit()).status).toBe(200)
@@ -216,6 +264,98 @@ describe('a commit', () => {
     const { status, data } = await commit()
     expect(status).toBe(409)
     expect(data.findings.find(f => f.kind === 'values-unreadable')?.description).toMatch(/^deployments\/team\/a: values.yaml cannot be read \(not valid YAML/)
+  })
+})
+
+describe('a deployment\'s values.yaml that is there and cannot be read', () => {
+  const DEP = 'deployments/team/a'
+  const url = `/api/v2/deployments/demo/a?folder=${encodeURIComponent(DEP)}`
+  const commit = async () => { await write('notes.txt', `${Math.random()}\n`); return api('POST', '/api/v2/git/commit', { message: 'x' }) }
+  beforeEach(async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: DEP, chart: 'demo' })).status).toBe(200)
+  })
+
+  describe.each([
+    ['a link to a file that is not there', async () => { await fs.rm(abs(`${DEP}/values.yaml`)); await fs.symlink(abs('nowhere.yaml'), abs(`${DEP}/values.yaml`)) }, 'a link to a file that is not there'],
+    ['a folder', async () => { await fs.rm(abs(`${DEP}/values.yaml`)); await fs.mkdir(abs(`${DEP}/values.yaml`)) }, 'it is a folder, not a file'],
+    ...(IS_ROOT ? [] : [['without permission', async () => lock(`${DEP}/values.yaml`), 'permission denied']]),
+  ])('%s', (_, breakIt, why) => {
+    it('opening it names it, not "not found"', async () => {
+      await breakIt()
+      const { status, data } = await api('GET', url)
+      expect(status).toBe(409)
+      names(data, `${DEP}/values.yaml cannot be read: ${why}`)
+    })
+
+    it('a save is refused, and no other file is written beside it', async () => {
+      await breakIt()
+      const { status, data } = await api('POST', url, { values: { cpu: [{ namespace: 'p' }] } })
+      expect(status, JSON.stringify(data)).toBe(409)
+      names(data, `${DEP}/values.yaml cannot be read`)
+      await expect(fs.lstat(abs(`${DEP}/a-values.yaml`))).rejects.toThrow()
+    })
+
+    it('a commit is refused, naming it', async () => {
+      expect((await commit()).status).toBe(200)
+      await breakIt()
+      const { status, data } = await commit()
+      expect(status).toBe(409)
+      expect(data.findings.map(f => f.description).join('\n')).toMatch(new RegExp(`${DEP}(: |/)values\\.yaml cannot be read \\(${why}`))
+    })
+  })
+})
+
+describe('a deployment whose Chart.yaml cannot be read', () => {
+  it.skipIf(IS_ROOT)('is named where the chart\'s users are listed, not left out', async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })).status).toBe(200)
+    await lock('deployments/team/a/Chart.yaml')
+    // A breaking change asks first while any folder that may use the chart cannot be read.
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU.replace(/namespace/g, 'ns') } })
+    expect(status).toBe(409)
+    expect(JSON.parse(data && JSON.stringify(data)).unreadable).toEqual([{ path: 'deployments/team/a', error: 'EACCES' }])
+  })
+})
+
+describe('a Template\'s Chart.yaml that cannot be read', () => {
+  it.skipIf(IS_ROOT)('the commit says it cannot be read, not that it is not YAML', async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })).status).toBe(200)
+    await write('notes.txt', 'x\n')
+    expect((await api('POST', '/api/v2/git/commit', { message: 'x' })).status).toBe(200)
+    await lock('charts/demo/Chart.yaml')
+    await write('notes.txt', 'y\n')
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'x' })
+    expect(status).toBe(409)
+    const said = data.findings.map(f => f.description).join('\n')
+    expect(said).toContain('charts/demo/Chart.yaml')
+    expect(said).toMatch(/cannot be read \(permission denied/)
+    expect(said).not.toContain('not valid YAML')
+  })
+
+  it.skipIf(IS_ROOT)('making a deployment of it is refused naming it, not a 500', async () => {
+    await lock('charts/demo/Chart.yaml')
+    const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/b', chart: 'demo' })
+    expect(status).toBe(409)
+    names(data, 'charts/demo/Chart.yaml cannot be read: permission denied')
+  })
+})
+
+describe('the Template\'s own values.yaml that is not YAML', () => {
+  it('refuses the commit, naming it', async () => {
+    await write('notes.txt', 'x\n')
+    expect((await api('POST', '/api/v2/git/commit', { message: 'x' })).status).toBe(200)
+    await write('charts/demo/values.yaml', 'cpu: [\n')
+    await write('notes.txt', 'y\n')
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'x' })
+    expect(status).toBe(409)
+    expect(data.findings.map(f => f.kind)).toContain('chart-unreadable')
+    names(data, 'charts/demo/values.yaml cannot be read (not valid YAML')
+  })
+
+  it('gen-rules --check fails on it', async () => {
+    await write('charts/demo/values.yaml', 'cpu: [\n')
+    const r = await run(process.execPath, [path.join(ROOT, 'scripts', 'gen-rules.mjs'), 'charts/demo', '--check'], { cwd: tmpDir }).then(o => ({ code: 0, out: o.stdout }), e => ({ code: e.code, out: `${e.stdout}` }))
+    expect(r.code).toBe(1)
+    expect(r.out).toMatch(/^ERROR {2}values.yaml is not valid YAML/m)
   })
 })
 

@@ -31,13 +31,25 @@ export class UnreadableError extends Error {
   }
 }
 
+/**
+ * Whether a failed read means the path is not there: ENOENT, and nothing at
+ * the path itself — a link to a file that is not there is there, and cannot
+ * be read.
+ */
+export async function isAbsent(abs, err) {
+  if (err?.code !== 'ENOENT') return false
+  return fs.lstat(abs).then(() => false, () => true)
+}
+
+const DANGLING = { reason: 'a link to a file that is not there' }
+
 /** The file's text, null when it is not there. */
 export async function readTextIfThere(abs) {
   try {
     return await fs.readFile(abs, 'utf-8')
   } catch (err) {
-    if (err.code === 'ENOENT') return null
-    throw new UnreadableError(abs, err)
+    if (await isAbsent(abs, err)) return null
+    throw new UnreadableError(abs, err.code === 'ENOENT' ? DANGLING : err)
   }
 }
 
@@ -46,8 +58,8 @@ export async function readDirIfThere(abs) {
   try {
     return await fs.readdir(abs)
   } catch (err) {
-    if (err.code === 'ENOENT') return null
-    throw new UnreadableError(abs, err)
+    if (await isAbsent(abs, err)) return null
+    throw new UnreadableError(abs, err.code === 'ENOENT' ? DANGLING : err)
   }
 }
 
@@ -60,4 +72,16 @@ export async function parseIfThere(abs, parse, absent = null) {
   } catch (err) {
     throw new UnreadableError(abs, { reason: `not valid ${/\.json$/.test(abs) ? 'JSON' : 'YAML'} (${err.reason || err.message})` })
   }
+}
+
+/**
+ * A route's answer to an error: a file of the repo that cannot be read is
+ * the repo's state, not the server failing — 409, naming the file (the
+ * routers take the workspace's path out), `unreadable: true` for the page.
+ * Anything else is a 500.
+ */
+export function errorAnswer(err) {
+  return err instanceof UnreadableError
+    ? { status: 409, body: { error: err.message, unreadable: true } }
+    : { status: 500, body: { error: err.message } }
 }

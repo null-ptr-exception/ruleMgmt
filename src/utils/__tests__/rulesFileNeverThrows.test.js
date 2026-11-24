@@ -79,7 +79,7 @@ describe('the rules parser never throws', () => {
     'labels', 'annotations',
   ])('an empty entry under %s, written as a list, is a problem naming the file and the rule', key => {
     const text = `columns:\n  job: {type: string}\nrules:\n  - alert: A\n    expr: up\n    ${key}:\n      - \n`
-    expect(parseRulesDir({ 'g.yaml': text }).errors).toEqual([`g.yaml rules[0]: ${key}[0] is empty — write ${key} as a mapping of name to value`])
+    expect(parseRulesDir({ 'g.yaml': text }).errors).toEqual([`g.yaml rules[0]: ${key} must be a mapping of name to text, e.g. { severity: warning }, not [null]`])
   })
 
   it('an empty entry under a rule\'s selectorLabels is a problem, not a throw', () => {

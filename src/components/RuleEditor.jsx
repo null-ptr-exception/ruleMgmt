@@ -120,6 +120,12 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, derive
   }
 
 
+  // What each reference holds, for the expr lint: a number column, an
+  // integer, a duration or a derived value is a number or a duration there.
+  const columnKinds = Object.create(null)
+  for (const [n, c] of Object.entries(columnDefs)) if (['number', 'integer', 'duration'].includes(c?.type) && !c.enum) columnKinds[n] = 'number'
+  for (const n of Object.keys(derived || {})) columnKinds[n] = 'number'
+
   const used = [...ruleVars(rule)]
   // A reference with no column renders as an empty value at deploy time, so it
   // is called out here rather than discovered in the rendered resource. A
@@ -237,6 +243,7 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, derive
               value={rule.expr || ''}
               onChange={expr => update({ expr })}
               minHeight={64}
+              columnKinds={columnKinds}
             />
             <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
               Select a literal and press Set as variable to turn it into a column.

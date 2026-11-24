@@ -104,6 +104,15 @@ describe.skipIf(!HAS_HELM)('Preview\'s derived values are what Helm renders', ()
     expect(shown(data.summary).table.rows[0].values.w).toEqual({ problem: 'it comes to 0, and a range has to be more than 0' })
   })
 
+  it('the deployment\'s null over the Template\'s Common Value: Helm drops the key, so the default', async () => {
+    expect((await api('POST', '/api/v2/templates/demo/values', { values: { _common: { base: 3 }, spc: [] } })).status).toBe(200)
+    // Written by hand: a save refuses an empty Common Value.
+    await fs.writeFile(path.join(tmpDir, DIRECT, 'values.yaml'), 'demo:\n  _common:\n    base: null\n  spc:\n    - {job: a, freq_num: 3}\n')
+    const { data } = await preview(DIRECT)
+    expect(rendered(data.output).Wide).toEqual({ a: '12m' })
+    expect(shown(data.summary).out.Wide).toEqual({ a: '12m' })
+  })
+
   it('on a _common stack: what the layer gives', async () => {
     expect((await api('POST', '/api/v2/folders', { path: 'deployments/shop' })).status).toBe(200)
     const plan = await api('GET', `/api/v2/folders/common/plan?${new URLSearchParams({ action: 'create', folder: 'deployments/shop', chart: 'demo' })}`)

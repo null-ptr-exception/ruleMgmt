@@ -26,6 +26,7 @@ import { valueProblems, rowIdentityRepeats } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
+import { readTextIfThere } from './readIfThere.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
@@ -58,6 +59,41 @@ export function isInherited(p, own, layers) {
     return !(p.column in mine) && layers.some(l => l.values?._common && typeof l.values._common === 'object' && p.column in l.values._common)
   }
   return p.group !== undefined && p.group !== null && !(own && p.group in own)
+}
+
+const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'a list' : typeof v === 'object' ? 'a map' : `${JSON.stringify(v)}`)
+const isValue = v => v === null || typeof v !== 'object'
+
+/**
+ * The shapes the Template's schema can never take, whatever the cells hold:
+ * values that are not a map, Common Values that are not a map, a group that
+ * is not a list of rows, a row that is not a map, a cell that is a list or a
+ * map. Said here, naming the group and the row, instead of saved and then
+ * refused by Helm for every render. (A cell's type against its column is
+ * the schema's; the empty and the null ones valueProblems says.)
+ */
+export function shapeProblems(bare, model) {
+  if (!isPlainObject(bare)) return [{ message: `the values must be a map of groups, not ${kindOf(bare)}` }]
+  const out = []
+  const groups = model?.groups || {}
+  for (const [key, value] of Object.entries(bare)) {
+    if (key === '_common') {
+      if (!isPlainObject(value)) { out.push({ group: '_common', row: null, message: `Common Values must be a map of name to value, not ${kindOf(value)}` }); continue }
+      for (const [name, cell] of Object.entries(value)) {
+        if (!isValue(cell)) out.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${kindOf(cell)} — a value is text, a number or true/false` })
+      }
+      continue
+    }
+    if (!Object.hasOwn(groups, key) || groups[key].custom) continue
+    if (!Array.isArray(value)) { out.push({ group: key, row: null, message: `${key}: must be a list of rows, not ${kindOf(value)}` }); continue }
+    value.forEach((row, i) => {
+      if (!isPlainObject(row)) { out.push({ group: key, row: i, message: `${key} row ${i + 1}: must be a map of column to value, not ${kindOf(row)}` }); return }
+      for (const [name, cell] of Object.entries(row)) {
+        if (!isValue(cell)) out.push({ group: key, row: i, column: name, message: `${key} row ${i + 1}, "${name}": ${kindOf(cell)} — a value is text, a number or true/false` })
+      }
+    })
+  }
+  return out
 }
 
 /**
@@ -94,10 +130,16 @@ export async function valuesRefusal(gitopsDir, dir, values, { chartName, stack: 
       : valueIssuesIn(bare, [], 'values.yaml', stack.groups)
     if (issues.length) return { error: 'Some values are null, or not what Helm reads', problems: issues.map(message => ({ message })) }
   }
+  // A file that is not a map of groups renders nothing Helm accepts.
+  if (typeof values === 'string' && !isPlainObject(yaml.load(values) ?? {})) {
+    return { error: 'Some values are not what Helm reads', problems: [{ message: `values.yaml must be a map, not ${kindOf(yaml.load(values))}` }] }
+  }
   const chart = stack.chart || chartName
   if (!chart) return null
   const { model } = await readChartModel(path.join(gitopsDir, chartsDirName(), chart))
-  if (!model || !bare || typeof bare !== 'object') return null
+  if (!model) return null
+  const shapes = shapeProblems(bare, model)
+  if (shapes.length) return { error: 'Some values are not what Helm reads', problems: shapes }
   const keep = isLayer ? p => !(p.required && p.group === '_common') : () => true
   if (!stack.layers.length) return problemsOf(bare, model, keep)
   const { merged, layers } = stackValues(stack, { own: bare })
@@ -225,7 +267,8 @@ export async function copyToTarget(srcDir, dstDir, { values = true, chart = valu
   }
 }
 
-const readOrNull = file => fs.readFile(file, 'utf-8').catch(err => (err.code === 'ENOENT' ? null : Promise.reject(err)))
+// null when not there; there and unreadable is an error naming it.
+const readOrNull = readTextIfThere
 
 // A file as it was before: written again only when it changed, removed
 // when it was not there.
@@ -291,6 +334,9 @@ export const okWith = syncFailed => (syncFailed.length ? { ok: true, syncFailed 
  */
 export async function saveValues(gitopsDir, registry, folder, values, { chartName, version } = {}) {
   const dir = path.join(gitopsDir, folder)
+  // The file as it is: one that is there and cannot be read (a folder, no
+  // permission, a link to nothing) is said, naming it, not written over.
+  await readTextIfThere(path.join(dir, 'values.yaml'))
   const stack = await resolveStack(gitopsDir, dir)
   if (version !== undefined && version !== await valuesVersion(gitopsDir, dir, stack)) {
     return { status: 409, body: { error: `${folder} changed since you opened it: reload it to see what is there now`, changed: true } }

@@ -22,6 +22,7 @@ import yaml from 'js-yaml'
 import { isDeploymentDir, isCommonChartDir } from './sync.js'
 import { inSharedDir, SHARED_DIR } from './sharedConfigs.js'
 import { COMMON_DIR } from '../../src/utils/reservedNames.js'
+import { isAbsent } from './readIfThere.js'
 
 export { COMMON_DIR }
 
@@ -83,6 +84,18 @@ async function readDir(dir) {
   }
 }
 
+// Why a folder's Chart.yaml cannot be read, or null (not there, or read).
+async function unreadableChart(abs) {
+  const file = path.join(abs, 'Chart.yaml')
+  try {
+    await fs.readFile(file, 'utf-8')
+    return null
+  } catch (err) {
+    if (await isAbsent(file, err)) return null
+    return err.code === 'ENOENT' ? 'a link to a file that is not there' : err.code || 'error'
+  }
+}
+
 // A folder with a Chart.yaml naming a dependency, and no values.yaml: Helm
 // deploys it with the Template's own values — its example rows.
 async function isChartOnlyDir(abs) {
@@ -127,7 +140,13 @@ export async function walkDeployments(gitopsDir, { from = '', chartOnly = false,
         await walk(child, { inChart: true, nestedIn })
         continue
       }
-      const isDeployment = await isDeploymentDir(abs)
+      // A Chart.yaml that is there and cannot be read: listed as a folder
+      // that cannot be read, as one whose entries cannot be — named, not
+      // taken for no deployment.
+      const chartError = await unreadableChart(abs)
+      // A folder that cannot be listed is named once, by the walk into it.
+      if (chartError && Array.isArray(await readDir(abs))) found.push({ path: child, kind: 'unreadable', error: chartError, nestedIn: null, inCommon: false })
+      const isDeployment = !chartError && await isDeploymentDir(abs)
       if (isDeployment) {
         found.push({ path: child, kind: 'deployment', nestedIn, inCommon: segmentsOf(child).includes(COMMON_DIR) })
       } else if (chartOnly && await isChartOnlyDir(abs)) {

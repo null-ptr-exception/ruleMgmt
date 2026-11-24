@@ -56,7 +56,9 @@ export const RECORD_KEYS = ['record', 'selectorLabels', 'expr', 'labels', 'note'
 export const COLUMN_KEYS = ['type', 'required', 'default', 'enum', 'description']
 export const DERIVED_KEYS = ['expr', 'unit']
 export const COMMON_KEYS = ['rowIdentity', 'columns']
-export const RESERVED_NAMES = ['selector']
+// `__proto__` cannot be a key of a JavaScript object as written: as a name
+// it would vanish on the way, so it is refused, naming it.
+export const RESERVED_NAMES = ['selector', '__proto__']
 const RESERVED = new Set(RESERVED_NAMES)
 // A derived value's name.
 export const DERIVED_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
@@ -119,18 +121,28 @@ function columnsToSchema(columns = {}, selectorColumns = new Set()) {
 
 // ── rules ────────────────────────────────────────────────────────────────────
 
-// An empty entry (a `- ` with nothing) is no entry: the parser says so
-// (listEntryProblem), and nothing here throws on it.
+// The editor's own model holds labels as a list of { key, value } entries;
+// a rules file holds a mapping (labelsProblem refuses anything else there).
 const entriesToMap = list =>
   Array.isArray(list) ? Object.fromEntries(list.filter(e => e !== null && e !== undefined).map(e => [e.key, String(e.value)])) : (list || undefined)
 
-/** labels or annotations written as a list with an empty entry (`- `). */
-function listEntryProblem(rule, where) {
+/**
+ * A rule's labels or annotations as a rules file holds them: a mapping of
+ * name to text (a number or true/false is its text, as written). Anything
+ * else would deploy something not written — `labels: foo` as labels 0, 1, 2,
+ * a list as a label named "undefined", a null as the text "null" — so it is
+ * refused, naming the file and the rule. Left out or empty is none.
+ */
+function labelsProblem(rule, where) {
   for (const key of ['labels', 'annotations']) {
-    const list = rule[key]
-    if (!Array.isArray(list)) continue
-    const at = list.findIndex(e => e === null || e === undefined)
-    if (at >= 0) return `${where}: ${key}[${at}] is empty — write ${key} as a mapping of name to value`
+    const value = rule[key]
+    if (value === undefined || value === null) continue
+    if (!isMapping(value)) return `${where}: ${key} must be a mapping of name to text, e.g. { severity: warning }, not ${JSON.stringify(value)}`
+    for (const [name, text] of Object.entries(value)) {
+      if (!['string', 'number', 'boolean'].includes(typeof text)) {
+        return `${where}: ${key} "${name}" is ${JSON.stringify(text)} — write text, e.g. ${name}: warning`
+      }
+    }
   }
   return null
 }
@@ -277,7 +289,7 @@ export function modelToSchema(model, originalSchema = null) {
   const commonCols = model.common?.columns || {}
   // A _common column any group arranges by is a selector column everywhere:
   // it is one value per deployment, read by every group.
-  const commonSelectors = new Set(Object.values(model.groups || {}).flatMap(g => g.selectors || []).filter(n => n in commonCols))
+  const commonSelectors = new Set(Object.values(model.groups || {}).flatMap(g => g.selectors || []).filter(n => Object.hasOwn(commonCols, n)))
   if (Object.keys(commonCols).length) {
     const { properties, required } = columnsToSchema(commonCols, commonSelectors)
     schema.properties._common = { type: 'object', properties }
@@ -291,7 +303,7 @@ export function modelToSchema(model, originalSchema = null) {
   // template.
   const groups = { ...model.groups }
   for (const key of customTemplateGroups(originalSchema)) {
-    if (!(key in groups)) groups[key] = { custom: true }
+    if (!Object.hasOwn(groups, key)) groups[key] = { custom: true }
   }
 
   for (const [key, group] of sortedGroups(groups)) {
@@ -450,6 +462,8 @@ export function modelToFiles(model) {
 export const GROUP_KEY_RE = /^[a-z][a-z0-9_]*$/
 
 const isMapping = v => v !== null && typeof v === 'object' && !Array.isArray(v)
+// A user-named key's value, never Object.prototype's (`constructor`, `valueOf`).
+const own = (obj, key) => (obj && typeof obj === 'object' && Object.hasOwn(obj, key) ? obj[key] : undefined)
 
 /**
  * A file's YAML as a mapping, or an error. Never throws: every caller (drift,
@@ -602,8 +616,13 @@ export function parseGroupFile(text, filename) {
       return []
     }
     rejectUnknown(rule, RULE_KEYS, where, errors)
-    const entry = listEntryProblem(rule, where)
-    if (entry) errors.push(entry)
+    const shape = labelsProblem(rule, where)
+    if (shape) errors.push(shape)
+    // Text fields: a list or a mapping would deploy as something not
+    // written (`expr: [x]` as x, `raw: {a: 1}` as [object Object]).
+    for (const key of ['alert', 'record', 'expr', 'raw']) {
+      if (rule[key] !== null && typeof rule[key] === 'object') errors.push(`${where}: ${key} must be text, not ${JSON.stringify(rule[key])}`)
+    }
     checkRuleKind(rule, where, errors)
     checkSelectorLabelsShape(rule.selectorLabels, where, errors)
     // A duration written out is checked here; one read from a column
@@ -889,12 +908,17 @@ export function derivedRows(values, model) {
     const rows = Array.isArray(values?.[group]) ? values[group] : []
     out[group] = rows.map(row => {
       const seen = merges ? helmMerge(row, values?._common) : (row && typeof row === 'object' ? row : {})
-      const cellOf = col => (col in seen ? seen[col] : (entry.columns?.[col] || commonCols[col])?.default)
+      // Own keys only: a column may be called valueOf or constructor.
+      const cellOf = col => (Object.hasOwn(seen, col) ? seen[col] : (own(entry.columns, col) || own(commonCols, col))?.default)
       return Object.fromEntries(defs.map(({ name, d, tree, position: where }) => {
         const read = Object.fromEntries(derivedColumns(tree).map(c => [c, cellOf(c)]))
         // A column left out with no default drops the rule or line that uses
         // it (attachGuards), so there is nothing to compute.
         if (Object.values(read).some(v => v === undefined)) return [name, { omitted: true }]
+        // A hand-edited rules file the parser refuses still gives Preview and
+        // the save a model: a unit left out or not one of ours would deploy
+        // a bare number or fail the computation, so it is the reason shown.
+        if (!DERIVED_UNITS.includes(d.unit)) return [name, { problem: `its unit ${d.unit === undefined ? 'is left out' : `${JSON.stringify(d.unit)} is not one of ${DERIVED_UNITS.join(', ')}`} — fix the rules file` }]
         const r = evalDerived(tree, read, { unit: d.unit, position: where })
         return [name, r.problem ? { problem: r.problem } : { value: r.value, unit: d.unit }]
       }))
@@ -973,9 +997,9 @@ export function valueProblems(values, model) {
     const rows = values?.[group]
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
       rendersAnything = true
-      const cells = new Set([...Object.keys(columns), ...Object.keys(row || {}).filter(k => !(k in commonCols))])
+      const cells = new Set([...Object.keys(columns), ...Object.keys(row || {}).filter(k => !Object.hasOwn(commonCols, k))])
       for (const name of cells) {
-        const why = cellProblem(columns[name], name in (row || {}), row?.[name], quoted.has(name), positionHere(name))
+        const why = cellProblem(own(columns, name), Object.hasOwn(row || {}, name), own(row, name), quoted.has(name), positionHere(name))
         if (why) problems.push({ group, row: i, column: name, message: `${group} row ${i + 1}, "${name}": ${why}`, ...(why === REQUIRED ? { required: true } : {}) })
       }
       for (const [name, out] of Object.entries(computed?.[i] || {})) {
@@ -987,7 +1011,7 @@ export function valueProblems(values, model) {
   const common = values?._common || {}
   const commonCells = new Set([...(rendersAnything ? Object.keys(commonCols) : []), ...Object.keys(common)])
   for (const name of commonCells) {
-    const why = cellProblem(commonCols[name], name in common, common[name], quotedCommon.has(name), commonPosition(name))
+    const why = cellProblem(own(commonCols, name), Object.hasOwn(common, name), own(common, name), quotedCommon.has(name), commonPosition(name))
     if (why) problems.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${why}`, ...(why === REQUIRED ? { required: true } : {}) })
   }
   return problems
@@ -1011,7 +1035,7 @@ export function validateValues(values, model) {
     const known = { ...commonCols, ...columns }
     for (const [i, row] of (Array.isArray(rows) ? rows : []).entries()) {
       for (const [name, value] of Object.entries(row || {})) {
-        if (!(name in known)) problems.push(`values.yaml: ${group}[${i}] has "${name}", which no column defines`)
+        if (!Object.hasOwn(known, name)) problems.push(`values.yaml: ${group}[${i}] has "${name}", which no column defines`)
         // A duration cell's problems, a number among them, are said once, by
         // valueProblems below, with what to write instead.
         else if (known[name].type !== 'duration' && !typeOk(value, known[name].type)) problems.push(`values.yaml: ${group}[${i}] "${name}" should be ${known[name].type}`)

@@ -116,7 +116,8 @@
         "propertyNames": {
           "not": {
             "enum": [
-              "selector"
+              "selector",
+              "__proto__"
             ]
           }
         }
@@ -129,7 +130,8 @@
           "propertyNames": {
             "not": {
               "enum": [
-                "selector"
+                "selector",
+                "__proto__"
               ]
             }
           },
@@ -311,7 +313,8 @@
         "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
         "not": {
           "enum": [
-            "selector"
+            "selector",
+            "__proto__"
           ]
         }
       },
@@ -349,9 +352,21 @@
         "type": "object",
         "properties": {
           "alert": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
             "description": "The alert's name. A rule has exactly one of alert or record, or is raw."
           },
           "record": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
             "description": "The recording rule's name. A recording rule has only record, expr, labels, selectorLabels and note."
           },
           "selectorLabels": {
@@ -362,6 +377,12 @@
             "description": "Selector column → label name for this rule, over the group's."
           },
           "expr": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
             "description": "The query. ${column} reads a row's value."
           },
           "for": {
@@ -371,12 +392,40 @@
             "description": "How long the alert keeps firing after the condition clears, e.g. 5m, or ${column}."
           },
           "labels": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            },
             "description": "Labels on the alert or series: name → text."
           },
           "annotations": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            },
             "description": "Annotations on the alert: name → text."
           },
           "raw": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
             "description": "A rule written out as it goes into the template, for what the other keys cannot say."
           },
           "note": {

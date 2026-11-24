@@ -181,7 +181,8 @@ export function selectorPath(sel, levels) {
 export function selectorCells(row, common, defaults, levels) {
   const merged = helmMerge(row, common)
   return Object.fromEntries(levels.map(l => {
-    const v = merged[l] !== undefined ? merged[l] : defaults[l]
+    // Own keys only: a selector column may be called constructor.
+    const v = Object.hasOwn(merged, l) && merged[l] !== undefined ? merged[l] : (Object.hasOwn(defaults || {}, l) ? defaults[l] : undefined)
     return [l, v === undefined ? undefined : String(v)]
   }))
 }

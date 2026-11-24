@@ -17,7 +17,8 @@
           "propertyNames": {
             "not": {
               "enum": [
-                "selector"
+                "selector",
+                "__proto__"
               ]
             }
           },

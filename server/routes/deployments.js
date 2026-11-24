@@ -15,6 +15,7 @@ import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath, COMMON_DIR } from '../../src/utils/reservedNames.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { NAME_RE, isRepoPath, inside } from '../lib/safePath.js'
+import { isAbsent, UnreadableError, readTextIfThere, errorAnswer } from '../lib/readIfThere.js'
 
 // One segment of a file name: not a path, not hidden.
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
@@ -56,8 +57,9 @@ async function resolveValuesFile(dir, deployment) {
       return { file: directFile, direct: true, legacyFile }
     } catch (err) {
       // Only a missing values.yaml means a legacy file named after the
-      // folder; any other error must not quietly pick the other file.
-      if (err.code !== 'ENOENT' && err.code !== 'ENOTDIR') throw err
+      // folder; any other error — a link to nothing among them — must not
+      // quietly pick the other file.
+      if (err.code !== 'ENOTDIR' && !(await isAbsent(directFile, err))) throw new UnreadableError(directFile, err.code === 'ENOENT' ? { reason: 'a link to a file that is not there' } : err)
     }
   }
   return { file: legacyFile, direct: false, legacyFile }
@@ -145,7 +147,8 @@ export default function deploymentsRouter() {
       }
       res.json(deployments)
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -157,10 +160,15 @@ export default function deploymentsRouter() {
     }
     try {
       const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
-      const content = await fs.readFile(file, 'utf-8')
+      // Not there: not found. There and unreadable (no permission, a
+      // folder, a link to nothing, not YAML): said, naming the file.
+      const content = await readTextIfThere(file)
+      if (content === null) return res.status(404).json({ error: 'Not found' })
+      let loaded
+      try { loaded = yaml.load(content) } catch (err) { throw new UnreadableError(file, { reason: `not valid YAML (${err.reason || err.message})` }) }
       // Only the deployment's own values, under every key of its stack (#100).
       const stack = await resolveStack(req.gitopsDir, dir)
-      const parsed = unwrapPath(yaml.load(content) || {}, stack.keys)
+      const parsed = unwrapPath(loaded || {}, stack.keys)
       // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
       // anything; say so, or it looks like the file being edited.
       const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
@@ -183,8 +191,9 @@ export default function deploymentsRouter() {
         }
       }
       res.json({ content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited })
-    } catch {
-      res.status(404).json({ error: 'Not found' })
+    } catch (err) {
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -237,6 +246,7 @@ export default function deploymentsRouter() {
       const stack = await resolveStack(req.gitopsDir, dir)
       const refusal = await valuesRefusal(req.gitopsDir, dir, values, { chartName: req.params.chart, stack })
       if (refusal) return res.status(400).json(refusal)
+      await readTextIfThere(file)
       if (typeof values !== 'string') {
         values = dumpForHelm(wrapPath(values, stack.keys), { lineWidth: -1 })
       }
@@ -244,7 +254,8 @@ export default function deploymentsRouter() {
 
       res.json({ ok: true })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -307,7 +318,8 @@ export default function deploymentsRouter() {
       }
       res.json(state)
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -336,7 +348,8 @@ export default function deploymentsRouter() {
       })
       res.status(status).json(status < 300 && warnings.length && body && typeof body === 'object' ? { ...body, warnings } : body)
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -347,7 +360,8 @@ export default function deploymentsRouter() {
       const { status, body } = await writeRoutingAndSync(req, at, async dir => { await removeRouting(dir); return null })
       res.status(status).json(body)
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 
@@ -367,7 +381,8 @@ export default function deploymentsRouter() {
       await fs.copyFile(srcFile, dstFile)
       res.json({ ok: true })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      const { status, body } = errorAnswer(err)
+      res.status(status).json(body)
     }
   })
 

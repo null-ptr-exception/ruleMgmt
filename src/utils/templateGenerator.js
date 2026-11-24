@@ -396,7 +396,7 @@ function attachGuards(rules, mayBeAbsent, derived = {}) {
  */
 export function selectorHelper(alertGroup, levels, defaults, withLabels = false, numeric = new Set()) {
   const name = `alertforge.selector.${alertGroup}`
-  const lit = l => (defaults[l] === undefined ? '""' : JSON.stringify(String(defaults[l])))
+  const lit = l => (!Object.hasOwn(defaults, l) || defaults[l] === undefined ? '""' : JSON.stringify(String(defaults[l])))
   // A number column's cell as JSON writes it (NUMERIC in ruleModel.js): toString
   // would give 1e+06 for 1000000. An empty one stays "".
   const cell = (l, v) => (numeric.has(l)
@@ -472,7 +472,7 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
   const rules = normalizeRules(alertGroup, alertDef, allSelectors, requiredSet, ref, refVar)
   if (levels.length && !legacy && !once) {
     const cols = { ...commonProps, ...(alertDef?.items?.properties || {}) }
-    const levelDefaults = Object.fromEntries(levels.filter(l => cols[l]?.default !== undefined).map(l => [l, cols[l].default]))
+    const levelDefaults = Object.fromEntries(levels.filter(l => Object.hasOwn(cols, l) && cols[l]?.default !== undefined).map(l => [l, cols[l].default]))
     // Only a group that renames a column (#121) passes labels; any other
     // renders as it did before selectorLabels.
     const labelsFor = rule => selectorLabelsFor(alertDef, rule)
@@ -489,7 +489,7 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
   // ${name} does — dig with the default, or the bare key.
   const derived = {}
   if (!legacy && !once) {
-    const cell = name => (defaults[name] === undefined ? `${ref}${name}` : `(dig "${name}" ${helmLiteral(defaults[name])} ${refVar})`)
+    const cell = name => (!Object.hasOwn(defaults, name) || defaults[name] === undefined ? `${ref}${name}` : `(dig "${name}" ${helmLiteral(defaults[name])} ${refVar})`)
     for (const [name, def] of Object.entries(alertDef.derived || {})) {
       const tree = parseDerived(def.expr)
       derived[name] = { columns: derivedColumns(tree), helm: `{{ ${compileSprig(tree, cell)} }}${def.unit || ''}` }

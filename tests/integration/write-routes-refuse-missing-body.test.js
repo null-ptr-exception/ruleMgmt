@@ -26,7 +26,7 @@ beforeAll(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'write-routes-'))
   execFileSync('git', ['init', '-q'], { cwd: tmpDir })
   await fs.mkdir(path.join(tmpDir, 'charts', 'demo'), { recursive: true })
-  const names = { charts: 'charts', templates: 'templates', deployments: 'deployments', folders: 'folders', sync: 'sync', 'routing/shared': 'routingShared' }
+  const names = { charts: 'charts', templates: 'templates', deployments: 'deployments', folders: 'folders', sync: 'sync', 'routing/shared': 'routingShared', git: 'git', render: 'render' }
   const app = express()
   app.use(express.json())
   app.use((req, res, next) => { req.gitopsDir = tmpDir; next() })
@@ -92,6 +92,7 @@ const ROUTES = [
   ['a deployment made', 'POST', '/api/v2/folders/init', [{}, { folder: 'deployments/team/c' }, { folder: 'deployments/team/c', chart: 5 }, { folder: 5, chart: 'demo' }, { folder: [], chart: 'demo' }]],
   ['a Template made', 'POST', '/api/v2/charts', each('name')],
   ['a Template cloned', 'POST', '/api/v2/charts/demo/clone', each('newName')],
+  ['a commit', 'POST', '/api/v2/git/commit', [...each('message', [undefined, null, 5, true, [], ['x'], { a: 1 }]), { message: '   ' }]],
 ]
 
 describe.each(ROUTES)('%s', (_, method, url, bodies) => {

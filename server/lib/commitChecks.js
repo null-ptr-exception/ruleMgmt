@@ -24,7 +24,7 @@ import { listDeploymentPaths, walkDeployments } from './deploymentWalk.js'
 import { resolveStack } from './stack.js'
 import { valuesWarnings } from './deploymentWrite.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
-import { parseIfThere } from './readIfThere.js'
+import { parseIfThere, readTextIfThere, UnreadableError } from './readIfThere.js'
 
 const SYNC_FILE = 'sync.yaml'
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
@@ -92,10 +92,17 @@ async function fileDependencyProblem(gitopsDir, dir, dep) {
     const noun = `${what} ${common ? path.relative(gitopsDir, at).replace(/\\/g, '/') : d.name || repo}`
     const problem = description => ({ kind: 'template-version', description: `${dep}: ${description}, so Helm cannot render it` })
     let template
+    let text
     try {
-      template = yaml.load(await fs.readFile(path.join(at, 'Chart.yaml'), 'utf-8'))
+      text = await readTextIfThere(path.join(at, 'Chart.yaml'))
     } catch (err) {
-      if (err.code === 'ENOENT') return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
+      // There, and not readable: its real reason, not "not YAML".
+      return problem(`its ${noun}'s Chart.yaml cannot be read (${err.why || err.message})`)
+    }
+    if (text === null) return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
+    try {
+      template = yaml.load(text)
+    } catch (err) {
       return problem(`its ${noun}'s Chart.yaml is not valid YAML (${err.reason || err.message})`)
     }
     const has = template && typeof template === 'object' ? parseVersion(template.version ?? '') : null
@@ -234,7 +241,10 @@ export async function deploymentCommitBlockers(gitopsDir) {
       }
       valuesText = null
     }
+    // A Template that cannot be read is the chart check's finding
+    // (chart-unreadable): this deployment's warnings wait for it.
     const repeats = valuesText === null ? [] : await valuesWarnings(gitopsDir, path.join(gitopsDir, dep), valuesText, { stack })
+      .catch(err => { if (err instanceof UnreadableError) return []; throw err })
     if (repeats.length) valueWarnings.push({ deployment: dep, warnings: repeats })
     // A target is held to its source below. One listed as its own target is
     // no target (sync.yaml is refused for it too): its routing is checked.

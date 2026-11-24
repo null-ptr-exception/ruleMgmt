@@ -114,7 +114,8 @@ export function substituteVars(str, ref = '.', defaults) {
   const numeric = defaults?.[NUMERIC]
   return String(str).replace(VAR_RE, (_, name) => {
     if (derived && Object.hasOwn(derived, name)) return derived[name].helm
-    const fallback = defaults?.[name]
+    // Own keys only: a column may be called constructor or valueOf.
+    const fallback = defaults && Object.hasOwn(defaults, name) ? defaults[name] : undefined
     const asNumber = numeric?.has(name) ? ' | toJson' : ''
     return fallback === undefined
       ? `{{ ${ref}${name}${asNumber} }}`

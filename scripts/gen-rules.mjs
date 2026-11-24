@@ -52,7 +52,9 @@ async function readIfExists(file) {
   try {
     return await fs.readFile(file, 'utf-8')
   } catch (err) {
-    if (err.code === 'ENOENT') return null
+    // A link to a file that is not there is there, and cannot be read.
+    if (err.code === 'ENOENT' && await fs.lstat(file).then(() => false, () => true)) return null
+    if (err.code === 'ENOENT') throw new Error(`${file} cannot be read: a link to a file that is not there`, { cause: err })
     throw err
   }
 }
@@ -224,7 +226,10 @@ async function main() {
         console.log(`warn   ${problem}`)
       }
     } catch (err) {
-      console.log(`warn   values.yaml did not parse: ${err.message}`)
+      // Helm reads it for every deployment of the chart: one that is not
+      // YAML fails them all, so it is an error, not a warning.
+      console.log(`ERROR  values.yaml is not valid YAML: ${err.message}`)
+      failed++
     }
   }
 

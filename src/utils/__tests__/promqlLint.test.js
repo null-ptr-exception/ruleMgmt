@@ -1,27 +1,60 @@
-// The expr editor's lint with ${column} references: each reference is read
-// as digits and as letters of its length, and only a problem both readings
-// have is shown. The real PromQL linter's answers for these texts are in
-// tests/e2e/expr-highlight.spec.js; here, the two readings and the choice.
+// The expr editor's lint with ${column} references, run with the editor's
+// own PromQL linter: no reference is shown as a problem, and a real mistake
+// beside one, in every position, is still shown.
 import { describe, it, expect } from 'vitest'
+import { createRequire } from 'node:module'
 import { withColumnRefs } from '../promqlLint.js'
 
-describe('withColumnRefs', () => {
-  it('reads each reference as digits and as letters of the same length', () => {
-    const seen = []
-    withColumnRefs('rate(x[${w}]) > ${warn}', text => { seen.push(text); return [] })
-    expect(seen).toEqual(['rate(x[xxxx]) > xxxxxxx', 'rate(x[0000]) > 0000000'])
-  })
+// The package's CommonJS build with CodeMirror's: under Node its ES build
+// is read beside another copy of @codemirror/state, which CodeMirror refuses.
+const require = createRequire(import.meta.url)
+const { EditorState } = require('@codemirror/state')
+const { ensureSyntaxTree } = require('@codemirror/language')
+const { PromQLExtension } = require('@prometheus-io/codemirror-promql/dist/cjs/index.js')
 
-  it('keeps a problem both readings have, drops one only a placeholder makes', () => {
-    const diagnose = text => [
-      ...(text.includes('>>') ? [{ from: 12, to: 14, message: 'bad operator' }] : []),
-      ...(text.includes('xxxx]') ? [{ from: 7, to: 11, message: 'not a duration' }] : []),
-    ]
-    expect(withColumnRefs('rate(x[${w}]) >> 1', diagnose)).toEqual([{ from: 12, to: 14, message: 'bad operator' }])
-    expect(withColumnRefs('rate(x[${w}]) > 1', diagnose)).toEqual([])
-  })
+const promql = new PromQLExtension()
+const extension = promql.asExtension()
+const lint = promql.getLinter().promQL()
+const diagnose = text => {
+  const state = EditorState.create({ doc: text, extensions: [extension] })
+  ensureSyntaxTree(state, text.length, 5000)
+  return lint({ state })
+}
+const NUMBERS = new Set(['thr', 'v', 'warn', 'n', 'q', 'k', 't', 'a', 'b', 'win', 'w', 'o'])
+const kindOf = name => (NUMBERS.has(name) ? 'number' : undefined)
+const shown = text => withColumnRefs(text, diagnose, kindOf).map(d => `${d.from}-${d.to} ${d.message}`)
 
-  it('with no reference, the linter on the text as it is', () => {
-    expect(withColumnRefs('rate(x[5m]) >', text => [{ from: 0, to: text.length, message: text }])).toEqual([{ from: 0, to: 13, message: 'rate(x[5m]) >' }])
+describe('no reference is a problem', () => {
+  it.each([
+    'rate(x[${win}])', 'rate(x[${win}]) > 0', 'x offset ${o}', 'rate(x[5m] offset ${o})', 'x[${a}:${b}]', 'max_over_time(x[${a}:${b}])', 'rate(x[${a}:])',
+    'x{job="${job}"}', 'x{job=~"${a}|${b}"}', 'sum by (${l}) (x)', '${metric}{a="b"}', 'x > ${a}${b}', 'x > ${ spaced }', 'x{${l}="a"}', 'rate(x[${win}m])', 'x[${n}m]',
+    'histogram_quantile(${q}, rate(x[5m]))', 'topk(${k}, x)', 'x @ ${t}', 'x > bool ${v}', 'label_replace(x, "${dst}", "$1", "src", "(.*)")',
+    'x unless on(${l}) y', '${a} + ${b}', 'sum(rate(x{ns="${ns}"}[${w}])) by (pod) > ${thr}', 'rate(x[${w}]) offset ${o} > 0', 'rate(${m})',
+    'rate(cpu_seconds_total{namespace="${namespace}"}[5m]) > ${warn}', 'abs(${metric})', 'count_values("${l}", x)',
+  ])('%s', text => {
+    expect(shown(text)).toEqual([])
   })
+})
+
+describe('a mistake beside a reference is shown', () => {
+  it.each([
+    // next to a number
+    'rate(x[5m]) >> ${v}', 'x > ${v} >> 1', 'sum(x) > ${thr} by (job)', 'rate(x[5m]) > ${thr} 5', 'rate(x[5m]) > ${v} ${v}', 'x > ${a} + ',
+    // next to a duration
+    'rate(x[${win}]) >> 1', 'rate(x[${w}]) offset > 0', 'rate(x[${w}] > 1',
+    // next to a label value
+    'x{job="${job}" > 1',
+    // next to a label name
+    'sum by (${l} (x)', 'x{${l}="a"} >> 1', 'sum by (${l}) (x) >> 1',
+    // next to a metric name
+    '${metric}{a="b" > 1', '${m}{a="b"} >> 1',
+    // an unknown function
+    'foo(${v})',
+  ])('%s', text => {
+    expect(shown(text).length).toBeGreaterThan(0)
+  })
+})
+
+it('with no reference, the linter on the text as it is', () => {
+  expect(shown('rate(x[5m]) >> 1')).toEqual(diagnose('rate(x[5m]) >> 1').map(d => `${d.from}-${d.to} ${d.message}`))
 })

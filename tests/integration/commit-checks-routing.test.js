@@ -225,6 +225,18 @@ describe('sync.yaml that cannot be right', () => {
   })
 })
 
+// A deployment listed as its own sync target
+// skipped its own routing check (its "source" was itself, always the same).
+describe('a deployment listed as its own target', () => {
+  it('still has its routing checked: a stale resource is named too', async () => {
+    await write('sync.yaml', yaml.dump({ syncs: [{ source: SRC, targets: [SRC] }] }))
+    await newLabels('{"release":"kps"}')
+    const { status, data } = await commit()
+    expect(status).toBe(409)
+    expect(kinds(data)).toEqual(expect.arrayContaining([`routing-stale ${SRC}`]))
+  })
+})
+
 describe('a Template deleted outside AlertForge', () => {
   it('refuses the commit, naming each deployment that uses it', async () => {
     await fs.rm(path.join(tmpDir, 'charts', 'demo'), { recursive: true })

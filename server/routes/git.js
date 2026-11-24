@@ -164,7 +164,7 @@ export default function gitRouter() {
 
       res.json({ branch, changes, changeCount, behindMain, hasRemote: remote })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
     }
   })
 
@@ -256,9 +256,9 @@ export default function gitRouter() {
         return res.status(401).json({ error: 'Authentication failed: token may have expired', code: 'TOKEN_EXPIRED' })
       }
       if (err.message.includes('permission') || err.message.includes('denied')) {
-        return res.status(403).json({ error: err.message })
+        return res.status(403).json({ error: await withoutPath(err.message, req.gitopsDir) })
       }
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
     }
   })
 
@@ -269,7 +269,7 @@ export default function gitRouter() {
       await git(cwd, 'clean', '-fd')
       res.json({ status: 'ok' })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
     }
   })
 
@@ -307,7 +307,7 @@ export default function gitRouter() {
 
       res.json(commits)
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
     }
   })
 
@@ -337,7 +337,7 @@ export default function gitRouter() {
 
       res.json({ file, original, modified })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
     }
   })
 
@@ -360,7 +360,7 @@ export default function gitRouter() {
       if (isAuthError(err)) {
         return res.status(401).json({ error: 'Authentication failed: token may have expired', code: 'TOKEN_EXPIRED' })
       }
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
     }
   })
 
@@ -381,7 +381,7 @@ export default function gitRouter() {
       const head = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
       res.json({ status: 'ok', head })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, req.gitopsDir) })
     }
   })
 

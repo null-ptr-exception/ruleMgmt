@@ -186,7 +186,10 @@ export async function deploymentCommitBlockers(gitopsDir) {
   for (const dep of deployments) {
     const template = await templateProblem(gitopsDir, dep)
     if (template) findings.push({ severity: 'commit', deployment: dep, ...template })
-    if (getSourceForTarget(registry, dep)) continue
+    // A target is held to its source below. One listed as its own target is
+    // no target (sync.yaml is refused for it too): its routing is checked.
+    const followed = getSourceForTarget(registry, dep)
+    if (followed && followed !== dep) continue
 
     const { text, cr } = await readRouting(path.join(gitopsDir, dep))
     if (text === null) {
@@ -213,7 +216,7 @@ export async function deploymentCommitBlockers(gitopsDir) {
   // A sync target is held to its source's files, not its own routing.yaml.
   for (const dep of deployments) {
     const source = getSourceForTarget(registry, dep)
-    if (!source || !(await isDeploymentDir(path.join(gitopsDir, source)))) continue
+    if (!source || source === dep || !(await isDeploymentDir(path.join(gitopsDir, source)))) continue
     if (await sameRouting(gitopsDir, source, dep)) continue
     if (brokenSources.has(source)) {
       findings.push({ severity: 'commit', kind: 'routing-target-differs', deployment: dep, regenerable: false,

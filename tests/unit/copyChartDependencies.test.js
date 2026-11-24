@@ -57,11 +57,13 @@ describe('copyChartDependencies', () => {
     expect((await read('b/tgt')).dependencies).toEqual([{ name: 'x', repository: 'file://' }])
   })
 
-  it('a target Chart.yaml that is not a mapping is replaced by one, not spread into it', async () => {
+  // It used to become a bare `dependencies:` — no apiVersion, name or
+  // version, so Helm could not load the target.
+  it('a target Chart.yaml that is not a mapping is replaced by the source\'s, under the target\'s name', async () => {
     await write('a/src', { name: 'src', dependencies: [{ name: 'demo', repository: 'file://../charts/demo' }] })
     await write('a/tgt', 'just a string\n')
     await copyChartDependencies(path.join(dir, 'a/src'), path.join(dir, 'a/tgt'))
-    expect(await read('a/tgt')).toEqual({ dependencies: [{ name: 'demo', repository: 'file://../charts/demo' }] })
+    expect(await read('a/tgt')).toEqual({ name: 'tgt', dependencies: [{ name: 'demo', repository: 'file://../charts/demo' }] })
   })
 
   it('a new target gets the source\'s Chart.yaml under its own folder name', async () => {
@@ -71,11 +73,13 @@ describe('copyChartDependencies', () => {
     expect(await read('new')).toEqual({ apiVersion: 'v2', name: 'new', version: '0.1.0', dependencies: [{ name: 'demo', repository: 'file://../a/charts/demo' }] })
   })
 
-  it('a source without dependencies leaves the target with none', async () => {
+  // It used to give the target none too: no longer a deployment, gone from
+  // the tree and from every later sync.
+  it('a source without dependencies throws, and the target keeps its own', async () => {
     await write('a/src', { name: 'src' })
     await write('a/tgt', { name: 'tgt', dependencies: [{ name: 'demo', repository: 'file://../charts/demo' }] })
-    await copyChartDependencies(path.join(dir, 'a/src'), path.join(dir, 'a/tgt'))
-    expect(await read('a/tgt')).toEqual({ name: 'tgt', dependencies: [] })
+    await expect(copyChartDependencies(path.join(dir, 'a/src'), path.join(dir, 'a/tgt'))).rejects.toMatchObject({ code: 'SOURCE_HAS_NO_TEMPLATE' })
+    expect(await read('a/tgt')).toEqual({ name: 'tgt', dependencies: [{ name: 'demo', repository: 'file://../charts/demo' }] })
   })
 
   it('a source Chart.yaml that is not YAML throws, and the target is not touched', async () => {
@@ -83,5 +87,32 @@ describe('copyChartDependencies', () => {
     await write('a/tgt', 'name: tgt\n')
     await expect(copyChartDependencies(path.join(dir, 'a/src'), path.join(dir, 'a/tgt'))).rejects.toThrow()
     expect(await fs.readFile(path.join(dir, 'a/tgt/Chart.yaml'), 'utf-8')).toBe('name: tgt\n')
+  })
+})
+
+// Two ways a target lost its alerts.
+describe('a target the source is copied to', () => {
+  const src = { apiVersion: 'v2', name: 'src', version: '0.1.0', dependencies: [{ name: 'cpu', version: '>=0.0.0-0', repository: 'file://../charts/cpu' }] }
+
+  it('whose Chart.yaml is not a mapping is made again from the source\'s, under its own name: a chart Helm can load', async () => {
+    await write('src', src)
+    await write('tgt', 'just a string\n')
+    await copyChartDependencies(path.join(dir, 'src'), path.join(dir, 'tgt'))
+    expect(await read('tgt')).toEqual({ ...src, name: 'tgt' })
+  })
+
+  it('keeps its Template when only routing is copied: the values that go with it are not', async () => {
+    const { copyToTarget } = await import('../../server/lib/deploymentWrite.js')
+    await write('src', src)
+    await fs.writeFile(path.join(dir, 'src/values.yaml'), 'cpu: {}\n')
+    const mem = { apiVersion: 'v2', name: 'tgt', version: '0.1.0', dependencies: [{ name: 'mem', version: '>=0.0.0-0', repository: 'file://../charts/mem' }] }
+    await write('tgt', mem)
+    await fs.writeFile(path.join(dir, 'tgt/values.yaml'), 'mem: {}\n')
+    await copyToTarget(path.join(dir, 'src'), path.join(dir, 'tgt'), { values: false, routing: false })
+    expect(await read('tgt')).toEqual(mem)
+    // With the values, the Template moves too.
+    await copyToTarget(path.join(dir, 'src'), path.join(dir, 'tgt'), { values: true, routing: false })
+    expect((await read('tgt')).dependencies[0].name).toBe('cpu')
+    expect(await fs.readFile(path.join(dir, 'tgt/values.yaml'), 'utf-8')).toBe('cpu: {}\n')
   })
 })

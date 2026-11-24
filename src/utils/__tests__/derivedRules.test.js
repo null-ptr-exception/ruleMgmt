@@ -67,6 +67,19 @@ describe('the save checks', () => {
     expect(findings(SPC.replace('rate(x[${short_w}]) > 2', expr))).toEqual([])
   })
 
+  // Text in quotes is no range, offset or number.
+  it.each([
+    ['a label value', 'up{window="${short_w}"} == 0'],
+    ['a string argument', 'label_replace(x, "w", "${short_w}", "", "") > 1'],
+  ])('in %s it is text, not compared as a number', (_, expr) => {
+    expect(findings(SPC.replace('rate(x[${short_w}]) > 2', expr))).toEqual([])
+  })
+
+  it('a derived value may be named toString: no column is', () => {
+    const text = SPC.replaceAll('short_w', 'toString')
+    expect(parse(text).errors).toEqual([])
+  })
+
   it('a raw rule cannot use one: where it goes there is not known', () => {
     const raw = SPC.replace("  - alert: SpcCustom\n    expr: rate(x[${short_w}]) > 2\n", "  - raw: |\n      alert: SpcRaw\n      expr: rate(x[${short_w}]) > 2\n")
     expect(findings(raw)).toEqual([expect.stringContaining('a raw rule cannot use derived "short_w"')])

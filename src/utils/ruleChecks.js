@@ -17,7 +17,7 @@
  */
 
 import { profileFor } from './outputs.js'
-import { parseDerived, derivedColumns, derivedPosition } from './derived.js'
+import { parseDerived, derivedColumns, derivedPosition, withoutStrings } from './derived.js'
 import { durationCellFault } from './duration.js'
 import { normalizeRules, columnFallbacks } from './templateGenerator.js'
 import { danglingRefs, ruleVars, varsIn, nestedPlaceholders } from './ruleModel.js'
@@ -211,6 +211,14 @@ export function checkRules(schema) {
         }
       }
 
+      // A range of a bare 0 (`rate(x[0])`, `x[0:1m]`): promtool 2.x takes
+      // it when checking, but evaluation prints it back as [0s] and fails —
+      // the rule never fires, and Preview stays green.
+      if (promql && !rule.raw && /\[\s*0+\s*[\]:]/.test(withoutStrings(rule.expr || ''))) {
+        findings.push({ severity: 'save', kind: 'zero-range', group, alert: rule.alert,
+          message: `${where}: a range of 0 (${(withoutStrings(rule.expr).match(/\[\s*0+\s*[\]:]/) || [''])[0]}…) is never evaluated: Prometheus fails the rule every time — give it a length, e.g. [5m]` })
+      }
+
       if (!rule.raw) findings.push(...derivedPositionProblems(rule, derived, promql, group, where))
       else {
         // A raw rule is written out as it is: where a value goes in it is not
@@ -248,7 +256,9 @@ function derivedPositionProblems(rule, derived, promql, group, where) {
   const out = []
   for (const [name, d] of Object.entries(derived)) {
     const ref = `\\$\\{\\s*${name}\\s*\\}`
-    const expr = rule.expr || ''
+    // Text in quotes is a label value or a string argument, never a range,
+    // offset or number: `up{window="${w}"}` takes "14m" as it is.
+    const expr = withoutStrings(rule.expr || '')
     const inDuration = new RegExp(ref).test(`${rule.for || ''} ${rule.keep_firing_for || ''}`)
     // PromQL keywords are not case-sensitive, and an offset may be negative.
     const offset = `\\boffset\\s+-?\\s*${ref}`

@@ -32,6 +32,8 @@ test.describe('the Template editor\'s Save and the chart version', () => {
 
   test('keeps a version changed on disk after the page loaded', async ({ page }) => {
     await openTemplateChart(page, CHART)
+    // The chart's own load resets the fields: wait for it before typing.
+    await page.waitForLoadState('networkidle')
     await expect(page.getByPlaceholder('Description', { exact: true })).toBeVisible({ timeout: 5000 })
 
     // The pull in another tab.
@@ -50,6 +52,8 @@ test.describe('the Template editor\'s Save and the chart version', () => {
     // The tab loads "old"; the pull then brings "pulled in".
     expect((await request.post(`/api/v2/templates/${CHART}/chart-meta`, { data: { chartMeta: { description: 'old' } } })).ok()).toBeTruthy()
     await openTemplateChart(page, CHART)
+    // The chart's own load resets the fields: wait for it before typing.
+    await page.waitForLoadState('networkidle')
     const pulled = { ...yaml.load(await fs.readFile(CHART_YAML, 'utf-8')), description: 'pulled in' }
     await fs.writeFile(CHART_YAML, yaml.dump(pulled))
 

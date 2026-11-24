@@ -215,6 +215,13 @@ describe('applySync', () => {
 })
 
 describe('applyUnlink', () => {
+  // A hand edit can list a target twice.
+  it('takes the target out of every entry that lists it', () => {
+    const registry = { syncs: [{ source: 'a/src', targets: ['a/tgt', 'a/t2'] }, { source: 'b/src', targets: ['a/tgt'] }] }
+    expect(applyUnlink(registry, 'a/tgt')).toEqual({ ok: true })
+    expect(registry.syncs).toEqual([{ source: 'a/src', targets: ['a/t2'] }])
+  })
+
   it('removes a target and prunes the source entry when it hits zero targets', () => {
     const registry = { syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] }
     const result = applyUnlink(registry, 'cpu/staging')

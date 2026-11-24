@@ -214,4 +214,12 @@ async function main() {
   return failed ? 1 : 0
 }
 
-process.exitCode = await main()
+// Anything main() did not expect (a values.schema.json that is not JSON, a
+// rules/ that cannot be read) is one ERROR line and exit 2 — not a stack, and
+// not the 1 that means the rules failed their checks.
+try {
+  process.exitCode = await main()
+} catch (err) {
+  console.log(`ERROR  ${err.message}`)
+  process.exitCode = 2
+}

@@ -90,6 +90,10 @@ function dependencyKey(d, dir) {
 export async function copyChartDependencies(srcDir, dstDir) {
   const src = yaml.load(await fs.readFile(path.join(srcDir, 'Chart.yaml'), 'utf-8')) || {}
   const srcDeps = Array.isArray(src.dependencies) ? src.dependencies : []
+  // A source whose Chart.yaml names no Template (a hand edit, a pull midway)
+  // would leave every target with none: no longer a deployment, gone from
+  // the tree. The target is left as it is, and the copy reported as failed.
+  if (!srcDeps.length) throw Object.assign(new Error('the source\'s Chart.yaml names no Template'), { code: 'SOURCE_HAS_NO_TEMPLATE' })
   const dependencies = srcDeps.map(d => {
     const rel = relativeFilePath(d?.repository)
     if (rel === null) return d
@@ -98,10 +102,13 @@ export async function copyChartDependencies(srcDir, dstDir) {
     return { ...d, repository: `file://${path.relative(dstDir, abs).replace(/\\/g, '/')}` }
   })
   const file = path.join(dstDir, 'Chart.yaml')
+  // A target Chart.yaml that is not a mapping (a hand edit, a pull) has no
+  // fields of its own to keep: it is made again from the source's, under the
+  // target's name — not written as a bare `dependencies:` Helm cannot load.
   let dst = null
   try {
     const loaded = yaml.load(await fs.readFile(file, 'utf-8'))
-    dst = isPlainObject(loaded) ? loaded : {}
+    dst = isPlainObject(loaded) ? loaded : null
   } catch (err) {
     if (err.code !== 'ENOENT') throw err
   }
@@ -120,7 +127,11 @@ export async function copyChartDependencies(srcDir, dstDir) {
  * the files; `valuesContent` and `routingContent` are what to write, when
  * the caller has already read and checked them.
  */
-export async function copyToTarget(srcDir, dstDir, { chart = true, values = true, routing = true, valuesContent, routingContent } = {}) {
+// `chart` follows `values` unless said otherwise: the Template a target
+// renders and the values wrapped under that Template's name change together.
+// A routing-only save that moved the target to the source's Template, its
+// values still under the old one, dropped every alert of the target.
+export async function copyToTarget(srcDir, dstDir, { values = true, chart = values, routing = true, valuesContent, routingContent } = {}) {
   await fs.mkdir(dstDir, { recursive: true })
   if (chart) await copyChartDependencies(srcDir, dstDir)
   if (values) {

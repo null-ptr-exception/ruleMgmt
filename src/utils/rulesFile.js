@@ -544,7 +544,7 @@ export function parseGroupFile(text, filename) {
   if (vars) {
     for (const name of Object.keys(vars)) {
       if (RESERVED.has(name)) errors.push(`${filename}.yaml: vars "${name}" is a reserved name`)
-      if (name in columns) errors.push(`${filename}.yaml: vars "${name}" collides with a column`)
+      if (Object.hasOwn(columns, name)) errors.push(`${filename}.yaml: vars "${name}" collides with a column`)
     }
   }
 
@@ -561,8 +561,9 @@ export function parseGroupFile(text, filename) {
       const where = `${filename}.yaml derived "${name}"`
       if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) errors.push(`${where}: a name is letters, digits and _, not starting with a digit`)
       if (RESERVED.has(name)) errors.push(`${where} is a reserved name`)
-      if (name in columns) errors.push(`${where} collides with a column`)
-      if (vars && name in vars) errors.push(`${where} collides with a vars entry`)
+      // Own keys only: `toString` or `constructor` is no column (#118).
+      if (Object.hasOwn(columns, name)) errors.push(`${where} collides with a column`)
+      if (vars && Object.hasOwn(vars, name)) errors.push(`${where} collides with a vars entry`)
       if (!isMapping(def)) { errors.push(`${where}: must be { expr, unit }`); continue }
       rejectUnknown(def, ['expr', 'unit'], where, errors)
       // A unit is required for now (#118's first version): a derived value is
@@ -694,9 +695,9 @@ export function parseRulesDir(files) {
     for (const [dName, d] of Object.entries(group.derived || {})) {
       if (commonNames.has(dName)) errors.push(`${name}: derived "${dName}" collides with a _common column`)
       for (const col of d.columns) {
-        const def = group.columns[col] || model.common.columns[col]
-        if (group.derived[col]) errors.push(`${name}: derived "${dName}" reads "${col}", which is another derived value — write its expression out`)
-        else if (group.vars && col in group.vars) errors.push(`${name}: derived "${dName}" reads "${col}", which is a vars entry — only columns can be computed with`)
+        const def = (Object.hasOwn(group.columns, col) && group.columns[col]) || (Object.hasOwn(model.common.columns, col) && model.common.columns[col])
+        if (Object.hasOwn(group.derived, col)) errors.push(`${name}: derived "${dName}" reads "${col}", which is another derived value — write its expression out`)
+        else if (group.vars && Object.hasOwn(group.vars, col)) errors.push(`${name}: derived "${dName}" reads "${col}", which is a vars entry — only columns can be computed with`)
         else if (!def) errors.push(`${name}: derived "${dName}" reads "${col}", which is not a column`)
         else if (def.type !== 'integer') errors.push(`${name}: derived "${dName}" reads "${col}", a ${def.type || 'string'} column — only integer columns can be computed with`)
         else if (def.default !== undefined && !Number.isSafeInteger(def.default)) errors.push(`${name}: derived "${dName}" reads "${col}", whose default ${JSON.stringify(def.default)} is not a whole number`)

@@ -203,14 +203,13 @@ export function applySync(registry, source, target) {
 // with zero targets, drop the entry entirely — this is what lets a former
 // source be folded into a different tree later (see "Merging two trees").
 export function applyUnlink(registry, target) {
-  const entry = findEntryForTarget(registry, target)
-  if (!entry) {
+  if (!findEntryForTarget(registry, target)) {
     return { ok: false, error: `${target} is not currently synced` }
   }
-  entry.targets = entry.targets.filter(t => t !== target)
-  if (entry.targets.length === 0) {
-    registry.syncs = registry.syncs.filter(s => s !== entry)
-  }
+  // Every entry that lists it: a hand edit can list a target twice, and the
+  // second one would point at a deployment that is gone.
+  for (const entry of registry.syncs) entry.targets = entry.targets.filter(t => t !== target)
+  registry.syncs = registry.syncs.filter(s => s.targets.length > 0)
   return { ok: true }
 }
 

@@ -152,6 +152,9 @@ export function evalDerived(tree, row, { unit, position } = {}) {
   return { value: value.toString() }
 }
 
+/** PromQL with every quoted string emptied: what is left is the query itself. */
+export const withoutStrings = text => text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g, '""')
+
 /** Whether 0 is refused where a value goes: a range, or an offset. */
 export const zeroRefused = position => position === 'range' || !!position?.includes('offset')
 
@@ -179,9 +182,10 @@ export function derivedPosition(name, rules, promql) {
   let position = null
   for (const rule of rules || []) {
     if (rule.raw) continue
-    if (promql && new RegExp(`\\[[^\\]]*${ref}[^\\]]*\\]`).test(rule.expr || '')) return 'range'
+    const expr = withoutStrings(rule.expr || '')
+    if (promql && new RegExp(`\\[[^\\]]*${ref}[^\\]]*\\]`).test(expr)) return 'range'
     if (new RegExp(ref).test(`${rule.for || ''} ${rule.keep_firing_for || ''}`)) position = mergePosition(position, 'duration')
-    if (promql && new RegExp(`\\boffset\\s+-?\\s*${ref}`, 'i').test(rule.expr || '')) position = mergePosition(position, 'offset')
+    if (promql && new RegExp(`\\boffset\\s+-?\\s*${ref}`, 'i').test(expr)) position = mergePosition(position, 'offset')
   }
   return position
 }

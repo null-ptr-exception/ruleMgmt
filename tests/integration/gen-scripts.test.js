@@ -360,6 +360,25 @@ describe('gen-rules.mjs ending on an error', () => {
     expect(r.stderr).not.toContain('process.exit(')
   })
 
+  // The same class in gen-chart.
+  it('gen-chart on rules/ that does not parse: exit code 1, the message, no process.exit', async () => {
+    await breakRules(t => `${t}\nintervel: 1m\n`)
+    const r = spawnSync('node', ['--require', PRELOAD, GEN_CHART, chartDir], { encoding: 'utf-8' })
+    expect(r.status, r.stdout + r.stderr).toBe(1)
+    expect(r.stderr).toMatch(/ERROR {2}cpu\.yaml.*unknown key "intervel"/)
+    expect(r.stderr).not.toContain('process.exit(')
+  })
+
+  it('a values.schema.json that is not JSON: one ERROR line and exit 2, not a stack', async () => {
+    run(GEN_RULES, [chartDir])
+    await fs.rm(path.join(chartDir, 'rules'), { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), '{ not json')
+    const r = runPiped([chartDir])
+    expect(r.status).toBe(2)
+    expect(r.stdout).toMatch(/^ERROR {2}/m)
+    expect(r.stderr).not.toMatch(/\n\s+at /)
+  })
+
   it('a clean run still exits 0, and --check too', () => {
     expect(runPiped([chartDir]).status).toBe(0)
     const r = runPiped([chartDir, '--check'])

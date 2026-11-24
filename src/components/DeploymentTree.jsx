@@ -239,7 +239,8 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   //
   // A click on the tree (#145) changes only selectedFolder, and its node is
   // already there under expanded, loaded parents: nothing to fetch. The tree
-  // is fetched again when refreshKey changes (sync, delete, create), or when
+  // is fetched again when refreshKey changes (a deployment created; sync and
+  // delete refresh the tree themselves), or when
   // the node or a parent is not in the tree yet (a session restored on an
   // empty tree, a deployment just created in a new folder).
   useEffect(() => {

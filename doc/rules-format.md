@@ -496,6 +496,8 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 - A `derived` without a `unit`, with an expression that does not parse or
   reads anything but an integer column (or one whose default is not a whole
   number), used in a `raw` rule, or — in PromQL — compared as a number
+- In PromQL, a range of a bare `0` (`rate(x[0])`, `x[0:1m]`): promtool
+  takes it, but Prometheus fails the rule on every evaluation
 - A unit written right after a [duration column](#a-duration-column)
   (`[${win}m]`); a duration column's `default` that is not a duration, or
   is `0s` where it goes into a range or an offset; a duration column with

@@ -24,6 +24,19 @@ const chart = (rules, columns, extra = {}) => ({
 
 const kinds = findings => findings.map(f => f.kind)
 
+// A bare 0 as a range passes promtool check rules but fails every evaluation
+// (promtool 2.54.1, test rules: "duration must be greater than 0").
+describe('a range of 0', () => {
+  it.each(['rate(cpu[0]) > ${warn}', 'max_over_time(cpu[0:1m]) > ${warn}', 'rate(cpu[ 00 ]) > ${warn}'])('%s is refused at save', expr => {
+    const found = checkRules(chart([{ alert: 'A', expr }])).filter(f => f.kind === 'zero-range')
+    expect(found).toEqual([expect.objectContaining({ severity: 'save', message: expect.stringContaining('a range of 0') })])
+  })
+
+  it.each(['rate(cpu[5m]) > ${warn}', 'max_over_time(cpu[5m:0]) > ${warn}', 'cpu offset 0 > ${warn}', 'cpu{le="[0]"} > ${warn}'])('%s is not', expr => {
+    expect(checkRules(chart([{ alert: 'A', expr }])).filter(f => f.kind === 'zero-range')).toEqual([])
+  })
+})
+
 describe('reference integrity', () => {
   it('flags a ${var} that is not a column', () => {
     const findings = checkRules(chart([{ alert: 'A', expr: 'cpu > ${threshold}' }]))

@@ -541,7 +541,7 @@ come from: override it in **Single**, where its rows are copied first.
 
 A page saves only over what it was opened on. When the deployment changed
 since — a `_common` made or removed above it, its `_common` edited, or
-someone else saved it — Save is refused ("changed since you opened it") and
+someone else saved it — Save is refused (409, "changed since you opened it") and
 nothing is written; **Reload** shows what is there now, and the edits on the
 page are discarded. A save sent without the version it was opened on (a
 script calling the API) is checked too, from the moment it reads the files:
@@ -562,12 +562,16 @@ instead of on the Template, and wraps its values under one more `common:`
 per layer:
 
 ```
-shop/_common/mariadb-alerts/Chart.yaml   name: common, dependencies: [{name: mariadb-alerts, version: ">=0.0.0-0"}]
-shop/_common/mariadb-alerts/charts/mariadb-alerts → ../../../../charts/mariadb-alerts
-shop/_common/mariadb-alerts/values.yaml  mariadb-alerts: {_common: {owner: team-a}, mariadb_saturation_disk: [...]}
-shop/prod/Chart.yaml                     dependencies: [{name: common, version: ">=0.0.0-0", repository: file://../_common/mariadb-alerts}]
-shop/prod/values.yaml                    common: {mariadb-alerts: {...prod's own...}}
+deployments/shop/_common/mariadb-alerts/Chart.yaml   name: common, dependencies: [{name: mariadb-alerts, version: ">=0.0.0-0"}]
+deployments/shop/_common/mariadb-alerts/charts/mariadb-alerts → ../../../../../charts/mariadb-alerts
+deployments/shop/_common/mariadb-alerts/values.yaml  mariadb-alerts: {_common: {owner: team-a}, mariadb_saturation_disk: [...]}
+deployments/shop/prod/Chart.yaml                     dependencies: [{name: common, version: ">=0.0.0-0", repository: file://../_common/mariadb-alerts}]
+deployments/shop/prod/values.yaml                    common: {mariadb-alerts: {...prod's own...}}
 ```
+
+The link is relative: from the `_common`'s `charts/` folder up to the repo's
+root, then down to the Template in `charts/` — five levels up for a
+`_common` in `deployments/shop/`, one more for each folder deeper.
 
 The links AlertForge makes are the ones in a `_common`'s `charts/`. A
 `_common` folder shared by a link made by hand (`team-b/_common →
@@ -723,6 +727,12 @@ ran — **Promtool + vmalert check passed** for a deployment with both. A LogsQL
 mistake is a failed check that names the group and the rule; vmalert stops at
 the first bad rule of each group, so check again after fixing it.
 
+The check also fails, with what Helm rendered still shown, when the Template
+itself deploys other than its rules say — for example, one of its generated files is
+missing, a file in its `templates/` starting with `_` holds a rule object, or
+a 1.x rule file left beside the generated ones renders every alert twice —
+and the message names it.
+
 A lint problem — most often two rows producing an alert with the same name and
 the same labels — shows as **passed with warnings**, in yellow, with the object
 listed first. It does not stop a save or a commit. promtool compares only the
@@ -804,7 +814,9 @@ its **Regenerate** makes the resource from the file as written, comments
 kept, for you to look at in the diff and commit.
 
 A save that does not pass the checks is refused with what is wrong, by cell
-or config, and writes nothing. The page says when the AlertmanagerConfig is
+or config, and writes nothing. A save that waited for another save and
+finds `routing.yaml` changed meanwhile is refused (409, "changed while it
+was being saved") and writes nothing. The page says when the AlertmanagerConfig is
 stale — not what `routing.yaml` says: after a hand edit to
 the file, or after the site's object labels changed. Saving again
 regenerates it; with nothing edited, the page saves the file as it is,
@@ -1058,6 +1070,11 @@ remove it: rename it back, then delete the Template again (when its
 moved aside) or save it again — removing it alone would leave half a
 Template: a folder with no `Chart.yaml`, or a generated file with no rules.
 
+When the server starts, it removes the temp files a stopped write left in
+the repo — files named `_<name>.<8 hex>.tmp`, anywhere but `.git`, made more
+than an hour ago — and names them in its log; it removes nothing else from
+the repo.
+
 A folder under `charts/` that holds `rules/` (or a 1.x `values.schema.json`)
 and no `Chart.yaml` is committed — it is how a Template is started by hand —
 and Commit's answer lists it: it is in no list of Templates until it has
@@ -1126,6 +1143,9 @@ A commit is refused, too, while any deployment:
   creates asks for `">=0.0.0-0"`, any version, so changing the Template's
   version by hand (or pulling a change to it) breaks nothing; an older one
   with an exact version is fixed by writing `">=0.0.0-0"` there
+- has a dependency in its `Chart.yaml`, or in a `_common` it renders on,
+  switched off by its `condition:` (the value it names is false; `no` is
+  false to Helm): Helm renders none of the deployment
 - has a `values.yaml` that cannot be read as values at all: not YAML, YAML
   AlertForge cannot tell Helm's reading of, a folder, a link out of the repo,
   or no map under the chart's name
@@ -1196,6 +1216,9 @@ The commands below are written short, as run from an AlertForge source
 checkout (after `npm ci`), with `charts/<name>` standing for the chart's
 folder in the gitops repo. From the image, put the `docker run` in front and
 the paths under `/work` — see [Run them from the image](#run-them-from-the-image).
+
+`gen-chart` is in a source checkout only (`node scripts/gen-chart.mjs`); the
+image does not have it.
 
 `gen-rules`, `gen-chart` and `import-rules` write what they write together,
 each file whole: a run stopped part-way (killed, the machine gone) leaves
@@ -1425,6 +1448,9 @@ Preview does the same: it shows what Helm renders, or Helm's error, with
 that line beside the check and no summary of values AlertForge cannot read. `check-repo`
 renders such a deployment as well, and refuses it as Commit does (exit 1),
 as it refuses such values of the deployment's own.
+
+Generated files of a Template that are out of date are not reported here:
+`gen-rules --check` and `check-repo` report them.
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \

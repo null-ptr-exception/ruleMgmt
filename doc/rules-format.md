@@ -1463,3 +1463,32 @@ profile](alert-rules.md#different-values-per-output-profile).
 
 A synced target gets the source's `routing.yaml` and AlertmanagerConfig with
 its `values.yaml`, and cannot change them.
+
+## Synced deployments: `sync.yaml`
+
+Which deployment is kept identical to which is one file at the root of the
+repo, `sync.yaml`. **Sync to...** and **Sync from...** write it (see
+[Keep a deployment identical to
+another](how-to.md#keep-a-deployment-identical-to-another)); written by hand,
+it has this shape:
+
+```yaml
+# sync.yaml
+syncs:
+  - source: deployments/shop/prod
+    targets:
+      - deployments/shop/dr
+      - deployments/cart/prod
+```
+
+| Field | What it is |
+|---|---|
+| `syncs` | A list, one entry per source. No file, an empty file or one with only comments is no syncs |
+| `source` | The deployment that is copied: its folder's path from the repo's root, `deployments/` included (`deployments/shop/prod`, not `shop/prod`) |
+| `targets` | A list of the deployments kept as its copy, each written the same way |
+
+Every path is a deployment's folder. A target follows one source, a source
+is not a target of another (sync does not chain), and a deployment is not
+its own target. Commit and `check-repo` refuse a `sync.yaml` that says
+otherwise, naming the entry (`syncs[0]: source shop/prod is not a
+deployment`), and refuse a target whose files are not its source's copy.

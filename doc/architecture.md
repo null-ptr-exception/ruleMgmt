@@ -1,343 +1,194 @@
 # Architecture
 
-> **Parts of this document are out of date** — the page and component names
-> below predate several rounds of change. For how a chart describes alerts and
-> how templates are generated from it, see [alert-rules.md](alert-rules.md);
-> for how to do things, [how-to.md](how-to.md). Both are current.
+A developer's map of the code. For how a chart describes alerts, see
+[alert-rules.md](alert-rules.md) and [rules-format.md](rules-format.md); for
+how to do things, [how-to.md](how-to.md); for the testing rules,
+`AGENTS.md`.
 
-## Overview
+## What AlertForge is
 
-Alert Template UI is a local-first, filesystem-backed tool for authoring and deploying Prometheus Operator alerting configurations. It has no database — all state lives in versioned Helm charts on disk. A lightweight Express API serves the frontend and delegates rendering to `helm template`.
+AlertForge edits the alert rules and notification routing kept in a gitops
+repo. It has no database: an Express server reads and writes the files of
+that repo, renders deployments with `helm template`, checks what Helm
+renders with `promtool` and `vmalert`, and serves a React page. The gitops
+repo is the only state.
 
-```
-Browser (React 18 / Vite)
-        │  /api  (Vite proxy → :3001)
-        ▼
-Express API (server.js, ES modules)
-        │
-        ├── Read / write YAML files  (js-yaml)
-        ├── Spawn:  helm dependency update
-        │           helm template
-        └── Inline: route pruning algorithm
-                    PrometheusRule import scanner
-```
-
----
-
-## Directory Layout
+## The repo it manages
 
 ```
-alerttemplateui/
-├── server.js               # Express API server (single file, ES module)
-├── vite.config.js          # Vite + proxy config
-├── src/
-│   ├── App.jsx             # Top-level nav shell
-│   ├── pages/              # One file per editor page
-│   │   ├── AlertTypeEditor.jsx
-│   │   ├── AlertSuiteEditor.jsx
-│   │   ├── ReceiversEditor.jsx
-│   │   ├── AlertmanagerSmartEditor.jsx   # AM Config (primary routing editor)
-│   │   ├── GitopsEditor.jsx
-│   │   └── PromQLEditor.jsx
-│   ├── components/
-│   │   ├── KVEditor.jsx        # Generic key-value table
-│   │   ├── VersionModal.jsx    # Save-as / version bump dialog
-│   │   └── PromQLEditor.jsx    # CodeMirror wrapper
-│   └── utils/
-│       ├── api.js              # Typed fetch wrappers for all endpoints
-│       └── templateUtils.js    # Shared YAML helpers
-├── templates/              # Helm chart filesystem (source of truth)
-│   ├── alert-type/
-│   ├── alert-suite/
-│   ├── receivers/
-│   └── amconfig/
-├── gitops-deploy/          # GitOps stage charts (generated)
-├── scripts/
-│   └── prune_routes.py     # Standalone CLI route pruning tool
-└── config/
-    └── defaults.yaml       # Global defaults (groupWait, intervals, etc.)
+charts/
+  mariadb-alerts/                 a Template (a Helm chart)
+    Chart.yaml
+    rules/                        the source: one file per group, and _common.yaml
+    values.schema.json            generated from rules/
+    templates/                    generated from rules/, one file per group
+    values.yaml                   the Template's own values
+deployments/
+  shop/
+    _common/mariadb-alerts/       values every deployment under shop/ inherits:
+      Chart.yaml                  a small chart named `common`, with a link to
+      charts/mariadb-alerts -> ../../../../../charts/mariadb-alerts
+                                  the Template, in its own charts/
+      values.yaml
+    prod/                         a deployment
+      Chart.yaml                  depends on the Template, or on a _common
+      values.yaml                 its rows
+      routing.yaml                who is notified (optional)
+      templates/alertmanagerconfig.yaml   generated from routing.yaml
+_shared/notification-configs.yaml   notification configs deployments share
+sync.yaml                         which deployment is kept identical to which
 ```
 
----
+Helm renders a deployment's folder; the rules it renders are
+`PrometheusRule` or `VMRule` objects (`config/outputs.json`), the routing an
+`AlertmanagerConfig`. The server takes the repo from `GITOPS_DIR`.
 
-## Template Hierarchy
-
-Templates are independent Helm charts. The dependency chain flows in one direction:
+## A request's path
 
 ```
-alert-type          (leaf — no dependencies)
-    ▲
-alert-suite         (depends on one or more alert-types via Helm deps)
-    ▲
-amconfig            (depends on one or more alert-suites)
-    ▲
-gitops-deploy stage (depends on one amconfig)
+page  ->  src/utils/chartApi.js  ->  src/lib/apiFetch.js
+                    |  /api/v2/...
+                    v
+server.js                  JSON body parser, mounts one router per area
+                    v
+server/http/route.js       the route's declared shape: params, query, body
+                    |      (does not fit -> 400 naming the field)
+                    v
+server/routes/*.js         handler(input, { repo, ... })
+                    |
+        read        |        write
+  repo.file, repo.helmYaml,  planChange(repo, change)   on the snapshot
+  loaders -> findings        applyChange(plan)          under the commit lock:
+  decide(findings, policy)                              compared with what was
+  -> refuse / warn / list                               read; all files or none
+                    v
+            { status, body }
 ```
 
-Each level adds a layer of parameterisation:
+## The server's layers
 
-| Level | Adds |
+| Directory | What is there |
 |---|---|
-| alert-type | `expr` template, var names/descriptions |
-| alert-suite | Concrete var values, severity, groupLabels, rules list |
-| amconfig | Route tree, inhibit rules, receivers, namespace filter |
-| gitops stage | Product/site/relunit context (`global.product`) |
+| `server.js` | Start-up (sample Templates in an empty repo, leftover temp files removed) and the routers under `/api/v2`. Any other `/api` path is a JSON 404 |
+| `server/http/` | `route(name, shape, handler)`: every route declares its request as zod schemas, and a value that becomes a path or a name in the repo with `repoPath` / `repoName`. The wrapper parses the request before the handler runs, always answers (a file that cannot be read is a 409 naming it, anything unexpected a 500 with no path of the machine) and lets the commit lock go. A router with a route that declares nothing does not start (`declaredRoutes`). `body.js` is the JSON body parser |
+| `server/routes/` | One router per area: `charts`, `templates`, `deployments`, `folders`, `sync`, `render` (Preview), `git`, `routingShared`. A handler reads the request only through its parsed input |
+| `server/repo/` | The only code that touches the gitops repo's files: the loader, the findings and policy tables, the writer, the commit lock, the path rules and the git calls that take a value from a request. See below |
+| `server/lib/` | What is built on the repo layer and reads the repo only through it: the `_common` stack (`stack.js`), Commit's checks (`commitChecks.js`, `commit/`), sync, migration, the checks of one deployment and of the whole repo (`deploymentCheck.js`, `repoCheck.js`), and the runner of Helm and the checkers (`ruleCheck.js`) |
+| `src/utils/` | Pure functions the browser and the server both use: the rules-file model, the generator of `templates/` and `values.schema.json`, the routing generator, the rule checks. The image ships this folder beside `server/` |
 
-### Filesystem layout per template
+The boundary is held by `npm run lint` (`eslint.config.js`):
 
-```
-templates/{type}/{name}/{version}/
-├── Chart.yaml          # name, version, dependencies[]
-├── values.yaml         # template data (the UI's source of truth)
-└── templates/
-    └── *.yaml          # Go template files rendered by helm template
-```
+- `boundary/disk` is an error where `server.js`, `server/` or `scripts/`
+  code outside `server/repo/` uses `fs`, a YAML parser or `child_process`;
+  in `src/utils/` only parsing text is allowed.
+- `boundary/request` is an error where a route file reads `req.params`,
+  `req.query` or `req.body` itself.
+- An exception is one line of `ALLOWED` there, naming the file, what it may
+  use and why: each is for something that is not the repo (Helm's output, a
+  temp folder for a checker, the app's own files).
+- `tests/unit/boundaryLint.test.js` plants a read, a parse, a child process
+  and a request read in each place and fails when lint lets one through.
 
----
+## `server/repo/`
 
-## API Server (`server.js`)
+**Loader.** `openRepo(root)` (`openRepo.js`) gives one snapshot of the repo
+for one request or one command. A file is read once, however many checks
+look at it. Every read gives a `Loaded` (`loaded.js`): `absent`,
+`unreadable` (with why), `invalid` (with findings) or `ok` (the value and
+its findings); only `ok` has a value, and reading the value of another
+state throws. `repo.helmYaml` reads a values file the way Helm reads it
+(`helmYaml.js`), or says it cannot tell. The loaders built on it —
+`template.js`, `deployment.js` (a deployment's values as Helm coalesces
+them over its `_common` layers and the Template), `routing.js`,
+`shared.js`, `sync.js`, and `walk.js` (which folder is a deployment) — are
+what every entry point asks, so opening, saving, Commit, Preview and the
+command line see the same file the same way.
 
-All routes are under `/api`. The server is a single ES-module file with no framework beyond Express.
+**Findings and policy.** A loader says what is in a file as findings
+(`finding.js`): a code, the file, a message, and what Helm does with it
+(`fails`, `renders`, `renders-differently`, `n/a`, `unknown`). A finding
+never says whether a caller refuses. That is a policy table, one per entry
+point (`policy.js`, `routingPolicy.js`, `findings/template.js`): by
+default a table refuses what Helm fails on, renders differently or what
+AlertForge cannot tell, and lets the rest through; each row that changes
+this (`refuse`, `warn`, `list`, `ignore`) carries its reason.
+`decide(findings, policy)` gives the three lists.
 
-### Template CRUD
+**Writer.** A route that saves, moves or deletes files of the repo does it
+as a change (`write.js`), with one file per kind of change under
+`server/repo/changes/`. Commit, Discard, Push and Pull run git instead, and
+start-up scaffolding (`setup.js`) writes before any request.
 
-| Method | Path | Action |
+1. `planChange(repo, change)` works out, on a snapshot, every file to
+   write, the repo as it will be after, and the findings of that. It writes
+   nothing.
+2. `applyChange(plan, { policy, expect })` answers a refusal (the plan's
+   own, or the policy's) without taking the lock.
+3. Under the commit lock (`lock.js`) it opens the repo again and compares
+   every file and folder the plan read. A change to the file the write is
+   about is a 409 and nothing is written; a change elsewhere is planned
+   once more, under the lock.
+4. The files are written one after another, each to a temp file beside it
+   and renamed over it. One that cannot be written puts back those written
+   before it and answers 409 naming that file.
+
+The lock is one per repo, inside the server's process: every write, and
+Commit, Push, Pull and Discard, take it. A program outside the server is
+not held by it.
+
+## Command-line tools
+
+All of them open the repo with the same loader and decide with a policy
+table, so they answer as the server does.
+
+| Tool | What it does | Shared with the server |
 |---|---|---|
-| GET | `/api/templates/:type` | List all names + versions for a type |
-| GET | `/api/templates/:type/:name/:version` | Read `values.yaml` (parsed + raw) |
-| POST | `/api/templates/:type/:name/:version` | Write `values.yaml`; create `Chart.yaml` if new |
-| DELETE | `/api/templates/:type/:name/:version` | Remove version folder |
-| GET | `/api/templates/:type/:name/:version/chartmeta` | Read `Chart.yaml` metadata |
+| `scripts/gen-rules.mjs` | Regenerates a Template's schema and `templates/` from `rules/` (or converts an older chart); `--check` only compares | The Template loader, the generator, the Template's `cli` policy table; writes with the writer's all-or-none file write, without the lock |
+| `scripts/gen-chart.mjs` | Regenerates `templates/` only | The same |
+| `scripts/import-rules.mjs` | Imports Prometheus rules into a Template's `rules/` | The same, and the editor's import |
+| `scripts/check-deployment.mjs` | Checks one deployment: what it renders, and its routing | Preview's render and checkers, the routing loader, the `checkDeployment` tables |
+| `scripts/check-repo.mjs` | Checks the whole repo as Commit does, then renders every deployment | Commit's checks under its own `checkRepo` table, which refuses what Commit only lists; Helm renders in a copy of the repo, so nothing is written |
 
-### GitOps Deploy
+The image ships `gen-rules`, `import-rules`, `check-deployment` and
+`check-repo`. The other files in `scripts/` are development helpers.
 
-| Method | Path | Action |
+## Front end
+
+React and Ant Design, built by Vite; in development Vite proxies `/api` to
+the server. `src/App.jsx` switches between three pages — Templates
+(`src/pages/TemplateDevEditor.jsx`), Alerts (`AlertUserView.jsx`) and
+Routing (`RoutingView.jsx`) — and the Git panel
+(`src/components/GitPanel.jsx`). `src/lib/apiFetch.js` is the only module
+that calls `fetch`. The pages call the server through
+`src/utils/chartApi.js`, which says for each call whether the answer was
+ok, refused or could not be read; the Git panel's components use `apiFetch`
+directly.
+
+## How it is tested
+
+| Layer | Where | What it holds |
 |---|---|---|
-| GET | `/api/gitops/product` | Read product name from `gitops-deploy/` |
-| POST | `/api/gitops/product` | Rename product folder |
-| GET | `/api/gitops/:product/sites` | List site folders |
-| POST | `/api/gitops/:product/sites` | Create site folder |
-| DELETE | `/api/gitops/:product/:site` | Delete site |
-| GET | `/api/gitops/:product/:site/relunits` | List relunit folders |
-| POST | `/api/gitops/:product/:site/relunits` | Create relunit |
-| DELETE | `/api/gitops/:product/:site/:relunit` | Delete relunit |
-| GET | `/api/gitops/:product/:site/:relunit/:stage` | Read stage `values.yaml` |
-| POST | `/api/gitops/:product/:site/:relunit/:stage` | Write stage; create `Chart.yaml` if new |
-| DELETE | `/api/gitops/:product/:site/:relunit/:stage` | Remove stage folder |
+| Unit | `tests/unit/`, `src/**/__tests__/` | Pure functions, the repo layer's parts, the lint rules |
+| Integration | `tests/integration/` | The API and the command-line tools on a temp repo, many beside real Helm, promtool, vmalert and amtool |
+| E2E | `tests/e2e/` (Playwright) | What a user sees and does, on a server serving the built page |
+| Generator blind tests | `tests/blind/`, `tests/fixtures/charts/<case>/` | What the generator emits, against an `expected/rendered.yaml` written by hand |
+| Pins | `tests/pin/<slice>/` | Every entry point for one kind of file, run on every input of a table (`cases.mjs`), each answer recorded (`baseline.tsv`) — where the slice renders, next to what Helm does with the same files. A cell whose answer changes fails; a cell that disagrees with Helm, or breaks what the slice holds every cell to, fails unless it is listed by hand with its reason (`allowlist.tsv`) |
 
-### Utilities
+`npm test` runs unit and integration; `npm run test:pin` the pins;
+`npm run test:e2e` Playwright. The pin slices are `deployment-values`,
+`template-files`, `routing`, `walk-sync`, `display`, `requests` (bad values
+for everything a route turns into a path, a name or a git ref) and
+`writes` (every path that writes the repo, on every situation: an old tab,
+two at once, a file in the way); these two run no Helm. `tests/pin/counts.mjs` counts what lint
+does not see (YAML parse sites, catches that swallow a failed read) and a
+test fails when a number goes up.
 
-| Method | Path | Action |
-|---|---|---|
-| GET | `/api/defaults` | Read `config/defaults.yaml` |
-| POST | `/api/defaults` | Write `config/defaults.yaml` |
-| GET | `/api/metrics-dict` | Read metrics dictionary |
-| POST | `/api/metrics-dict` | Write metrics dictionary |
-| GET | `/api/import/prometheus-rules` | Scan filesystem for PrometheusRule YAMLs |
-| POST | `/api/prune-routes` | Run route pruning algorithm (pure JS) |
-| POST | `/api/helm/render/:product/:site/:relunit/:stage` | Run `helm template` on a stage |
+## Where to start reading
 
----
-
-## Frontend Pages
-
-### Alert Type Editor
-
-Manages `templates/alert-type/` entries. Each alert type stores:
-- `expr` — a Go template string with `{{ .varName }}` placeholders
-- `vars[]` — name + description for each placeholder
-
-The editor renders a live preview of the filled `expr` and a PrometheusRule skeleton.
-
-### Rule Group Editor (Alert Suite)
-
-Manages `templates/alert-suite/` entries. Each rule group stores:
-- `alertSuite.rules[]` — concrete instances of alert types with resolved `expr`, `vars`, `severity`, `for`, `labels`
-- `alertSuite.groupLabels` — Kubernetes labels attached to the PrometheusRule group
-
-Rules reference an alert type by `alertTypeName` + `alertTypeVersion`. The editor can import existing PrometheusRule YAMLs from the filesystem (via `/api/import/prometheus-rules`) and auto-fill the rule table, including scanning `spec.groups[].labels` as `groupLabels`.
-
-### Receivers Editor
-
-Manages `templates/receivers/` entries. Supports four config types per receiver entry: `webhook_configs`, `slack_configs`, `pagerduty_configs`, `email_configs`.
-
-### AM Config Editor (`AlertmanagerSmartEditor`)
-
-The main Alertmanager configuration editor. Manages `templates/amconfig/` entries.
-
-**Form sections:**
-
-| Section | Fields |
-|---|---|
-| Header | `configName`, `defaultReceiver` |
-| Rule Groups | List of `alert-suite` name+version pairs (rendered into Helm dependencies) |
-| Route Matchers | `spec.route.matchers` — top-level namespace / label filter applied before child routes |
-| Route Configuration | Flat list of `{receiver, matchers[]}` route rules; Original / Pruned toggle |
-| Inhibit Rules | `spec.inhibitRules[]` — source matchers, target matchers, equal label names |
-| Receivers | Embedded receiver configs (same format as Receivers editor) |
-
-**Route modes:**
-
-- **Original** — route rules rendered as a flat list in YAML
-- **Pruned** — routes sent to `POST /api/prune-routes`; result is a synthesized trie tree displayed in preview and stored on save
-
-**Autocomplete sources:**
-- Receiver names — from the embedded receivers list
-- Label keys / alertnames — derived from all loaded rule group data
-- Severity values — hardcoded `critical`, `warning`, `info`
-- Alertname values — rule names from loaded alert-suite templates
-
-### GitOps Deploy Editor
-
-Tree view: `product → sites → relunits → stages`. Each stage stores a `values.yaml` that scopes overrides under the amconfig chart name key. The editor can:
-- Toggle stages on/off (creates/removes the stage folder)
-- Assign an amconfig template
-- Run `helm template` and display the rendered YAML
-
-### PromQL Builder
-
-CodeMirror 6 editor with `@prometheus-io/codemirror-promql` for syntax highlighting and autocomplete. Includes a guided builder panel backed by a user-maintained metrics dictionary.
-
----
-
-## Route Pruning Algorithm
-
-The pruning algorithm converts a flat list of routes into an optimal trie, reducing Alertmanager routing work by hoisting shared matchers into parent nodes.
-
-### Steps
-
-1. **Strip top-level matchers** — `spec.route.matchers` are implicit for all children; remove them from every child route to avoid redundancy.
-
-2. **Build trie** (recursive):
-   a. Index all matchers → which routes contain them.
-   b. Find matchers shared by 2+ routes (candidates for hoisting).
-   c. For each unique group of routes sharing a matcher, compute the full intersection of all matchers across every route in that group.
-   d. Pick the best group: maximise (number of routes grouped, then number of matchers hoisted).
-   e. Create a synthetic parent node with the intersection matchers; assign the most-common receiver as parent receiver.
-   f. Children keep only their differentiating matchers. Drop children that are identical to the parent.
-   g. Recurse on children, then on remaining ungrouped routes.
-
-### Example
-
-Input (flat):
-```yaml
-- receiver: pd       matchers: [severity=critical, team=infra]
-- receiver: slack    matchers: [severity=warning,  team=infra]
-- receiver: email    matchers: [severity=warning,  team=api]
-```
-
-Output (pruned):
-```yaml
-- receiver: pd
-  matchers: [team=infra]
-  routes:
-    - receiver: pd      matchers: [severity=critical]
-    - receiver: slack   matchers: [severity=warning]
-- receiver: email
-  matchers: [severity=warning, team=api]
-```
-
-### Implementations
-
-| Location | Use |
-|---|---|
-| `server.js` — `buildRouteTree()` | Server-side, called by `/api/prune-routes`; result used for YAML preview and saved values |
-| `src/pages/AlertmanagerSmartEditor.jsx` — `pruneRoutes()` | Client-side fallback (basic subset detection only) |
-| `scripts/prune_routes.py` | Standalone CLI for manual inspection; same algorithm, PyYAML output |
-
----
-
-## Helm Template Conventions
-
-### Recursive route rendering
-
-`amconfig` uses a named Go template to render arbitrarily nested route trees:
-
-```yaml
-{{- define "amconfig.routes" -}}
-{{- range . }}
-- receiver: {{ .receiver | quote }}
-  {{- if .matchers }}
-  matchers:
-    {{- range .matchers }}
-    - name: {{ .key | quote }}
-      matchType: {{ .op | quote }}
-      value: {{ .value | quote }}
-    {{- end }}
-  {{- end }}
-  {{- if .routes }}
-  routes:
-{{ include "amconfig.routes" .routes | indent 4 }}
-  {{- end }}
-{{- end }}
-{{- end }}
-```
-
-### Product prefixing
-
-`global.product` is injected by the GitOps stage chart. When set, it prefixes:
-- `metadata.name` on all CRs
-- Receiver names in routes and receiver definitions
-
-This allows multiple products to share a single Alertmanager instance without name collisions.
-
-### Stage `Chart.yaml` formula
-
-```yaml
-apiVersion: v2
-name: {relunit}-{stage}
-version: 0.1.0
-dependencies:
-  - name: {amconfig-chart-name}
-    version: "{version-without-v}"
-    repository: "file://../../../../../templates/amconfig/{name}/{version}"
-```
-
-The `file://` path is always 5 `../` levels up from the stage folder to the repo root.
-
----
-
-## Data Flow: Save an AM Config
-
-```
-User edits form
-    │
-    ▼
-buildPayload()              # serialise form → plain JS object
-    │
-    ├── routeMode = 'pruned' ?
-    │       └── prunedRouteTree ?? pruneRoutes(flat)  →  routeRules
-    │
-    ▼
-saveTemplate('amconfig', name, version, payload)
-    │
-    ▼
-POST /api/templates/amconfig/:name/:version
-    │
-    ├── js-yaml.dump(payload)  →  values.yaml
-    └── create Chart.yaml + templates/ if new version
-```
-
-## Data Flow: Helm Render
-
-```
-User clicks "Render" on a GitOps stage
-    │
-    ▼
-POST /api/helm/render/:product/:site/:relunit/:stage
-    │
-    ├── helm dependency update  (amconfig chart)
-    ├── helm dependency update  (stage chart)
-    └── helm template {relunit}-{stage} .
-            │
-            └── stdout → res.json({ yaml: ... })
-```
-
----
-
-## Kubernetes CRDs Produced
-
-| CRD | API Version | Produced by |
-|---|---|---|
-| `PrometheusRule` | `monitoring.coreos.com/v1` | `templates/alert-suite/.../prometheus-rule.yaml` |
-| `AlertmanagerConfig` | `monitoring.coreos.com/v1alpha1` | `templates/amconfig/.../alertmanager-config.yaml` |
+1. `server/http/route.js` — how a route declares and receives its request
+2. `server/routes/deployments/values.js` — a small route that reads and writes
+3. `server/repo/openRepo.js` and `server/repo/loaded.js` — the snapshot and what a read gives
+4. `server/repo/finding.js` and `server/repo/policy.js` — findings and the tables
+5. `server/repo/write.js` with `server/repo/changes/set-values.js` — the writer and one kind of change
+6. `eslint.config.js` (`ALLOWED`) — the boundary and its exceptions
+7. `tests/pin/writes/` (`cases.mjs`, `compare.mjs`, `baseline.tsv`) — one pin

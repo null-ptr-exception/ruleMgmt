@@ -104,18 +104,55 @@ can be reverted in one step. One commit per chart is easier still.
 
 ## Checking
 
-For each deployment, render it before and after and compare:
+For each deployment, render it before and after and compare. Build the
+deployment's dependency before each render: it packs the chart as it is on
+that commit, and without it Helm stops ("You may need to run `helm dependency
+build`") or, after the conversion, renders the chart as it was before.
 
 ```bash
-helm template <release> <deployment-dir> > before.yaml   # on the commit before
-helm template <release> <deployment-dir> > after.yaml    # on the converted commit
-dyff between before.yaml after.yaml
+# on the commit before
+helm dependency build <deployment-dir>
+helm template <release> <deployment-dir> > before.yaml
+# on the converted commit
+helm dependency build <deployment-dir>
+helm template <release> <deployment-dir> > after.yaml
 ```
 
+The image has the Helm the editor renders with. From the gitops repo's root,
+with `IMAGE` as above:
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
+  helm dependency build /work/<deployment-dir>
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
+  helm template <release> /work/<deployment-dir> > before.yaml
+```
+
+The objects are renamed and split, so a plain `diff` of the two files shows
+every line. Compare the rules instead: list each file's rules, sorted, and
+`diff` the lists. This needs only the image:
+
+```bash
+rules() {
+  docker run --rm -i "$IMAGE" node -e '
+    const docs = require("js-yaml").loadAll(require("fs").readFileSync(0, "utf8"))
+    const rules = docs.flatMap(d => d?.spec?.groups ?? []).flatMap(g => g.rules.map(r => JSON.stringify([g.name, r])))
+    console.log(rules.sort().join("\n"))'
+}
+rules < before.yaml > before.rules
+rules < after.yaml > after.rules
+diff before.rules after.rules
+```
+
+[dyff](https://github.com/homeport/dyff) (`dyff between before.yaml
+after.yaml`) reads more easily; it is a separate tool, not in the image.
+
 Expect the rules to be the same and only the objects to differ: new names,
-one or more objects per group, and the labels from `RULE_OBJECT_LABELS`. A
-rule that differs, or labels your evaluator selects on going missing, is a
-reason to stop.
+one or more objects per group, and the labels from `RULE_OBJECT_LABELS`. One
+difference in a rule is expected: a large number that 1.x rendered as
+`1.048576e+08` is now rendered as `104857600`. It is the same value. Any
+other difference in a rule, or labels your evaluator selects on going
+missing, is a reason to stop.
 
 After the sync, check that the evaluator loaded the new objects and that the
 old ones are gone.

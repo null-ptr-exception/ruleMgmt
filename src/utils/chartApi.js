@@ -79,7 +79,8 @@ export async function deleteChartTemplate(chart, template) {
  * the lot all-or-nothing. `files` is { '<name>.yaml': text }.
  *
  * A breaking change comes back as 409 with `breaking` / `notices` / `added` /
- * `deployments` (each `readonly`); parse errors and failed rule checks come
+ * `deployments` (each `readonly`): `blocked`. Any other 409 is `failed`, with
+ * the server's `error` and `findings`. Parse errors and failed rule checks come
  * back as 400 with `errors` / `findings`. A migration that would write values
  * a save refuses comes back `refused` with `migrationProblems` (#176). `migration` ({ groups?, columns?,
  * dropped? }) with confirmBreaking rewrites every affected deployment's values.
@@ -92,9 +93,14 @@ export async function saveChartRules(chart, files, confirmBreaking = false, migr
   })
   if (res.status === 409) {
     const body = await res.json()
-    // A migration that would write values a save refuses (#176) is a 409 of
-    // its own: not the breaking change the dialog asks about.
-    return body.migrationProblems ? { refused: true, ...body } : { blocked: true, ...body }
+    // Only a 409 that lists the breaking changes is the breaking-change
+    // dialog. A migration that would write values a save refuses (#176) is
+    // a refusal of its own; any other 409 (rules/ gone, a Template that
+    // would not render, a file that cannot be read) is a save that failed,
+    // with its error and findings.
+    if (Array.isArray(body.breaking)) return { blocked: true, ...body }
+    if (body.migrationProblems) return { refused: true, ...body }
+    return { failed: true, ...body }
   }
   if (res.status === 400) return { invalid: true, ...(await res.json()) }
   // Anything else — "Generation failed", "Deployment migration failed" — keeps
@@ -136,7 +142,8 @@ export async function saveChartMeta(chart, chartMeta) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chartMeta })
   })
-  if (!res.ok) return {}
+  // A refusal says why: `{ ok: false, error }`.
+  if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({ error: `the server answered ${res.status}` }))) }
   return res.json()
 }
 
@@ -347,11 +354,18 @@ export async function getCommonUsers(commonPath) {
 
 // ─── Sync ───────────────────────────────────────────────────────────────────
 
-// Full registry in one call — used by DeploymentSelector to badge every row
-// without a per-item request.
+// What a read of sync.yaml that failed says: `{ failed, error, file? }`. A
+// sync.yaml that cannot be read is not "no syncs" (the server says so too).
+async function syncReadFailure(res) {
+  const body = await res.json().catch(() => ({}))
+  return { failed: true, error: body.error || `sync.yaml could not be read (the server answered ${res.status})`, ...(body.file ? { file: body.file } : {}) }
+}
+
+// Full registry in one call — used by the deployment tree to badge every row
+// without a per-item request. `{ syncs }`, or `{ failed, error, file? }`.
 export async function getSyncRegistry() {
   const res = await apiFetch(`${BASE}/sync`)
-  if (!res.ok) return { syncs: [] }
+  if (!res.ok) return syncReadFailure(res)
   return res.json()
 }
 
@@ -361,9 +375,11 @@ export async function getSyncTargets(source) {
   return res.json()
 }
 
+// `{ target, source }` (source null: not a sync target), or
+// `{ target, failed, error, file? }`: whether it is one is not known.
 export async function getSyncSource(target) {
   const res = await apiFetch(`${BASE}/sync?target=${encodeURIComponent(target)}`)
-  if (!res.ok) return { target, source: null }
+  if (!res.ok) return { target, ...(await syncReadFailure(res)) }
   return res.json()
 }
 

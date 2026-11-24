@@ -48,6 +48,9 @@ export default function RoutingView() {
   // Labels added since the last save: alerts without them now match no cell.
   const [addedLabels, setAddedLabels] = useState([])
   const [frozenSource, setFrozenSource] = useState(null)
+  // Why sync.yaml cannot be read: whether this is a sync target is not
+  // known, so nothing is offered to edit.
+  const [syncUnknown, setSyncUnknown] = useState(null)
   const [preview, setPreview] = useState(null)
   // Grid or list; unset follows the labels — a list from three on.
   const [view, setView] = useState(null)
@@ -65,7 +68,7 @@ export default function RoutingView() {
   }, [showShared, selectedFolder, reloadKey])
 
   const deployment = selectedFolder ? selectedFolder.split('/').pop() : null
-  const readOnly = !!frozenSource
+  const readOnly = !!frozenSource || !!syncUnknown
 
   useEffect(() => {
     if (!selectedFolder || !selectedChart) return
@@ -106,10 +109,16 @@ export default function RoutingView() {
   async function refreshFrozenSource(path) {
     frozenFolderRef.current = path
     let source = null
+    let unknown = null
     try {
-      ;({ source } = await getSyncSource(path))
+      const read = await getSyncSource(path)
+      if (read.failed) unknown = read.error
+      else source = read.source
     } catch { /* the server refuses a save to a target regardless */ }
-    if (frozenFolderRef.current === path) setFrozenSource(source)
+    if (frozenFolderRef.current === path) {
+      setFrozenSource(source)
+      setSyncUnknown(unknown)
+    }
   }
   useEffect(() => {
     if (selectedFolder) refreshFrozenSource(selectedFolder)
@@ -393,6 +402,11 @@ export default function RoutingView() {
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
+        {!showShared && syncUnknown && selectedFolder && (
+          <div data-testid="sync-unknown" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
+            {syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.
+          </div>
+        )}
         {!showShared && frozenSource && selectedFolder && (
           <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
             Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.

@@ -1,6 +1,9 @@
 import { test, expect } from '@playwright/test'
 import yaml from 'js-yaml'
+import fs from 'fs/promises'
+import path from 'path'
 import { openedModal, removeChart, openTemplateChart } from './charts.js'
+import { WORKSPACE } from './workspace.js'
 
 // The editor now loads a chart's rules/*.yaml (or adapts a schema-only chart),
 // and Save goes through the one atomic POST /:chart/rules. This drives that
@@ -443,5 +446,76 @@ test.describe('Set as variable', () => {
     expect(file.rules[0].expr).toBe('cpu{ns="${namespace}"} > ${warn}')
     expect(file.columns.warn).toEqual({ type: 'number', default: 0.8 })
     expect(file.columns.namespace).toEqual({ type: 'string', default: 'shop' })
+  })
+})
+
+// A save the server refuses for a reason other than a breaking change (here:
+// rules/ is gone beside the schema it generated) says that reason. It is not
+// the breaking-change dialog, which would have nothing to list and offer a
+// Clone that makes a Template the save then fails on.
+test.describe('a save refused for another reason', () => {
+  const GONE = 'e2e-rules-gone-save'
+
+  test.beforeEach(async ({ request }) => {
+    await removeChart(request, GONE)
+    expect((await request.post('/api/v2/charts', { data: { name: GONE } })).ok()).toBeTruthy()
+    const res = await request.post(`/api/v2/templates/${GONE}/rules`, {
+      data: { files: { 'cpu.yaml': 'group: cpu\ncolumns:\n  namespace: {type: string, required: true}\nrules:\n  - alert: CpuHigh\n    expr: cpu{ns="${namespace}"} > 1\n' } },
+    })
+    expect(res.ok()).toBeTruthy()
+    await fs.rm(path.join(WORKSPACE, 'charts', GONE, 'rules'), { recursive: true })
+  })
+  test.afterAll(async ({ request }) => { await removeChart(request, GONE) })
+
+  test('says why, with no breaking dialog and no extra Template', async ({ page, request }) => {
+    const before = (await (await request.get('/api/v2/charts')).json()).map(c => c.name).sort()
+    await openTemplateChart(page, GONE)
+    await page.getByRole('button', { name: 'Save' }).first().click()
+
+    const refused = page.locator('.ant-modal').filter({ hasText: `charts/${GONE}/rules is not there` })
+    await expect(refused).toBeVisible({ timeout: 8000 })
+    await expect(page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })).toHaveCount(0)
+    expect((await (await request.get('/api/v2/charts')).json()).map(c => c.name).sort()).toEqual(before)
+  })
+})
+
+// The rules saved and the description not: said, and what was typed stays
+// in the box to save again.
+test.describe('a description that cannot be saved', () => {
+  const DESC = 'e2e-description-refused'
+  const chartYaml = () => path.join(WORKSPACE, 'charts', DESC, 'Chart.yaml')
+  // chmod does not stop root from writing.
+  test.skip(typeof process.getuid === 'function' && process.getuid() === 0, 'chmod does not stop root')
+
+  test.beforeEach(async ({ request }) => {
+    await fs.chmod(chartYaml(), 0o644).catch(() => {})
+    await removeChart(request, DESC)
+    expect((await request.post('/api/v2/charts', { data: { name: DESC } })).ok()).toBeTruthy()
+    const res = await request.post(`/api/v2/templates/${DESC}/rules`, {
+      data: { files: { 'cpu.yaml': 'group: cpu\nrules:\n  - alert: CpuHigh\n    expr: up > 1\n' } },
+    })
+    expect(res.ok()).toBeTruthy()
+  })
+  test.afterAll(async ({ request }) => {
+    await fs.chmod(chartYaml(), 0o644).catch(() => {})
+    await removeChart(request, DESC)
+  })
+
+  test('is said, and the box keeps what was typed', async ({ page, request }) => {
+    await openTemplateChart(page, DESC)
+    await page.getByText('cpu', { exact: true }).first().click()
+    await expect(page.getByPlaceholder('alert name')).toBeVisible({ timeout: 5000 })
+    await fs.chmod(chartYaml(), 0o444)
+    await page.getByPlaceholder('Description').fill('what the user typed')
+    await page.getByPlaceholder('alert name').fill('CpuTooHigh')
+    await page.getByRole('button', { name: 'Save' }).first().click()
+
+    const said = page.locator('.ant-modal-confirm').filter({ hasText: 'The rules were saved, but the description was not' })
+    await expect(said).toContainText(`EACCES: permission denied, access 'charts/${DESC}/Chart.yaml'`, { timeout: 8000 })
+    const info = await (await request.get(`/api/v2/templates/${DESC}`)).json()
+    expect(info.rulesFiles['cpu.yaml']).toContain('alert: CpuTooHigh')
+    await said.getByRole('button', { name: 'OK' }).click()
+    await expect(page.getByPlaceholder('Description')).toHaveValue('what the user typed')
+    await expect(page.getByRole('button', { name: 'Save' }).first()).toBeEnabled()
   })
 })

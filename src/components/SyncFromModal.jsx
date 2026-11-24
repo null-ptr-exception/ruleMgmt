@@ -21,14 +21,23 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
   const [submitting, setSubmitting] = useState(false)
   // A refused sync: the source has values a save would refuse (#180).
   const [refusal, setRefusal] = useState(null)
+  // Why sync.yaml cannot be read: nothing is offered to overwrite.
+  const [readError, setReadError] = useState(null)
 
   useEffect(() => {
     if (!open || !target) return
     setSelectedSource(null)
     setAcked(false)
     setRefusal(null)
+    setReadError(null)
     ;(async () => {
       const [all, reg] = await Promise.all([listAllDeployments(), getSyncRegistry()])
+      if (reg.failed) {
+        setReadError(reg.error)
+        setCandidates([])
+        setRegistry({ syncs: [] })
+        return
+      }
       setCandidates(all.filter(d => d.path !== target.path))
       setSelf(all.find(d => d.path === target.path) || null)
       setRegistry(reg)
@@ -53,7 +62,7 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
   const change = templateChange(candidates.find(c => c.path === selectedSource)?.chart, self)
 
   const needsAck = targetState.status === 'red' || targetState.status === 'orange'
-  const canConfirm = !!selectedSource && (!needsAck || acked) && !submitting
+  const canConfirm = !readError && !!selectedSource && (!needsAck || acked) && !submitting
 
   async function handleConfirm() {
     setSubmitting(true)
@@ -81,6 +90,10 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
       okButtonProps={{ disabled: !canConfirm, loading: submitting }}
       destroyOnClose
     >
+      {readError ? (
+        <Alert type="error" showIcon data-testid="sync-read-error" message={readError}
+          description="Which deployments are synced is not known, so none is offered to sync from until it can be read." />
+      ) : (<>
       <Select
         style={{ width: '100%' }}
         placeholder="Follow source"
@@ -126,6 +139,7 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
           description={<SyncProblems problems={refusal.problems} />}
         />
       )}
+      </>)}
     </Modal>
   )
 }

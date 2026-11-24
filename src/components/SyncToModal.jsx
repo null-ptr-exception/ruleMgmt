@@ -38,6 +38,8 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
   const [newPath, setNewPath] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [results, setResults] = useState(null)
+  // Why sync.yaml cannot be read: nothing is offered to overwrite.
+  const [readError, setReadError] = useState(null)
 
   useEffect(() => {
     if (!open || !source) return
@@ -45,9 +47,16 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
     setAcked(new Set())
     setNewPath('')
     setResults(null)
+    setReadError(null)
     ;(async () => {
       // Each folder's _common for the source's Template, which a target renders.
       const [all, reg] = await Promise.all([listAllDeployments(source.chart), getSyncRegistry()])
+      if (reg.failed) {
+        setReadError(reg.error)
+        setCandidates([])
+        setRegistry({ syncs: [] })
+        return
+      }
       setCandidates(all.filter(d => d.path !== source.path))
       setSourceChart(all.find(d => d.path === source.path)?.chart || null)
       setSourceInherits(all.find(d => d.path === source.path)?.inheritsFrom || null)
@@ -101,7 +110,7 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
   ]
   const allAcked = needsAck.every(r => acked.has(r.path))
   const newPathBlocked = newPathStatus?.status === 'disabled'
-  const canConfirm = (selected.size > 0 || newPathTrimmed.length > 0) && allAcked && !newPathBlocked && !submitting
+  const canConfirm = !readError && (selected.size > 0 || newPathTrimmed.length > 0) && allAcked && !newPathBlocked && !submitting
 
   async function handleConfirm() {
     setSubmitting(true)
@@ -142,6 +151,10 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
       okButtonProps={{ disabled: !canConfirm, loading: submitting }}
       destroyOnClose
     >
+      {readError ? (
+        <Alert type="error" showIcon data-testid="sync-read-error" message={readError}
+          description="Which deployments are synced is not known, so none is offered to sync to until it can be read." />
+      ) : (<>
       <List
         size="small"
         dataSource={rows}
@@ -212,6 +225,7 @@ export default function SyncToModal({ open, source, onClose, onSuccess }) {
             : undefined}
         />
       )}
+      </>)}
     </Modal>
   )
 }

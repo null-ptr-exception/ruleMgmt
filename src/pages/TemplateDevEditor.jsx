@@ -414,6 +414,22 @@ export default function TemplateDevEditor() {
   const saveDescriptionIfChanged = () => ((chartMeta.description || '') === (loadedDescription.current || '')
     ? Promise.resolve()
     : saveChartMeta(activeChart, { description: chartMeta.description || '' }))
+  // After the rules were saved: the description, then the chart again. A
+  // description that was not saved is said, and what was typed stays in
+  // the box, to be saved again.
+  async function saveDescriptionAndReload() {
+    const typed = chartMeta.description || ''
+    const meta = await saveDescriptionIfChanged()
+    await loadChart(activeChart)
+    if (meta && !meta.ok) {
+      setChartMeta(m => ({ ...m, description: typed }))
+      setDirty(true)
+      Modal.error({
+        title: 'The rules were saved, but the description was not',
+        content: meta.error || 'The server did not save the description.',
+      })
+    }
+  }
   // The chart as { common: { columns }, groups: { <key>: { group, columns, rules, vars?, custom? } } }
   const [model, setModel] = useState({ common: { columns: {} }, groups: {} })
   const [order, setOrder] = useState([])
@@ -658,8 +674,7 @@ export default function TemplateDevEditor() {
     }
     reportNotices(result.notices)
 
-    await saveDescriptionIfChanged()
-    await loadChart(activeChart)
+    await saveDescriptionAndReload()
   }
 
   // Changes that break nothing but are worth knowing — a group changing type
@@ -699,8 +714,7 @@ export default function TemplateDevEditor() {
     setBreaking(null)
     const notice = syncFailedNotice(result.syncFailed, 'Changed')
     if (notice) message.warning(notice, 10)
-    await saveDescriptionIfChanged()
-    await loadChart(activeChart)
+    await saveDescriptionAndReload()
   }
 
   async function cloneWithEdits(newName, migration) {

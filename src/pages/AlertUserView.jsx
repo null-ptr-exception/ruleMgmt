@@ -48,6 +48,8 @@ export default function AlertUserView() {
   // The chart's rules model — for once groups (#70) and selectors (#60).
   const [rulesModel, setRulesModel] = useState(null)
   const [alertNames, setAlertNames] = useState([])
+  // Why the Template cannot be opened, when it cannot: no group is listed.
+  const [chartError, setChartError] = useState(null)
 
   const [allValues, setAllValues] = useState({})
   const [commonValues, setCommonValues] = useState({})
@@ -89,6 +91,9 @@ export default function AlertUserView() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const [frozenSource, setFrozenSource] = useState(null)
+  // Why sync.yaml cannot be read, when it cannot: whether this deployment is
+  // a sync target (read-only) is not known, so nothing is offered to edit.
+  const [syncUnknown, setSyncUnknown] = useState(null)
   // Why the deployment's values cannot be read, when they cannot: nothing is
   // shown to edit or save over.
   const [loadError, setLoadError] = useState(null)
@@ -129,12 +134,25 @@ export default function AlertUserView() {
   }
 
   useEffect(() => {
+    setChartError(null)
     if (!selectedChart) {
       setSchema(null)
       setAlertNames([])
       return
     }
+    // A slower answer for the Template just left must not land on this one.
+    let stale = false
     getChartInfo(selectedChart).then(info => {
+      if (stale) return
+      if (info.failed) {
+        // Nothing of the Template before stays to fill in.
+        setChartError(info.error || 'The Template cannot be opened')
+        setRulesModel(null)
+        setSchema(null)
+        setOnceGroups([])
+        setAlertNames([])
+        return
+      }
       // A once group (#70) has no rows and so no entry in the schema; it is
       // listed from the chart's rules/ so the rule owner sees it exists.
       let once = []
@@ -152,6 +170,7 @@ export default function AlertUserView() {
         setActiveAlert(null)
       }
     })
+    return () => { stale = true }
   }, [selectedChart])
 
   const folderBasename = selectedFolder ? selectedFolder.split('/').pop() : null
@@ -294,6 +313,7 @@ export default function AlertUserView() {
     setNewDeployOpen(false)
     if (result.status === 'created' || result.status === 'existing') {
       const chart = result.chart || newDeployChart
+      clearSaveStatus()
       setSelectedFolder(newDeployPath)
       setSelectedChart(chart)
       setActiveAlert(null)
@@ -317,14 +337,21 @@ export default function AlertUserView() {
   async function refreshFrozenSource(path) {
     frozenSourceFolderRef.current = path
     let source = null
+    let unknown = null
     try {
-      ;({ source } = await getSyncSource(path))
+      const read = await getSyncSource(path)
+      if (read.failed) unknown = read.error
+      else source = read.source
     } catch {
-      // Transport failure — fall through to null. The server enforces
-      // read-only on save regardless, so failing open here can't corrupt a
-      // synced target; it just skips the banner until the next refresh.
+      // An answer that cannot be read — fall through to null. The server
+      // enforces read-only on save regardless, so failing open here can't
+      // corrupt a synced target; it just skips the banner until the next
+      // refresh.
     }
-    if (frozenSourceFolderRef.current === path) setFrozenSource(source)
+    if (frozenSourceFolderRef.current === path) {
+      setFrozenSource(source)
+      setSyncUnknown(unknown)
+    }
   }
 
   // Covers folders restored from session state, which never pass through
@@ -381,6 +408,8 @@ export default function AlertUserView() {
       setCheckedAlerts([])
       setDirty(false)
       setFrozenSource(null)
+      setSyncUnknown(null)
+      clearSaveStatus()
       return
     }
     if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
@@ -397,6 +426,7 @@ export default function AlertUserView() {
     if (!keepGroups) setCheckedAlerts([])
     setDirty(false)
     setFrozenSource(null)
+    if (path !== selectedFolder) clearSaveStatus()
     await refreshFrozenSource(path)
   }
 
@@ -452,6 +482,13 @@ export default function AlertUserView() {
     setDirty(true)
   }
 
+  // "Saved at" and what that save said belong to that save: not to one
+  // that failed after it, nor to another deployment.
+  function clearSaveStatus() {
+    setSaveStatus('')
+    setSaveWarnings([])
+  }
+
   // A save refused as the deployment changed since it was opened: what is
   // there now is shown again, and the edits here are said to be lost.
   function reportChanged(result) {
@@ -464,16 +501,17 @@ export default function AlertUserView() {
     })
   }
 
-  // A save refused for specific cells lists them; anything else is still
-  // just "Save failed". Rows that would fix a selector overlap (#60) each
-  // come with a button that adds them.
+  // A save refused for specific cells lists them; anything else says the
+  // server's reason (a file that cannot be written, a deployment synced
+  // since). Rows that would fix a selector overlap (#60) each come with a
+  // button that adds them.
   function reportSaveFailure(result) {
     if (result.changed) {
       reportChanged(result)
       return
     }
     if (!result.problems?.length) {
-      message.error('Save failed')
+      Modal.error({ title: 'Save failed', content: result.error || 'The server did not save the values.' })
       return
     }
     const dialog = Modal.error({
@@ -520,6 +558,7 @@ export default function AlertUserView() {
       : merged
     const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder, loadedVersion)
     if (!result.ok) {
+      clearSaveStatus()
       reportSaveFailure(result)
       return false
     }
@@ -539,6 +578,7 @@ export default function AlertUserView() {
       : allValues
     const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder, loadedVersion)
     if (!result.ok) {
+      clearSaveStatus()
       reportSaveFailure(result)
       return false
     }
@@ -624,6 +664,9 @@ export default function AlertUserView() {
   }
 
   const isCommonView = activeAlert === '__common_vars__'
+  // Nothing to edit: a sync target, values that cannot be read, or
+  // sync.yaml that cannot be read (whether it is a target is not known).
+  const locked = !!frozenSource || !!loadError || !!syncUnknown
   const commonVarDefs = schema ? getCommonVars(schema) : []
   const showMain = selectedFolder && selectedChart && activeAlert
 
@@ -660,6 +703,10 @@ export default function AlertUserView() {
               <div style={{ padding: '0 16px 4px', fontSize: 11, color: '#6b7280' }}>
                 from <b>{selectedChart}</b>
               </div>
+              {chartError && (
+                <Alert data-testid="chart-load-error" type="error" showIcon style={{ margin: '4px 12px', fontSize: 12 }}
+                  message={`This Template cannot be opened: ${chartError}`} />
+              )}
               <div style={{ padding: '4px 12px 8px' }}>
                 <Segmented
                   size="small"
@@ -729,6 +776,11 @@ export default function AlertUserView() {
             )}
           </div>
         )}
+        {syncUnknown && selectedFolder && !multi && (
+          <div data-testid="sync-unknown" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
+            {syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.
+          </div>
+        )}
         {loadError && selectedFolder && !multi && (
           <div data-testid="values-load-error" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
             This deployment&apos;s values cannot be read: {loadError}
@@ -783,7 +835,7 @@ export default function AlertUserView() {
             dirty={dirty}
             saveStatus={saveStatus}
             getVars={getVars}
-            readOnly={!!frozenSource || !!loadError}
+            readOnly={locked}
             deployments={viewedDeployments}
             onOpenDeployment={openViewedDeployment}
             inheritedFrom={multi ? null : inheritedFrom}
@@ -819,13 +871,13 @@ export default function AlertUserView() {
                           style={{ flex: 1 }}
                           options={v.enum.map(opt => ({ value: opt, label: opt }))}
                           allowClear
-                          disabled={!!frozenSource || !!loadError}
+                          disabled={locked}
                           onClear={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}
                         />
                       ) : (
                         <Input size="small" value={commonValues[v.name] ?? ''}
                           placeholder={from ? `${inheritedCommon[v.name]} (inherited)` : undefined}
-                          disabled={!!frozenSource || !!loadError}
+                          disabled={locked}
                           status={missing || badDuration ? 'error' : undefined}
                           onChange={e => {
                             if (e.target.value) {
@@ -842,7 +894,7 @@ export default function AlertUserView() {
                         <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}{v.required && <RequiredMark />}</Text>
                         {missing ? <Tooltip title="Required">{field}</Tooltip> : badDuration ? <Tooltip title={badDuration}>{field}</Tooltip> : field}
                         {from && <Tag data-testid={`inherited-from-${v.name}`} style={{ margin: 0, opacity: 0.7 }}>from {from}</Tag>}
-                        {own && v.name in inheritedCommon && !frozenSource && (
+                        {own && v.name in inheritedCommon && !frozenSource && !syncUnknown && (
                           <Tooltip title={`Remove it here: ${inheritedCommon[v.name]} from ${commonFrom[v.name]} again`}>
                             <Button size="small" type="link" data-testid={`reset-${v.name}`} style={{ padding: 0 }}
                               onClick={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}>Reset</Button>
@@ -865,13 +917,13 @@ export default function AlertUserView() {
                   <Alert data-testid="inherited-group" type="info" showIcon style={{ marginBottom: 12 }}
                     message={<>Inherited from <b>{groupFrom}</b>: {inheritedRows.length} row{inheritedRows.length === 1 ? '' : 's'}</>}
                     description={`A group is inherited whole. To change any of its rows here, override it: the ${inheritedRows.length} rows are copied into this deployment, and later changes to ${groupFrom}'s ${activeAlert} no longer reach it.`}
-                    action={!frozenSource && <Button size="small" onClick={() => overrideGroup()}>Override here</Button>} />
+                    action={!frozenSource && !syncUnknown && <Button size="small" onClick={() => overrideGroup()}>Override here</Button>} />
                   <div style={{ opacity: 0.55 }}>
                     <AlertTable vars={vars} rows={inheritedRows} plain readOnly commonValues={{ ...inheritedCommon, ...commonValues }}
                       filters={filters} onFiltersChange={setFilters} onUpdate={() => {}} onDelete={() => {}} onAdd={() => {}}
                       scrollContainer={mainScrollContainer} />
                   </div>
-                  {!frozenSource && (
+                  {!frozenSource && !syncUnknown && (
                     <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }}
                       onClick={() => addToInherited(buildNewRow(vars, { ...inheritedCommon, ...commonValues }))}>
                       Add instance (copies the {inheritedRows.length} inherited rows here first)
@@ -885,7 +937,7 @@ export default function AlertUserView() {
                     message={rows.length === 0 && inheritedRows.length > 0
                       ? <>This deployment clears {activeAlert} (it writes no rows): <b>{groupFrom}</b> gives {inheritedRows.length}</>
                       : <>Overrides <b>{groupFrom}</b> ({inheritedRows.length} row{inheritedRows.length === 1 ? '' : 's'} there)</>}
-                    action={!frozenSource && <Button size="small" onClick={resetGroup}>Reset to inherited</Button>} />
+                    action={!frozenSource && !syncUnknown && <Button size="small" onClick={resetGroup}>Reset to inherited</Button>} />
                 )}
                 <AlertTable
                   vars={vars}
@@ -899,14 +951,14 @@ export default function AlertUserView() {
                   onUpdate={updated => { setRows(updated); setDirty(true) }}
                   onDelete={realIndex => { setRows(rows.filter((_, i) => i !== realIndex)); setDirty(true) }}
                   onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
-                  readOnly={!!frozenSource || !!loadError}
+                  readOnly={locked}
                   scrollContainer={mainScrollContainer}
                 />
                 </>
               )}
             </div>
             <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty || !!frozenSource || !!loadError}>Save</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty || locked}>Save</Button>
               {!isCommonView && !onCommon && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
               {!isCommonView && Object.values(filters).some(f => f && f.value !== '' && f.value != null) && (
                 <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>

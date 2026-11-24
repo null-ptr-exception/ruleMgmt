@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Tree, Tag, Dropdown, Modal, Tooltip, message } from 'antd'
+import { Tree, Tag, Dropdown, Modal, Tooltip, Alert, message } from 'antd'
 import { FolderOutlined, MoreOutlined, WarningOutlined } from '@ant-design/icons'
 import { isReservedName, RESERVED_HINT, COMMON_DIR } from '../utils/reservedNames'
 import { getFolderTree, getSyncRegistry, unlinkSync, deleteDeployment } from '../utils/chartApi'
@@ -211,6 +211,9 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   const confirmLeaveRef = useRef(confirmLeave)
   confirmLeaveRef.current = confirmLeave
   const [syncRegistry, setSyncRegistry] = useState({ syncs: [] })
+  // Why sync.yaml cannot be read, when it cannot: no node is marked, and
+  // the tree says why rather than look like nothing is synced.
+  const [syncError, setSyncError] = useState(null)
   const [syncToNode, setSyncToNode] = useState(null)
   const [syncFromNode, setSyncFromNode] = useState(null)
   const [deleteSourceInfo, setDeleteSourceInfo] = useState(null)
@@ -253,7 +256,9 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // expanded (a selected folder's ancestors) on top of — never instead of —
   // what the user already has open.
   async function refreshAll(ensureKeys = []) {
-    const [registry, rootChildren] = await Promise.all([getSyncRegistry(), loadChildren('')])
+    const [read, rootChildren] = await Promise.all([getSyncRegistry(), loadChildren('')])
+    const registry = read.failed ? { syncs: [] } : read
+    setSyncError(read.failed ? read.error : null)
     setSyncRegistry(registry)
 
     let newTreeData = buildTreeNodes(rootChildren, registry)
@@ -400,6 +405,10 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
 
   return (
     <div style={{ padding: '4px 8px' }}>
+      {syncError && (
+        <Alert data-testid="sync-read-error" type="error" showIcon style={{ marginBottom: 6, fontSize: 12 }}
+          message={`${syncError}: which deployments are synced is not shown.`} />
+      )}
       <Tree
         showIcon
         treeData={shownTree}

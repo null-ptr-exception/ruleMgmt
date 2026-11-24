@@ -19,9 +19,12 @@ export default defineConfig({
   // The shared notification configs (#123) are the whole workspace's: a
   // change to them is refused while any deployment's routing.yaml cannot be
   // read, which other specs write on purpose. Their spec runs after the rest.
+  // sync.yaml is the whole workspace's too: while one spec makes it
+  // unreadable, every save and sync is refused. That spec runs last.
   projects: [
-    { name: 'main', testIgnore: /routing-shared\.spec\.js/ },
+    { name: 'main', testIgnore: /(routing-shared|sync-unreadable)\.spec\.js/ },
     { name: 'shared-configs', testMatch: /routing-shared\.spec\.js/, dependencies: ['main'] },
+    { name: 'sync-unreadable', testMatch: /sync-unreadable\.spec\.js/, dependencies: ['shared-configs'] },
   ],
   webServer: {
     // tests/e2e/web-server.js keeps an idle connection open longer than a test.

@@ -18,7 +18,7 @@
  */
 
 import { z } from 'zod'
-import { durationFault, DURATION_PATTERN } from './duration.js'
+import { durationFault, durationNs, DURATION_PATTERN } from './duration.js'
 import { hasUnclosedTemplate } from './ruleModel.js'
 
 export const DROP_RECEIVER = '_drop'
@@ -40,6 +40,33 @@ export function timingProblem(key, value) {
   if (zero && NONZERO_TIMING.has(key)) return `${key} cannot be zero`
   return null
 }
+/**
+ * Why a webhook timeout is refused, or null. Alertmanager (0.28 on) reads it
+ * as a Go duration, which has no d, w or y: `1d` stops the whole
+ * Alertmanager configuration from loading, and the operator writes a whole
+ * number of days as one (24h as 1d). So only h, m, s and ms, and at most
+ * 1h — AlertForge's own limit, which Alertmanager does not have. Alertmanager
+ * gives each send of a group, retries included, the route's groupInterval
+ * (at least 10s, plus by default 15s per cluster peer ahead of it; Alertmanager 0.28
+ * cmd/alertmanager/main.go, timeoutFunc): a timeout longer than that has no
+ * effect, which with a groupInterval of 1h or less is any above 1h.
+ */
+export const WEBHOOK_TIMEOUT_MAX = '1h'
+export const WEBHOOK_TIMEOUT_PATTERN = '^(0|([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$'
+const TIMEOUT_UNITS_RE = /^(0|(?=\d)(\d+h)?(\d+m)?(\d+s)?(\d+ms)?)$/
+export function webhookTimeoutProblem(value) {
+  const ns = typeof value === 'string' ? durationNs(value) : null
+  if (ns !== null && !TIMEOUT_UNITS_RE.test(value)) {
+    return `timeout ${JSON.stringify(value)} uses d, w or y, which Alertmanager does not read — write it in h, m, s or ms, at most ${WEBHOOK_TIMEOUT_MAX}`
+  }
+  const why = timingProblem('timeout', value)
+  if (why) return why
+  if (ns > durationNs(WEBHOOK_TIMEOUT_MAX)) {
+    return `timeout ${JSON.stringify(value)} is longer than ${WEBHOOK_TIMEOUT_MAX}, the most AlertForge allows — Alertmanager stops waiting once the route's groupInterval (at least 10s) has passed, so a longer one only matters with a groupInterval over 1h`
+  }
+  return null
+}
+
 // Text with something besides spaces in it.
 const TEXT_RE = /\S/
 
@@ -293,8 +320,14 @@ const webhook = strictMap({
   sendResolved: bool('sendResolved').optional(),
   maxAlerts: z.int32({ error: 'maxAlerts must be a whole number from 0 (all alerts in one request) to 2147483647' })
     .min(0, { error: 'maxAlerts must be a whole number from 0 (all alerts in one request) to 2147483647' }).optional(),
-  // The resource's duration format, as for the routing timings.
-  timeout: duration('timeout').optional(),
+  // The resource's duration format, in the units Alertmanager reads.
+  timeout: z.string({ error: iss => webhookTimeoutProblem(iss.input) })
+    .superRefine((value, ctx) => {
+      const why = webhookTimeoutProblem(value)
+      if (why) ctx.addIssue({ code: 'custom', message: why })
+    })
+    .meta({ pattern: WEBHOOK_TIMEOUT_PATTERN, minLength: 1 })
+    .optional(),
   authorization: strictMap({
     // The operator refuses Basic in any case or spacing: that is basicAuth.
     type: trimmed('type', filled('type')).refine(v => v.trim().toLowerCase() !== 'basic', { error: 'type cannot be Basic: use basicAuth for a user name and password' }).optional(),

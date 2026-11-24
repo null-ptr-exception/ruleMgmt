@@ -33,6 +33,12 @@ jobs:
         run: |
           "$PROMTOOL3_BIN" --version | head -1
           "$PROMTOOL3_BIN" --version | grep -q "version $(sed -n 's/^ARG PROMETHEUS3_VERSION=v//p' Dockerfile) "
+      # The routing tests check what the save accepts against it: an older one
+      # does not read a webhook's timeout.
+      - name: amtool is the pinned version
+        run: |
+          amtool --version 2>&1 | head -1
+          amtool --version 2>&1 | grep -q "version $(sed -n 's/^ALERTMANAGER_VERSION=//p' scripts/install-checkers.sh) "
       - run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.2
       - run: npm ci
       # Runtime dependencies only: these ship in the image. Dev-tool advisories

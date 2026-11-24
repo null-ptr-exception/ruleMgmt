@@ -10,9 +10,7 @@ import os from 'os'
 import path from 'path'
 import yaml from 'js-yaml'
 import { configProblems, configWarnings, routingSpec } from '../../src/utils/routingGenerator.js'
-import { toAlertmanagerConfig, amtoolRoutes, hasBinary } from '../blind/harness.js'
-
-const HAS_AMTOOL = hasBinary('amtool')
+import { toAlertmanagerConfig, amtoolRoutes, HAS_AMTOOL, amtoolTitle } from '../blind/harness.js'
 
 const problems = config => configProblems('c', config)
 
@@ -68,7 +66,7 @@ describe('webhook url', () => {
     expect(problems(webhook(url))).toEqual([])
   })
 
-  it.skipIf(!HAS_AMTOOL)('amtool refuses what it can tell is wrong, and accepts the good ones', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('amtool refuses what it can tell is wrong, and accepts the good ones'), () => {
     for (const url of Object.keys(REFUSED_BY_AMTOOL)) expect(amtoolAccepts({ webhookConfigs: [{ url }] }), url).toBe(false)
     for (const url of GOOD) expect(amtoolAccepts({ webhookConfigs: [{ url }] }), url).toBe(true)
   })
@@ -110,7 +108,7 @@ describe('e-mail to', () => {
     expect(problems(email(to))).toEqual([])
   })
 
-  it.skipIf(!HAS_AMTOOL)('amtool loads the accepted ones', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('amtool loads the accepted ones'), () => {
     for (const to of [...ACCEPTED, ...EMPTY_GROUPS]) {
       expect(amtoolAccepts({ emailConfigs: [{ to }] }), to).toBe(true)
     }
@@ -143,7 +141,7 @@ describe('e-mail smarthost without its own login', () => {
     expect(problems(mail(extra))).toEqual([])
     expect(configWarnings('c', mail(extra)).join()).toContain('smarthost relay.example.com:25 has no login of its own')
   })
-  it.skipIf(!HAS_AMTOOL)('amtool loads it', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('amtool loads it'), () => {
     expect(amtoolAccepts({ emailConfigs: [{ to: 'db@example.com', smarthost: 'relay.example.com:25' }] })).toBe(true)
     expect(amtoolAccepts({ emailConfigs: [{ to: 'db@example.com', smarthost: 'relay.example.com:25', tlsConfig: { insecureSkipVerify: true } }] })).toBe(true)
   })
@@ -156,7 +154,7 @@ describe('e-mail smarthost without its own login', () => {
 // The harness used to give amtool receiver names only, so no blind test
 // ever had `to` or `url` checked.
 describe('the blind harness hands amtool the configs', () => {
-  it.skipIf(!HAS_AMTOOL)('a bad url makes the route test fail', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('a bad url makes the route test fail'), () => {
     const spec = { route: { receiver: 'c' }, receivers: [{ name: 'c', webhookConfigs: [{ url: 'http:example.com' }] }] }
     expect(amtoolRoutes('bad-url', spec, [{ labels: { alertname: 'X' } }])[0].join()).toMatch(/amtool failed/)
   })
@@ -215,14 +213,14 @@ describe('e-mail fields', () => {
     expect(problems(email(extra)).join()).toContain(why)
   })
 
-  it.skipIf(!HAS_AMTOOL)('amtool loads the accepted ones and refuses the refused ones', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('amtool loads the accepted ones and refuses the refused ones'), () => {
     for (const extra of ACCEPTED) expect(amtoolAccepts(generated(email(extra))), JSON.stringify(extra)).toBe(true)
     for (const [extra] of REFUSED_BY_AMTOOL) expect(amtoolAccepts(generated(email(extra))), JSON.stringify(extra)).toBe(false)
   })
 
   // Stricter than amtool: the CRD wants these non-empty, and a header name
   // with a space or ":" would write a broken mail header when sent.
-  it.skipIf(!HAS_AMTOOL)('the save is stricter than amtool on empty text and header names', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('the save is stricter than amtool on empty text and header names'), () => {
     for (const extra of [{ from: '' }, { text: '' }, { headers: { 'X Team': 'x' } }, { headers: { '': 'x' } }]) {
       expect(problems(email(extra)), JSON.stringify(extra)).not.toEqual([])
       expect(amtoolAccepts(generated(email(extra))), JSON.stringify(extra)).toBe(true)
@@ -257,15 +255,15 @@ describe('e-mail fields', () => {
     expect(problems(email({ headers: { Subject: template }, text: template, html: template }))).toEqual([])
   })
 
-  it.skipIf(!HAS_AMTOOL)('amtool template render agrees', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('amtool template render agrees'), () => {
     for (const t of UNCLOSED) expect(amtoolRenders(t), t).toBe(false)
     for (const t of READS) expect(amtoolRenders(t), t).toBe(true)
   })
 })
 
-// #160: each webhook field, as generated, handed to amtool 0.27. timeout is
-// not: that amtool does not know it (Alertmanager reads it from 0.28 on), so
-// it is checked against the CRD's format only (tests/unit/routingCrd.test.js).
+// #160: each webhook field, as generated, handed to amtool (0.28 or later,
+// which reads timeout). timeout reaches Alertmanager as the operator writes
+// it: 24h as 1d (see toAlertmanagerConfig).
 describe('webhook fields', () => {
   const webhook = extra => ({ type: 'webhook', url: 'https://hooks.example.com/alert', ...extra })
   const generated = config => routingSpec({ labels: { s: ['x'] }, configs: { c: config }, cells: [{ match: { s: 'x' }, configs: ['c'] }] })
@@ -297,7 +295,7 @@ describe('webhook fields', () => {
     expect(problems(webhook(extra)).join()).toContain(why)
   })
 
-  it.skipIf(!HAS_AMTOOL)('amtool loads the accepted ones and refuses the refused ones', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('amtool loads the accepted ones and refuses the refused ones'), () => {
     for (const extra of ACCEPTED) expect(amtoolAccepts(generated(webhook(extra))), JSON.stringify(extra)).toBe(true)
     for (const [extra] of REFUSED_BY_AMTOOL) expect(amtoolAccepts(generated(webhook(extra))), JSON.stringify(extra)).toBe(false)
   })
@@ -305,7 +303,7 @@ describe('webhook fields', () => {
   // Stricter than amtool: the CRD's maxAlerts is a 32-bit whole number, and
   // a user name without a password (or the other way) is a mistake the
   // operator would pass on.
-  it.skipIf(!HAS_AMTOOL)('the save is stricter than amtool on maxAlerts and a lone half of basicAuth', () => {
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('the save is stricter than amtool on maxAlerts and a lone half of basicAuth'), () => {
     for (const extra of [{ maxAlerts: 1.5 }, { maxAlerts: 2147483648 }]) {
       expect(problems(webhook(extra)), JSON.stringify(extra)).not.toEqual([])
       expect(amtoolAccepts(generated(webhook(extra))), JSON.stringify(extra)).toBe(true)
@@ -314,11 +312,49 @@ describe('webhook fields', () => {
     expect(amtoolAccepts({ webhookConfigs: [{ url: 'http://relay', httpConfig: { basicAuth: { username: ref } } }] })).toBe(true)
   })
 
-  it.skipIf(!HAS_AMTOOL)('amtool 0.27 does not know timeout, so the harness leaves it out', () => {
-    const receiver = generated(webhook({ timeout: '10s' }))
-    expect(receiver.webhookConfigs[0].timeout).toBe('10s')
-    const config = toAlertmanagerConfig({ route: { receiver: 'c' }, receivers: [receiver] })
-    expect(config.receivers.find(r => r.name === 'c').webhook_configs[0].timeout).toBeUndefined()
-    expect(amtoolAccepts(receiver)).toBe(true)
+  // Alertmanager reads timeout as a Go duration: no d, w or y, and the
+  // operator writes a whole number of days as d. Refused, the whole
+  // Alertmanager configuration does not load.
+  const TIMEOUTS_ACCEPTED = ['10s', '0', '0s', '500ms', '90s', '1m30s', '59m59s', '1h', '60m', '3600s']
+  const TIMEOUTS_REFUSED_BY_AMTOOL = [
+    ['1d', 'uses d, w or y, which Alertmanager does not read'],
+    ['1w', 'uses d, w or y, which Alertmanager does not read'],
+    ['1y', 'uses d, w or y, which Alertmanager does not read'],
+    ['1d1h', 'uses d, w or y, which Alertmanager does not read'],
+    // The operator writes these as 1d and 1d1h.
+    ['24h', 'is longer than 1h'],
+    ['25h', 'is longer than 1h'],
+  ]
+
+  it.each(TIMEOUTS_ACCEPTED)('accepts the timeout %j', timeout => {
+    expect(problems(webhook({ timeout }))).toEqual([])
+  })
+
+  it.each(TIMEOUTS_REFUSED_BY_AMTOOL)('refuses the timeout %j', (timeout, why) => {
+    expect(problems(webhook({ timeout })).join()).toContain(why)
+  })
+
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('amtool loads the accepted timeouts, as the operator writes them, and refuses the refused ones'), () => {
+    for (const timeout of TIMEOUTS_ACCEPTED) {
+      const receiver = generated(webhook({ timeout }))
+      expect(receiver.webhookConfigs[0].timeout).toBe(timeout)
+      expect(amtoolAccepts(receiver), timeout).toBe(true)
+    }
+    for (const [timeout] of TIMEOUTS_REFUSED_BY_AMTOOL) expect(amtoolAccepts(generated(webhook({ timeout }))), timeout).toBe(false)
+  })
+
+  it('hands amtool the timeout as the operator writes it', () => {
+    const written = timeout => toAlertmanagerConfig({ route: { receiver: 'c' }, receivers: [generated(webhook({ timeout }))] })
+      .receivers.find(r => r.name === 'c').webhook_configs[0].timeout
+    expect(['10s', '0', '90s', '3600s', '24h', '25h', '7d'].map(written)).toEqual(['10s', '0s', '1m30s', '1h', '1d', '1d1h', '1w'])
+  })
+
+  // Stricter than amtool above 1h, AlertForge's own limit: Alertmanager
+  // takes these; with a groupInterval of 1h or less it waits no longer.
+  it.skipIf(!HAS_AMTOOL)(amtoolTitle('the save is stricter than amtool on a timeout over 1h'), () => {
+    for (const timeout of ['1h0m1s', '1h30m', '23h59m']) {
+      expect(problems(webhook({ timeout })).join(), timeout).toContain('is longer than 1h')
+      expect(amtoolAccepts(generated(webhook({ timeout }))), timeout).toBe(true)
+    }
   })
 })

@@ -46,7 +46,7 @@
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 import yaml from 'js-yaml'
 import { parseRulesDir } from '../../src/utils/rulesFile.js'
 import { generateProducts } from '../../src/utils/drift.js'
@@ -166,6 +166,32 @@ export function hasBinary(bin, args = ['--version']) {
     return false
   }
 }
+
+/**
+ * Whether the amtool on PATH can check what is generated: 0.28 or later, the
+ * first to read a webhook's timeout (scripts/install-checkers.sh pins it).
+ * An older one would refuse every config with a timeout: its tests are
+ * skipped with a reason, not failed — CI installs the pinned one and checks
+ * its version, so they run there.
+ */
+export const AMTOOL_MIN = [0, 28]
+export function amtoolStatus() {
+  // Older ones print the version on stderr.
+  const run = spawnSync('amtool', ['--version'], { encoding: 'utf-8' })
+  if (run.error) return { ok: false, why: 'amtool not found' }
+  const out = `${run.stdout || ''}${run.stderr || ''}`
+  const m = /version (\d+)\.(\d+)\.(\d+)/.exec(out)
+  if (!m) return { ok: false, why: `amtool's version cannot be read: ${out.split('\n')[0]}` }
+  const [major, minor] = [Number(m[1]), Number(m[2])]
+  const ok = major > AMTOOL_MIN[0] || (major === AMTOOL_MIN[0] && minor >= AMTOOL_MIN[1])
+  return ok ? { ok: true, version: `${m[1]}.${m[2]}.${m[3]}` }
+    : { ok: false, why: `amtool ${m[1]}.${m[2]}.${m[3]} is older than ${AMTOOL_MIN.join('.')}, which the tests need (it reads a webhook's timeout) — install the version in scripts/install-checkers.sh` }
+}
+const AMTOOL = amtoolStatus()
+export const HAS_AMTOOL = AMTOOL.ok
+export const AMTOOL_SKIP_REASON = AMTOOL.why ?? null
+/** A test's title, saying why it is skipped when amtool cannot run it (the reporter shows titles, not logs). */
+export const amtoolTitle = title => (HAS_AMTOOL ? title : `${title} [skipped: ${AMTOOL_SKIP_REASON}]`)
 
 /**
  * Render a case the way a deployment is rendered: the generated schema and
@@ -408,8 +434,29 @@ const email = c => ({
   ...(c.html !== undefined ? { html: c.html } : {}),
 })
 
-// timeout is left out: the amtool the tests run (0.27) does not know it,
-// and Alertmanager reads it from 0.28 on.
+/**
+ * A webhook timeout as the operator hands it to Alertmanager: parsed with
+ * Prometheus' duration reader and written back with its String() (prometheus
+ * common model.Duration) — largest unit first, whole days as `d`, years and
+ * weeks only when exact: 90s is 1m30s, 24h is 1d. Alertmanager reads a Go
+ * duration, which has no d, w or y. What does not parse is passed on as
+ * written (the operator would refuse it).
+ */
+const MS = { y: 31536000000, w: 604800000, d: 86400000, h: 3600000, m: 60000, s: 1000, ms: 1 }
+export function operatorDuration(text) {
+  const m = /^(?:0|(?:(\d+)y)?(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(?:(\d+)ms)?)$/.exec(String(text))
+  if (!m || text === '') return text
+  let ms = ['y', 'w', 'd', 'h', 'm', 's', 'ms'].reduce((sum, unit, i) => sum + Number(m[i + 1] || 0) * MS[unit], 0)
+  if (ms === 0) return '0s'
+  let out = ''
+  for (const [unit, exact] of [['y', true], ['w', true], ['d', false], ['h', false], ['m', false], ['s', false], ['ms', false]]) {
+    if (exact && ms % MS[unit] !== 0) continue
+    const v = Math.floor(ms / MS[unit])
+    if (v > 0) { out += `${v}${unit}`; ms -= v * MS[unit] }
+  }
+  return out
+}
+
 const webhook = c => {
   const h = c.httpConfig || {}
   const http = {
@@ -421,6 +468,7 @@ const webhook = c => {
     url: c.url ?? SECRET_URL_STAND_IN,
     ...(c.sendResolved !== undefined ? { send_resolved: c.sendResolved } : {}),
     ...(c.maxAlerts !== undefined ? { max_alerts: c.maxAlerts } : {}),
+    ...(c.timeout !== undefined ? { timeout: operatorDuration(c.timeout) } : {}),
     ...(Object.keys(http).length ? { http_config: http } : {}),
   }
 }

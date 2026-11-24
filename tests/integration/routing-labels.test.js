@@ -5,9 +5,10 @@
 import { describe, it, expect } from 'vitest'
 import { reshapeLabels, setCellConfigs, setCellTiming, toSave } from '../../src/utils/routingModel.js'
 import { generateRouting } from '../../src/utils/routingGenerator.js'
-import { renderRoutingCase, amtoolRoutes, hasBinary } from '../blind/harness.js'
+import { renderRoutingCase, amtoolRoutes, hasBinary, HAS_AMTOOL, amtoolTitle } from '../blind/harness.js'
 
-const READY = hasBinary('helm', ['version']) && hasBinary('amtool')
+const READY = hasBinary('helm', ['version']) && HAS_AMTOOL
+
 
 const CONFIGS = {
   'db-email': { type: 'email', to: 'db@example.com' },
@@ -38,7 +39,7 @@ function reach(routing, list, tag) {
 const key = a => JSON.stringify(Object.entries(a).sort())
 
 // About 130 helm and amtool runs a test: more than vitest's 5 s under load.
-describe.skipIf(!READY)('who an alert reaches', { timeout: 60000 }, () => {
+describe.skipIf(!READY)(amtoolTitle('who an alert reaches'), { timeout: 60000 }, () => {
   const env = ['prod', 'dev']
   const added = () => reshapeLabels(base(), [...rowsOf(base()), { name: 'env', values: env }]).routing
 

@@ -210,6 +210,27 @@ test('a config Alertmanager would refuse cannot be added, and says why', async (
   await expect(page.getByTestId('notification-configs')).toContainText('db-team@example.com')
 })
 
+// Alertmanager reads a webhook timeout without d, w or y: 1d would stop the
+// whole Alertmanager configuration from loading.
+test('a webhook timeout in days or over 1h cannot be added, and says why', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'relay', async dialog => {
+    await dialog.getByLabel('Webhook URL').fill('http://alert-relay.monitoring.svc:8080')
+    await dialog.getByText('More settings').click()
+    await dialog.getByLabel('Timeout').fill('1d')
+    await expect(dialog.getByTestId('config-problems')).toContainText('timeout "1d" uses d, w or y, which Alertmanager does not read — write it in h, m, s or ms, at most 1h')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Timeout').fill('24h')
+    await expect(dialog.getByTestId('config-problems')).toContainText('timeout "24h" is longer than 1h')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Timeout').fill('30s')
+    await expect(dialog.getByTestId('config-problems')).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await expect(page.getByTestId('notification-configs')).toContainText('relay')
+})
+
 // Alertmanager takes a group with no members and sends to nobody: added,
 // saved, and said — in the dialog, on the save and on the page.
 test('a config that notifies nobody is added and saved, with a warning', async ({ page, request }) => {

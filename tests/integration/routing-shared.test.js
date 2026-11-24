@@ -10,7 +10,7 @@ import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
 import git from '../../server/lib/git.js'
-import { hasBinary, toAlertmanagerConfig } from '../blind/harness.js'
+import { toAlertmanagerConfig, HAS_AMTOOL, amtoolTitle } from '../blind/harness.js'
 import { withSyncRegistryLock } from '../../server/lib/sync.js'
 
 let server, baseURL, tmpDir, savedLabels
@@ -417,7 +417,7 @@ describe('the _shared folder', () => {
 // Two deployments' resources carry the same shared config as a receiver of
 // the same name. The operator prefixes each receiver with its resource's
 // namespace and name, so in Alertmanager's configuration they do not clash.
-describe.skipIf(!hasBinary('amtool'))('two deployments using one shared config', () => {
+describe.skipIf(!HAS_AMTOOL)(amtoolTitle('two deployments using one shared config'), () => {
   it('give a configuration amtool accepts', async () => {
     const specs = await Promise.all([A, B].map(async d => (await crOf(d)).spec))
     const configs = specs.map((spec, i) => {

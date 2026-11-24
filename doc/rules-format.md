@@ -1137,6 +1137,13 @@ configs:
 - **`timeout` needs Alertmanager 0.28 and prometheus-operator 0.82 or later**
   (kube-prometheus-stack 75 or later). With an older one the field is dropped
   without a word. Check the platform's versions before relying on it.
+- **`timeout` is in `h`, `m`, `s` or `ms`, at most `1h`** — `10s`, `1m30s`,
+  `500ms`. It bounds one request. Alertmanager also gives each send of a
+  group, retries included, at most the route's `groupInterval` (at least
+  10s, and in an Alertmanager cluster by default 15s more for each peer
+  ahead of it), so a timeout longer than that has no effect. The `1h` limit is AlertForge's
+  own: Alertmanager takes a longer one, which would only make a difference
+  with a `groupInterval` over `1h`.
 - Not supported yet: `bearerTokenSecret` (use `authorization`), `oauth2`,
   proxies, `followRedirects`, `enableHttp2`, client certificates, TLS settings
   other than the two above, and `payload`.
@@ -1150,7 +1157,8 @@ configs:
 |---|---|
 | `sendResolved` that is not `true` / `false` | The resource's type |
 | `maxAlerts` that is not a whole number from 0 to 2147483647 (`-1`, `1.5`, `"20"`) | The resource's type, a 32-bit whole number |
-| `timeout` that is not a duration as the resource writes it — largest unit first, each unit once (`1m30s`; not `5s1m`, `1s1s`, `""`), up to about 292 years. Quote a bare number | The API server refuses the resource (`5s1m`); the operator cannot read `293y` and builds no Alertmanager configuration at all; `""` would be ignored |
+| `timeout` that is not a duration as the resource writes it — largest unit first, each unit once (`1m30s`; not `5s1m`, `1s1s`, `""`). Quote a bare number | The API server refuses the resource (`5s1m`); `""` would be ignored |
+| `timeout` with `d`, `w` or `y` (`1d`), or longer than `1h` (`24h`, `1h30m`) | Alertmanager reads it as a Go duration, which has no `d`, `w` or `y`, and the operator writes a whole number of days as one (`24h` as `1d`, `25h` as `1d1h`): Alertmanager then cannot load the configuration the operator writes — the platform's one, every team's routes in it — and started with it, does not start. Longer than `1h` is AlertForge's own limit (Alertmanager takes it): a send waits at most the route's `groupInterval`, so a longer timeout only matters with a `groupInterval` over `1h`. A `routing.yaml` saved before with such a timeout is refused on its next save until it is changed |
 | `authorization` and `basicAuth` together | The operator refuses the whole AlertmanagerConfig |
 | `authorization.type` that is `Basic`, in any case or with spaces around it | The operator refuses it: use `basicAuth` |
 | `authorization` without `credentials`, or `credentials` other than `{ name, key }` | Only a Secret reference; another key would be dropped without a word |

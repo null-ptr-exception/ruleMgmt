@@ -357,8 +357,9 @@ const request = {
       const call = fn.parent
       if (call?.type !== 'CallExpression' || !call.arguments.includes(fn)) return false
       const c = call.callee
-      // route(name, handler) takes the request; route(name, shape, handler)
-      // gives its handler the parsed input instead.
+      // A function as route()'s second argument would take the request
+      // (route() refuses it when the route is made); route(name, shape,
+      // handler) gives its handler the parsed input instead.
       if (c.type === 'Identifier') return c.name === 'route' && call.arguments[1] === fn
       return c.type === 'MemberExpression' && c.property.type === 'Identifier' && ROUTER_METHODS.has(c.property.name)
     }

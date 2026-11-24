@@ -1,6 +1,6 @@
 /**
- * route(name, handler): a route that always answers and always lets the
- * commit lock go.
+ * route(name, shape, handler): a route that declares its request, always
+ * answers and always lets the commit lock go.
  *
  * Express 4 does not catch an async handler's rejection: no answer is sent,
  * Node may end the process, and a write holding the commit lock
@@ -21,13 +21,7 @@
  *   - what it writes after the wrapper answered is dropped, not thrown
  * Answering ends the response, which lets the lock go at once.
  *
- *   router.get('/diff', route('git.diff', async (req, res) => { … }))
- *
- * answerEveryRoute(router) gives the same to every handler of a router
- * not wrapped yet (named after its method and path), and to the routers
- * mounted in it, until each route is wrapped by name.
- *
- * A route that declares its request: route(name, shape, handler).
+ * The request:
  *   shape: { params, query, body } — each a zod schema (left out: nothing
  *   of it is read); a value that becomes a path or a name is declared with
  *   repoPath(intent, …) or repoName(intent, …), which parsePath decides
@@ -47,7 +41,8 @@
  *
  * declaredRoutes(router): every route of the router must declare its
  * request, or the router does not start; its other handlers (middleware,
- * routers mounted in it) are answered as answerEveryRoute answers them.
+ * routers mounted in it) are answered the same way, named after their
+ * method and path.
  */
 import express from 'express'
 import { AsyncLocalStorage } from 'async_hooks'
@@ -172,11 +167,6 @@ function wrap(name, fn, { mustAnswer, deadlineMs = ANSWER_DEADLINE_MS }) {
  * sent, a callback) is not cut short before it.
  */
 export function route(name, shape, handler, options) {
-  if (typeof shape === 'function') {
-    // route(name, handler, options): the request is read by the handler.
-    if (typeof name !== 'string') throw new TypeError('route(name, handler)')
-    return wrap(name, shape, { mustAnswer: true, deadlineMs: handler?.deadlineMs })
-  }
   if (typeof name !== 'string' || !shape || typeof shape !== 'object' || typeof handler !== 'function') {
     throw new TypeError('route(name, { params, query, body }, handler)')
   }
@@ -325,9 +315,8 @@ export const repoName = (intent, opts = {}) => pathSchema(intent, opts, p => p.r
  * Every route of `router` declares its request (route(name, shape,
  * handler)), or this throws naming the ones that do not: a router whose
  * route reads an undeclared request does not start. The router's other
- * handlers, and the routers mounted in it, are answered as
- * answerEveryRoute answers them; a router mounted in it is held to the
- * same.
+ * handlers (middleware) are answered as a route is, named after their
+ * method and path; a router mounted in it is held to the same.
  */
 export function declaredRoutes(router) {
   const missing = []
@@ -351,20 +340,6 @@ export function declaredRoutes(router) {
   return router
 }
 
-export function answerEveryRoute(router) {
-  for (const layer of router.stack) {
-    if (layer.route) {
-      const name = `${Object.keys(layer.route.methods).join(',').toUpperCase()} ${layer.route.path}`
-      for (const l of layer.route.stack) l.handle = wrap(name, l.handle, { mustAnswer: false })
-    } else if (Object.getPrototypeOf(layer.handle) === express.Router) {
-      answerEveryRoute(layer.handle)
-    } else {
-      layer.handle = wrap(`middleware ${layer.handle.name || 'anonymous'}`, layer.handle, { mustAnswer: false })
-    }
-  }
-  return router
-}
-
 /**
  * The app's last error handler: an error no route answered (one passed on
  * with next(err)) is a JSON 500 without a stack or a path of the machine,
@@ -373,12 +348,4 @@ export function answerEveryRoute(router) {
 export function answerUncaught(err, req, res, next) {
   if (res.headersSent) return next(err)
   answer('app', err, req, res)
-}
-
-/**
- * An /api path no route has, whatever its method: a JSON 404 — not the
- * page the SPA fallback sends for any other GET, nor Express's HTML.
- */
-export function answerUnknownApi(req, res) {
-  res.status(404).json({ error: 'No such API route' })
 }

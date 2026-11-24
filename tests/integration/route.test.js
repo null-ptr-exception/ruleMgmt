@@ -1,15 +1,15 @@
 // route(): a handler's failure is always answered — a file of the repo that
 // cannot be read as a 409 naming it, anything else as a 500 with no path
 // of the machine — and the commit lock is let go with the answer, at once.
-// answerEveryRoute gives the same to a router's handlers not wrapped yet;
-// jsonBody answers a body that is not JSON, or too big, as JSON.
+// declaredRoutes gives the same to a router's middleware and the routers
+// mounted in it; jsonBody answers a body that is not JSON, or too big, as JSON.
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import express from 'express'
 import { z } from 'zod'
-import { route, answerEveryRoute, answerUncaught, declaredRoutes, repoPath, repoName, FAILED } from '../../server/http/route.js'
+import { route, answerUncaught, declaredRoutes, repoPath, repoName, FAILED } from '../../server/http/route.js'
 import { jsonBody } from '../../server/http/body.js'
 import { holdSyncRegistryLock } from '../../server/lib/sync.js'
 import { UnreadableError } from '../../server/lib/readIfThere.js'
@@ -28,39 +28,39 @@ beforeAll(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'route-'))
   const router = express.Router()
   router.use(holdSyncRegistryLock)
-  router.get('/reject', route('t.reject', async () => { throw new Error(`EACCES: permission denied, realpath '${dir}/charts/demo/templates/x.yaml'`) }))
-  router.get('/unreadable', route('t.unreadable', async () => { throw new UnreadableError(path.join(dir, 'charts/demo/templates'), { code: 'EACCES' }) }))
-  router.get('/loaded', route('t.loaded', async () => unreadable('charts/demo/values.yaml', 'permission denied', 'permission').value))
-  router.get('/invalid', route('t.invalid', async () => invalidOwn('sync.yaml', [finding({ code: 'sync.not-registry', file: 'sync.yaml', helm: 'n/a', message: 'sync.yaml: syncs is not a list' })]).value))
-  router.get('/own-status', route('t.own-status', async () => { throw Object.assign(new Error('x'), { status: 404 }) }))
-  router.get('/throw', route('t.throw', () => { throw new Error('thrown at once') }))
-  router.post('/write-rejects', route('t.write-rejects', async () => { await new Promise(r => setTimeout(r, 10)); throw new Error('write failed') }))
-  router.post('/write-silent', route('t.write-silent', async () => {}, { deadlineMs: 300 }))
-  router.post('/write', route('t.write', (req, res) => res.json({ ok: true, body: req.body })))
-  router.get('/after-headers', route('t.after-headers', async (req, res) => { res.status(200).write('partial'); throw new Error('late') }))
+  router.get('/reject', route('t.reject', {}, async () => { throw new Error(`EACCES: permission denied, realpath '${dir}/charts/demo/templates/x.yaml'`) }))
+  router.get('/unreadable', route('t.unreadable', {}, async () => { throw new UnreadableError(path.join(dir, 'charts/demo/templates'), { code: 'EACCES' }) }))
+  router.get('/loaded', route('t.loaded', {}, async () => unreadable('charts/demo/values.yaml', 'permission denied', 'permission').value))
+  router.get('/invalid', route('t.invalid', {}, async () => invalidOwn('sync.yaml', [finding({ code: 'sync.not-registry', file: 'sync.yaml', helm: 'n/a', message: 'sync.yaml: syncs is not a list' })]).value))
+  router.get('/own-status', route('t.own-status', {}, async () => { throw Object.assign(new Error('x'), { status: 404 }) }))
+  router.get('/throw', route('t.throw', {}, () => { throw new Error('thrown at once') }))
+  router.post('/write-rejects', route('t.write-rejects', {}, async () => { await new Promise(r => setTimeout(r, 10)); throw new Error('write failed') }))
+  router.post('/write-silent', route('t.write-silent', {}, async () => {}, { deadlineMs: 300 }))
+  router.post('/write', route('t.write', { body: z.record(z.string(), z.unknown()) }, ({ body }) => ({ status: 200, body: { ok: true, body } })))
+  router.get('/after-headers', route('t.after-headers', {}, async (input, { res }) => { res.status(200).write('partial'); throw new Error('late') }))
   // Answered later than the handler returns, and answered twice.
-  router.get('/sendfile', route('t.sendfile', (req, res) => { res.sendFile(path.join(import.meta.dirname, 'route.test.js')) }))
-  router.get('/callback', route('t.callback', (req, res) => { setTimeout(() => res.json({ later: true }), 50) }))
-  router.get('/late', route('t.late', async (req, res) => {
+  router.get('/sendfile', route('t.sendfile', {}, (input, { res }) => { res.sendFile(path.join(import.meta.dirname, 'route.test.js')) }))
+  router.get('/callback', route('t.callback', {}, (input, { res }) => { setTimeout(() => res.json({ later: true }), 50) }))
+  router.get('/late', route('t.late', {}, async (input, { res }) => {
     setTimeout(() => { try { res.json({ late: true }) } catch (err) { lateErrors.push(err.code) } }, 50)
     throw new Error('failed first')
   }))
-  router.post('/never', route('t.never', () => {}, { deadlineMs: 300 }))
-  router.get('/passes-on', route('t.passes-on', (req, res, next) => next()))
-  router.get('/passes-on', (req, res) => res.json({ passed: true }))
-  // Not wrapped by name: answerEveryRoute covers it, and a router inside.
+  router.post('/never', route('t.never', {}, () => {}, { deadlineMs: 300 }))
+  // Middleware, and a router inside: declaredRoutes covers them.
   const inner = express.Router()
-  inner.get('/deep', async () => { throw new Error(`failed at ${dir}/charts/demo`) })
+  inner.use('/deep', async () => { throw new Error(`failed at ${dir}/charts/demo`) })
   router.use('/inner', inner)
-  router.get('/unwrapped', async () => { throw new Error('unwrapped') })
-  router.get('/to-error-handler', (req, res, next) => next(new Error('passed on')))
+  router.use('/unwrapped', async () => { throw new Error('unwrapped') })
+  router.use('/to-error-handler', (req, res, next) => next(new Error('passed on')))
+  router.use('/passes-on', (req, res, next) => next())
+  router.get('/passes-on', route('t.passes-on', {}, () => ({ status: 200, body: { passed: true } })))
   router.use((err, req, res, next) => res.status(418).json({ error: `handled: ${err.message}` }))
-  answerEveryRoute(router)
+  declaredRoutes(router)
   const app = express()
   app.use(jsonBody())
   app.use((req, res, next) => { req.gitopsDir = dir; next() })
   app.use(router)
-  app.get('/param/:x', route('t.param', (req, res) => res.json({ x: req.params.x })))
+  app.get('/param/:x', route('t.param', { params: z.object({ x: z.string() }) }, ({ params }) => ({ status: 200, body: { x: params.x } })))
   app.get('/next-error', (req, res, next) => next(new Error(`at ${dir}/x`)))
   app.use(answerUncaught)
   await new Promise(r => { server = app.listen(0, '127.0.0.1', () => { baseURL = `http://127.0.0.1:${server.address().port}`; r() }) })
@@ -91,10 +91,10 @@ describe('a route failing outside its own try', () => {
     ['a Loaded that is invalid is a 409 naming the file, as the routes answer it', '/invalid', 409, { error: 'sync.yaml: syncs is not a list', file: 'sync.yaml', unreadable: true }],
     ['an error of its own with a 4xx status is still a server failure', '/own-status', 500, { error: FAILED }],
     ['a synchronous throw is a JSON 500, not an HTML page', '/throw', 500, { error: FAILED }],
-    ['a handler not wrapped by name is covered', '/unwrapped', 500, { error: FAILED }],
+    ['a middleware failing is covered', '/unwrapped', 500, { error: FAILED }],
     ['a router mounted inside is covered too', '/inner/deep', 500, { error: FAILED }],
     ['an error passed on still reaches the error handler', '/to-error-handler', 418, { error: 'handled: passed on' }],
-    ['a route that passes the request on is not answered by route()', '/passes-on', 200, { passed: true }],
+    ['a middleware that passes the request on reaches the route', '/passes-on', 200, { passed: true }],
     ['an error no route answers is a JSON 500 without a stack', '/next-error', 500, { error: FAILED }],
   ])('%s', async (_, p, status, body) => {
     const r = await ask('GET', p)
@@ -307,11 +307,15 @@ describe('a route that declares its request', () => {
   it('a router with a route that does not declare its request does not start, naming it', () => {
     const r = express.Router()
     r.get('/a', route('a', { query: z.object({}) }, async () => ({ status: 200, body: {} })))
-    r.post('/b', route('b', async (req, res) => res.json({})))
+    r.post('/b', (req, res) => res.json({}))
     const inner = express.Router()
     inner.delete('/c', (req, res) => res.json({}))
     r.use('/inner', inner)
     expect(() => declaredRoutes(r)).toThrow('these routes do not declare their request (route(name, shape, handler)): POST /b, DELETE /c')
+  })
+
+  it('a route made without a shape is refused when it is made', () => {
+    expect(() => route('x', async (req, res) => res.json({}))).toThrow('route(name, { params, query, body }, handler)')
   })
 
   it('a shape that is not one is refused when the route is made', () => {

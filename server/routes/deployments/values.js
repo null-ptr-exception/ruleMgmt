@@ -2,15 +2,15 @@
 
 import fs from 'fs/promises'
 import path from 'path'
-import { resolveStack, unwrapPath, wrapPath, readStackValues, stackValues } from '../../lib/stack.js'
+import { resolveStack, unwrapPath, readStackValues, stackValues } from '../../lib/stack.js'
 import { originsOf, folderCommonOf, inheritsFromOf } from '../../lib/commonEdit.js'
-import { valuesRefusal, saveValues, valuesVersion } from '../../lib/deploymentWrite.js'
+import { valuesWrite, saveValues, valuesVersion } from '../../lib/deploymentWrite.js'
 import { readSyncRegistry, withSyncRegistryLock, isTarget } from '../../lib/sync.js'
 import { newReservedSegment, reservedError } from '../../lib/reservedNames.js'
-import { dumpForHelm } from '../../../src/utils/yamlScalar.js'
 import { writeWhole } from '../../lib/routingFiles.js'
-import { UnreadableError, readTextIfThere, errorAnswer } from '../../lib/readIfThere.js'
-import { loadValues } from '../../../src/utils/valuesText.js'
+import { UnreadableError, errorAnswer } from '../../lib/readIfThere.js'
+import { openRepo } from '../../repo/openRepo.js'
+import { loadDeployment } from '../../repo/deployment.js'
 
 import { isValidDeploymentParam, syncFolder, resolveDeploymentDir, resolveValuesFile, exists, commonRefused } from './resolve.js'
 /**
@@ -37,13 +37,20 @@ export function valuesRoutes(router) {
       const { file, direct, legacyFile } = await resolveValuesFile(dir, req.params.deployment)
       // Not there: not found. There and unreadable (no permission, a
       // folder, a link to nothing, not YAML): said, naming the file.
-      const content = await readTextIfThere(file)
-      if (content === null) return res.status(404).json({ error: 'Not found' })
-      let loaded
-      try { loaded = loadValues(content) } catch (err) { throw new UnreadableError(file, { reason: `not valid YAML (${err.reason || err.message})` }) }
+      // Read as Helm reads it (`010` is 8): the values shown are the ones deployed.
+      const repo = openRepo(req.gitopsDir)
+      const rel = path.relative(req.gitopsDir, file).replace(/\\/g, '/')
+      const read = await repo.helmYaml(rel)
+      if (read.state === 'absent') return res.status(404).json({ error: 'Not found' })
+      if (read.state === 'unreadable') throw new UnreadableError(file, { reason: read.why })
+      if (read.state === 'invalid') throw new UnreadableError(file, { reason: read.findings.map(f => f.message.replace(/^\S+ (line \d+: )?/, '')).join('; ') })
+      const content = (await repo.file(rel)).value.text
       // Only the deployment's own values, under every key of its stack (#100).
-      const stack = await resolveStack(req.gitopsDir, dir)
-      const parsed = unwrapPath(loaded || {}, stack.keys)
+      const stack = await resolveStack(req.gitopsDir, dir, { repo })
+      const parsed = unwrapPath(read.value, stack.keys)
+      // What Helm does with them, for the page to say (findings, policy.js: as a save would decide).
+      const loadedDep = await loadDeployment(repo, direct ? path.relative(req.gitopsDir, dir).replace(/\\/g, '/') : rel, { chart: req.params.chart })
+      const findings = loadedDep.state === 'ok' ? loadedDep.findings.map(f => ({ code: f.code, message: f.message, helm: f.helm, ...(f.at ? { at: f.at } : {}) })) : []
       // A leftover `<name>-values.yaml` beside `values.yaml` is not read by
       // anything; say so, or it looks like the file being edited.
       const unusedFile = direct && await exists(legacyFile) ? path.basename(legacyFile) : undefined
@@ -65,7 +72,7 @@ export function valuesRoutes(router) {
           problems.stackProblems = [...(problems.stackProblems || []), `what it inherits cannot be read (${err.code || err.message})`]
         }
       }
-      res.json({ content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited })
+      res.json({ content, parsed, unusedFile, ...stackOf, ...version, ...problems, ...inherited, ...(findings.length ? { findings } : {}) })
     } catch (err) {
       const { status, body } = errorAnswer(err)
       res.status(status).json(body)
@@ -117,15 +124,10 @@ export function valuesRoutes(router) {
 
       // A legacy `<name>-values.yaml`: the same checks, and no sync.
       if (commonRefused(req, res, 'given another values file')) return
-      let values = req.body.values
-      const stack = await resolveStack(req.gitopsDir, dir)
-      const refusal = await valuesRefusal(req.gitopsDir, dir, values, { chartName: req.params.chart, stack })
-      if (refusal) return res.status(400).json(refusal)
-      await readTextIfThere(file)
-      if (typeof values !== 'string') {
-        values = dumpForHelm(wrapPath(values, stack.keys), { lineWidth: -1 })
-      }
-      await writeWhole(file, values)
+      const rel = path.relative(req.gitopsDir, file).replace(/\\/g, '/')
+      const answer = await valuesWrite(req.gitopsDir, direct ? path.relative(req.gitopsDir, dir).replace(/\\/g, '/') : rel, req.body.values, { chartName: req.params.chart })
+      if (answer.refusal) return res.status(answer.refusal.status).json(answer.refusal.body)
+      await writeWhole(file, answer.text)
 
       res.json({ ok: true })
     } catch (err) {

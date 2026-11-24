@@ -30,6 +30,7 @@
  *             Template first (already unwrapped from its keys)
  *   own       the deployment's own values for the Template (unwrapped)
  *   mode      'chart' (a folder deployment) or 'flat' (-f)
+ *   stacked   the values are a _common's: read on a stack whatever is above
  * `value` has no prototype at any level, as readHelmYaml's.
  */
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -76,11 +77,12 @@ export function firstNull(v, at = []) {
   return null
 }
 
-export function coalesce({ defaults = {}, layers = [], own = {}, mode = 'chart' }) {
+export function coalesce({ defaults = {}, layers = [], own = {}, mode = 'chart', stacked = false }) {
   const unsure = []
   const base = isMap(defaults) ? defaults : {}
-  if (layers.length) {
-    const nulls = [['the Template\'s values.yaml', base], ...layers.map((l, i) => [`the _common layer ${i + 1} up`, l]), ['the deployment\'s values', own]]
+  // A _common's own values are always read through a stack (its deployments').
+  if (layers.length || stacked) {
+    const nulls = [['the Template\'s values.yaml', base], ...layers.map((l, i) => [`the _common layer ${i + 1} up`, l]), [stacked && !layers.length ? 'the _common\'s values' : 'the deployment\'s values', own]]
     for (const [where, v] of nulls) {
       const p = firstNull(v)
       if (p) unsure.push({ path: p, why: `${where} writes a null at ${p.join('.') || '(the top)'}: on a _common stack Helm 3.15 and 3.19 do not read a null the same way (one removes the key, the other keeps it or keeps what is under it)` })

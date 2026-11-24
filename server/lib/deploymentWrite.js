@@ -2,8 +2,8 @@
  * The one place a deployment's values are checked before they are written,
  * and a sync target is made a copy of its source (#180).
  *
- *   problemsOf      the save checks on bare values against a model
- *   valuesRefusal   the same, for what a save or POST /sync is about to write
+ *   valuesWrite     whether values may be written: the repo as it will be
+ *                   after the write, loaded and decided by a policy table
  *   copyChartDependencies  the target's Chart.yaml depends on what the source's does
  *   copyToTarget    make one target a copy of its source's files
  *   copyToTargets   every target of a source; returns the ones that failed
@@ -18,166 +18,69 @@ import fs from 'fs/promises'
 import { createHash } from 'crypto'
 import path from 'path'
 import yaml from 'js-yaml'
-import { resolveStack, stackValues, unwrapPath, wrapPath, valueIssuesIn } from './stack.js'
-import { readChartModel } from './chartFiles.js'
+import { resolveStack, wrapPath } from './stack.js'
 import { copyRouting, readRouting, restoreRouting, writeWhole } from './routingFiles.js'
 import { getTargetsForSource, isSafeSyncPath, isDeploymentDir } from './sync.js'
-import { valueProblems, rowIdentityRepeats } from '../../src/utils/rulesFile.js'
-import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
-import { readTextIfThere, parseIfThere } from './readIfThere.js'
+import { readTextIfThere } from './readIfThere.js'
 import { insideReal } from './safePath.js'
-import { loadValues } from '../../src/utils/valuesText.js'
+import { openRepo } from '../repo/openRepo.js'
+import { loadDeployment, isFlatFile } from '../repo/deployment.js'
+import { decide } from '../repo/policy.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
 /**
- * A value Helm cannot render inside a quoted label, naming the cell, and a
- * group with selectors (#60) whose cells cannot be matched on or whose rows
- * overlap. `null`, or the refusal's body: `{ error, problems, proposals? }`.
+ * The answer to "may these values be written": the repo as it will be after
+ * the write is loaded (loadDeployment), and the entry point's table
+ * (policy.js) decides. `rel` is the deployment (its folder, or a legacy
+ * `<name>-values.yaml`); `values` the text of the file, or the bare values
+ * the editor sends (wrapped under the stack's keys to be written).
+ *
+ *   { text, refusal: null | { status, body }, warnings: [string] }
+ *   body: { error, problems: [{ message, code, group?, row?, column? }], proposals? }
+ *         or, for a file that cannot be read, { error, unreadable: true }
  */
-export function problemsOf(bare, model, keep = () => true) {
-  const problems = valueProblems(bare, model).filter(keep)
-  if (problems.length) return { error: 'Some values cannot be rendered', problems }
-  const selectors = selectorValueProblems(bare, model)
-  const found = selectors.problems.filter(keep)
-  if (found.length) {
-    const cells = found.filter(p => p.cell).length
-    const error = cells === found.length ? 'Some selector cells cannot be used'
-      : cells ? 'Some selector cells cannot be used, and some rows overlap' : 'Some rows overlap'
-    return { error, problems: found, proposals: selectors.proposals.filter(keep) }
-  }
-  return null
+export async function valuesWrite(gitopsDir, rel, values, { chartName, policy = 'save', repo = openRepo(gitopsDir) } = {}) {
+  const flat = isFlatFile(rel)
+  const file = flat ? rel : `${rel}/values.yaml`
+  // What is there now: one that cannot be read is named, not written over.
+  const now = await repo.file(file)
+  if (now.state === 'unreadable') return { refusal: { status: 409, body: { error: `${file} cannot be read: ${now.why}`, unreadable: true } } }
+  const keys = flat ? [] : (await resolveStack(gitopsDir, path.join(gitopsDir, rel), { repo })).keys
+  const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, keys), { lineWidth: -1 })
+  const after = repo.with([[file, text]])
+  const loaded = await loadDeployment(after, rel, { chart: chartName })
+  const table = isCommonChartPath(rel) && policy === 'save' ? 'saveLayer' : policy
+  if (loaded.state === 'unreadable') return { text, refusal: { status: 400, body: { error: `${file} cannot be read: ${loaded.why}`, problems: [{ message: loaded.why, code: 'values.unreadable' }] } } }
+  const d = decide(loaded.findings, table)
+  const warnings = d.warn.map(f => f.message)
+  if (!d.refuse.length) return { text, refusal: null, warnings }
+  return { text, refusal: { status: 400, body: refusalBody(d.refuse, loaded.state === "ok" ? loaded.value : null) }, warnings }
 }
 
-// A problem that is a `_common` layer's, not this deployment's: in a group
-// the deployment does not write (it inherits the whole group), or in a
-// Common Values key a layer gives and the deployment does not. Each layer's
-// own save and the commit checks report it there.
-export function isInherited(p, own, layers) {
-  if (p.group === '_common') {
-    const mine = own?._common && typeof own._common === 'object' ? own._common : {}
-    return !(p.column in mine) && layers.some(l => l.values?._common && typeof l.values._common === 'object' && p.column in l.values._common)
+// Today's headline for each kind of refusal.
+function headline(found) {
+  const codes = found.map(f => f.code)
+  if (codes.some(c => /^yaml\.(not-yaml|cannot-read|not-map|bad-key|not-json|key-collision)$/.test(c))) return 'values.yaml is not valid YAML'
+  if (codes.every(c => c === 'values.selector' || c === 'stack.selector')) {
+    const cells = found.filter(f => f.detail?.cellProblem).length
+    return cells === found.length ? 'Some selector cells cannot be used' : cells ? 'Some selector cells cannot be used, and some rows overlap' : 'Some rows overlap'
   }
-  return p.group !== undefined && p.group !== null && !(own && p.group in own)
+  if (codes.includes('values.null-on-stack')) return 'AlertForge cannot tell what Helm renders from a null on a _common stack'
+  const notHelms = found.filter(f => /\.(schema|chart-key|not-under-chart-key)$/.test(f.code) || f.code === 'yaml.read-differently' || f.code === 'yaml.duplicate-key')
+  // A required cell missing reads as the editor's "fill it in", as before.
+  if (notHelms.some(f => f.detail?.required !== true && !(f.code.endsWith('.schema') && /: required — fill it in$/.test(f.message)))) return 'Some values are not what Helm reads'
+  return 'Some values cannot be rendered'
 }
 
-const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'a list' : typeof v === 'object' ? 'a map' : `${JSON.stringify(v)}`)
-const isValue = v => v === null || typeof v !== 'object'
-
-/**
- * The shapes the Template's schema refuses whatever the cells hold: values
- * that are not a map, Common Values that are not a map, a row group that is
- * not a list of rows, a row that is not a map, a cell that is a list or a
- * map. Said here, naming the group and the row, instead of saved and then
- * refused by Helm for every render. Measured with Helm 3.15.4 and 3.19.0:
- * - a once group takes no rows: Helm renders it whatever its key holds, so
- *   it is not looked at;
- * - a null group or null Common Values removes the key, and Helm renders
- *   the Template's own value (`templateValues`, its values.yaml); with none
- *   there, the schema refuses the null, and so is it here.
- * (A cell's type against its column is the schema's; the empty and the
- * null cells valueProblems says.)
- */
-export function shapeProblems(bare, model, templateValues = {}) {
-  if (!isPlainObject(bare)) return [{ message: `the values must be a map of groups, not ${kindOf(bare)}` }]
-  const out = []
-  const groups = model?.groups || {}
-  const commonCols = model?.common?.columns || {}
-  const fromTemplate = isPlainObject(templateValues) ? templateValues : {}
-  for (const [key, value] of Object.entries(bare)) {
-    // null removes the key: fine where the Template gives one to use.
-    if (value === null && Object.hasOwn(fromTemplate, key) && (key === '_common' ? isPlainObject(fromTemplate[key]) : Array.isArray(fromTemplate[key]))) continue
-    if (key === '_common') {
-      if (!isPlainObject(value)) { out.push({ group: '_common', row: null, message: `Common Values must be a map of name to value, not ${kindOf(value)}` }); continue }
-      // Only a column the schema declares: Helm leaves any other key alone.
-      for (const [name, cell] of Object.entries(value)) {
-        if (!isValue(cell) && Object.hasOwn(commonCols, name)) out.push({ group: '_common', row: null, column: name, message: `Common Values, "${name}": ${kindOf(cell)} — a value is text, a number or true/false` })
-      }
-      continue
-    }
-    if (!Object.hasOwn(groups, key) || groups[key].custom || groups[key].once) continue
-    if (!Array.isArray(value)) { out.push({ group: key, row: null, message: `${key}: must be a list of rows, not ${kindOf(value)}` }); continue }
-    value.forEach((row, i) => {
-      if (!isPlainObject(row)) { out.push({ group: key, row: i, message: `${key} row ${i + 1}: must be a map of column to value, not ${kindOf(row)}` }); return }
-      for (const [name, cell] of Object.entries(row)) {
-        if (!isValue(cell) && (Object.hasOwn(groups[key].columns || {}, name) || Object.hasOwn(commonCols, name))) out.push({ group: key, row: i, column: name, message: `${key} row ${i + 1}, "${name}": ${kindOf(cell)} — a value is text, a number or true/false` })
-      }
-    })
-  }
-  return out
-}
-
-/**
- * `values` is the bare object the editor sends, or a values.yaml's text,
- * for the deployment in `dir`. Text that is not YAML is refused: written,
- * it fails every render after. Only a chart with a model is checked against
- * it. A deployment on a `_common` stack (#100) is checked with what it
- * inherits: a required value a layer gives need not be filled here, and a
- * hand-written null is refused (its meaning changes between Helm versions).
- * `chartName` is the Template when the folder names none (a legacy file);
- * `stack` the folder's, when the caller has resolved it already.
- * `null` when it may be written.
- */
-export async function valuesRefusal(gitopsDir, dir, values, { chartName, stack: resolved } = {}) {
-  const stack = resolved ?? await resolveStack(gitopsDir, dir)
-  let bare = values
-  if (typeof values === 'string') {
-    let parsed
-    try {
-      parsed = loadValues(values) || {}
-    } catch (err) {
-      return { error: 'values.yaml is not valid YAML', problems: [{ message: err.reason || 'not valid YAML' }] }
-    }
-    bare = unwrapPath(parsed, stack.keys)
-  }
-  // On a stack, a null (or a group that is not a list) is refused in both
-  // forms: written, it would block every commit after (#100).
-  // A `_common` chart (#101) is checked as a deployment on a stack is, but
-  // a required Common Value it leaves out is the deployments' to give.
-  const isLayer = isCommonChartPath(dir)
-  if (stack.layers.length || isLayer) {
-    const issues = typeof values === 'string'
-      ? valueIssuesIn(loadValues(values) || {}, stack.keys, 'values.yaml', stack.groups)
-      : valueIssuesIn(bare, [], 'values.yaml', stack.groups)
-    if (issues.length) return { error: 'Some values are null, or not what Helm reads', problems: issues.map(message => ({ message })) }
-  }
-  // A file that is not a map of groups renders nothing Helm accepts.
-  if (typeof values === 'string' && !isPlainObject(loadValues(values) ?? {})) {
-    return { error: 'Some values are not what Helm reads', problems: [{ message: `values.yaml must be a map, not ${kindOf(loadValues(values))}` }] }
-  }
-  const chart = stack.chart || chartName
-  if (!chart) return null
-  const { model } = await readChartModel(path.join(gitopsDir, chartsDirName(), chart))
-  if (!model) return null
-  const templateValues = await parseIfThere(path.join(gitopsDir, chartsDirName(), chart, 'values.yaml'), loadValues)
-  const shapes = shapeProblems(bare, model, templateValues ?? {})
-  if (shapes.length) return { error: 'Some values are not what Helm reads', problems: shapes }
-  const keep = isLayer ? p => !(p.required && p.group === '_common') : () => true
-  if (!stack.layers.length) return problemsOf(bare, model, keep)
-  const { merged, layers } = stackValues(stack, { own: bare })
-  return problemsOf(merged, model, p => keep(p) && !isInherited(p, bare, layers))
-}
-
-/**
- * What a save of these values lets through but is worth saying (never a
- * refusal): rows the row identity label cannot tell apart. Read as Helm
- * reads them — on a stack, merged with what the deployment inherits.
- * `values` as valuesRefusal takes it; [] when there is nothing to say.
- */
-export async function valuesWarnings(gitopsDir, dir, values, { chartName, stack: resolved } = {}) {
-  const stack = resolved ?? await resolveStack(gitopsDir, dir)
-  let bare = values
-  if (typeof values === 'string') {
-    try { bare = unwrapPath(loadValues(values) || {}, stack.keys) } catch { return [] }
-  }
-  const chart = stack.chart || chartName
-  if (!chart || !bare || typeof bare !== 'object') return []
-  const { model } = await readChartModel(path.join(gitopsDir, chartsDirName(), chart))
-  if (!model) return []
-  const merged = stack.layers.length ? stackValues(stack, { own: bare }).merged : bare
-  return rowIdentityRepeats(merged, model).map(r => r.message)
+export function refusalBody(found, dep) {
+  const problems = found.map(f => {
+    const { group, row, column, required } = f.detail ?? {}
+    return { message: f.message, code: f.code, ...(group !== undefined ? { group, row: row ?? null } : {}), ...(column !== undefined ? { column } : {}), ...(required ? { required: true } : {}) }
+  })
+  return { error: headline(found), problems, ...(dep?.proposals?.length ? { proposals: dep.proposals } : {}) }
 }
 
 /**
@@ -350,21 +253,15 @@ export const okWith = syncFailed => (syncFailed.length ? { ok: true, syncFailed 
  */
 export async function saveValues(gitopsDir, registry, folder, values, { chartName, version } = {}) {
   const dir = path.join(gitopsDir, folder)
-  // The file as it is: one that is there and cannot be read (a folder, no
-  // permission, a link to nothing) is said, naming it, not written over.
-  await readTextIfThere(path.join(dir, 'values.yaml'))
-  const stack = await resolveStack(gitopsDir, dir)
+  const repo = openRepo(gitopsDir)
+  const stack = await resolveStack(gitopsDir, dir, { repo })
   if (version !== undefined && version !== await valuesVersion(gitopsDir, dir, stack)) {
     return { status: 409, body: { error: `${folder} changed since you opened it: reload it to see what is there now`, changed: true } }
   }
-  const refusal = await valuesRefusal(gitopsDir, dir, values, { chartName, stack })
-  if (refusal) return { status: 400, body: refusal }
-  // Under every key of its stack (#100): one level less, and Helm reads
-  // none of it.
-  const { keys } = stack
-  const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, keys), { lineWidth: -1 })
-  await writeWhole(path.join(dir, 'values.yaml'), text)
+  const answer = await valuesWrite(gitopsDir, folder, values, { chartName, repo })
+  if (answer.refusal) return answer.refusal
+  await writeWhole(path.join(dir, 'values.yaml'), answer.text)
   const syncFailed = await copyToTargets(gitopsDir, registry, folder, { values: true, routing: false })
-  const warnings = await valuesWarnings(gitopsDir, dir, values, { chartName, stack })
+  const { warnings } = answer
   return { status: 200, body: { ...okWith(syncFailed), version: await valuesVersion(gitopsDir, dir, await resolveStack(gitopsDir, dir)), ...(warnings.length ? { warnings } : {}) } }
 }

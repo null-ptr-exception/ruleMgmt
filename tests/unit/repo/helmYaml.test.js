@@ -207,11 +207,25 @@ describe('limits: size, depth, time', () => {
     expect(read(`${text} `).finding.helm).toBe('unknown')
   })
 
-  it('returns soon on each odd shape just under the limit (measured times are in the commit)', () => {
+  // Measured as CPU time of this process (process.cpuUsage), not wall-clock
+  // time, and against a plain values file of the same size read in the same
+  // process: a busy machine slows both alike. A plain 1 MiB file is about 6 s
+  // of CPU here; the odd shapes below the limits take at most 3 times that,
+  // and what is over a limit is refused before it is parsed (without the
+  // depth limit, 1 MiB of 400-deep lists takes 3.3 times a plain file;
+  // without the size limit, 8 MiB of rows takes 8 times).
+  it('no text up to the limits costs much more than a plain one, and one over a limit costs next to nothing', () => {
     const MiB = MAX_BYTES - 4096
     const fill = unit => unit.repeat(Math.floor(MiB / unit.length))
+    const cpu = text => {
+      const c0 = process.cpuUsage()
+      const r = read(text)
+      const c = process.cpuUsage(c0)
+      return { r, s: (c.user + c.system) / 1e6 }
+    }
+    const plain = cpu(`demo:\n  cpu:\n${fill('  - {job: api, threshold: 90, severity: warning}\n')}`)
+    expect(plain.r.ok).toBe(true)
     for (const text of [
-      `demo:\n  cpu:\n${fill('  - {job: api, threshold: 90, severity: warning}\n')}`,
       `demo:\n  cpu:\n${fill('  - job: api\n    threshold: 90\n')}`,
       `a: 1\n${fill('b:\t1 #\tc\n')}`,
       `a: "${'x'.repeat(MiB)}"\n`,
@@ -219,12 +233,21 @@ describe('limits: size, depth, time', () => {
       `${fill('# a comment line\n')}a: 1\n`,
       `a: ${'['.repeat(90)}${']'.repeat(90)}\n`.repeat(Math.floor(MiB / 200)),
     ]) {
-      const t0 = performance.now()
       expect(Buffer.byteLength(text)).toBeLessThanOrEqual(MAX_BYTES)
-      expect(read(text).finding?.message ?? '').not.toMatch(/larger than/)
-      expect(performance.now() - t0).toBeLessThan(20000)
+      const { r, s } = cpu(text)
+      expect(r.finding?.message ?? '').not.toMatch(/larger than|nest more than/)
+      expect(s / plain.s, `${text.slice(0, 40)}…: ${s.toFixed(2)} s of CPU, a plain file ${plain.s.toFixed(2)} s`).toBeLessThan(5)
     }
-  }, 180000)
+    for (const text of [
+      `a: ${'['.repeat(400)}${']'.repeat(400)}\n`.repeat(Math.floor(MiB / 820)),
+      `a: ${'['.repeat(MiB / 2 - 4)}${']'.repeat(MiB / 2 - 4)}\n`,
+      `demo:\n  cpu:\n${'  - {job: api, threshold: 90, severity: warning}\n'.repeat(Math.floor(8 * MiB / 50))}`,
+    ]) {
+      const { r, s } = cpu(text)
+      expect(s / plain.s, `${text.slice(0, 40)}…: ${s.toFixed(2)} s of CPU, a plain file ${plain.s.toFixed(2)} s`).toBeLessThan(0.1)
+      expect(r.finding?.helm).toBe('unknown')
+    }
+  }, 300000)
 })
 
 describe('where in the file', () => {

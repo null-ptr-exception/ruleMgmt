@@ -18,7 +18,7 @@ import { readRouting, restoreRouting, routingToCopy, unreadableAnswer } from '..
 import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { openRepo } from '../repo/openRepo.js'
 import { writeProblems, writeRefusal } from '../repo/writePath.js'
-import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
+import { valuesWrite, copyToTarget } from '../lib/deploymentWrite.js'
 import { newDeploymentProblem } from '../lib/deploymentWalk.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
@@ -117,8 +117,14 @@ export default function syncRouter() {
         const sourceDir = path.join(req.gitopsDir, source)
         // What a values save would refuse is not copied either: the target
         // is read-only and could not fix it (#180).
-        const content = await fs.readFile(path.join(sourceDir, 'values.yaml'), 'utf-8')
-        const refusal = await valuesRefusal(req.gitopsDir, sourceDir, content)
+        // Read as a save reads it: one that cannot be read is named (409).
+        const repo = openRepo(req.gitopsDir)
+        const sourceFile = await repo.file(`${source}/values.yaml`)
+        if (sourceFile.state === 'unreadable') return { status: 409, body: { error: `${source}/values.yaml cannot be read: ${sourceFile.why}`, unreadable: true } }
+        const content = sourceFile.state === 'ok' ? sourceFile.value.text : ''
+        const answer = await valuesWrite(req.gitopsDir, source, content, { policy: 'sync', repo })
+        if (answer.refusal?.status === 409) return answer.refusal
+        const refusal = answer.refusal?.body ?? null
         // Nor routing the save checks would refuse: the whole sync is
         // refused, not half of it, with both files' problems at once. A
         // resource behind its routing.yaml is made again rather than copied

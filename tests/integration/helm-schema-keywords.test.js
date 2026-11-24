@@ -16,6 +16,7 @@ import path from 'path'
 import { readHelmYaml } from '../../server/repo/helmYaml.js'
 import { schemaProblem, schemaValidator } from '../../server/repo/schema.js'
 import { DURATION_COLUMN_PATTERN } from '../../src/utils/duration.js'
+import { SELECTOR_PATTERN } from '../../src/utils/selectorContract.js'
 import { helmBins } from '../helpers/helmValues.js'
 
 const VALUES = ['x', '', '010', 1, 0, -1, 1.5, 1e300, 9007199254740993, true, false, null, {}, { a: 1 }, [], [1], ['a'], '😀', 'é', 'yes']
@@ -47,6 +48,9 @@ const CASES = [
     ['^é+$', ['éé', 'e']],
     ['^😀$', ['😀', 'x']],
     ['^[😀-😂]$', ['😁', 'x']],
+    ['^[^\\t\\x00-\\x08\\x7F-\\x9F]+$', ['ab', 'a\tb', 'aé', '']],
+    ['^a\\x41\\n?$', ['aA', 'aA\n', 'ax']],
+    [SELECTOR_PATTERN, ['api', ' api', 'api ', 'a\tb', 'a`b', 'é', '\u2000a', 'a\u3000', 'a b', '']],
   ].flatMap(([p, vs]) => vs.map(v => [`pattern ${p} / ${JSON.stringify(v)}`, { type: 'string', pattern: p }, v])),
   ...[{}, { a: null }, { a: 1 }, { b: 1 }, { a: 1, b: 2 }, [], 'x'].map(v => [`required a / ${JSON.stringify(v)}`, { type: 'object', required: ['a'] }, v]),
   ...[{ a: 1 }, { a: 'x' }, { b: 1 }, {}, { a: null }].map(v => [`properties a string / ${JSON.stringify(v)}`, { type: 'object', properties: { a: { type: 'string' } } }, v]),

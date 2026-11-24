@@ -65,11 +65,12 @@ export async function deploymentCommitBlockers(gitopsDir) {
   // What Regenerate would make: a source behind makes its targets again too.
   const fixes = new Set()
   const brokenSources = new Set()
+  // `repo` is one snapshot for every deployment: a Template is read once.
   for (const dep of deployments) {
     // Read once for both.
-    const stack = await resolveStack(gitopsDir, path.join(gitopsDir, dep))
+    const stack = await resolveStack(gitopsDir, path.join(gitopsDir, dep), { repo })
     findings.push(...await templateFindings(gitopsDir, dep, stack))
-    const values = await valuesFindings(gitopsDir, dep, stack)
+    const values = await valuesFindings(gitopsDir, dep, stack, { repo })
     findings.push(...values.findings)
     if (values.warnings.length) valueWarnings.push({ deployment: dep, warnings: values.warnings })
     // A target is held to its source below. One listed as its own target is

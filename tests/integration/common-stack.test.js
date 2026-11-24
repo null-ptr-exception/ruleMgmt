@@ -194,18 +194,23 @@ describe('the editor and its save', () => {
   it('a required value a layer gives need not be filled again', async () => {
     // owner is required; shop's _common gives it.
     expect((await api('POST', `/api/v2/deployments/${CHART}/inherit${q('shop/inherit')}`, { values: { [CPU]: [{ warn_pct: 60, critical_pct: 80 }] } })).status).toBe(200)
-    // Where no layer gives it, it is required as before.
+    // Where no layer gives it, the Template's own values.yaml does
+    // (owner: sample-team): Helm renders that, so it is not refused either.
     await write(`${SHOP}/values.yaml`, { [CHART]: { _common: { namespace: 'c1' } } })
-    const { status, data } = await api('POST', `/api/v2/deployments/${CHART}/inherit${q('shop/inherit')}`, { values: { [CPU]: [{ warn_pct: 60, critical_pct: 80 }] } })
-    expect(status).toBe(400)
-    expect(data.problems.map(p => p.message)).toContainEqual(expect.stringContaining('"owner": required'))
+    const { status } = await api('POST', `/api/v2/deployments/${CHART}/inherit${q('shop/inherit')}`, { values: { [CPU]: [{ warn_pct: 60, critical_pct: 80 }] } })
+    expect(status).toBe(200)
+    // Written '' where nothing below fills it in, it is refused.
+    const empty = await api('POST', `/api/v2/deployments/${CHART}/inherit${q('shop/inherit')}`, { values: { _common: { owner: '' }, [CPU]: [{ warn_pct: 60, critical_pct: 80 }] } })
+    expect(empty.status).toBe(400)
+    expect(empty.data.problems.map(p => p.message)).toContainEqual(expect.stringContaining('"owner": required'))
   })
 
   it('a null, or a group that is not a list, sent from the editor is refused too', async () => {
     for (const values of [{ [DISK]: null }, { _common: { owner: null } }, { [CPU]: false }]) {
       const { status, data } = await api('POST', `/api/v2/deployments/${CHART}/inherit${q('shop/inherit')}`, { values })
       expect(status, JSON.stringify(values)).toBe(400)
-      expect(data.problems[0].message, JSON.stringify(values)).toMatch(/is (null|false, not a list of rows)/)
+      // A null on a stack: Helm 3.15 and 3.19 read it differently, so AlertForge cannot tell.
+      expect(data.problems[0].message, JSON.stringify(values)).toMatch(/cannot tell what Helm renders: .*null|must be a list of rows, not false/)
     }
     expect(yaml.load(await read('shop/inherit/values.yaml'))).toEqual({ common: { [CHART]: {} } })
   })
@@ -219,7 +224,7 @@ describe('the editor and its save', () => {
   it('a null written as text is refused', async () => {
     const { status, data } = await api('POST', `/api/v2/deployments/${CHART}/inherit${q('shop/inherit')}`, { values: `common:\n  ${CHART}:\n    _common:\n      owner: null\n` })
     expect(status).toBe(400)
-    expect(data.problems[0].message).toContain('Common Values\' owner is null')
+    expect(data.problems[0].message).toContain('writes a null at _common.owner: on a _common stack Helm 3.15 and 3.19 do not read a null the same way')
   })
 })
 
@@ -236,11 +241,12 @@ describe('the commit checks', () => {
       .toBe(`shop/inherit: its _common chart ${SHOP} is not in the repo`)
   })
 
-  it('name a hand-written null in a layer for the deployments under it', async () => {
+  it('list a hand-written null in a layer for the deployments under it (Helm versions read it differently): not a reason to refuse', async () => {
     await write(`${TEAM_B}/values.yaml`, `common:\n  ${CHART}:\n    ${DISK}: null\n`)
-    const { findings } = await deploymentCommitBlockers(tmpDir)
-    expect(findings).toEqual([expect.objectContaining({ kind: 'values-null', deployment: 'shop/team-b/dev' })])
-    expect(findings[0].description).toContain(`${TEAM_B}/values.yaml: the group ${DISK} is null`)
+    const { findings, valueWarnings } = await deploymentCommitBlockers(tmpDir)
+    expect(findings).toEqual([])
+    expect(valueWarnings).toEqual([expect.objectContaining({ deployment: 'shop/team-b/dev' })])
+    expect(valueWarnings[0].warnings[0]).toMatch(/cannot tell what Helm renders: the _common layer \d up writes a null at /)
   })
 
   it('call the _common chart one when a version is asked of it', async () => {

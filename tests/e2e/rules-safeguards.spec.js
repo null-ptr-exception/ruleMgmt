@@ -347,6 +347,31 @@ test.describe('A commit that goes through with things to fix', () => {
   })
 })
 
+// A commit lists the deployment values Helm would not render as written
+// (#202, #203): committed, not refused, under a heading that says check-repo
+// refuses them. Stubbed: nothing is committed into the shared gitops repo.
+test.describe('A commit that lists deployment values to look at', () => {
+  test('names each deployment and what is wrong, as committed', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({
+      json: { branch: 'main', changes: { modified: ['deployments/shop/prod/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false },
+    }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ json: {
+      sha: 'abc1234', message: 'e2e', unconverted: [],
+      valueWarnings: [{ deployment: 'deployments/shop/prod', warnings: ['deployments/shop/prod/values.yaml line 4: Helm reads 010 as 8 (YAML 1.1); the editor would write 8. Write 8, or \'010\' in quotes for the text'] }],
+    } }))
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: values to look at')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Changes committed' })
+    await expect(dialog).toContainText('Deployment values to look at', { timeout: 8000 })
+    await expect(dialog).toContainText('check-repo')
+    await expect(dialog.getByTestId('commit-value-warnings')).toContainText('deployments/shop/prod: deployments/shop/prod/values.yaml line 4: Helm reads 010 as 8')
+  })
+})
+
 // #79: a chart still in the 1.x format renders as it always did, so it no
 // longer stops a commit — the commit goes through and names it. The server
 // side is in tests/integration/git-api.test.js; here the commit is stubbed,

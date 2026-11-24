@@ -1,13 +1,13 @@
 {
   "lint": {
-    "total": 313,
+    "total": 288,
     "byKind": {
       "childProcess": 1,
       "fs": 35,
-      "fsUse": 174,
-      "helper": 30,
+      "fsUse": 169,
+      "helper": 21,
       "yaml": 19,
-      "yamlParse": 54
+      "yamlParse": 43
     },
     "byFile": {
       "scripts/gen-chart.mjs": 7,
@@ -21,18 +21,17 @@
       "server/lib/chartUsage.js": 2,
       "server/lib/commit/sync.js": 4,
       "server/lib/commit/template.js": 6,
-      "server/lib/commit/values.js": 3,
       "server/lib/commonEdit.js": 36,
       "server/lib/deploymentCheck.js": 6,
       "server/lib/deploymentWalk.js": 9,
-      "server/lib/deploymentWrite.js": 19,
+      "server/lib/deploymentWrite.js": 11,
       "server/lib/helmCheck.js": 2,
-      "server/lib/migrate.js": 6,
+      "server/lib/migrate.js": 3,
       "server/lib/reservedNames.js": 2,
       "server/lib/routingFiles.js": 13,
       "server/lib/ruleCheck.js": 6,
       "server/lib/sharedConfigs.js": 9,
-      "server/lib/stack.js": 15,
+      "server/lib/stack.js": 8,
       "server/lib/subchart.js": 4,
       "server/lib/sync.js": 10,
       "server/lib/valuesText.js": 5,
@@ -40,31 +39,31 @@
       "server/routes/deployments/lifecycle.js": 8,
       "server/routes/deployments/list.js": 8,
       "server/routes/deployments/resolve.js": 4,
-      "server/routes/deployments/values.js": 5,
+      "server/routes/deployments/values.js": 2,
       "server/routes/folders/create.js": 11,
       "server/routes/folders/tree.js": 12,
       "server/routes/git.js": 9,
       "server/routes/render.js": 6,
-      "server/routes/sync.js": 7,
+      "server/routes/sync.js": 6,
       "server/routes/templates.js": 17
     }
   },
   "yamlParseSites": {
-    "serverAndScripts": 54,
+    "serverAndScripts": 43,
     "src": 9,
     "byFileKind": {
       "Chart.yaml": 19,
-      "Template values.yaml": 9,
-      "deployment values": 13,
+      "Template values.yaml": 8,
+      "deployment values": 5,
       "routing.yaml": 0,
       "rules files": 0,
       "shared configs": 0,
-      "sync.yaml": 3,
-      "unknown": 10
+      "sync.yaml": 2,
+      "unknown": 9
     }
   },
   "swallowingCatches": {
-    "total": 51,
+    "total": 49,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
@@ -72,10 +71,10 @@
       "server/lib/commonEdit.js": 10,
       "server/lib/deploymentCheck.js": 1,
       "server/lib/deploymentWalk.js": 1,
-      "server/lib/deploymentWrite.js": 2,
+      "server/lib/deploymentWrite.js": 1,
       "server/lib/migrate.js": 1,
       "server/lib/safePath.js": 1,
-      "server/lib/stack.js": 4,
+      "server/lib/stack.js": 3,
       "server/lib/subchart.js": 1,
       "server/lib/sync.js": 2,
       "server/routes/charts.js": 2,
@@ -91,7 +90,7 @@
     }
   },
   "ownEnoentChecks": {
-    "total": 33,
+    "total": 30,
     "byFile": {
       "scripts/gen-chart.mjs": 2,
       "scripts/gen-rules.mjs": 4,
@@ -104,12 +103,11 @@
       "server/lib/deploymentCheck.js": 2,
       "server/lib/deploymentWalk.js": 2,
       "server/lib/deploymentWrite.js": 1,
-      "server/lib/migrate.js": 2,
       "server/lib/routingFiles.js": 2,
       "server/lib/ruleCheck.js": 1,
       "server/lib/safePath.js": 1,
       "server/lib/sharedConfigs.js": 1,
-      "server/lib/stack.js": 2,
+      "server/lib/stack.js": 1,
       "server/lib/sync.js": 1,
       "server/routes/deployments/resolve.js": 1,
       "server/routes/folders/tree.js": 1,

@@ -2,287 +2,161 @@
 # category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
 # Edited by hand: a fix removes its line; a new disagreement needs one.
 id	entry	kind	category	reason
-number-col-text	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-number-col-text	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-number-col-text	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 number-col-text	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 number-col-text	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-number-col-text	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 integer-col-float	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-integer-col-float	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-string-col-bool	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-string-col-bool	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-string-col-bool	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 string-col-bool	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 string-col-bool	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-string-col-bool	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-enum-miss	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-enum-miss	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-enum-miss	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 enum-miss	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 enum-miss	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-enum-miss	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 required-miss	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-required-miss	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 required-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 required-empty	save-json	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 required-empty	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 duration-number	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-duration-number	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 duration-bad	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-duration-bad	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-number-col-false	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-number-col-false	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-number-col-false	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 number-col-false	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 number-col-false	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-number-col-false	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 row-negative	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 row-negative	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 row-negative	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-row-negative	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-cell-null	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 cell-list	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 cell-list	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-cell-list	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 row-scalar	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-row-scalar	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 group-not-list	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 group-not-list	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-group-not-list	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 common-not-map	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-common-not-map	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 group-null	common-plan	refuses-what-helm-renders	policy	a null is refused: Helm versions read it differently (remove the key, or write [])
 common-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-common-null	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 common-team-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-common-team-null	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 once-group-null	common-plan	refuses-what-helm-renders	policy	a null is refused: Helm versions read it differently (remove the key, or write [])
-y11-yes	save-text	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-yes	sync	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
 y11-yes	migration-preview	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
 y11-yes	migration-apply	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-yes	commit	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-off-enum	save-text	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-off-enum	sync	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
 y11-off-enum	migration-preview	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
 y11-off-enum	migration-apply	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-off-enum	commit	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-octal-010	get	shows-other-threshold	bug	#202: Helm reads YAML 1.1 (010 is 8, 1_000 and 0_7 are numbers); the editor shows what YAML 1.2 reads
-y11-underscore	get	shows-other-threshold	bug	#202: Helm reads YAML 1.1 (010 is 8, 1_000 and 0_7 are numbers); the editor shows what YAML 1.2 reads
-y11-date	get	shows-other-job	bug	#202: Helm reads an unquoted date as text; the check reads a date and refuses it
-y11-date	save-text	refuses-what-helm-renders	bug	#202: Helm reads an unquoted date as text; the check reads a date and refuses it
-y11-date	sync	refuses-what-helm-renders	bug	#202: Helm reads an unquoted date as text; the check reads a date and refuses it
-y11-sexagesimal	save-text	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-sexagesimal	sync	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
 y11-sexagesimal	migration-preview	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
 y11-sexagesimal	migration-apply	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-sexagesimal	commit	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-0_7	get	shows-other-threshold	bug	#202: Helm reads YAML 1.1 (010 is 8, 1_000 and 0_7 are numbers); the editor shows what YAML 1.2 reads
-quoted-number	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-quoted-number	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-quoted-number	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 quoted-number	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 quoted-number	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-quoted-number	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 dup-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-dup-key	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-key	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-key	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 comment-only	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 comment-only	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 bom	common-apply	5xx	bug	no issue yet: a values file that starts with a byte-order mark makes the _common write answer 500 and put everything back
-tab-indent	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-tab-indent	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
 empty-file	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 empty-file	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 null-doc	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 null-doc	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 null-doc	common-plan	refuses-what-helm-renders	bug	no issue yet: the _common plan reads values with a parser that refuses a second document or an empty file
 demo-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-demo-null	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 trailing-dashes	common-plan	refuses-what-helm-renders	bug	no issue yet: the _common plan reads values with a parser that refuses a second document or an empty file
 second-doc	common-plan	refuses-what-helm-renders	bug	no issue yet: the _common plan reads values with a parser that refuses a second document or an empty file
 second-doc-broken	common-plan	refuses-what-helm-renders	bug	no issue yet: the _common plan reads values with a parser that refuses a second document or an empty file
-not-yaml	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-not-yaml	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-top-scalar	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-top-scalar	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-top-list	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-top-list	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-unwrapped	save-text	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-unwrapped	sync	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	common-plan	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	common-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	migration-preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-unwrapped	commit	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	common-plan	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	common-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-wrong-wrapper	commit	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-stack-unwrapped	save-text	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 stack-unwrapped	migration-preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 stack-unwrapped	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-stack-unwrapped	commit	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 stack-unwrapped	preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 stack-unwrapped	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 common-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 common-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 common-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-common-zero	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 row-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 row-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 row-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-row-zero	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 derived-overflow	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 derived-overflow	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 derived-overflow	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-derived-overflow	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-threshold-inf	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-threshold-inf	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-threshold-inf	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-threshold-inf	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-threshold-inf	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-unreadable-perm	sync	5xx	bug	no issue yet: sync answers 500 when the source's values or the Template's files cannot be read
-unreadable-perm	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-unreadable-perm	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
 unreadable-dir	save-text	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
-unreadable-dir	sync	5xx	bug	no issue yet: sync answers 500 when the source's values or the Template's files cannot be read
 unreadable-dir	common-plan	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
-unreadable-dir	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-unreadable-dir	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
 unreadable-dir	commit	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
-dangling-link	sync	5xx	bug	no issue yet: sync answers 500 when the source's values or the Template's files cannot be read
-link-loop	sync	5xx	bug	no issue yet: sync answers 500 when the source's values or the Template's files cannot be read
-link-loop	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-link-loop	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-tpl-common-team	save-text	refuses-what-helm-renders	bug	no issue yet: the save does not count the Template's own Common Values for a required column
-tpl-common-team	sync	refuses-what-helm-renders	bug	no issue yet: the save does not count the Template's own Common Values for a required column
-tpl-common-zero	save-text	accepts-what-helm-fails	bug	no issue yet: the save's derived-value check does not count the Template's or the _common's values
-tpl-common-zero	sync	accepts-what-helm-fails	bug	no issue yet: the save's derived-value check does not count the Template's or the _common's values
 tpl-common-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 tpl-common-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 tpl-common-zero	init	accepts-what-helm-fails	bug	no issue yet: a new deployment is made without checking that Helm can render and the checker accepts it
 tpl-common-zero	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 tpl-common-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-tpl-common-zero	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 tpl-null-merge	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-tpl-null-merge	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 tpl-null-merge	gen-rules	accepts-what-helm-fails	out-of-scope	gen-rules checks the Template's own values; the null that fails is the deployment's
-tpl-not-yaml	sync	5xx	bug	no issue yet: sync answers 500 when the source's values or the Template's files cannot be read
 tpl-not-yaml	migration-preview	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
 tpl-not-yaml	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
-tpl-unreadable	sync	5xx	bug	no issue yet: sync answers 500 when the source's values or the Template's files cannot be read
 tpl-unreadable	migration-preview	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
 tpl-unreadable	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
-tpl-rules-unreadable	sync	5xx	bug	no issue yet: sync answers 500 when the source's values or the Template's files cannot be read
 tpl-rules-unreadable	init	accepts-what-helm-fails	bug	no issue yet: a new deployment is made without checking that Helm can render and the checker accepts it
 stack-x-null	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 stack-x-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-stack-x-number-text	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 stack-x-number-text	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 stack-x-number-text	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-stack-x-number-text	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-stack-x-010	get	shows-other-threshold	bug	#202: Helm reads YAML 1.1 (010 is 8, 1_000 and 0_7 are numbers); the editor shows what YAML 1.2 reads
 layer-common-zero	save-text	accepts-what-helm-fails	bug	no issue yet: the save's derived-value check does not count the Template's or the _common's values
 layer-common-zero	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 layer-common-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-layer-common-zero	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 layer-group-map	save-text	refuses-what-helm-renders	policy	a _common group that is not a list of rows is refused: every deployment that does not set the group fails
 layer-group-map	init	accepts-what-helm-fails	bug	no issue yet: a new deployment is made without checking that Helm can render and the checker accepts it
-layer-group-map	commit	refuses-what-helm-renders	policy	a _common group that is not a list of rows is refused: every deployment that does not set the group fails
 layer-group-map	check-deployment	refuses-what-helm-renders	policy	a _common group that is not a list of rows is refused: every deployment that does not set the group fails
-layer-not-yaml	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-layer-not-yaml	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-layer-unreadable	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-layer-unreadable	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-flat-number-text	save-text	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
-flat-number-text	save-json	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-number-text	migration-apply	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-number-text	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
-flat-010	get	shows-other-threshold	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
-flat-not-yaml	migration-preview	5xx	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
-flat-not-yaml	migration-apply	5xx	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-not-yaml	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-empty	save-text	refuses-what-helm-renders	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
-flat-unreadable	migration-preview	5xx	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
-flat-unreadable	migration-apply	5xx	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-wrapped	migration-apply	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-wrapped	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-wrapped	preview	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 common-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 common-empty	save-json	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 common-empty	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
-common-wrong-type	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-common-wrong-type	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-common-wrong-type	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 common-wrong-type	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 common-wrong-type	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-common-wrong-type	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 cell-map	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 cell-map	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-cell-map	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-two-bad-cells	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-two-bad-cells	save-json	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-two-bad-cells	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 two-bad-cells	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 two-bad-cells	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-two-bad-cells	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
-y11-octal-string	save-text	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
-y11-octal-string	sync	accepts-what-helm-fails	bug	no issue yet: the save does not check a cell's type or enum the way the Template's schema does
 y11-octal-string	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 y11-octal-string	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-y11-octal-string	commit	accepts-what-helm-fails	bug	no issue yet: Commit says nothing about deployment values Helm cannot render or promtool refuses
 dup-key-block	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key-block	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key-block	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-dup-key-block	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-key-block	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-key-block	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-group	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-group	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-group	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-dup-group	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-group	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-group	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-wrapper	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-wrapper	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-wrapper	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-dup-wrapper	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-wrapper	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-wrapper	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-common-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-common-key	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-common-key	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-dup-common-key	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-common-key	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-dup-common-key	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-cond-no	save-text	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
-cond-no	sync	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
 cond-no	migration-preview	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
 cond-no	migration-apply	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
-cond-no	commit	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
-cond-no	preview	accepts-what-helm-fails	bug	no issue yet: Preview and check-deployment say passed when Helm renders none of the rows written (a condition that is false)
-cond-no	check-deployment	accepts-what-helm-fails	bug	no issue yet: Preview and check-deployment say passed when Helm renders none of the rows written (a condition that is false)
 cond-true	common-plan	refuses-what-helm-renders	out-of-scope	a dependency with a condition is not re-attached to a new _common (the _common plan is not part of the values checks)
 stack-required-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
-stack-condition-no	save-text	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
-stack-condition-no	init	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
-stack-condition-no	migration-preview	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
-stack-condition-no	migration-apply	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
-stack-condition-no	commit	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
-stack-condition-no	preview	accepts-what-helm-fails	bug	no issue yet: Preview and check-deployment say passed when Helm renders none of the rows written (a condition that is false)
-stack-condition-no	check-deployment	accepts-what-helm-fails	bug	no issue yet: Preview and check-deployment say passed when Helm renders none of the rows written (a condition that is false)
 layer-dup-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-layer-dup-key	migration-preview	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-layer-dup-key	migration-apply	5xx	bug	no issue yet: the migration answers 500 for a values file it cannot read or parse
-layer-dup-key	commit	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-layer-dup-key	preview	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
-layer-dup-key	check-deployment	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+layer-link-outside	commit	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-link-outside	preview	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-link-outside	check-deployment	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+y11-octal-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-octal-010	sync	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-underscore	save-text	refuses-what-helm-renders	policy	Helm reads 1_000 as 1000 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-underscore	sync	refuses-what-helm-renders	policy	Helm reads 1_000 as 1000 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-0_7	save-text	refuses-what-helm-renders	policy	Helm reads 0_7 as 7 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-0_7	sync	refuses-what-helm-renders	policy	Helm reads 0_7 as 7 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-key	save-text	refuses-what-helm-renders	policy	Helm reads the key y as "true" (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it (#202); Commit lists it
+y11-key	sync	refuses-what-helm-renders	policy	Helm reads the key y as "true" (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it (#202); Commit lists it
+unreadable-dir	sync	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo
+link-outside	save-text	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	sync	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	commit	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-x-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
+layer-link-outside	save-text	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-unwrapped	save-text	refuses-what-helm-renders	policy	values not under the chart's name reach no Template: Helm renders only the Template's own, so a save refuses them (#203)
+layer-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
+flat-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
+unreadable-dir	migration-apply	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo
+link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo

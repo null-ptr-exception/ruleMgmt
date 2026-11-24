@@ -210,36 +210,35 @@
   },
   "a deployment on a _common, with a hand-written null": {
     "blockers": {
-      "findings": [
-        {
-          "severity": "commit",
-          "kind": "values-null",
-          "deployment": "deployments/stack/s",
-          "regenerable": false,
-          "description": "deployments/stack/s: deployments/stack/s/values.yaml: the group cpu is null — write [] to clear a group, or remove the key to inherit it"
-        }
-      ],
+      "findings": [],
       "routingProblems": [],
       "routingWarnings": [],
-      "valueWarnings": [],
+      "valueWarnings": [
+        {
+          "deployment": "deployments/stack/s",
+          "warnings": [
+            "deployments/stack/s/values.yaml: AlertForge cannot tell what Helm renders: the deployment's values writes a null at cpu: on a _common stack Helm 3.15 and 3.19 do not read a null the same way (one removes the key, the other keeps it or keeps what is under it). Remove the null to inherit the value, or write the value plainly"
+          ]
+        }
+      ],
       "unreadable": [],
       "regenerable": 0,
       "readable": true
     },
     "commit": {
-      "status": 409,
+      "status": 200,
       "data": {
-        "error": "Commit refused",
-        "findings": [
+        "sha": "<sha>",
+        "message": "check",
+        "unconverted": [],
+        "valueWarnings": [
           {
-            "severity": "commit",
-            "kind": "values-null",
             "deployment": "deployments/stack/s",
-            "regenerable": false,
-            "description": "deployments/stack/s: deployments/stack/s/values.yaml: the group cpu is null — write [] to clear a group, or remove the key to inherit it"
+            "warnings": [
+              "deployments/stack/s/values.yaml: AlertForge cannot tell what Helm renders: the deployment's values writes a null at cpu: on a _common stack Helm 3.15 and 3.19 do not read a null the same way (one removes the key, the other keeps it or keeps what is under it). Remove the null to inherit the value, or write the value plainly"
+            ]
           }
-        ],
-        "regenerable": 0
+        ]
       }
     }
   },
@@ -715,7 +714,7 @@
           "kind": "values-unreadable",
           "deployment": "deployments/team/d",
           "regenerable": false,
-          "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+          "description": "deployments/team/d: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
         },
         {
           "severity": "commit",
@@ -728,7 +727,7 @@
           "kind": "values-unreadable",
           "deployment": "deployments/team/e",
           "regenerable": false,
-          "description": "deployments/team/e: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+          "description": "deployments/team/e: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
         },
         {
           "severity": "commit",
@@ -787,7 +786,7 @@
             "kind": "values-unreadable",
             "deployment": "deployments/team/d",
             "regenerable": false,
-            "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+            "description": "deployments/team/d: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
           },
           {
             "severity": "commit",
@@ -800,7 +799,7 @@
             "kind": "values-unreadable",
             "deployment": "deployments/team/e",
             "regenerable": false,
-            "description": "deployments/team/e: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+            "description": "deployments/team/e: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
           },
           {
             "severity": "commit",
@@ -850,7 +849,7 @@
             "kind": "values-unreadable",
             "deployment": "deployments/team/d",
             "regenerable": false,
-            "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+            "description": "deployments/team/d: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
           },
           {
             "severity": "commit",
@@ -863,7 +862,7 @@
             "kind": "values-unreadable",
             "deployment": "deployments/team/e",
             "regenerable": false,
-            "description": "deployments/team/e: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+            "description": "deployments/team/e: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
           }
         ],
         "routingProblems": [
@@ -901,7 +900,7 @@
               "kind": "values-unreadable",
               "deployment": "deployments/team/d",
               "regenerable": false,
-              "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+              "description": "deployments/team/d: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
             },
             {
               "severity": "commit",
@@ -914,7 +913,7 @@
               "kind": "values-unreadable",
               "deployment": "deployments/team/e",
               "regenerable": false,
-              "description": "deployments/team/e: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+              "description": "deployments/team/e: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
             }
           ],
           "regenerable": 0
@@ -1705,7 +1704,7 @@
           "kind": "values-unreadable",
           "deployment": "deployments/team/d",
           "regenerable": false,
-          "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+          "description": "deployments/team/d: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
         }
       ],
       "routingProblems": [],
@@ -1739,7 +1738,7 @@
             "kind": "values-unreadable",
             "deployment": "deployments/team/d",
             "regenerable": false,
-            "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+            "description": "deployments/team/d: values.yaml cannot be read (line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the first document), so Helm cannot render it"
           }
         ],
         "regenerable": 0

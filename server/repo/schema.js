@@ -93,9 +93,19 @@ function walk(s, path, root) {
   return null
 }
 
+// \t \n \v \f \r and \xHH (two hex digits): one character, read alike by
+// Go's regexp and JavaScript's; the length of the escape, or 0.
+function charEscape(p, i) {
+  const e = p[i + 1]
+  if (e !== undefined && 'tnvfr'.includes(e)) return 2
+  if (e === 'x' && /^[0-9A-Fa-f]{2}$/.test(p.slice(i + 2, i + 4))) return 4
+  return 0
+}
+
 /**
  * A pattern Go's regexp (Helm) and JavaScript's (with the u flag) read the
- * same way: characters, [ ] classes of characters and ranges, \d \w, groups
+ * same way: characters (\t \n \v \f \r \xHH among them), [ ] classes of
+ * characters and ranges, \d \w, groups
  * ( ) and (?: ), |, the quantifiers * + ? {n} {n,} {n,m} (lazy too), ^ $.
  * Not: . \s \b \p, lookaround, back references, flags. Returns why not, or
  * null.
@@ -108,6 +118,8 @@ export function regexSubset(p) {
     if (c === '\\') {
       const e = p[i + 1]
       if (e === 'd' || e === 'w' || (e !== undefined && '.^$|?*+()[]{}\\/'.includes(e))) { i += 2; canRepeat = true; continue }
+      const n = charEscape(p, i)
+      if (n) { i += n; canRepeat = true; continue }
       return `the escape \\${e ?? ''}`
     }
     if (c === '[') {
@@ -118,6 +130,8 @@ export function regexSubset(p) {
         if (p[j] === '\\') {
           const e = p[j + 1]
           if (e === 'd' || e === 'w' || (e !== undefined && '^$|?*+()[]{}\\/-.'.includes(e))) { j++; continue }
+          const n = charEscape(p, j)
+          if (n) { j += n - 1; continue }
           return `the escape \\${e ?? ''} in a [ ] class`
         }
         if (p[j] === '[') return 'a [ inside a [ ] class'
@@ -184,7 +198,15 @@ function newAjv() {
   return ajv
 }
 
-/** The schema as ajv is given it: no $schema, `pattern` as the u-flag keyword. */
+// Every property name is given to ajv with a mark in front, in the schema and
+// in the values: ajv 6 looks names up in plain objects, so a property named
+// valueOf or constructor would be found on Object.prototype ("required" when
+// it is not, a function where nothing is written).
+const MARK = '\u2063'
+const KEY = n => MARK + n
+const unKey = k => (typeof k === 'string' && k.startsWith(MARK) ? k.slice(MARK.length) : k)
+
+/** The schema as ajv is given it: no $schema, `pattern` as the u-flag keyword, names marked. */
 function forAjv(s) {
   if (Array.isArray(s)) return s.map(forAjv)
   if (!isObj(s)) return s
@@ -192,7 +214,8 @@ function forAjv(s) {
   for (const [k, v] of Object.entries(s)) {
     if (k === '$schema') continue
     if (k === 'pattern') out[PATTERN] = v
-    else if (k === 'properties') out[k] = Object.fromEntries(Object.entries(v).map(([n, sub]) => [n, forAjv(sub)]))
+    else if (k === 'properties') out[k] = Object.fromEntries(Object.entries(v).map(([n, sub]) => [KEY(n), forAjv(sub)]))
+    else if (k === 'required') out[k] = v.map(KEY)
     else if (k === 'items') out[k] = forAjv(v)
     else out[k] = v
   }
@@ -216,16 +239,28 @@ export function schemaValidator(schema, file) {
   }
   compiled.set(key, validate)
   return values => {
-    // ajv is given plain objects: the values read have no prototype.
-    const plain = JSON.parse(JSON.stringify(values ?? null))
+    // ajv is given objects with no prototype, as the values read: a key
+    // named valueOf or constructor that is not written is not there (a
+    // plain object would hand ajv Object.prototype's).
+    const plain = bare(JSON.parse(JSON.stringify(values ?? null)))
     if (validate(plain)) return []
     return validate.errors.map(e => {
-      const path = pathOf(e.dataPath, plain)
+      const path = pathOf(e.dataPath, plain).map(unKey)
       const where = path.length ? path.join('.') : '(the top)'
       const allowed = e.params?.allowedValues ? ` (${e.params.allowedValues.join(', ')})` : ''
-      return finding({ code: 'values.schema', file, helm: 'fails', at: { path }, message: `${file}: ${where} ${e.message}${allowed}` })
+      const params = { ...(e.params ?? {}), ...(e.params?.missingProperty !== undefined ? { missingProperty: unKey(e.params.missingProperty.replace(/^\./, '')) } : {}) }
+      const message = e.keyword === 'required' ? `should have required property '${params.missingProperty}'` : e.message
+      return finding({ code: 'values.schema', file, helm: 'fails', at: { path }, message: `${file}: ${where} ${message}${allowed}`, detail: { keyword: e.keyword, params, schemaPath: e.schemaPath } })
     })
   }
+}
+
+const bare = v => {
+  if (Array.isArray(v)) return v.map(bare)
+  if (v === null || typeof v !== 'object') return v
+  const out = Object.create(null)
+  for (const k of Object.keys(v)) out[KEY(k)] = bare(v[k])
+  return out
 }
 
 export const compiledCount = () => compiled.size

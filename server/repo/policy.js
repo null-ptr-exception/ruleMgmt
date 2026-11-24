@@ -55,15 +55,54 @@ export function definePolicy(name, { default: dflt, rows = {} } = {}) {
   return Object.freeze({ name, rows: Object.freeze(table), default: base })
 }
 
+// The deployment values rows (loadDeployment's findings), the same for a
+// save of the deployment and of a _common, and for a sync (which copies what
+// a save would write, to a target that cannot fix it).
+const EDITOR = 'the editor\'s rule: a cell is filled or left out, holds one line a label can take, and selector rows can be told apart'
+const SAVE_ROWS = {
+  'values.required-empty': { action: 'refuse', why: 'a required cell written \'\' is refused: fill it in, or leave the row out' },
+  'values.cell': { action: 'refuse', why: EDITOR },
+  'values.selector': { action: 'refuse', why: EDITOR },
+  'values.rows-alike': { action: 'warn', why: 'rows the row identity label cannot tell apart are said, not refused' },
+  'yaml.duplicate-key': { action: 'refuse', why: 'the text was just written: which of the two was meant cannot be told (Helm keeps the last)' },
+  'stack.*': { action: 'warn', why: 'what a _common above (or the Template) gives is fixed there: saving this deployment does not change it' },
+  'template.schema-unchecked': { action: 'warn', why: 'a Template schema AlertForge cannot check as Helm does is the Template\'s: the deployment is checked by its columns, and Preview by Helm' },
+}
+const LISTED = why => ({ action: 'list', why })
+
 /** The tables, one per entry point. */
 export const POLICIES = Object.freeze({
-  save: definePolicy('save'),
-  saveLayer: definePolicy('saveLayer'),
-  sync: definePolicy('sync'),
-  commit: definePolicy('commit'),
-  checkRepo: definePolicy('checkRepo'),
+  save: definePolicy('save', { rows: SAVE_ROWS }),
+  saveLayer: definePolicy('saveLayer', { rows: SAVE_ROWS }),
+  sync: definePolicy('sync', { rows: SAVE_ROWS }),
+  commit: definePolicy('commit', {
+    default: { refuse: 'list', why: 'Commit lists what Helm stops on in values; check-repo refuses it' },
+    rows: {
+      'values.unreadable': { action: 'refuse', why: 'a values file that cannot be read is not committed as if fine: Helm renders something other than the repo holds' },
+      'yaml.not-yaml': { action: 'refuse', why: 'a values file that is not YAML stops every render of the deployment, as it did before' },
+      'yaml.not-map': { action: 'refuse', why: 'a values file that is not a map stops every render of the deployment' },
+      'values.chart-key': { action: 'refuse', why: 'a chart key that is not a map stops every render of the deployment' },
+      'values.rows-alike': LISTED('rows the row identity label cannot tell apart are said'),
+      'values.required-empty': LISTED(EDITOR),
+      'values.cell': LISTED(EDITOR),
+      'values.selector': LISTED(EDITOR),
+      'yaml.duplicate-key': LISTED('Helm keeps the last of two keys; said so it can be written once'),
+      'values.flat-not-checked': LISTED('a legacy <name>-values.yaml is not supported: said, not checked'),
+    },
+  }),
+  checkRepo: definePolicy('checkRepo', {
+    rows: {
+      'values.unreadable': { action: 'refuse', why: 'Helm renders something other than the repo holds' },
+      'values.rows-alike': { action: 'warn', why: 'rows the row identity label cannot tell apart are said' },
+      'values.required-empty': { action: 'warn', why: EDITOR },
+      'values.cell': { action: 'warn', why: EDITOR },
+      'values.selector': { action: 'warn', why: EDITOR },
+      'yaml.duplicate-key': { action: 'warn', why: 'Helm keeps the last of two keys: it renders, the text should say it once' },
+      'values.flat-not-checked': { action: 'warn', why: 'a legacy <name>-values.yaml is not supported: said, not checked' },
+    },
+  }),
   preview: definePolicy('preview'),
-  migration: definePolicy('migration'),
+  migration: definePolicy('migration', { rows: SAVE_ROWS }),
 })
 
 function tableOf(policy) {

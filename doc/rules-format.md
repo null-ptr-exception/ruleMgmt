@@ -744,6 +744,37 @@ two levels `common: { common: { mariadb-alerts: … } }`. A `_common`'s own
 `values.yaml` is laid out the same, counted from it. The editor shows and
 saves only the rows under these keys.
 
+### Writing values by hand
+
+A `values.yaml` written by hand (in git, or saved as text) is read the way
+Helm reads it — YAML 1.1 — and checked against what the Template sees:
+its own `values.yaml`, under each `_common`, under the deployment's. A save
+and a sync refuse, naming the file, line or row and column:
+
+| Written | Why | Write instead |
+|---|---|---|
+| values not under the chart's name (`cpu: […]` instead of `mariadb-alerts: { cpu: […] }`), or under another name | Helm passes none of them to the Template: it renders only the Template's own rows | the values under the chart's name (on a `_common`, under `common:` first) |
+| `010`, `0777`, `1_000`, `0_7` in a number column | Helm reads `010` as 8, `0777` as 511, `1_000` as 1000 | the number as you mean it (`8`, `10`), or `'010'` in quotes for text |
+| `yes`, `no`, `on`, `off`, `y`, `n` | Helm reads them as true and false | `true` / `false`, or `'yes'` in quotes for the text |
+| a key `y:`, `n:`, `on:` | Helm reads the key as `"true"` / `"false"` | `'y':` in quotes |
+| a key written twice in one map | Helm keeps the last one; which was meant cannot be told | each key once |
+| a value of the wrong type for its column, outside its `enum`, a row that is not a map, a group that is not a list | the Template's schema stops Helm | what the column asks for |
+| a `null` on a `_common` stack, in a deployment's values, a `_common`'s or the Template's | Helm 3.15 and 3.19 read it differently (one removes the key, the other keeps it): AlertForge cannot tell what is deployed | leave the key out to inherit it, `[]` to clear a group |
+| syntax AlertForge does not read the same as Helm: a tag (`!!binary`, `!foo`), `?` keys, an indentation digit (`\|2`), a tab Helm's reading depends on, a file larger than `MAX_VALUES_BYTES` (1 MiB) | AlertForge cannot tell what Helm reads | plain YAML: no tags, `key: value`, spaces for indentation |
+| a `values.yaml` that is a folder, or a link leading outside the repo | Helm renders the Template's own values and says nothing: what is deployed is not in the repo | a file in the repo |
+
+The editor writes none of these: it quotes `'010'`, `'yes'` and the like
+itself. Opening a deployment shows the values as Helm reads them (`010` shows
+as 8). Commit does not refuse these: it lists them under the deployment, and
+`check-repo` refuses them. A key written twice, a required cell written
+`''` and a value a label cannot take are listed by Commit too. A
+`values.yaml` that cannot be read at all — not YAML, a folder, a link out
+of the repo — still blocks the commit.
+
+A null that is not on a `_common` stack is read as Helm 3.15 and 3.19 both
+read it: over a key the Template has, it removes it (the Template's value is
+not used either); over one it does not, it stays a null.
+
 ## What gets generated
 
 Two things, both products:

@@ -36,7 +36,8 @@ describe('sync API', () => {
     const dir = path.join(tmpDir, relPath)
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'Chart.yaml'), CHART_WITH_DEP)
-    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump(values))
+    // Under the Template's name, as Helm passes them to it.
+    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump({ 'mariadb-alerts': values }))
     return dir
   }
 
@@ -82,7 +83,7 @@ describe('sync API', () => {
       expect(res.status).toBe(200)
       expect(res.body).toEqual({ ok: true })
 
-      const written = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/dev/values.yaml'), 'utf-8'))
+      const written = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/dev/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(written).toEqual({ alerts: [{ warn: 99 }] })
     })
 
@@ -94,7 +95,7 @@ describe('sync API', () => {
 
       expect(fs.existsSync(path.join(tmpDir, 'cpu/canary/values.yaml'))).toBe(true)
       expect(fs.existsSync(path.join(tmpDir, 'cpu/canary/Chart.yaml'))).toBe(true)
-      const written = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/canary/values.yaml'), 'utf-8'))
+      const written = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/canary/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(written).toEqual({ alerts: [{ warn: 99 }] })
     })
 
@@ -196,7 +197,7 @@ describe('sync API', () => {
       const registry = await request(app).get('/api/v2/sync')
       expect(registry.body).toEqual({ syncs: [] })
 
-      const content = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))
+      const content = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(content).toEqual({ alerts: [{ warn: 99 }] })
     })
 
@@ -278,7 +279,7 @@ describe('sync API', () => {
       expect(res.status).toBe(500)
       // Registry-first ordering: the failed persist must mean the target's
       // content was never overwritten...
-      const target = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))
+      const target = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(target).toEqual({ alerts: [{ warn: 1 }] })
       // ...and no half-created link is visible afterwards.
       const registry = await request(app).get('/api/v2/sync')

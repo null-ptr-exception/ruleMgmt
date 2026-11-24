@@ -32,8 +32,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { unwrapPath } from './subchart.js'
-import { isAbsent } from './readIfThere.js'
-import { loadValues } from '../../src/utils/valuesText.js'
+import { openRepo } from '../repo/openRepo.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 // More hops than this is a loop of links, not a stack.
@@ -70,15 +69,19 @@ async function readTemplateChart(dir) {
 /** A chart's dependencies that are entries (a hand edit may hold anything). */
 export const dependenciesOf = chart => (Array.isArray(chart?.dependencies) ? chart.dependencies.filter(isPlainObject) : [])
 
-/** A values.yaml: `{ doc }`, `{ doc: {} }` when there is none, `{ error }` when it cannot be read. */
-async function readValuesDoc(dir) {
-  try {
-    const doc = loadValues(await fs.readFile(path.join(dir, 'values.yaml'), 'utf-8'))
-    return { doc: doc ?? {} }
-  } catch (err) {
-    if (await isAbsent(path.join(dir, 'values.yaml'), err)) return { doc: {} }
-    return { error: err.code === 'ENOENT' ? 'a link to a file that is not there' : err.reason || err.code || err.message }
-  }
+/**
+ * A values.yaml, as the repo's reader reads it (as Helm does): `{ doc }`,
+ * `{ doc: {} }` when there is none, `{ error }` when it cannot be read or
+ * is not YAML Helm reads.
+ */
+async function readValuesDoc(repo, gitopsDir, dir) {
+  const file = rel(gitopsDir, path.join(dir, 'values.yaml'))
+  if (file.startsWith('../')) return { error: 'it is outside the repo' }
+  const loaded = await repo.helmYaml(file)
+  if (loaded.state === 'absent') return { doc: {} }
+  if (loaded.state === 'unreadable') return { error: loaded.why }
+  if (loaded.state === 'invalid') return { error: loaded.findings.map(f => f.message.replace(/^\S+ (line \d+: )?/, '')).join('; ') }
+  return { doc: loaded.value }
 }
 
 const at = (v, k) => (isPlainObject(v) && isPlainObject(v[k]) ? v[k] : {})
@@ -154,7 +157,7 @@ async function chartsIn(dir) {
  *   valueIssues  values Helm versions read differently or not at all (a
  *             null, a group that is not a list), in a stack's files
  */
-export async function resolveStack(gitopsDir, dir) {
+export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) } = {}) {
   const templatesDir = path.resolve(gitopsDir, chartsDirName())
   // A Template folder: charts/<name>. An alert Template is one AlertForge
   // made (annotations.app: alertforge); another chart there is followed
@@ -169,13 +172,15 @@ export async function resolveStack(gitopsDir, dir) {
   const layers = []
   const problems = []
   const result = { chart: null, keys, layers, problems, doc: {}, valueIssues: [], groups: new Set(), dependencyNames: [], claims: null }
+  // The snapshot it was read from: what is read later reads the same.
+  Object.defineProperty(result, 'repo', { value: repo, enumerable: false })
   // The folder's own values are read only when something needs them: a
   // stack, or a condition to work out. A deployment with no `_common` is
   // not read here at all.
   let own = null
   const loadOwn = async () => {
     if (!own) {
-      own = await readValuesDoc(dir)
+      own = await readValuesDoc(repo, gitopsDir, dir)
       result.doc = own.doc ?? {}
       result.docRead = true
     }
@@ -254,7 +259,7 @@ export async function resolveStack(gitopsDir, dir) {
       break walk
     }
     visited.add(path.resolve(cur))
-    const values = await readValuesDoc(cur)
+    const values = await readValuesDoc(repo, gitopsDir, cur)
     // Named, and the stack still followed: what it renders on is still known.
     if (values.error) problems.push(problem('values-unreadable', `${layerPath}/values.yaml cannot be read (${values.error}), so Helm cannot render it`))
     const layerDoc = values.doc ?? {}
@@ -323,7 +328,7 @@ export async function resolveStack(gitopsDir, dir) {
   // What each file holds that Helm reads differently by version, or fails on.
   // Only on a stack: a deployment with no `_common` is read as before.
   if (!layers.length && !startsAsLayer) return result
-  const groups = await templateGroups(templatesDir, result.chart)
+  const groups = await templateGroups(repo, result.chart)
   result.groups = groups
   result.valueIssues = [
     ...valueIssuesIn(result.doc, keys, `${rel(gitopsDir, dir)}/values.yaml`, groups),
@@ -334,23 +339,11 @@ export async function resolveStack(gitopsDir, dir) {
 }
 
 // The Template's groups: the keys its values.yaml gives a list of rows.
-// Read once per version of the file: the commit checks ask for every
-// deployment on a stack.
-const groupsCache = new Map()
-async function templateGroups(templatesDir, chart) {
+async function templateGroups(repo, chart) {
   if (!chart) return new Set()
-  const file = path.join(templatesDir, chart, 'values.yaml')
-  try {
-    const { mtimeMs, size } = await fs.stat(file)
-    const hit = groupsCache.get(file)
-    if (hit && hit.mtimeMs === mtimeMs && hit.size === size) return hit.groups
-    const doc = loadValues(await fs.readFile(file, 'utf-8'))
-    const groups = new Set(Object.entries(isPlainObject(doc) ? doc : {}).filter(([, v]) => Array.isArray(v)).map(([k]) => k))
-    groupsCache.set(file, { mtimeMs, size, groups })
-    return groups
-  } catch {
-    return new Set()
-  }
+  const t = await repo.template(chart)
+  const doc = t.state === 'ok' ? t.value.defaults : {}
+  return new Set(Object.entries(isPlainObject(doc) ? doc : {}).filter(([, v]) => Array.isArray(v)).map(([k]) => k))
 }
 
 export { unwrapPath }
@@ -436,7 +429,7 @@ export function stackValues(stack, { own } = {}) {
 /** The same, reading the folder's own values when resolveStack did not need them. */
 export async function readStackValues(gitopsDir, dir, stack, options) {
   if (!stack.docRead) {
-    stack.doc = (await readValuesDoc(dir)).doc ?? {}
+    stack.doc = (await readValuesDoc(stack.repo ?? openRepo(gitopsDir), gitopsDir, dir)).doc ?? {}
     stack.docRead = true
   }
   return stackValues(stack, options)

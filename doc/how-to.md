@@ -558,9 +558,19 @@ left out of the row, which is how an optional column says "not set". Save is
 refused, naming the row and column, when:
 
 - a required column is empty — in a row, or in Common Values once anything
-  renders (any row, or a group marked **No values needed**)
+  renders (any row, or a group marked **No values needed**), unless a
+  `_common` above or the Template's own `values.yaml` gives it
 - a value holds a line break
 - a value read by a label holds `"` or `\`
+- a value is not what its column takes (`abc` in a number column, a value
+  outside the column's list), as the Template's schema would refuse it in Helm
+
+Saved as text, the values are also refused when Helm would read them
+otherwise than they look (`010` is 8 to Helm, `yes` is true), when they are
+not under the chart's name, or when a key is written twice — see
+[writing values by hand](rules-format.md#writing-values-by-hand). A problem
+in what a `_common` above gives is said when you save, not refused: it is
+fixed on that `_common`.
 
 In a group with selectors, a row that is `.*` covers everything the rows
 under it do not. **Scope** says which rows a row gives up (*excludes N* —
@@ -905,6 +915,15 @@ A commit is refused, too, while any deployment:
   creates asks for `">=0.0.0-0"`, any version, so changing the Template's
   version by hand (or pulling a change to it) breaks nothing; an older one
   with an exact version is fixed by writing `">=0.0.0-0"` there
+- has a `values.yaml` that cannot be read as values at all: not YAML, YAML
+  AlertForge cannot tell Helm's reading of, a folder, a link out of the repo,
+  or no map under the chart's name
+
+A deployment's other value problems do not refuse the commit: Helm stopping
+on a cell, a value Helm reads otherwise (`010`), values not under the
+chart's name, a key written twice, a `null` on a `_common` stack. They are
+listed under the deployment after the commit, as rows the row identity label
+cannot tell apart are; `check-repo` refuses them.
 
 and while `sync.yaml` has an entry that cannot be right: one deployment
 following another that follows a third, a target with two sources, a path

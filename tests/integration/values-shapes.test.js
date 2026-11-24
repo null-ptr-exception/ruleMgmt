@@ -54,8 +54,8 @@ const REFUSED = [
   [{ _common: { owner: { a: 1 } }, cpu: [{}] }, 'Common Values, "owner": a map — a value is text, a number or true/false'],
 ]
 const TEXT_REFUSED = [
-  ['5\n', 'values.yaml must be a map, not 5'],
-  ['- a\n', 'values.yaml must be a map, not a list'],
+  ['5\n', 'deployments/t/a/values.yaml: the file must be a map of keys, not a number'],
+  ['- a\n', 'deployments/t/a/values.yaml: the file must be a map of keys, not a list'],
   ['demo:\n  _common: x\n  cpu: []\n', 'Common Values must be a map of name to value, not "x"'],
   ['demo:\n  _common: {owner: o}\n  cpu:\n    - "s"\n', 'cpu row 1: must be a map of column to value, not "s"'],
 ]
@@ -108,14 +108,5 @@ describe('a deployment save', () => {
   it('takes a row with no cells and Common Values that are a map', async () => {
     expect((await api('POST', URL_, { values: { _common: O, cpu: [{}] } })).status).toBe(200)
     expect(yaml.load(await fs.readFile(path.join(tmpDir, DEP, 'values.yaml'), 'utf-8')).demo.cpu).toEqual([{}])
-  })
-})
-
-describe('shapeProblems', () => {
-  it('null Common Values pass where the Template has a map of them, and are said where it has none', async () => {
-    const { shapeProblems } = await import('../../server/lib/deploymentWrite.js')
-    const model = { groups: { cpu: { columns: {} } } }
-    expect(shapeProblems({ _common: null, cpu: [] }, model, { _common: { owner: 't' } })).toEqual([])
-    expect(shapeProblems({ _common: null, cpu: [] }, model, {}).map(p => p.message)).toEqual(['Common Values must be a map of name to value, not null'])
   })
 })

@@ -23,13 +23,13 @@ describe('the default', () => {
     expect(defaultAction(differently)).toBe('refuse')
   })
 
-  it('a file read with two keys Helm keeps one of at random is refused by every table', async () => {
+  it('a file read with two keys Helm keeps one of at random is refused by every table but Commit, which lists it', async () => {
     const { readHelmYaml } = await import('../../../server/repo/helmYaml.js')
     const { invalid } = await import('../../../server/repo/loaded.js')
     const r = readHelmYaml('1: a\n"1": b\n', { file: 'v.yaml' })
     const state = invalid('v.yaml', [r.finding])
     expect(() => state.value).toThrow()
-    for (const name of Object.keys(POLICIES)) expect(decide(state.findings, name).refuse, name).toEqual([r.finding])
+    for (const name of Object.keys(POLICIES)) expect(decide(state.findings, name)[name === 'commit' ? 'list' : 'refuse'], name).toEqual([r.finding])
   })
 
   it('a finding the default lets through cannot make a file invalid', async () => {
@@ -39,11 +39,15 @@ describe('the default', () => {
     expect(invalid('a', [f('values.derived', 'renders', { deploy: 'fails' })]).state).toBe('invalid')
   })
 
-  it('every table starts empty and so acts as the default', () => {
-    for (const [name, table] of Object.entries(POLICIES)) {
-      expect(Object.keys(table.rows), name).toEqual([])
-      expect(decide([f('values.schema', 'fails')], name).refuse).toHaveLength(1)
+  it('what Helm fails on is refused by every table but Commit, which lists it; no table lets it pass unsaid', () => {
+    for (const name of Object.keys(POLICIES)) {
+      const d = decide([f('values.schema', 'fails'), f('yaml.cannot-read', 'unknown'), f('values.not-under-chart-key', 'renders-differently')], name)
+      expect(d[name === 'commit' ? 'list' : 'refuse'], name).toHaveLength(3)
     }
+  })
+
+  it('every row says why', () => {
+    for (const table of Object.values(POLICIES)) for (const row of Object.values(table.rows)) expect(row.why.length).toBeGreaterThan(10)
   })
 })
 

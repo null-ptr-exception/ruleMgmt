@@ -48,7 +48,7 @@ async function api(method, urlPath, body) {
 describe.skipIf(!HAS_HELM)('names that are also Object.prototype\'s', () => {
   it('are saved and rendered as written', async () => {
     const save = await api('POST', `/api/v2/deployments/demo/g?folder=${encodeURIComponent(DEP)}`, { values: { g: [{ b: 2 }, { b: 2, valueOf: 3, constructor: 'x' }] } })
-    expect(save.status).toBe(200)
+    expect(save.status, JSON.stringify(save.data)).toBe(200)
     const abs = path.join(tmpDir, DEP)
     const exprs = yaml.loadAll(await renderChart(abs, ['template', 'g', abs])).filter(d => d?.kind === 'PrometheusRule')
       .flatMap(d => d.spec.groups.flatMap(g => g.rules.map(r => r.expr)))

@@ -14,13 +14,23 @@ import path from 'path'
 import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
 import { getDepName } from './subchart.js'
 import { unwrapPath, wrapPath, replaceAtPath, resolveStack, stackValues } from './stack.js'
-import { isInherited } from './deploymentWrite.js'
 import { readSyncRegistry, isTarget, getSourceForTarget } from './sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'
 import { valueProblems } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
-import { loadValues } from '../../src/utils/valuesText.js'
+import { openRepo } from '../repo/openRepo.js'
+
+// A problem that is a `_common` layer's, not this deployment's: in a group
+// the deployment does not write, or a Common Value a layer gives and the
+// deployment does not.
+function isInherited(p, own, layers) {
+  if (p.group === '_common') {
+    const mine = own?._common && typeof own._common === 'object' ? own._common : {}
+    return !(p.column in mine) && layers.some(l => l.values?._common && typeof l.values._common === 'object' && p.column in l.values._common)
+  }
+  return p.group !== undefined && p.group !== null && !(own && p.group in own)
+}
 
 // Everything a values save would refuse, both kinds at once (a save stops at
 // the first kind). Each names its cell in its message.
@@ -96,6 +106,7 @@ async function locate(gitopsDir, relPath, keys) {
  *          its `losses` and `orphaned` are the source's.
  */
 export async function planDeploymentMigration(gitopsDir, chart, targetSchema, migration, { deploymentsDirEnv, model, beforeModel, checkOnly = false } = {}) {
+  const repo = openRepo(gitopsDir)
   const found = await findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv)
   const registry = await readSyncRegistry(gitopsDir)
 
@@ -128,21 +139,26 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     }
     const { valuesFile, keys } = await locate(gitopsDir, dep.path, dep.keys)
 
-    // Only a missing file is empty. One that cannot be read or parsed stops
-    // the plan: migrating `{}` would write an empty file over its data.
+    // Read as Helm reads it (010 is 8, and is written back as 8). Only a
+    // missing file is empty. One that cannot be read or is not values is not
+    // migrated, and named: migrating `{}` would write an empty file over it.
     let parsed = {}
-    try {
-      parsed = loadValues(await fs.readFile(valuesFile, 'utf-8')) || {}
-    } catch (err) {
+    const read = await repo.helmYaml(path.relative(gitopsDir, valuesFile).replace(/\\/g, '/'))
+    if (read.state === 'absent') missing.add(dep.path)
+    else if (read.state !== 'ok') {
+      const why = read.state === 'unreadable' ? read.why : read.findings.map(f => f.message.replace(/^\S+ (line \d+: )?/, '')).join('; ')
       // Only checking (#176): one that cannot be read is left out, the rest
       // are still checked; its own save says what is wrong with it.
-      if (checkOnly && err?.code !== 'ENOENT') {
-        console.error(`Template save check: ${dep.path} values cannot be read`, err.message)
+      if (checkOnly) {
+        console.error(`Template save check: ${dep.path} values cannot be read: ${why}`)
         continue
       }
-      if (err?.code !== 'ENOENT') throw new Error(`${dep.path}: values cannot be read (${err.message})`, { cause: err })
-      missing.add(dep.path)
-    }
+      // Not migrated, and said: a save of the Template that would migrate it
+      // is refused naming it, as a save of its values would be.
+      deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], noValues: true,
+        problems: [{ message: `${dep.path}: its values cannot be read (${why}) — fix them first`, before: false }] })
+      continue
+    } else parsed = read.value
     const before = unwrapPath(parsed, keys)
 
     const { values: after, orphaned } = migrateValues(before, migration, targetSchema)

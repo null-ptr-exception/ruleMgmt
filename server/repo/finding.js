@@ -17,6 +17,8 @@
  *              value ([group, row, column] as the schema sees it)
  *     deploy?: 'fails' when Helm renders it but the rules it renders cannot
  *              be loaded (promtool refuses them)
+ *     detail?: what a caller needs to word or place it (a schema keyword
+ *              and its params, the group / row / column of a cell)
  *   }
  */
 export const HELM = Object.freeze(['fails', 'renders', 'renders-differently', 'n/a', 'unknown'])
@@ -24,7 +26,7 @@ export const HELM = Object.freeze(['fails', 'renders', 'renders-differently', 'n
 const CODE = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
 
 /** A checked, frozen Finding; a wrong shape is a mistake in AlertForge, so it throws. */
-export function finding({ code, file = '', helm, message, at, deploy }) {
+export function finding({ code, file = '', helm, message, at, deploy, detail }) {
   if (typeof code !== 'string' || !CODE.test(code)) throw new TypeError(`a finding's code is lower-case words with dots, not ${JSON.stringify(code)}`)
   if (!HELM.includes(helm)) throw new TypeError(`a finding's helm is one of ${HELM.join(', ')}, not ${JSON.stringify(helm)}`)
   if (typeof message !== 'string' || !message) throw new TypeError('a finding needs a message')
@@ -33,5 +35,6 @@ export function finding({ code, file = '', helm, message, at, deploy }) {
   const out = { code, file, helm, message }
   if (at !== undefined) out.at = Object.freeze({ ...at, ...(Array.isArray(at.path) ? { path: Object.freeze([...at.path]) } : {}) })
   if (deploy !== undefined) out.deploy = deploy
+  if (detail !== undefined) out.detail = Object.freeze({ ...detail })
   return Object.freeze(out)
 }

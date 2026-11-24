@@ -263,7 +263,7 @@ describe('a commit', () => {
     await write('deployments/team/a/values.yaml', 'demo:\n  cpu: [\n')
     const { status, data } = await commit()
     expect(status).toBe(409)
-    expect(data.findings.find(f => f.kind === 'values-unreadable')?.description).toMatch(/^deployments\/team\/a: values.yaml cannot be read \(not valid YAML/)
+    expect(data.findings.find(f => f.kind === 'values-unreadable')?.description).toMatch(/^deployments\/team\/a: values.yaml cannot be read \(line 2: .*\), so Helm cannot render it$/)
   })
 })
 

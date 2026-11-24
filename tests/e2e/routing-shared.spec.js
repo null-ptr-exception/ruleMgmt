@@ -147,6 +147,176 @@ test('use a shared config in a cell, see it read-only, and make a local copy', a
   await expect.poll(async () => yaml.load(await onDisk(A, 'routing.yaml')).configs).toEqual({ 'relay-webhook': { type: 'webhook', url: RELAY } })
 })
 
+// After a save the page reads routing.yaml again and puts it on screen. An
+// edit made before that read answered was thrown away, even one made after
+// "Saved at" was shown. Until the read is back, the page says "Saving…" and
+// takes no edit; "Saved at" comes after it, and an edit then is kept.
+test('an edit made right after Saved at is kept: the page is locked until routing.yaml is read again', async ({ page, request }) => {
+  expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
+  expect((await request.put(routingUrl(A), { data: { routing: 'labels:\n  severity: [critical]\nconfigs:\n  relay-webhook: { shared: true }\n' } })).ok()).toBeTruthy()
+  await openDeployment(page, A)
+  const configs = page.getByTestId('notification-configs')
+  await expect(configs.getByTestId('shared-tag-relay-webhook')).toBeVisible()
+  await page.getByTestId('cell-critical').locator('.ant-select').click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^relay-webhook$/ }).click()
+  await page.keyboard.press('Escape')
+
+  // The read after the save is held until released.
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  let saved = false
+  let readHeld = false
+  await page.route(u => u.pathname === `/api/v2/deployments/${CHART}/a/routing`, async route => {
+    const method = route.request().method()
+    if (method === 'PUT') saved = true
+    if (method !== 'GET' || !saved || readHeld) return route.continue()
+    readHeld = true
+    const res = await route.fetch()
+    await held
+    return route.fulfill({ response: res })
+  })
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect.poll(() => readHeld).toBe(true)
+  await expect(page.getByText('Saving…')).toBeVisible()
+  await expect(page.getByText(/Saved at/)).toHaveCount(0)
+  await expect(configs.getByRole('button', { name: 'Make local copy' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+  release()
+  await expect(page.getByText(/Saved at/)).toBeVisible()
+  await configs.getByRole('button', { name: 'Make local copy' }).click()
+  await expect(configs.getByTestId('shared-tag-relay-webhook')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect.poll(async () => yaml.load(await onDisk(A, 'routing.yaml')).configs).toEqual({ 'relay-webhook': { type: 'webhook', url: RELAY } })
+  await expect(configs.getByTestId('shared-tag-relay-webhook')).toHaveCount(0)
+})
+
+// Another deployment opened while a save is on its way: the page shows that
+// deployment's own routing, and no "Saved at" — it was not the one saved.
+test('another deployment opened during a save shows its own routing, not the saved one\'s', async ({ page, request }) => {
+  expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
+  expect((await request.put(routingUrl(A), { data: { routing: 'labels:\n  severity: [critical]\nconfigs:\n  relay-webhook: { shared: true }\n' } })).ok()).toBeTruthy()
+  expect((await request.put(routingUrl(B), { data: { routing: 'labels:\n  severity: [critical]\nconfigs:\n  b-mail: { type: email, to: b@example.com }\n' } })).ok()).toBeTruthy()
+  await openDeployment(page, A)
+  const configs = page.getByTestId('notification-configs')
+  await expect(configs.getByTestId('shared-tag-relay-webhook')).toBeVisible()
+  await page.getByTestId('cell-critical').locator('.ant-select').click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^relay-webhook$/ }).click()
+  await page.keyboard.press('Escape')
+
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  let putHeld = false
+  await page.route(u => u.pathname === `/api/v2/deployments/${CHART}/a/routing`, async route => {
+    if (route.request().method() !== 'PUT') return route.continue()
+    putHeld = true
+    await held
+    return route.continue()
+  })
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect.poll(() => putHeld).toBe(true)
+  await expect(page.getByText('Saving…')).toBeVisible()
+
+  // B, while A's save is held. The page asks first, as for any unsaved edit.
+  await page.locator('.ant-tree .ant-tree-treenode').filter({ has: page.locator('.ant-tag') })
+    .filter({ hasText: B.split('/').pop() }).first().locator('.ant-tree-node-content-wrapper').click()
+  await page.getByRole('button', { name: 'Discard' }).click()
+  await expect(page.getByRole('heading', { name: `${B} / Routing` })).toBeVisible()
+  await expect(configs).toContainText('b-mail')
+
+  const readsOfA = page.waitForResponse(r => r.url().includes('/a/routing') && r.request().method() === 'GET', { timeout: 3000 }).catch(() => null)
+  release()
+  await expect.poll(async () => (yaml.load(await onDisk(A, 'routing.yaml')).cells || []).length).toBe(1)
+  await readsOfA
+  await expect(page.getByText('Saving…')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: `${B} / Routing` })).toBeVisible()
+  await expect(configs).toContainText('b-mail')
+  await expect(configs.getByTestId('shared-tag-relay-webhook')).toHaveCount(0)
+  await expect(page.getByText(/Saved at/)).toHaveCount(0)
+})
+
+// Remove routing is held like Save: until routing.yaml is read again the
+// page says "Saving…" and takes no edit, so nothing is made over a routing
+// on its way out.
+test('Remove routing takes no edit until it is done', async ({ page, request }) => {
+  expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
+  expect((await request.put(routingUrl(A), { data: { routing: routing('  relay-webhook: { shared: true }\n') } })).ok()).toBeTruthy()
+  await openDeployment(page, A)
+  const configs = page.getByTestId('notification-configs')
+  await expect(configs.getByTestId('shared-tag-relay-webhook')).toBeVisible()
+
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  let deletes = 0
+  await page.route(u => u.pathname === `/api/v2/deployments/${CHART}/a/routing`, async route => {
+    if (route.request().method() !== 'DELETE') return route.continue()
+    deletes++
+    await held
+    return route.continue()
+  })
+  await page.getByRole('button', { name: 'Remove routing' }).click()
+  await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
+  await expect.poll(() => deletes).toBe(1)
+  await expect(page.getByText('Saving…')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Remove routing' })).toBeDisabled()
+  await expect(configs.getByRole('button', { name: 'Make local copy' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Labels' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Preview' })).toBeDisabled()
+
+  release()
+  await expect(page.getByText('No notification routing for this deployment.')).toBeVisible()
+  await expect(page.getByText('Saving…')).toHaveCount(0)
+  expect(deletes).toBe(1)
+  await expect.poll(() => onDisk(A, 'routing.yaml').then(() => 'there', () => 'gone')).toBe('gone')
+})
+
+// Each change on the Shared configs page is sent with the configs as the
+// page has them. A second change made while the first was on its way, or
+// before the page had read the file again, was sent from the configs before
+// the first, and undid it. Until the file is read again the page says
+// "Saving…" and takes no change.
+for (const when of ['while the first is on its way', 'before the file is read again']) {
+  test(`delete one shared config, then another ${when}: neither comes back`, async ({ page, request }) => {
+    // z stays: the last shared config is not deleted here.
+    expect((await putShared(request, { x: { type: 'email', to: 'x@example.com' }, y: { type: 'email', to: 'y@example.com' }, z: { type: 'email', to: 'z@example.com' } })).ok()).toBeTruthy()
+    await openShared(page)
+    await expect(page.getByRole('button', { name: 'Delete y' })).toBeEnabled()
+    let release
+    const held = new Promise(resolve => { release = resolve })
+    let puts = 0
+    let holding = false
+    await page.route('**/api/v2/routing/shared', async route => {
+      const method = route.request().method()
+      if (method === 'PUT') {
+        puts++
+        if (puts === 1 && when.startsWith('while')) { holding = true; await held }
+        return route.continue()
+      }
+      if (method === 'GET' && puts === 1 && !when.startsWith('while') && !holding) {
+        holding = true
+        const res = await route.fetch()
+        await held
+        return route.fulfill({ response: res })
+      }
+      return route.continue()
+    })
+    await page.getByRole('button', { name: 'Delete x' }).click()
+    await expect.poll(() => holding).toBe(true)
+    await expect(page.getByTestId('shared-configs').getByText('Saving…')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Delete y' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Add shared config' })).toBeDisabled()
+    release()
+    await expect(page.getByRole('button', { name: 'Delete x' })).toHaveCount(0)
+    await expect(page.getByTestId('shared-configs').getByText('Saving…')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Delete y' }).click()
+    await expect(page.getByRole('button', { name: 'Delete y' })).toHaveCount(0)
+    await expect(page.getByTestId('shared-configs').getByText('Saving…')).toHaveCount(0)
+    expect(puts).toBe(2)
+    expect(yaml.load(await fs.readFile(SHARED, 'utf-8'))).toEqual({ configs: { z: { type: 'email', to: 'z@example.com' } } })
+  })
+}
+
 test('a deployment\'s own config of the same name: replaced at once when the same, asked when not', async ({ page, request }) => {
   expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY }, 'ops-email': { type: 'email', to: 'ops@example.com' } })).ok()).toBeTruthy()
   const own = 'relay-webhook: { type: webhook, url: http://old-relay:8080 }\n  ops-email: { type: email, to: ops@example.com }\n'

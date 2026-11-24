@@ -70,39 +70,49 @@ export default function RoutingView() {
   const deployment = selectedFolder ? selectedFolder.split('/').pop() : null
   const readOnly = !!frozenSource || !!syncUnknown
 
-  useEffect(() => {
-    if (!selectedFolder || !selectedChart) return
-    let stale = false
-    getRouting(selectedChart, deployment, selectedFolder).then(state => {
-      if (stale) return
-      if (state === null) {
-        setLoaded({ none: true })
+  // Reads routing.yaml and puts it on the page. Only the latest read lands:
+  // one for a folder left since, or started before another, is dropped.
+  const loadSeq = useRef(0)
+  // The folder on screen now: a save's answer for one left since is not put
+  // on the page, nor its "Saved at".
+  const shownFolder = useRef(selectedFolder)
+  shownFolder.current = selectedFolder
+  async function loadRouting() {
+    const seq = ++loadSeq.current
+    const state = await getRouting(selectedChart, deployment, selectedFolder)
+    if (seq !== loadSeq.current) return
+    if (state === null) {
+      setLoaded({ none: true })
+      setRouting(null)
+      setDirty(false)
+      setAddedLabels([])
+    } else if (state.error) {
+      setLoaded({ error: state.error, file: state.file, unreadable: state.unreadable })
+    } else {
+      setLoaded(state)
+      setDirty(false)
+      setAddedLabels([])
+      // Only a file that passes the server's checks is edited here (#158):
+      // the page never writes one that fails, so a failing file came from
+      // elsewhere (a hand edit, a merge, a sync) and is fixed by hand.
+      if (state.errors?.length) {
         setRouting(null)
-        setDirty(false)
-        setAddedLabels([])
-      } else if (state.error) {
-        setLoaded({ error: state.error, file: state.file, unreadable: state.unreadable })
       } else {
-        setLoaded(state)
-        setDirty(false)
-        setAddedLabels([])
-        // Only a file that passes the server's checks is edited here (#158):
-        // the page never writes one that fails, so a failing file came from
-        // elsewhere (a hand edit, a merge, a sync) and is fixed by hand.
-        if (state.errors?.length) {
+        try {
+          setRouting(parseRouting(state.text))
+        } catch (err) {
           setRouting(null)
-        } else {
-          try {
-            setRouting(parseRouting(state.text))
-          } catch (err) {
-            setRouting(null)
-            setLoaded({ ...state, errors: [`routing.yaml is not valid YAML: ${err.reason || err.message}`] })
-          }
+          setLoaded({ ...state, errors: [`routing.yaml is not valid YAML: ${err.reason || err.message}`] })
         }
       }
-    })
-    return () => { stale = true }
-  }, [selectedChart, selectedFolder, reloadKey])
+    }
+  }
+
+  useEffect(() => {
+    if (!selectedFolder || !selectedChart) return
+    loadRouting()
+    return () => { loadSeq.current++ }
+  }, [selectedChart, selectedFolder])
 
   // Only the latest folder's answer may freeze or unfreeze the page.
   const frozenFolderRef = useRef(null)
@@ -239,20 +249,48 @@ export default function RoutingView() {
     return !!notice
   }
 
-  async function handleSave() {
+  // From Save (or Remove) until routing.yaml has been read again, the page
+  // takes no edits and no second save: the file read after the save is put
+  // on the page, and would throw away an edit made meanwhile — also one made
+  // after "Saved at" while that read is still on its way. A ref, so a double
+  // click sees the first.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+  async function oneSaveAtATime(save) {
+    if (savingRef.current) return false
+    savingRef.current = true
+    setSaving(true)
+    try {
+      return await save()
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+
+  const handleSave = () => oneSaveAtATime(saveNow)
+  async function saveNow() {
     // Nothing edited but the resource is out of date: send the file as it
     // is, so its comments stay.
     const body = dirty ? toSave(routing) : loaded.text
-    const result = await saveRouting(selectedChart, deployment, selectedFolder, body)
+    const folder = selectedFolder
+    const result = await saveRouting(selectedChart, deployment, folder, body)
     if (!result.ok) {
       reportSaveFailure(result)
       return false
     }
-    setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
+    if (shownFolder.current !== folder) {
+      // Another deployment is open now: it was not this save's.
+      message.success(`${folder}'s routing saved`)
+      warnSyncFailed(result)
+      return true
+    }
     setAddedLabels([])
     warnSyncFailed(result)
     if (result.warnings?.length) message.warning({ content: `Saved. ${result.warnings.join(' ')}`, duration: 10 })
     setReloadKey(k => k + 1)
+    await loadRouting()
+    if (shownFolder.current === folder) setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
     return true
   }
 
@@ -263,17 +301,24 @@ export default function RoutingView() {
       okText: 'Remove',
     })
     if (!ok) return
-    const result = await removeRouting(selectedChart, deployment, selectedFolder)
-    if (!result.ok) {
-      reportSaveFailure(result)
-      return
-    }
-    if (!warnSyncFailed(result, 'Routing removed')) message.success('Routing removed')
-    setReloadKey(k => k + 1)
+    await oneSaveAtATime(async () => {
+      const folder = selectedFolder
+      const result = await removeRouting(selectedChart, deployment, folder)
+      if (!result.ok) {
+        reportSaveFailure(result)
+        return
+      }
+      if (!warnSyncFailed(result, 'Routing removed')) message.success('Routing removed')
+      if (shownFolder.current !== folder) return
+      setReloadKey(k => k + 1)
+      await loadRouting()
+    })
   }
 
   async function handlePreview() {
+    const folder = selectedFolder
     if (dirty && !readOnly && !(await handleSave())) return
+    if (shownFolder.current !== folder) return
     const result = await renderDeployment(selectedChart, deployment, selectedFolder)
     setPreview({ output: result.ok ? routingDocs(result.output) || 'No AlertmanagerConfig rendered' : `Error: ${result.error || 'Unknown error'}` })
   }
@@ -282,7 +327,9 @@ export default function RoutingView() {
   // A routing.yaml on disk that fails the checks: only Remove is offered.
   const broken = !routing && !!loaded?.errors?.length
   const hasTable = routing && Object.keys(routing.labels).length > 0
-  const canSave = !readOnly && hasTable && (dirty || loaded?.stale)
+  const canSave = !readOnly && !saving && hasTable && (dirty || loaded?.stale)
+  // Nothing is edited while a save is on its way (oneSaveAtATime).
+  const locked = readOnly || saving
   const shownView = view || (routing && Object.keys(routing.labels).length >= 3 ? 'list' : 'grid')
   // A sync target's Save is off: it is made again from its source (#179).
   const staleAlert = frozenSource
@@ -307,7 +354,7 @@ export default function RoutingView() {
       return (
         <Empty style={{ margin: 'auto' }} description={<span data-testid="routing-error">{loaded.error}</span>}>
           {loaded.file && !loaded.unreadable && !readOnly && (
-            <Button danger icon={<DeleteOutlined />} data-testid="routing-orphan-remove" onClick={handleRemove}>Remove routing</Button>
+            <Button danger icon={<DeleteOutlined />} data-testid="routing-orphan-remove" disabled={saving} onClick={handleRemove}>Remove routing</Button>
           )}
         </Empty>
       )
@@ -320,7 +367,7 @@ export default function RoutingView() {
             <Text type="secondary" style={{ fontSize: 12 }}>Its alerts go wherever the Alertmanager sends them by default.</Text>
           </>
         }>
-          <Button type="primary" disabled={readOnly} onClick={() => setLabelsOpen(true)}>Set up routing</Button>
+          <Button type="primary" disabled={locked} onClick={() => setLabelsOpen(true)}>Set up routing</Button>
         </Empty>
       )
     }
@@ -344,13 +391,13 @@ export default function RoutingView() {
         )}
         <section>
           <Title level={5} style={{ marginTop: 0 }}>Notify</Title>
-          <NotificationConfigs routing={routing} onChange={edit} readOnly={readOnly} describeMatch={describeMatch} shared={shared} />
+          <NotificationConfigs routing={routing} onChange={edit} readOnly={locked} describeMatch={describeMatch} shared={shared} />
         </section>
         <section>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <Title level={5} style={{ margin: 0 }}>Routes</Title>
             <Text type="secondary" style={{ fontSize: 12 }}>by {Object.keys(routing.labels).join(', ') || '—'}</Text>
-            <Button size="small" type="text" icon={<EditOutlined />} disabled={readOnly} onClick={() => setLabelsOpen(true)}>Labels</Button>
+            <Button size="small" type="text" icon={<EditOutlined />} disabled={locked} onClick={() => setLabelsOpen(true)}>Labels</Button>
             <span style={{ flex: 1 }} />
             {hasTable && (
               <Segmented size="small" value={shownView} onChange={setView} aria-label="Routes view"
@@ -369,15 +416,15 @@ export default function RoutingView() {
           {!hasTable
             ? <Text type="secondary">Name the labels to route by first.</Text>
             : shownView === 'list'
-              ? <RoutesList routing={routing} onChange={edit} readOnly={readOnly} />
-              : <RoutesMatrix routing={routing} onChange={edit} readOnly={readOnly} />}
+              ? <RoutesList routing={routing} onChange={edit} readOnly={locked} />
+              : <RoutesMatrix routing={routing} onChange={edit} readOnly={locked} />}
         </section>
         <section data-testid="routing-defaults">
           <Title level={5} style={{ marginTop: 0 }}>Timing</Title>
           <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
             For every cell, unless the cell overrides it (the clock in a cell; a filled clock overrides).
           </Text>
-          <TimingFields values={routing.defaults || {}} readOnly={readOnly} prefix="default "
+          <TimingFields values={routing.defaults || {}} readOnly={locked} prefix="default "
             onChange={(key, value) => edit(setDefaultTiming(routing, key, value))} />
         </section>
       </div>
@@ -422,18 +469,18 @@ export default function RoutingView() {
         {!showShared && routing && (
           <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
             <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!canSave}>Save</Button>
-            {!isNew && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
-            {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
+            {!isNew && <Button icon={<EyeOutlined />} onClick={handlePreview} disabled={saving}>Preview</Button>}
+            {(saving || saveStatus) && <Text type="secondary" style={{ fontSize: 12 }}>{saving ? 'Saving…' : saveStatus}</Text>}
             <span style={{ flex: 1 }} />
             {isNew
-              ? <Button onClick={() => { setRouting(null); setDirty(false) }}>Cancel</Button>
-              : <Button danger icon={<DeleteOutlined />} disabled={readOnly} onClick={handleRemove}>Remove routing</Button>}
+              ? <Button disabled={saving} onClick={() => { setRouting(null); setDirty(false) }}>Cancel</Button>
+              : <Button danger icon={<DeleteOutlined />} disabled={locked} onClick={handleRemove}>Remove routing</Button>}
           </div>
         )}
         {!showShared && broken && (
           <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
             <span style={{ flex: 1 }} />
-            <Button danger icon={<DeleteOutlined />} disabled={readOnly} onClick={handleRemove}>Remove routing</Button>
+            <Button danger icon={<DeleteOutlined />} disabled={locked} onClick={handleRemove}>Remove routing</Button>
           </div>
         )}
       </div>

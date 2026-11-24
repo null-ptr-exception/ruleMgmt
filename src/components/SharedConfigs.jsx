@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Empty, Input, Modal, Table, Typography, message } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons'
 import { ConfigDialog, configTarget } from './NotificationConfigs'
@@ -25,7 +25,6 @@ function List({ items }) {
  */
 export default function SharedConfigs() {
   const [state, setState] = useState(null)
-  const [reloadKey, setReloadKey] = useState(0)
   const [editing, setEditing] = useState(null)
   const [renaming, setRenaming] = useState(null) // { from, to }
 
@@ -33,9 +32,27 @@ export default function SharedConfigs() {
     let stale = false
     getSharedConfigs().then(s => { if (!stale) setState(s) })
     return () => { stale = true }
-  }, [reloadKey])
+  }, [])
 
-  const reload = () => setReloadKey(k => k + 1)
+  // One change at a time, for the whole page: from the request until the
+  // file has been read again the page says "Saving…" and takes no other
+  // change. Each change is built from the configs on the page, so one sent
+  // before the read was back would be built from the configs before the
+  // last change, and undo it. A ref, so a double click sees the first.
+  const busyRef = useRef(false)
+  const [busy, setBusy] = useState(false)
+  async function oneAtATime(change) {
+    if (busyRef.current) return
+    busyRef.current = true
+    setBusy(true)
+    try {
+      await change()
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+  const readAgain = async () => setState(await getSharedConfigs())
 
   if (!state) return <Empty style={{ margin: 'auto' }} description="Loading..." />
   if (state.error) return <Empty style={{ margin: 'auto' }} description={state.error} />
@@ -44,6 +61,7 @@ export default function SharedConfigs() {
   const usersOf = name => (Object.hasOwn(usage, name) ? usage[name] : [])
   // A file with problems, or a _shared/ of the repo's own: fixed by hand.
   const readOnly = !!state.dirProblem || state.errors.length > 0
+  const locked = readOnly || busy
 
   function refused(result) {
     Modal.error({
@@ -56,12 +74,12 @@ export default function SharedConfigs() {
     })
   }
 
-  function done(result, what) {
+  async function done(result, what) {
     if (!result.ok) return refused(result)
     message.success(`${what}: ${result.written.length} file${result.written.length > 1 ? 's' : ''} written — commit them from the Git panel`)
     if (result.syncFailed?.length) message.warning(`Not copied to ${result.syncFailed.map(f => f.target).join(', ')}`)
     if (result.warnings?.length) message.warning({ content: result.warnings.join(' '), duration: 10 })
-    reload()
+    await readAgain()
   }
 
   // Ask first when the change reaches deployments, naming them.
@@ -86,7 +104,7 @@ export default function SharedConfigs() {
     setEditing(null)
     const configs = Object.fromEntries(Object.entries(state.configs).map(([n, c]) => (n === was ? [n, config] : [n, c])))
     if (!was) configs[name] = config
-    confirmFor(was ? usersOf(was) : [], `Change ${was}?`, async () => done(await saveSharedConfigs({ configs }), was ? `${was} saved` : `${name} added`))
+    confirmFor(was ? usersOf(was) : [], `Change ${was}?`, () => oneAtATime(async () => done(await saveSharedConfigs({ configs }), was ? `${was} saved` : `${name} added`)))
   }
 
   async function remove(name) {
@@ -96,16 +114,17 @@ export default function SharedConfigs() {
       return
     }
     const { [name]: _, ...configs } = state.configs
-    done(await saveSharedConfigs({ configs }), `${name} deleted`)
+    await oneAtATime(async () => done(await saveSharedConfigs({ configs }), `${name} deleted`))
   }
 
   async function rename() {
     const { from, to } = renaming
     setRenaming(null)
-    confirmFor(usersOf(from), `Rename ${from} to ${to}?`, async () => done(await renameSharedConfig(from, to), `${from} renamed to ${to}`))
+    confirmFor(usersOf(from), `Rename ${from} to ${to}?`, () => oneAtATime(async () => done(await renameSharedConfig(from, to), `${from} renamed to ${to}`)))
   }
 
-  async function regenerate() {
+  const regenerate = () => oneAtATime(regenerateNow)
+  async function regenerateNow() {
     const result = await regenerateShared()
     if (!result.ok) return refused(result)
     if (result.failed.length) {
@@ -113,7 +132,7 @@ export default function SharedConfigs() {
     } else {
       message.success(`Made again: ${result.regenerated.join(', ')} — commit them from the Git panel`)
     }
-    reload()
+    await readAgain()
   }
 
   const renameProblem = renaming && (renaming.to === renaming.from ? 'the same name'
@@ -166,7 +185,7 @@ export default function SharedConfigs() {
         <Alert type="warning" showIcon data-testid="shared-stale"
           message={`Behind the shared configs: ${state.stale.join(', ')}`}
           description="Their AlertmanagerConfig is not what their routing and the shared configs make now — a commit is refused until they are made again."
-          action={<Button size="small" icon={<ReloadOutlined />} onClick={regenerate}>Regenerate</Button>} />
+          action={<Button size="small" icon={<ReloadOutlined />} disabled={busy} onClick={regenerate}>Regenerate</Button>} />
       )}
       <Table
         size="small"
@@ -190,11 +209,11 @@ export default function SharedConfigs() {
             title: '', width: 150,
             render: (_, r) => (
               <span style={{ whiteSpace: 'nowrap' }}>
-                <Button type="text" size="small" icon={<EditOutlined />} aria-label={`Edit ${r.name}`} disabled={readOnly}
+                <Button type="text" size="small" icon={<EditOutlined />} aria-label={`Edit ${r.name}`} disabled={locked}
                   onClick={() => setEditing({ was: r.name, form: toForm(r.name, r.config) })} />
-                <Button type="link" size="small" aria-label={`Rename ${r.name}`} disabled={readOnly}
+                <Button type="link" size="small" aria-label={`Rename ${r.name}`} disabled={locked}
                   onClick={() => setRenaming({ from: r.name, to: '' })}>Rename</Button>
-                <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={`Delete ${r.name}`} disabled={readOnly}
+                <Button type="text" size="small" danger icon={<DeleteOutlined />} aria-label={`Delete ${r.name}`} disabled={locked}
                   onClick={() => remove(r.name)} />
               </span>
             ),
@@ -202,10 +221,11 @@ export default function SharedConfigs() {
         ]}
       />
       <div>
-        <Button type="dashed" size="small" icon={<PlusOutlined />} disabled={readOnly}
+        <Button type="dashed" size="small" icon={<PlusOutlined />} disabled={locked}
           onClick={() => setEditing({ was: undefined, form: { ...blankForm } })}>
           Add shared config
         </Button>
+        {busy && <Text type="secondary" style={{ fontSize: 12, marginLeft: 12 }}>Saving…</Text>}
       </div>
 
       {editing && (

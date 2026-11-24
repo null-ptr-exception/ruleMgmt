@@ -598,3 +598,97 @@ test.describe('a Template save in flight', () => {
     expect(info.rulesFiles['cpu.yaml']).toContain('alert: CpuSent')
   })
 })
+
+// The breaking dialog's saves — Change in place, Clone to a new chart — are
+// followed by a reload of the chart, as Save is. Until it has landed the
+// editor says "Saving…" and takes no typing; what is typed after is kept
+// and counted as unsaved.
+test.describe('a breaking change saved from its dialog', () => {
+  const FLY = 'e2e-breaking-in-flight'
+  const CLONE = `${FLY}-clone`
+  const RULES = 'group: cpu\ncolumns:\n  namespace: {type: string, required: true}\n  warn: {type: number}\nrules:\n  - alert: CpuHigh\n    expr: cpu{ns="${namespace}"} > 1\n'
+  test.beforeEach(async ({ request }) => {
+    await request.delete(`/api/v2/deployments/${FLY}/prod`)
+    await removeChart(request, CLONE)
+    await removeChart(request, FLY)
+    expect((await request.post('/api/v2/charts', { data: { name: FLY } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/templates/${FLY}/rules`, { data: { files: { 'cpu.yaml': RULES } } })).ok()).toBeTruthy()
+    // A deployment fills `warn`: deleting the column is breaking.
+    expect((await request.post(`/api/v2/deployments/${FLY}/prod`, { data: { values: { cpu: [{ namespace: 'p', warn: 90 }] } } })).ok()).toBeTruthy()
+  })
+  test.afterAll(async ({ request }) => {
+    await request.delete(`/api/v2/deployments/${FLY}/prod`)
+    await removeChart(request, CLONE)
+    await removeChart(request, FLY)
+  })
+
+  // Holds the first read of `chart` that follows `armed()`.
+  async function holdReload(page, chart, armed) {
+    let release
+    const held = new Promise(resolve => { release = resolve })
+    let seen = false
+    await page.route(u => u.pathname === `/api/v2/templates/${chart}`, async route => {
+      if (route.request().method() !== 'GET' || seen || !armed()) return route.continue()
+      seen = true
+      const res = await route.fetch()
+      await held
+      return route.fulfill({ response: res })
+    })
+    return { release, seen: () => seen }
+  }
+
+  async function openBreaking(page) {
+    await openTemplateChart(page, FLY)
+    await page.getByText('cpu', { exact: true }).first().click()
+    await expect(page.getByPlaceholder('alert name')).toBeVisible({ timeout: 5000 })
+    await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
+    await page.getByRole('button', { name: 'Save' }).first().click()
+    const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+    await openedModal(dialog)
+    return dialog
+  }
+
+  async function typingWaitsForTheReload(page, dialog, hold) {
+    await expect.poll(hold.seen, { timeout: 10000 }).toBe(true)
+    await expect(dialog).toBeHidden()
+    await expect(page.getByText('Saving…').first()).toBeVisible()
+    const name = page.getByPlaceholder('alert name')
+    await name.focus().catch(() => {})
+    await page.keyboard.type('Typed')
+    await expect(name).toHaveValue('CpuHigh')
+    hold.release()
+    await expect(page.getByText('Saving…')).toHaveCount(0, { timeout: 8000 })
+    await expect(page.getByText('Unsaved changes')).toHaveCount(0)
+    await name.fill('CpuAfter')
+    await expect(page.getByText('Unsaved changes')).toBeVisible()
+    // Nothing still on its way puts the chart back over it.
+    await page.waitForLoadState('networkidle')
+    await expect(name).toHaveValue('CpuAfter')
+  }
+
+  test('Change in place', async ({ page }) => {
+    const dialog = await openBreaking(page)
+    let posts = 0
+    const hold = await holdReload(page, FLY, () => posts > 0)
+    await page.route(`**/api/v2/templates/${FLY}/rules`, route => {
+      if (route.request().method() === 'POST') posts++
+      return route.continue()
+    })
+    await dialog.getByRole('button', { name: 'Continue' }).click()   // step 1 -> map
+    await expect(dialog.locator('.ant-steps-item-process')).toContainText('Map')
+    await dialog.getByRole('button', { name: 'Continue' }).click()   // step 2 -> preview
+    await expect(dialog.getByText(/prod-values/)).toBeVisible({ timeout: 8000 })
+    await dialog.getByRole('button', { name: 'Change in place' }).dblclick()
+    await typingWaitsForTheReload(page, dialog, hold)
+    expect(posts).toBe(1)
+  })
+
+  test('Clone to a new chart', async ({ page }) => {
+    const dialog = await openBreaking(page)
+    const hold = await holdReload(page, CLONE, () => true)
+    await dialog.getByPlaceholder('new-chart-name').fill(CLONE)
+    await dialog.getByRole('button', { name: 'Clone to a new chart' }).click()
+    await typingWaitsForTheReload(page, dialog, hold)
+    await expect(page.locator('.ant-select').first()).toContainText(CLONE)
+  })
+})

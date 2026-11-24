@@ -532,8 +532,15 @@ export default function TemplateDevEditor() {
     setActiveGroup(prev => (prev === COMMON || ord.includes(prev)) ? prev : (ord[0] || null))
   }, [setActiveGroup])
 
+  // A chart a save has just read itself (a clone) is not read again.
+  const loadedBySave = useRef(null)
   useEffect(() => {
-    if (activeChart) loadChart(activeChart)
+    if (!activeChart) return
+    if (loadedBySave.current === activeChart) {
+      loadedBySave.current = null
+      return
+    }
+    loadChart(activeChart)
   }, [activeChart, loadChart])
 
   // ── model mutation ────────────────────────────────────────────────────────
@@ -613,20 +620,23 @@ export default function TemplateDevEditor() {
   // its own dialog — the server is never told it was confirmed here (#185).
   // While a save is on its way the editor takes no edits (inert) and no
   // second save: the reload after it would throw an edit made meanwhile
-  // away. A ref, so a double click sees the first.
+  // away. The breaking dialog's Change in place and Clone are saves too,
+  // held the same way until their reload has landed. A ref, so a double
+  // click sees the first.
   const savingRef = useRef(false)
   const [saving, setSaving] = useState(false)
-  async function handleSave(overwrite = false) {
+  async function oneSaveAtATime(save) {
     if (savingRef.current) return
     savingRef.current = true
     setSaving(true)
     try {
-      await saveNow(overwrite)
+      await save()
     } finally {
       savingRef.current = false
       setSaving(false)
     }
   }
+  const handleSave = (overwrite = false) => oneSaveAtATime(() => saveNow(overwrite))
 
   async function saveNow(overwrite) {
     if (!activeChart) return
@@ -722,7 +732,8 @@ export default function TemplateDevEditor() {
     })
   }
 
-  async function applyInPlace(migration) {
+  const applyInPlace = migration => oneSaveAtATime(() => changeInPlace(migration))
+  async function changeInPlace(migration) {
     const result = await saveChartRules(activeChart, buildFiles(), true, migration)
     if (!result?.ok) {
       reportFailedSave(result)
@@ -734,7 +745,8 @@ export default function TemplateDevEditor() {
     await saveDescriptionAndReload()
   }
 
-  async function cloneWithEdits(newName, migration) {
+  const cloneWithEdits = (newName, migration) => oneSaveAtATime(() => cloneNow(newName, migration))
+  async function cloneNow(newName, migration) {
     const res = await cloneChart(activeChart, newName, migration)
     if (res?.error) { Modal.error({ title: 'Clone failed', content: res.error }); return }
     const saved = await saveChartRules(newName, buildFiles(), true)   // the clone gets the edited rules
@@ -746,7 +758,11 @@ export default function TemplateDevEditor() {
     }
     setBreaking(null)
     await loadCharts()
+    // The clone is read here, inside the save, not by the chart change:
+    // that read would land after "Saving…" is gone, over what was typed.
+    loadedBySave.current = newName
     setActiveChart(newName)
+    await loadChart(newName)
   }
 
   // ── chart-level actions ───────────────────────────────────────────────────

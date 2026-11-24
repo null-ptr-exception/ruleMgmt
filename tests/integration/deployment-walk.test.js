@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 import express from 'express'
 import yaml from 'js-yaml'
 import { findDeploymentsUsing } from '../../server/lib/chartUsage.js'
@@ -16,6 +16,7 @@ import { listFolderDeployments } from '../../server/lib/commitChecks.js'
 import { renderChart } from '../../server/lib/ruleCheck.js'
 
 const HAS_HELM = (() => { try { execFileSync(process.env.HELM_BIN || 'helm', ['version'], { stdio: 'ignore' }); return true } catch { return false } })()
+const HAS_PROMTOOL = (() => { try { execFileSync('promtool', ['--version'], { stdio: 'ignore' }); return true } catch { return false } })()
 
 let server, baseURL, tmpDir
 
@@ -288,6 +289,28 @@ describe('the walk, from every side', () => {
     expect((await api('GET', '/api/v2/folders/deployments')).data.map(d => d.path)).toEqual(['infra/legacy/charts/prod'])
   })
 
+  it('the Templates folder that is a link: a deployment or a _common in it is refused as the Templates folder, and no place in it is offered', async () => {
+    await fs.rename(path.join(tmpDir, 'charts'), path.join(tmpDir, 'realcharts'))
+    await fs.symlink('realcharts', path.join(tmpDir, 'charts'))
+    await fs.symlink('realcharts', path.join(tmpDir, 'alias'))
+    for (const folder of ['charts', 'charts/nd', 'charts/demo/nd']) {
+      const { status, data } = await init(folder)
+      expect(status, folder).toBe(400)
+      expect(data.error, folder).toBe(`${folder}: a deployment there would not be seen — charts is the Templates folder, which AlertForge does not look into`)
+      const common = await api('GET', `/api/v2/folders/common/plan?${new URLSearchParams({ action: 'create', folder, chart: 'demo' })}`)
+      expect(common.status, folder).toBe(400)
+      expect(common.data.error, folder).toBe(`${folder}: charts is the Templates folder, which AlertForge does not look into`)
+    }
+    // Another link that leads into it: refused as a link, and the Templates
+    // folder is not offered instead.
+    const made = await init('alias/nd')
+    expect(made.status).toBe(400)
+    expect(made.data.error).toBe('alias/nd: alias is a link to realcharts — a deployment is made in a folder of the repo, not through a link')
+    const common = await api('GET', `/api/v2/folders/common/plan?${new URLSearchParams({ action: 'create', folder: 'alias/nd', chart: 'demo' })}`)
+    expect(common.data.error).toBe('alias/nd: alias is a link to realcharts — AlertForge makes no _common through a link')
+    for (const rel of ['realcharts/nd', 'realcharts/demo/nd']) expect(await exists(rel)).toBe(false)
+  })
+
   it('the Templates folder somewhere else (CHARTS_DIR): that one is named', async () => {
     const before = process.env.CHARTS_DIR
     process.env.CHARTS_DIR = 'platform/tpl'
@@ -336,30 +359,41 @@ describe('the walk, from every side', () => {
     expect((await api('DELETE', '/api/v2/charts/demo')).status).toBe(200)
   })
 
-  it('a Chart.yaml with no values.yaml: its charts/ and templates/ are its own, in the tree and in every list, as a deployment\'s are', async () => {
-    for (const bare of ['nv', 'nv2']) {
-      await deployment(bare)
-      await fs.rm(path.join(tmpDir, bare, 'values.yaml'))
-    }
-    await deployment('nv/charts/own')
-    await deployment('nv/templates/own')
-    await deployment('nv/envs/charts/prod')
-    await fs.mkdir(path.join(tmpDir, 'nv2', 'charts', 'fetched'), { recursive: true })
+  // Helm deploys a deployment wherever it is; one made inside a folder that
+  // has a Chart.yaml and no values.yaml is in every list, as any other is.
+  it.skipIf(!HAS_HELM || !HAS_PROMTOOL)('a deployment inside the charts/ of a Chart.yaml with no values.yaml is listed, migrated, and checked by Commit and check-repo', async () => {
+    await deployment('bare')
+    await fs.rm(path.join(tmpDir, 'bare', 'values.yaml'))
+    await deployment('bare/charts/prod')
+    await deployment('bare/templates/stg')
 
-    const top = (await api('GET', '/api/v2/folders/tree')).data
-    expect(top.find(n => n.name === 'nv')).toMatchObject({ noValues: true, isLeaf: false })
-    expect(top.find(n => n.name === 'nv2')).toMatchObject({ noValues: true, isLeaf: true })
-    expect((await api('GET', '/api/v2/folders/tree?path=nv')).data.map(n => n.name)).toEqual(['envs'])
-    expect((await api('GET', '/api/v2/folders/tree?path=nv2')).data).toEqual([])
+    const inside = ['bare/charts/prod', 'bare/templates/stg']
+    expect(await listFolderDeployments(tmpDir)).toEqual(inside)
+    expect((await api('GET', '/api/v2/folders/deployments')).data.map(d => d.path)).toEqual(inside)
+    expect((await findDeploymentsUsing(tmpDir, 'demo')).map(d => d.path).sort()).toEqual(['bare', ...inside])
+    expect((await api('GET', '/api/v2/folders/tree?path=bare')).data.map(n => n.name)).toEqual(['charts', 'templates'])
 
-    expect(await listFolderDeployments(tmpDir)).toEqual(['nv/envs/charts/prod'])
-    expect((await api('GET', '/api/v2/folders/deployments')).data.map(d => d.path)).toEqual(['nv/envs/charts/prod'])
-    expect((await findDeploymentsUsing(tmpDir, 'demo')).map(d => d.path).sort()).toEqual(['nv', 'nv/envs/charts/prod', 'nv2'])
+    // Commit checks it: a values.yaml that is not YAML is refused, named.
+    await fs.writeFile(path.join(tmpDir, 'bare/charts/prod/values.yaml'), 'demo: [\n')
+    const { deploymentCommitBlockers } = await import('../../server/lib/commitChecks.js')
+    const blockers = await deploymentCommitBlockers(tmpDir)
+    expect(blockers.findings).toEqual([expect.objectContaining({ kind: 'values-unreadable', deployment: 'bare/charts/prod' })])
+    await fs.writeFile(path.join(tmpDir, 'bare/charts/prod/values.yaml'), yaml.dump({ demo: { cpu: [{ namespace: 'prod', warn: 90 }] } }))
 
-    const made = await init('nv/charts/new')
-    expect(made.status).toBe(400)
-    expect(made.data.error).toMatch(/nv\/charts is a chart's own charts\/ folder/)
-    expect(await exists('nv/charts/new')).toBe(false)
+    // check-repo counts and renders both.
+    const r = spawnSync('node', [path.resolve('scripts/check-repo.mjs'), tmpDir], { encoding: 'utf-8', timeout: 120000 })
+    expect(r.stdout).toContain('1 Template, 2 deployments')
+    expect(r.status).toBe(0)
+
+    // A breaking change migrates them: Helm then deploys their value, not the default.
+    const breaking = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': WITH_THRESHOLD } })
+    expect(breaking.status).toBe(409)
+    expect(breaking.data.deployments.map(d => d.path).sort()).toEqual(['bare', ...inside])
+    const migrated = await api('POST', '/api/v2/templates/demo/rules', {
+      files: { 'cpu.yaml': WITH_THRESHOLD }, confirmBreaking: true, migration: { columns: { cpu: { warn: 'threshold' } } },
+    })
+    expect(migrated.status).toBe(200)
+    for (const rel of inside) expect(await read(`${rel}/values.yaml`)).toContain('threshold: 90')
   })
 
   it.skipIf(IS_ROOT)('a folder that cannot be read is named, by its place in the repo, and stops nothing else', async () => {

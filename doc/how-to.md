@@ -419,7 +419,7 @@ A deployment is a folder of its own, beside the others:
 | On a folder that already holds a deployment (`shop`, with `shop/prod` in it) | refused |
 | Inside a `_common` folder (`shop/_common/…`) | refused: `_common` holds what the deployments beside it inherit |
 | On a folder that holds a `_common` (`shop`, with `shop/_common`) | refused: its deployments go under it (`shop/prod`) |
-| Under a folder starting with `.`, `node_modules`, the Templates folder, the shared configs' `_shared/`, or a chart's own `templates/` or `charts/` (right inside a deployment, a `_common` chart, or a folder with a `Chart.yaml` naming a Template and no `values.yaml`) | refused: AlertForge does not look there |
+| Under a folder starting with `.`, `node_modules`, the Templates folder, the shared configs' `_shared/`, or a deployment's own `templates/` or `charts/` | refused: AlertForge does not look there |
 
 The same holds for a new sync target. A deployment already in such a place
 (made by hand, or pulled) is marked with a warning in the tree and keeps
@@ -430,8 +430,8 @@ Some folders are no place for a deployment, and the tree shows it:
 
 | Folder | In the tree |
 |---|---|
-| The Templates folder (`charts/`, or the folder `CHARTS_DIR` names) | Greyed, with the Templates page's icon and the word Templates; it cannot be opened and has no menu. Templates are edited on the Templates page: a deployment or a `_common` there is refused, saying it is the Templates folder |
-| A chart's own `charts/` and `templates/` (right inside a deployment, a `_common` chart, or a folder with a `Chart.yaml` naming a Template and no `values.yaml`) | Not shown |
+| The Templates folder (`charts/`, or the folder `CHARTS_DIR` names) | Greyed, with the Templates page's icon and the word Templates; it cannot be opened and has no menu. Templates are edited on the Templates page: a deployment or a `_common` there is refused, saying it is the Templates folder (also when that folder is a link; no place in it is offered instead) |
+| A chart's own `charts/` and `templates/` (right inside a deployment or a `_common` chart) | Not shown |
 | The shared configs' `_shared/`, a folder starting with `.`, `node_modules` | Not shown |
 | A folder that is only called `charts` or `templates`, in no chart (`infra/legacy/charts`) | A folder like any other: deployments are made in it |
 
@@ -439,7 +439,7 @@ Two more kinds of folder are flagged in the tree:
 
 | Folder | What it means | Counts as using its Template |
 |---|---|---|
-| A `Chart.yaml` naming a Template and no `values.yaml` | Helm deploys the Template's example rows. Its `charts/` and `templates/` are the chart's own, as a deployment's are: not in the tree, and nothing in them is listed, checked or migrated | Yes: listed for a breaking change (nothing is written in it), and the Template cannot be deleted while it is there. Delete it like a deployment, or add a `values.yaml` |
+| A `Chart.yaml` and no `values.yaml` | Helm deploys the Template's example rows | Yes: listed for a breaking change (nothing is written in it), and the Template cannot be deleted while it is there. Delete it like a deployment, or add a `values.yaml` |
 | One AlertForge cannot read (permissions), a deployment whose `Chart.yaml` cannot be read or used (no permission, a folder, a link to nothing or out of the repo, not YAML, empty, `dependencies` that is not a list), a folder that is a link leading outside the repo, or one that is a link round in a circle | The deployments in it (or it) are not listed for sync, checked or migrated | Not known: named in the tree, in the list of who uses a Template, when a commit goes through, in a breaking change's dialog and when the Template is deleted, and blocks none of them — but a breaking change that migrates deployments is refused while a folder cannot be read or is a link leading outside the repo (`check-deployment` and `check-repo` cannot check it: exit 2) |
 | A `Chart.yaml` that names no Template beside a `values.yaml` that writes values | Not a deployment: none of its rows is deployed | Named when a commit goes through (not refused); `check-repo` refuses it (exit 1) |
 

@@ -34,7 +34,7 @@ import path from 'path'
 import { isDeepStrictEqual } from 'util'
 import { createHash } from 'crypto'
 import { resolveStack, wrapPath, linkedStackRefusal, linkedCommonRefusal, linkToCommon, STACK_LINK } from './stack.js'
-import { walk, excludedFolder, isCommonChart, isDeployment } from '../repo/walk.js'
+import { walk, excludedFolder, isCommonChart, isDeployment, templatesFolderOf } from '../repo/walk.js'
 import { getSourceForTarget, getTargetsForSource, normalizeSyncPath } from './sync.js'
 import { readRegistry } from '../repo/sync.js'
 import { copyParts, writeIntoCopy } from '../repo/copyRepo.js'
@@ -199,6 +199,9 @@ async function repoint(repo, item, fromAbs, toAbs, name, key) {
 async function folderProblem(repo, folder) {
   const segments = segmentsOf(folder)
   if (!segments.length) return 'Name a folder: a _common is made in a folder, for the deployments under it'
+  // In the Templates folder, a link or not: said as that, before the link.
+  const templates = templatesFolderOf(folder)
+  if (templates) return `${folder}: ${templates} is the Templates folder, which AlertForge does not look into`
   const link = await linkOnTheWay(repo.root, folder)
   if (link) return `${folder}: ${link.why} — AlertForge makes no ${COMMON_DIR} through a link${link.use}`
   // A folder that is not there yet is made with its _common: every folder

@@ -7,13 +7,11 @@ import { openMenu } from './menu.js'
 
 // The deployment tree shows which folders are no place for a deployment:
 // the Templates folder is greyed, with its own icon, cannot be opened and
-// has no menu; a chart's own charts/ and templates/ are not listed, for a
-// Chart.yaml with no values.yaml as for a deployment. A folder that is only
-// called charts is a folder like any other.
+// has no menu. A folder that is only called charts is a folder like any
+// other.
 
 const CHART = 'mariadb-alerts'
 const FOLDER = 'deployments/e2e-kinds'
-const BARE = `${FOLDER}/bare`
 const PLAIN = `${FOLDER}/plain`
 
 const nodeOf = (tree, name) => tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${name}`) }).first()
@@ -33,15 +31,6 @@ async function openTree(page, segments = []) {
 
 test.describe('Folders of the tree that are no place for a deployment', () => {
   test.beforeAll(async () => {
-    // A Chart.yaml naming a Template, no values.yaml, and the two folders
-    // Helm reads as the chart's own.
-    const bare = path.join(WORKSPACE, BARE)
-    await fs.mkdir(path.join(bare, 'charts', 'fetched'), { recursive: true })
-    await fs.mkdir(path.join(bare, 'templates', 'extra'), { recursive: true })
-    await fs.writeFile(path.join(bare, 'Chart.yaml'), [
-      'apiVersion: v2', 'name: bare', 'version: 0.1.0', 'dependencies:',
-      `  - name: ${CHART}`, '    version: ">=0.0.0-0"', `    repository: file://../../../charts/${CHART}`, '',
-    ].join('\n'))
     // In no chart: only its name is charts.
     await fs.mkdir(path.join(WORKSPACE, PLAIN, 'charts', 'team'), { recursive: true })
   })
@@ -91,12 +80,8 @@ test.describe('Folders of the tree that are no place for a deployment', () => {
     await expect(page.getByRole('tooltip')).toContainText('no place for a deployment or a _common')
   })
 
-  test('a Chart.yaml with no values.yaml lists no charts/ or templates/ of its own; a folder called charts elsewhere is listed', async ({ page }) => {
+  test('a folder called charts elsewhere is listed as a folder', async ({ page }) => {
     const tree = await openTree(page, ['deployments', 'e2e-kinds', 'plain'])
-    const bare = nodeOf(tree, 'bare')
-    await expect(bare.getByRole('img', { name: 'no values of its own' })).toBeVisible({ timeout: 8000 })
-    await expect(bare.locator('.ant-tree-switcher_close, .ant-tree-switcher_open')).toHaveCount(0)
-
     // Not the Templates folder at the top: the one with a folder's menu.
     const plainCharts = tree.locator('.ant-tree-treenode').filter({ hasText: /^charts/ }).filter({ has: page.getByRole('button', { name: 'Folder actions' }) }).first()
     await expect(plainCharts).toBeVisible({ timeout: 8000 })

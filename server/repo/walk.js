@@ -61,8 +61,7 @@ const WALK_AT_ONCE = 16
 
 export { COMMON_DIR }
 
-// Right inside a deployment, a `_common` chart or a folder whose Chart.yaml
-// names a Template with no values.yaml: the chart's own folders —
+// Right inside a deployment or a `_common` chart: the chart's own folders —
 // templates/ (the notification routing) and charts/ (what Helm fetches, or
 // the `_common` chart's link to the Template). Further down they are
 // folders like any other, as Helm reads only these two.
@@ -80,8 +79,7 @@ function excludedName(name, { inChart = false, hidden = false } = {}) {
 
 /**
  * Whether folder `name` is left out by its name alone. `inChart`: it is
- * right inside a chart (a deployment, a `_common` chart, a Chart.yaml naming
- * a Template with no values.yaml). `hidden`: hidden folders
+ * right inside a deployment or a `_common` chart. `hidden`: hidden folders
  * are looked into too (all but .git), as "who uses this Template" does.
  */
 export function skippedDir(name, opts) {
@@ -98,6 +96,15 @@ function inTemplatesDir(rel) {
   const segments = segmentsOf(rel)
   const templates = segmentsOf(chartsDir() ?? 'charts')
   return segments.length >= templates.length && templates.every((s, i) => s === segments[i])
+}
+
+/**
+ * The Templates folder as it is named, when `rel` is it or a folder in it
+ * (a link or not), else null.
+ *   templatesFolderOf('charts/demo/nd') → 'charts'
+ */
+export function templatesFolderOf(rel) {
+  return inTemplatesDir(rel) ? segmentsOf(chartsDir() ?? 'charts').join('/') : null
 }
 
 const inShared = async (repo, rel) => segmentsOf(rel)[0] === SHARED_DIR && !sharedDirProblemOf(await loadSharedDir(repo))
@@ -232,10 +239,7 @@ export async function isDeployment(repo, rel) {
   return (await folderEntry(repo, rel)).kind === 'deployment'
 }
 
-// Whether charts/ and templates/ right inside it are the chart's own: a
-// deployment, a `_common` chart, and a Chart.yaml naming a Template with no
-// values.yaml, which Helm deploys as it does a deployment.
-const isChart = e => e.kind === 'deployment' || e.kind === 'common' || !!e.chartOnly
+const isChart = e => e.kind === 'deployment' || e.kind === 'common'
 
 // Where a folder is: the deployment above it, whether its parent is a chart.
 async function contextOf(repo, rel) {
@@ -345,6 +349,9 @@ export async function newDeploymentProblem(repo, rel) {
   const where = segments.join('/')
   const here = await folderEntry(repo, where)
   if (here.kind === 'deployment') return null
+  // In the Templates folder, a link or not: said as that, before the link.
+  const templates = templatesFolderOf(where)
+  if (templates) return `${where}: a deployment there would not be seen — ${templates} is the Templates folder, which AlertForge does not look into`
   // Made through a link, it would be somewhere else, or outside the repo.
   if (here.link) {
     const { at, to } = await linkOnTheWay(repo, where)

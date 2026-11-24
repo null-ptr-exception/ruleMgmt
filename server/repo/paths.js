@@ -232,16 +232,27 @@ export async function linkOnTheWay(root, rel) {
   return { kind, at, why: e.why, ...(real ? { real } : {}), use: real ? `: ask for ${real}` : '' }
 }
 
+// The Templates folder where it really is, in the repo: CHARTS_DIR, or
+// where it leads when it is a link.
+async function realTemplatesDir(root) {
+  const dir = process.env.CHARTS_DIR || 'charts'
+  const real = await fs.realpath(path.join(root, dir)).catch(() => null)
+  return real ? path.relative(await realBaseOf(root), real).split(path.sep).join('/') : dir
+}
+
 /**
  * Whether a refusal may offer `real` as the path to ask for instead: only
  * one the same request would take — no hidden folder or .git, no link on
- * the way, not inside the Templates' folder, where no deployment is.
+ * the way, not inside the Templates' folder (by its name or where it
+ * leads, when it is a link), where no deployment is.
  *   offeredPath(root, 'deployments/team/a') → true
  *   offeredPath(root, 'charts/demo/templates') → false
  */
 export async function offeredPath(root, real) {
   if (pathProblem(real, 'deployment')) return false
   if (real.split('/')[0] === (process.env.CHARTS_DIR || 'charts')) return false
+  const templates = await realTemplatesDir(root)
+  if (real === templates || real.startsWith(`${templates}/`)) return false
   if (await firstLink(openRepo(root), real)) return false
   const { why } = await realPlace(root, real).catch(() => ({ why: 'outside' }))
   return !why

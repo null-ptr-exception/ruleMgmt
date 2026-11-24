@@ -115,6 +115,8 @@ export const CASES = [
   // hand-written files in templates/
   { id: 'tmpl-extra-own-rules', chart: 'p2', files: { [P('templates/extra-alerts.yaml')]: OWN_RULE_OBJECT('extra') }, promise: { ...P2_PROMISE, Extra: 1 } },
   { id: 'tmpl-underscore-file', chart: 'p2', files: { [P('templates/_extra.yaml')]: OWN_RULE_OBJECT('extra') }, promise: { ...P2_PROMISE, Extra: 1 } },
+  // a partial Helm reads as one: defines only, no rule object
+  { id: 'tmpl-underscore-helpers', chart: 'p2', files: { [P('templates/_helpers.yaml')]: '{{- define "p2.team" -}}shop{{- end -}}\n' } },
   { id: 'tmpl-folder-named-yaml', chart: 'p2', files: { [P('templates/x.yaml/a.yaml')]: OWN_RULE_OBJECT('x') }, promise: { ...P2_PROMISE, Extra: 1 } },
   { id: 'tmpl-generated-missing', chart: 'p2', files: { [P('templates/mem.yaml')]: { remove: true } } },
   { id: 'tmpl-generated-hand-edited', chart: 'p2', edits: { [P('templates/mem.yaml')]: t => `${t}# edited by hand\n` } },
@@ -128,6 +130,7 @@ export const CASES = [
   { id: 'rules-file-unreadable', chart: 'p2', files: { [P('rules/mem.yaml')]: { mode: 0, content: P2_RULES['mem.yaml'] } } },
   { id: 'rules-file-is-folder', chart: 'p2', files: { [P('rules/mem.yaml')]: { dir: true } } },
   { id: 'rules-dangling-link', chart: 'p2', files: { [P('rules/mem.yaml')]: { link: 'nowhere.yaml' } } },
+  { id: 'rules-link-inside', chart: 'p2', files: { [P('rules/mem.yaml')]: { link: '../../../shared/mem.yaml' }, 'shared/mem.yaml': P2_RULES['mem.yaml'] } },
   { id: 'rules-link-outside', chart: 'p2', files: { [P('rules/mem.yaml')]: { link: '__OUTSIDE__' } } },
   { id: 'rules-not-yaml', chart: 'p2', files: { [P('rules/mem.yaml')]: 'columns: [\n' } },
   { id: 'rules-labels-scalar', chart: 'p2', files: { [P('rules/mem.yaml')]: RULE('    labels: foo\n') } },
@@ -157,6 +160,9 @@ export const CASES = [
   { id: 'tvalues-trailing-dashes', chart: 'p2', files: { [P('values.yaml')]: '{}\n---\n' } },
   { id: 'tvalues-two-documents', chart: 'p2', files: { [P('values.yaml')]: 'mem: []\n---\nmem:\n  - { job: other }\n' } },
   { id: 'tvalues-yaml11', chart: 'p2', files: { [P('values.yaml')]: '_common:\n  base: 010\n  team: yes\n' } },
+  // a block text with an indentation digit: Helm reads it, AlertForge
+  // cannot tell how
+  { id: 'tvalues-cannot-tell', chart: 'p2', files: { [P('values.yaml')]: '_common:\n  team: |2\n    platform\n' } },
   { id: 'tvalues-common', chart: 'p2', files: { [P('values.yaml')]: '_common:\n  team: platform\n' } },
   { id: 'tvalues-required-common-only-there', chart: 'p2', files: { [P('values.yaml')]: '_common:\n  team: platform\n', 'deployments/p2/d/values.yaml': 'p2:\n  cpu:\n    - { job: api }\n    - { job: web, threshold: 70 }\n  mem:\n    - { job: api }\n' } },
   { id: 'tvalues-unreadable', chart: 'p2', files: { [P('values.yaml')]: { mode: 0, content: '{}\n' } } },

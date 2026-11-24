@@ -151,6 +151,8 @@ function templateDocs(text) {
 }
 
 const ruleDocs = text => templateDocs(text).filter(d => d.isRule)
+/** Whether a templates/ file holds a rule object (PrometheusRule or VMRule). */
+export const holdsRuleObject = text => ruleDocs(text).length > 0
 
 // The same alert, as far as a template shows it: the same name, and the same
 // label names with the same values. A value written with `{{ }}` on either

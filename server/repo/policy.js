@@ -24,6 +24,8 @@
  *     (policy: a table, or the name of one in POLICIES; 'ignore' drops it)
  *   explain(finding, policy) → { action, why }
  */
+import { TEMPLATE_ROWS } from './findings/templateRows.js'
+
 export const ACTIONS = Object.freeze(['refuse', 'warn', 'list', 'ignore'])
 
 const DEFAULT_WHY = 'Helm fails on it (or AlertForge cannot tell what Helm does, or Helm does not render it the same way each time, or the rules it renders cannot be loaded)'
@@ -91,10 +93,12 @@ export const POLICIES = Object.freeze({
       'values.flat-not-checked': LISTED('a legacy <name>-values.yaml is not supported: said, not checked'),
       'values.null-on-stack': { action: 'refuse', why: 'a null on a _common stack deploys differently on the two supported Helm versions (one keeps it, the other removes the key and falls back to the layer above or the default): what deploys would depend on the Helm version' },
       'stack.duplicate-key': LISTED('a key a _common writes twice deploys the later one, which may not be the one meant: said'),
+      ...TEMPLATE_ROWS.commit,
     },
   }),
   checkRepo: definePolicy('checkRepo', {
     rows: {
+      ...TEMPLATE_ROWS.checkRepo,
       'values.unreadable': { action: 'refuse', why: 'Helm renders something other than the repo holds' },
       'values.rows-alike': { action: 'warn', why: 'rows the row identity label cannot tell apart are said' },
       'values.required-empty': { action: 'warn', why: EDITOR },

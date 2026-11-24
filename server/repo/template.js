@@ -1,7 +1,7 @@
 /**
  * A Template (charts/<name>), as much of it as Helm reads to render a
  * deployment: Chart.yaml, values.yaml (the defaults), values.schema.json.
- * Its rules/ and templates/ are not read here yet.
+ * Its rules/ and templates/ are read by loadTemplateFiles, below.
  *
  *   Loaded<{
  *     name, dir,                       'demo', 'charts/demo'
@@ -14,6 +14,9 @@
  *
  * absent: no Chart.yaml. unreadable / invalid: the first of the three
  * files that cannot be read or used, naming it.
+ *
+ * loadTemplateFiles (below) reads the whole folder, as the Template's own
+ * entry points need it: the editor, Commit, the command line tools.
  */
 import path from 'path'
 import { isName } from '../lib/safePath.js'
@@ -21,6 +24,7 @@ import { finding } from './finding.js'
 import { absent, invalid, ok, unreadable } from './loaded.js'
 import { repoRel } from './readRepoFile.js'
 import { schemaProblem, schemaValidator } from './schema.js'
+import { buildTemplateFiles } from './findings/template.js'
 
 /**
  * The Templates folder in the repo, as the routes find it:
@@ -82,4 +86,40 @@ export async function loadTemplate(repo, name) {
     schema,
     validate,
   })
+}
+
+/**
+ * Every file of a Template folder (`dir`, a path in the repo), each read
+ * once and named when it cannot be, and what they add up to:
+ *
+ *   Loaded<{
+ *     name, dir,                    'p2', 'charts/p2'
+ *     chart: HelmValues | null,     Chart.yaml as Helm reads it (null: none
+ *                                   Helm can use; a finding says why)
+ *     values: HelmValues,           values.yaml as Helm reads it ({} when none)
+ *     valuesText: string | null,
+ *     schema: object | null,        values.schema.json (null: not there, or
+ *                                   not JSON — a finding says so)
+ *     rulesFiles: {name: text} | null   rules/*.yaml (null: no rules/)
+ *     templateFiles: {name: text},  templates/*.yaml (a folder named so is
+ *                                   Helm's to read, not a file here)
+ *     fromRules: boolean,           rules/ holds a file: it is the source
+ *     model, ruleErrors: string[],  the rules as parsed (model null when
+ *                                   there is neither rules/ nor a schema)
+ *     ruleChecks: [],               the rule checks' findings (ruleChecks.js)
+ *     drift: { state, files?, errors?, repeats?, outOfDate? } | null
+ *                                   whether the generated files are what
+ *                                   rules/ makes (computeDrift, drift.js);
+ *                                   null when a file of it cannot be read
+ *     unreadable: { file, why } | null  the first of rules/ and templates/
+ *                                   (or a file in them) that cannot be read
+ *   }, findings>                    findings/template.js
+ *
+ * absent: no folder there. unreadable: the folder cannot be listed, or it
+ * is a link that leads outside the repo.
+ */
+export async function loadTemplateFiles(repo, dir) {
+  const folder = await repo.dir(dir)
+  if (folder.state !== 'ok') return folder
+  return buildTemplateFiles(repo, dir)
 }

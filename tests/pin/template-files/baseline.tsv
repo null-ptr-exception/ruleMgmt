@@ -348,6 +348,29 @@ tmpl-underscore-file	p2	gen-chart-check	ok	exit 0	-	no	-	renders-fewer	disk	-	re
 tmpl-underscore-file	p2	gen-chart	ok	exit 0	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	accepts-what-helm-fails
 tmpl-underscore-file	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders-fewer	after	changed	renders-fewer	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	accepts-what-helm-fails
 tmpl-underscore-file	p2	products-current	same	-	-	no	-	renders-fewer	disk	-	renders-fewer	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=current commit=current gen-rules=current gen-chart=current	
+tmpl-underscore-helpers	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=4	
+tmpl-underscore-helpers	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=4 version=0.1.0	
+tmpl-underscore-helpers	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
+tmpl-underscore-helpers	p2	file-get	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	bytes=1067	
+tmpl-underscore-helpers	p2	file-save	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	file-rename	ok	200	-	no	<T>/templates/notes.yaml,<T>/templates/notes2.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	file-delete	ok	200	-	no	<T>/templates/notes.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	save-rules	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=open	
+tmpl-underscore-helpers	p2	migration-preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	problems=0	
+tmpl-underscore-helpers	p2	save-values	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=open	
+tmpl-underscore-helpers	p2	chart-meta	ok	200	-	no	<T>/Chart.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	clone	ok	200	-	no	charts/p2-copy/Chart.yaml,charts/p2-copy/rules/_common.yaml,charts/p2-copy/rules/cpu.yaml,charts/p2-copy/rules/mem.yaml,charts/p2-copy/rules/up.yaml,charts/p2-copy/templates/_helpers.yaml,charts/p2-copy/templates/cpu.yaml,charts/p2-copy/templates/mem.yaml,charts/p2-copy/templates/up.yaml,charts/p2-copy/values.schema.json,charts/p2-copy/values.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	init	ok	200	-	no	deployments/p2/n/Chart.yaml,deployments/p2/n/values.yaml	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	new: renders 1	
+tmpl-underscore-helpers	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=ok	
+tmpl-underscore-helpers	p2	commit	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
+tmpl-underscore-helpers	p2	gen-rules	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tmpl-underscore-helpers	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
+tmpl-underscore-helpers	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=current commit=current gen-rules=current gen-chart=current	
 tmpl-folder-named-yaml	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	7	CpuHighx2 CpuRatex2 Down Extra MemHigh #1bf4e6c5	promtool=ok	drift=ok rules=4 templates=4	
 tmpl-folder-named-yaml	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	7	CpuHighx2 CpuRatex2 Down Extra MemHigh #1bf4e6c5	promtool=ok	templates=4 version=0.1.0	
 tmpl-folder-named-yaml	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	7	CpuHighx2 CpuRatex2 Down Extra MemHigh #1bf4e6c5	promtool=ok	deployments=deployments/p2/d	
@@ -624,6 +647,29 @@ rules-dangling-link	p2	gen-chart-check	cannot-check	exit 2	rules/mem.yaml	no	-	f
 rules-dangling-link	p2	gen-chart	cannot-check	exit 2	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	
 rules-dangling-link	p2	import-rules	error	crash 1	rules/mem.yaml	no	-	fails	would-be	-	fails	1	-	-	-	-	5xx
 rules-dangling-link	p2	products-current	same	-	-	no	-	fails	disk	-	fails	1	-	-	-	open=? preview=? commit=? gen-rules=? gen-chart=?	
+rules-link-inside	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
+rules-link-inside	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
+rules-link-inside	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
+rules-link-inside	p2	file-get	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	bytes=1067	
+rules-link-inside	p2	file-save	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	file-rename	ok	200	-	no	<T>/templates/notes.yaml,<T>/templates/notes2.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	file-delete	ok	200	-	no	<T>/templates/notes.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	save-rules	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=open	
+rules-link-inside	p2	migration-preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	problems=0	
+rules-link-inside	p2	save-values	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=open	
+rules-link-inside	p2	chart-meta	ok	200	-	no	<T>/Chart.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	clone	ok	200	-	no	charts/p2-copy/Chart.yaml,charts/p2-copy/rules/_common.yaml,charts/p2-copy/rules/cpu.yaml,charts/p2-copy/rules/mem.yaml,charts/p2-copy/rules/up.yaml,charts/p2-copy/templates/cpu.yaml,charts/p2-copy/templates/mem.yaml,charts/p2-copy/templates/up.yaml,charts/p2-copy/values.schema.json,charts/p2-copy/values.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	init	ok	200	-	no	deployments/p2/n/Chart.yaml,deployments/p2/n/values.yaml	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	new: renders 1	
+rules-link-inside	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=ok	
+rules-link-inside	p2	commit	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
+rules-link-inside	p2	gen-rules	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+rules-link-inside	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
+rules-link-inside	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=current commit=current gen-rules=current gen-chart=current	
 rules-link-outside	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 rules-link-outside	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 rules-link-outside	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
@@ -1245,6 +1291,29 @@ tvalues-yaml11	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	Cp
 tvalues-yaml11	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #e630d959	promtool=ok	-	
 tvalues-yaml11	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #7d9a8226	promtool=ok	-	
 tvalues-yaml11	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #e630d959	promtool=ok	open=current preview=current commit=current gen-rules=current gen-chart=current	
+tvalues-cannot-tell	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
+tvalues-cannot-tell	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
+tvalues-cannot-tell	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	
+tvalues-cannot-tell	p2	file-get	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	bytes=1067	
+tvalues-cannot-tell	p2	file-save	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	file-rename	ok	200	-	no	<T>/templates/notes.yaml,<T>/templates/notes2.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	file-delete	ok	200	-	no	<T>/templates/notes.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	save-rules	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=open	
+tvalues-cannot-tell	p2	migration-preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	problems=0	
+tvalues-cannot-tell	p2	save-values	ok	200	-	no	<T>/values.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	body=open	
+tvalues-cannot-tell	p2	chart-meta	ok	200	-	no	<T>/Chart.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	clone	ok	200	-	no	charts/p2-copy/Chart.yaml,charts/p2-copy/rules/_common.yaml,charts/p2-copy/rules/cpu.yaml,charts/p2-copy/rules/mem.yaml,charts/p2-copy/rules/up.yaml,charts/p2-copy/templates/cpu.yaml,charts/p2-copy/templates/mem.yaml,charts/p2-copy/templates/up.yaml,charts/p2-copy/values.schema.json,charts/p2-copy/values.yaml	renders	after	same	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	delete	refused	409	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	init	ok	200	-	no	deployments/p2/n/Chart.yaml,deployments/p2/n/values.yaml	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	new: fails -	
+tvalues-cannot-tell	p2	preview	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	alerts=6 drift=ok	
+tvalues-cannot-tell	p2	commit	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	check-deployment	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	gen-rules-check	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	warn	
+tvalues-cannot-tell	p2	gen-rules	listed	exit 0	values.yaml	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	gen-chart-check	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	gen-chart	ok	exit 0	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	-	
+tvalues-cannot-tell	p2	import-rules	ok	exit 0	-	no	<T>/rules/imported.yaml,<T>/templates/imported.yaml,<T>/values.schema.json	renders	after	changed	renders	0	7	CpuHighx2 CpuRatex2 Down ImportedDown MemHigh #cabd855e	promtool=ok	-	
+tvalues-cannot-tell	p2	products-current	same	-	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	open=current preview=current commit=current gen-rules=current gen-chart=current	
 tvalues-common	p2	open	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	drift=ok rules=4 templates=3	
 tvalues-common	p2	list	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	templates=3 version=0.1.0	
 tvalues-common	p2	usage	ok	200	-	no	-	renders	disk	-	renders	0	6	CpuHighx2 CpuRatex2 Down MemHigh #01467688	promtool=ok	deployments=deployments/p2/d	

@@ -10,6 +10,9 @@
  *                           (yaml.read-differently: `010` is 8 to Helm) and
  *                           each key written twice (yaml.duplicate-key)
  *   repo.json(rel)        → Promise<Loaded<unknown>>
+ *   repo.dir(rel)         → Promise<Loaded<{ entries }>>: a folder (readRepoDir.js)
+ *   repo.templateFiles(dir) → Promise<Loaded<TemplateFiles>>: every file of
+ *                           the Template folder at `dir` (template.js)
  *   repo.template(name)   → Promise<Loaded<Template>>
  *   repo.memo(kind, key, build) → the one build of (kind, key) in this
  *                           snapshot, for loaders kept in their own module.
@@ -27,7 +30,8 @@ import { readHelmYaml } from './helmYaml.js'
 import { finding } from './finding.js'
 import { invalid, ok } from './loaded.js'
 import { readRepoFile, repoRel } from './readRepoFile.js'
-import { loadTemplate } from './template.js'
+import { loadTemplate, loadTemplateFiles } from './template.js'
+import { readRepoDir } from './readRepoDir.js'
 
 const shown = v => (typeof v === 'string' ? JSON.stringify(v) : String(v))
 
@@ -108,6 +112,14 @@ function makeRepo(root, overlay, sharedFiles) {
     },
     template(name) {
       return memo('template', String(name), () => loadTemplate(repo, name))
+    },
+    dir(rel) {
+      const key = repoRel(rel)
+      return memo('dir', key, () => readRepoDir(root, key, { overlay }))
+    },
+    templateFiles(dir) {
+      const key = repoRel(dir)
+      return memo('templateFiles', key, () => loadTemplateFiles(repo, key))
     },
     memo,
     with(more) {

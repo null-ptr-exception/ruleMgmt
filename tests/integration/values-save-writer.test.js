@@ -340,6 +340,21 @@ describe('Commit never adds a temp file a write left', () => {
   })
 })
 
+describe('Commit with content a write moved aside and did not put back', () => {
+  it('is refused naming it and what to do; nothing is committed', async () => {
+    await fs.mkdir(path.join(root, 'deployments/t/_gone.0123abcd.parked/templates'), { recursive: true })
+    await fs.writeFile(path.join(root, 'deployments/t/_gone.0123abcd.parked/values.yaml'), 'kept\n')
+    await fs.writeFile(path.join(root, 'marker.txt'), 'y\n')
+    const head = git('rev-parse', 'HEAD')
+    const { status, data } = await api('POST', '/api/v2/git/commit', { message: 'with a folder parked' })
+    expect(status).toBe(409)
+    expect(data.findings).toEqual([expect.objectContaining({ kind: 'parked', description: 'deployments/t/_gone.0123abcd.parked is deployments/t/gone as it was, moved aside by a write that did not finish: rename it back to deployments/t/gone to keep it, or remove it, then commit' })])
+    expect(git('rev-parse', 'HEAD')).toBe(head)
+    // Shown by git status, not hidden as a temp file is.
+    expect(git('status', '--porcelain')).toContain('deployments/t/_gone.0123abcd.parked/')
+  })
+})
+
 describe('a Commit with nothing but a temp file a write left', () => {
   it('is "no changes to commit", not a failed commit', async () => {
     await fs.writeFile(path.join(root, SRC, '_values.yaml.0123abcd.tmp'), 'half\n')

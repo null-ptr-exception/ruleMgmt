@@ -522,6 +522,15 @@ async function headState(ws, files, pre, after) {
   return is(pre) || is(after) ? 'whole' : 'mixed'
 }
 
+// Until the request waits for the commit lock (its waiter is counted) or
+// is answered without waiting: no time limit, so a write still planning on
+// a busy machine is not taken for one that did not wait.
+async function waitsOrAnswers(root, pending) {
+  let answered = false
+  pending.then(() => { answered = true }, () => { answered = true })
+  while (lockWaiters(root) === 0 && !answered) await new Promise(res => setTimeout(res, 5))
+}
+
 async function runCell(ws, c, p) {
   const { root, work } = ws
   const make = c.id === 'new-reserved' ? () => p.newFolder('reserved') : c.id === 'new-invalid' ? () => p.newFolder('invalid') : c.id === 'undeployable' ? p.bad : c.id === 'check-after-write' ? p.checkAfter : c.id === 'new-refused' ? p.newRefused : (p.req || (() => ({})))
@@ -564,8 +573,7 @@ async function runCell(ws, c, p) {
     const lock = withSyncRegistryLock(root, () => holding)
     await new Promise(res => setTimeout(res, 20))
     const pending = send(ws, p, r)
-    const until = Date.now() + 4000
-    while (lockWaiters(root) === 0 && Date.now() < until) await new Promise(res => setTimeout(res, 5))
+    await waitsOrAnswers(root, pending)
     if (lockWaiters(root) > 0) {
       extra = 'waited'
       await fs.appendFile(path.join(root, p.primary), p.primary.endsWith('.json') ? '\n' : '# changed meanwhile\n')
@@ -635,8 +643,7 @@ async function runCell(ws, c, p) {
     const lock = withSyncRegistryLock(root, () => holding)
     await new Promise(res => setTimeout(res, 20))
     const pending = send(ws, p, r)
-    const until = Date.now() + 4000
-    while (lockWaiters(root) === 0 && Date.now() < until) await new Promise(res => setTimeout(res, 5))
+    await waitsOrAnswers(root, pending)
     extra = lockWaiters(root) > 0 ? 'waited' : 'did-not-wait'
     for (const [f, data] of tpl) await fs.writeFile(path.join(root, T, f), data)
     pre = await snapshot(root)

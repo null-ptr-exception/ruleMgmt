@@ -481,7 +481,7 @@ describe('deleting a sync source', () => {
       const { status, data } = await del(SRC)
       // Named, in the repo; every file removed before it put back.
       expect(status).toBe(409)
-      expect(data).toEqual({ error: `${SRC} cannot be written: permission denied`, file: SRC })
+      expect(data).toEqual({ error: `${SRC} cannot be removed: permission denied`, file: SRC })
       expect(await read(`${SRC}/values.yaml`)).toBe(before)
     } finally {
       await fs.chmod(parent, 0o755)

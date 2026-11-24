@@ -206,7 +206,7 @@ describe.skipIf(!HAS_HELM)('what Helm deploys, as Helm reads it', { timeout: 120
     const refused = { error: 'Not made: shop/own would no longer deploy what it does', differs: [{ path: 'shop/own', why: 'Helm renders other objects' }] }
     expect(await plan({ action: 'create', folder: 'shop', chart: C })).toMatchObject({ status: 409, data: refused })
     expect(await snapshot()).toEqual(was)
-    const done = await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'shop', chart: C })
+    const done = await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'shop', chart: C, expected: {} })
     expect(done).toEqual({ status: 409, data: refused })
     expect(await snapshot()).toEqual(was)
   })

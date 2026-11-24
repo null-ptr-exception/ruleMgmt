@@ -193,9 +193,20 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
     return result.doc
   }
 
+  // The folder's own Chart.yaml, read through the snapshot (so a planned
+  // one, overlaid, is the one read): as readChart answers, undefined when
+  // there is none, null when it cannot be read or is not YAML.
+  async function ownChart() {
+    const own = rel(gitopsDir, dir)
+    if (own === '.' || own.startsWith('../')) return readChart(dir)
+    const f = await repo.helmYaml(`${own}/Chart.yaml`)
+    if (f.state === 'absent' || (f.state === 'unreadable' && f.kind === 'not-a-folder')) return undefined
+    return f.state === 'ok' ? f.value : null
+  }
+
   // The deployment's own dependencies: what `helm dependency update` fetches.
   async function firstHop() {
-    const deps = dependenciesOf(await readChart(dir))
+    const deps = dependenciesOf(await ownChart())
     result.dependencyNames = deps.map(d => d.name).filter(n => typeof n === 'string')
     if (!deps.length) return null
     const targets = []
@@ -272,7 +283,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
     const link = !self && !layerPath.startsWith('../') && (await folderEntry(repo, layerPath)).link ? await linkOnTheWay(gitopsDir, layerPath) : null
     if (link) {
       lastLayerFolder = cur
-      problems.push(problem(STACK_LINK, `its _common chart ${layerPath}: ${link.why} — a _common reached through a link made by hand is not supported, and nothing is written to it: replace the link with a folder of its own in git${link.real && isCommonChartPath(link.real) ? `, or depend on ${link.real}` : ''}`))
+      problems.push(stackLinkProblem(layerPath, link))
       break walk
     }
     const values = await readValuesDoc(repo, gitopsDir, cur)
@@ -366,6 +377,27 @@ export { unwrapPath }
 
 /** A `_common` reached through a link made by hand: refused by every entry point. */
 export const STACK_LINK = 'stack-link'
+// The problem of a stack that reaches the _common chart at `layerPath`
+// through `link` (linkOnTheWay's): `real` is the _common chart it leads to
+// in the repo, when it leads to one.
+const stackLinkProblem = (layerPath, link) => ({
+  ...problem(STACK_LINK, `its _common chart ${layerPath}: ${link.why} — a _common reached through a link made by hand is not supported, and nothing is written to it: replace the link with a folder of its own in git${link.real && isCommonChartPath(link.real) ? `, or depend on ${link.real}` : ''}`),
+  real: link.real && isCommonChartPath(link.real) ? link.real : null,
+})
+/**
+ * The link a `_common` chart at `commonRel` is reached through (the
+ * `_common` folder, or one above it, is a link made by hand), as
+ * linkOnTheWay gives it, or null.
+ */
+export async function linkToCommon(repo, commonRel) {
+  return (await folderEntry(repo, commonRel)).link ? linkOnTheWay(repo.root, commonRel) : null
+}
+/**
+ * What a write says that would put `rel` (a new deployment, or the folder a
+ * `_common` is made or removed in) on the `_common` chart at `commonRel`,
+ * reached through `link`: linkedStackRefusal's answer, in the same words.
+ */
+export const linkedCommonRefusal = (rel, commonRel, link) => linkedStackRefusal({ problems: [stackLinkProblem(commonRel, link)] }, rel)
 /**
  * What a write that touches the deployment at `rel` (its `stack`) says when
  * it renders on a `_common` reached through a link: 409, nothing written;

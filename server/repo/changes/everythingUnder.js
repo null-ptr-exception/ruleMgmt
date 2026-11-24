@@ -14,7 +14,12 @@
  * Read through the snapshot: a file added while the removal waits for the
  * lock is a change the writer sees.
  */
+import { linkOnTheWay } from '../paths.js'
+
 export async function everythingUnder(repo, rel, files) {
+  // Never into a link: a folder that is one is said, not listed through.
+  const link = await linkOnTheWay(repo.root, rel)
+  if (link) return { file: link.at, why: link.why }
   const dir = await repo.dir(rel)
   if (dir.state === 'absent') return null
   if (dir.state !== 'ok') return { file: rel, why: dir.why }

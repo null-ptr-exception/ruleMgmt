@@ -8,7 +8,7 @@ import git from '../lib/git.js'
 import { deploymentCommitBlockers, regenerateRouting } from '../lib/commitChecks.js'
 import { chartCommitBlockers } from '../lib/chartChecks.js'
 import { withSyncRegistryLock, holdSyncRegistryLock } from '../lib/sync.js'
-import { TEMP_PATHSPEC_EXCLUDE } from '../repo/write.js'
+import { TEMP_PATHSPEC_EXCLUDE, parkedItems } from '../repo/write.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { parsePath, pathProblem } from '../repo/paths.js'
 import { repoGit } from '../repo/git.js'
@@ -81,6 +81,15 @@ const COMMIT_MESSAGE = 'message required: the commit message, as text'
 // left out or not a number is `fallback`.
 const count = (fallback, min, max) => z.any().transform(v => Math.min(max, Math.max(min, parseInt(v, 10) || fallback))).default(fallback)
 
+// The refusal of a Commit (or Push) while parked content is in the repo:
+// each named, with what to do. Null when there is none.
+async function parkedRefusal(cwd) {
+  const parked = await parkedItems(cwd)
+  if (!parked.length) return null
+  return { status: 409, body: { error: 'Commit refused', findings: parked.map(p => ({ severity: 'commit', kind: 'parked', regenerable: false,
+    description: `${p.rel} is ${p.original} as it was, moved aside by a write that did not finish: ${p.free ? `rename it back to ${p.original} to keep it` : `${p.original} is there again: keep one of the two`}, or remove it, then commit` })) } }
+}
+
 export default function gitRouter() {
   const router = Router()
   router.use(answersWithoutPaths)
@@ -126,6 +135,10 @@ export default function gitRouter() {
       // between would leave the checks passing on files not in the index.
       const outcome = await withSyncRegistryLock(cwd, async () => {
         let charts, deployments
+        // Content a write moved aside and did not put back or remove (a
+        // crash midway, a failed put-back) is never committed by itself.
+        const parked = await parkedRefusal(cwd)
+        if (parked) return parked
         try {
           try {
             await git(cwd, 'add', '-A', '--', '.', TEMP_PATHSPEC_EXCLUDE)
@@ -185,6 +198,8 @@ export default function gitRouter() {
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
     try {
+      const parked = await parkedRefusal(cwd)
+      if (parked) return res.status(parked.status).json(parked.body)
       await git(cwd, 'add', '-A', '--', '.', TEMP_PATHSPEC_EXCLUDE)
       const statusRaw = await git(cwd, 'status', '--porcelain', '--', '.', TEMP_PATHSPEC_EXCLUDE)
       if (statusRaw.trim()) {

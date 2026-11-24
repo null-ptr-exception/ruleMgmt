@@ -358,16 +358,17 @@ describe('temp files and modes', () => {
   })
 
   it('sweepTempFiles removes the writer\'s old temp files, and only those', async () => {
+    // Aged by when they were made (ctime), whatever their mtime says.
     const old = Date.now() - 2 * 60 * 60 * 1000
-    const put = async (rel, mtime) => { await fs.mkdir(path.dirname(path.join(root, rel)), { recursive: true }); await fs.writeFile(path.join(root, rel), 'x'); if (mtime) await fs.utimes(path.join(root, rel), mtime / 1000, mtime / 1000) }
-    await put('a/_one.yaml.0123abcd.tmp', old)
-    await put('b/deep/_x.yaml.deadbeef.tmp', old)
-    await put('a/_one.yaml.0123abcd.tmp.keep', old)
-    await put('a/_mine.tmp', old)
-    await put('b/_young.yaml.00000000.tmp')
-    await put('.git/_in-git.yaml.0123abcd.tmp', old)
-    expect((await sweepTempFiles(root)).sort()).toEqual(['a/_one.yaml.0123abcd.tmp', 'b/deep/_x.yaml.deadbeef.tmp'])
-    expect(await exists(path.join(root, 'b/_young.yaml.00000000.tmp'))).toBe(true)
+    const put = async rel => { await fs.mkdir(path.dirname(path.join(root, rel)), { recursive: true }); await fs.writeFile(path.join(root, rel), 'x'); await fs.utimes(path.join(root, rel), old / 1000, old / 1000) }
+    await put('a/_one.yaml.0123abcd.tmp')
+    await put('b/deep/_x.yaml.deadbeef.tmp')
+    await put('a/_one.yaml.0123abcd.tmp.keep')
+    await put('a/_mine.tmp')
+    await put('.git/_in-git.yaml.0123abcd.tmp')
+    // Made just now: young, though its mtime is old.
+    expect(await sweepTempFiles(root)).toEqual([])
+    expect((await sweepTempFiles(root, { now: Date.now() + 2 * 60 * 60 * 1000 })).sort()).toEqual(['a/_one.yaml.0123abcd.tmp', 'b/deep/_x.yaml.deadbeef.tmp'])
     expect(await exists(path.join(root, '.git/_in-git.yaml.0123abcd.tmp'))).toBe(true)
     expect(await exists(path.join(root, 'a/_mine.tmp'))).toBe(true)
   })

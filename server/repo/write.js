@@ -17,6 +17,10 @@
  *             also { rel, link } (a link, made new, leading to `link`)
  *             and { rel, removeFolder: true } (a folder removed: empty by
  *             then, its files removed before it in the same list)
+ *             and { rel, removeWhole: true } (a folder removed with all it
+ *             holds, nothing in it read: moved aside in one rename to a
+ *             temp name beside it, removed once every file is written;
+ *             put back by the rename back)
  *   after     the snapshot as it will be after the write (repo.with(files)):
  *             the facts after the write, read without the disk
  *   findings  what the loaders found in `after`; applyChange's policy decides
@@ -157,7 +161,8 @@ async function expectedFolder(root, dirRel) {
 
 // One entry of a plan's files: a file's text (null: removed), a link, or
 // a folder removed.
-const entryOf = f => (f.removeFolder ? { rel: repoRel(f.rel), removeFolder: true }
+const entryOf = f => (f.removeWhole ? { rel: repoRel(f.rel), removeWhole: true }
+  : f.removeFolder ? { rel: repoRel(f.rel), removeFolder: true }
   : f.link !== undefined ? { rel: repoRel(f.rel), link: String(f.link) }
   : { rel: repoRel(f.rel), text: f.text })
 
@@ -172,11 +177,13 @@ async function makePlan(repo, change) {
   // under the lock.
   const log = repo.readLog()
   const reads = new Map()
-  for (const rel of new Set([...log.files, ...(made.reads ?? []).map(repoRel), ...files.filter(f => !f.removeFolder).map(f => f.rel)])) {
+  for (const rel of new Set([...log.files, ...(made.reads ?? []).map(repoRel), ...files.filter(f => !f.removeFolder && !f.removeWhole).map(f => f.rel)])) {
     reads.set(rel, stateOf(await repo.file(rel)))
   }
   const dirs = new Map()
-  for (const rel of log.dirs) dirs.set(rel, dirStateOf(await openRepo(repo.root).dir(rel)))
+  // Each folder as it was when the plan listed it: one that gained or lost
+  // an entry while the plan was still being made is a change.
+  for (const rel of log.dirs) dirs.set(rel, dirStateOf(await (log.dirsAsRead?.get(rel) ?? openRepo(repo.root).dir(rel))))
   const places = new Map()
   for (const f of files) places.set(f.rel, await expectedFolder(repo.root, path.posix.dirname(f.rel)))
   return Object.freeze({
@@ -311,6 +318,17 @@ async function before(abs) {
 export const TEMP_FILE = /^_.+\.[0-9a-f]{8}\.tmp$/
 export const TEMP_PATHSPEC_EXCLUDE = `:(exclude,glob)**/_*.${'[0-9a-f]'.repeat(8)}.tmp`
 
+/**
+ * The name of content that was there before a change and was moved aside
+ * ("parked") — a file or folder removed, until the change is written, or
+ * one whose put-back failed: `_<name>.<8 hex>.parked`, beside where it was.
+ * Never swept, never hidden from git status: Commit refuses while one is
+ * there (routes/git.js). parkedOf gives the name it had.
+ */
+export const PARKED_NAME = /^_(.+)\.[0-9a-f]{8}\.parked$/
+export const parkedOf = name => PARKED_NAME.exec(name)?.[1] ?? null
+const parkName = (dir, base) => path.join(dir, `_${base}.${randomBytes(4).toString('hex')}.parked`)
+
 // A temp file beside the file, so a crash mid-write cannot leave a cut-off
 // file that breaks `helm template`. Its name starts with `_`: Helm renders
 // every other file in templates/. Each write has its own temp file: two
@@ -318,26 +336,20 @@ export const TEMP_PATHSPEC_EXCLUDE = `:(exclude,glob)**/_*.${'[0-9a-f]'.repeat(8
 const tempName = (dir, base) => path.join(dir, `_${base}.${randomBytes(4).toString('hex')}.tmp`)
 
 // One file; `step` records what it did, for writeFiles to take back.
-async function writeOne(root, { rel, text, link, removeFolder }, made, step, expected) {
+async function writeOne(root, { rel, text, link, removeFolder, removeWhole }, made, step, expected, asides) {
   const dirRel = path.posix.dirname(rel)
   const base = path.posix.basename(rel)
   const dir = await realFolder(root, dirRel, made, expected)
   step.dir = dir
   step.dirRel = dirRel
   step.abs = path.join(dir, base)
-  if (removeFolder) return removeOneFolder(root, step)
+  if (removeFolder) return removeOneFolder(root, step, asides)
+  if (removeWhole) return moveAside(root, step)
+  if (text === null) return removeOne(root, step)
   step.before = await before(step.abs)
   // A file that is there and read-only stays a refusal, as a plain write
   // would be: a rename alone would quietly replace it.
   if (step.before.kind === 'file') await fs.access(step.abs, fsConstants.W_OK)
-  if (text === null) {
-    if (step.before.kind === 'absent') return
-    await samePlace(root, dirRel, dir)
-    await fs.rm(step.abs)
-    step.changed = true
-    await samePlace(root, dirRel, dir)
-    return
-  }
   step.tmp = tempName(dir, base)
   // 'wx': made new, never written through a file or link already there.
   if (link !== undefined) await fs.symlink(link, step.tmp)
@@ -356,15 +368,67 @@ async function writeOne(root, { rel, text, link, removeFolder }, made, step, exp
 // A folder removed: one that is there as a folder of its own (not a
 // link), and empty — what was in it removed by the steps before. One not
 // there is nothing to do.
-async function removeOneFolder(root, step) {
+async function removeOneFolder(root, step, asides) {
   const st = await fs.lstat(step.abs).catch(err => { if (err.code === 'ENOENT') return null; throw err })
   if (!st) return
+  if (st.isSymbolicLink()) throw Object.assign(new Error('a link'), { code: 'ENOTDIR', why: 'it is a link, not a folder' })
   if (!st.isDirectory()) throw Object.assign(new Error('not a folder'), { code: 'ENOTDIR', why: 'it is not a folder' })
-  step.before = { kind: 'folder', mode: st.mode & 0o7777 }
+  // Empty but for what the steps before moved aside in it (removeOne):
+  // anything else is refused, as an rmdir would refuse it.
+  const left = (await fs.readdir(step.abs)).filter(name => !asides.has(path.join(step.abs, name)))
+  if (left.length) throw Object.assign(new Error('not empty'), { code: 'ENOTEMPTY' })
+  // Moved aside with them, in one rename: put back by the rename back
+  // (then they are put back in it), removed with them once all is written.
+  return moveAside(root, step)
+}
+
+// A file removed (anything but a folder: a file of any mode, a link, a
+// pipe), moved aside in one rename to a temp name beside it: nothing of it
+// is read, and it is put back by the rename back. Removed by writeFiles
+// once every file is written. One not there is nothing to do.
+async function removeOne(root, step) {
+  const st = await fs.lstat(step.abs).catch(err => { if (err.code === 'ENOENT') return null; throw err })
+  if (!st) return
+  if (st.isDirectory()) throw Object.assign(new Error('a folder'), { code: 'EISDIR' })
+  const aside = parkName(step.dir, path.basename(step.abs))
   await samePlace(root, step.dirRel, step.dir)
-  await fs.rmdir(step.abs)
+  await fs.rename(step.abs, aside)
+  step.before = { kind: 'moved', aside }
   step.changed = true
   await samePlace(root, step.dirRel, step.dir)
+}
+
+// A folder moved aside whole, in one rename, to a temp name beside it
+// (TEMP_FILE: Commit never adds it, the start-up sweep removes it): what
+// is in it is not read. One that is a link, or no folder, is refused; one
+// not there is nothing to do. Removed by writeFiles once every file is
+// written; put back by the rename back.
+async function moveAside(root, step) {
+  const st = await fs.lstat(step.abs).catch(err => { if (err.code === 'ENOENT') return null; throw err })
+  if (!st) return
+  if (!st.isDirectory()) throw Object.assign(new Error('not a folder'), { code: 'ENOTDIR', why: st.isSymbolicLink() ? 'it is a link, not a folder' : 'it is not a folder' })
+  const aside = parkName(step.dir, path.basename(step.abs))
+  await samePlace(root, step.dirRel, step.dir)
+  await fs.rename(step.abs, aside)
+  step.before = { kind: 'moved', aside }
+  step.changed = true
+  await samePlace(root, step.dirRel, step.dir)
+}
+
+// A folder moved aside, removed: what is in it is the writer's to remove,
+// so a read-only folder in it is made writable first (never through a link).
+async function removeAside(abs) {
+  try {
+    await fs.rm(abs, { recursive: true, force: true })
+  } catch (err) {
+    if (err.code !== 'EACCES' && err.code !== 'EPERM') throw err
+    const open = async dir => {
+      await fs.chmod(dir, 0o700)
+      for (const e of await fs.readdir(dir, { withFileTypes: true })) if (e.isDirectory()) await open(path.join(dir, e.name))
+    }
+    await open(abs)
+    await fs.rm(abs, { recursive: true, force: true })
+  }
 }
 
 // Remove a step's temp file, if it has one; false when it cannot be.
@@ -386,6 +450,7 @@ async function putBack(root, step) {
   await samePlace(root, step.dirRel, step.dir)
   const b = step.before
   if (b.kind === 'absent') return fs.rm(step.abs, { force: true })
+  if (b.kind === 'moved') return fs.rename(b.aside, step.abs)
   if (b.kind === 'folder') { await fs.mkdir(step.abs); return fs.chmod(step.abs, b.mode) }
   const tmp = tempName(step.dir, path.basename(step.abs))
   try {
@@ -414,16 +479,25 @@ export async function writeFiles(root, files, { places } = {}) {
     const step = { rel: f.rel }
     steps.push(step)
     try {
-      await writeOne(root, f, made, step, places?.get(f.rel) ?? null)
+      await writeOne(root, f, made, step, places?.get(f.rel) ?? null, new Set(steps.filter(x => x.before?.kind === 'moved').map(x => x.before.aside)))
     } catch (err) {
       if (!err?.code) logger.error(`${f.rel}: the write failed (${err?.message})`)
       const notRestored = await takeBack(root, steps, made)
-      if (!notRestored.length) return { ok: false, answer: writeRefusal({ file: f.rel, why: whyOf(err) }) }
+      // A removal is said as one: "cannot be removed".
+      const removal = f.text === null || f.removeFolder || f.removeWhole
+      if (!notRestored.length) return { ok: false, answer: removal ? { status: 409, body: { error: `${f.rel} cannot be removed: ${whyOf(err)}`, file: f.rel } } : writeRefusal({ file: f.rel, why: whyOf(err) }) }
       logger.error(`${f.rel} could not be written (${err.code || err.message}), and ${notRestored.join(', ')} could not be put back as they were`)
       return { ok: false, answer: { status: 500, body: {
         error: `${f.rel} cannot be written: ${whyOf(err)}; and ${notRestored.join(', ')} could not be put back as ${notRestored.length > 1 ? 'they were' : 'it was'}: look at ${notRestored.length > 1 ? 'them' : 'it'} before saving again`,
         file: f.rel, notRestored } } }
     }
+  }
+  // Written: what was moved aside goes. One that cannot be removed is
+  // no failed write (the change is made); it is logged, and swept later.
+  for (const step of steps) {
+    if (step.before?.kind !== 'moved') continue
+    await removeAside(step.before.aside)
+      .catch(err => logger.error(`${step.rel}: what was moved aside to remove it could not be removed (${err.code || err.message}): ${path.basename(step.before.aside)}`))
   }
   return { ok: true, written: files.map(f => f.rel) }
 }
@@ -441,7 +515,8 @@ async function takeBack(root, steps, made) {
       await putBack(root, step)
     } catch (err) {
       logger.error(`${step.rel} could not be put back as it was (${err.code || err.message})`)
-      left.push(step.rel)
+      // Content moved aside is where it was moved to: said, so it is found.
+      left.push(step.before?.kind === 'moved' ? `${step.rel} (it is at ${path.posix.join(step.dirRel, path.basename(step.before.aside))})` : step.rel)
     }
   }
   for (const m of [...made].reverse()) {
@@ -457,8 +532,10 @@ async function takeBack(root, steps, made) {
 /**
  * Remove the writer's temp files (TEMP_FILE) older than `olderThanMs`
  * anywhere in the repo but .git: what a write killed between its temp file
- * and its rename leaves. A younger one may be a write going on now, and is
- * left. Links are not followed. Returns the paths removed, in the repo.
+ * and its rename leaves — new content, never content that was there: a
+ * parked file or folder (PARKED_NAME) is never removed. A younger one may
+ * be a write going on now, and is left. Links are not followed. Returns
+ * the paths removed, in the repo.
  */
 export async function sweepTempFiles(root, { olderThanMs = 60 * 60 * 1000, now = Date.now() } = {}) {
   const removed = []
@@ -471,7 +548,9 @@ export async function sweepTempFiles(root, { olderThanMs = 60 * 60 * 1000, now =
       if (e.isDirectory()) { await walk(r); continue }
       if (!e.isFile() || !TEMP_FILE.test(e.name)) continue
       const st = await fs.lstat(path.join(root, r)).catch(() => null)
-      if (!st || now - st.mtimeMs < olderThanMs) continue
+      // By when the writer made it (its ctime): a rename keeps a file's
+      // mtime, so an mtime says nothing of when a temp file came to be.
+      if (!st || now - st.ctimeMs < olderThanMs) continue
       await fs.rm(path.join(root, r), { force: true }).then(() => removed.push(r), err => logger.error(`${r} could not be removed (${err.code || err.message})`))
     }
   }
@@ -500,4 +579,30 @@ export async function writeWhole(abs, content) {
     await fs.rm(tmp, { force: true })
     throw err
   }
+}
+
+/**
+ * Every parked file or folder in the repo but .git (PARKED_NAME): content
+ * a write moved aside and a crash, or a failed put-back, left there.
+ * `[{ rel, original, free }]`, `free` whether its original name is free.
+ */
+export async function parkedItems(root) {
+  const out = []
+  async function walk(rel) {
+    let entries
+    try { entries = await fs.readdir(path.join(root, rel), { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      const r = rel ? `${rel}/${e.name}` : e.name
+      if (!rel && e.name === '.git') continue
+      const original = parkedOf(e.name)
+      if (original) {
+        const at = rel ? `${rel}/${original}` : original
+        out.push({ rel: r, original: at, free: !(await fs.lstat(path.join(root, at)).then(() => true, () => false)) })
+        continue
+      }
+      if (e.isDirectory()) await walk(r)
+    }
+  }
+  await walk('')
+  return out.sort((a, b) => (a.rel < b.rel ? -1 : 1))
 }

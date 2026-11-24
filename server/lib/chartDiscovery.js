@@ -60,9 +60,9 @@ export async function findAlertTemplateCharts(chartsDir) {
  * or what Helm fails on or renders other than written (409, naming it). A
  * file that cannot be read is an UnreadableError naming it.
  */
-export async function templateForNewDeployment(gitopsDir, chart, folder) {
+export async function templateForNewDeployment(gitopsDir, chart, folder, repo = openRepo(gitopsDir)) {
   const base = chartsDirRel()
-  const loaded = base === null ? null : await openRepo(gitopsDir).templateFiles(`${base}/${chart}`)
+  const loaded = base === null ? null : await repo.templateFiles(`${base}/${chart}`)
   if (loaded?.state === 'unreadable') throw new UnreadableError(path.join(gitopsDir, loaded.file), { reason: loaded.why })
   if (!loaded || loaded.state === 'absent' || loaded.findings.some(f => f.code === 'template.chart-absent')) return { status: 400, error: `${chart} is not a Template of this repo` }
   const t = loaded.value

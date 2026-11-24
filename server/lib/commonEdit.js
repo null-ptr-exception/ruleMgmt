@@ -35,11 +35,11 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { isDeepStrictEqual } from 'util'
 import { createHash } from 'crypto'
-import { resolveStack, wrapPath } from './stack.js'
+import { resolveStack, wrapPath, linkedStackRefusal, linkedCommonRefusal, linkToCommon, STACK_LINK } from './stack.js'
 import { walk, excludedFolder, isCommonChart, isDeployment } from '../repo/walk.js'
 import { getSourceForTarget, getTargetsForSource, normalizeSyncPath } from './sync.js'
 import { readRegistry } from '../repo/sync.js'
-import { copyRepo } from '../repo/copyRepo.js'
+import { copyParts, writeIntoCopy } from '../repo/copyRepo.js'
 import { everythingUnder } from '../repo/changes/everythingUnder.js'
 import { loadMap, wrapEntry, liftEntry, addMissing, setDependency } from '../repo/valuesDoc.js'
 import { helmAvailable, renderAll, sameRender } from './helmCheck.js'
@@ -236,7 +236,11 @@ async function renderCheck(repo, items, files) {
   const rels = items.map(i => i.path)
   const checkedWith = await helmAvailable() ? 'helm' : 'values'
   if (!rels.length) return { checkedWith, problems: [], differs: [] }
-  const copy = await copyRepo(repo.root)
+  // Only what Helm needs for them: each deployment's folder, the _common
+  // charts it renders on, the Templates — and the folder of a _common
+  // being made (written into the copy below).
+  const parts = [...items.flatMap(i => [i.path, ...i.stack.layers.map(l => l.path)]), ...(chartsDir() === null ? [] : [chartsDir()])]
+  const copy = await copyParts(repo.root, parts)
   try {
     const renderNow = async (root, from) => (checkedWith === 'helm'
       ? renderAll(root, rels)
@@ -246,7 +250,12 @@ async function renderCheck(repo, items, files) {
       ? [...before].filter(([, r]) => r.error).map(([rel, r]) => ({ path: rel, message: `Helm cannot render it as it is (${r.error}): fix it first` }))
       : [...before].filter(([, v]) => v === null).map(([rel]) => ({ path: rel, message: 'AlertForge cannot work out the values it deploys as it is: fix it first' }))
     if (problems.length || !files) return { checkedWith, problems, differs: [] }
-    await writeInto(copy.root, files)
+    try {
+      await writeIntoCopy(copy.root, files)
+    } catch (err) {
+      if (!err.outsideCopy) throw err
+      return { checkedWith, problems: [{ path: '.', message: 'a folder it writes in leads outside the repo: AlertForge does not write through it' }], differs: [] }
+    }
     const after = await renderNow(copy.root, openRepo(copy.root))
     const differs = []
     for (const rel of rels) {
@@ -264,18 +273,6 @@ async function renderCheck(repo, items, files) {
   }
 }
 
-// A plan's files written into the copy at `root` (never the repo).
-async function writeInto(root, files) {
-  for (const f of files) {
-    const abs = path.join(root, f.rel)
-    if (f.removeFolder) { await fs.rm(abs, { recursive: true, force: true }); continue }
-    await fs.rm(abs, { force: true })
-    if (f.text === null) continue
-    await fs.mkdir(path.dirname(abs), { recursive: true })
-    if (f.link !== undefined) await fs.symlink(f.link, abs)
-    else await fs.writeFile(abs, f.text)
-  }
-}
 
 // The writer's files of a plan's writes.
 const filesOf = writes => writes.map(w => (w.remove ? { rel: w.rel, text: null } : w.link !== undefined ? { rel: w.rel, link: w.link } : { rel: w.rel, text: w.content }))
@@ -327,13 +324,12 @@ export async function planCreate(repo, folderIn, chart) {
   if (!(await isAlertTemplate(repo, chart))) return refuse(400, `${chart} is not an alert Template of this repo`)
   const commonRel = commonPathOf(folder, chart)
   const commonAbs = path.join(gitopsDir, commonRel)
+  // The folder's _common is a link made by hand: nothing is made through it, or over it.
+  const handMade = await linkToCommon(repo, commonRel)
+  if (handMade) return linkedCommonRefusal(folder, commonRel, handMade)
   if ((await repo.dir(commonRel)).state !== 'absent') return refuse(409, `${commonRel} is already there`)
   const holder = await repo.dir(`${folder}/${COMMON_DIR}`)
   if (holder.state === 'unreadable' && holder.kind === 'not-a-folder') return refuse(409, `${folder}/${COMMON_DIR} is there and is not a folder`)
-  // A _common folder that is a link (made by hand) is not written through.
-  const viaLink = await linkOnTheWay(gitopsDir, commonRel)
-  if (viaLink) return refuse(409, `${commonRel}: ${viaLink.why} — AlertForge makes no ${COMMON_DIR} through a link${viaLink.use}`)
-
   const tpl = await templateValues(repo, chart)
   if (tpl.why) return templateRefusal('Not made', tpl)
   const { items, byPath, unreadable } = await loadItems(repo)
@@ -371,6 +367,9 @@ export async function planCreate(repo, folderIn, chart) {
       else untouched.push({ path: y.path, why: `${y.kind === 'common' ? `a ${COMMON_DIR} chart` : 'a deployment'} of another Template (${y.stack.chart || y.stack.claims || names.join(', ') || 'none'})` })
       continue
     }
+    // On a _common reached through a link made by hand: not re-attached, and nothing else is.
+    const onLink = linkedStackRefusal(y.stack, y.path)
+    if (onLink) return onLink
     if (y.stack.problems.length) { problems.push(...y.stack.problems.map(p => ({ path: y.path, message: p.description }))); continue }
     let j = 0
     while (j < y.chain.length - 1 && under(y.chain[j + 1])) j++
@@ -463,7 +462,9 @@ export async function planCreate(repo, folderIn, chart) {
   // The new chart: named `common`, its link, and its values — every group
   // cleared on the Template directly (a group added later is then the
   // `_common`'s to give), nothing of its own on another `_common`.
-  const values = nextRel ? {} : { [chart]: Object.fromEntries(groups.map(g => [g, []])) }
+  // A Template with no group gives nothing to clear: `{}`, not `chart: {}`
+  // (a flow map, which the _common's removal could not move down).
+  const values = nextRel || !groups.length ? {} : { [chart]: Object.fromEntries(groups.map(g => [g, []])) }
   const own = [
     { rel: `${commonRel}/Chart.yaml`, content: dump({ apiVersion: 'v2', name: COMMON_CHART, description: `What the deployments under ${folder}/ inherit`, version: '0.1.0', dependencies: [{ name: innerName, version: ANY_VERSION }] }) },
     { rel: `${commonRel}/charts/${innerName}`, link: relOf(path.join(commonAbs, 'charts'), nextAbs) },
@@ -491,6 +492,8 @@ export async function planCreate(repo, folderIn, chart) {
       unreadable,
     },
     files,
+    // What `expected` is worked out from: again under the lock (expectedNow).
+    check: { writes: [...own, ...writes] },
   }
 }
 
@@ -506,6 +509,14 @@ async function folderState(abs, rel = '') {
   }
   return out
 }
+
+/**
+ * A plan's `expected` worked out again from the repo as it is now (`check`
+ * as planCreate/planDelete return it): what the writer compares under the
+ * lock, so a link the plan follows that now leads elsewhere — which a read
+ * of the files does not show — is a change too.
+ */
+export const expectedNow = (gitopsDir, check) => expectedOf(gitopsDir, check.writes, check.removed)
 
 /**
  * What a plan was made from and writes, one hash per file: each file as it
@@ -533,9 +544,20 @@ export async function planDelete(repo, commonRelIn) {
   if (!isCommonChartPath(commonRel)) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
   // A link is no _common chart to the walk: said as a link, not as none.
   const link = await linkOnTheWay(gitopsDir, commonRel)
+  // The _common folder itself (or the chart in it) is a link made by hand:
+  // said as every write to what is on it says it. A folder above that is
+  // one is said as a link, with where to ask instead.
+  const inFolder = segmentsOf(commonRel).slice(0, -2).join('/')
+  if (link && link.at.length > inFolder.length) return linkedCommonRefusal(inFolder, commonRel, link)
   if (link) return refuse(409, `Not removed: ${link.why} — remove it by hand${link.real ? `, or ask for ${link.real}` : ''}`)
   if (!(await isCommonChart(repo, commonRel))) return refuse(404, `${commonRel} is not a ${COMMON_DIR} chart`)
   const { items, byPath, unreadable } = await loadItems(repo)
+  // One that reaches it through a link made by hand would be left on
+  // nothing: not removed from under it.
+  for (const y of items) {
+    const led = y.stack.problems.find(p => p.kind === STACK_LINK)?.real
+    if (led && (led === commonRel || byPath.get(led)?.chain.includes(commonRel))) return linkedStackRefusal(y.stack, y.path)
+  }
   // A folder that cannot be read may hold a deployment on it, which would
   // be left pointing at nothing.
   if (unreadable.length) return refuse(409, `Not removed: ${unreadable.join(', ')} cannot be read, and may hold a deployment that inherits from it`, { unreadable })
@@ -633,6 +655,7 @@ export async function planDelete(repo, commonRelIn) {
       unreadable,
     },
     files,
+    check: { writes, removed: commonRel },
   }
 }
 
@@ -682,14 +705,26 @@ export const inheritsFromOf = stack => stack.layers[0]?.path ?? stack.firstLayer
  * (#102): on the nearest one, writing nothing of its own, so it inherits
  * everything — a group the `_common` gets later too. `{ chartYaml,
  * valuesYaml, inheritsFrom }`, `{ error }` when that `_common` has a
- * problem, or null when there is none (it is made on the Template).
+ * problem, `{ refusal }` when it is reached through a link made by hand,
+ * or null when there is none (it is made on the Template).
  */
 export async function deploymentOnCommon(gitopsDir, folder, chart, repo = openRepo(gitopsDir)) {
   const segments = segmentsOf(folder)
-  const commonRel = await folderCommonOf(gitopsDir, folder, chart, repo)
+  // The nearest folder above with a _common for the Template. One that is
+  // there through a link made by hand takes no new deployment (`refusal`).
+  let commonRel = null
+  for (let i = segments.length - 1; i >= 1 && !commonRel; i--) {
+    const at = commonPathOf(segments.slice(0, i).join('/'), chart)
+    const link = await linkToCommon(repo, at)
+    if (link && (await repo.dir(at)).state !== 'absent') return { refusal: linkedCommonRefusal(segments.join('/'), at, link) }
+    if (await isCommonChart(repo, at)) commonRel = at
+  }
   if (!commonRel) return null
   const commonDir = path.join(gitopsDir, commonRel)
   const layer = await resolveStack(gitopsDir, commonDir, { repo })
+  // The _common it would be on is itself on one reached through such a link.
+  const onLink = linkedStackRefusal(layer, segments.join('/'))
+  if (onLink) return { refusal: onLink }
   if (layer.problems.length) return { error: `${segments.join('/')} would inherit from ${commonRel}, which has a problem — fix it first: ${layer.problems.map(p => p.description).join('; ')}` }
   const dir = path.join(gitopsDir, ...segments)
   return {

@@ -3,18 +3,27 @@
 // hold every round: each answer is a whole change or none of it, a Commit
 // takes a change whole or not at all, the commit lock is free again, and no
 // temp file is left.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+//
+// In `npm test` one round of each: beside a Commit it is the one ordered by
+// the writer's hook (the Commit sent once the change holds the lock, so the
+// two always meet); with STRESS=1, 20 rounds of two at once and 50 beside a
+// Commit — the unlink, the delete and the _common's removal are in those.
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import { execFileSync } from 'child_process'
 import express from 'express'
 import { withSyncRegistryLock } from '../../server/repo/lock.js'
-import { defineChange, planChange, applyChange } from '../../server/repo/write.js'
+import { defineChange, planChange, applyChange, hooks } from '../../server/repo/write.js'
 import { openRepo } from '../../server/repo/openRepo.js'
 import { planMigration } from '../../server/lib/migrate.js'
 
-let server, baseURL, root, errors
+let server, baseURL, root, seed, errors
+
+const FULL = !!process.env.STRESS
+const TWO_AT_ONCE = FULL ? 20 : 1
+const BESIDE_COMMIT = FULL ? 50 : 1
 
 // The migration's writes into deployments as the Template's save takes
 // them (a test kind: the save's own files left out), so the seam is tried
@@ -34,8 +43,10 @@ defineChange('test-migration', {
   answer: () => ({ ok: true }),
 })
 
-beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'deployment-writes-stress-'))
+// The repo every test starts from is made once, through the API (a
+// Template, five deployments, committed), and copied for each test.
+beforeAll(async () => {
+  root = seed = await fs.mkdtemp(path.join(os.tmpdir(), 'deployment-writes-stress-seed-'))
   await fs.mkdir(path.join(root, 'charts'), { recursive: true })
   const names = ['templates', 'charts', 'deployments', 'folders', 'sync', 'git']
   const routers = await Promise.all(names.map(r => import(`../../server/routes/${r}.js`)))
@@ -44,7 +55,6 @@ beforeEach(async () => {
   app.use((req, res, next) => { req.gitopsDir = root; next() })
   names.forEach((r, i) => app.use(`/api/v2/${r}`, routers[i].default()))
   await new Promise(r => { server = app.listen(0, '127.0.0.1', () => { baseURL = `http://127.0.0.1:${server.address().port}`; r() }) })
-  errors = vi.spyOn(console, 'error').mockImplementation(() => {})
   git('init', '-q'); git('config', 'user.email', 'stress@example.invalid'); git('config', 'user.name', 'stress'); git('config', 'commit.gpgsign', 'false')
   expect((await api('POST', '/api/v2/charts', { name: 'demo' })).status).toBe(200)
   expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })).status).toBe(200)
@@ -56,10 +66,21 @@ beforeEach(async () => {
   git('add', '-A'); git('commit', '-qm', 'base')
 })
 
+beforeEach(async () => {
+  root = await fs.mkdtemp(path.join(os.tmpdir(), 'deployment-writes-stress-'))
+  await fs.cp(seed, root, { recursive: true, verbatimSymlinks: true })
+  errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+})
+
 afterEach(async () => {
+  hooks.locked = null
   errors.mockRestore()
-  if (server) await new Promise(r => server.close(r))
   await fs.rm(root, { recursive: true, force: true })
+})
+
+afterAll(async () => {
+  if (server) await new Promise(r => server.close(r))
+  await fs.rm(seed, { recursive: true, force: true })
 })
 
 const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf-8' })
@@ -115,7 +136,17 @@ const noTemp = async () => Object.keys(await files()).filter(p => /\.tmp$/.test(
 async function besideCommit(round, change, want = [200]) {
   const before = tracked(await files())
   await fs.writeFile(path.join(root, 'marker.txt'), `${round}\n`)
-  const [done, committed] = await Promise.all([change(), commit(`round ${round}`)])
+  let done, committed
+  if (round === 0) {
+    // Ordered: the Commit is sent while the change holds the lock, and
+    // waits for it.
+    let sent
+    hooks.locked = async () => { hooks.locked = null; sent = commit(`round ${round}`) }
+    done = await change()
+    committed = await sent
+  } else {
+    [done, committed] = await Promise.all([change(), commit(`round ${round}`)])
+  }
   expect(want, `round ${round}: ${JSON.stringify(done.data)}`).toContain(done.status)
   expect(committed.status).toBe(200)
   const after = tracked(await files())
@@ -131,8 +162,8 @@ async function besideCommit(round, change, want = [200]) {
 }
 
 describe('stress: two changes at once', () => {
-  it('20 rounds of a _common made beside a values save in that folder: never values of the old shape on the new stack', async () => {
-    for (let round = 0; round < 20; round++) {
+  it('rounds of a _common made beside a values save in that folder: never values of the old shape on the new stack', async () => {
+    for (let round = 0; round < TWO_AT_ONCE; round++) {
       const plan = (await api('GET', `/api/v2/folders/common/plan?folder=${U}&chart=demo`)).data
       const [made, saved] = await Promise.all([
         api('POST', '/api/v2/folders/common', { action: 'create', folder: U, chart: 'demo', expected: plan.expected }),
@@ -154,9 +185,9 @@ describe('stress: two changes at once', () => {
     }
   }, 300_000)
 
-  it('20 rounds of the migration\'s deployment writes beside a values save: a save is never migrated over', async () => {
+  it('rounds of the migration\'s deployment writes beside a values save: a save is never migrated over', async () => {
     const migrate = async () => applyChange(await planChange(openRepo(root), { kind: 'test-migration', migration: { columns: {} } }))
-    for (let round = 0; round < 20; round++) {
+    for (let round = 0; round < TWO_AT_ONCE; round++) {
       // Each round the migration has something to write, the saved file
       // too: files in flow style, which it writes in block style.
       await fs.writeFile(path.join(root, C, 'values.yaml'), `demo:\n  cpu: [{job: c${round}}]\n`)
@@ -176,22 +207,22 @@ describe('stress: two changes at once', () => {
   }, 300_000)
 })
 
-describe('stress: each kind beside a Commit, 50 rounds', () => {
+describe('stress: each kind beside a Commit', () => {
   it('a sync link and unlink', async () => {
-    for (let round = 0; round < 50; round++) {
+    for (let round = 0; round < BESIDE_COMMIT; round++) {
       await besideCommit(round, () => (round % 2 ? api('DELETE', '/api/v2/sync', { target: B }) : api('POST', '/api/v2/sync', { source: A, target: B })))
     }
   }, 300_000)
 
   it('a new deployment, then deleting it', async () => {
-    for (let round = 0; round < 50; round++) {
+    for (let round = 0; round < BESIDE_COMMIT; round++) {
       const n = `deployments/t/n${Math.floor(round / 2)}`
       await besideCommit(round, () => (round % 2 ? api('DELETE', `/api/v2/deployments/demo/${path.basename(n)}${q(n)}`) : api('POST', '/api/v2/folders/init', { folder: n, chart: 'demo' })))
     }
   }, 300_000)
 
   it('deleting a sync source', async () => {
-    for (let round = 0; round < 50; round++) {
+    for (let round = 0; round < BESIDE_COMMIT; round++) {
       const s = `deployments/t/s${round}`
       expect((await api('POST', '/api/v2/folders/init', { folder: s, chart: 'demo' })).status).toBe(200)
       expect((await save(s, `s${round}`)).status).toBe(200)
@@ -202,7 +233,7 @@ describe('stress: each kind beside a Commit, 50 rounds', () => {
   }, 300_000)
 
   it('a _common made, then removed', async () => {
-    for (let round = 0; round < 50; round++) {
+    for (let round = 0; round < BESIDE_COMMIT; round++) {
       if (round % 2) {
         // In block YAML: what it gives can be moved down when it is removed.
         await fs.writeFile(path.join(root, U, '_common/demo/values.yaml'), `demo:\n  cpu:\n    - job: layer${round}\n`)
@@ -220,7 +251,7 @@ describe('stress: each kind beside a Commit, 50 rounds', () => {
   }, 300_000)
 
   it('the migration\'s deployment writes', async () => {
-    for (let round = 0; round < 50; round++) {
+    for (let round = 0; round < BESIDE_COMMIT; round++) {
       await fs.writeFile(path.join(root, C, 'values.yaml'), `demo:\n  cpu: [{job: c${round}}]\n`)
       await fs.writeFile(path.join(root, P, 'values.yaml'), `demo:\n  cpu: [{job: p${round}}]\n`)
       git('add', '-A'); git('commit', '-qm', `out of shape ${round}`)

@@ -19,7 +19,7 @@
  * (409, with the new plan), never written over.
  */
 import { defineChange } from '../write.js'
-import { planCreate, planDelete } from '../../lib/commonEdit.js'
+import { planCreate, planDelete, expectedNow } from '../../lib/commonEdit.js'
 
 /** A plan's `expected` (a map of file → hash) as one string, the order of its keys aside. */
 export const expectedVersion = expected => JSON.stringify(Object.entries(expected).sort())
@@ -30,11 +30,12 @@ defineChange('common', {
   async plan(repo, { action, folder, chart, path }) {
     const out = action === 'delete' ? await planDelete(repo, path) : await planCreate(repo, folder, chart)
     if (!out.plan) return { refusal: out }
-    return { files: out.files, facts: { plan: out.plan, version: expectedVersion(out.plan.expected) } }
+    return { files: out.files, facts: { plan: out.plan, check: out.check } }
   },
 
-  // Worked out with the plan: the same files read, the same version.
-  version: (repo, change, facts) => facts.version,
+  // The plan's `expected` as the repo is now: each file it writes and, on a
+  // removal, every one under the _common, a link by where it leads.
+  version: async (repo, change, facts) => expectedVersion(await expectedNow(repo.root, facts.check)),
   strict: () => new Set(),
   table: () => 'commonMove',
   refused: () => ({ status: 409, body: { error: 'refused' } }),

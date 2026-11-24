@@ -4,11 +4,14 @@
  *   { kind: 'sync-link', source, target }     (as sync.yaml spells them)
  *   { kind: 'sync-unlink', target }
  *
- * sync-link writes, in this order and all or none: the target's Chart.yaml
- * (when its Template is not the source's), its values.yaml (the source's
- * bytes), its routing.yaml and the AlertmanagerConfig made from it (the
- * source's, or removed when the source has none, with the templates/
- * folder they leave empty), then sync.yaml. A new target is made as a
+ * sync-link writes, in this order and all or none: sync.yaml, then the
+ * target's Chart.yaml (when its Template is not the source's), its
+ * values.yaml (the source's bytes), its routing.yaml and the
+ * AlertmanagerConfig made from it (the source's, or removed when the
+ * source has none, with the templates/ folder they leave empty). sync.yaml
+ * first: a server killed midway leaves a target that is listed and not
+ * yet its source's copy (or not there yet), which Commit refuses — never
+ * a target overwritten and not listed, which it would take. A new target is made as a
  * copy; one refused leaves nothing behind. A target file that cannot be
  * read fails the link, naming it: what the copy replaces could not be put
  * back. sync-unlink writes sync.yaml alone.
@@ -110,7 +113,7 @@ async function planLink(repo, { source, target }) {
   const copy = await targetCopy(repo, source, target, { valuesContent: content, routingContent: routing })
   if (copy.refusal) return { refusal: copy.refusal }
   const files = copy.files
-  files.push({ rel: SYNC_FILE, text: registryText(registry) })
+  files.unshift({ rel: SYNC_FILE, text: registryText(registry) })
   return { files, facts: {} }
 }
 

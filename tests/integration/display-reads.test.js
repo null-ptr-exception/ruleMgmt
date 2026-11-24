@@ -226,6 +226,53 @@ describe('a _common reached through a hand-made link', () => {
     })
   }
 
+  // A write that would put a deployment or a _common on it, or take away
+  // the _common it leads to: the same sentence, about the folder or the
+  // deployment it is said of.
+  const everything = async (rel = 'deployments') => {
+    const out = {}
+    for (const e of await fs.readdir(path.join(root, rel), { withFileTypes: true })) {
+      const p = `${rel}/${e.name}`
+      if (e.isSymbolicLink()) out[p] = `link:${await fs.readlink(path.join(root, p))}`
+      else if (e.isDirectory()) Object.assign(out, { [`${p}/`]: 'folder' }, await everything(p))
+      else out[p] = await fs.readFile(path.join(root, p), 'utf-8')
+    }
+    return out
+  }
+  const refusedAs = async (rel, ask) => {
+    const before = await everything()
+    const r = await ask()
+    expect(r.status).toBe(409)
+    expect(r.data).toMatchObject({ error: `${rel}: ${SAID}`, file: rel })
+    expect(await everything()).toEqual(before)
+  }
+  it('takes no new deployment in the folder', async () => {
+    await refusedAs('deployments/t/n', () => api('POST', '/api/v2/folders/init', { folder: 'deployments/t/n', chart: 'demo' }))
+  })
+  it('takes no new deployment in a folder below it', async () => {
+    await fs.mkdir(path.join(root, 'deployments/t/sub'))
+    await refusedAs('deployments/t/sub/n', () => api('POST', '/api/v2/folders/init', { folder: 'deployments/t/sub/n', chart: 'demo' }))
+  })
+  it('is not made a _common over, in its folder or one above', async () => {
+    await refusedAs('deployments/t', () => api('GET', '/api/v2/folders/common/plan?folder=deployments/t&chart=demo'))
+    await refusedAs('deployments/t', () => api('POST', '/api/v2/folders/common', { action: 'create', folder: 'deployments/t', chart: 'demo', expected: {} }))
+    await refusedAs('deployments/t/a', () => api('GET', '/api/v2/folders/common/plan?folder=deployments&chart=demo'))
+    await refusedAs('deployments/t/a', () => api('POST', '/api/v2/folders/common', { action: 'create', folder: 'deployments', chart: 'demo', expected: {} }))
+  })
+  it('is not removed through the link', async () => {
+    await refusedAs('deployments/t', () => api('GET', '/api/v2/folders/common/plan?action=delete&path=deployments/t/_common/demo'))
+    await refusedAs('deployments/t', () => api('POST', '/api/v2/folders/common', { action: 'delete', path: 'deployments/t/_common/demo', expected: {} }))
+  })
+  it('keeps the _common it leads to: removing that one would leave the deployment on nothing', async () => {
+    await refusedAs('deployments/t/a', () => api('GET', '/api/v2/folders/common/plan?action=delete&path=deployments/s/_common/demo'))
+    await refusedAs('deployments/t/a', () => api('POST', '/api/v2/folders/common', { action: 'delete', path: 'deployments/s/_common/demo', expected: {} }))
+  })
+  it('takes a sync to a new deployment in the folder, which is made on the _common the source is on, not through the link', async () => {
+    const r = await api('POST', '/api/v2/sync', { source: 'deployments/s/x', target: 'deployments/t/new' })
+    expect(r.status).toBe(200)
+    expect(await fs.readFile(path.join(root, 'deployments/t/new/Chart.yaml'), 'utf-8')).toContain('file://../../s/_common/demo')
+  })
+
   it('is refused by Preview in the same words', async () => {
     const { data } = await api('POST', `/api/v2/render/demo/a?folder=${encodeURIComponent('deployments/t/a')}`)
     expect(data).toMatchObject({ ok: false, error: `deployments/t/a: ${SAID}` })

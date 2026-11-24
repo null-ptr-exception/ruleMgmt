@@ -11,9 +11,13 @@
  *                  says what was not checked
  *   copy.remove()
  *
- *   tempFolder(prefix) → { dir, remove() }: a folder in the temp folder,
- *   removed by remove() or, if the process is stopped first (SIGINT,
- *   SIGTERM), on the way out
+ *   tempFolder(prefix, { onStop }) → { dir, remove() }: a folder in the temp
+ *   folder, removed by remove() or, if the process is stopped first
+ *   (SIGINT, SIGTERM), on the way out — with onStop: false (the server),
+ *   only by remove(), and by sweepTempCopies when the server starts
+ *   copyRepo(root, { onStop, prefix }): the same choice
+ *   sweepTempCopies(prefix, { olderThanMs }): the temp folders of that
+ *   prefix older than that, removed
  *   removeWhenStopped(): from now on a SIGINT or SIGTERM stops the child
  *   processes still running, removes every temp folder not yet removed,
  *   and exits 130 or 143 (tempFolder calls it; a command calls it first)
@@ -49,7 +53,11 @@ async function targetOf(src) {
 const whyNot = err => (err.code === 'EACCES' || err.code === 'EPERM' ? 'permission denied' : 'it cannot be read')
 const relOf = (root, p) => path.relative(root, p).split(path.sep).join('/') || '.'
 
-async function copyInto(root, copy, from, to, skipped) {
+// Where a link that leads out of the repo is made to lead in a copy that
+// cuts them: nowhere (it is not there), so nothing outside is reached.
+const CUT = '.outside-link-cut'
+
+async function copyInto(root, copy, from, to, skipped, { cutOutside = false } = {}) {
   let entries
   try {
     entries = await fs.readdir(from, { withFileTypes: true })
@@ -64,9 +72,10 @@ async function copyInto(root, copy, from, to, skipped) {
     const dst = path.join(to, e.name)
     if (e.isSymbolicLink()) {
       const at = await targetOf(src)
-      await fs.symlink(inside(root, at) ? path.relative(path.dirname(dst), path.join(copy, path.relative(root, at))) || '.' : at, dst)
+      const to = inside(root, at) ? path.relative(path.dirname(dst), path.join(copy, path.relative(root, at))) || '.' : cutOutside ? path.join(copy, CUT, e.name) : at
+      await fs.symlink(to, dst)
     } else if (e.isDirectory()) {
-      await copyInto(root, copy, src, dst, skipped)
+      await copyInto(root, copy, src, dst, skipped, { cutOutside })
     } else if (e.isFile()) {
       try {
         await fs.copyFile(src, dst)
@@ -111,8 +120,11 @@ export function removeWhenStopped() {
   }
 }
 
-export async function tempFolder(prefix) {
-  removeWhenStopped()
+export async function tempFolder(prefix, { onStop = true } = {}) {
+  // A command removes it when stopped (removeWhenStopped); the server does
+  // not take over SIGINT/SIGTERM: its caller removes it in a finally, and
+  // one a killed server left is swept when it starts (sweepTempCopies).
+  if (onStop) removeWhenStopped()
   // Made and listed in one step, so no signal comes between the two; as
   // it really is, so what a tool says of it names it so.
   const dir = fsSync.realpathSync(fsSync.mkdtempSync(path.join(os.tmpdir(), prefix)))
@@ -125,8 +137,8 @@ export async function tempFolder(prefix) {
   return { dir, remove }
 }
 
-export async function copyRepo(root) {
-  const work = await tempFolder('check-repo-')
+export async function copyRepo(root, { onStop = true, prefix = 'check-repo-' } = {}) {
+  const work = await tempFolder(prefix, { onStop })
   const tmp = work.dir
   const copy = path.join(tmp, 'repo')
   const skipped = []
@@ -138,4 +150,75 @@ export async function copyRepo(root) {
     throw err
   }
   return { root: copy, skipped, remove: work.remove }
+}
+
+/** The server's copies (SERVER_COPY prefix) a killed server left in the temp folder, an hour old or more, removed. */
+export const SERVER_COPY = 'alertforge-copy-'
+export async function sweepTempCopies(prefix = SERVER_COPY, { olderThanMs = 60 * 60 * 1000, now = Date.now() } = {}) {
+  const removed = []
+  for (const name of await fs.readdir(os.tmpdir()).catch(() => [])) {
+    if (!name.startsWith(prefix)) continue
+    const abs = path.join(os.tmpdir(), name)
+    const st = await fs.lstat(abs).catch(() => null)
+    if (!st?.isDirectory() || now - st.mtimeMs < olderThanMs) continue
+    await fs.rm(abs, { recursive: true, force: true }).then(() => removed.push(name), () => {})
+  }
+  return removed
+}
+
+/**
+ * A copy of some folders of the repo (`rels`), each where it is in the
+ * repo, for Helm to render a few deployments in (a _common's check): as
+ * copyRepo copies, but a link that leads outside the repo leads nowhere in
+ * the copy (it is cut), so nothing Helm or a check does in the copy
+ * reaches outside it. `{ root, skipped, remove }`.
+ */
+export async function copyParts(repoRoot, rels, { prefix = SERVER_COPY, onStop = false } = {}) {
+  const root = await fs.realpath(repoRoot)
+  const work = await tempFolder(prefix, { onStop })
+  const copy = path.join(work.dir, 'repo')
+  const skipped = []
+  // A folder inside another one asked for comes with it.
+  const wanted = [...new Set(rels)].sort().filter((r, i, all) => !all.slice(0, i).some(o => r === o || r.startsWith(`${o}/`)))
+  try {
+    await fs.mkdir(copy, { recursive: true })
+    for (const rel of wanted) {
+      const from = path.join(root, rel)
+      const st = await fs.lstat(from).catch(() => null)
+      if (!st?.isDirectory()) continue
+      await copyInto(root, copy, from, path.join(copy, rel), skipped, { cutOutside: true })
+    }
+  } catch (err) {
+    await work.remove()
+    throw err
+  }
+  return { root: copy, skipped, remove: work.remove }
+}
+
+/**
+ * A plan's files written into the copy at `root` (copyParts; never the
+ * repo), each only where the copy really is: a folder on the way that
+ * leads out of it throws (`outsideCopy`).
+ */
+export async function writeIntoCopy(root, files) {
+  const real = await fs.realpath(root)
+  const within = async dir => {
+    const at = await fs.realpath(dir)
+    const r = path.relative(real, at)
+    if (r.startsWith('..') || path.isAbsolute(r)) throw Object.assign(new Error('outside the copy'), { outsideCopy: true })
+  }
+  for (const f of files) {
+    const abs = path.join(root, f.rel)
+    // The deepest folder on the way that is there, before any is made.
+    let up = path.dirname(abs)
+    while (!(await fs.lstat(up).then(() => true, () => false))) up = path.dirname(up)
+    await within(up)
+    await fs.mkdir(path.dirname(abs), { recursive: true })
+    await within(path.dirname(abs))
+    if (f.removeFolder || f.removeWhole) { await fs.rm(abs, { recursive: true, force: true }); continue }
+    await fs.rm(abs, { force: true })
+    if (f.text === null) continue
+    if (f.link !== undefined) await fs.symlink(f.link, abs)
+    else await fs.writeFile(abs, f.text)
+  }
 }

@@ -18,7 +18,8 @@ import { logger, httpLogger } from './server/lib/logger.js'
 import { jsonBody } from './server/http/body.js'
 import { answerUncaught } from './server/http/route.js'
 import { userRoute, unknownApiRoute } from './server/routes/own.js'
-import { sweepTempFiles } from './server/repo/write.js'
+import { sweepTempFiles, parkedItems } from './server/repo/write.js'
+import { sweepTempCopies } from './server/repo/copyRepo.js'
 import { objectMetaFromEnv } from './src/utils/objectMeta.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -85,6 +86,12 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
 {
   const swept = await sweepTempFiles(GITOPS_DIR_V2)
   if (swept.length) logger.info(`Removed ${swept.length} temp file(s) a write left: ${swept.join(', ')}`)
+  // And the copies of the repo a plan checks in, left by a server killed meanwhile.
+  // Content a write moved aside and did not put back or remove is never
+  // removed: said, and Commit refuses while it is there.
+  for (const p of await parkedItems(GITOPS_DIR_V2)) logger.warn(`${p.rel} is ${p.original} as it was, moved aside by a write that did not finish${p.free ? `: rename it back to ${p.original} to keep it, or remove it` : `; ${p.original} is there again`}`)
+  const copies = await sweepTempCopies()
+  if (copies.length) logger.info(`Removed ${copies.length} temp cop${copies.length > 1 ? 'ies' : 'y'} of the repo left by a stopped server`)
 }
 
 // ─── V2 API (base path router) ──────────────────────────────────────────────

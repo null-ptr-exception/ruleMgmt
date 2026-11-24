@@ -8,40 +8,41 @@
  *     deployment  the name in the URL
  *
  * A folder deployment (its values.yaml, or a Chart.yaml with none) goes
- * whole: every file under its folder — links as links, never followed —
- * then each folder, deepest first; and sync.yaml without it: a deleted
- * target leaves its source, a deleted source lets go of its targets, which
- * keep what they have and become editable again (#180). A legacy
- * `<name>-values.yaml` goes alone, and sync.yaml is not touched. All or
- * none: a file that cannot be removed puts back every one removed before
- * it. A file or folder under it that cannot be read is named, and nothing
- * is removed (it could not be put back).
+ * whole: its folder moved aside in one rename (write.js removeWhole) —
+ * nothing in it read, so one with a file that cannot be read, or a link,
+ * is removed too — then sync.yaml written without it: a deleted target
+ * leaves its source, a deleted source lets go of its targets, which keep
+ * what they have and become editable again (#180); then the folder moved
+ * aside is removed. All or none: when sync.yaml cannot be written the
+ * folder is renamed back. A deployment folder that is itself a link is
+ * refused (the route's path check, and the writer's). A legacy
+ * `<name>-values.yaml` goes alone, and sync.yaml is not touched.
  */
 import path from 'path'
 import { defineChange } from '../write.js'
 import { syncAnswer, SYNC_FILE } from '../sync.js'
 import { folderEntry, isDeployment } from '../walk.js'
-import { LEGACY_VALUES_SUFFIX } from '../paths.js'
+import { LEGACY_VALUES_SUFFIX, deploymentLinkProblem } from '../paths.js'
 import { isTarget, applyUnlink, registryText } from '../../lib/sync.js'
-import { everythingUnder } from './everythingUnder.js'
-
-const cannotRead = (file, why) => ({ refusal: { status: 409, body: { error: `${file} cannot be read: ${why}`, file, unreadable: true } } })
 
 defineChange('delete-deployment', {
   policy: 'save',
 
   async plan(repo, { dir, folder, deployment }) {
+    // A deployment folder reached through a link is refused here too: the
+    // plan made again under the lock is not checked by the route.
+    const link = await deploymentLinkProblem(repo.root, dir)
+    if (link) return { refusal: { status: 400, body: { error: link } } }
     // Which file holds its values (resolve.js): the folder's own deployment,
     // named after the folder, is values.yaml when there is one; any other
     // name a legacy `<name>-values.yaml` beside it.
+    // Anything at values.yaml — a file, one that cannot be read, a link,
+    // a link to nothing, a folder — is the folder's own deployment: never
+    // quietly the other file.
     let direct = false
     if (deployment === path.posix.basename(dir)) {
       const values = await repo.file(`${dir}/values.yaml`)
-      // A link to nothing, or one that cannot be read, must not quietly
-      // pick the other file.
-      // A folder in its place is removed with the rest, as before.
-      if (values.state === 'unreadable' && values.kind !== 'not-a-folder' && values.kind !== 'folder') return cannotRead(`${dir}/values.yaml`, values.why)
-      direct = values.state === 'ok' || values.kind === 'folder'
+      direct = values.state !== 'absent' && values.kind !== 'not-a-folder'
     }
     // A folder with a Chart.yaml and no values.yaml is removed whole too:
     // it renders the Template, and keeps the Template from being deleted.
@@ -55,8 +56,7 @@ defineChange('delete-deployment', {
       if (there.state !== 'absent') files.push({ rel: file, text: null })
       return { files, facts }
     }
-    const unread = await everythingUnder(repo, dir, files)
-    if (unread) return cannotRead(unread.file, unread.why)
+    files.push({ rel: dir, removeWhole: true })
     // Deleting a legacy deployment's folder leaves sync.yaml as it is.
     if (!folder) return { files, facts }
     const read = await syncAnswer(repo)
@@ -72,11 +72,10 @@ defineChange('delete-deployment', {
     if (entries.length) {
       registry.syncs = registry.syncs.filter(s => !entries.includes(s))
       changed = true
-      // Listed as let go: on disk, and not still under another source.
-      // Asked of the repo as it is after the delete: one inside the source goes with it.
-      const after = repo.with(files.filter(f => !f.removeFolder).map(f => [f.rel, null]))
+      // Listed as let go: on disk, and not still under another source; one
+      // inside the source goes with it.
       for (const t of new Set(entries.flatMap(e => e.targets))) {
-        if (t !== folder && !t.startsWith(`${folder}/`) && !isTarget(registry, t) && await isDeployment(after, t)) facts.unlinked.push(t)
+        if (t !== folder && !t.startsWith(`${folder}/`) && !isTarget(registry, t) && await isDeployment(repo, t)) facts.unlinked.push(t)
       }
     }
     if (changed) files.push({ rel: SYNC_FILE, text: registryText(registry) })
@@ -84,7 +83,7 @@ defineChange('delete-deployment', {
   },
 
   // Nothing is someone else's edit to keep: a file added or changed while
-  // it waits is planned again (and removed with the rest).
+  // it waits is planned again (and goes with the rest).
   strict: () => new Set(),
   table: () => 'save',
   refused: () => ({ status: 400, body: { error: 'refused' } }),

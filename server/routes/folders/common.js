@@ -26,11 +26,11 @@ const PLAN_FIELDS = {
   path: z.string().min(1).optional(),
 }
 const PLAN_QUERY = z.object({ action: z.string().optional(), ...PLAN_FIELDS })
-// `expected` is the plan's, as shown: a file changed since refuses it.
-// Left out (a script), the plan made now is written.
+// `expected` is the plan's, as shown: a file changed since refuses it. A
+// _common is not made or removed without its plan having been shown.
 const APPLY_BODY = z.object({
   action: z.enum(['create', 'delete'], { error: 'action is create or delete' }),
-  expected: map(z.unknown(), { error: 'expected is the plan\'s expected, from GET /common/plan, as it was shown' }).optional(),
+  expected: map(z.unknown(), { error: 'expected is needed: the plan\'s expected, from GET /common/plan, as it was shown' }),
   ...PLAN_FIELDS,
 })
 const USERS_QUERY = z.object({
@@ -83,7 +83,7 @@ export function commonRoutes(router) {
   router.post('/common', route('folders.common', { body: APPLY_BODY }, async ({ body }, { gitopsDir }) => {
     try {
       const plan = await planChange(openRepo(gitopsDir), changeOf(body))
-      return await applyChange(plan, { expect: body.expected === undefined ? undefined : expectedVersion(body.expected) })
+      return await applyChange(plan, { expect: expectedVersion(body.expected) })
     } catch (err) {
       const answer = errorAnswer(err)
       return answer.status === 500 ? { status: 500, body: { error: await withoutPath(err.message, gitopsDir) } } : answer

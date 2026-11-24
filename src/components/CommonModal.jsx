@@ -117,7 +117,7 @@ export default function CommonModal({ open, mode, folder, commonPath, onClose, o
           </Text>
           <Text type="secondary" data-testid="common-checked" style={{ display: 'block', fontSize: 12, marginBottom: 8 }}>
             {plan.checkedWith === 'helm'
-              ? 'Each deployment it changes was rendered with Helm as it is now, and is rendered again once written: if one renders anything else, everything is put back.'
+              ? 'Each deployment it changes was rendered with Helm as it is now and as it will be, before anything is written: one that would render anything else stops it, and nothing is written.'
               : 'Helm is not available here: only the values AlertForge works out for each deployment are compared before and after, not what Helm renders.'}
           </Text>
           {rows.length > 0 && (

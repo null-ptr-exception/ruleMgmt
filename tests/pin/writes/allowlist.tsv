@@ -62,3 +62,5 @@ second-dir-swapped-inside	routing-save	partial	policy	a sync target (or a deploy
 first-readonly	migration-apply	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 middle-readonly	migration-apply	refused-but-changed+5xx	bug	no issue yet: a migration writes the Template, then each deployment; one deployment that cannot be written leaves the Template and the deployments before it written, and answers 500
 last-readonly	migration-apply	partial	bug	no issue yet: a migration whose sync target cannot be written writes the Template and every other deployment, and lists the target
+changed-while-waiting	common-create	not-locked	policy	a _common move sent without its plan's expected is refused (400) before it takes the lock; nothing is read for writing or written
+changed-while-waiting	common-remove	not-locked	policy	a _common move sent without its plan's expected is refused (400) before it takes the lock; nothing is read for writing or written

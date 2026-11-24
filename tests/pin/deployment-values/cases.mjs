@@ -9,6 +9,7 @@
 //         T  like A, with the Template's own values.yaml changed (files)
 // text:   the subject file's content, or { mode: 0, content } / { dir: true } / { link }
 // json:   the bare values the editor would send for a JSON save (optional)
+// init:   true: a new deployment is asked for beside the subject too (deployments/t/n)
 // files:  other files of the repo to change, same forms as text, or
 //         { remove: true } / { dirMode: 0 }
 
@@ -169,8 +170,9 @@ export const CASES = [
   // which Helm renders.
   { id: 'layer-cannot-tell', target: 'L', text: 'demo:\n  _common:\n    team: shop\n  note: |2\n     two spaces more\n' },
   // By hand: deployments/t/_common is a link to deployments/s/_common, and
-  // the deployment renders on the _common through it.
-  { id: 'common-linked', target: 'A', text: 'common:\n  demo:\n    cpu:\n      - { job: api }\n', json: { cpu: [{ job: 'api' }] }, files: { 'deployments/t/_common': { link: '../s/_common' }, [A_CHART]: "apiVersion: v2\nname: a\nversion: 0.1.0\ndependencies:\n  - name: common\n    version: '>=0.0.0-0'\n    repository: file://../_common/demo\n" } },
+  // the deployment renders on the _common through it. `init`: a new
+  // deployment beside it is asked for too.
+  { id: 'common-linked', target: 'A', init: true, text: 'common:\n  demo:\n    cpu:\n      - { job: api }\n', json: { cpu: [{ job: 'api' }] }, files: { 'deployments/t/_common': { link: '../s/_common' }, [A_CHART]: "apiVersion: v2\nname: a\nversion: 0.1.0\ndependencies:\n  - name: common\n    version: '>=0.0.0-0'\n    repository: file://../_common/demo\n" } },
   // The layer gives rows while the deployment's own values cannot be read,
   // are not YAML, or hold nothing under the chart's key.
   { id: 'stack-own-unreadable', target: 'S', text: { mode: 0, content: BASE.X }, files: { [L_VALUES]: L_ROWS } },

@@ -182,17 +182,26 @@ describe('a deployment deleted while the commit checks it', () => {
     await fs.writeFile(path.join(dep, 'Chart.yaml'), 'apiVersion: v2\nname: x\nversion: 0.1.0\ndependencies:\n  - name: stale\n    repository: file://../../../charts/stale\n')
     await fs.writeFile(path.join(dep, 'values.yaml'), 'stale: {}\n')
     // Its folder is found, then it is gone when its Chart.yaml is read.
+    // Read as a file (readFile) or through the repo's reader (open).
     const readFile = fs.readFile.bind(fs)
+    const open = fs.open.bind(fs)
     let reads = 0
-    const spy = vi.spyOn(fs, 'readFile').mockImplementation(async (file, ...rest) => {
-      if (String(file) === path.join(dep, 'Chart.yaml') && reads++ > 0) throw Object.assign(new Error('gone'), { code: 'ENOENT' })
-      return readFile(file, ...rest)
-    })
+    const gone = file => String(file) === path.join(dep, 'Chart.yaml') && reads++ > 0
+    const spies = [
+      vi.spyOn(fs, 'readFile').mockImplementation(async (file, ...rest) => {
+        if (gone(file)) throw Object.assign(new Error('gone'), { code: 'ENOENT' })
+        return readFile(file, ...rest)
+      }),
+      vi.spyOn(fs, 'open').mockImplementation(async (file, ...rest) => {
+        if (gone(file)) throw Object.assign(new Error('gone'), { code: 'ENOENT' })
+        return open(file, ...rest)
+      }),
+    ]
     try {
       const { findings } = await deploymentCommitBlockers(tmpDir)
       expect(findings).toEqual([])
     } finally {
-      spy.mockRestore()
+      for (const spy of spies) spy.mockRestore()
     }
   })
 })

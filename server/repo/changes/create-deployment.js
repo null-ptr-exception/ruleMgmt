@@ -14,17 +14,14 @@
  * Chart.yaml that depends on an alert Template: the answer says
  * `existing`, with its Template.
  */
-import fs from 'fs/promises'
 import path from 'path'
 import { defineChange } from '../write.js'
-import { openRepo } from '../openRepo.js'
-import { copyRepo } from '../copyRepo.js'
 import { newDeploymentProblem, isDeployment } from '../walk.js'
 import { loadDeployment } from '../deployment.js'
 import { findingsOf } from '../loaded.js'
 import { decide } from '../policy.js'
 import { chartsDir as chartsRel } from '../template.js'
-import { getChartsDir, findAlertTemplateCharts, templateForNewDeployment } from '../../lib/chartDiscovery.js'
+import { getChartsDir, templateForNewDeployment } from '../../lib/chartDiscovery.js'
 import { wrapValues } from '../../lib/subchart.js'
 import { resolveStack } from '../../lib/stack.js'
 import { newReservedSegment, reservedError } from '../../lib/reservedNames.js'
@@ -32,20 +29,10 @@ import { deploymentOnCommon, ANY_VERSION } from '../../lib/commonEdit.js'
 import { dumpForHelm } from '../../../src/utils/yamlScalar.js'
 
 // What the init table refuses in the deployment at `folder` once `files`
-// are written: worked out in a copy of the repo, so nothing is written in
-// it (the stack is read from the folders as they are on disk).
-async function problemsOnceMade(root, folder, files) {
-  const copy = await copyRepo(root)
-  try {
-    for (const f of files) {
-      await fs.mkdir(path.dirname(path.join(copy.root, f.rel)), { recursive: true })
-      await fs.writeFile(path.join(copy.root, f.rel), f.text)
-    }
-    const dep = await loadDeployment(openRepo(copy.root), folder)
-    return dep.state === 'unreadable' ? [`${dep.file} cannot be read: ${dep.why}`] : decide(findingsOf(dep), 'init').refuse.map(f => f.message)
-  } finally {
-    await copy.remove()
-  }
+// are written: the snapshot with them overlaid, nothing written.
+async function problemsOnceMade(repo, folder, files) {
+  const dep = await loadDeployment(repo.with(files.map(f => [f.rel, f.text])), folder)
+  return dep.state === 'unreadable' ? [`${dep.file} cannot be read: ${dep.why}`] : decide(findingsOf(dep), 'init').refuse.map(f => f.message)
 }
 
 const say = (status, error, extra = {}) => ({ refusal: { status, body: { error, ...extra } } })
@@ -69,6 +56,7 @@ defineChange('create-deployment', {
     }
     // Asked before anything is written: a refusal leaves the repo as it was.
     const onCommon = await deploymentOnCommon(root, folder, chart, repo)
+    if (onCommon?.refusal) return { refusal: onCommon.refusal }
     if (onCommon?.error) return say(409, onCommon.error)
 
     // What is there now: one that cannot be read is not written over.
@@ -85,16 +73,24 @@ defineChange('create-deployment', {
       const parsed = await repo.helmYaml(`${folder}/Chart.yaml`)
       if (parsed.state !== 'ok') return say(409, `${folder}/Chart.yaml cannot be read: not valid YAML (${findingsOf(parsed).map(f => f.message).join('; ')})`, { file: `${folder}/Chart.yaml`, unreadable: true })
       const deps = parsed.value && typeof parsed.value === 'object' && Array.isArray(parsed.value.dependencies) ? parsed.value.dependencies : []
-      if (deps.length) {
-        const names = new Set((await findAlertTemplateCharts(getChartsDir(root, process.env.CHARTS_DIR))).map(c => c.name))
-        const dep = deps.find(d => names.has(d?.name))
-        if (dep) return existing(dep.name)
+      // The alert Templates of the repo, as findAlertTemplateCharts lists
+      // them (a folder of the Templates' whose Chart.yaml, as Helm reads it,
+      // says app: alertforge), read through the snapshot.
+      const names = new Set()
+      const base = chartsRel()
+      const listed = base === null ? null : await repo.dir(base)
+      for (const [name, kind] of listed?.state === 'ok' ? listed.value.entries : []) {
+        if (kind !== 'dir') continue
+        const tpl = await repo.helmYaml(`${base}/${name}/Chart.yaml`)
+        if (tpl.state === 'ok' && tpl.value?.annotations?.app === 'alertforge') names.add(tpl.value.name || name)
       }
+      const dep = deps.find(d => names.has(d?.name))
+      if (dep) return existing(dep.name)
     }
 
     // The Template has to be there, readable, and render (chartDiscovery.js);
     // its version is not copied (below).
-    const template = await templateForNewDeployment(root, chart, folder)
+    const template = await templateForNewDeployment(root, chart, folder, repo)
     if (template.error) return say(template.status, template.error, template.problems ? { problems: template.problems } : {})
     // The Template's groups, from its values.yaml as Helm reads it: a group
     // it has starts empty; one that cannot be read or parsed is said, not
@@ -132,10 +128,10 @@ defineChange('create-deployment', {
       valuesYaml = dumpForHelm(wrapValues(emptyValues, chart), { lineWidth: -1 })
     }
     const files = [{ rel: `${folder}/Chart.yaml`, text: chartYaml }, { rel: `${folder}/values.yaml`, text: valuesYaml }]
-    // Loaded as Helm reads it, as it will be — in a copy of the repo with
-    // both files written: what the Template or the _common gives that Helm
-    // fails on is said, and nothing is written.
-    const problems = await problemsOnceMade(root, folder, files)
+    // Loaded as Helm reads it, as it will be (the snapshot with both files
+    // overlaid): what the Template or the _common gives that Helm fails on
+    // is said, and nothing is written.
+    const problems = await problemsOnceMade(repo, folder, files)
     if (problems.length) return say(409, `Not made: ${folder} would not deploy (${problems.join('; ')})`, { problems })
     // What it deploys is read from these: one changed while it waits is planned again.
     const reads = [`${chartsRel()}/${chart}/Chart.yaml`, valuesFile, ...(onCommon?.reads ?? [])]

@@ -471,8 +471,8 @@ cannot be read. **Create** (or **Remove**) writes what was listed, all of it
 or none: a file that cannot be written (read-only, a folder that cannot be
 removed) puts back everything written before it and is named (409). A file
 changed since, by anyone — a save in the folder while it waits included —
-refuses it and shows the list again. Sent without the list's `expected` (a
-script), the plan made then is written. Nothing is made or removed through
+refuses it and shows the list again; one sent without the list's
+`expected` is refused (400). Nothing is made or removed through
 a folder that is a link. A `_common` is not deleted, cloned or given routing
 as a deployment: **Remove this _common...** is the way, so the deployments
 on it keep what they inherited. It renders before it takes the commit lock,
@@ -552,7 +552,10 @@ depends on it, its page, Preview and `check-deployment` name the link, and
 the Sync dialogs give it no row count. Nothing is written to such a
 deployment: saving it, syncing to or from it, a `_common` made or removed
 around it and a Template change that would move its values are refused
-(409) with the same sentence. Replace the link with a folder of its own in
+(409) with the same sentence. So are a new deployment in a folder whose
+`_common` is such a link, making or removing a `_common` through the link,
+and removing the `_common` the link leads to while a deployment still
+reaches it that way. Replace the link with a folder of its own in
 git, or make the deployment depend on the `_common` where it is. `check-deployment` and `check-repo` fail such a deployment (exit 1),
 as they fail one whose `values.yaml` (or a `_common`'s) is a link out of
 the repo: it is a deployment, and what it renders on is refused. Exit 2 is
@@ -936,10 +939,16 @@ copied to it.
   along with the source instead. Those marked to be deleted go
   first: when the source then cannot be deleted, the message says why and
   names the ones already gone; the source keeps the rest.
-- A deployment is deleted whole or not at all: its folder, every file in it
-  and its line in `sync.yaml` together. When one cannot be removed (a
-  read-only folder, a `sync.yaml` that cannot be written) or a folder in it
-  cannot be read, nothing is removed and the message names the file (409).
+- A deployment is deleted whole or not at all: its folder and its line in
+  `sync.yaml` together. What is in the folder is not read to remove it, so a
+  broken deployment (a file that cannot be read, a `values.yaml` that is a
+  link) can be deleted too. When `sync.yaml` cannot be written, nothing is
+  removed and the message names it (409). What a delete has moved aside
+  and could not remove afterwards — or what a server stopped midway left
+  moved aside — is kept beside it as `_<name>.<hex>.parked`: it is never
+  removed by itself, the server's log names it when it starts, the Git
+  panel shows it, and Commit refuses while it is there, saying to rename
+  it back (to keep it) or remove it.
 - A `sync.yaml` that cannot be read (no permission, a folder in its place)
   or is no registry (not YAML, not a map, `syncs:` not a list) is named, with 409 and `unreadable: true`, by everything that
   needs to know who syncs from whom: the sync list, sync and unlink, a
@@ -959,7 +968,9 @@ copied to it.
   file the copy replaces that cannot be read is named the same way. A
   source saved, or another sync made, while it waits for the one before it
   is copied as it is by then. Unlinking writes `sync.yaml` alone, and names
-  it when it cannot be written.
+  it when it cannot be written. `sync.yaml` is written first: a server
+  stopped midway leaves the target listed but not yet its source's copy,
+  which Commit refuses until it is synced again (save the source).
 - A target is its source's copy, and Commit holds it to that: a target
   whose `values.yaml`, or the Template its `Chart.yaml` depends on, is not
   what a sync of the source writes (edited with git, or in the Gitea web

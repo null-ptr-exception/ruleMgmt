@@ -258,8 +258,8 @@ export async function runRow(ws, c) {
     })
   }
   // A new deployment beside it: what init writes, and what Helm makes of it.
-  if (c.target === 'T' || c.target === 'S' || c.target === 'L') {
-    const folder = c.target === 'T' ? 'deployments/t/n' : 'deployments/s/n'
+  if (c.target === 'T' || c.target === 'S' || c.target === 'L' || c.init) {
+    const folder = c.target === 'T' || c.init ? 'deployments/t/n' : 'deployments/s/n'
     await record('init', async () => {
       const res = await api('POST', '/api/v2/folders/init', { folder, chart: 'demo' })
       const r = http(res)

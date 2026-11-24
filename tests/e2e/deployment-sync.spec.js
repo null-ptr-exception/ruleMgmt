@@ -431,7 +431,7 @@ test.describe.serial('deleting a sync source that fails', () => {
 
   test('says why, and which targets were deleted already', async ({ page, request }) => {
     await page.route(`**/api/v2/deployments/${CHART}/dfsrc?folder=${encodeURIComponent(`${FAIL}/dfsrc`)}`, route => (route.request().method() === 'DELETE'
-      ? route.fulfill({ status: 409, json: { error: `${FAIL}/dfsrc cannot be written: permission denied`, file: `${FAIL}/dfsrc` } })
+      ? route.fulfill({ status: 409, json: { error: `${FAIL}/dfsrc cannot be removed: permission denied`, file: `${FAIL}/dfsrc` } })
       : route.continue()))
     await page.goto('/#/alerts')
     await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
@@ -442,7 +442,7 @@ test.describe.serial('deleting a sync source that fails', () => {
     await modal.locator('div').filter({ hasText: `${FAIL}/dfrm` }).last().locator('.ant-radio-button-wrapper', { hasText: 'Delete' }).click()
     await modal.getByRole('button', { name: 'Delete dfsrc' }).click()
 
-    await expect(page.getByText(`Failed to delete dfsrc: ${FAIL}/dfsrc cannot be written: permission denied; ${FAIL}/dfrm was deleted already`)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(`Failed to delete dfsrc: ${FAIL}/dfsrc cannot be removed: permission denied; ${FAIL}/dfrm was deleted already`)).toBeVisible({ timeout: 5000 })
     expect((await request.get(`/api/v2/deployments/${CHART}/dfrm?folder=${encodeURIComponent(`${FAIL}/dfrm`)}`)).status()).toBe(404)
     expect((await request.get(`/api/v2/deployments/${CHART}/dfsrc?folder=${encodeURIComponent(`${FAIL}/dfsrc`)}`)).status()).toBe(200)
   })

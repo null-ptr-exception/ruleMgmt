@@ -20,10 +20,12 @@
  *                           A build that throws (a bug, not a file's state:
  *                           those are Loaded values) is not kept, so the
  *                           next call builds again
- *   repo.readLog()        → { files, dirs }: every file and folder read from
- *                           disk by this snapshot and those made from it
- *                           with with() (what a writer compares again
- *                           before it writes)
+ *   repo.readLog()        → { files, dirs, dirsAsRead }: every file and
+ *                           folder read from disk by this snapshot and
+ *                           those made from it with with() (what a writer
+ *                           compares again before it writes); dirsAsRead
+ *                           rel → Promise<Loaded> of each folder as it was
+ *                           on disk when first listed
  *   repo.with(overlay)    → the repo as it will be after writing `overlay`
  *                           (Map rel → text or null). Files it does not
  *                           name are shared with this snapshot; everything
@@ -58,7 +60,7 @@ export function readerNotes(file, r) {
 }
 
 export function openRepo(root, { overlay } = {}) {
-  return makeRepo(root, normalizeOverlay(overlay), new Map(), { files: new Set(), dirs: new Set() })
+  return makeRepo(root, normalizeOverlay(overlay), new Map(), { files: new Set(), dirs: new Set(), dirsAsRead: new Map() })
 }
 
 function normalizeOverlay(overlay) {
@@ -126,6 +128,10 @@ function makeRepo(root, overlay, sharedFiles, log) {
     dir(rel) {
       const key = rel === '' ? '' : repoRel(rel)
       log.dirs.add(key)
+      // The folder as it is on disk the first time this snapshot (or one
+      // made from it) lists it: what a writer compares again under the
+      // lock. A snapshot with an overlay reads the disk's listing beside.
+      if (!log.dirsAsRead.has(key)) log.dirsAsRead.set(key, overlay.size ? readRepoDir(root, key, { realRoot: realRoot() }) : memo('dir', key, () => readRepoDir(root, key, { overlay, realRoot: realRoot() })))
       return memo('dir', key, () => readRepoDir(root, key, { overlay, realRoot: realRoot() }))
     },
     templateFiles(dir) {
@@ -133,7 +139,7 @@ function makeRepo(root, overlay, sharedFiles, log) {
       return memo('templateFiles', key, () => loadTemplateFiles(repo, key))
     },
     memo,
-    readLog: () => ({ files: [...log.files], dirs: [...log.dirs] }),
+    readLog: () => ({ files: [...log.files], dirs: [...log.dirs], dirsAsRead: new Map(log.dirsAsRead) }),
     with(more) {
       const next = new Map(overlay)
       for (const [rel, text] of normalizeOverlay(more)) next.set(rel, text)

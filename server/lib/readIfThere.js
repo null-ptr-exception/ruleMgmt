@@ -46,39 +46,6 @@ export async function isAbsent(abs, err) {
   return fs.stat(abs).then(() => true, () => false)
 }
 
-const DANGLING = { reason: 'a link to a file that is not there' }
-
-/** The file's text, null when it is not there. */
-export async function readTextIfThere(abs) {
-  try {
-    return await fs.readFile(abs, 'utf-8')
-  } catch (err) {
-    if (await isAbsent(abs, err)) return null
-    throw new UnreadableError(abs, err.code === 'ENOENT' ? DANGLING : err)
-  }
-}
-
-/** The folder's entry names, null when it is not there. */
-export async function readDirIfThere(abs) {
-  try {
-    return await fs.readdir(abs)
-  } catch (err) {
-    if (await isAbsent(abs, err)) return null
-    throw new UnreadableError(abs, err.code === 'ENOENT' ? DANGLING : err)
-  }
-}
-
-/** `parse(text)` of the file, `absent` when it is not there; a parse error names the file. */
-export async function parseIfThere(abs, parse, absent = null) {
-  const text = await readTextIfThere(abs)
-  if (text === null) return absent
-  try {
-    return parse(text)
-  } catch (err) {
-    throw new UnreadableError(abs, { reason: `not valid ${/\.json$/.test(abs) ? 'JSON' : 'YAML'} (${err.reason || err.message})` })
-  }
-}
-
 /**
  * A route's answer to an error: a file of the repo that cannot be read is
  * the repo's state, not the server failing — 409, naming the file (the

@@ -316,17 +316,6 @@ export async function childEntries(repo, rel) {
 }
 
 /**
- * Why an existing deployment at `rel` is where no new one can be made, for
- * the tree to flag: `{ nestedIn }` or `{ inCommon: true }`, or null.
- */
-export async function placementOf(repo, rel) {
-  const { nestedIn } = await contextOf(repo, rel)
-  if (nestedIn) return { nestedIn }
-  if (segmentsOf(rel).includes(COMMON_DIR)) return { inCommon: true }
-  return null
-}
-
-/**
  * Why no new deployment can be made at `rel`, or null. An existing
  * deployment there is no problem: the caller finds it there. Refused:
  * anywhere the walk does not look (excludedFolder, a link on the way),

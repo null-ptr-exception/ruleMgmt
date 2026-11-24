@@ -1,13 +1,13 @@
 {
   "lint": {
-    "total": 82,
+    "total": 78,
     "byKind": {
       "childProcess": 1,
-      "fs": 15,
-      "fsUse": 43,
+      "fs": 14,
+      "fsUse": 42,
       "helper": 1,
-      "yaml": 11,
-      "yamlParse": 11
+      "yaml": 10,
+      "yamlParse": 10
     },
     "byFile": {
       "scripts/import-rules.mjs": 2,
@@ -23,7 +23,6 @@
       "server/lib/ruleCheck.js": 6,
       "server/lib/sharedConfigs.js": 4,
       "server/lib/stack.js": 8,
-      "server/lib/subchart.js": 4,
       "server/lib/sync.js": 1,
       "server/routes/charts.js": 2,
       "server/routes/deployments/resolve.js": 4,
@@ -31,10 +30,10 @@
     }
   },
   "yamlParseSites": {
-    "serverAndScripts": 11,
+    "serverAndScripts": 10,
     "src": 6,
     "byFileKind": {
-      "Chart.yaml": 5,
+      "Chart.yaml": 4,
       "Template values.yaml": 0,
       "deployment values": 0,
       "routing.yaml": 0,
@@ -45,7 +44,7 @@
     }
   },
   "swallowingCatches": {
-    "total": 18,
+    "total": 17,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
@@ -53,7 +52,6 @@
       "server/lib/commonEdit.js": 4,
       "server/lib/deploymentCheck.js": 3,
       "server/lib/stack.js": 3,
-      "server/lib/subchart.js": 1,
       "server/routes/deployments/resolve.js": 1,
       "src/utils/schemaCompat.js": 1
     }

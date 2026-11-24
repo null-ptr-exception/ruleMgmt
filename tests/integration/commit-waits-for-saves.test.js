@@ -228,7 +228,7 @@ describe('a save whose client leaves', () => {
 // once — before, it waited on itself, and so did every commit after it.
 describe('taking the lock again inside a request that holds it', () => {
   it('is an error at once, and the next commit still goes through', async () => {
-    const { holdSyncRegistryLock, withSyncRegistryLock } = await import('../../server/lib/sync.js')
+    const { holdSyncRegistryLock, withSyncRegistryLock } = await import('../../server/repo/lock.js')
     const app = express()
     app.use((req, res, next) => { req.gitopsDir = tmpDir; next() })
     app.post('/nested', holdSyncRegistryLock, async (req, res) => {

@@ -3,14 +3,10 @@
 import path from 'path'
 import { getChartsDir } from '../../lib/chartDiscovery.js'
 import { isSafeSyncPath } from '../../lib/sync.js'
-import { ANY_VERSION } from '../../lib/commonEdit.js'
 import { z } from 'zod'
 import { route, repoPath, repoName } from '../../http/route.js'
 import { openRepo } from '../../repo/openRepo.js'
 import { planChange, applyChange } from '../../repo/changes/index.js'
-
-// What a new deployment asks of its Template's version: any.
-export const ANY_TEMPLATE_VERSION = ANY_VERSION
 
 function chartsDirName() {
   return process.env.CHARTS_DIR || 'charts'

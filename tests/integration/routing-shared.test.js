@@ -11,7 +11,7 @@ import express from 'express'
 import yaml from 'js-yaml'
 import git from '../../server/lib/git.js'
 import { toAlertmanagerConfig, HAS_AMTOOL, amtoolTitle } from '../blind/harness.js'
-import { withSyncRegistryLock } from '../../server/lib/sync.js'
+import { withSyncRegistryLock } from '../../server/repo/lock.js'
 
 let server, baseURL, tmpDir, savedLabels
 

@@ -9,14 +9,13 @@ import os from 'os'
 import git from '../lib/git.js'
 import { deploymentCommitBlockers } from '../lib/commitChecks.js'
 import { chartCommitBlockers } from '../lib/chartChecks.js'
-import { withSyncRegistryLock, holdSyncRegistryLock, getSourceForTarget, getTargetsForSource } from '../lib/sync.js'
+import { getSourceForTarget, getTargetsForSource } from '../lib/sync.js'
+import { withSyncRegistryLock, holdSyncRegistryLock } from '../repo/lock.js'
 import { syncAnswer } from '../repo/sync.js'
 import { TEMP_PATHSPEC_EXCLUDE, parkedItems } from '../repo/write.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { parsePath, pathProblem } from '../repo/paths.js'
 import { repoGit } from '../repo/git.js'
-
-export { withoutPath }
 
 // `git status --porcelain -z`: each entry NUL-ended, the path as it is (no
 // quoting: `café-prod`, `my folder` and `q"x` reach the page as they are,

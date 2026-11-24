@@ -6,8 +6,6 @@ import { treeRoutes } from './folders/tree.js'
 import { initRoutes } from './folders/create.js'
 import { commonRoutes } from './folders/common.js'
 
-export { ANY_TEMPLATE_VERSION } from './folders/create.js'
-
 export default function foldersRouter() {
   const router = express.Router()
   router.use(answersWithoutPaths)

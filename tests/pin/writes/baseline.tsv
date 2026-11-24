@@ -565,7 +565,6 @@ middle-readonly	deployment-delete	ok	200	-	no	deployments/t/a/,sync.yaml	deploym
 last-readonly	sync-create	refused	409	sync.yaml	no	-	-	-	-	released	answered	-	
 last-readonly	common-create	refused	409	deployments/u/q/values.yaml	no	-	-	-	-	released	answered	-	
 last-readonly	common-remove	refused	409	deployments/s/_common/demo/Chart.yaml	no	-	-	-	-	released	answered	-	
-last-readonly	migration-apply	refused	409	deployments/t/b/values.yaml	no	-	-	-	-	released	answered	-	
 last-readonly	deployment-delete	refused	409	sync.yaml	no	-	-	-	-	released	answered	-	
 chart-unreadable	sync-create	refused	400	deployments/t/d	no	-	-	-	-	released	answered	-	
 chart-unreadable	common-create	refused	409	-	no	-	-	-	-	released	answered	-	

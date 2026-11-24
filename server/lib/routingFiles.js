@@ -9,11 +9,9 @@
  */
 
 import path from 'path'
-import { ROUTING_FILE, ROUTING_CR_FILE, buildRouting, loadRouting, routingFiles } from '../repo/routing.js'
+import { ROUTING_FILE, ROUTING_CR_FILE, loadRouting, routingFiles } from '../repo/routing.js'
 import { decide } from '../repo/policy.js'
 import { ROUTING_POLICIES } from '../repo/routingPolicy.js'
-
-export { ROUTING_FILE, ROUTING_CR_FILE, buildRouting }
 
 /**
  * An answer naming a file that cannot be read: 409, `unreadable: true`,

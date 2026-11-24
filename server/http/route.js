@@ -54,7 +54,7 @@ import { errorAnswer } from '../lib/readIfThere.js'
 import { clientStatus, clientRefusal } from './body.js'
 import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
 import { logger } from '../lib/logger.js'
-import { HOLD_LIMIT_MS, holdSyncRegistryLock } from '../lib/sync.js'
+import { HOLD_LIMIT_MS, holdSyncRegistryLock } from '../repo/lock.js'
 
 const WRAPPED = Symbol('route')
 const DECLARED = Symbol('route declares its request')

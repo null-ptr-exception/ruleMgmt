@@ -18,7 +18,7 @@ import { createHash } from 'crypto'
 import { execFileSync } from 'child_process'
 import express from 'express'
 import { run, oneLine } from '../lib/tools.mjs'
-import { withSyncRegistryLock, lockWaiters } from '../../../server/lib/sync.js'
+import { withSyncRegistryLock, lockWaiters } from '../../../server/repo/lock.js'
 
 // Where the dir-link-git row puts the folder it links to.
 const GIT_PIN_DIR = 'pin-dir'
@@ -249,7 +249,8 @@ export const PATHS = [
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: { job: 'name' } } } } }),
     bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: {} } } } }),
     said: res => [...rel(T, res.data?.written), ...(res.data?.migrated || []).map(m => `${m.path}/values.yaml`)],
-    failAt: { first: `${T}/rules/cpu.yaml`, middle: `${D.c}/values.yaml`, last: `${D.b}/values.yaml` }, chartFile: `${D.b}/Chart.yaml`, depFolder: D.c,
+    // Its last file read-only is the `last-readonly-file` cell (`last` above).
+    failAt: { first: `${T}/rules/cpu.yaml`, middle: `${D.c}/values.yaml` }, chartFile: `${D.b}/Chart.yaml`, depFolder: D.c,
     files: [`${T}/`, 'deployments/'] },
   { name: 'rules-save', side: 'template', primary: `${T}/rules/cpu.yaml`, second: `${T}/templates/cpu.yaml`,
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(2) } } }),
@@ -367,9 +368,7 @@ const sameMap = (a, b) => diff(a, b).length === 0
 
 // A temp file's random part is not pinned.
 const firstPath = s => ((/((?:deployments|charts|_shared|notes)\/[\w./-]*[\w-]|sync\.yaml)/.exec(s || '') || [])[1] || '')
-  .replace(/\.[0-9a-f]{8}\.tmp$/, '.<random>.tmp').replace(/\.removing-\d+-\d+/g, '.removing-<pid>-<time>')
-// A folder moved aside to be removed is named by the process and the time: not pinned.
-const unstamped = s => s.replace(/\.removing-\d+-\d+/g, '.removing-<pid>-<time>')
+  .replace(/\.[0-9a-f]{8}\.tmp$/, '.<random>.tmp')
 const message = d => oneLine([d?.error, ...(d?.problems || []).map(p => p.message || p), ...(d?.findings || []).map(f => f.description), ...(d?.failed || []).map(f => `${f.deployment}: ${f.error}`), ...(d?.syncFailed || []).map(f => `${f.target}: ${f.error}`)].filter(Boolean).join(' / '))
 
 function classOf(res) {
@@ -711,12 +710,12 @@ async function runCell(ws, c, p) {
     cls: answers.map(a => a.cls).sort().join('+'), status: answers.map(a => a.status).sort().join('+'),
     file: set('file') || '-', leak: p.cli ? '-' : leaks ? 'yes' : 'no',
     said: [...new Set(answers.filter(a => a.cls === 'ok' || a.cls === 'listed').flatMap(a => [...a.said, ...(c.id === 'link-inside' ? [linkedOf(p)] : []), ...(c.id === 'dir-link-inside' ? [`notes/linked-dir-${path.basename(path.dirname(p.primary))}/`] : [])]))].sort().join(',') || '-',
-    written: unstamped(diff(pre, post).join(',')) || '-',
+    written: diff(pre, post).join(',') || '-',
     outside: diff(preOut, postOut).join(',') || '-',
     // Beside a Commit, what is left uncommitted depends on which of the two
     // came first: both are right, so it is not recorded (`extra` says whether
     // what was committed is whole).
-    git: c.id === 'race-commit' ? '~' : unstamped(oneLine(status.split('\n').filter(Boolean).map(l => l.trim().replace(/\s+/, ' ')).join(','))) || '-',
+    git: c.id === 'race-commit' ? '~' : oneLine(status.split('\n').filter(Boolean).map(l => l.trim().replace(/\s+/, ' ')).join(',')) || '-',
     lock, again, extra,
     note: answers.map(a => a.note).filter(Boolean).join(' | ').slice(0, 500),
   }

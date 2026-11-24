@@ -128,9 +128,6 @@ export function defineChange(kind, spec) {
   CHANGES.set(kind, Object.freeze({ ...spec }))
 }
 
-/** The kinds defined, by name. */
-export const changeKinds = () => [...CHANGES.keys()]
-
 /**
  * Points a test can stop at, to order events without timing: each is an
  * async function or null.

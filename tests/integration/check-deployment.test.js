@@ -8,7 +8,7 @@ import path from 'path'
 import os from 'os'
 import express from 'express'
 import renderRouter from '../../server/routes/render.js'
-import { buildRouting, ROUTING_FILE, ROUTING_CR_FILE } from '../../server/lib/routingFiles.js'
+import { buildRouting, ROUTING_FILE, ROUTING_CR_FILE } from '../../server/repo/routing.js'
 
 // A deployment's routing.yaml and the resource made from it, as a save writes them.
 async function writeRouting(dir, { text, cr }) {

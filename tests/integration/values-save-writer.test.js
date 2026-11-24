@@ -12,7 +12,7 @@ import path from 'path'
 import os from 'os'
 import { execFileSync } from 'child_process'
 import express from 'express'
-import { withSyncRegistryLock, lockWaiters } from '../../server/lib/sync.js'
+import { withSyncRegistryLock, lockWaiters } from '../../server/repo/lock.js'
 import { hooks } from '../../server/repo/write.js'
 
 const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0

@@ -373,8 +373,6 @@ async function templateGroups(repo, chart) {
   return new Set(Object.entries(isPlainObject(doc) ? doc : {}).filter(([, v]) => Array.isArray(v)).map(([k]) => k))
 }
 
-export { unwrapPath }
-
 /** A `_common` reached through a link made by hand: refused by every entry point. */
 export const STACK_LINK = 'stack-link'
 // The problem of a stack that reaches the _common chart at `layerPath`

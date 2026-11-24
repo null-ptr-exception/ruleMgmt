@@ -10,7 +10,8 @@
  */
 
 import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
-import { unwrapPath, wrapPath, replaceAtPath } from './stack.js'
+import { wrapPath, replaceAtPath } from './stack.js'
+import { unwrapPath } from './subchart.js'
 import { isTarget, getSourceForTarget } from './sync.js'
 import { readRegistry } from '../repo/sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'

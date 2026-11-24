@@ -3,10 +3,6 @@ import yaml from 'js-yaml'
 import { pathProblem } from '../repo/paths.js'
 import { normalizeSyncPath } from '../repo/sync.js'
 
-// The commit lock lives with the writer (repo/lock.js); its names stay here
-// for the callers that take it from this module.
-export { withSyncRegistryLock, holdSyncRegistryLock, lockWaiters, HOLD_LIMIT_MS } from '../repo/lock.js'
-
 /** sync.yaml's text for `registry` ({ syncs }), as the writer writes it. */
 export const registryText = registry => yaml.dump(registry, { lineWidth: -1 })
 

@@ -132,7 +132,7 @@ describe('a failure that is not a file going away', () => {
     // gitopsDir is a folder inside the repo: the lock is in ../.git.
     const inner = path.join(tmpDir, 'gitops')
     await fs.mkdir(path.join(inner, 'charts'), { recursive: true })
-    const { withoutPath } = await import('../../server/routes/git.js')
+    const { withoutPath } = await import('../../server/lib/answerPaths.js')
     expect(typeof withoutPath).toBe('function')
     const lock = path.join(tmpDir, '.git', 'index.lock')
     await fs.writeFile(lock, '')
@@ -158,7 +158,7 @@ describe('a failure that is not a file going away', () => {
     ['nothing', '', 'fatal: /a/b failed', 'fatal: /a/b failed'],
     ['a sibling sharing the prefix', '/srv/gitops', 'in /srv/gitops-old/y and /srv/gitops/x and \'/srv/gitops\'', 'in /srv/gitops-old/y and x and \'.\''],
   ])('taking the repo out of a message leaves %s alone', async (_, dir, text, out) => {
-    const { withoutPath } = await import('../../server/routes/git.js')
+    const { withoutPath } = await import('../../server/lib/answerPaths.js')
     expect(await withoutPath(text, dir)).toBe(out)
   })
 
@@ -166,7 +166,7 @@ describe('a failure that is not a file going away', () => {
     const link = `${tmpDir}-link`
     await fs.symlink(tmpDir, link)
     try {
-      const { withoutPath } = await import('../../server/routes/git.js')
+      const { withoutPath } = await import('../../server/lib/answerPaths.js')
       expect(await withoutPath(`hook failed in ${tmpDir}/charts/a and ${link}/x`, `${link}/`)).toBe('hook failed in charts/a and x')
     } finally {
       await fs.rm(link)

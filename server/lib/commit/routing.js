@@ -19,11 +19,6 @@ export async function sameRouting(gitopsDir, a, b, repo = openRepo(gitopsDir)) {
   return x.text !== undefined && y.text !== undefined && x.text === y.text && x.cr === y.cr
 }
 
-export async function sameRoutingAs(gitopsDir, dep, { text, cr }, repo = openRepo(gitopsDir)) {
-  const now = await filesOf(repo, dep)
-  return now.text === text && now.cr === cr
-}
-
 const KIND = {
   'routing.orphaned': 'routing-orphaned',
   'routing.shared-unresolved': 'routing-shared-unresolved',

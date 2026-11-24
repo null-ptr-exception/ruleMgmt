@@ -17,4 +17,4 @@ import './rules.js'
 import './routing.js'
 import './shared.js'
 
-export { planChange, applyChange, changeKinds } from '../write.js'
+export { planChange, applyChange } from '../write.js'

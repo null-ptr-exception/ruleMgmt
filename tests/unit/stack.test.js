@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { mergeValues, wrapPath, unwrapPath, replaceAtPath } from '../../server/lib/stack.js'
+import { mergeValues, wrapPath, replaceAtPath } from '../../server/lib/stack.js'
+import { unwrapPath } from '../../server/lib/subchart.js'
 
 // Helm's merge of a _common layer's values and a deployment's (#100), as the
 // Helm 3.12, 3.15 and 3.19 renders of the same files showed it: maps key by

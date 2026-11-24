@@ -184,6 +184,43 @@ describe.skipIf(!CAN_RUN)('check-repo', () => {
     expect(status).toBe(1)
   })
 
+  // A _common's own values.yaml is read as a deployment's own is: what
+  // Helm reads otherwise than written, or passes on to no Template, is
+  // refused naming the _common's file. Helm renders the deployment below.
+  const stackOn = layerValues => {
+    write('deployments/s/_common/mariadb-alerts/Chart.yaml', 'apiVersion: v2\nname: common\nversion: 0.1.0\ndependencies:\n  - name: mariadb-alerts\n    version: ">=0.0.0-0"\n')
+    write('deployments/s/_common/mariadb-alerts/values.yaml', layerValues)
+    fs.mkdirSync(path.join(repo, 'deployments/s/_common/mariadb-alerts/charts'), { recursive: true })
+    fs.symlinkSync('../../../../../charts/mariadb-alerts', path.join(repo, 'deployments/s/_common/mariadb-alerts/charts/mariadb-alerts'))
+    write('deployments/s/d1/Chart.yaml', 'apiVersion: v2\nname: d1\nversion: 0.1.0\ndependencies:\n  - name: common\n    version: ">=0.0.0-0"\n    repository: file://../_common/mariadb-alerts\n')
+    write('deployments/s/d1/values.yaml', 'common:\n  mariadb-alerts:\n    _common:\n      owner: d1\n      namespace: ns1\n')
+  }
+  const LAYER = 'deployments/s/_common/mariadb-alerts'
+
+  it('a _common as Helm reads it: exit 0', () => {
+    stackOn('mariadb-alerts:\n  mariadb_saturation_cpu:\n    - { warn_pct: 8, critical_pct: 95 }\n')
+    const { status, data } = json()
+    expect(codes(data)).toEqual([])
+    expect(status).toBe(0)
+  })
+
+  it('a _common\'s value Helm reads otherwise (010): exit 1, naming the _common\'s file and line', () => {
+    stackOn('mariadb-alerts:\n  mariadb_saturation_cpu:\n    - { warn_pct: 010, critical_pct: 95 }\n')
+    const { status, data } = json()
+    expect(codes(data)).toEqual([`refuse yaml.read-differently ${LAYER}/values.yaml`])
+    expect(data.problems[0].message).toBe(`${LAYER}/values.yaml line 3: Helm reads 010 as 8 (YAML 1.1); the editor would write 8. Write 8, or '010' in quotes for the text`)
+    expect(data.problems[0].group).toBe(LAYER)
+    expect(status).toBe(1)
+  })
+
+  it('a _common\'s values not under the chart\'s name: exit 1, naming the _common\'s file', () => {
+    stackOn('mariadb_saturation_cpu:\n  - { warn_pct: 8, critical_pct: 95 }\n')
+    const { status, data } = json()
+    expect(codes(data)).toEqual([`refuse values.not-under-chart-key ${LAYER}/values.yaml`])
+    expect(data.problems[0].message).toContain('the values are not under mariadb-alerts: Helm passes none of them to the Template mariadb-alerts')
+    expect(status).toBe(1)
+  })
+
   // Catches: a folder whose deployments were not looked at taken for none.
   it.skipIf(asRoot)('a folder that cannot be listed: exit 2, naming it', () => {
     fs.mkdirSync(path.join(repo, 'deployments/locked'))

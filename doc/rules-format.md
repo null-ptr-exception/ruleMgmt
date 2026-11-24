@@ -769,8 +769,11 @@ and a sync refuse, naming the file, line or row and column:
 The editor writes none of these: it quotes `'010'`, `'yes'` and the like
 itself. Opening a deployment shows the values as Helm reads them, and says
 which ones it reads otherwise than they are written (`010` shows
-as 8). Commit does not refuse these: it lists them under the deployment, and
-`check-repo` refuses them. A breaking Template change that migrates the
+as 8). Preview lists them above the result, and its check still passes:
+Helm renders them. Commit does not refuse these: it lists them under the deployment, and
+`check-repo` refuses them. In a `_common`'s own `values.yaml`, these and
+values not under the chart's name are listed under the `_common`, naming
+its file, and `check-repo` refuses them there too. A breaking Template change that migrates the
 file does not refuse them either: its preview lists each one with the
 deployment, and the migrated file holds the value as Helm read it (`010`
 becomes `8`, `yes` becomes `true`, a key `y:` becomes `'true':`) — what

@@ -1,6 +1,6 @@
 /** The commit check of a deployment's values: loadDeployment, and the commit's table. */
 
-import { loadDeployment } from '../../repo/deployment.js'
+import { loadDeployment, loadOwnValues } from '../../repo/deployment.js'
 import { decide } from '../../repo/policy.js'
 import { finding } from '../../repo/finding.js'
 import { openRepo } from '../../repo/openRepo.js'
@@ -17,17 +17,27 @@ import { CANNOT_TELL } from '../stack.js'
  * its _common stack from rendering is the Template check's to say
  * (commit/template.js), not said twice here.
  * `policy`: the table (Commit's, or check-repo's); `facts` as facts.js.
+ *
+ * `layer`: `dep` is a _common chart, and what is checked is its own
+ * values.yaml as a text, read as a deployment's own is (loadOwnValues) and
+ * decided by the same table: a value Helm reads otherwise than written,
+ * values not under the chart's name. It is said here once, under the
+ * _common, naming its file. The rest of a _common is said with each
+ * deployment below it, as before: a file that cannot be read or that Helm
+ * stops on (its stack's problem), a key written twice, and the values it
+ * gives, which are checked as part of what each deployment deploys.
  * @returns { findings: [finding], warnings: [string], facts }
  */
-export async function valuesFindings(gitopsDir, dep, stack, { repo = openRepo(gitopsDir), policy = 'commit' } = {}) {
-  const loaded = await loadDeployment(repo, dep)
+export async function valuesFindings(gitopsDir, dep, stack, { repo = openRepo(gitopsDir), policy = 'commit', layer = false } = {}) {
+  const loaded = layer ? await loadOwnValues(repo, dep) : await loadDeployment(repo, dep)
+  if (layer && loaded.state !== 'ok') return { findings: [], warnings: [], facts: [] }
   // A file its stack already said cannot be read (unreadable, or not
   // values: resolveStack's values-unreadable, or values-cannot-tell) is said once.
-  const stackSaid = stack.problems.some(p => p.kind === 'values-unreadable' || p.kind === CANNOT_TELL)
+  const stackSaid = !layer && stack.problems.some(p => p.kind === 'values-unreadable' || p.kind === CANNOT_TELL)
   const facts = loaded.state === 'unreadable'
     ? (stackSaid ? [] : [finding({ code: 'values.unreadable', file: loaded.file, helm: 'unknown', message: `${dep}: values.yaml cannot be read (${loaded.why}), so Helm cannot render it` })])
     : loaded.state === 'invalid' && stackSaid ? []
-      : (loaded.findings ?? []).filter(f => !f.detail?.stack && !f.code.startsWith('template.'))
+      : (loaded.findings ?? []).filter(f => !f.detail?.stack && !f.code.startsWith('template.') && !(layer && f.code === 'yaml.duplicate-key'))
   // A file read as no values at all (not YAML, or YAML AlertForge cannot
   // tell Helm's reading of) leaves nothing of the deployment to check: it
   // blocks, as before, whatever its table does with the same fact elsewhere.

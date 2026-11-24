@@ -104,6 +104,15 @@ export async function collectDeploymentChecks(gitopsDir, { policy = 'commit', re
     for (const f of routing.fixes) fixes.add(f)
   }
 
+  // Each _common chart's own values.yaml, read as a deployment's own is
+  // and decided by the same table, said under the _common.
+  for (const rel of walked.filter(d => d.kind === 'common').map(d => d.rel)) {
+    const values = await valuesFindings(gitopsDir, rel, null, { repo, policy, layer: true })
+    findings.push(...values.findings)
+    facts.push(...values.facts)
+    if (values.warnings.length) valueWarnings.push({ deployment: rel, warnings: values.warnings })
+  }
+
   const sharedFile = sharedFileFindings(shared, unresolved)
   routingWarnings.push(...sharedFile.warnings)
   findings.push(...sharedFile.findings)

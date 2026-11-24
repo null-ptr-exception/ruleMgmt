@@ -171,7 +171,7 @@ y11-off-enum	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=- e
 y11-octal-010	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 y11-octal-010	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 y11-octal-010	A	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=8		
-y11-octal-010	A	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
+y11-octal-010	A	preview	ok	200	no	warnings	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
 y11-0o10	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 y11-0o10	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 y11-0o10	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=8		
@@ -179,7 +179,7 @@ y11-0o10	A	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down
 y11-underscore	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 y11-underscore	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 y11-underscore	A	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=1000	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=1000		
-y11-underscore	A	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
+y11-underscore	A	preview	ok	200	no	warnings	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
 y11-date	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 y11-date	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 y11-date	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="2024-01-01"	0	3	1	_common.team="shop"; cpu.0.job="2024-01-01"		
@@ -191,7 +191,7 @@ y11-sexagesimal	A	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	all-list=
 y11-0_7	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 y11-0_7	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 y11-0_7	A	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=7	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=7		
-y11-0_7	A	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
+y11-0_7	A	preview	ok	200	no	warnings	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
 y11-hex	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 y11-hex	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 y11-hex	A	editor	ok	200	no	-	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=16	0	3	1	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold=16		
@@ -211,7 +211,7 @@ y11-quoted-ok	A	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,D
 y11-key	A	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 y11-key	A	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 y11-key	A	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="api"	0	3	1	_common.team="shop"; cpu.0.job="api"		
-y11-key	A	preview	ok	200	no	-	1	3	w=4m; orphans=true	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
+y11-key	A	preview	ok	200	no	warnings	1	3	w=4m; orphans=true	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
 quoted-number	A	tree	ok	200	no	-	n/a	-	-	1	-	-	-		
 quoted-number	A	all-list	ok	200	no	null	-	-	-	1	-	-	-	all-list=- editor=1 preview=-	
 quoted-number	A	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="api"; cpu.0.threshold="10"	1	-	-	-	all-list=- editor=1 preview=-	
@@ -411,7 +411,7 @@ stack-x-number-text	S	common-users	ok	200	no	-	-	-	cpu from own	1	-	-	-	all-list
 stack-x-010	S	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 stack-x-010	S	all-list	ok	200	no	-	1	-	-	0	3	1	-		
 stack-x-010	S	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="x"; cpu.0.threshold=8		
-stack-x-010	S	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
+stack-x-010	S	preview	ok	200	no	warnings	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
 stack-x-010	S	common-users	ok	200	no	-	1	-	cpu from own	0	3	1	-		
 stack-required-empty	S	tree	ok	200	no	-	n/a	-	-	0	3	1	-		
 stack-required-empty	S	all-list	ok	200	no	-	1	-	-	0	3	1	-		
@@ -540,7 +540,7 @@ flat-ok	F	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down
 flat-number-text	F	editor	ok	200	no	values.schema	1	-	_common.team="shop"; cpu.0.job="f"; cpu.0.threshold="abc"	1	-	-	-	editor=1 preview=-	
 flat-number-text	F	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-	editor=1 preview=-	
 flat-010	F	editor	ok	200	no	yaml.read-differently	1	-	_common.team="shop"; cpu.0.job="f"; cpu.0.threshold=8	0	3	1	_common.team="shop"; cpu.0.job="f"; cpu.0.threshold=8		
-flat-010	F	preview	ok	200	no	-	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
+flat-010	F	preview	ok	200	no	warnings	1	3	w=4m	0	3	1	w=4m; names=CpuHigh,CpuRate,Down		
 flat-not-yaml	F	editor	unreadable	409	no	-	-	-	-	1	-	-	-		
 flat-not-yaml	F	preview	failed	200	no	error	-	-	-	1	-	-	w=-; names=-		
 flat-empty	F	editor	ok	200	no	values.required-empty	0	-	-	0	1	0	-		

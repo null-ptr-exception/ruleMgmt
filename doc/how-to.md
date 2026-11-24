@@ -823,6 +823,14 @@ Helm passes none of them to the Template and renders only the Template's
 own, so the rules it shows are not the ones written. The message names the
 file and the name to write them under, as a save of the same text does.
 
+A value the deployment's `values.yaml` writes by hand in a form Helm reads
+otherwise (`010`, `1_000`, `yes`, a key `y:` — see
+[writing values by hand](rules-format.md#writing-values-by-hand)) does not
+fail the check: Helm renders it, and what Preview shows is what deploys
+(`010` as 8). It is listed above the result under **Values to look at**,
+naming the file and the line, as a hand-written null on a `_common` stack
+and a key a `_common` writes twice are.
+
 A lint problem — most often two rows producing an alert with the same name and
 the same labels — shows as **passed with warnings**, in yellow, with the object
 listed first. It does not stop a save or a commit. promtool compares only the
@@ -1256,6 +1264,12 @@ cannot take and selector rows that cannot be told apart are. `check-repo`
 refuses what Helm stops on or reads otherwise than written (the first three);
 the rest Helm renders as written, and `check-repo` says them as warnings.
 
+A `_common`'s own `values.yaml` is read the same way: a value in it Helm
+reads otherwise (`010`), or values in it that are not under the chart's
+name, are listed once under the `_common`, naming its file (and the line),
+with the sentence a save of that `_common` is refused with; `check-repo`
+refuses them (exit 1).
+
 and while `sync.yaml` has an entry that cannot be right: one deployment
 following another that follows a third, a target with two sources, a path
 that is not a deployment (a folder that is a link included), an entry with
@@ -1627,7 +1641,8 @@ deployment).
 
 It refuses everything Commit refuses, and what Commit only names: a value
 Helm stops on or reads otherwise than written (`010`), values not under the
-chart's name, a `routing.yaml` with problems, a shared configs file with
+chart's name (either of the two in a deployment's `values.yaml` or in a
+`_common`'s own), a `routing.yaml` with problems, a shared configs file with
 problems, an AlertmanagerConfig a `_common` chart hands to its deployments,
 a Template with a generated file missing, a deployment Helm cannot render or
 whose rules the checker refuses. What Helm renders as written is said as a

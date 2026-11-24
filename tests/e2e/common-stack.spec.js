@@ -73,7 +73,18 @@ test.describe('A deployment on a _common', () => {
   test('a hand-written null is pointed out in Preview', async ({ page }) => {
     await write(`${PROD}/values.yaml`, `common:\n  ${CHART}:\n    mariadb_saturation_cpu: null\n`)
     const modal = await preview(page, await openProd(page))
-    await expect(modal.getByText('Some values are null')).toBeVisible({ timeout: 15000 })
+    await expect(modal.getByText('Values to look at')).toBeVisible({ timeout: 15000 })
     await expect(modal.getByText(`${PROD}/values.yaml: mariadb_saturation_cpu is null on a _common stack: Helm 3.15 and 3.19 deploy different things`, { exact: false })).toBeVisible()
+  })
+
+  // Helm reads a hand-written 010 as 8 and renders it: Preview says the
+  // cell beside a check that still passes.
+  test('a hand-written 010 is pointed out in Preview, and the check passes', async ({ page }) => {
+    await write(`${PROD}/values.yaml`, `common:\n  ${CHART}:\n    mariadb_saturation_disk:\n      - { warn_pct: 010, critical_pct: 92 }\n`)
+    const modal = await preview(page, await openProd(page))
+    await expect(modal.getByText('Values to look at')).toBeVisible({ timeout: 15000 })
+    await expect(modal.getByText(`${PROD}/values.yaml line 4: Helm reads 010 as 8 (YAML 1.1)`, { exact: false })).toBeVisible()
+    await expect(modal.getByText('check passed')).toBeVisible()
+    await expect(modal.getByText('Some values are null')).toHaveCount(0)
   })
 })

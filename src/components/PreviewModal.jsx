@@ -49,13 +49,15 @@ export default function PreviewModal({ open, onClose, yaml, check, selfCheck, su
       )}
 
       {valueWarnings?.length > 0 && (
-        // A hand-written null on a _common stack (#100): Helm versions read
-        // it differently, so what this shows may not be what is deployed.
+        // Values Helm renders, though maybe not as meant: a hand-written
+        // null on a _common stack (Helm versions read it differently), a
+        // value Helm reads otherwise than written (010 is 8), a key a
+        // _common writes twice. Each line says which, and where.
         <Alert
           style={{ marginBottom: 12 }}
           type="warning"
           showIcon
-          message="Some values are null — Helm versions read a null differently"
+          message="Values to look at — what deploys may not be what was meant"
           description={<ul style={{ margin: 0, paddingLeft: 18 }}>{valueWarnings.map((p, i) => <li key={i}>{p}</li>)}</ul>}
         />
       )}

@@ -130,6 +130,7 @@ export const POLICIES = Object.freeze({
   preview: definePolicy('preview', {
     rows: {
       'stack.duplicate-key': { action: 'warn', why: 'a key a _common writes twice deploys the later one, which may not be the one meant' },
+      'yaml.read-differently': { action: 'warn', why: 'Helm renders it, and Preview shows what Helm makes of it (010 as 8): the check passes, and the value is said, naming its line, since what deploys is not what was written' },
     },
   }),
   // check-deployment renders the deployment with Helm, as Preview does,

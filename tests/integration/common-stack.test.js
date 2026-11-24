@@ -163,6 +163,28 @@ describe.skipIf(!HAS_HELM)('Preview', () => {
     expect(data.valueWarnings).toEqual(expect.arrayContaining([expect.stringMatching(new RegExp(`^${SHOP}/values.yaml line 4: the key owner is written twice: Helm keeps the last one.* — in the _common ${SHOP}`))]))
   })
 
+  // What Helm deploys is real Helm's; Preview shows it and says the cell,
+  // and its check passes as it did: Helm renders the value.
+  const OWN_010 = `common:\n  ${CHART}:\n    _common:\n      owner: team-prod\n    ${DISK}:\n      - { warn_pct: 010, critical_pct: 92 }\n`
+  const SAID_010 = `shop/own/values.yaml line 6: Helm reads 010 as 8 (YAML 1.1); the editor would write 8. Write 8, or '010' in quotes for the text`
+
+  it.skipIf(!HAS_PROMTOOL)('a hand-written value Helm reads otherwise (010) is said beside the check, naming its line; the check passes', async () => {
+    await write('shop/own/values.yaml', OWN_010)
+    expect(await helmAlerts('shop/own')).toContain('MariadbSaturationDisk_WarnPct team-prod c1 8')
+    const { data } = await api('POST', `/api/v2/render/${CHART}/own${q('shop/own')}`)
+    expect(data.ok).toBe(true)
+    expect(data.valueWarnings).toEqual([SAID_010])
+    expect(data.check.passed).toBe(true)
+    expect(data.check.skipped).toBeFalsy()
+  })
+
+  it.skipIf(!HAS_PROMTOOL)('written as Helm reads it (8), or in quotes, nothing is said', async () => {
+    await write('shop/own/values.yaml', OWN_010.replace('010', '8'))
+    const { data } = await api('POST', `/api/v2/render/${CHART}/own${q('shop/own')}`)
+    expect(data.check.passed).toBe(true)
+    expect(data.valueWarnings).toBeUndefined()
+  })
+
   it('a hand-written null is pointed out', async () => {
     await write('shop/inherit/values.yaml', `common:\n  ${CHART}:\n    ${DISK}: null\n`)
     const { data } = await api('POST', `/api/v2/render/${CHART}/inherit${q('shop/inherit')}`)
@@ -268,6 +290,45 @@ describe('the commit checks', () => {
     expect(dev[0].description).toMatch(new RegExp(`${TEAM_B}/values.yaml: ${DISK} is null on a _common stack: Helm 3.15 and 3.19 deploy different things.*Give it a value, or delete the line`))
   })
 
+  // A _common's own values.yaml is read by Commit as a deployment's own is
+  // (#202, #203). The layer's save is the reference for the sentence, real
+  // Helm for what deploys.
+  const saveLayer = text => api('POST', `/api/v2/deployments/${CHART}/${CHART}${q(SHOP)}`, { values: text })
+  const listedFor = async rel => ((await deploymentCommitBlockers(tmpDir)).valueWarnings.find(w => w.deployment === rel)?.warnings ?? [])
+
+  it.skipIf(!HAS_HELM)('a value a _common writes that Helm reads otherwise (010) is listed under the _common, naming its file and line as its save does', async () => {
+    const text = `${CHART}:\n  _common:\n    owner: team-a\n    namespace: c1\n  ${DISK}:\n    - { warn_pct: 010, critical_pct: 95 }\n`
+    const saved = await saveLayer(text)
+    expect(saved.status).toBe(400)
+    await write(`${SHOP}/values.yaml`, text)
+    // Helm deploys 8 where 010 is written.
+    expect(await helmAlerts('shop/inherit')).toContain('MariadbSaturationDisk_WarnPct team-a c1 8')
+    const said = `${SHOP}/values.yaml line 6: Helm reads 010 as 8 (YAML 1.1); the editor would write 8. Write 8, or '010' in quotes for the text`
+    expect(saved.data.problems.map(p => p.message)).toEqual([said])
+    expect(await listedFor(SHOP)).toEqual([said])
+    // Listed, not refused, and said once: not again under each deployment below.
+    const { findings, valueWarnings } = await deploymentCommitBlockers(tmpDir)
+    expect(findings).toEqual([])
+    expect(valueWarnings.filter(w => w.warnings.some(m => m.includes('Helm reads 010')))).toHaveLength(1)
+  })
+
+  it.skipIf(!HAS_HELM)('a _common\'s values not under the chart\'s name are listed under the _common, with its save\'s sentence', async () => {
+    const text = '_common:\n  owner: team-a\n  namespace: c1\n'
+    const saved = await saveLayer(text)
+    expect(saved.status).toBe(400)
+    await write(`${SHOP}/values.yaml`, text)
+    // Helm passes none of it on: the deployment below renders without the owner.
+    expect((await helmAlerts('shop/inherit')).some(a => a.includes(' team-a '))).toBe(false)
+    const said = `${SHOP}/values.yaml: the values are not under ${CHART}: Helm passes none of them to the Template ${CHART}, and renders only its own. Write them under ${CHART}:`
+    expect(saved.data.problems.map(p => p.message)).toEqual([said])
+    expect(await listedFor(SHOP)).toEqual([said])
+  })
+
+  it('a _common whose values are as Helm reads them is not listed', async () => {
+    expect(await listedFor(SHOP)).toEqual([])
+    expect(await listedFor(TEAM_B)).toEqual([])
+  })
+
   it('call the _common chart one when a version is asked of it', async () => {
     await deployment('shop/inherit', SHOP, { common: { [CHART]: {} } }, '0.2.0')
     const { findings } = await deploymentCommitBlockers(tmpDir)
@@ -283,6 +344,12 @@ describe.skipIf(!HAS_HELM || !HAS_PROMTOOL)('check-deployment', () => {
     const own = check(SHOP)
     expect(own.status).toBe(2)
     expect(own.stderr).toContain('is a _common chart')
+  })
+
+  // Helm renders a hand-written 010 (as 8): the check passes as before.
+  it('passes a deployment whose values hold a hand-written 010, which Helm renders', async () => {
+    await write('shop/own/values.yaml', `common:\n  ${CHART}:\n    _common:\n      owner: team-prod\n    ${DISK}:\n      - { warn_pct: 010, critical_pct: 92 }\n`)
+    expect(check('shop/own').status).toBe(0)
   })
 
   // An unclosed [ is a text AlertForge cannot tell Helm's reading of: left

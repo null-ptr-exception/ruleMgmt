@@ -1,4 +1,11 @@
 import { expect } from '@playwright/test'
+import fs from 'fs/promises'
+import path from 'path'
+import { WORKSPACE } from './workspace.js'
+
+// A Template's templates/<name>.yaml as it is on disk; undefined when it is not there.
+export const templateFile = (chart, name) =>
+  fs.readFile(path.join(WORKSPACE, 'charts', chart, 'templates', `${name}.yaml`), 'utf-8').catch(() => undefined)
 
 // Deleting a chart is refused while a deployment uses it (#177), so a spec
 // that clears its chart clears the chart's deployments first. A delete that

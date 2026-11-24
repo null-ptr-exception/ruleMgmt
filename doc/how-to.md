@@ -324,8 +324,8 @@ In the editor, pick the chart → **Delete**. A chart a deployment still uses is
 not deleted: the deployment would fail to render without it. The refusal lists
 those deployments — delete them, then delete the chart again.
 
-This covers the editor and its API. A chart removed by hand or through git is
-not checked.
+This covers the editor. A chart removed by hand or through git is not
+checked.
 
 ---
 
@@ -728,27 +728,19 @@ since it was saved — is not drawn as a table: the page lists what is wrong, an
 fixed by hand (or removed with **Remove routing** and set up again).
 
 The page rewrites `routing.yaml` when it saves, so comments in a hand-written
-one are not kept. To keep editing by hand, save through the API instead:
-
-```bash
-BASE='http://<host>/api/v2/deployments/<chart>/<deployment>/routing?folder=<folder>'
-
-# save: routing.yaml as written (comments kept), and the AlertmanagerConfig from it
-curl -X PUT "$BASE" -H 'Content-Type: application/json' \
-  --data "$(jq -Rs '{routing: .}' routing.yaml)"
-
-# check: { text, errors, stale }
-curl "$BASE"
-```
+one are not kept. To keep editing by hand, edit the file and commit: the
+commit is refused while the AlertmanagerConfig is behind `routing.yaml`, and
+its **Regenerate** makes the resource from the file as written, comments
+kept, for you to look at in the diff and commit.
 
 A save that does not pass the checks is refused with what is wrong, by cell
-or config, and writes nothing. `stale: true` — shown on the page too — means
-the AlertmanagerConfig is not what `routing.yaml` says: after a hand edit to
+or config, and writes nothing. The page says when the AlertmanagerConfig is
+stale — not what `routing.yaml` says: after a hand edit to
 the file, or after the site's object labels changed. Saving again
 regenerates it; with nothing edited, the page saves the file as it is,
 comments and all. A `routing.yaml` with problems makes no resource, so one
-that is there is `stale` too. On a sync target, `stale` also means its
-routing is not its source's (`differsFromSource`); its Save is off, so the
+that is there is stale too. On a sync target, stale also means its
+routing is not its source's; its Save is off, so the
 page names the source and points to **Regenerate** in the Git panel.
 
 A file the page cannot read is named, never taken for "no routing": a
@@ -898,8 +890,7 @@ copied to it.
   or put `routing.yaml` back.
 - Deleting a source lets go of its targets: each keeps what it has and can
   be edited again. The **Delete** dialog lists them, and each can be deleted
-  along with the source instead. Deleting it through the API does the same,
-  and the response lists them as `unlinked`. Those marked to be deleted go
+  along with the source instead. Those marked to be deleted go
   first: when the source then cannot be deleted, the message says why and
   names the ones already gone; the source keeps the rest.
 - A `sync.yaml` that cannot be read (no permission, a folder in its place)

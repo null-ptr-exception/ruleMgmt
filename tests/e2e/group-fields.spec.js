@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { removeChart, openTemplateChart } from './charts.js'
+import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // #182: a group's Type picks one of four outputs, and the settings row offers
 // the group fields that type has. A field left from another type is shown,
@@ -77,7 +77,7 @@ test.describe('Group fields by type', () => {
     await page.getByRole('button', { name: 'Save' }).first().click()
     await expect.poll(() => rulesFile(request, CHART, 'svc.yaml'), { timeout: 8000 }).toContain('labels: {team: ops, severity: critical}')
     expect(await rulesFile(request, CHART, 'svc.yaml')).toContain('query_offset: 1m')
-    const tmpl = (await (await request.get(`/api/v2/templates/${CHART}/svc`)).json()).content
+    const tmpl = await templateFile(CHART, 'svc')
     expect(tmpl).toContain('      query_offset: 1m\n      labels:\n        team: ops\n        severity: critical\n')
   })
 

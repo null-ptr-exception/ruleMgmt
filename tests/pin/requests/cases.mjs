@@ -14,7 +14,7 @@
 export const OUTSIDE_TOKEN = 'pin-outside-7d1c5e'
 export const GITDIR_TOKEN = 'pin-gitdir-3b9a2f'
 
-const SEG = new Set(['chart', 'name-new', 'template', 'rules-file', 'deployment'])
+const SEG = new Set(['chart', 'name-new', 'rules-file', 'deployment'])
 const dirOf = p => p.split('/').slice(0, -1).join('/')
 const firstSegToDot = p => p.replace(/^([^/]+)\//, '$1/./')
 const LONG = n => 'x'.repeat(n)
@@ -33,22 +33,22 @@ const PATH_CASES = [
   { id: 'good', legit: 'all', v: (k, g) => g },
 
   { id: 'up', v: () => '..' },
-  { id: 'up-twin', legit: ['template', 'folder', 'folder-new', 'tree', 'file'], v: (k, g) => ({
-    chart: 'demo..x', 'name-new': `${g}..x`, template: 'a..b', 'rules-file': 'a..b.yaml',
+  { id: 'up-twin', legit: ['folder', 'folder-new', 'tree', 'file'], v: (k, g) => ({
+    chart: 'demo..x', 'name-new': `${g}..x`, 'rules-file': 'a..b.yaml',
     folder: 'deployments/team/a..b', 'folder-new': `${g}..x`, tree: 'deployments/team/a..b', file: 'deployments/team/a..b/values.yaml',
   })[k] ?? null },
 
   // A path that goes up out of the repo, to a thing outside it of the
-  // slot's sort (a chart, a template file, a deployment, a file).
+  // slot's sort (a chart, a rules file, a deployment, a file).
   { id: 'climb', v: k => ({
-    chart: '../../outside/chart', 'name-new': '../../outside/new', template: '../../../../outside/tpl', 'rules-file': '../../../../outside/rules.yaml',
+    chart: '../../outside/chart', 'name-new': '../../outside/new', 'rules-file': '../../../../outside/rules.yaml',
     deployment: '../../../../outside/dep', folder: 'deployments/../../outside/dep', 'folder-new': 'deployments/../../outside/new',
     'folder-parent': 'deployments/../../outside', common: 'deployments/../../outside/dep', tree: 'deployments/../../outside', file: 'deployments/../../outside/secret.txt',
   })[k] ?? null },
   { id: 'climb-twin', legit: ['folder', 'folder-new', 'folder-parent', 'common', 'tree', 'file'], v: (k, g) => (SEG.has(k) || k === 'ref' ? null : firstSegToDot(g)) },
 
   { id: 'absolute', v: (k, g, ctx) => ({
-    chart: `${ctx.outside}/chart`, 'name-new': `${ctx.outside}/new`, template: `${ctx.outside}/tpl`, 'rules-file': `${ctx.outside}/rules.yaml`,
+    chart: `${ctx.outside}/chart`, 'name-new': `${ctx.outside}/new`, 'rules-file': `${ctx.outside}/rules.yaml`,
     deployment: `${ctx.outside}/dep`, folder: `${ctx.outside}/dep`, 'folder-new': `${ctx.outside}/new`, 'folder-parent': ctx.outside,
     common: `${ctx.outside}/dep`, tree: ctx.outside, file: `${ctx.outside}/secret.txt`,
   })[k] ?? null },
@@ -71,38 +71,38 @@ const PATH_CASES = [
 
   // git's own folder never; a dot-file or dot-folder where it is read.
   { id: 'dot-git', v: k => ({
-    chart: '.git', 'name-new': '.git', template: '.git', 'rules-file': '.git', deployment: '.git',
+    chart: '.git', 'name-new': '.git', 'rules-file': '.git', deployment: '.git',
     folder: '.git', 'folder-new': '.git/x', 'folder-parent': '.git', common: '.git/x/_common/demo', tree: '.git', file: '.git/info/pin-note',
   })[k] ?? null },
-  { id: 'dot-gitignore', legit: ['file', 'tree', 'template'], v: k => ({
-    chart: '.gitignore', 'name-new': '.gitignore', template: '.gitignore', tree: '.gitignore', file: '.gitignore',
+  { id: 'dot-gitignore', legit: ['file', 'tree'], v: k => ({
+    chart: '.gitignore', 'name-new': '.gitignore', tree: '.gitignore', file: '.gitignore',
   })[k] ?? null },
   { id: 'dot-github', legit: ['file', 'tree'], v: k => ({
     'folder-new': '.github/x', folder: '.github/workflows', tree: '.github', file: '.github/workflows/ci.yaml',
   })[k] ?? null },
 
   // Names starting with _ : reserved for a new folder; an existing _common
-  // chart is opened and read; a hand-written template may be called so.
-  { id: 'reserved-common', legit: ['folder:read', 'tree', 'file', 'template'], v: k => ({
-    chart: '_common', 'name-new': '_common', template: '_common', folder: 'deployments/s/_common/demo',
+  // chart is opened and read.
+  { id: 'reserved-common', legit: ['folder:read', 'tree', 'file'], v: k => ({
+    chart: '_common', 'name-new': '_common', folder: 'deployments/s/_common/demo',
     'folder-new': 'deployments/team/_common', tree: 'deployments/s/_common', file: 'deployments/s/_common/demo/values.yaml',
   })[k] ?? null },
   { id: 'reserved-shared', legit: ['tree', 'file'], v: k => ({
     'name-new': '_shared', 'folder-new': '_shared/x', tree: '_shared', file: '_shared/notification-configs.yaml',
   })[k] ?? null },
-  { id: 'reserved-extra', legit: ['template'], v: k => ({
-    chart: '_extra-alerts', 'name-new': '_extra-alerts', template: '_extra-alerts', 'rules-file': '_extra-alerts.yaml',
+  { id: 'reserved-extra', v: k => ({
+    chart: '_extra-alerts', 'name-new': '_extra-alerts', 'rules-file': '_extra-alerts.yaml',
     'folder-new': 'deployments/team/_extra-alerts',
   })[k] ?? null },
 
   // Links: to a place in the repo (fine), to a place outside it, and a
   // folder on the way that is a link outside.
   { id: 'link-in', legit: 'all', v: k => ({
-    chart: 'inchart', template: 'inlink', folder: 'deployments/team/inlink', 'folder-new': 'deployments/inteam/new',
+    chart: 'inchart', folder: 'deployments/team/inlink', 'folder-new': 'deployments/inteam/new',
     'folder-parent': 'deployments/inteam', tree: 'deployments/inteam', file: 'deployments/team/inlink/values.yaml',
   })[k] ?? null },
   { id: 'link-out', v: k => ({
-    chart: 'outchart', template: 'outlink', folder: 'deployments/team/outlink', 'folder-new': 'deployments/team/outlink',
+    chart: 'outchart', folder: 'deployments/team/outlink', 'folder-new': 'deployments/team/outlink',
     tree: 'deployments/team/outlink', file: 'deployments/team/outfile.yaml',
   })[k] ?? null },
   { id: 'link-via', v: k => ({

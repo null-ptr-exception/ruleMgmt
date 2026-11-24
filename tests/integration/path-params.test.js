@@ -66,13 +66,9 @@ const VALUES = ['../outside', '../../outside', 'deployments/../../outside', '/tm
 // Where a file is read or a folder listed, a dot-folder is fine (.github);
 // .git never is.
 const READ_VALUES = VALUES.filter(v => v !== 'deployments/.hidden/a')
-// A template file is named as the listing gives it: `.hidden` is a name.
-const FILE_SEGMENTS = SEGMENTS.filter(s => s !== '.hidden')
 const q = v => encodeURIComponent(v)
 
 const ROUTES = [
-  ...['GET', 'POST', 'DELETE'].map(m => [`${m} a template file`, 'template', FILE_SEGMENTS.map(s => [m, `/api/v2/templates/demo/${s}`, m === 'POST' ? { content: SENTINEL } : undefined])]),
-  ['rename a template file', 'template', FILE_SEGMENTS.map(s => ['POST', `/api/v2/templates/demo/${s}/rename`, { newName: 'moved' }])],
   ['a chart', 'chart', SEGMENTS.map(s => ['GET', `/api/v2/templates/${s}`])],
   ['read a deployment', 'folder', VALUES.map(v => ['GET', `/api/v2/deployments/demo/a?folder=${q(v)}`])],
   ['save a deployment', 'folder', VALUES.map(v => ['POST', `/api/v2/deployments/demo/a?folder=${q(v)}`, { values: { cpu: [{ namespace: 'p' }] } }])],
@@ -80,10 +76,8 @@ const ROUTES = [
   ['delete a deployment', 'folder', VALUES.map(v => ['DELETE', `/api/v2/deployments/demo/a?folder=${q(v)}`])],
   ['save routing', 'folder', VALUES.map(v => ['PUT', `/api/v2/deployments/demo/a/routing?folder=${q(v)}`, { routing: 'labels: {}\nconfigs: {}\ncells: []\n' }])],
   ['preview', 'folder', VALUES.map(v => ['POST', `/api/v2/render/demo/a?folder=${q(v)}`])],
-  ['make a folder', 'path', VALUES.map(v => ['POST', '/api/v2/folders', { path: v }])],
   ['make a deployment', 'folder', VALUES.map(v => ['POST', '/api/v2/folders/init', { folder: v, chart: 'demo' }])],
   ['list a folder', 'path', READ_VALUES.map(v => ['GET', `/api/v2/folders/tree?path=${q(v)}`])],
-  ['list a folder (old route)', 'path', READ_VALUES.map(v => ['GET', `/api/v2/folders?path=${q(v)}`])],
   ['who uses a _common', 'path', READ_VALUES.map(v => ['GET', `/api/v2/folders/common/users?path=${q(v)}`])],
   ['plan a _common', 'folder', VALUES.map(v => ['GET', `/api/v2/folders/common/plan?action=create&chart=demo&folder=${q(v)}`])],
   ['make a _common', 'folder', VALUES.map(v => ['POST', '/api/v2/folders/common', { action: 'create', folder: v, chart: 'demo', expected: {} }])],
@@ -150,11 +144,9 @@ describe('what the checks still take', () => {
     expect(status, text).toBe(200)
   })
 
-  it.each([['_extra-alerts'], ['my.alerts']])('a template file named %s opens and can be deleted, as the listing gives it', async name => {
+  it.each([['_extra-alerts'], ['my.alerts']])('a template file named %s is listed', async name => {
     const listed = JSON.parse((await api('GET', '/api/v2/templates/demo')).text).templateFiles
     expect(listed).toContain(name)
-    expect((await api('GET', `/api/v2/templates/demo/${encodeURIComponent(name)}`)).status).toBe(200)
-    expect((await api('DELETE', `/api/v2/templates/demo/${encodeURIComponent(name)}`)).status).toBe(200)
   })
 
   it('a deployment in folders with dots, dashes and underscores, made, saved, read and previewed', async () => {
@@ -193,18 +185,12 @@ describe('links', () => {
   beforeAll(async () => {
     await fs.mkdir(path.join(root, 'outdir'), { recursive: true })
     await fs.writeFile(path.join(root, 'outside-file.yaml'), SENTINEL)
-    await fs.symlink(path.join(root, 'outside-file.yaml'), path.join(repo, 'charts/demo/templates/out-link.yaml'))
     await fs.symlink(path.join(root, 'outdir'), path.join(repo, 'deployments', 'out-link'))
     await fs.symlink(path.join(repo, 'deployments', 'team'), path.join(repo, 'deployments', 'in-link'))
-    await fs.writeFile(path.join(repo, 'charts/demo/templates/kept.yaml'), '# kept\n')
-    await fs.symlink('kept.yaml', path.join(repo, 'charts/demo/templates/in-link.yaml'))
   })
 
   it.each([
-    ['GET', '/api/v2/templates/demo/out-link'],
-    ['POST', '/api/v2/templates/demo/out-link', { content: 'x: 1\n' }],
     ['POST', '/api/v2/folders/init', { folder: 'deployments/out-link/new', chart: 'demo' }],
-    ['POST', '/api/v2/folders', { path: 'deployments/out-link/new' }],
     ['POST', `/api/v2/deployments/demo/new?folder=${q('deployments/out-link/new')}`, { values: { cpu: [{ namespace: 'p' }] } }],
   ])('%s %s → refused, nothing outside read or written', async (method, url, body) => {
     const { status, text } = await api(method, url, body)
@@ -214,8 +200,7 @@ describe('links', () => {
     expect(await fs.readFile(path.join(root, 'outside-file.yaml'), 'utf-8')).toBe(SENTINEL)
   })
 
-  it('a link to a place in the repo is followed to a Template file; a deployment folder reached through one is none', async () => {
-    expect((await api('GET', '/api/v2/templates/demo/in-link')).status).toBe(200)
+  it('a deployment folder reached through a link to a place in the repo is none', async () => {
     expect((await api('GET', `/api/v2/deployments/demo/a?folder=${q('deployments/in-link/a')}`)).status).toBe(400)
   })
 })
@@ -244,13 +229,11 @@ describe('a deployment folder reached through a link', () => {
   const IN = 'deployments/in-link/a'
   const OUT = 'deployments/out-link/a'
   const calls = folder => [
-    ['GET', `/api/v2/deployments/demo?folder=${q(folder)}`],
     ['GET', `/api/v2/deployments/demo/a?folder=${q(folder)}`],
     ['POST', `/api/v2/deployments/demo/a?folder=${q(folder)}`, { values: { cpu: [{ namespace: 'p' }] } }],
     ['GET', `/api/v2/deployments/demo/a/routing?folder=${q(folder)}`],
     ['PUT', `/api/v2/deployments/demo/a/routing?folder=${q(folder)}`, { routing: 'labels: {}\nconfigs: {}\ncells: []\n' }],
     ['DELETE', `/api/v2/deployments/demo/a/routing?folder=${q(folder)}`],
-    ['POST', `/api/v2/deployments/demo/a/clone?folder=${q(folder)}`, { newName: 'copy' }],
     ['DELETE', `/api/v2/deployments/demo/a?folder=${q(folder)}`],
     ['POST', `/api/v2/render/demo/a?folder=${q(folder)}`],
     ['POST', '/api/v2/sync', { source: folder, target: 'deployments/team/z' }],
@@ -289,13 +272,9 @@ describe('a name longer than 255 bytes', () => {
     ['POST', '/api/v2/charts', { name: LONG }],
     ['POST', '/api/v2/charts/demo/clone', { newName: LONG }],
     ['DELETE', `/api/v2/charts/${LONG}`],
-    ['GET', `/api/v2/templates/${LONG}/deployments`],
-    ['GET', `/api/v2/templates/demo/${LONG}`],
-    ['POST', `/api/v2/templates/demo/${LONG}`, { content: 'x: 1\n' }],
-    ['POST', '/api/v2/folders', { path: `deployments/${LONG}` }],
+    ['GET', `/api/v2/templates/${LONG}`],
     ['POST', '/api/v2/folders/init', { folder: `deployments/${LONG}`, chart: 'demo' }],
     ['DELETE', `/api/v2/deployments/demo/${LONG}?folder=${q('deployments/team/a')}`],
-    ['POST', `/api/v2/deployments/demo/a/clone?folder=${q('deployments/team/a')}`, { newName: LONG }],
     ['GET', `/api/v2/deployments/demo/a?folder=${q(`deployments/${LONG}`)}`],
   ])('%s %s → 400 naming the limit', async (method, url, body) => {
     const { status, text } = await api(method, url, body)
@@ -304,7 +283,7 @@ describe('a name longer than 255 bytes', () => {
   })
 
   it('a name of 255 bytes is taken', async () => {
-    const { status, text } = await api('POST', '/api/v2/folders', { path: `deployments/${'y'.repeat(255)}` })
+    const { status, text } = await api('POST', '/api/v2/folders/init', { folder: `deployments/${'y'.repeat(255)}`, chart: 'demo' })
     expect(status, text).toBe(200)
   })
 })
@@ -377,12 +356,8 @@ describe('a link into .git', () => {
   it.each([
     ['GET', `/api/v2/git/diff?file=${q('gitlink/config')}`],
     ['GET', `/api/v2/folders/tree?path=gitlink`],
-    ['GET', `/api/v2/folders?path=gitlink`],
-    ['POST', '/api/v2/folders', { path: 'gitlink/hooks/evil' }],
     ['POST', '/api/v2/folders/init', { folder: 'gitlink/x', chart: 'demo' }],
     ['GET', '/api/v2/templates/gl'],
-    ['POST', '/api/v2/templates/gl/notes', { content: 'x: 1\n' }],
-    ['POST', '/api/v2/templates/gt/notes', { content: 'x: 1\n' }],
     ['POST', '/api/v2/templates/gt/rules', { files: { 'cpu.yaml': CPU } }],
   ])('%s %s → refused, nothing of .git read or written', async (method, url, body) => {
     const before = await gitFiles()
@@ -474,7 +449,7 @@ describe('one refusal for one state', () => {
   })
   it.each([
     ['GET', `/api/v2/deployments/demo/a?folder[]=a&folder[]=..`],
-    ['POST', '/api/v2/folders', { path: 5 }],
+    ['POST', '/api/v2/folders/init', { folder: 5, chart: 'demo' }],
   ])('%s %s: a value that is not text is said to be', async (method, url, body) => {
     const { status, text } = await api(method, url, body)
     expect(status, text).toBe(400)
@@ -484,7 +459,7 @@ describe('one refusal for one state', () => {
 
 // A path of short names that is longer, as a whole, than the system takes.
 it.each([
-  ['POST', '/api/v2/folders', p => ({ path: p })],
+  ['POST', '/api/v2/folders/init', p => ({ folder: p, chart: 'demo' })],
   ['POST', '/api/v2/sync', p => ({ source: 'deployments/team/a', target: p })],
 ])('%s %s with a path over 4095 bytes → 400 naming the limit', async (method, url, body) => {
   const { status, text } = await api(method, url, body(`deployments/${'a/'.repeat(2100)}x`))

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { removeChart, openTemplateChart } from './charts.js'
+import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // The row identity label: off by default, turned on in the Template
 // editor's Common Variables, saved to rules/_common.yaml, and the templates
@@ -31,7 +31,7 @@ test.describe.serial('Row identity label', () => {
   })
 
   let before
-  const template = async request => (await (await request.get(`/api/v2/templates/${CHART}/cpu`)).json()).content
+  const template = async () => templateFile(CHART, 'cpu')
 
   test('is off, says what turning it on does, and saving it on adds the label to the template', async ({ page, request }) => {
     before = await template(request)

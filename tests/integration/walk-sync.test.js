@@ -13,6 +13,7 @@ import { openRepo } from '../../server/repo/openRepo.js'
 import { loadSync } from '../../server/repo/sync.js'
 import { walk, folderEntry } from '../../server/repo/walk.js'
 import { deploymentCommitBlockers } from '../../server/lib/commitChecks.js'
+import { findChartUsage } from '../../server/lib/chartUsage.js'
 
 const run = promisify(execFile)
 const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0
@@ -59,7 +60,7 @@ describe('a deployment whose Chart.yaml cannot be read or used', () => {
     const node = (await api('GET', '/api/v2/folders/tree?path=deployments/t')).data.find(n => n.name === 'a')
     expect(node).toMatchObject({ unreadable: 'its Chart.yaml cannot be read (permission denied)' })
     expect(node.isDeployment).toBeUndefined()
-    const users = (await api('GET', '/api/v2/templates/demo/deployments')).data
+    const users = await findChartUsage(tmpDir, 'demo')
     expect(users.deployments.map(d => d.path)).toEqual([B])
     expect(users.unreadable).toEqual([{ path: A, error: 'its Chart.yaml cannot be read (permission denied)' }])
   })
@@ -73,15 +74,15 @@ describe('a deployment whose Chart.yaml cannot be read or used', () => {
   })
 })
 
-describe('a folder\'s deployment list', () => {
-  it('lists the folder\'s own deployment by the walk\'s rule: not a values.yaml alone, nor a Chart.yaml naming no Template', async () => {
-    const list = async rel => (await api('GET', `/api/v2/deployments/demo?folder=${rel}`)).data.map(d => d.name)
-    expect(await list(A)).toEqual(['a'])
+describe('the tree', () => {
+  it('shows a folder as a deployment by the walk\'s rule: not a values.yaml alone, nor a Chart.yaml naming no Template', async () => {
+    const isDeployment = async (parent, name) => !!(await api('GET', `/api/v2/folders/tree?path=${parent}`)).data.find(n => n.name === name).isDeployment
+    expect(await isDeployment('deployments/t', 'a')).toBe(true)
     await fs.mkdir(path.join(tmpDir, 'deployments/w/vo'), { recursive: true })
     await fs.writeFile(path.join(tmpDir, 'deployments/w/vo/values.yaml'), 'demo: {}\n')
-    expect(await list('deployments/w/vo')).toEqual([])
+    expect(await isDeployment('deployments/w', 'vo')).toBe(false)
     await fs.writeFile(path.join(tmpDir, 'deployments/w/vo/Chart.yaml'), 'apiVersion: v2\nname: vo\nversion: 0.1.0\n')
-    expect(await list('deployments/w/vo')).toEqual([])
+    expect(await isDeployment('deployments/w', 'vo')).toBe(false)
   })
 })
 
@@ -181,7 +182,7 @@ describe('a folder that is a link leading outside the repo', () => {
       const tree = (await api('GET', '/api/v2/folders/tree?path=deployments')).data
       expect(tree.map(n => [n.name, n.unreadable ?? null])).toEqual([['out', 'it is a link that leads outside the repo'], ['t', null]])
       expect((await deploymentCommitBlockers(tmpDir)).unreadable).toEqual([{ path: 'deployments/out', error: 'it is a link that leads outside the repo' }])
-      expect((await api('GET', '/api/v2/templates/demo/deployments')).data.unreadable).toEqual([])
+      expect((await findChartUsage(tmpDir, 'demo')).unreadable).toEqual([])
       expect((await api('GET', '/api/v2/folders/tree?path=deployments/out')).data).toEqual([])
       // In a folder of its own, the folder opens to show it.
       await fs.mkdir(path.join(tmpDir, 'deployments', 'only'))

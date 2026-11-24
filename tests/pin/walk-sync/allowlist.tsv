@@ -3,13 +3,10 @@
 # Edited by hand: a fix removes its line; a new disagreement needs one.
 id	entry	kind	category	reason
 inside-deployment-templates	list	misses-what-helm-renders	policy	a chart's own templates/ and charts/ folders are not walked into (Helm reads them as the chart's)
-inside-deployment-templates	users	misses-what-helm-renders	policy	a chart's own templates/ and charts/ folders are not walked into (Helm reads them as the chart's)
 inside-deployment-templates	migration	misses-what-helm-renders	policy	a chart's own templates/ and charts/ folders are not walked into (Helm reads them as the chart's)
 inside-deployment-templates	sync-to	not-a-copy-after	bug	no issue yet: sync accepts a target inside its source's templates/ (a folder there that is a deployment) and writes into it: the source then fails to render
 in-common-folder	tree	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
 in-common-folder	list	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
-in-common-folder	folder-list	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
-in-common-folder	users	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
 in-common-folder	migration	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
 in-common-folder	routing-get	misses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
 in-common-folder	preview	refuses-what-helm-renders	policy	a folder right inside _common/ is a _common chart, never a deployment, though Helm renders it as one
@@ -31,11 +28,9 @@ hidden-deployment	preview	refuses-what-helm-renders	policy	hidden folders and no
 hidden-deployment	sync-to	refuses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
 hidden-deployment	sync-from	refuses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
 node-modules	list	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
-node-modules	users	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
 node-modules	migration	misses-what-helm-renders	policy	hidden folders and node_modules are not looked into by the tree and the list (who uses a Template looks into hidden ones, as ArgoCD deploys whatever it is pointed at)
 link-inside	tree	misses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
 link-inside	list	misses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
-link-inside	users	misses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
 link-inside	migration	misses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
 link-outside	list	misses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
 link-outside	migration	misses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
@@ -49,7 +44,6 @@ chart-template-gone	sync-from	accepts-what-helm-fails	bug	no issue yet: sync fro
 chart-two-templates	preview	refuses-what-helm-renders	policy	a deployment naming two Templates is not supported: Commit and Preview refuse it, Helm renders both
 chart-two-templates	commit	refuses-what-helm-renders	policy	a deployment naming two Templates is not supported: Commit and Preview refuse it, Helm renders both
 chart-two-templates	check-repo	refuses-what-helm-renders	policy	a deployment naming two Templates is not supported: Commit and Preview refuse it, Helm renders both
-file-not-folder	folder-list	5xx	bug	no issue yet: a folder path that is a file answers 500 in a folder's deployment list (mkdir ENOTDIR/EEXIST)
 legacy-flat	tree	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
 legacy-flat	list	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
 legacy-flat	routing-get	misses-what-helm-renders	out-of-scope	a legacy flat <name>-values.yaml deployment is not supported (folder deployments only); it is in the tree as nothing, cannot be synced or checked
@@ -79,4 +73,3 @@ link-inside	preview	refuses-what-helm-renders	policy	a folder that is a link (or
 link-inside	routing-get	misses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
 link-inside	sync-from	refuses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
 link-inside	sync-to	refuses-what-helm-renders	policy	a folder that is a link (or is reached through one) is never a deployment, at every entry point: what it leads to is found, listed and checked where it is; a link leading outside the repo is named as one that cannot be read
-link-outside	users	misses-what-helm-renders	policy	a folder that is a link leading outside the repo holds none of the repo's deployments: who uses a Template does not follow it (the tree and Commit name it)

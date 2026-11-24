@@ -94,12 +94,12 @@ describe('a Template folder', () => {
     expect(t.findings[0].message).toMatch(/_extra\.yaml starts with _: Helm takes it for a partial/)
   })
 
-  it('values AlertForge cannot tell Helm\'s reading of: save and Commit refuse, naming the line', async () => {
+  it('values AlertForge cannot tell Helm\'s reading of: a migration and Commit refuse, naming the line', async () => {
     write(`${D}/values.yaml`, '_common:\n  team: |2\n    platform\n')
     const t = await load()
     expect(codes(t)).toEqual(['template.values-cannot-tell'])
     expect(t.findings[0].message).toMatch(/line 2.*write it as plain YAML/)
-    expect(decide(t.findings, TEMPLATE_POLICIES.saveValues).refuse).toHaveLength(1)
+    expect(decide(t.findings, TEMPLATE_POLICIES.migrationApply).refuse).toHaveLength(1)
     expect(decide(t.findings, 'commit').refuse.map(f => f.code)).toEqual(['template.values-cannot-tell'])
   })
 

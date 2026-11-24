@@ -50,7 +50,7 @@ describe.skipIf(IS_ROOT)('an error answer', () => {
       await fs.rm(path.join(tmpDir, 'charts/demo/values.yaml'), { force: true })
       await fs.mkdir(path.join(tmpDir, 'charts/demo/values.yaml'))
     },
-      () => api('POST', '/api/v2/templates/demo/values', { values: {} })],
+      () => api('GET', '/api/v2/templates/demo')],
     ['a Template whose Chart.yaml cannot be read', () => fs.chmod(path.join(tmpDir, 'charts/demo/Chart.yaml'), 0o000),
       () => api('POST', '/api/v2/templates/demo/chart-meta', { chartMeta: { description: 'x' } })],
     ['a deployment whose values cannot be read', () => fs.chmod(path.join(tmpDir, SRC, 'values.yaml'), 0o000),

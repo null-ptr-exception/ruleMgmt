@@ -194,11 +194,11 @@ describe.skipIf(!HAS_HELM)('links and the deployment routes', { timeout: 60000 }
     }
   })
 
-  it('a _common is not deleted, cloned or given routing as a deployment', async () => {
+  it('a _common is not deleted or given routing as a deployment', async () => {
     await init('shop/a')
     await make('shop')
     const q = `?folder=${encodeURIComponent(SHOP)}`
-    for (const [method, url] of [['DELETE', `/api/v2/deployments/${C}/${C}${q}`], ['POST', `/api/v2/deployments/${C}/${C}/clone${q}`], ['PUT', `/api/v2/deployments/${C}/${C}/routing${q}`], ['DELETE', `/api/v2/deployments/${C}/${C}/routing${q}`]]) {
+    for (const [method, url] of [['DELETE', `/api/v2/deployments/${C}/${C}${q}`], ['PUT', `/api/v2/deployments/${C}/${C}/routing${q}`], ['DELETE', `/api/v2/deployments/${C}/${C}/routing${q}`]]) {
       const r = await api(method, url, { newName: 'x', routing: 'cells: []\n' })
       expect(r.status, `${method} ${url}`).toBe(400)
       expect(r.data.error).toMatch(/is a _common chart, not a deployment/)

@@ -132,14 +132,6 @@ describe('opening a Template', () => {
     expect(data.schema).toBe(null)
     expect(data.drift.state).not.toBe('ok')
   })
-
-  it.skipIf(IS_ROOT)('a template file without permission: refused, not "not found"', async () => {
-    const file = (await fs.readdir(abs('charts/demo/templates')))[0]
-    await lock(`charts/demo/templates/${file}`)
-    const { status, data } = await api('GET', `/api/v2/templates/demo/${file.replace(/\.yaml$/, '')}`)
-    expect(status).toBe(409)
-    names(data, `charts/demo/templates/${file} cannot be read: permission denied`)
-  })
 })
 
 describe('a folder named templates/<name>.yaml', () => {

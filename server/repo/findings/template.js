@@ -295,20 +295,8 @@ export const TEMPLATE_POLICIES = Object.freeze({
     default: { refuse: 'ignore', why: 'the rest is the save of rules/\'s to decide (saveRules)' },
     rows: Object.fromEntries(['template.values-unreadable', 'template.values-not-yaml', 'template.values-cannot-tell'].map(code => [code, {
       action: 'refuse',
-      why: 'a migration rewrites many deployments while the Template values they are checked against cannot be read as Helm reads them; the file is fixed first (saving the Template values in the editor), the migration then',
+      why: 'a migration rewrites many deployments while the Template values they are checked against cannot be read as Helm reads them; the file is fixed by hand first, the migration then',
     }])),
-  }),
-  // Save of the Template's values.yaml: judged on the Template as the save
-  // leaves it. Saving does not run Helm.
-  saveValues: definePolicy('saveValues', {
-    rows: {
-      ...READ_THROUGH,
-      'template.rules-invalid': { action: 'ignore', why: 'rules/ is not what this saves; Commit names it' },
-      'template.rule-check': { action: 'ignore', why: 'rules/ is not what this saves; Commit names it' },
-      'template.drift-stale': { action: 'ignore', why: 'what is on disk renders; Commit names it' },
-      'template.legacy': { action: 'ignore', why: LEGACY },
-      'template.values-unreadable': { action: 'ignore', why: 'the save writes the file' },
-    },
   }),
   // A new deployment: made only from a Template Helm can render.
   init: definePolicy('init', {

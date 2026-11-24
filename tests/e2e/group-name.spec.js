@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { removeChart, openTemplateChart } from './charts.js'
+import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // A group's own rule-group name: the Name field of the settings row. Empty is
 // the key's default; another group's name is shown and refused by Save.
@@ -35,8 +35,7 @@ async function openGroup(page, chart, group) {
 
 const rulesFile = async (request, chart, file) =>
   (await (await request.get(`/api/v2/templates/${chart}`)).json()).rulesFiles[file]
-const template = async (request, chart, group) =>
-  (await (await request.get(`/api/v2/templates/${chart}/${group}`)).json()).content
+const template = async (request, chart, group) => templateFile(chart, group)
 
 test.describe('A group\'s rule-group name', () => {
   const CHART = 'e2e-group-name'

@@ -115,16 +115,4 @@ export function treeRoutes(router) {
       res.status(500).json({ error: err.message })
     }
   })
-
-  router.get('/', async (req, res) => {
-    try {
-      const parentPath = req.query.path || ''
-      const where = parentPath ? await parsePath(parentPath, 'list', { root: req.gitopsDir, what: 'path' }) : { ok: true }
-      if (!where.ok) return res.status(400).json({ error: where.error })
-      const children = await listChildren(req.gitopsDir, parentPath)
-      res.json(children)
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
 }

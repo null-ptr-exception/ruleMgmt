@@ -74,31 +74,17 @@ export const ROUTES = [
 
   // templates
   { id: 'templates.get', method: 'GET', path: '/api/v2/templates/:chart', params: { chart: 'demo' }, inputs: { chart: chart() } },
-  { id: 'templates.deployments', method: 'GET', path: '/api/v2/templates/:chart/deployments', params: { chart: 'demo' }, inputs: { chart: chart() } },
   { id: 'templates.rules', method: 'POST', path: '/api/v2/templates/:chart/rules', params: { chart: 'demo' }, body: { files: { 'cpu.yaml': CPU } },
     inputs: { chart: chart('write'), file: { at: 'files-key', kind: 'rules-file', mode: 'write' } },
     fields: [{ name: 'files', types: ['o'], required: true }, { name: 'confirmBreaking', types: ['b'], required: false }, { name: 'migration', types: ['o'], required: false }] },
   { id: 'templates.migration-preview', method: 'POST', path: '/api/v2/templates/:chart/migration-preview', params: { chart: 'demo' }, body: { files: { 'cpu.yaml': CPU }, migration: {} },
     inputs: { chart: chart(), file: { at: 'files-key', kind: 'rules-file', mode: 'read' } },
     fields: [{ name: 'files', types: ['o'], required: true }, { name: 'migration', types: ['o'], required: false }] },
-  { id: 'templates.values', method: 'POST', path: '/api/v2/templates/:chart/values', params: { chart: 'demo' }, body: { values: { cpu: [] } },
-    inputs: { chart: chart('write') }, fields: [{ name: 'values', types: ['s', 'o'], required: true, emptyOk: true }] },
   { id: 'templates.chart-meta', method: 'POST', path: '/api/v2/templates/:chart/chart-meta', params: { chart: 'demo' }, body: { chartMeta: { description: 'd' } },
     inputs: { chart: chart('write') },
     fields: [{ name: 'chartMeta', types: ['o'], required: true }, { name: 'chartMeta.description', types: ['s', 'z'], required: false, emptyOk: true }] },
-  { id: 'templates.rename', method: 'POST', path: '/api/v2/templates/:chart/:template/rename', params: { chart: 'hand', template: 'notes' }, body: { newName: 'moved' },
-    inputs: { chart: chart('write'), template: { at: 'param', kind: 'template', mode: 'write' }, newName: { at: 'body', kind: 'name-new', mode: 'write' } },
-    fields: [S('newName')] },
-  { id: 'templates.template-get', method: 'GET', path: '/api/v2/templates/:chart/:template', params: { chart: 'hand', template: 'notes' },
-    inputs: { chart: chart(), template: { at: 'param', kind: 'template', mode: 'read' } } },
-  { id: 'templates.template-save', method: 'POST', path: '/api/v2/templates/:chart/:template', params: { chart: 'hand', template: 'notes' }, body: { content: NOTE },
-    inputs: { chart: chart('write'), template: { at: 'param', kind: 'template', mode: 'write' } },
-    fields: [S('content', { emptyOk: true })] },
-  { id: 'templates.template-delete', method: 'DELETE', path: '/api/v2/templates/:chart/:template', params: { chart: 'hand', template: 'notes' },
-    inputs: { chart: chart('write'), template: { at: 'param', kind: 'template', mode: 'write' } } },
 
   // deployments
-  depRoute('deployments.list', 'GET', '', 'read'),
   depRoute('deployments.get', 'GET', '/:deployment', 'read'),
   depRoute('deployments.save', 'POST', '/:deployment', 'write', { rest: { body: { values: { cpu: [{ job: 'a' }] } },
     fields: [{ name: 'values', types: ['s', 'o'], required: true, emptyOk: true }, { name: 'version', types: ['s'], required: false }] } }),
@@ -106,8 +92,6 @@ export const ROUTES = [
   depRoute('deployments.routing-put', 'PUT', '/:deployment/routing', 'write', { rest: { body: { routing: ROUTING },
     fields: [{ name: 'routing', types: ['s', 'o'], required: true, emptyOk: true }] } }),
   depRoute('deployments.routing-delete', 'DELETE', '/:deployment/routing', 'write'),
-  depRoute('deployments.clone', 'POST', '/:deployment/clone', 'write', {
-    inputs: { newName: { at: 'body', kind: 'name-new', mode: 'write' } }, rest: { body: { newName: 'copy' }, fields: [S('newName')] } }),
   depRoute('deployments.delete', 'DELETE', '/:deployment', 'write'),
 
   // render
@@ -147,14 +131,11 @@ export const ROUTES = [
     fields: [S('action'), { name: 'expected', types: ['o'], required: true }, S('folder'), S('chart')] },
   { id: 'folders.common-users', method: 'GET', path: '/api/v2/folders/common/users', query: { path: 'deployments/s/_common/demo' },
     inputs: { path: { at: 'query', kind: 'common', mode: 'read' } } },
-  { id: 'folders.create', method: 'POST', path: '/api/v2/folders', body: { path: 'deployments/newf' },
-    inputs: { path: { at: 'body', kind: 'folder-new', mode: 'write' } }, fields: [S('path')] },
   { id: 'folders.init', method: 'POST', path: '/api/v2/folders/init', body: { folder: 'deployments/team/new', chart: 'demo' },
     inputs: { folder: { at: 'body', kind: 'folder-new', mode: 'write' }, chart: { at: 'body', kind: 'chart', mode: 'read' } },
     fields: [S('folder'), S('chart')] },
   { id: 'folders.tree', method: 'GET', path: '/api/v2/folders/tree', query: { path: 'deployments' }, inputs: { path: { at: 'query', kind: 'tree', mode: 'read' } } },
   { id: 'folders.deployments', method: 'GET', path: '/api/v2/folders/deployments', query: { chart: 'demo' }, inputs: { chart: { at: 'query', kind: 'chart', mode: 'read' } } },
-  { id: 'folders.list', method: 'GET', path: '/api/v2/folders', query: { path: 'deployments' }, inputs: { path: { at: 'query', kind: 'tree', mode: 'read' } } },
 
   // sync
   { id: 'sync.get', method: 'GET', path: '/api/v2/sync', query: { source: DEP },

@@ -1,4 +1,4 @@
-/** Clone and delete a deployment. */
+/** Delete a deployment. */
 
 import { withoutPath } from '../../lib/answerPaths.js'
 import fs from 'fs/promises'
@@ -7,32 +7,9 @@ import { writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink } from '
 import { syncAnswer } from '../../repo/sync.js'
 import { folderEntry, isDeployment } from '../../repo/walk.js'
 import { openRepo } from '../../repo/openRepo.js'
-import { pathProblem } from '../../repo/paths.js'
-import { errorAnswer } from '../../lib/readIfThere.js'
 
 import { deploymentParamProblem, syncFolder, resolveDeploymentDir, resolveValuesFile, commonRefused } from './resolve.js'
 export function lifecycleRoutes(router) {
-  router.post('/:chart/:deployment/clone', async (req, res) => {
-    if (commonRefused(req, res, 'cloned')) return
-    const { dir, error } = await resolveDeploymentDir(req)
-    if (error) return res.status(400).json({ error })
-    const badName = deploymentParamProblem(req)
-    if (badName) return res.status(400).json({ error: badName })
-    const badNew = pathProblem(req.body?.newName, 'name')
-    if (badNew) {
-      return res.status(400).json({ error: `Invalid newName: ${badNew.why}` })
-    }
-    const dstFile = path.join(dir, `${req.body.newName}-values.yaml`)
-    try {
-      const { file: srcFile } = await resolveValuesFile(dir, req.params.deployment)
-      await fs.copyFile(srcFile, dstFile)
-      res.json({ ok: true })
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
-    }
-  })
-
   router.delete('/:chart/:deployment', async (req, res) => {
     if (commonRefused(req, res, 'deleted as one')) return
     const { dir, error } = await resolveDeploymentDir(req)

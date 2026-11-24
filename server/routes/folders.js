@@ -4,7 +4,7 @@ import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerEveryRoute } from '../http/route.js'
 
 import { treeRoutes } from './folders/tree.js'
-import { createFolderRoutes, initRoutes } from './folders/create.js'
+import { initRoutes } from './folders/create.js'
 import { commonRoutes } from './folders/common.js'
 
 export { ANY_TEMPLATE_VERSION } from './folders/create.js'
@@ -18,7 +18,6 @@ export default function foldersRouter() {
   router.use((req, res, next) => (req.method === 'POST' && req.path === '/common' ? next() : holdSyncRegistryLock(req, res, next)))
 
   treeRoutes(router)
-  createFolderRoutes(router)
   commonRoutes(router)
   initRoutes(router)
 

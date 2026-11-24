@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { hasBinary } from '../blind/harness.js'
-import { removeChart, openTemplateChart } from './charts.js'
+import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // Output profiles (#65): a group's type, interval and limit are set in the
 // editor's group settings row, a vlogs group becomes a VMRule, and Preview
@@ -49,8 +49,7 @@ async function openGroup(page, chart, group) {
 
 const rulesFile = async (request, chart, file) =>
   (await (await request.get(`/api/v2/templates/${chart}`)).json()).rulesFiles[file]
-const template = async (request, chart, name) =>
-  (await (await request.get(`/api/v2/templates/${chart}/${name}`)).json()).content
+const template = async (request, chart, name) => templateFile(chart, name)
 
 test.describe('Group settings', () => {
   const CHART = 'e2e-profiles-settings'

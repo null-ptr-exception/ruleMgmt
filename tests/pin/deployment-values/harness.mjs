@@ -163,7 +163,7 @@ export async function baseFiles(ws) {
 }
 
 // The entry points, in the order a row's cells are listed.
-export const ENTRIES = ['get', 'list', 'save-text', 'save-json', 'sync', 'common-plan', 'common-apply', 'init', 'migration-preview', 'migration-apply', 'commit', 'preview', 'check-deployment', 'check-repo', 'gen-rules']
+export const ENTRIES = ['get', 'save-text', 'save-json', 'sync', 'common-plan', 'common-apply', 'init', 'migration-preview', 'migration-apply', 'commit', 'preview', 'check-deployment', 'check-repo', 'gen-rules']
 // The ones that write what they were given (or a copy of it).
 export const WRITERS = new Set(['save-text', 'save-json', 'sync', 'init', 'common-apply', 'migration-apply'])
 
@@ -227,15 +227,6 @@ export async function runRow(ws, c) {
     const r = http(res)
     return { ...r, cls: res.status === 404 ? 'absent' : r.cls, appValue: oneLine(row && typeof row === 'object' ? JSON.stringify(row) : JSON.stringify(res.data?.parsed ?? null)).slice(0, 120) }
   })
-  // The list of a chart's deployments, with an alert count each.
-  if (!sub.layer) {
-    await record('list', async () => {
-      const res = await api('GET', sub.dep ? `/api/v2/deployments/demo${q(sub.dep)}` : '/api/v2/deployments/demo')
-      const r = http(res)
-      const mine = Array.isArray(res.data) ? res.data.find(d => d.name === sub.name) : null
-      return { ...r, appValue: mine ? `alertCount=${mine.alertCount}` : 'not listed' }
-    })
-  }
   // Saves: the row's text as sent, and the editor's JSON form, onto the base
   // file (the unreadable rows keep their file, which the save meets).
   const asSaved = async body => {

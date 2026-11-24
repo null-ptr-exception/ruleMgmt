@@ -445,7 +445,7 @@ describe('the _shared folder', () => {
   it('lists no deployment from it, for sync or for the commit checks', async () => {
     const list = await api('GET', '/api/v2/folders/deployments')
     expect(JSON.stringify(list.data)).not.toMatch(/_shared/)
-    expect((await api('POST', '/api/v2/folders', { path: '_shared/x' })).status).toBe(400)
+    expect((await api('POST', '/api/v2/folders/init', { folder: '_shared/x', chart: 'demo' })).status).toBe(400)
   })
 
   // A repo that already had a _shared/ of its own, with a deployment in it:

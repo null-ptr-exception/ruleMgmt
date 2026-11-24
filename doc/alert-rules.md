@@ -378,8 +378,8 @@ commit refuses it until it is fixed. A save that migrates deployments (a
 breaking change with its mapping) is refused, before anything is written,
 while the Template's `values.yaml` cannot be read or is not YAML Helm reads
 the way AlertForge can tell: it would rewrite many deployments against
-values it cannot read — save the Template values first (the migration
-preview lists it). A Template whose `rules/` is gone or
+values it cannot read — fix the Template's `values.yaml` by hand first (the
+migration preview lists it). A Template whose `rules/` is gone or
 empty next to a schema the generator wrote is not converted by a save of
 that schema (every group with no rules): restore `rules/`. A new deployment
 is not made from a Template none of whose deployments would render. Preview

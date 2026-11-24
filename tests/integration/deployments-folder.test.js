@@ -24,28 +24,6 @@ describe('deployments route with folder param', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('reads from default DEPLOYMENTS_DIR', async () => {
-    const dir = path.join(tmpDir, 'deployments', 'my-chart')
-    fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'prod-values.yaml'), 'foo:\n  - bar: 1\n')
-
-    const res = await request(app).get('/api/v2/deployments/my-chart')
-    expect(res.status).toBe(200)
-    expect(res.body).toHaveLength(1)
-    expect(res.body[0].name).toBe('prod')
-  })
-
-  it('reads from custom folder via query param', async () => {
-    const dir = path.join(tmpDir, 'teams', 'alpha')
-    fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(path.join(dir, 'staging-values.yaml'), 'foo:\n  - bar: 1\n')
-
-    const res = await request(app).get('/api/v2/deployments/any-chart?folder=teams/alpha')
-    expect(res.status).toBe(200)
-    expect(res.body).toHaveLength(1)
-    expect(res.body[0].name).toBe('staging')
-  })
-
   it('saves to custom folder via query param', async () => {
     const dir = path.join(tmpDir, 'teams', 'alpha')
     fs.mkdirSync(dir, { recursive: true })
@@ -100,19 +78,6 @@ describe('deployments route with folder param', () => {
       expect(read(dir, 'values.yaml')).toBe('cpu:\n  - threshold: 90\n')
     })
 
-    it('clones the file the editor shows', async () => {
-      const dir = path.join(tmpDir, 'shop', 'prod')
-      fs.mkdirSync(dir, { recursive: true })
-      fs.writeFileSync(path.join(dir, 'values.yaml'), 'disk:\n  - threshold: 85\n')
-      fs.writeFileSync(path.join(dir, 'prod-values.yaml'), 'disk:\n  - threshold: 50\n')
-
-      const res = await request(app)
-        .post('/api/v2/deployments/c/prod/clone?folder=shop/prod')
-        .send({ newName: 'copy' })
-      expect(res.status).toBe(200)
-      expect(read(dir, 'copy-values.yaml')).toBe('disk:\n  - threshold: 85\n')
-    })
-
     it('still reads a lone values.yaml, with nothing to report', async () => {
       const dir = path.join(tmpDir, 'shop', 'stg')
       fs.mkdirSync(dir, { recursive: true })
@@ -135,13 +100,6 @@ describe('deployments route with folder param', () => {
 
   // #99: reading or saving a deployment must not create a reserved folder.
   describe('reserved names', () => {
-    it('GET / refuses a new reserved folder and creates nothing', async () => {
-      const res = await request(app).get('/api/v2/deployments/c?folder=deployments/_b')
-      expect(res.status).toBe(400)
-      expect(res.body.error).toBe('"_b": Names starting with _ are reserved for AlertForge')
-      expect(fs.existsSync(path.join(tmpDir, 'deployments'))).toBe(false)
-    })
-
     it('POST /:deployment refuses a new reserved folder and writes nothing', async () => {
       const res = await request(app)
         .post('/api/v2/deployments/c/x?folder=deployments/_c')
@@ -155,7 +113,6 @@ describe('deployments route with folder param', () => {
       const dir = path.join(tmpDir, '_legacy', 'prod')
       fs.mkdirSync(dir, { recursive: true })
 
-      expect((await request(app).get('/api/v2/deployments/c?folder=_legacy/prod')).status).toBe(200)
       const res = await request(app)
         .post('/api/v2/deployments/c/x?folder=_legacy/prod')
         .send({ values: { test: [{ a: 1 }] } })
@@ -164,14 +121,16 @@ describe('deployments route with folder param', () => {
     })
 
     it('still creates a folder with _ elsewhere in its name', async () => {
-      const res = await request(app).get('/api/v2/deployments/c?folder=deployments/my_team')
+      const res = await request(app)
+        .post('/api/v2/deployments/c/x?folder=deployments/my_team')
+        .send({ values: { test: [{ a: 1 }] } })
       expect(res.status).toBe(200)
-      expect(fs.existsSync(path.join(tmpDir, 'deployments', 'my_team'))).toBe(true)
+      expect(fs.existsSync(path.join(tmpDir, 'deployments', 'my_team', 'x-values.yaml'))).toBe(true)
     })
   })
 
   it('rejects folder paths with ..', async () => {
-    const res = await request(app).get('/api/v2/deployments/chart?folder=../../../etc')
+    const res = await request(app).get('/api/v2/deployments/chart/x?folder=../../../etc')
     expect(res.status).toBe(400)
   })
 })

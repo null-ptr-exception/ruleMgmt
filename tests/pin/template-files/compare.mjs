@@ -16,9 +16,8 @@ export const COLUMNS = ['id', 'chart', 'entry', 'cls', 'status', 'file', 'leak',
 // Answers that say nothing about this input: another file refused the
 // commit, the entry point was not reached, there was nothing to send.
 const SILENT = new Set(['refused-other', 'not-seen', 'absent'])
-// Writers that are asked to write what is there (the file read, the values
-// opened), or to change a file Helm renders no alert from.
-const SAME_CONTENT = new Set(['file-save', 'save-values', 'chart-meta', 'file-rename', 'file-delete'])
+// Writers that change a file Helm renders no alert from.
+const SAME_CONTENT = new Set(['chart-meta'])
 const accepts = c => c === 'ok' || c === 'listed'
 const refuses = c => ['refused', 'unreadable', 'cannot-check'].includes(c)
 const notices = c => ['listed', 'refused', 'unreadable', 'cannot-check', 'error'].includes(c)

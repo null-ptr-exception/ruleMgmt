@@ -1,13 +1,13 @@
 {
   "lint": {
-    "total": 196,
+    "total": 183,
     "byKind": {
       "childProcess": 1,
-      "fs": 32,
-      "fsUse": 129,
-      "helper": 6,
+      "fs": 31,
+      "fsUse": 120,
+      "helper": 5,
       "yaml": 12,
-      "yamlParse": 16
+      "yamlParse": 14
     },
     "byFile": {
       "scripts/gen-chart.mjs": 3,
@@ -32,24 +32,23 @@
       "server/lib/subchart.js": 4,
       "server/lib/sync.js": 4,
       "server/routes/charts.js": 9,
-      "server/routes/deployments/lifecycle.js": 5,
-      "server/routes/deployments/list.js": 8,
+      "server/routes/deployments/lifecycle.js": 4,
       "server/routes/deployments/resolve.js": 4,
       "server/routes/deployments/values.js": 2,
-      "server/routes/folders/create.js": 8,
+      "server/routes/folders/create.js": 7,
       "server/routes/folders/tree.js": 6,
       "server/routes/git.js": 6,
       "server/routes/sync.js": 6,
-      "server/routes/templates.js": 5
+      "server/routes/templates.js": 2
     }
   },
   "yamlParseSites": {
-    "serverAndScripts": 16,
+    "serverAndScripts": 14,
     "src": 9,
     "byFileKind": {
       "Chart.yaml": 8,
       "Template values.yaml": 0,
-      "deployment values": 4,
+      "deployment values": 2,
       "routing.yaml": 0,
       "rules files": 0,
       "shared configs": 0,
@@ -58,7 +57,7 @@
     }
   },
   "swallowingCatches": {
-    "total": 33,
+    "total": 31,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
@@ -70,7 +69,6 @@
       "server/lib/stack.js": 3,
       "server/lib/subchart.js": 1,
       "server/routes/charts.js": 2,
-      "server/routes/deployments/list.js": 2,
       "server/routes/deployments/resolve.js": 1,
       "server/routes/folders/tree.js": 2,
       "server/routes/sync.js": 3,
@@ -94,23 +92,22 @@
     }
   },
   "requestReads": {
-    "total": 108,
+    "total": 82,
     "byFile": {
       "server/routes/charts.js": 13,
       "server/routes/deployments.js": 1,
-      "server/routes/deployments/lifecycle.js": 5,
-      "server/routes/deployments/list.js": 4,
+      "server/routes/deployments/lifecycle.js": 2,
       "server/routes/deployments/resolve.js": 10,
       "server/routes/deployments/routing.js": 2,
       "server/routes/deployments/values.js": 11,
       "server/routes/folders/common.js": 4,
-      "server/routes/folders/create.js": 2,
-      "server/routes/folders/tree.js": 4,
+      "server/routes/folders/create.js": 1,
+      "server/routes/folders/tree.js": 3,
       "server/routes/git.js": 5,
       "server/routes/render.js": 2,
       "server/routes/routingShared.js": 2,
       "server/routes/sync.js": 10,
-      "server/routes/templates.js": 33
+      "server/routes/templates.js": 16
     }
   }
 }

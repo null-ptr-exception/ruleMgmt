@@ -33,7 +33,7 @@ const openDisk = page => page.getByText('disk', { exact: true }).first().click()
 test.describe.serial('A deployment under a _common', () => {
   test.beforeAll(async ({ request }) => {
     await fs.rm(at(FOLDER), { recursive: true, force: true })
-    expect((await request.post('/api/v2/folders', { data: { path: FOLDER } })).ok()).toBeTruthy()
+    await fs.mkdir(at(FOLDER), { recursive: true })
     const shown = await (await request.get(`/api/v2/folders/common/plan?action=create&folder=${FOLDER}&chart=${CHART}`)).json()
     expect((await request.post('/api/v2/folders/common', { data: { action: 'create', folder: FOLDER, chart: CHART, expected: shown.expected } })).ok()).toBeTruthy()
     const values = { _common: { owner: 'team-a', namespace: 'c1' }, [DISK]: [{ warn_pct: 85, critical_pct: 95 }, { warn_pct: 86, critical_pct: 96 }] }

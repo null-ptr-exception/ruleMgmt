@@ -71,8 +71,9 @@ async function startApp(dir) {
 // (used by nobody); deployments t/a (synced to t/b, own routing), t/c (a
 // shared config), t/d (plain, own routing), s/x on the _common s/_common/demo,
 // u/p and u/q (no _common yet), a legacy deployments/demo/old-values.yaml;
-// the shared configs. Made through the API, and committed through it: a
-// Commit of the base itself is not refused.
+// the shared configs. Made through the API (the hand-written template
+// written as a file), and committed through it: a Commit of the base itself
+// is not refused.
 export async function makeWorkspace() {
   if (open++ === 0) { helmWas = process.env.HELM_BIN; process.env.HELM_BIN = NO_HELM }
   delete process.env.RULE_OBJECT_LABELS
@@ -88,7 +89,7 @@ export async function makeWorkspace() {
   git('init', '-q'); git('config', 'user.email', 'pin@example.invalid'); git('config', 'user.name', 'pin'); git('config', 'commit.gpgsign', 'false')
   await must(api('POST', '/api/v2/charts', { name: 'demo' }))
   await must(api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU() } }))
-  await must(api('POST', '/api/v2/templates/demo/notes', { content: HAND_TEMPLATE }))
+  await fs.writeFile(path.join(root, 'charts/demo/templates/notes.yaml'), HAND_TEMPLATE)
   await must(api('POST', '/api/v2/charts', { name: 'spare' }))
   await must(api('POST', '/api/v2/templates/spare/rules', { files: { 'cpu.yaml': CPU() } }))
   for (const d of [D.a, D.b, D.c, D.d, D.x, D.p, D.q]) await must(api('POST', '/api/v2/folders/init', { folder: d, chart: 'demo' }))
@@ -201,10 +202,6 @@ export const PATHS = [
       return { method: 'POST', url: '/api/v2/folders/init', body: { folder: 'deployments/s/n', chart: 'demo' } }
     },
     files: ['deployments/t/n/'] },
-  { name: 'folder-create', absent: 'deployments/t',
-    req: () => ({ method: 'POST', url: '/api/v2/folders', body: { path: 'deployments/t/newdir' } }),
-    newFolder: kind => ({ method: 'POST', url: '/api/v2/folders', body: { path: kind === 'reserved' ? 'deployments/t/_new' : '../escape' } }),
-    files: ['deployments/t/newdir', 'deployments/t/'] },
   { name: 'migration-apply', primary: `${T}/rules/cpu.yaml`, second: `${D.c}/values.yaml`,
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: { job: 'name' } } } } }),
     bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: {} } } } }),
@@ -216,22 +213,6 @@ export const PATHS = [
     bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(2).replace('columns:\n', 'columns:\n  team: {type: string, required: true}\n') } } }),
     said: res => rel(T, res.data?.written),
     files: [`${T}/`] },
-  { name: 'template-values', primary: `${T}/values.yaml`,
-    req: async ws => ({ method: 'POST', url: '/api/v2/templates/demo/values', body: { values: `${await read(ws, `${T}/values.yaml`)}# saved\n` } }),
-    alt: async ws => ({ method: 'POST', url: '/api/v2/templates/demo/values', body: { values: `${await read(ws, `${T}/values.yaml`)}# saved again\n` } }),
-    bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/values', body: { values: 'cpu: [\n' } }),
-    files: [`${T}/values.yaml`] },
-  { name: 'template-file-save', primary: `${T}/templates/notes.yaml`, absent: `${T}/templates`,
-    req: () => ({ method: 'POST', url: '/api/v2/templates/demo/notes', body: { content: `${HAND_TEMPLATE}# saved\n` } }),
-    alt: () => ({ method: 'POST', url: '/api/v2/templates/demo/notes', body: { content: `${HAND_TEMPLATE}# saved again\n` } }),
-    bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/notes', body: { content: '{{ if }}\n' } }),
-    files: [`${T}/templates/notes.yaml`] },
-  { name: 'template-file-rename', primary: `${T}/templates/notes.yaml`, noStale: true,
-    req: () => ({ method: 'POST', url: '/api/v2/templates/demo/notes/rename', body: { newName: 'notes2' } }),
-    files: [`${T}/templates/notes.yaml`, `${T}/templates/notes2.yaml`] },
-  { name: 'template-file-delete', primary: `${T}/templates/notes.yaml`, noStale: true,
-    req: () => ({ method: 'DELETE', url: '/api/v2/templates/demo/notes' }),
-    files: [`${T}/templates/notes.yaml`] },
   { name: 'chart-meta', primary: `${T}/Chart.yaml`,
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/chart-meta', body: { chartMeta: { description: 'pinned' } } }),
     alt: () => ({ method: 'POST', url: '/api/v2/templates/demo/chart-meta', body: { chartMeta: { description: 'pinned again' } } }),
@@ -248,10 +229,6 @@ export const PATHS = [
   { name: 'chart-delete', primary: 'charts/spare/Chart.yaml', noStale: true,
     req: () => ({ method: 'DELETE', url: '/api/v2/charts/spare' }),
     files: ['charts/spare/'] },
-  { name: 'deployment-clone', primary: 'deployments/demo/old-values.yaml', noStale: true,
-    req: () => ({ method: 'POST', url: '/api/v2/deployments/demo/old/clone', body: { newName: 'old2' } }),
-    newFolder: kind => ({ method: 'POST', url: '/api/v2/deployments/demo/old/clone', body: { newName: kind === 'reserved' ? '_new' : '../escape' } }),
-    files: ['deployments/demo/old2-values.yaml'] },
   { name: 'deployment-delete', primary: `${D.a}/values.yaml`, second: 'sync.yaml', writesRegistry: true, noStale: true,
     req: () => ({ method: 'DELETE', url: `/api/v2/deployments/demo/a${q(D.a)}` }),
     files: [`${D.a}/`, 'sync.yaml'] },

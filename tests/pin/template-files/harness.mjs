@@ -28,8 +28,8 @@ const snapshot = root => snapshotAll(root, rel => rel === 'marker.txt')
 
 // The entry points, in the order a row's cells are listed.
 export const ENTRIES = [
-  'open', 'list', 'usage', 'file-get', 'file-save', 'file-rename', 'file-delete',
-  'save-rules', 'migration-preview', 'save-values', 'chart-meta', 'clone', 'delete', 'init',
+  'open', 'list',
+  'save-rules', 'migration-preview', 'chart-meta', 'clone', 'delete', 'init',
   'preview', 'commit', 'check-deployment', 'check-repo', 'gen-rules-check', 'gen-rules', 'gen-chart-check', 'gen-chart', 'import-rules',
   'products-current',
 ]
@@ -39,15 +39,14 @@ export const ENTRIES = [
 //   source   writes what it is given or generates: judged on what it leaves
 //   writer   changes a file of the Template: judged on what it leaves
 export const KIND = {
-  open: 'reader', list: 'reader', usage: 'reader', 'file-get': 'reader', 'migration-preview': 'reader',
-  'file-save': 'writer', 'file-rename': 'writer', 'file-delete': 'writer', 'chart-meta': 'writer', clone: 'writer', delete: 'writer',
-  'save-rules': 'source', 'save-values': 'source', 'gen-rules': 'source', 'gen-chart': 'source', 'import-rules': 'source',
+  open: 'reader', list: 'reader', 'migration-preview': 'reader',
+  'chart-meta': 'writer', clone: 'writer', delete: 'writer',
+  'save-rules': 'source', 'gen-rules': 'source', 'gen-chart': 'source', 'import-rules': 'source',
   init: 'checker', preview: 'checker', commit: 'checker', 'check-deployment': 'checker', 'check-repo': 'checker', 'gen-rules-check': 'checker', 'gen-chart-check': 'checker',
   'products-current': 'agreement',
 }
 
 const NO_REF = { helm: '-', helmExit: '-', alerts: '-', rendered: '-', deploy: '-', others: '-' }
-const HAND_FILE = 'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: {{ .Release.Name }}-notes\ndata:\n  a: b\n'
 const IMPORTED = 'apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata:\n  name: imported\nspec:\n  groups:\n    - name: imported\n      rules:\n        - alert: ImportedDown\n          expr: up{job="imported"} == 0\n'
 
 // The app runs in a process of its own (app.mjs): one that dies on a
@@ -320,38 +319,6 @@ export async function runRow(ws, c) {
     if (r.cls === 'ok' && !mine) r.cls = 'not-listed'
     return { ...r, appValue: mine ? `templates=${mine.templateCount} version=${mine.version}` : `not listed${named.length ? ` (also: ${named.join(',')})` : ''}` }
   })
-  await record('usage', async () => {
-    const res = await api('GET', `${T}/deployments`)
-    const r = http(res)
-    return { ...r, appValue: Array.isArray(res.data?.deployments) ? `deployments=${res.data.deployments.map(x => x.path).join(',') || 'none'}` : '-' }
-  })
-  // One file under templates/: the first generated one, read and saved back.
-  let content = null
-  await record('file-get', async () => {
-    const res = await api('GET', `${T}/${b.tfile}`)
-    if (res.status === 200) content = res.data.content
-    return { ...http(res), appValue: res.status === 200 ? `bytes=${res.data.content.length}` : '-' }
-  })
-  await record('file-save', async () => {
-    if (typeof content !== 'string') return { cls: 'not-seen', status: '-', note: 'file-get gave nothing to save' }
-    return http(await api('POST', `${T}/${b.tfile}`, { content }))
-  })
-  // A hand-written file next to them, renamed and deleted.
-  const handFile = async () => {
-    try { await fs.writeFile(path.join(chartDir, 'templates/notes.yaml'), HAND_FILE); return '' } catch (err) { return `notes.yaml not written (${err.code})` }
-  }
-  await record('file-rename', async () => {
-    const why = await handFile()
-    const preSnap = await snapshot(root)
-    const r = http(await api('POST', `${T}/notes/rename`, { newName: 'notes2' }))
-    return { ...r, preSnap, note: [why, r.note].filter(Boolean).join(' / ') }
-  })
-  await record('file-delete', async () => {
-    const why = await handFile()
-    const preSnap = await snapshot(root)
-    const r = http(await api('DELETE', `${T}/notes`))
-    return { ...r, preSnap, note: [why, r.note].filter(Boolean).join(' / ') }
-  })
   // Save of rules/: what the editor sends back after opening it (its rules
   // files as they are, or a legacy chart's schema converted), or, when it
   // could not open, the rules files that can be read.
@@ -376,13 +343,6 @@ export async function runRow(ws, c) {
     const r = http(res)
     if (r.cls === 'ok' && mine?.problems?.length) r.cls = 'listed'
     return { ...r, appValue: res.status === 200 ? (mine ? `problems=${mine.problems?.length || 0}` : 'not-seen') : '-' }
-  })
-  // Save of the Template's values: the editor sends what it opened.
-  await record('save-values', async () => {
-    let values = opened?.status === 200 ? opened.data.values : null
-    let from = 'open'
-    if (values === null) { try { values = await fs.readFile(path.join(chartDir, 'values.yaml'), 'utf-8'); from = 'disk' } catch { return { cls: 'not-seen', status: '-', note: 'nothing to send' } } }
-    return { ...http(await api('POST', `${T}/values`, { values })), appValue: `body=${from}` }
   })
   await record('chart-meta', async () => http(await api('POST', `${T}/chart-meta`, { chartMeta: { description: 'pinned' } })))
   // Clone, then a deployment of the copy as the first one is.

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { removeChart, openTemplateChart } from './charts.js'
+import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // Once groups and recording rules (#70): the editor's once switch and
 // Alert / Record switch write the rules file, the Alerts page says a once
@@ -43,8 +43,7 @@ async function openGroup(page, chart, group) {
 
 const rulesFile = async (request, chart, file) =>
   (await (await request.get(`/api/v2/templates/${chart}`)).json()).rulesFiles[file]
-const template = async (request, chart, name) =>
-  (await (await request.get(`/api/v2/templates/${chart}/${name}`)).json()).content
+const template = async (request, chart, name) => templateFile(chart, name)
 
 test.describe('Template editor', () => {
   const CHART = 'e2e-once-editor'

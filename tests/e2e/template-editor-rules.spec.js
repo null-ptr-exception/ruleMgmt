@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import yaml from 'js-yaml'
 import fs from 'fs/promises'
 import path from 'path'
-import { openedModal, removeChart, openTemplateChart } from './charts.js'
+import { openedModal, removeChart, openTemplateChart, templateFile } from './charts.js'
 import { WORKSPACE } from './workspace.js'
 
 // The editor now loads a chart's rules/*.yaml (or adapts a schema-only chart),
@@ -63,8 +63,7 @@ test.describe.serial('Template editor — rules source', () => {
     // not the schema.
     expect(info.schema.properties.cpu['x-rules']).toBeUndefined()
     expect(info.drift.state).toBe('ok')
-    const tmpl = await (await request.get(`/api/v2/templates/${CHART}/cpu`)).json()
-    expect(tmpl.content).toContain('- alert: CpuTooHigh')
+    expect(await templateFile(CHART, 'cpu')).toContain('- alert: CpuTooHigh')
   })
 
   test('renaming a group renames its rules file on save', async ({ page, request }) => {

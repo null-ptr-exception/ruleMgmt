@@ -41,26 +41,8 @@ async function api(method, urlPath, body) {
 }
 
 describe('Templates write API', () => {
-  it('saves values as object and reflects in GET /:chart', async () => {
-    const { status, data } = await api('POST', '/api/v2/templates/test-chart/values', {
-      values: { replicas: 3, image: { tag: 'latest' } },
-    })
-    expect(status).toBe(200)
-    expect(data.ok).toBe(true)
-
-    const { data: info } = await api('GET', '/api/v2/templates/test-chart')
-    expect(info.values.replicas).toBe(3)
-    expect(info.values.image.tag).toBe('latest')
-  })
-
-  it('saves values as string and reflects in GET /:chart', async () => {
-    const yamlStr = 'replicas: 5\nenv: production\n'
-    const { status, data } = await api('POST', '/api/v2/templates/test-chart/values', {
-      values: yamlStr,
-    })
-    expect(status).toBe(200)
-    expect(data.ok).toBe(true)
-
+  it('GET /:chart shows the Template\'s values.yaml', async () => {
+    await fs.writeFile(path.join(tmpDir, 'charts', 'test-chart', 'values.yaml'), 'replicas: 5\nenv: production\n')
     const { data: info } = await api('GET', '/api/v2/templates/test-chart')
     expect(info.values.replicas).toBe(5)
     expect(info.values.env).toBe('production')
@@ -78,12 +60,6 @@ describe('Templates write API', () => {
     const { data: info } = await api('GET', '/api/v2/templates/test-chart')
     expect(info.chartMeta.version).toBe(before.chartMeta.version)
     expect(info.chartMeta.description).toBe('Updated chart')
-  })
-
-  it('returns 404 for nonexistent template', async () => {
-    const { status, data } = await api('GET', '/api/v2/templates/test-chart/no-such-template')
-    expect(status).toBe(404)
-    expect(data.error).toBeTruthy()
   })
 
   it('returns 400 for invalid chart name', async () => {

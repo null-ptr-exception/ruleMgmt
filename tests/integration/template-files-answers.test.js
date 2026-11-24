@@ -117,13 +117,6 @@ describe('a save, when a file it does not write keeps Helm from rendering', () =
     expect((await commit()).status).toBe(409)
   })
 
-  it('saving the Template values goes through and says which file; its own text is still refused', async () => {
-    await write('charts/demo/templates/_extra.yaml', 'apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata:\n  name: x\nspec:\n  groups: []\n')
-    const ok = await api('POST', '/api/v2/templates/demo/values', { values: '{}\n' })
-    expect(ok.status).toBe(200)
-    expect(ok.data.warnings.map(w => w.file)).toEqual(['charts/demo/templates/_extra.yaml'])
-    expect((await api('POST', '/api/v2/templates/demo/values', { values: 'a: b: c\n' })).status).toBe(400)
-  })
 })
 
 describe('a migration while the Template values.yaml cannot be read as Helm reads it', () => {

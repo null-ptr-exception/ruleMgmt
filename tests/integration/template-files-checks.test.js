@@ -104,26 +104,6 @@ describe('Commit, on a Template\'s files', () => {
   })
 })
 
-describe('saving the Template\'s values', () => {
-  it('values Helm reads are saved', async () => {
-    const { status } = await api('POST', '/api/v2/templates/demo/values', { values: 'cpu:\n  - { job: api }\n' })
-    expect(status).toBe(200)
-  })
-
-  it('a text that is not YAML is refused naming the line, and nothing is written', async () => {
-    const { status, data } = await api('POST', '/api/v2/templates/demo/values', { values: 'cpu: x: y\n' })
-    expect(status).toBe(400)
-    expect(data.error).toMatch(/charts\/demo\/values\.yaml cannot be read: not valid YAML \(line 1/)
-    expect(await fs.readFile(abs('charts/demo/values.yaml'), 'utf-8')).not.toContain('x: y')
-  })
-
-  it('a text AlertForge cannot tell Helm\'s reading of is refused, saying how to write it', async () => {
-    const { status, data } = await api('POST', '/api/v2/templates/demo/values', { values: '_common:\n  team: |2\n    shop\n' })
-    expect(status).toBe(400)
-    expect(data.error).toMatch(/line 2.*write it as plain YAML/)
-  })
-})
-
 describe('opening the Template', () => {
   it('shows its values as Helm reads them', async () => {
     await write('charts/demo/values.yaml', '_common:\n  base: 010\n  team: yes\n')
@@ -160,18 +140,5 @@ describe('a Template whose rules/ is gone', () => {
     expect(status).toBe(409)
     expect(data.error).toMatch(/restore rules\//)
     expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })).status).toBe(200)
-  })
-})
-
-describe('saving the Template\'s values, when a file Helm reads cannot be read', () => {
-  it.skipIf(process.getuid?.() === 0)('a rules/ file without permission (Helm cannot read the chart): saved, and named', async () => {
-    await fs.chmod(abs('charts/demo/rules/cpu.yaml'), 0)
-    try {
-      const { status, data } = await api('POST', '/api/v2/templates/demo/values', { values: '{}\n' })
-      expect(status).toBe(200)
-      expect(data.warnings.map(w => w.description)).toEqual([expect.stringMatching(/charts\/demo\/rules\/cpu\.yaml cannot be read: permission denied/)])
-    } finally {
-      await fs.chmod(abs('charts/demo/rules/cpu.yaml'), 0o644)
-    }
   })
 })

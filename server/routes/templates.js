@@ -20,19 +20,17 @@ import path from 'path'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { writeWhole } from '../lib/routingFiles.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { pathProblem, parsePath } from '../repo/paths.js'
+import { pathProblem } from '../repo/paths.js'
 import { openRepo } from '../repo/openRepo.js'
 import { decide } from '../repo/policy.js'
 import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
-import { writeProblems, writeRefusal } from '../repo/writePath.js'
+import { writeRefusal } from '../repo/writePath.js'
 
 // What a save refuses: what it writes. What another file of the Template
 // keeps Helm from rendering is said with the save, not a reason to lose it.
 function splitBySave({ refuse, warn = [] }, writes) {
   return { refuse: refuse.filter(writes), elsewhere: [...refuse.filter(f => !writes(f)), ...warn] }
 }
-
-const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
 // A rules/ filename: a group file, or _common.yaml. Guards path traversal in
 // the keys of the POST /:chart/rules body, and keeps a group key a name Helm
@@ -99,27 +97,6 @@ export default function templatesRouter() {
     if (chart) return res.status(400).json({ error: `Invalid chart name: ${chart.why}` })
     next()
   })
-  // A template file is named like a file, never a path (paths.js).
-  router.use('/:chart/:template', (req, res, next) => {
-    const template = pathProblem(req.params.template, 'file', { suffix: '.yaml' })
-    if (template) return res.status(400).json({ error: `Invalid template name: ${template.why}` })
-    next()
-  })
-  // Where the file really is, through a link: in the repo.
-  const templateFile = async req => {
-    const p = await parsePath(req.params.template, 'file', { under: chartPaths(req, req.params.chart).tmplDir, suffix: '.yaml' })
-    return p.ok ? p.abs : null
-  }
-  // A template file as the repo names it: charts/<chart>/templates/<name>.yaml.
-  const templateRel = (req, name) => path.relative(req.gitopsDir, path.join(chartPaths(req, req.params.chart).tmplDir, `${name}.yaml`)).replace(/\\/g, '/')
-  // A write to a template file never lands outside the repo: a chart folder
-  // or a templates/ folder that is a link leading out is refused (409, the
-  // file named), as the Template's other routes refuse it.
-  const outsideRefusal = async (req, names) => {
-    const problem = await writeProblems(req.gitopsDir, names.map(n => templateRel(req, n)))
-    return problem ? writeRefusal(problem) : null
-  }
-
   function chartPaths(req, chart) {
     const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
     const chartDir = path.join(chartsDir, chart)
@@ -206,17 +183,7 @@ export default function templatesRouter() {
     res.json({ templateFiles, schema: t.schema, values: t.values, chartMeta: t.chart || {}, drift: t.drift, rulesFiles: t.rulesFiles })
   }))
 
-  // --- Chart-level endpoints (must be before /:chart/:template) ---
-
-  // Which deployments are using this chart. Needed before a breaking change,
-  // and to know when an old chart is free to retire.
-  router.get('/:chart/deployments', async (req, res) => {
-    try {
-      res.json(await findChartUsage(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR))
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+  // --- Chart-level endpoints ---
 
   // Save a chart's rules/*.yaml source, and regenerate every product from it
   // in one request.
@@ -459,41 +426,6 @@ export default function templatesRouter() {
     }
   })
 
-  // Save chart-level default values
-  router.post('/:chart/values', async (req, res) => {
-    const { valuesFile } = chartPaths(req, req.params.chart)
-    const { values } = req.body || {}
-    // The text of values.yaml, or its values as a map: anything else
-    // (left out, null, a number, a list) would be written as an empty or
-    // meaningless file.
-    if (typeof values !== 'string' && !isMap(values)) {
-      return res.status(400).json({ error: 'values is required: the text of values.yaml, or its values as a map' })
-    }
-    try {
-      const content = typeof values === 'string' ? values : dumpForHelm(values, { lineWidth: -1 })
-      // The Template as this save leaves it, read as Helm reads it: a text
-      // that is not YAML, one AlertForge cannot tell Helm's reading of (the
-      // line is named), and what else of the Template keeps every deployment
-      // from rendering are refused before it is written. Saving does not run
-      // Helm.
-      const dir = path.relative(req.gitopsDir, path.dirname(valuesFile)).replace(/\\/g, '/')
-      const after = await openRepo(req.gitopsDir).with(new Map([[`${dir}/values.yaml`, content]])).templateFiles(dir)
-      if (after.state === 'unreadable') throw new UnreadableError(path.join(req.gitopsDir, after.file), { reason: after.why })
-      const decided = after.state === 'ok' ? decide(after.findings, TEMPLATE_POLICIES.saveValues) : { refuse: [], warn: [] }
-      // The text sent is refused; a file this save does not write goes
-      // through, said (Commit refuses it).
-      const { refuse, elsewhere } = splitBySave(decided, f => f.file === `${dir}/values.yaml`)
-      const unread = refuse.find(f => /-unreadable$/.test(f.code))
-      if (unread) throw new UnreadableError(path.join(req.gitopsDir, unread.file), { reason: unread.detail.why })
-      if (refuse.length) return res.status(400).json({ error: refuse.map(f => f.message).join('; '), findings: refuse.map(f => ({ code: f.code, file: f.file, description: f.message, ...(f.at ? { at: f.at } : {}) })) })
-      await writeWhole(valuesFile, content)
-      res.json({ ok: true, ...(elsewhere.length ? { warnings: elsewhere.map(f => ({ code: f.code, file: f.file, description: `${f.message} — Commit refuses it until it is fixed` })) } : {}) })
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
-    }
-  })
-
   // Save Chart.yaml metadata (name, description, version)
   // The editor's Save writes the description, and only that: the rest
   // of Chart.yaml is read from disk, so a page loaded before a pull cannot
@@ -529,84 +461,6 @@ export default function templatesRouter() {
       res.json({ ok: true })
     } catch (err) {
       res.status(500).json({ error: err.message })
-    }
-  })
-
-  // Rename a template file
-  router.post('/:chart/:template/rename', async (req, res) => {
-    const { tmplDir } = chartPaths(req, req.params.chart)
-    const { newName } = req.body || {}
-    const badNew = pathProblem(newName, 'name')
-    if (badNew) {
-      return res.status(400).json({ error: `Invalid newName: ${badNew.why}` })
-    }
-    try {
-      const refused = await outsideRefusal(req, [req.params.template, newName])
-      if (refused) return res.status(refused.status).json(refused.body)
-      const oldFile = await templateFile(req)
-      if (!oldFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
-      // A file already at the new name is not written over, as a chart's
-      // clone and a shared config's rename are not.
-      const newRel = templateRel(req, newName)
-      const listed = await openRepo(req.gitopsDir).dir(path.posix.dirname(newRel))
-      if (listed.state === 'ok' && listed.value.entries.has(`${newName}.yaml`)) return res.status(409).json({ error: `${newRel} already exists`, file: newRel })
-      await fs.rename(oldFile, path.join(tmplDir, `${newName}.yaml`))
-      res.json({ ok: true })
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
-    }
-  })
-
-  // --- Template file endpoints ---
-
-  // Get a single template file's content
-  router.get('/:chart/:template', async (req, res) => {
-    try {
-      const tmplFile = await templateFile(req)
-      if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
-      const { tmplDir } = chartPaths(req, req.params.chart)
-      const read = await openRepo(req.gitopsDir).file(path.relative(req.gitopsDir, path.join(tmplDir, `${req.params.template}.yaml`)).replace(/\\/g, '/'))
-      if (read.state === 'absent') return res.status(404).json({ error: 'Template not found' })
-      if (read.state === 'unreadable') throw new UnreadableError(path.join(tmplDir, `${req.params.template}.yaml`), { reason: read.why })
-      res.json({ content: read.value.text })
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
-    }
-  })
-
-  // Save a template file's content
-  router.post('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req, req.params.chart)
-    const { content } = req.body || {}
-    if (typeof content !== 'string') return res.status(400).json({ error: 'content is required: the template file\'s text' })
-    try {
-      const refused = await outsideRefusal(req, [req.params.template])
-      if (refused) return res.status(refused.status).json(refused.body)
-      const tmplFile = await templateFile(req)
-      if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
-      await fs.mkdir(tmplDir, { recursive: true })
-      await writeWhole(tmplFile, content)
-      res.json({ ok: true })
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
-    }
-  })
-
-  // Delete a template file
-  router.delete('/:chart/:template', async (req, res) => {
-    try {
-      const refused = await outsideRefusal(req, [req.params.template])
-      if (refused) return res.status(refused.status).json(refused.body)
-      const tmplFile = await templateFile(req)
-      if (!tmplFile) return res.status(400).json({ error: 'Invalid template name: it leads outside the repo' })
-      await fs.rm(tmplFile, { force: true })
-      res.json({ ok: true })
-    } catch (err) {
-      const { status, body } = errorAnswer(err)
-      res.status(status).json(body)
     }
   })
 

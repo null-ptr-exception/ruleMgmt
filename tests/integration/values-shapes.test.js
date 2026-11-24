@@ -92,7 +92,7 @@ describe('a deployment save', () => {
   })
 
   it('takes a null group where the Template gives one (Helm renders the Template\'s)', async () => {
-    expect((await api('POST', '/api/v2/templates/demo/values', { values: { cpu: [], up: [], _common: { owner: 't' } } })).status).toBe(200)
+    await fs.writeFile(path.join(tmpDir, 'charts/demo/values.yaml'), yaml.dump({ cpu: [], up: [], _common: { owner: 't' } }))
     try {
       // (`_common: null` alone is refused here for another reason: the
       // save check does not read the Template's own Common Values yet.)
@@ -101,7 +101,7 @@ describe('a deployment save', () => {
         expect(status, `${text} ${JSON.stringify(data)}`).toBe(200)
       }
     } finally {
-      await api('POST', '/api/v2/templates/demo/values', { values: {} })
+      await fs.writeFile(path.join(tmpDir, 'charts/demo/values.yaml'), '{}\n')
     }
   })
 

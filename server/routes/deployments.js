@@ -3,7 +3,6 @@ import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerEveryRoute } from '../http/route.js'
 import { parsePath } from '../repo/paths.js'
 
-import { listRoutes } from './deployments/list.js'
 import { valuesRoutes } from './deployments/values.js'
 import { routingRoutes } from './deployments/routing.js'
 import { lifecycleRoutes } from './deployments/lifecycle.js'
@@ -18,7 +17,6 @@ export default function deploymentsRouter() {
     next()
   })
 
-  listRoutes(router)
   valuesRoutes(router)
   routingRoutes(router)
   lifecycleRoutes(router)

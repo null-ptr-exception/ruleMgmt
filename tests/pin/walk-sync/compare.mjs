@@ -42,7 +42,7 @@ export function vsHelm(cell) {
   return ''
 }
 
-const READERS = new Set(['tree', 'list', 'folder-list', 'users', 'migration', 'routing-get'])
+const READERS = new Set(['tree', 'list', 'migration', 'routing-get'])
 
 export function summary(cells) {
   const byRow = new Map()

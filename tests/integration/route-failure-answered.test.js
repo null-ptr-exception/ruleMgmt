@@ -100,7 +100,7 @@ afterAll(async () => {
 })
 
 describe('every route, with every file and git call failing', () => {
-  it('finds the routes', () => expect(routes.length).toBeGreaterThan(40))
+  it('finds the routes', () => expect(routes.length).toBeGreaterThan(30))
 
   it.each(routes)('%s %s is answered, leaves nothing unhandled and the lock free', async (method, route) => {
     const p = route.replace(/:(\w+)/g, (_, k) => PARAMS[k]) + `?folder=${encodeURIComponent(DEP)}&path=${encodeURIComponent(DEP)}`
@@ -120,7 +120,7 @@ describe('every route, with every file and git call failing', () => {
     await new Promise(res => setTimeout(res, 20))
     const left = unhandled.slice(before).map(e => `${e?.code || ''} ${e?.message}`)
     // A write after it is not kept waiting on the commit lock (held up to 60 s).
-    const next = await ask('POST', '/api/v2/templates/demo/x/rename', { newName: 'NOT A NAME' }, 5_000)
+    const next = await ask('POST', '/api/v2/charts', { name: 'NOT A NAME' }, 5_000)
     table.push([method, route, r.status, left.length ? `unhandled: ${left.join('; ')}` : 'none unhandled', `next write ${next.status} in ${next.ms} ms`].join('\t'))
     expect(left, 'unhandled').toEqual([])
     // Answered: some reads say what they could not read in a 200.

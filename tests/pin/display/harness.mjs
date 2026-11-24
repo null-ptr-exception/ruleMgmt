@@ -28,16 +28,16 @@ export { SUBJECT }
 export const makeWorkspace = valuesWorkspace
 
 // The entry points, in the order a row's cells are listed.
-export const ENTRIES = ['tree', 'list', 'all-list', 'editor', 'preview', 'common-users']
+export const ENTRIES = ['tree', 'all-list', 'editor', 'preview', 'common-users']
 // Which apply to a target (see ../deployment-values/cases.mjs): the flat
 // file is in no folder of the tree and not in the Sync dialogs' list; a
 // _common's users list is the stack's.
 const APPLIES = {
-  A: ['tree', 'list', 'all-list', 'editor', 'preview'],
-  T: ['tree', 'list', 'all-list', 'editor', 'preview'],
-  S: ['tree', 'list', 'all-list', 'editor', 'preview', 'common-users'],
-  L: ['tree', 'list', 'all-list', 'editor', 'preview', 'common-users'],
-  F: ['list', 'editor', 'preview'],
+  A: ['tree', 'all-list', 'editor', 'preview'],
+  T: ['tree', 'all-list', 'editor', 'preview'],
+  S: ['tree', 'all-list', 'editor', 'preview', 'common-users'],
+  L: ['tree', 'all-list', 'editor', 'preview', 'common-users'],
+  F: ['editor', 'preview'],
 }
 const LAYER = 'deployments/s/_common/demo'
 const PROBE_FILE = 'charts/demo/templates/zz-pin-values.yaml'
@@ -137,12 +137,6 @@ export async function runRow(ws, c) {
       status: res.status, rows: node ? shown(node.alertCount) : '-', mark: marks.join(',') || '-',
       note: node?.problems?.join(' / ') || res.data?.error, raw: res.text,
     }
-  })
-  // The deployment list of a folder (or the flat files of a chart).
-  await record('list', async () => {
-    const res = await api('GET', dep ? `/api/v2/deployments/demo${q(dep)}` : '/api/v2/deployments/demo')
-    const mine = Array.isArray(res.data) ? res.data.find(d => d.name === sub.name) : null
-    return { cls: res.status >= 400 ? cls(res) : mine ? 'ok' : 'absent', status: res.status, rows: mine ? shown(mine.alertCount) : '-', note: res.data?.error, raw: res.text }
   })
   // Every deployment in the repo: the Sync to / Sync from dialogs' list,
   // whose count is said when a sync moves a deployment to another Template.

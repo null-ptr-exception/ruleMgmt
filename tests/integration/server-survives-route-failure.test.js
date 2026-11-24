@@ -94,13 +94,15 @@ describe.skipIf(IS_ROOT)('the server, after a route fails outside its own error 
     if (tmp) await fs.rm(tmp, { recursive: true, force: true })
   })
 
-  // Each was a request that ended the process: the folder on the way to
-  // the file cannot be read, and the path is resolved before the try.
+  // Each fails where its own try does not reach: the folder on the way to
+  // the file cannot be read, and the path is resolved before the try. The
+  // routes that ended the process this way are gone; these are answered by
+  // the wrapper round every route (server/http/route.js).
   it.each([
-    ['open a template file', 'GET', '/api/v2/templates/demo/x', undefined, 'charts/demo/templates'],
-    ['rename a template file', 'POST', '/api/v2/templates/demo/x/rename', { newName: 'y' }, 'charts/demo/templates'],
-    ['delete a template file', 'DELETE', '/api/v2/templates/demo/x', undefined, 'charts/demo/templates'],
-    ['list a folder whose parent cannot be read', 'GET', '/api/v2/deployments/demo?folder=deployments/w/d', undefined, 'deployments/w'],
+    ['open a Template whose templates folder cannot be read', 'GET', '/api/v2/templates/demo', undefined, 'charts/demo/templates'],
+    ['save a deployment whose parent cannot be read', 'POST', '/api/v2/deployments/demo/d?folder=deployments/w/d', { values: {} }, 'deployments/w'],
+    ['delete a deployment whose parent cannot be read', 'DELETE', '/api/v2/deployments/demo/d?folder=deployments/w/d', undefined, 'deployments/w'],
+    ['make a deployment in a folder whose parent cannot be read', 'POST', '/api/v2/folders/init', { folder: 'deployments/w/d/n', chart: 'demo' }, 'deployments/w'],
   ])('%s: answered, naming the folder, and the server answers the next request', async (_, method, p, body, named) => {
     const r = await ask(method, p, body)
     expect(r.status, child.exitCode === null ? '' : `the server process ended:\n${output}`).toBe(409)
@@ -109,7 +111,24 @@ describe.skipIf(IS_ROOT)('the server, after a route fails outside its own error 
     expect((await ask('GET', '/api/v2/user')).status).toBe(200)
     // A write right after it is not kept waiting on the commit lock.
     const started = Date.now()
-    expect((await ask('POST', '/api/v2/templates/demo/x/rename', { newName: 'NOT A NAME' })).status).toBe(400)
+    expect((await ask('POST', '/api/v2/charts', { name: 'NOT A NAME' })).status).toBe(400)
     expect(Date.now() - started).toBeLessThan(5000)
+  })
+
+  // A path no route has — a route no page calls was taken out, or there
+  // never was one — is a JSON 404 whatever its method: not the page, not
+  // Express's HTML, no stack or path of the machine.
+  it.each([
+    ['GET', '/api/v2/templates/demo/x'], ['POST', '/api/v2/templates/demo/x'], ['DELETE', '/api/v2/templates/demo/x'],
+    ['POST', '/api/v2/templates/demo/x/rename'], ['POST', '/api/v2/templates/demo/values'], ['GET', '/api/v2/templates/demo/deployments'],
+    ['GET', '/api/v2/deployments/demo'], ['POST', '/api/v2/deployments/demo/d/clone'], ['GET', '/api/v2/folders'], ['POST', '/api/v2/folders'],
+    ['GET', '/api/nothing'], ['PUT', '/api/v2/nothing/here'],
+  ])('%s %s: a JSON 404', async (method, p) => {
+    const res = await fetch(base + p, { method, headers: { 'Content-Type': 'application/json' }, body: method === 'GET' ? undefined : '{}', signal: AbortSignal.timeout(10_000) })
+    const text = await res.text()
+    expect(res.status, text).toBe(404)
+    expect(res.headers.get('content-type')).toMatch(/^application\/json/)
+    expect(JSON.parse(text)).toEqual({ error: 'No such API route' })
+    expect(text).not.toContain(tmp)
   })
 })

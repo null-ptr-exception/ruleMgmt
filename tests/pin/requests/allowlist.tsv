@@ -1,18 +1,7 @@
 # Every cell of baseline.tsv that disagrees with what must hold (compare.mjs), with why. Edited by hand only.
 id	entry	kind	category	reason
-encoded-slash	deployments.clone:folder	5xx	bug	no issue yet: cloning a deployment whose values file is not there is a 500, not a 404
-empty	deployments.clone:folder	5xx	bug	no issue yet: cloning a deployment whose values file is not there is a 500, not a 404
-long-twin	templates.values:chart	5xx	bug	no issue yet: saving the values of a Template that is not there is a 500, not a 404
-long-twin	templates.rename:chart	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
-long-twin	templates.rename:template	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
-long-twin	deployments.clone:deployment	5xx	bug	no issue yet: cloning a deployment whose values file is not there is a 500, not a 404
-long-twin	deployments.clone:folder	5xx	bug	no issue yet: cloning a deployment whose values file is not there is a 500, not a 404
-dot-git	templates.rename:template	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
-dot-gitignore	templates.rename:template	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
-reserved-common	templates.rename:template	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
 reserved-common	deployments.routing-get:folder	refuses-legit	policy	a _common chart opens in the editor and nothing else: it has no notification routing and is no sync source
 reserved-common	sync.create:source	refuses-legit	policy	a _common chart opens in the editor and nothing else: it has no notification routing and is no sync source
-link-in	templates.rename:chart	5xx	bug	no issue yet: renaming a template file, or in a Template, that is not there is a 500, not a 404
 link-in	folders.common-plan:folder	refuses-legit	policy	no _common is made through a link, even one that stays in the repo: whether it does is not checked there
 link-in	folders.common:folder	refuses-legit	policy	no _common is made through a link, even one that stays in the repo: whether it does is not checked there
 link-out	git.diff:file	server-path	policy	the diff shows a link as git keeps it, its target; the target the repo holds is an absolute path of this machine
@@ -99,10 +88,8 @@ field:deep	folders.common{chart}	unnamed-field	bug	no issue yet: refused, but th
 field:deep	sync.create{source}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
 field:deep	sync.create{target}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
 field:deep	sync.delete{target}	unnamed-field	bug	no issue yet: refused, but the answer does not name the field (request-body validation)
-link-in	deployments.clone:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	deployments.delete:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	deployments.get:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
-link-in	deployments.list:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	deployments.routing-delete:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	deployments.routing-get:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	deployments.routing-put:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
@@ -111,10 +98,8 @@ link-in	folders.init:folder	refuses-legit	policy	a folder that is a link (or is 
 link-in	render.preview:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	sync.create:source	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-in	sync.create:target	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
-link-via-in	deployments.clone:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-via-in	deployments.delete:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-via-in	deployments.get:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
-link-via-in	deployments.list:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-via-in	deployments.routing-delete:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-via-in	deployments.routing-get:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is
 link-via-in	deployments.routing-put:folder	refuses-legit	policy	a folder that is a link (or is reached through one) is no deployment at any entry point, even one that stays in the repo: what it leads to is used where it is

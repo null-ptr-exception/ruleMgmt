@@ -65,28 +65,28 @@ const LEGACY_PROMISE = { MariadbLatencySlowQueries_WarnThreshold: 1, MariadbErro
 // is copied as it is; `convert` is the legacy chart after `gen-rules`;
 // `schema` (custom) is written before the save, for it to carry over.
 export const BASE = {
-  p2: { rules: P2_RULES, deployment: P2_VALUES('p2'), promise: P2_PROMISE, tfile: 'cpu' },
+  p2: { rules: P2_RULES, deployment: P2_VALUES('p2'), promise: P2_PROMISE },
   p3: {
     rules: { 'api.yaml': "type: prometheus3\ncolumns:\n  job: {type: string, required: true}\nrules:\n  - alert: ApiErrors\n    expr: rate(http_errors_total{job=\"${job}\"}[5m]) > 1\n    labels: {severity: warning, service.name: '${job}'}\n" },
-    deployment: 'p3:\n  api:\n    - { job: api }\n', promise: { ApiErrors: 1 }, tfile: 'api',
+    deployment: 'p3:\n  api:\n    - { job: api }\n', promise: { ApiErrors: 1 },
   },
   vm: {
     rules: { 'http.yaml': "type: vm\ncolumns:\n  job: {type: string, required: true}\nrules:\n  - alert: HTTPErrors\n    expr: 'WITH (e = rate(http_errors_total{job=\"${job}\"}[5m])) e > 5'\n    labels: {severity: warning}\n" },
-    deployment: 'vm:\n  http:\n    - { job: api }\n', promise: { HTTPErrors: 1 }, tfile: 'http',
+    deployment: 'vm:\n  http:\n    - { job: api }\n', promise: { HTTPErrors: 1 },
   },
   vlogs: {
     rules: { 'app.yaml': "type: vlogs\ncolumns:\n  service: {type: string, required: true}\nrules:\n  - alert: AppErrors\n    expr: '_time:5m service:\"${service}\" level:error | stats count() as errors | filter errors:>10'\n    labels: {severity: warning}\n" },
-    deployment: 'vlogs:\n  app:\n    - { service: checkout }\n', promise: { AppErrors: 1 }, tfile: 'app',
+    deployment: 'vlogs:\n  app:\n    - { service: checkout }\n', promise: { AppErrors: 1 },
   },
   custom: {
     schemaFirst: { $schema: 'https://json-schema.org/draft-07/schema#', type: 'object', properties: { hand: { type: 'array', 'x-custom-template': true, items: { type: 'object', properties: { job: { type: 'string' } } } } } },
     handTemplate: { 'hand.yaml': 'apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata:\n  name: {{ .Release.Name }}-hand\nspec:\n  groups:\n    - name: hand\n      rules:\n        {{- range .Values.hand }}\n        - alert: HandWritten\n          expr: up{job="{{ .job }}"} == 0\n        {{- end }}\n' },
-    rules: SMALL_RULES, deployment: 'custom:\n  disk:\n    - { job: api }\n  hand:\n    - { job: api }\n', promise: { DiskFull: 1, HandWritten: 1 }, tfile: 'disk',
+    rules: SMALL_RULES, deployment: 'custom:\n  disk:\n    - { job: api }\n  hand:\n    - { job: api }\n', promise: { DiskFull: 1, HandWritten: 1 },
   },
-  'my-chart': { rules: SMALL_RULES, deployment: SMALL_VALUES('my-chart'), promise: { DiskFull: 1 }, tfile: 'disk' },
-  my_chart: { rules: SMALL_RULES, deployment: SMALL_VALUES('my_chart'), promise: { DiskFull: 1 }, tfile: 'disk' },
-  legacy: { legacy: LEGACY, deployment: LEGACY.deployment.replace(/^mariadb-alerts:/m, 'legacy:'), promise: LEGACY_PROMISE, tfile: 'prometheus-rule' },
-  conv: { legacy: LEGACY, convert: true, deployment: LEGACY.deployment.replace(/^mariadb-alerts:/m, 'conv:'), promise: LEGACY_PROMISE, tfile: 'mariadb-errors-connections' },
+  'my-chart': { rules: SMALL_RULES, deployment: SMALL_VALUES('my-chart'), promise: { DiskFull: 1 } },
+  my_chart: { rules: SMALL_RULES, deployment: SMALL_VALUES('my_chart'), promise: { DiskFull: 1 } },
+  legacy: { legacy: LEGACY, deployment: LEGACY.deployment.replace(/^mariadb-alerts:/m, 'legacy:'), promise: LEGACY_PROMISE },
+  conv: { legacy: LEGACY, convert: true, deployment: LEGACY.deployment.replace(/^mariadb-alerts:/m, 'conv:'), promise: LEGACY_PROMISE },
 }
 
 const P = rel => `charts/p2/${rel}`

@@ -1,4 +1,4 @@
-/** Make a folder, and a deployment in one (POST /init). */
+/** Make a deployment in a folder (POST /init). */
 
 import fs from 'fs/promises'
 import path from 'path'
@@ -38,28 +38,6 @@ function isSafeFolderPath(candidate, gitopsDir) {
   const relative = path.relative(chartsDir, targetDir)
   const isSameOrChild = relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
   return !isSameOrChild
-}
-
-export function createFolderRoutes(router) {
-  router.post('/', async (req, res) => {
-    const { path: folderPath } = req.body
-    const pathWhy = pathProblem(folderPath, 'create')
-    if (pathWhy) return res.status(400).json({ error: `Invalid folder path: ${pathWhy.why}` })
-    if (!isSafeFolderPath(folderPath, req.gitopsDir)) {
-      return res.status(400).json({ error: 'Invalid folder path' })
-    }
-    try {
-      const reserved = await newReservedSegment(req.gitopsDir, folderPath)
-      if (reserved) return res.status(400).json({ error: reservedError(reserved) })
-      // Where it really is, through a link: in the repo.
-      const where = await parsePath(folderPath, 'create', { root: req.gitopsDir, what: 'folder path' })
-      if (!where.ok) return res.status(400).json({ error: where.error })
-      await fs.mkdir(path.join(req.gitopsDir, folderPath), { recursive: true })
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
 }
 
 export function initRoutes(router) {

@@ -29,7 +29,6 @@ function shownOtherwise(cell) {
 
 // How a cell disagrees with Helm, or '' when it does not.
 export function vsHelm(cell) {
-  if (cell.entry === 'list') return ''
   if (cell.entry === 'get') return cell.cls === 'error' ? '5xx' : shownOtherwise(cell) || ''
   if (SILENT.has(cell.cls) || cell.helm === '-') return cell.cls === 'error' ? '5xx' : ''
   const no = HELM_SAYS_NO.has(cell.helm)
@@ -43,7 +42,7 @@ export function vsHelm(cell) {
 export function summary(cells) {
   const byRow = new Map()
   for (const c of cells) {
-    if (c.entry === 'get' || c.entry === 'list' || SILENT.has(c.cls)) continue
+    if (c.entry === 'get' || SILENT.has(c.cls)) continue
     if (!byRow.has(c.id)) byRow.set(c.id, new Set())
     byRow.get(c.id).add(notices(c.cls))
   }

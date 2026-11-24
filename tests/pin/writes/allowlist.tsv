@@ -3,7 +3,6 @@
 # Edited by hand: a fix removes its line; a new disagreement needs one.
 id	entry	kind	category	reason
 while-locked	save-legacy	not-locked	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
-while-locked	deployment-clone	not-locked	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 second-readonly-file	save-json	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 second-readonly-file	save-text	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 second-readonly-file	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
@@ -46,23 +45,14 @@ new-refused	save-json	refused-but-changed	bug	no issue yet: a save to a new depl
 new-refused	save-text	changed-unsaid	bug	no issue yet: a text save to a new deployment folder makes the folder, finds no values.yaml and writes <name>-values.yaml there under the flat-file checks, which take values a folder save refuses; answers 200
 link-outside	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 dangling-link	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
-dangling-link	deployment-clone	5xx	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 dangling-link	deployment-delete	5xx	bug	no issue yet: a deployment whose values.yaml is a link to nothing cannot be deleted: 500 "cannot be read"
 dangling-link	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 dir-link-outside	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
-is-folder	template-values	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-is-folder	template-file-save	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-is-folder	template-file-delete	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-is-folder	deployment-clone	5xx	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 is-folder	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 is-folder	gen-rules	refused-but-changed	bug	no issue yet: gen-rules writes the schema, then exits 2 at a template it cannot write; the schema stays written
 primary-unreadable	sync-create	5xx	bug	no issue yet: a sync whose files cannot be written answers 500 "Failed to create sync" / "Failed to unlink sync" without naming the file; nothing is changed (rolled back)
-primary-unreadable	template-values	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-primary-unreadable	template-file-save	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-primary-unreadable	deployment-clone	5xx	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 primary-unreadable	regenerate	partial	policy	a sync target (or a deployment of a Regenerate) that cannot be written is listed and the rest is kept, as for #180; the half that was written is not taken back yet
 undeployable	save-legacy	accepted-undeployable	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
-undeployable	template-file-save	accepted-undeployable	bug	no issue yet: Save of a Template's values or template file checks nothing (not YAML, a template Helm cannot parse); the template-files pin lists the same
 readonly-repo	save-json	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	save-text	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	save-legacy	5xx	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
@@ -72,17 +62,11 @@ readonly-repo	sync-unlink	5xx	bug	no issue yet: a sync whose files cannot be wri
 readonly-repo	common-create	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	common-remove	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	init	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-readonly-repo	folder-create	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	migration-apply	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	rules-save	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-readonly-repo	template-values	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-readonly-repo	template-file-save	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-readonly-repo	template-file-rename	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-readonly-repo	template-file-delete	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	chart-meta	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	chart-create	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	chart-delete	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
-readonly-repo	deployment-clone	5xx	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no lock, no checks of a folder deployment, no link rule); kept to show what it does
 readonly-repo	deployment-delete	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	routing-save	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
 readonly-repo	routing-remove	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed

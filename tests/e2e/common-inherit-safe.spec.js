@@ -20,7 +20,7 @@ const ownValues = async () => yaml.load(await fs.readFile(at(`${QA}/values.yaml`
 
 async function setUp(request) {
   for (const f of [FOLDER, OTHER]) await fs.rm(at(f), { recursive: true, force: true })
-  for (const f of [FOLDER, OTHER]) expect((await request.post('/api/v2/folders', { data: { path: f } })).ok()).toBeTruthy()
+  for (const f of [FOLDER, OTHER]) await fs.mkdir(at(f), { recursive: true })
   expect((await request.post('/api/v2/folders/common', { data: { action: 'create', folder: FOLDER, chart: CHART, expected: (await (await request.get(`/api/v2/folders/common/plan?action=create&folder=${FOLDER}&chart=${CHART}`)).json()).expected } })).ok()).toBeTruthy()
   const values = { _common: { owner: 'team-a', namespace: 'c1' }, [DISK]: [{ warn_pct: 85, critical_pct: 95 }, { warn_pct: 86, critical_pct: 96 }] }
   expect((await request.post(`/api/v2/deployments/${CHART}/${CHART}?folder=${encodeURIComponent(COMMON)}`, { data: { values } })).ok()).toBeTruthy()

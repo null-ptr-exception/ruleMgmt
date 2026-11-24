@@ -97,7 +97,7 @@ describe.skipIf(!HAS_HELM)('Preview\'s derived values are what Helm renders', ()
   })
 
   it('the Template\'s own Common Value of 0: shown as the problem it is, and Helm renders [0m]', async () => {
-    expect((await api('POST', '/api/v2/templates/demo/values', { values: { _common: { base: 0 }, spc: [] } })).status).toBe(200)
+    await fs.writeFile(path.join(tmpDir, 'charts/demo/values.yaml'), yaml.dump({ _common: { base: 0 }, spc: [] }))
     await fs.writeFile(path.join(tmpDir, DIRECT, 'values.yaml'), yaml.dump({ demo: { spc: [{ job: 'a', freq_num: 3 }] } }))
     const { data } = await preview(DIRECT)
     expect(rendered(data.output).Wide).toEqual({ a: '0m' })
@@ -105,7 +105,7 @@ describe.skipIf(!HAS_HELM)('Preview\'s derived values are what Helm renders', ()
   })
 
   it('the deployment\'s null over the Template\'s Common Value: Helm drops the key, so the default', async () => {
-    expect((await api('POST', '/api/v2/templates/demo/values', { values: { _common: { base: 3 }, spc: [] } })).status).toBe(200)
+    await fs.writeFile(path.join(tmpDir, 'charts/demo/values.yaml'), yaml.dump({ _common: { base: 3 }, spc: [] }))
     // Written by hand: a save refuses an empty Common Value.
     await fs.writeFile(path.join(tmpDir, DIRECT, 'values.yaml'), 'demo:\n  _common:\n    base: null\n  spc:\n    - {job: a, freq_num: 3}\n')
     const { data } = await preview(DIRECT)
@@ -114,7 +114,7 @@ describe.skipIf(!HAS_HELM)('Preview\'s derived values are what Helm renders', ()
   })
 
   it('on a _common stack: what the layer gives', async () => {
-    expect((await api('POST', '/api/v2/folders', { path: 'deployments/shop' })).status).toBe(200)
+    await fs.mkdir(path.join(tmpDir, 'deployments/shop'), { recursive: true })
     const plan = await api('GET', `/api/v2/folders/common/plan?${new URLSearchParams({ action: 'create', folder: 'deployments/shop', chart: 'demo' })}`)
     expect((await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'deployments/shop', chart: 'demo', expected: plan.data.expected })).status).toBe(200)
     expect((await api('POST', '/api/v2/folders/init', { folder: ON_STACK, chart: 'demo' })).status).toBe(200)

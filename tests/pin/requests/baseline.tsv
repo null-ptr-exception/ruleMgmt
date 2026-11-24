@@ -53,24 +53,11 @@ good	charts.clone:name	legit	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,
 good	charts.clone:newName	legit	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/rules/cpu.yaml,charts/copy/templates/cpu.yaml,charts/copy/values.schema.json	-	-	-	
 good	charts.delete:name	legit	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 good	templates.get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-good	templates.deployments:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 good	templates.rules:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 good	templates.rules:file	legit	ok	200	same	no	same	no	free		-	-	-	
 good	templates.migration-preview:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 good	templates.migration-preview:file	legit	ok	200	same	no	same	no	free		-	-	-	
-good	templates.values:chart	legit	ok	200	same	no	same	no	free	charts/demo/values.yaml	-	-	-	
 good	templates.chart-meta:chart	legit	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
-good	templates.rename:chart	legit	ok	200	same	no	same	no	free	charts/hand/templates/moved.yaml,charts/hand/templates/notes.yaml	-	-	-	
-good	templates.rename:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/moved.yaml,charts/hand/templates/notes.yaml	-	-	-	
-good	templates.rename:newName	legit	ok	200	same	no	same	no	free	charts/hand/templates/moved.yaml,charts/hand/templates/notes.yaml	-	-	-	
-good	templates.template-get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-good	templates.template-get:template	legit	ok	200	same	no	same	no	free		-	-	-	
-good	templates.template-save:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-good	templates.template-save:template	legit	ok	200	same	no	same	no	free		-	-	-	
-good	templates.template-delete:chart	legit	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
-good	templates.template-delete:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
-good	deployments.list:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-good	deployments.list:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 good	deployments.get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 good	deployments.get:deployment	legit	ok	200	same	no	same	no	free		-	-	-	
 good	deployments.get:folder	legit	ok	200	same	no	same	no	free		-	-	-	
@@ -86,10 +73,6 @@ good	deployments.routing-put:folder	legit	ok	200	same	no	same	no	free		-	-	-
 good	deployments.routing-delete:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
 good	deployments.routing-delete:deployment	legit	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
 good	deployments.routing-delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-good	deployments.clone:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-good	deployments.clone:deployment	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-good	deployments.clone:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-good	deployments.clone:newName	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
 good	deployments.delete:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 good	deployments.delete:deployment	legit	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 good	deployments.delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
@@ -105,12 +88,10 @@ good	folders.common:folder	legit	ok	200	same	no	same	no	free	deployments/c/_comm
 good	folders.common:chart	legit	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	
 good	folders.common:path	legit	ok	200	same	no	same	no	free	deployments/s/_common/demo/Chart.yaml,deployments/s/_common/demo/charts/demo,deployments/s/_common/demo/values.yaml,deployments/s/x/Chart.yaml,+1	-	-	-	
 good	folders.common-users:path	legit	ok	200	same	no	same	no	free		-	-	-	
-good	folders.create:path	legit	ok	200	same	no	same	no	free		-	-	-	
 good	folders.init:folder	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	-	
 good	folders.init:chart	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	-	
 good	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
 good	folders.deployments:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-good	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 good	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
 good	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
 good	sync.create:source	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	-	
@@ -121,24 +102,11 @@ up	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 up	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 up	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 up	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 up	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-up	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 up	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 up	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -154,10 +122,6 @@ up	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-
 up	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 up	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-up	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-up	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
-up	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 up	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 up	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -173,12 +137,10 @@ up	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 up	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	folders.common:path	any	refused	400	same	no	same	no	free		-	-	-	
 up	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-up	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 up	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 up	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up	folders.tree:path	any	refused	400	same	no	same	no	free		-	-	-	
 up	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-up	folders.list:path	any	refused	400	same	no	same	no	free		-	-	-	
 up	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 up	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 up	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -189,24 +151,11 @@ up-twin	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 up-twin	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	templates.rename:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/a..b.yaml,charts/hand/templates/moved.yaml	-	-	-	
-up-twin	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	templates.template-get:template	legit	ok	200	same	no	same	no	free		-	-	-	
-up-twin	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	templates.template-save:template	legit	ok	200	same	no	same	no	free		-	-	-	
-up-twin	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	templates.template-delete:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/a..b.yaml	-	-	-	
-up-twin	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	deployments.list:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 up-twin	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	deployments.get:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 up-twin	deployments.save:chart	any	refused	400	same	no	same	no	free		-	-	-	
@@ -217,9 +166,6 @@ up-twin	deployments.routing-put:chart	any	refused	400	same	no	same	no	free		-	-	
 up-twin	deployments.routing-put:folder	legit	ok	200	same	no	same	no	free	deployments/team/a..b/routing.yaml,deployments/team/a..b/templates/alertmanagerconfig.yaml	-	-	-	
 up-twin	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	deployments.routing-delete:folder	legit	ok	200	same	no	same	no	free		-	-	-	
-up-twin	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	deployments.clone:folder	legit	ok	200	same	no	same	no	free	deployments/team/a..b/copy-values.yaml	-	-	-	
-up-twin	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	deployments.delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/a..b/Chart.yaml,deployments/team/a..b/values.yaml	-	-	-	
 up-twin	render.preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
@@ -228,12 +174,10 @@ up-twin	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-
 up-twin	git.diff:file@HEAD	legit	ok	200	same	no	same	no	free		-	-	-	
 up-twin	folders.common-plan:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
-up-twin	folders.create:path	legit	ok	200	same	no	same	no	free		-	-	-	
 up-twin	folders.init:folder	legit	ok	200	same	no	same	no	free	deployments/team/new..x/Chart.yaml,deployments/team/new..x/values.yaml	-	-	-	
 up-twin	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 up-twin	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
 up-twin	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-up-twin	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 up-twin	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
 up-twin	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
 up-twin	sync.create:source	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml,sync.yaml	-	-	-	
@@ -244,24 +188,11 @@ climb	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 climb	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 climb	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 climb	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 climb	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-climb	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-climb	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-climb	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 climb	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 climb	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -277,10 +208,6 @@ climb	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-
 climb	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 climb	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-climb	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-climb	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-climb	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
-climb	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 climb	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 climb	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -296,24 +223,20 @@ climb	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 climb	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	folders.common:path	any	refused	400	same	no	same	no	free		-	-	-	
 climb	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-climb	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 climb	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 climb	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 climb	folders.tree:path	any	refused	400	same	no	same	no	free		-	-	-	
 climb	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-climb	folders.list:path	any	refused	400	same	no	same	no	free		-	-	-	
 climb	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 climb	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 climb	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
 climb	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-	
 climb	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
-climb-twin	deployments.list:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	deployments.get:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	deployments.save:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
 climb-twin	deployments.routing-get:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	deployments.routing-put:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	deployments.routing-delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-climb-twin	deployments.clone:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
 climb-twin	deployments.delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 climb-twin	render.preview:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-	
@@ -323,10 +246,8 @@ climb-twin	folders.common-plan:path	legit	ok	200	same	no	same	no	free		-	-	-
 climb-twin	folders.common:folder	legit	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	
 climb-twin	folders.common:path	legit	ok	200	same	no	same	no	free	deployments/s/_common/demo/Chart.yaml,deployments/s/_common/demo/charts/demo,deployments/s/_common/demo/values.yaml,deployments/s/x/Chart.yaml,+1	-	-	-	
 climb-twin	folders.common-users:path	legit	ok	200	same	no	same	no	free		-	-	-	
-climb-twin	folders.create:path	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	folders.init:folder	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	-	
 climb-twin	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
-climb-twin	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
 climb-twin	sync.create:source	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	-	
@@ -337,24 +258,11 @@ absolute	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 absolute	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -370,10 +278,6 @@ absolute	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	
 absolute	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -389,12 +293,10 @@ absolute	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 absolute	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	folders.common:path	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-absolute	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	folders.tree:path	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-absolute	folders.list:path	any	refused	400	same	no	same	no	free		-	-	-	
 absolute	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 absolute	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 absolute	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -405,24 +307,11 @@ encoded-slash	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 encoded-slash	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	deployments.list:folder	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	deployments.get:folder	any	not-found	404	same	no	same	no	free		-	-	-	
@@ -438,10 +327,6 @@ encoded-slash	deployments.routing-put:folder	any	refused	400	same	no	same	no	fre
 encoded-slash	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-encoded-slash	deployments.clone:folder	any	error	500	same	no	same	no	free		-	-	-	5xx
-encoded-slash	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	deployments.delete:folder	any	ok	200	same	no	same	no	free		-	-	-	
@@ -457,12 +342,10 @@ encoded-slash	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 encoded-slash	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	folders.common:path	any	not-found	404	same	no	same	no	free		-	-	-	
 encoded-slash	folders.common-users:path	any	ok	200	same	no	same	no	free		-	-	-	
-encoded-slash	folders.create:path	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	folders.init:folder	any	ok	200	same	no	same	no	free	deployments%2Fteam%2Fnew/Chart.yaml,deployments%2Fteam%2Fnew/values.yaml	-	-	-	
 encoded-slash	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 encoded-slash	folders.tree:path	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-encoded-slash	folders.list:path	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 encoded-slash	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -473,24 +356,11 @@ nul	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 nul	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 nul	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 nul	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 nul	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-nul	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-nul	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-nul	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 nul	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 nul	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -506,10 +376,6 @@ nul	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-
 nul	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 nul	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-nul	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-nul	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-nul	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
-nul	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 nul	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 nul	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -525,12 +391,10 @@ nul	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 nul	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	folders.common:path	any	refused	400	same	no	same	no	free		-	-	-	
 nul	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-nul	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 nul	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 nul	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 nul	folders.tree:path	any	refused	400	same	no	same	no	free		-	-	-	
 nul	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-nul	folders.list:path	any	refused	400	same	no	same	no	free		-	-	-	
 nul	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 nul	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 nul	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -539,20 +403,9 @@ nul	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-
 bad-percent	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	deployments.save:chart	any	refused	400	same	no	same	no	free		-	-	-	
@@ -563,8 +416,6 @@ bad-percent	deployments.routing-put:chart	any	refused	400	same	no	same	no	free		
 bad-percent	deployments.routing-put:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-bad-percent	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 bad-percent	render.preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
@@ -574,24 +425,11 @@ backslash	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 backslash	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -607,10 +445,6 @@ backslash	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-
 backslash	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -626,12 +460,10 @@ backslash	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 backslash	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	folders.common:path	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-backslash	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 backslash	folders.tree:path	any	ok	200	same	no	same	no	free		-	-	-	
 backslash	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-backslash	folders.list:path	any	ok	200	same	no	same	no	free		-	-	-	
 backslash	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 backslash	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 backslash	sync.create:source	any	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	-	
@@ -642,24 +474,11 @@ trailing-slash	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 trailing-slash	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	deployments.list:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 trailing-slash	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	deployments.get:folder	legit	ok	200	same	no	same	no	free		-	-	-	
@@ -675,10 +494,6 @@ trailing-slash	deployments.routing-put:folder	legit	ok	200	same	no	same	no	free	
 trailing-slash	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	deployments.routing-delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-trailing-slash	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-trailing-slash	deployments.clone:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-trailing-slash	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	deployments.delete:folder	legit	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
@@ -694,12 +509,10 @@ trailing-slash	folders.common:folder	legit	ok	200	same	no	same	no	free	deploymen
 trailing-slash	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	folders.common:path	legit	ok	200	same	no	same	no	free	deployments/s/_common/demo/Chart.yaml,deployments/s/_common/demo/charts/demo,deployments/s/_common/demo/values.yaml,deployments/s/x/Chart.yaml,+1	-	-	-	
 trailing-slash	folders.common-users:path	legit	ok	200	same	no	same	no	free		-	-	-	
-trailing-slash	folders.create:path	legit	ok	200	same	no	same	no	free		-	-	-	
 trailing-slash	folders.init:folder	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	-	
 trailing-slash	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 trailing-slash	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
 trailing-slash	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-trailing-slash	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 trailing-slash	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
 trailing-slash	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
 trailing-slash	sync.create:source	legit	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	-	
@@ -709,33 +522,20 @@ empty	charts.create:name	any	refused	400	same	no	same	no	free		-	-	-
 empty	charts.clone:name	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 empty	charts.delete:name	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	templates.get:chart	any	ok	200	same	no	same	no	free		-	-	-	
-empty	templates.deployments:chart	any	not-found	404	same	no	same	no	free		-	-	-	
+empty	templates.get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	templates.rules:chart	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 empty	templates.migration-preview:chart	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-empty	templates.values:chart	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	templates.chart-meta:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-empty	templates.rename:template	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-empty	templates.template-get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	templates.template-get:template	any	conflict	409	same	no	same	no	free		-	-	-	
-empty	templates.template-save:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	templates.template-save:template	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	templates.template-delete:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	templates.template-delete:template	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	deployments.list:chart	any	ok	200	same	no	same	no	free		-	-	-	
-empty	deployments.list:folder	any	ok	200	same	no	same	no	free		-	-	-	
-empty	deployments.get:chart	any	ok	200	same	no	same	no	free		-	-	-	
-empty	deployments.get:deployment	any	ok	200	same	no	same	no	free		-	-	-	
+empty	deployments.get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
+empty	deployments.get:deployment	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.get:folder	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.save:chart	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.save:deployment	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.save:folder	any	ok	200	same	no	same	no	free	deployments/demo/a-values.yaml	-	-	-	
 empty	deployments.routing-get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	deployments.routing-get:deployment	any	ok	200	same	no	same	no	free		-	-	-	
+empty	deployments.routing-get:deployment	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.routing-get:folder	any	refused	400	same	no	same	no	free		-	-	-	
 empty	deployments.routing-put:chart	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.routing-put:deployment	any	not-found	404	same	no	same	no	free		-	-	-	
@@ -743,10 +543,6 @@ empty	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-
 empty	deployments.routing-delete:chart	any	ok	200	same	no	same	no	free		-	-	-	
 empty	deployments.routing-delete:deployment	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-empty	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-empty	deployments.clone:deployment	any	not-found	404	same	no	same	no	free		-	-	-	
-empty	deployments.clone:folder	any	error	500	same	no	same	no	free		-	-	-	5xx
-empty	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 empty	deployments.delete:chart	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.delete:deployment	any	not-found	404	same	no	same	no	free		-	-	-	
 empty	deployments.delete:folder	any	ok	200	same	no	same	no	free		-	-	-	
@@ -762,12 +558,10 @@ empty	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 empty	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 empty	folders.common:path	any	refused	400	same	no	same	no	free		-	-	-	
 empty	folders.common-users:path	any	ok	200	same	no	same	no	free		-	-	-	
-empty	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 empty	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 empty	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 empty	folders.tree:path	any	ok	200	same	no	same	no	free		-	-	-	
 empty	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-empty	folders.list:path	any	ok	200	same	no	same	no	free		-	-	-	
 empty	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 empty	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 empty	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -778,24 +572,11 @@ long	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 long	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 long	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 long	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 long	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-long	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-long	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-long	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 long	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 long	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -811,10 +592,6 @@ long	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-
 long	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 long	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-long	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-long	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-long	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
-long	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 long	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 long	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -830,12 +607,10 @@ long	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 long	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	folders.common:path	any	refused	400	same	no	same	no	free		-	-	-	
 long	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-long	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 long	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 long	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long	folders.tree:path	any	refused	400	same	no	same	no	free		-	-	-	
 long	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-long	folders.list:path	any	refused	400	same	no	same	no	free		-	-	-	
 long	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 long	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 long	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -846,24 +621,11 @@ long-twin	charts.clone:name	any	not-found	404	same	no	same	no	free		-	-	-
 long-twin	charts.clone:newName	legit	ok	200	same	no	same	no	free	charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/Chart.yaml,charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/rules/cpu.yaml,charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/templates/cpu.yaml,charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/values.schema.json	-	-	-	
 long-twin	charts.delete:name	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	templates.get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-long-twin	templates.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	templates.rules:chart	any	ok	200	same	no	same	no	free	charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/Chart.yaml,charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/rules/cpu.yaml,charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/templates/cpu.yaml,charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/values.schema.json	-	-	-	
 long-twin	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 long-twin	templates.migration-preview:chart	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-long-twin	templates.values:chart	any	error	500	same	no	same	no	free		-	-	-	5xx
 long-twin	templates.chart-meta:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-long-twin	templates.rename:chart	any	error	500	same	no	same	no	free		-	-	-	5xx
-long-twin	templates.rename:template	any	error	500	same	no	same	no	free		-	-	-	5xx
-long-twin	templates.rename:newName	legit	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml,charts/hand/templates/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.yaml	-	-	-	
-long-twin	templates.template-get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-long-twin	templates.template-get:template	any	not-found	404	same	no	same	no	free		-	-	-	
-long-twin	templates.template-save:chart	any	ok	200	same	no	same	no	free	charts/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/templates/notes.yaml	-	-	-	
-long-twin	templates.template-save:template	any	ok	200	same	no	same	no	free	charts/hand/templates/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.yaml	-	-	-	
-long-twin	templates.template-delete:chart	any	ok	200	same	no	same	no	free		-	-	-	
-long-twin	templates.template-delete:template	any	ok	200	same	no	same	no	free		-	-	-	
-long-twin	deployments.list:chart	any	ok	200	same	no	same	no	free		-	-	-	
-long-twin	deployments.list:folder	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	deployments.get:chart	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	deployments.get:deployment	any	not-found	404	same	no	same	no	free		-	-	-	
 long-twin	deployments.get:folder	any	not-found	404	same	no	same	no	free		-	-	-	
@@ -879,10 +641,6 @@ long-twin	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-
 long-twin	deployments.routing-delete:chart	any	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
 long-twin	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 long-twin	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-long-twin	deployments.clone:chart	any	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-long-twin	deployments.clone:deployment	any	error	500	same	no	same	no	free		-	-	-	5xx
-long-twin	deployments.clone:folder	any	error	500	same	no	same	no	free		-	-	-	5xx
-long-twin	deployments.clone:newName	legit	ok	200	same	no	same	no	free	deployments/team/a/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-values.yaml	-	-	-	
 long-twin	deployments.delete:chart	any	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 long-twin	deployments.delete:deployment	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	deployments.delete:folder	any	ok	200	same	no	same	no	free		-	-	-	
@@ -898,12 +656,10 @@ long-twin	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 long-twin	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long-twin	folders.common:path	any	not-found	404	same	no	same	no	free		-	-	-	
 long-twin	folders.common-users:path	any	ok	200	same	no	same	no	free		-	-	-	
-long-twin	folders.create:path	legit	ok	200	same	no	same	no	free		-	-	-	
 long-twin	folders.init:folder	legit	ok	200	same	no	same	no	free	deployments/team/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/Chart.yaml,deployments/team/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/values.yaml	-	-	-	
 long-twin	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 long-twin	folders.tree:path	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-long-twin	folders.list:path	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 long-twin	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -914,24 +670,11 @@ dot-git	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 dot-git	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	templates.rename:template	any	error	500	same	no	same	no	free		-	-	-	5xx
-dot-git	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	templates.template-get:template	any	not-found	404	same	no	same	no	free		-	-	-	
-dot-git	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	templates.template-save:template	any	ok	200	same	no	same	no	free	charts/hand/templates/.git.yaml	-	-	-	
-dot-git	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	templates.template-delete:template	any	ok	200	same	no	same	no	free		-	-	-	
-dot-git	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	deployments.get:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -947,10 +690,6 @@ dot-git	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-
 dot-git	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	deployments.routing-delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	deployments.clone:deployment	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	deployments.delete:deployment	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
@@ -966,12 +705,10 @@ dot-git	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 dot-git	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	folders.common:path	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-dot-git	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	folders.tree:path	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-dot-git	folders.list:path	any	refused	400	same	no	same	no	free		-	-	-	
 dot-git	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 dot-git	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 dot-git	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -982,28 +719,14 @@ dot-gitignore	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 dot-gitignore	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.rename:template	legit	error	500	same	no	same	no	free		-	-	-	5xx
-dot-gitignore	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.template-get:template	legit	not-found	404	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.template-save:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/.gitignore.yaml	-	-	-	
-dot-gitignore	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	templates.template-delete:template	legit	ok	200	same	no	same	no	free		-	-	-	
-dot-gitignore	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	deployments.save:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	deployments.routing-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	deployments.routing-put:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-dot-gitignore	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	render.preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-	
@@ -1013,22 +736,17 @@ dot-gitignore	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-
 dot-gitignore	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 dot-gitignore	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
 dot-gitignore	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-dot-gitignore	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
-dot-github	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	deployments.save:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	deployments.routing-get:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-dot-github	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	render.preview:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-	
 dot-github	git.diff:file@HEAD	legit	ok	200	same	no	same	no	free		-	-	-	
-dot-github	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 dot-github	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
-dot-github	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 dot-github	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 dot-github	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 dot-github	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1039,22 +757,9 @@ reserved-common	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-
 reserved-common	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	templates.rename:template	legit	error	500	same	no	same	no	free		-	-	-	5xx
-reserved-common	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	templates.template-get:template	legit	not-found	404	same	no	same	no	free		-	-	-	
-reserved-common	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	templates.template-save:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/_common.yaml	-	-	-	
-reserved-common	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	templates.template-delete:template	legit	ok	200	same	no	same	no	free		-	-	-	
-reserved-common	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	deployments.list:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-common	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	deployments.get:folder	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-common	deployments.save:chart	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1065,9 +770,6 @@ reserved-common	deployments.routing-put:chart	any	refused	400	same	no	same	no	fr
 reserved-common	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	render.preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1076,12 +778,10 @@ reserved-common	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-
 reserved-common	git.diff:file@HEAD	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-common	folders.common-plan:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-common	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-common	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-common	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-reserved-common	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-common	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-common	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-common	sync.create:source	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
@@ -1089,49 +789,30 @@ reserved-common	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-
 reserved-common	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-shared	charts.create:name	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-shared	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-shared	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-shared	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-shared	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-shared	git.diff:file@HEAD	legit	ok	200	same	no	same	no	free		-	-	-	
-reserved-shared	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-shared	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-shared	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
-reserved-shared	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 reserved-shared	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	charts.create:name	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	charts.clone:name	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	charts.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	charts.delete:name	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	templates.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	templates.deployments:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	templates.rules:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	templates.rules:file	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	templates.migration-preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	templates.migration-preview:file	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	templates.values:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	templates.chart-meta:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	templates.rename:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	templates.rename:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/_extra-alerts.yaml,charts/hand/templates/moved.yaml	-	-	-	
-reserved-extra	templates.rename:newName	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	templates.template-get:template	legit	ok	200	same	no	same	no	free		-	-	-	
-reserved-extra	templates.template-save:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	templates.template-save:template	legit	ok	200	same	no	same	no	free		-	-	-	
-reserved-extra	templates.template-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	templates.template-delete:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/_extra-alerts.yaml	-	-	-	
-reserved-extra	deployments.list:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	deployments.get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	deployments.save:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	deployments.routing-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	deployments.routing-put:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	deployments.routing-delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	deployments.clone:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	deployments.clone:newName	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	deployments.delete:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	render.preview:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	folders.common-plan:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
-reserved-extra	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	folders.init:chart	any	refused	400	same	no	same	no	free		-	-	-	
 reserved-extra	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
@@ -1139,21 +820,9 @@ reserved-extra	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-
 link-in	charts.clone:name	legit	ok	200	same	no	same	no	free	charts/copy,charts/demo/Chart.yaml,charts/demo/values.schema.json	-	-	-	
 link-in	charts.delete:name	legit	ok	200	same	no	same	no	free	charts/inchart	-	-	-	
 link-in	templates.get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	templates.deployments:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	templates.rules:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	templates.migration-preview:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	templates.values:chart	legit	ok	200	same	no	same	no	free	charts/demo/values.yaml	-	-	-	
 link-in	templates.chart-meta:chart	legit	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
-link-in	templates.rename:chart	legit	error	500	same	no	same	no	free		-	-	-	5xx
-link-in	templates.rename:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/inlink.yaml,charts/hand/templates/moved.yaml	-	-	-	
-link-in	templates.template-get:chart	legit	not-found	404	same	no	same	no	free		-	-	-	
-link-in	templates.template-get:template	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	templates.template-save:chart	legit	ok	200	same	no	same	no	free	charts/demo/templates/notes.yaml	-	-	-	
-link-in	templates.template-save:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/inlink.yaml	-	-	-	
-link-in	templates.template-delete:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	templates.template-delete:template	legit	ok	200	same	no	same	no	free	charts/hand/templates/inlink.yaml	-	-	-	
-link-in	deployments.list:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	deployments.list:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.get:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	deployments.get:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.save:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
@@ -1164,8 +833,6 @@ link-in	deployments.routing-put:chart	legit	ok	200	same	no	same	no	free		-	-	-
 link-in	deployments.routing-put:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.routing-delete:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
 link-in	deployments.routing-delete:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
-link-in	deployments.clone:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-link-in	deployments.clone:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	deployments.delete:chart	legit	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 link-in	deployments.delete:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	render.preview:chart	legit	ok	200	same	no	same	no	free		-	-	-	
@@ -1176,12 +843,10 @@ link-in	folders.common-plan:folder	legit	refused	400	same	no	same	no	free		-	-	-
 link-in	folders.common-plan:chart	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	folders.common:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	folders.common:chart	legit	conflict	409	same	no	same	no	free		-	-	-	
-link-in	folders.create:path	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	folders.init:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-in	folders.init:chart	legit	conflict	409	same	no	same	no	free		-	-	-	
 link-in	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	folders.deployments:chart	legit	ok	200	same	no	same	no	free		-	-	-	
-link-in	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
 link-in	sync.create:source	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
@@ -1190,21 +855,9 @@ link-in	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-
 link-out	charts.clone:name	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	charts.delete:name	any	ok	200	same	no	same	no	free	charts/outchart	-	-	-	
 link-out	templates.get:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-out	templates.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	templates.rules:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.migration-preview:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-out	templates.values:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	templates.chart-meta:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-out	templates.rename:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-out	templates.rename:template	any	refused	400	same	no	same	no	free		-	-	-	
-link-out	templates.template-get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-link-out	templates.template-get:template	any	refused	400	same	no	same	no	free		-	-	-	
-link-out	templates.template-save:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-out	templates.template-save:template	any	refused	400	same	no	same	no	free		-	-	-	
-link-out	templates.template-delete:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-out	templates.template-delete:template	any	refused	400	same	no	same	no	free		-	-	-	
-link-out	deployments.list:chart	any	ok	200	same	no	same	no	free		-	-	-	
-link-out	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	deployments.get:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	deployments.save:chart	any	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
@@ -1215,8 +868,6 @@ link-out	deployments.routing-put:chart	any	ok	200	same	no	same	no	free		-	-	-
 link-out	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	deployments.routing-delete:chart	any	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
 link-out	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-link-out	deployments.clone:chart	any	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-link-out	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	deployments.delete:chart	any	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 link-out	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	render.preview:chart	any	ok	200	same	no	same	no	free		-	-	-	
@@ -1225,24 +876,20 @@ link-out	git.diff:file	any	ok	200	same	no	same	yes	free		-	-	-	server-path
 link-out	git.diff:file@HEAD	any	ok	200	same	no	same	yes	free		-	-	-	server-path
 link-out	folders.common-plan:chart	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
-link-out	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	folders.init:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-out	folders.tree:path	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-link-out	folders.list:path	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 link-out	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	sync.create:target	any	refused	400	same	no	same	no	free		-	-	-	
 link-out	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-	
-link-via	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	deployments.save:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	deployments.routing-get:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-link-via	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	render.preview:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	git.diff:file	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1252,10 +899,8 @@ link-via	folders.common-plan:path	any	not-found	404	same	no	same	no	free		-	-	-
 link-via	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	folders.common:path	any	not-found	404	same	no	same	no	free		-	-	-	
 link-via	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-link-via	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-via	folders.tree:path	any	ok	200	same	no	same	no	free		-	-	-	
-link-via	folders.list:path	any	ok	200	same	no	same	no	free		-	-	-	
 link-via	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 link-via	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 link-via	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1264,17 +909,9 @@ link-via	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-
 link-git	charts.clone:name	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git	charts.delete:name	any	ok	200	same	no	same	no	free	charts/gitchart	-	-	-	
 link-git	templates.get:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git	templates.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git	templates.rules:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git	templates.migration-preview:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git	templates.values:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git	templates.chart-meta:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-link-git	templates.rename:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git	templates.template-get:chart	any	refused	400	same	no	same	no	free		-	-	-	
-link-git	templates.template-save:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git	templates.template-delete:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git	deployments.list:chart	any	ok	200	same	no	same	no	free		-	-	-	
-link-git	deployments.list:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	deployments.get:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git	deployments.get:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	deployments.save:chart	any	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
@@ -1285,8 +922,6 @@ link-git	deployments.routing-put:chart	any	ok	200	same	no	same	no	free		-	-	-
 link-git	deployments.routing-put:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	deployments.routing-delete:chart	any	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
 link-git	deployments.routing-delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
-link-git	deployments.clone:chart	any	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
-link-git	deployments.clone:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	deployments.delete:chart	any	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 link-git	deployments.delete:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	render.preview:chart	any	ok	200	same	no	same	no	free		-	-	-	
@@ -1300,12 +935,10 @@ link-git	folders.common:folder	any	refused	400	same	no	same	no	free		-	-	-
 link-git	folders.common:chart	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	folders.common:path	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git	folders.common-users:path	any	refused	400	same	no	same	no	free		-	-	-	
-link-git	folders.create:path	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	folders.init:folder	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	folders.init:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git	folders.tree:path	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-link-git	folders.list:path	any	refused	400	same	no	same	no	free		-	-	-	
 link-git	sync.get:source	any	ok	200	same	no	same	no	free		-	-	-	
 link-git	sync.get:target	any	ok	200	same	no	same	no	free		-	-	-	
 link-git	sync.create:source	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1314,41 +947,30 @@ link-git	sync.delete:target	any	refused	400	same	no	same	no	free		-	-	-
 link-git-templates	charts.clone:name	any	ok	200	same	no	same	no	free	charts/copy/Chart.yaml,charts/copy/templates,charts/copy/values.schema.json,charts/copy/values.yaml	-	-	-	
 link-git-templates	charts.delete:name	any	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 link-git-templates	templates.get:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git-templates	templates.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git-templates	templates.rules:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git-templates	templates.migration-preview:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git-templates	templates.values:chart	any	ok	200	same	no	same	no	free	charts/spare/values.yaml	-	-	-	
 link-git-templates	templates.chart-meta:chart	any	ok	200	same	no	same	no	free	charts/spare/Chart.yaml	-	-	-	
-link-git-templates	templates.rename:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git-templates	templates.template-get:chart	any	not-found	404	same	no	same	no	free		-	-	-	
-link-git-templates	templates.template-save:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git-templates	templates.template-delete:chart	any	conflict	409	same	no	same	no	free		-	-	-	
-link-git-templates	deployments.list:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git-templates	deployments.get:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git-templates	deployments.save:chart	any	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
 link-git-templates	deployments.routing-get:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git-templates	deployments.routing-put:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git-templates	deployments.routing-delete:chart	any	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-link-git-templates	deployments.clone:chart	any	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
 link-git-templates	deployments.delete:chart	any	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 link-git-templates	render.preview:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git-templates	folders.common-plan:chart	any	ok	200	same	no	same	no	free		-	-	-	
 link-git-templates	folders.common:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git-templates	folders.init:chart	any	conflict	409	same	no	same	no	free		-	-	-	
 link-git-templates	folders.deployments:chart	any	ok	200	same	no	same	no	free		-	-	-	
-link-via-in	deployments.list:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-via-in	deployments.get:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-via-in	deployments.save:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-via-in	deployments.routing-get:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-via-in	deployments.routing-put:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-via-in	deployments.routing-delete:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
-link-via-in	deployments.clone:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-via-in	deployments.delete:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-via-in	render.preview:folder	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
 link-via-in	git.diff:file	legit	ok	200	same	no	same	no	free		-	-	-	
 link-via-in	git.diff:file@HEAD	legit	ok	200	same	no	same	no	free		-	-	-	
 link-via-in	folders.tree:path	legit	ok	200	same	no	same	no	free		-	-	-	
-link-via-in	folders.list:path	legit	ok	200	same	no	same	no	free		-	-	-	
 link-via-in	sync.get:source	legit	ok	200	same	no	same	no	free		-	-	-	
 link-via-in	sync.get:target	legit	ok	200	same	no	same	no	free		-	-	-	
 link-via-in	sync.create:source	legit	refused	400	same	no	same	no	free		-	-	-	refuses-legit
@@ -1370,15 +992,10 @@ body:good	charts.clone{}	good	ok	200	same	no	same	no	free	charts/copy/Chart.yaml
 body:good	charts.delete{}	good	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 body:good	templates.rules{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:good	templates.migration-preview{}	good	ok	200	same	no	same	no	free		-	-	-	
-body:good	templates.values{}	good	ok	200	same	no	same	no	free	charts/demo/values.yaml	-	-	-	
 body:good	templates.chart-meta{}	good	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
-body:good	templates.rename{}	good	ok	200	same	no	same	no	free	charts/hand/templates/moved.yaml,charts/hand/templates/notes.yaml	-	-	-	
-body:good	templates.template-save{}	good	ok	200	same	no	same	no	free		-	-	-	
-body:good	templates.template-delete{}	good	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
 body:good	deployments.save{}	good	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
 body:good	deployments.routing-put{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:good	deployments.routing-delete{}	good	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-body:good	deployments.clone{}	good	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	-	
 body:good	deployments.delete{}	good	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 body:good	render.preview{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:good	git.regenerate{}	good	ok	200	same	no	same	no	free		-	-	-	
@@ -1388,7 +1005,6 @@ body:good	git.discard{}	good	ok	200	same	no	same	no	free		-	-	-
 body:good	git.pull{}	good	not-found	404	same	no	same	no	free		-	-	-	
 body:good	git.sync{}	good	not-found	404	same	no	same	no	free		-	-	-	
 body:good	folders.common{}	good	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	-	
-body:good	folders.create{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:good	folders.init{}	good	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	-	
 body:good	sync.create{}	good	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	-	
 body:good	sync.delete{}	good	ok	200	same	no	same	no	free	sync.yaml	-	-	-	
@@ -1400,15 +1016,10 @@ body:extra-field	charts.clone{}	same-as-good	ok	200	same	no	same	no	free	charts/
 body:extra-field	charts.delete{}	same-as-good	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	ok	
 body:extra-field	templates.rules{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
 body:extra-field	templates.migration-preview{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
-body:extra-field	templates.values{}	same-as-good	ok	200	same	no	same	no	free	charts/demo/values.yaml	-	-	ok	
 body:extra-field	templates.chart-meta{}	same-as-good	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	ok	
-body:extra-field	templates.rename{}	same-as-good	ok	200	same	no	same	no	free	charts/hand/templates/moved.yaml,charts/hand/templates/notes.yaml	-	-	ok	
-body:extra-field	templates.template-save{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
-body:extra-field	templates.template-delete{}	same-as-good	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	ok	
 body:extra-field	deployments.save{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	ok	
 body:extra-field	deployments.routing-put{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
 body:extra-field	deployments.routing-delete{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	ok	
-body:extra-field	deployments.clone{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/a/copy-values.yaml	-	-	ok	
 body:extra-field	deployments.delete{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	ok	
 body:extra-field	render.preview{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
 body:extra-field	git.regenerate{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
@@ -1418,7 +1029,6 @@ body:extra-field	git.discard{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok
 body:extra-field	git.pull{}	same-as-good	not-found	404	same	no	same	no	free		-	-	not-found	
 body:extra-field	git.sync{}	same-as-good	not-found	404	same	no	same	no	free		-	-	not-found	
 body:extra-field	folders.common{}	same-as-good	ok	200	same	no	same	no	free	deployments/c/_common/demo/Chart.yaml,deployments/c/_common/demo/charts/demo,deployments/c/_common/demo/values.yaml,deployments/c/one/Chart.yaml,+1	-	-	ok	
-body:extra-field	folders.create{}	same-as-good	ok	200	same	no	same	no	free		-	-	ok	
 body:extra-field	folders.init{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/values.yaml	-	-	ok	
 body:extra-field	sync.create{}	same-as-good	ok	200	same	no	same	no	free	deployments/team/new/Chart.yaml,deployments/team/new/routing.yaml,deployments/team/new/templates/alertmanagerconfig.yaml,deployments/team/new/values.yaml,+1	-	-	ok	
 body:extra-field	sync.delete{}	same-as-good	ok	200	same	no	same	no	free	sync.yaml	-	-	ok	
@@ -1430,15 +1040,10 @@ body:none	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	no	-	unna
 body:none	charts.delete{}	good	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 body:none	templates.rules{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	templates.migration-preview{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:none	templates.values{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	templates.chart-meta{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:none	templates.rename{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:none	templates.template-save{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:none	templates.template-delete{}	good	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
 body:none	deployments.save{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	deployments.routing-put{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	deployments.routing-delete{}	good	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-body:none	deployments.clone{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	deployments.delete{}	good	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 body:none	render.preview{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:none	git.regenerate{}	good	ok	200	same	no	same	no	free		-	-	-	
@@ -1448,7 +1053,6 @@ body:none	git.discard{}	good	ok	200	same	no	same	no	free		-	-	-
 body:none	git.pull{}	good	not-found	404	same	no	same	no	free		-	-	-	
 body:none	git.sync{}	good	not-found	404	same	no	same	no	free		-	-	-	
 body:none	folders.common{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:none	folders.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	folders.init{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	sync.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:none	sync.delete{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1460,15 +1064,10 @@ body:text-plain	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	no	
 body:text-plain	charts.delete{}	good	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 body:text-plain	templates.rules{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	templates.migration-preview{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:text-plain	templates.values{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	templates.chart-meta{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:text-plain	templates.rename{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:text-plain	templates.template-save{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:text-plain	templates.template-delete{}	good	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
 body:text-plain	deployments.save{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	deployments.routing-put{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	deployments.routing-delete{}	good	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-body:text-plain	deployments.clone{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	deployments.delete{}	good	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 body:text-plain	render.preview{}	good	ok	200	same	no	same	no	free		-	-	-	
 body:text-plain	git.regenerate{}	good	ok	200	same	no	same	no	free		-	-	-	
@@ -1478,7 +1077,6 @@ body:text-plain	git.discard{}	good	ok	200	same	no	same	no	free		-	-	-
 body:text-plain	git.pull{}	good	not-found	404	same	no	same	no	free		-	-	-	
 body:text-plain	git.sync{}	good	not-found	404	same	no	same	no	free		-	-	-	
 body:text-plain	folders.common{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:text-plain	folders.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	folders.init{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	sync.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:text-plain	sync.delete{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1490,15 +1088,10 @@ body:not-json	charts.clone{}	bad	refused	400	same	no	same	no	free		-	-	-
 body:not-json	charts.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	templates.rules{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	templates.migration-preview{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:not-json	templates.values{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	templates.chart-meta{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:not-json	templates.rename{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:not-json	templates.template-save{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:not-json	templates.template-delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	deployments.save{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	deployments.routing-put{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	deployments.routing-delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:not-json	deployments.clone{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	deployments.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	render.preview{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	git.regenerate{}	bad	refused	400	same	no	same	no	free		-	-	-	
@@ -1508,7 +1101,6 @@ body:not-json	git.discard{}	bad	refused	400	same	no	same	no	free		-	-	-
 body:not-json	git.pull{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	git.sync{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	folders.common{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:not-json	folders.create{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	folders.init{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	sync.create{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:not-json	sync.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
@@ -1520,15 +1112,10 @@ body:array	charts.clone{}	bad-named	refused	400	same	no	same	no	free		-	no	-	unn
 body:array	charts.delete{}	any	ok	200	same	no	same	no	free	charts/spare/Chart.yaml,charts/spare/templates,charts/spare/values.schema.json,charts/spare/values.yaml	-	-	-	
 body:array	templates.rules{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	templates.migration-preview{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:array	templates.values{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	templates.chart-meta{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:array	templates.rename{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:array	templates.template-save{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:array	templates.template-delete{}	any	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
 body:array	deployments.save{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	deployments.routing-put{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	deployments.routing-delete{}	any	ok	200	same	no	same	no	free	deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/b/routing.yaml,deployments/team/b/templates/alertmanagerconfig.yaml	-	-	-	
-body:array	deployments.clone{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	deployments.delete{}	any	ok	200	same	no	same	no	free	deployments/team/a/Chart.yaml,deployments/team/a/routing.yaml,deployments/team/a/templates/alertmanagerconfig.yaml,deployments/team/a/values.yaml,+1	-	-	-	
 body:array	render.preview{}	any	ok	200	same	no	same	no	free		-	-	-	
 body:array	git.regenerate{}	any	ok	200	same	no	same	no	free		-	-	-	
@@ -1538,7 +1125,6 @@ body:array	git.discard{}	any	ok	200	same	no	same	no	free		-	-	-
 body:array	git.pull{}	any	not-found	404	same	no	same	no	free		-	-	-	
 body:array	git.sync{}	any	not-found	404	same	no	same	no	free		-	-	-	
 body:array	folders.common{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-body:array	folders.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	folders.init{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	sync.create{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 body:array	sync.delete{}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1550,15 +1136,10 @@ body:over-limit	charts.clone{}	bad	too-large	413	same	no	same	no	free		-	-	-
 body:over-limit	charts.delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	templates.rules{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	templates.migration-preview{}	bad	too-large	413	same	no	same	no	free		-	-	-	
-body:over-limit	templates.values{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	templates.chart-meta{}	bad	too-large	413	same	no	same	no	free		-	-	-	
-body:over-limit	templates.rename{}	bad	too-large	413	same	no	same	no	free		-	-	-	
-body:over-limit	templates.template-save{}	bad	too-large	413	same	no	same	no	free		-	-	-	
-body:over-limit	templates.template-delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	deployments.save{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	deployments.routing-put{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	deployments.routing-delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
-body:over-limit	deployments.clone{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	deployments.delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	render.preview{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	git.regenerate{}	bad	too-large	413	same	no	same	no	free		-	-	-	
@@ -1568,7 +1149,6 @@ body:over-limit	git.discard{}	bad	too-large	413	same	no	same	no	free		-	-	-
 body:over-limit	git.pull{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	git.sync{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	folders.common{}	bad	too-large	413	same	no	same	no	free		-	-	-	
-body:over-limit	folders.create{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	folders.init{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	sync.create{}	bad	too-large	413	same	no	same	no	free		-	-	-	
 body:over-limit	sync.delete{}	bad	too-large	413	same	no	same	no	free		-	-	-	
@@ -1580,15 +1160,10 @@ body:bad-gzip	charts.clone{}	bad	refused	400	same	no	same	no	free		-	-	-
 body:bad-gzip	charts.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	templates.rules{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	templates.migration-preview{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:bad-gzip	templates.values{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	templates.chart-meta{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:bad-gzip	templates.rename{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:bad-gzip	templates.template-save{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:bad-gzip	templates.template-delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	deployments.save{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	deployments.routing-put{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	deployments.routing-delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:bad-gzip	deployments.clone{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	deployments.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	render.preview{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	git.regenerate{}	bad	refused	400	same	no	same	no	free		-	-	-	
@@ -1598,7 +1173,6 @@ body:bad-gzip	git.discard{}	bad	refused	400	same	no	same	no	free		-	-	-
 body:bad-gzip	git.pull{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	git.sync{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	folders.common{}	bad	refused	400	same	no	same	no	free		-	-	-	
-body:bad-gzip	folders.create{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	folders.init{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	sync.create{}	bad	refused	400	same	no	same	no	free		-	-	-	
 body:bad-gzip	sync.delete{}	bad	refused	400	same	no	same	no	free		-	-	-	
@@ -1613,21 +1187,16 @@ field:number	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	f
 field:number	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:number	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:number	templates.values{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	templates.rename{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	templates.template-save{content}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
 field:number	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:number	deployments.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:number	folders.create{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:number	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1644,21 +1213,16 @@ field:text	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	fre
 field:text	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:text	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:text	templates.values{values}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
-field:text	templates.rename{newName}	any	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml,charts/hand/templates/x.yaml	-	-	-	
-field:text	templates.template-save{content}	any	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
 field:text	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	deployments.save{version}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:text	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
-field:text	deployments.clone{newName}	any	ok	200	same	no	same	no	free	deployments/team/a/x-values.yaml	-	-	-	
 field:text	git.commit{message}	any	ok	200	same	no	same	no	free		-	-	-	
 field:text	folders.common{action}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:text	folders.common{folder}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	folders.common{chart}	any	refused	400	same	no	same	no	free		-	-	-	
-field:text	folders.create{path}	any	ok	200	same	no	same	no	free		-	-	-	
 field:text	folders.init{folder}	any	ok	200	same	no	same	no	free	x/Chart.yaml,x/values.yaml	-	-	-	
 field:text	folders.init{chart}	any	refused	400	same	no	same	no	free		-	-	-	
 field:text	sync.create{source}	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1675,21 +1239,16 @@ field:array	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	fr
 field:array	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:array	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
 field:array	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:array	templates.values{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:array	templates.rename{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:array	templates.template-save{content}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
 field:array	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:array	deployments.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:array	folders.create{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:array	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1706,21 +1265,16 @@ field:map	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	free
 field:map	templates.rules{migration}	any	ok	200	same	no	same	no	free		-	-	-	
 field:map	templates.migration-preview{files}	any	ok	200	same	no	same	no	free		-	-	-	
 field:map	templates.migration-preview{migration}	any	ok	200	same	no	same	no	free		-	-	-	
-field:map	templates.values{values}	any	ok	200	same	no	same	no	free	charts/demo/values.yaml	-	-	-	
 field:map	templates.chart-meta{chartMeta}	any	ok	200	same	no	same	no	free		-	-	-	
 field:map	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:map	templates.rename{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:map	templates.template-save{content}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	deployments.save{values}	any	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
 field:map	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
 field:map	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
-field:map	deployments.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.common{expected}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:map	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:map	folders.create{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:map	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1737,21 +1291,16 @@ field:empty-list	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	
 field:empty-list	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:empty-list	templates.migration-preview{files}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:empty-list	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:empty-list	templates.values{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty-list	templates.rename{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty-list	templates.template-save{content}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
 field:empty-list	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty-list	deployments.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:empty-list	folders.create{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty-list	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1768,21 +1317,16 @@ field:null	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	fre
 field:null	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:null	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:null	templates.values{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
-field:null	templates.rename{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:null	templates.template-save{content}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
 field:null	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:null	deployments.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:null	folders.create{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:null	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1799,21 +1343,16 @@ field:bool	templates.rules{confirmBreaking}	any	ok	200	same	no	same	no	free		-	-
 field:bool	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:bool	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:bool	templates.values{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:bool	templates.rename{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:bool	templates.template-save{content}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	deployments.save{values}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
 field:bool	deployments.routing-put{routing}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:bool	deployments.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:bool	folders.create{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:bool	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
@@ -1830,21 +1369,16 @@ field:empty	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	fr
 field:empty	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:empty	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:empty	templates.values{values}	any	ok	200	same	no	same	no	free	charts/demo/values.yaml	-	-	-	
 field:empty	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
-field:empty	templates.rename{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:empty	templates.template-save{content}	any	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
 field:empty	deployments.save{values}	any	ok	200	same	no	same	no	free	deployments/team/a/values.yaml,deployments/team/b/values.yaml	-	-	-	
 field:empty	deployments.save{version}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:empty	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
-field:empty	deployments.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:empty	folders.create{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:empty	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
@@ -1861,21 +1395,16 @@ field:long	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	fre
 field:long	templates.rules{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
 field:long	templates.migration-preview{files}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	templates.migration-preview{migration}	bad-named	ok	200	same	no	same	no	free		-	-	-	accepts-bad-body
-field:long	templates.values{values}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	templates.chart-meta{chartMeta}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	templates.chart-meta{chartMeta.description}	any	ok	200	same	no	same	no	free	charts/demo/Chart.yaml	-	-	-	
-field:long	templates.rename{newName}	any	refused	400	same	no	same	no	free		-	-	-	
-field:long	templates.template-save{content}	any	ok	200	same	no	same	no	free	charts/hand/templates/notes.yaml	-	-	-	
 field:long	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	deployments.save{version}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:long	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
-field:long	deployments.clone{newName}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	git.commit{message}	any	ok	200	same	no	same	no	free		-	-	-	
 field:long	folders.common{action}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	folders.common{expected}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:long	folders.common{folder}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	folders.common{chart}	any	refused	400	same	no	same	no	free		-	-	-	
-field:long	folders.create{path}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	folders.init{folder}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	folders.init{chart}	any	refused	400	same	no	same	no	free		-	-	-	
 field:long	sync.create{source}	any	refused	400	same	no	same	no	free		-	-	-	
@@ -1892,21 +1421,16 @@ field:deep	templates.rules{confirmBreaking}	bad-named	ok	200	same	no	same	no	fre
 field:deep	templates.rules{migration}	any	ok	200	same	no	same	no	free		-	-	-	
 field:deep	templates.migration-preview{files}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.migration-preview{migration}	any	ok	200	same	no	same	no	free		-	-	-	
-field:deep	templates.values{values}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	templates.chart-meta{chartMeta}	any	ok	200	same	no	same	no	free		-	-	-	
 field:deep	templates.chart-meta{chartMeta.description}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:deep	templates.rename{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
-field:deep	templates.template-save{content}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	deployments.save{values}	any	refused	400	same	no	same	no	free		-	-	-	
 field:deep	deployments.save{version}	bad-named	conflict	409	same	no	same	no	free		-	no	-	unnamed-field
 field:deep	deployments.routing-put{routing}	any	refused	400	same	no	same	no	free		-	-	-	
-field:deep	deployments.clone{newName}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	git.commit{message}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{action}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{expected}	any	conflict	409	same	no	same	no	free		-	-	-	
 field:deep	folders.common{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.common{chart}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field
-field:deep	folders.create{path}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.init{folder}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	folders.init{chart}	bad-named	refused	400	same	no	same	no	free		-	yes	-	
 field:deep	sync.create{source}	bad-named	refused	400	same	no	same	no	free		-	no	-	unnamed-field

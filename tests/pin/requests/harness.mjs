@@ -177,9 +177,10 @@ export async function makeWorkspace() {
   }
   const q = f => `?folder=${encodeURIComponent(f)}`
   await must('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
-  // A Template with hand-written files only: the template file routes' own.
+  // A Template with hand-written files only, as a repo may hold.
   for (const name of ['spare', 'hand']) await must('POST', '/api/v2/charts', { name })
-  for (const t of ['notes', 'a..b', '_extra-alerts']) await must('POST', `/api/v2/templates/hand/${encodeURIComponent(t)}`, { content: NOTE })
+  await fs.mkdir(path.join(root, 'charts/hand/templates'), { recursive: true })
+  for (const t of ['notes', 'a..b', '_extra-alerts']) await fs.writeFile(path.join(root, `charts/hand/templates/${t}.yaml`), NOTE)
   for (const d of ['deployments/team/a', 'deployments/team/a..b', 'deployments/c/one', 'deployments/s/x']) await must('POST', '/api/v2/folders/init', { folder: d, chart: 'demo' })
   const plan = await must('GET', '/api/v2/folders/common/plan?folder=deployments/s&chart=demo')
   await must('POST', '/api/v2/folders/common', { action: 'create', folder: 'deployments/s', chart: 'demo', expected: plan.expected })

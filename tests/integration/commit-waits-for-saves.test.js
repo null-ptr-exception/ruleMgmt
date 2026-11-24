@@ -187,9 +187,9 @@ describe('a save whose client leaves', () => {
     })
     const save = api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': rules('>=') } })
     await atTemplates
-    // A folder create queued behind the save, and its tab closed.
+    // A new Template queued behind the save, and its tab closed.
     const ac = new AbortController()
-    const queued = fetch(`${baseURL}/api/v2/folders`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'team' }) }).catch(() => 'aborted')
+    const queued = fetch(`${baseURL}/api/v2/charts`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'queued' }) }).catch(() => 'aborted')
     await new Promise(r => setTimeout(r, 100))
     ac.abort()
     expect((await save).status).toBe(200)

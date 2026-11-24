@@ -120,15 +120,15 @@ export async function baseFiles(ws) {
 
 export const ENTRIES = [
   // is it a deployment, who finds it
-  'tree', 'list', 'folder-list', 'users', 'migration', 'routing-get', 'preview', 'check-deployment', 'sync-to', 'sync-from',
+  'tree', 'list', 'migration', 'routing-get', 'preview', 'check-deployment', 'sync-to', 'sync-from',
   // sync.yaml
   'sync-get', 'parsers', 'sync-post', 'sync-unlink', 'save-copy', 'routing-copy', 'regenerate', 'delete-source', 'target-readonly',
   'commit', 'check-repo',
 ]
-export const FINDERS = new Set(['tree', 'list', 'folder-list', 'users', 'migration', 'routing-get'])
+export const FINDERS = new Set(['tree', 'list', 'migration', 'routing-get'])
 export const COPIERS = new Set(['sync-post', 'save-copy', 'routing-copy', 'regenerate'])
 const APPLIES = {
-  W: ['tree', 'list', 'folder-list', 'users', 'migration', 'routing-get', 'preview', 'check-deployment', 'sync-to', 'sync-from', 'commit', 'check-repo'],
+  W: ['tree', 'list', 'migration', 'routing-get', 'preview', 'check-deployment', 'sync-to', 'sync-from', 'commit', 'check-repo'],
   Y: ['sync-get', 'parsers', 'sync-post', 'sync-unlink', 'save-copy', 'routing-copy', 'regenerate', 'delete-source', 'target-readonly', 'commit', 'check-repo'],
 }
 
@@ -276,22 +276,6 @@ export async function runRow(ws, c) {
     const mine = (res.data || []).find(d => d.path === folder)
     if (mine?.unreadable) return { cls: 'unreadable', status: 200, appValue: 'unreadable', raw: res.text }
     return { ...seen(mine, mine ? ` alertCount=${mine.alertCount}` : ''), raw: res.text }
-  })
-  await record('folder-list', async () => {
-    const res = await api('GET', flat ? '/api/v2/deployments/demo' : `/api/v2/deployments/demo${q(folder)}`)
-    if (res.status !== 200) return http(res)
-    const mine = Array.isArray(res.data) ? res.data.find(d => d.name === name) : null
-    if (mine?.unreadable) return { cls: 'unreadable', status: 200, appValue: 'unreadable', raw: res.text }
-    return { ...seen(mine, mine ? ` alertCount=${mine.alertCount}` : ''), raw: res.text }
-  })
-  await record('users', async () => {
-    const res = await api('GET', '/api/v2/templates/demo/deployments')
-    if (res.status !== 200) return http(res)
-    const mine = (res.data?.deployments || []).find(d => d.path === folder)
-    // Who is in a folder that cannot be read is not known: named apart.
-    const apart = !mine && (res.data?.unreadable || []).find(u => u.path === folder || folder.startsWith(`${u.path}/`))
-    if (apart) return { cls: 'unreadable', status: 200, appValue: `unreadable ${apart.path}`, raw: res.text }
-    return { cls: !mine ? 'absent' : mine.kind || 'deployment', status: 200, appValue: mine ? `found${mine.broken ? ' broken' : ''}${mine.hidden ? ' hidden' : ''}` : 'not found', raw: res.text }
   })
   await record('migration', async () => {
     const res = await api('POST', '/api/v2/templates/demo/migration-preview', { files: RULES, migration: {} })

@@ -172,3 +172,11 @@ export function answerUncaught(err, req, res, next) {
   if (res.headersSent) return next(err)
   answer('app', err, req, res)
 }
+
+/**
+ * An /api path no route has, whatever its method: a JSON 404 — not the
+ * page the SPA fallback sends for any other GET, nor Express's HTML.
+ */
+export function answerUnknownApi(req, res) {
+  res.status(404).json({ error: 'No such API route' })
+}

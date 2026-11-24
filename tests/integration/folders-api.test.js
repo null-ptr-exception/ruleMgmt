@@ -25,11 +25,11 @@ describe('folders API', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('GET / returns immediate children', async () => {
+  it('GET /tree returns immediate children', async () => {
     fs.mkdirSync(path.join(tmpDir, 'charts', 'my-alerts'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'deployments', 'prod'), { recursive: true })
 
-    const res = await request(app).get('/api/v2/folders')
+    const res = await request(app).get('/api/v2/folders/tree')
     expect(res.status).toBe(200)
     expect(res.body).toBeInstanceOf(Array)
     const names = res.body.map(f => f.name)
@@ -39,50 +39,39 @@ describe('folders API', () => {
     const chartsNode = res.body.find(f => f.name === 'charts')
     expect(chartsNode.isLeaf).toBe(false)
 
-    const res2 = await request(app).get('/api/v2/folders?path=charts')
+    const res2 = await request(app).get('/api/v2/folders/tree?path=charts')
     expect(res2.body).toHaveLength(1)
     expect(res2.body[0].name).toBe('my-alerts')
   })
 
-  it('GET / excludes .git and node_modules', async () => {
+  it('GET /tree excludes .git and node_modules', async () => {
     fs.mkdirSync(path.join(tmpDir, '.git', 'objects'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'node_modules', 'foo'), { recursive: true })
     fs.mkdirSync(path.join(tmpDir, 'real-folder'), { recursive: true })
 
-    const res = await request(app).get('/api/v2/folders')
+    const res = await request(app).get('/api/v2/folders/tree')
     const names = res.body.map(f => f.name)
     expect(names).not.toContain('.git')
     expect(names).not.toContain('node_modules')
     expect(names).toContain('real-folder')
   })
 
-  it('POST / creates a new folder', async () => {
-    const res = await request(app).post('/api/v2/folders').send({ path: 'teams/new-team' })
-    expect(res.status).toBe(200)
-    expect(fs.existsSync(path.join(tmpDir, 'teams', 'new-team'))).toBe(true)
-  })
-
-  it('POST / rejects paths with ..', async () => {
-    const res = await request(app).post('/api/v2/folders').send({ path: '../outside' })
+  // A new deployment's folder never lands outside the repo or among the Templates.
+  it('POST /init rejects a folder with ..', async () => {
+    const res = await request(app).post('/api/v2/folders/init').send({ folder: '../outside', chart: 'my-alerts' })
     expect(res.status).toBe(400)
   })
 
-  it('POST / rejects paths rooted at the charts dir', async () => {
-    const res = await request(app).post('/api/v2/folders').send({ path: 'charts/mychart' })
-    expect(res.status).toBe(400)
-    expect(fs.existsSync(path.join(tmpDir, 'charts', 'mychart'))).toBe(false)
-  })
-
-  it('POST / rejects the charts dir itself', async () => {
-    const res = await request(app).post('/api/v2/folders').send({ path: 'charts' })
+  it('POST /init rejects the charts dir itself', async () => {
+    const res = await request(app).post('/api/v2/folders/init').send({ folder: 'charts', chart: 'my-alerts' })
     expect(res.status).toBe(400)
   })
 
-  it('POST / rejects a charts-dir escape even when CHARTS_DIR is an equivalent spelling', async () => {
+  it('POST /init rejects a charts-dir escape even when CHARTS_DIR is an equivalent spelling', async () => {
     const origEnv = process.env.CHARTS_DIR
     process.env.CHARTS_DIR = 'charts/'
     try {
-      const res = await request(app).post('/api/v2/folders').send({ path: 'charts/mychart' })
+      const res = await request(app).post('/api/v2/folders/init').send({ folder: 'charts/mychart', chart: 'my-alerts' })
       expect(res.status).toBe(400)
       expect(fs.existsSync(path.join(tmpDir, 'charts', 'mychart'))).toBe(false)
     } finally {
@@ -250,8 +239,9 @@ describe('folders API', () => {
     }
 
     for (const folderPath of ['shop/_common', '_x', '_x/prod']) {
-      it(`POST / refuses ${folderPath}, saying why, and creates nothing`, async () => {
-        const res = await request(app).post('/api/v2/folders').send({ path: folderPath })
+      it(`POST /init refuses ${folderPath}, saying why, and creates nothing`, async () => {
+        makeChart()
+        const res = await request(app).post('/api/v2/folders/init').send({ folder: folderPath, chart: 'my-alerts' })
         expect(res.status).toBe(400)
         expect(res.body.error).toMatch(/^"_\w+": Names starting with _ are reserved for AlertForge$/)
         expect(fs.existsSync(path.join(tmpDir, folderPath))).toBe(false)
@@ -268,7 +258,6 @@ describe('folders API', () => {
 
     it('takes a name with _ elsewhere in it', async () => {
       makeChart()
-      expect((await request(app).post('/api/v2/folders').send({ path: 'shop/my_team' })).status).toBe(200)
       expect((await request(app).post('/api/v2/folders/init').send({ folder: 'shop/prod_1', chart: 'my-alerts' })).status).toBe(200)
     })
 

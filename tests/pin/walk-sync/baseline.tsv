@@ -37,8 +37,6 @@
 id	kind	entry	cls	status	file	leak	written	fs	helm	helmExit	alerts	copy	appValue	vsHelm
 plain	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 plain	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-plain	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-plain	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 plain	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 plain	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 plain	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -49,8 +47,6 @@ plain	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 plain	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 deep	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 deep	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-deep	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-deep	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 deep	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 deep	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 deep	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -61,8 +57,6 @@ deep	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 deep	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 top-level	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 top-level	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-top-level	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-top-level	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 top-level	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 top-level	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 top-level	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -73,8 +67,6 @@ top-level	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 top-level	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 inside-deployment	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1 nestedIn=deployments/t/a	
 inside-deployment	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-inside-deployment	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-inside-deployment	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 inside-deployment	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 inside-deployment	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 inside-deployment	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -85,8 +77,6 @@ inside-deployment	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 inside-deployment	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 inside-deployment-templates	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1 nestedIn=deployments/t/a	
 inside-deployment-templates	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-inside-deployment-templates	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-inside-deployment-templates	W	users	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 inside-deployment-templates	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 inside-deployment-templates	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 inside-deployment-templates	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -97,8 +87,6 @@ inside-deployment-templates	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 inside-deployment-templates	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 in-common-folder	W	tree	common	200	-	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
 in-common-folder	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-in-common-folder	W	folder-list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-in-common-folder	W	users	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 in-common-folder	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 in-common-folder	W	routing-get	absent	400	deployments/s/_common/d	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
 in-common-folder	W	preview	refused	200	deployments/s/_common/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
@@ -109,8 +97,6 @@ in-common-folder	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 in-common-folder	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 under-common-stack	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 under-common-stack	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-under-common-stack	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-under-common-stack	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 under-common-stack	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 under-common-stack	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 under-common-stack	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -121,8 +107,6 @@ under-common-stack	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 under-common-stack	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 common-two-levels	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 common-two-levels	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-common-two-levels	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-common-two-levels	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 common-two-levels	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 common-two-levels	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 common-two-levels	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -133,8 +117,6 @@ common-two-levels	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 common-two-levels	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 common-chart-link-gone	W	tree	deployment	200	-	no	-	folder	renders-empty	0	0	-	alertCount=0	
 common-chart-link-gone	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=0	
-common-chart-link-gone	W	folder-list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=0	
-common-chart-link-gone	W	users	deployment	200	-	no	-	folder	renders-empty	0	0	-	found broken	
 common-chart-link-gone	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found problems=1	
 common-chart-link-gone	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
 common-chart-link-gone	W	preview	refused	200	deployments/s/x	no	-	folder	renders-empty	0	0	-	-	
@@ -145,8 +127,6 @@ common-chart-link-gone	W	commit	refused	409	deployments/s/x	no	-	folder	renders-
 common-chart-link-gone	W	check-repo	refused	exit 1	deployments/s/x/Chart.yaml	no	-	folder	renders-empty	0	0	-	refuse:stack.template-missing	
 name-dots	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 name-dots	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-dots	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-dots	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-dots	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-dots	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 name-dots	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -157,8 +137,6 @@ name-dots	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 name-dots	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 name-dash-underscore	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 name-dash-underscore	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-dash-underscore	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-dash-underscore	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-dash-underscore	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-dash-underscore	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 name-dash-underscore	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -169,8 +147,6 @@ name-dash-underscore	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 name-dash-underscore	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 name-space	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 name-space	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-space	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-space	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-space	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-space	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 name-space	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -181,8 +157,6 @@ name-space	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 name-space	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 name-non-ascii	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 name-non-ascii	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-non-ascii	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-non-ascii	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-non-ascii	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-non-ascii	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 name-non-ascii	W	preview	refused	200	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
@@ -193,8 +167,6 @@ name-non-ascii	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 name-non-ascii	W	check-repo	refused	exit 1	deployments/w/部署	no	-	folder	renders	0	1	-	refuse:deployment.render	refuses-what-helm-renders
 name-uppercase	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 name-uppercase	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-uppercase	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-name-uppercase	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-uppercase	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 name-uppercase	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 name-uppercase	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -205,8 +177,6 @@ name-uppercase	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 name-uppercase	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 hidden-folder	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 hidden-folder	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-hidden-folder	W	folder-list	refused	400	deployments/.w	no	-	folder	renders	0	1	-	-	
-hidden-folder	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found hidden	
 hidden-folder	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 hidden-folder	W	routing-get	absent	400	deployments/.w	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
 hidden-folder	W	preview	refused	400	deployments/.w	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
@@ -217,8 +187,6 @@ hidden-folder	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 hidden-folder	W	check-repo	listed	exit 0	deployments/.w/d	no	-	folder	renders	0	1	-	warn:walk.hidden	
 hidden-deployment	W	tree	absent	200	-	no	-	folder	renders	0	1	-	not shown	misses-what-helm-renders
 hidden-deployment	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-hidden-deployment	W	folder-list	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	
-hidden-deployment	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found hidden	
 hidden-deployment	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 hidden-deployment	W	routing-get	absent	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
 hidden-deployment	W	preview	refused	400	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
@@ -229,8 +197,6 @@ hidden-deployment	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 hidden-deployment	W	check-repo	listed	exit 0	deployments/w/.d	no	-	folder	renders	0	1	-	warn:walk.hidden	
 node-modules	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 node-modules	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
-node-modules	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-node-modules	W	users	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 node-modules	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
 node-modules	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 node-modules	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -241,8 +207,6 @@ node-modules	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 node-modules	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 link-inside	W	tree	absent	200	-	no	-	link	renders	0	1	-	not shown	misses-what-helm-renders
 link-inside	W	list	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
-link-inside	W	folder-list	refused	400	deployments/w/ln	no	-	link	renders	0	1	-	-	
-link-inside	W	users	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-inside	W	migration	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-inside	W	routing-get	absent	400	deployments/w/ln	no	-	link	renders	0	1	-	-	misses-what-helm-renders
 link-inside	W	preview	refused	400	deployments/w/ln	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
@@ -253,8 +217,6 @@ link-inside	W	commit	ok	200	-	no	-	link	renders	0	1	-	-
 link-inside	W	check-repo	ok	exit 0	-	no	-	link	renders	0	1	-	-	
 link-outside	W	tree	unreadable	200	-	no	-	link	renders	0	1	-	unreadable=it is a link that leads outside the repo	
 link-outside	W	list	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
-link-outside	W	folder-list	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	
-link-outside	W	users	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-outside	W	migration	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-outside	W	routing-get	absent	400	deployments/w/out	no	-	link	renders	0	1	-	-	misses-what-helm-renders
 link-outside	W	preview	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
@@ -265,8 +227,6 @@ link-outside	W	commit	listed	200	deployments/w/out	no	-	link	renders	0	1	-	liste
 link-outside	W	check-repo	cannot-check	exit 2	deployments/w/out	no	-	link	renders	0	1	-	refuse:walk.link-outside	refuses-what-helm-renders
 link-loop	W	tree	absent	200	-	no	-	link	no-chart	-	-	-	not shown	
 link-loop	W	list	absent	200	-	no	-	link	no-chart	-	-	-	not found	
-link-loop	W	folder-list	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
-link-loop	W	users	absent	200	-	no	-	link	no-chart	-	-	-	not found	
 link-loop	W	migration	absent	200	-	no	-	link	no-chart	-	-	-	not found	
 link-loop	W	routing-get	absent	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
 link-loop	W	preview	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
@@ -277,8 +237,6 @@ link-loop	W	commit	ok	200	-	no	-	link	no-chart	-	-	-	-
 link-loop	W	check-repo	ok	exit 0	-	no	-	link	no-chart	-	-	-	-	
 link-dangling	W	tree	absent	200	-	no	-	link	no-chart	-	-	-	not shown	
 link-dangling	W	list	absent	200	-	no	-	link	no-chart	-	-	-	not found	
-link-dangling	W	folder-list	refused	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
-link-dangling	W	users	absent	200	-	no	-	link	no-chart	-	-	-	not found	
 link-dangling	W	migration	absent	200	-	no	-	link	no-chart	-	-	-	not found	
 link-dangling	W	routing-get	absent	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
 link-dangling	W	preview	refused	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
@@ -289,8 +247,6 @@ link-dangling	W	commit	ok	200	-	no	-	link	no-chart	-	-	-	-
 link-dangling	W	check-repo	ok	exit 0	-	no	-	link	no-chart	-	-	-	-	
 link-self-loop	W	tree	absent	200	-	no	-	link	fails	1	-	-	not shown	
 link-self-loop	W	list	absent	200	-	no	-	link	fails	1	-	-	not found	
-link-self-loop	W	folder-list	refused	400	deployments/w/self	no	-	link	fails	1	-	-	-	
-link-self-loop	W	users	unreadable	200	-	no	-	link	fails	1	-	-	unreadable deployments/w/self	
 link-self-loop	W	migration	absent	200	-	no	-	link	fails	1	-	-	not found	
 link-self-loop	W	routing-get	absent	400	deployments/w/self	no	-	link	fails	1	-	-	-	
 link-self-loop	W	preview	refused	400	deployments/w/self	no	-	link	fails	1	-	-	-	
@@ -301,8 +257,6 @@ link-self-loop	W	commit	listed	200	deployments/w/self	no	-	link	fails	1	-	-	list
 link-self-loop	W	check-repo	cannot-check	exit 2	deployments/w/self	no	-	link	fails	1	-	-	refuse:walk.link-circle	
 charts-link-inside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 charts-link-inside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-charts-link-inside	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-charts-link-inside	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 charts-link-inside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 charts-link-inside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 charts-link-inside	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -313,8 +267,6 @@ charts-link-inside	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 charts-link-inside	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 chart-link-inside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 chart-link-inside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-chart-link-inside	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-chart-link-inside	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 chart-link-inside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 chart-link-inside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 chart-link-inside	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -325,8 +277,6 @@ chart-link-inside	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 chart-link-inside	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 values-link-outside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 values-link-outside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-values-link-outside	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-values-link-outside	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 values-link-outside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found problems=1	
 values-link-outside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 values-link-outside	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -337,8 +287,6 @@ values-link-outside	W	commit	refused	409	deployments/w/d	no	-	folder	renders	0	1
 values-link-outside	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	refuse:values.unreadable	refuses-what-helm-renders
 nested-two-deep	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1 nestedIn=deployments/t/a	
 nested-two-deep	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-nested-two-deep	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-nested-two-deep	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 nested-two-deep	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 nested-two-deep	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 nested-two-deep	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
@@ -349,8 +297,6 @@ nested-two-deep	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-
 nested-two-deep	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
 layer-chart-null	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	alertCount=1	
 layer-chart-null	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
-layer-chart-null	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
-layer-chart-null	W	users	deployment	200	-	no	-	folder	fails	1	-	-	found	
 layer-chart-null	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found	
 layer-chart-null	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 layer-chart-null	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
@@ -361,8 +307,6 @@ layer-chart-null	W	commit	refused	409	deployments/s/x	no	-	folder	fails	1	-	-	va
 layer-chart-null	W	check-repo	refused	exit 1	deployments/s/_common/demo/values.yaml	no	-	folder	fails	1	-	-	refuse:stack.chart-key,refuse:deployment.render	
 unreadable-folder	W	tree	absent	200	-	no	-	absent	fails	1	-	-	not shown	
 unreadable-folder	W	list	absent	200	-	no	-	absent	fails	1	-	-	not found	
-unreadable-folder	W	folder-list	unreadable	409	deployments/w	no	-	absent	fails	1	-	-	-	
-unreadable-folder	W	users	unreadable	200	-	no	-	absent	fails	1	-	-	unreadable deployments/w	
 unreadable-folder	W	migration	absent	200	-	no	-	absent	fails	1	-	-	not found	
 unreadable-folder	W	routing-get	unreadable	409	deployments/w	no	-	absent	fails	1	-	-	-	
 unreadable-folder	W	preview	refused	409	deployments/w	no	-	absent	fails	1	-	-	-	
@@ -373,8 +317,6 @@ unreadable-folder	W	commit	listed	200	deployments/w	no	-	absent	fails	1	-	-	list
 unreadable-folder	W	check-repo	cannot-check	exit 2	deployments/w	no	-	absent	fails	1	-	-	refuse:walk.folder-unreadable	
 unreadable-chart	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (permission denied)	
 unreadable-chart	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-unreadable-chart	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
-unreadable-chart	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 unreadable-chart	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 unreadable-chart	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 unreadable-chart	W	preview	refused	200	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	-	
@@ -385,8 +327,6 @@ unreadable-chart	W	commit	refused	409	deployments/w/d/Chart.yaml	no	-	folder	fai
 unreadable-chart	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable,refuse:repo.not-copied	
 chart-not-yaml	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be used (deployments/w/d/Chart.yaml line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the firs	
 chart-not-yaml	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-not-yaml	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
-chart-not-yaml	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 chart-not-yaml	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-not-yaml	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 chart-not-yaml	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
@@ -397,8 +337,6 @@ chart-not-yaml	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	liste
 chart-not-yaml	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
 chart-no-dependencies	W	tree	folder	200	-	no	-	folder	renders-empty	0	0	-	-	
 chart-no-dependencies	W	list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
-chart-no-dependencies	W	folder-list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
-chart-no-dependencies	W	users	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
 chart-no-dependencies	W	migration	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
 chart-no-dependencies	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
 chart-no-dependencies	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
@@ -409,8 +347,6 @@ chart-no-dependencies	W	commit	listed	200	deployments/w/d/values.yaml	no	-	folde
 chart-no-dependencies	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	refuse:walk.values-no-template	
 chart-template-gone	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	alertCount=1	
 chart-template-gone	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
-chart-template-gone	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
-chart-template-gone	W	users	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-template-gone	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-template-gone	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 chart-template-gone	W	preview	refused	200	charts/gone	no	-	folder	fails	1	-	-	-	
@@ -421,8 +357,6 @@ chart-template-gone	W	commit	refused	409	deployments/w/d	no	-	folder	fails	1	-	-
 chart-template-gone	W	check-repo	refused	exit 1	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	refuse:deployment.template-missing	
 chart-two-templates	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	alertCount=1	
 chart-two-templates	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-chart-two-templates	W	folder-list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
-chart-two-templates	W	users	deployment	200	-	no	-	folder	renders	0	1	-	found	
 chart-two-templates	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
 chart-two-templates	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 chart-two-templates	W	preview	refused	200	deployments/w/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
@@ -433,8 +367,6 @@ chart-two-templates	W	commit	refused	409	deployments/w/d	no	-	folder	renders	0	1
 chart-two-templates	W	check-repo	refused	exit 1	deployments/w/d/Chart.yaml	no	-	folder	renders	0	1	-	refuse:stack.stack-unsupported	refuses-what-helm-renders
 chart-is-folder	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (it is a folder, not a file)	
 chart-is-folder	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-is-folder	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
-chart-is-folder	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 chart-is-folder	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-is-folder	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 chart-is-folder	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
@@ -445,8 +377,6 @@ chart-is-folder	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	list
 chart-is-folder	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
 chart-empty	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be used (it is empty)	
 chart-empty	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-empty	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
-chart-empty	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 chart-empty	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-empty	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 chart-empty	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
@@ -457,8 +387,6 @@ chart-empty	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed
 chart-empty	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
 chart-deps-not-list	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be used (its dependencies are not a list)	
 chart-deps-not-list	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-deps-not-list	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
-chart-deps-not-list	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 chart-deps-not-list	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-deps-not-list	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 chart-deps-not-list	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
@@ -469,8 +397,6 @@ chart-deps-not-list	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	
 chart-deps-not-list	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
 chart-dangling-link	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (a link to a file that is not there)	
 chart-dangling-link	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
-chart-dangling-link	W	folder-list	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable	
-chart-dangling-link	W	users	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable deployments/w/d	
 chart-dangling-link	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
 chart-dangling-link	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 chart-dangling-link	W	preview	refused	200	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	-	
@@ -481,8 +407,6 @@ chart-dangling-link	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	
 chart-dangling-link	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
 no-values	W	tree	chart-only	200	-	no	-	folder	renders-empty	0	0	-	-	
 no-values	W	list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
-no-values	W	folder-list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
-no-values	W	users	chart-only	200	-	no	-	folder	renders-empty	0	0	-	found	
 no-values	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found	
 no-values	W	routing-get	absent	400	-	no	-	folder	renders-empty	0	0	-	-	
 no-values	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
@@ -493,8 +417,6 @@ no-values	W	commit	ok	200	-	no	-	folder	renders-empty	0	0	-	-
 no-values	W	check-repo	ok	exit 0	-	no	-	folder	renders-empty	0	0	-	-	
 values-only	W	tree	folder	200	-	no	-	folder	no-chart	-	-	-	-	
 values-only	W	list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
-values-only	W	folder-list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
-values-only	W	users	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
 values-only	W	migration	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
 values-only	W	routing-get	deployment	404	-	no	-	folder	no-chart	-	-	-	-	
 values-only	W	preview	refused	200	-	no	-	folder	no-chart	-	-	-	-	
@@ -505,8 +427,6 @@ values-only	W	commit	ok	200	-	no	-	folder	no-chart	-	-	-	-
 values-only	W	check-repo	ok	exit 0	-	no	-	folder	no-chart	-	-	-	-	
 values-yaml11	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	alertCount=1	
 values-yaml11	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
-values-yaml11	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
-values-yaml11	W	users	deployment	200	-	no	-	folder	fails	1	-	-	found	
 values-yaml11	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found problems=1	
 values-yaml11	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
@@ -517,8 +437,6 @@ values-yaml11	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed
 values-yaml11	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	fails	1	-	-	refuse:yaml.read-differently,refuse:values.schema,refuse:deployment.render	
 values-is-folder	W	tree	deployment	200	-	no	-	folder	renders-empty	0	0	-	alertCount=0	
 values-is-folder	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=null	
-values-is-folder	W	folder-list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=0	
-values-is-folder	W	users	deployment	200	-	no	-	folder	renders-empty	0	0	-	found	
 values-is-folder	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found problems=1	
 values-is-folder	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
 values-is-folder	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
@@ -529,8 +447,6 @@ values-is-folder	W	commit	refused	409	deployments/w/d	no	-	folder	renders-empty	
 values-is-folder	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	refuse:values.unreadable	
 empty-folder	W	tree	folder	200	-	no	-	folder	no-chart	-	-	-	-	
 empty-folder	W	list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
-empty-folder	W	folder-list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
-empty-folder	W	users	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
 empty-folder	W	migration	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
 empty-folder	W	routing-get	absent	400	-	no	-	folder	no-chart	-	-	-	-	
 empty-folder	W	preview	refused	200	-	no	-	folder	no-chart	-	-	-	-	
@@ -541,8 +457,6 @@ empty-folder	W	commit	ok	200	-	no	-	folder	no-chart	-	-	-	-
 empty-folder	W	check-repo	ok	exit 0	-	no	-	folder	no-chart	-	-	-	-	
 file-not-folder	W	tree	absent	200	-	no	-	file	no-chart	-	-	-	not shown	
 file-not-folder	W	list	absent	200	-	no	-	file	no-chart	-	-	-	not found	
-file-not-folder	W	folder-list	error	500	deployments/w/d	no	-	file	no-chart	-	-	-	-	5xx
-file-not-folder	W	users	absent	200	-	no	-	file	no-chart	-	-	-	not found	
 file-not-folder	W	migration	absent	200	-	no	-	file	no-chart	-	-	-	not found	
 file-not-folder	W	routing-get	absent	400	-	no	-	file	no-chart	-	-	-	-	
 file-not-folder	W	preview	refused	200	-	no	-	file	no-chart	-	-	-	-	
@@ -553,8 +467,6 @@ file-not-folder	W	commit	ok	200	-	no	-	file	no-chart	-	-	-	-
 file-not-folder	W	check-repo	ok	exit 0	-	no	-	file	no-chart	-	-	-	-	
 legacy-flat	W	tree	absent	200	-	no	-	file	renders	0	1	-	not shown	misses-what-helm-renders
 legacy-flat	W	list	absent	200	-	no	-	file	renders	0	1	-	not found	misses-what-helm-renders
-legacy-flat	W	folder-list	deployment	200	-	no	-	file	renders	0	1	-	found alertCount=1	
-legacy-flat	W	users	deployment	200	-	no	-	file	renders	0	1	-	found	
 legacy-flat	W	migration	deployment	200	-	no	-	file	renders	0	1	-	found	
 legacy-flat	W	routing-get	absent	400	-	no	-	file	renders	0	1	-	-	misses-what-helm-renders
 legacy-flat	W	preview	ok	200	-	no	-	file	renders	0	1	-	alerts=1	
@@ -565,8 +477,6 @@ legacy-flat	W	commit	ok	200	-	no	-	file	renders	0	1	-	-
 legacy-flat	W	check-repo	listed	exit 0	deployments/demo/f-values.yaml	no	-	file	renders	0	1	-	warn:walk.flat	
 legacy-flat-second	W	tree	absent	200	-	no	-	file	renders	0	1	-	not shown	misses-what-helm-renders
 legacy-flat-second	W	list	absent	200	-	no	-	file	renders	0	1	-	not found	misses-what-helm-renders
-legacy-flat-second	W	folder-list	deployment	200	-	no	-	file	renders	0	1	-	found alertCount=1	
-legacy-flat-second	W	users	deployment	200	-	no	-	file	renders	0	1	-	found	
 legacy-flat-second	W	migration	deployment	200	-	no	-	file	renders	0	1	-	found	
 legacy-flat-second	W	routing-get	absent	400	-	no	-	file	renders	0	1	-	-	misses-what-helm-renders
 legacy-flat-second	W	preview	ok	200	-	no	-	file	renders	0	1	-	alerts=1	

@@ -61,7 +61,7 @@ const q = f => `?folder=${encodeURIComponent(f)}`
 const save = (folder, values) => api('POST', `/api/v2/deployments/demo/spc${q(folder)}`, { values })
 
 async function makeStack() {
-  expect((await api('POST', '/api/v2/folders', { path: 'deployments/shop' })).status).toBe(200)
+  await fs.mkdir(path.join(tmpDir, 'deployments/shop'), { recursive: true })
   const shown = await api('GET', `/api/v2/folders/common/plan?${new URLSearchParams({ action: 'create', folder: 'deployments/shop', chart: 'demo' })}`)
   expect(shown.status).toBe(200)
   expect((await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'deployments/shop', chart: 'demo', expected: shown.data.expected })).status).toBe(200)

@@ -42,7 +42,7 @@ const deployment = (tree, page, name) => tree.locator('.ant-tree-treenode').filt
 test.describe.serial('Sync across folders with different _commons', () => {
   test.beforeAll(async ({ request }) => {
     await clear(request)
-    for (const f of [SHOP, CART, OTHER]) expect((await request.post('/api/v2/folders', { data: { path: f } })).ok()).toBeTruthy()
+    for (const f of [SHOP, CART, OTHER]) await fs.mkdir(path.join(WORKSPACE, f), { recursive: true })
     for (const f of [SHOP, CART]) {
       const shown = await (await request.get(`/api/v2/folders/common/plan?action=create&folder=${f}&chart=${CHART}`)).json()
       expect((await request.post('/api/v2/folders/common', { data: { action: 'create', folder: f, chart: CHART, expected: shown.expected } })).ok()).toBeTruthy()

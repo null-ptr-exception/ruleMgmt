@@ -33,7 +33,7 @@ beforeAll(async () => {
   for (const [at, file] of Object.entries(names)) app.use(`/api/v2/${at}`, (await import(`../../server/routes/${file}.js`)).default())
   await new Promise(r => { server = app.listen(0, '127.0.0.1', () => { baseURL = `http://127.0.0.1:${server.address().port}`; r() }) })
   expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })).status).toBe(200)
-  expect((await api('POST', '/api/v2/templates/demo/values', { values: { cpu: [] } })).status).toBe(200)
+  await fs.writeFile(path.join(tmpDir, 'charts', 'demo', 'values.yaml'), 'cpu: []\n')
   for (const d of [DEP, OTHER]) expect((await api('POST', '/api/v2/folders/init', { folder: d, chart: 'demo' })).status).toBe(200)
   expect((await api('POST', `/api/v2/deployments/demo/a${q(DEP)}`, { values: { cpu: [{ namespace: 'p' }] } })).status).toBe(200)
   expect((await api('PUT', `/api/v2/deployments/demo/a/routing${q(DEP)}`, { routing: ROUTING })).status).toBe(200)
@@ -74,20 +74,15 @@ const label = body => (Object.keys(body).length ? JSON.stringify(body) : 'no bod
 
 // [route, method, url, bodies]
 const ROUTES = [
-  ['a Template\'s values', 'POST', '/api/v2/templates/demo/values', each('values')],
   ['a Template\'s rules', 'POST', '/api/v2/templates/demo/rules', [...each('files'), { files: { 'cpu.yaml': null } }, { files: { 'cpu.yaml': 5 } }]],
   ['a Template\'s migration', 'POST', '/api/v2/templates/demo/rules', [{ files: { 'cpu.yaml': CPU.replace('namespace', 'ns').replace('namespace', 'ns') }, confirmBreaking: true, migration: 'x' }, { files: { 'cpu.yaml': CPU.replace('namespace', 'ns').replace('namespace', 'ns') }, confirmBreaking: true, migration: [] }]],
   ['a Template\'s Chart.yaml', 'POST', '/api/v2/templates/demo/chart-meta', [...each('chartMeta'), { chartMeta: { description: 5 } }]],
-  ['a template file', 'POST', '/api/v2/templates/demo/cpu', [...each('content'), { content: { a: 1 } }]],
-  ['a template file\'s name', 'POST', '/api/v2/templates/demo/cpu/rename', each('newName')],
   ['a deployment\'s values', 'POST', `/api/v2/deployments/demo/a${q(DEP)}`, each('values', [undefined, null, 5, true, [], ['x']])],
   ['a deployment\'s routing', 'PUT', `/api/v2/deployments/demo/a/routing${q(DEP)}`, each('routing')],
-  ['a deployment\'s clone', 'POST', `/api/v2/deployments/demo/a/clone${q(DEP)}`, each('newName')],
   ['the shared configs', 'PUT', '/api/v2/routing/shared', [...each('shared'), { shared: { configs: [] } }, { shared: { configs: 5 } }]],
   ['a shared config\'s name', 'POST', '/api/v2/routing/shared/rename', [{}, { from: 'team' }, { from: 'team', to: 5 }, { from: 5, to: 'x' }]],
   ['a sync link', 'POST', '/api/v2/sync', [{}, { source: DEP }, { source: DEP, target: 5 }, { source: 5, target: OTHER }, { source: [], target: OTHER }, { source: DEP, target: {} }]],
   ['a sync link removed', 'DELETE', '/api/v2/sync', [{}, { target: 5 }, { target: [] }, { target: {} }]],
-  ['a folder', 'POST', '/api/v2/folders', each('path')],
   ['a _common', 'POST', '/api/v2/folders/common', [{}, { action: 'create' }, { action: 'create', folder: 'deployments/team', chart: 'demo', expected: 5 }, { action: 'create', folder: 5, chart: 'demo', expected: {} }, { action: 'delete', path: 5, expected: {} }]],
   ['a deployment made', 'POST', '/api/v2/folders/init', [{}, { folder: 'deployments/team/c' }, { folder: 'deployments/team/c', chart: 5 }, { folder: 5, chart: 'demo' }, { folder: [], chart: 'demo' }]],
   ['a Template made', 'POST', '/api/v2/charts', each('name')],

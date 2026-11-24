@@ -836,7 +836,9 @@ otherwise (`010`, `1_000`, `yes`, a key `y:` — see
 fail the check: Helm renders it, and what Preview shows is what deploys
 (`010` as 8). It is listed above the result under **Values to look at**,
 naming the file and the line, as a hand-written null on a `_common` stack
-and a key a `_common` writes twice are.
+and a key a `_common` writes twice are. Such a value in a `_common` above is listed
+the same way in the Preview of each deployment below, naming the
+`_common`'s file and line; the check passes there too.
 
 A lint problem — most often two rows producing an alert with the same name and
 the same labels — shows as **passed with warnings**, in yellow, with the object

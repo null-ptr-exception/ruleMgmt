@@ -770,7 +770,8 @@ The editor writes none of these: it quotes `'010'`, `'yes'` and the like
 itself. Opening a deployment shows the values as Helm reads them, and says
 which ones it reads otherwise than they are written (`010` shows
 as 8). Preview lists them above the result, and its check still passes:
-Helm renders them. Commit does not refuse these: it lists them under the deployment, and
+Helm renders them; one in a `_common` above is listed in the Preview of each
+deployment below, naming the `_common`'s file. Commit does not refuse these: it lists them under the deployment, and
 `check-repo` refuses them. In a `_common`'s own `values.yaml`, these and
 values not under the chart's name are listed under the `_common`, naming
 its file, and `check-repo` refuses them there too. A breaking Template change that migrates the

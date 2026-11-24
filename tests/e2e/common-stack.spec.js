@@ -87,4 +87,14 @@ test.describe('A deployment on a _common', () => {
     await expect(modal.getByText('check passed')).toBeVisible()
     await expect(modal.getByText('Some values are null')).toHaveCount(0)
   })
+
+  // The same in the _common above: said in the deployment's Preview,
+  // naming the _common's file, beside a check that still passes.
+  test('a hand-written 010 in the _common is pointed out in the Preview of a deployment below, and the check passes', async ({ page }) => {
+    await write(`${COMMON}/values.yaml`, `${CHART}:\n  _common:\n    owner: team-a\n    namespace: c1\n  mariadb_saturation_cpu:\n    - { warn_pct: 070, critical_pct: 90 }\n`)
+    const modal = await preview(page, await openProd(page))
+    await expect(modal.getByText('Values to look at')).toBeVisible({ timeout: 15000 })
+    await expect(modal.getByText(`${COMMON}/values.yaml line 6: Helm reads 070 as 56 (YAML 1.1)`, { exact: false })).toBeVisible()
+    await expect(modal.getByText('check passed')).toBeVisible()
+  })
 })

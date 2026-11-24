@@ -107,6 +107,7 @@ layer-unwrapped	migration-apply	refuses-what-helm-renders	policy	values not unde
 layer-unwrapped	check-repo	refuses-what-helm-renders	policy	a _common's values not under the chart's name reach no Template: Helm renders the deployments below without them, so check-repo refuses the _common's file as its save does (#203)
 layer-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
 layer-010	check-repo	refuses-what-helm-renders	policy	Helm reads a _common's 010 as 8 (YAML 1.1): what is deployed is not what was written, so check-repo refuses the _common's file as it does a deployment's own (#202)
+stack-condition-yes	check-repo	refuses-what-helm-renders	policy	Helm reads a _common's enabled: yes as true (YAML 1.1) and renders the dependency: check-repo refuses the _common's file, the same rule as for a deployment's own values: yes is not true to the editor (#202)
 flat-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
 unreadable-dir	migration-apply	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo
 unreadable-dir	check-deployment	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)

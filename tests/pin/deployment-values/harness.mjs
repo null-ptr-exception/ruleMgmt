@@ -28,7 +28,8 @@ const snapshot = root => snapshotAll(root, rel => rel === 'marker.txt')
 export const SUBJECT = {
   A: { dep: 'deployments/t/a', file: 'deployments/t/a/values.yaml', name: 'a' },
   T: { dep: 'deployments/t/a', file: 'deployments/t/a/values.yaml', name: 'a' },
-  S: { dep: 'deployments/s/x', file: 'deployments/s/x/values.yaml', name: 'x' },
+  // `stack`: the _common it inherits from, whose values it deploys too.
+  S: { dep: 'deployments/s/x', file: 'deployments/s/x/values.yaml', name: 'x', stack: 'deployments/s/_common' },
   L: { dep: 'deployments/s/x', file: 'deployments/s/_common/demo/values.yaml', name: 'x', layer: 'deployments/s/_common/demo' },
   F: { dep: null, file: 'deployments/demo/f-values.yaml', name: 'f' },
 }
@@ -307,8 +308,9 @@ export async function runRow(ws, c) {
       return { cls: r.status === 0 ? 'ok' : r.status === 1 ? 'refused' : 'cannot-check', status: `exit ${r.status}`, file: firstPath(out), note: out.trim().split('\n').slice(0, 3).join(' '), raw: out.split(path.join(root, sub.dep)).join('<arg>') }
     })
   }
-  // The whole repo checked as CI checks it: what it says about this deployment.
-  if (sub.dep) await record('check-repo', () => checkRepoCell(root, aboutPaths(sub.dep, sub.file, sub.layer)))
+  // The whole repo checked as CI checks it: what it says about this
+  // deployment, its own values or the _common's it deploys.
+  if (sub.dep) await record('check-repo', () => checkRepoCell(root, aboutPaths(sub.dep, sub.file, sub.layer, sub.stack)))
   // gen-rules reads the Template's own values.yaml.
   if (c.target === 'T') {
     await record('gen-rules', async () => {

@@ -178,6 +178,18 @@ describe.skipIf(!HAS_HELM)('Preview', () => {
     expect(data.check.skipped).toBeFalsy()
   })
 
+  // In the _common above: said in a deployment's Preview as Commit says it
+  // for the _common's file, beside a check that still passes.
+  const LAYER_010 = `${CHART}:\n  _common:\n    owner: team-a\n    namespace: c1\n  ${DISK}:\n    - { warn_pct: 010, critical_pct: 95 }\n`
+  it.skipIf(!HAS_PROMTOOL)('a hand-written value Helm reads otherwise in the _common above is said in a deployment\'s Preview, naming the _common\'s file and line; the check passes', async () => {
+    await write(`${SHOP}/values.yaml`, LAYER_010)
+    expect(await helmAlerts('shop/inherit')).toContain('MariadbSaturationDisk_WarnPct team-a c1 8')
+    const { data } = await api('POST', `/api/v2/render/${CHART}/inherit${q('shop/inherit')}`)
+    expect(data.ok).toBe(true)
+    expect(data.valueWarnings).toEqual([`${SHOP}/values.yaml line 6: Helm reads 010 as 8 (YAML 1.1); the editor would write 8. Write 8, or '010' in quotes for the text`])
+    expect(data.check.passed).toBe(true)
+  })
+
   it.skipIf(!HAS_PROMTOOL)('written as Helm reads it (8), or in quotes, nothing is said', async () => {
     await write('shop/own/values.yaml', OWN_010.replace('010', '8'))
     const { data } = await api('POST', `/api/v2/render/${CHART}/own${q('shop/own')}`)
@@ -350,6 +362,11 @@ describe.skipIf(!HAS_HELM || !HAS_PROMTOOL)('check-deployment', () => {
   it('passes a deployment whose values hold a hand-written 010, which Helm renders', async () => {
     await write('shop/own/values.yaml', `common:\n  ${CHART}:\n    _common:\n      owner: team-prod\n    ${DISK}:\n      - { warn_pct: 010, critical_pct: 92 }\n`)
     expect(check('shop/own').status).toBe(0)
+  })
+
+  it('passes a deployment under a _common whose values hold a hand-written 010, which Helm renders', async () => {
+    await write(`${SHOP}/values.yaml`, `${CHART}:\n  _common:\n    owner: team-a\n    namespace: c1\n  ${DISK}:\n    - { warn_pct: 010, critical_pct: 95 }\n`)
+    expect(check('shop/inherit').status).toBe(0)
   })
 
   // An unclosed [ is a text AlertForge cannot tell Helm's reading of: left

@@ -151,8 +151,15 @@ async function build(repo, rel, { chart, next }) {
   }
   for (const l of stack?.layers ?? []) {
     const lf = `${l.path}/values.yaml`
-    for (const d of findingsOf(await repo.helmYaml(lf)).filter(f => f.code === 'yaml.duplicate-key')) {
+    const layerFindings = findingsOf(await repo.helmYaml(lf))
+    for (const d of layerFindings.filter(f => f.code === 'yaml.duplicate-key')) {
       findings.push(finding({ code: 'stack.duplicate-key', file: lf, helm: 'renders', ...(d.at ? { at: d.at } : {}), message: `${d.message.replace(/ Write each key once$/, '')} — in the _common ${l.path}, which ${rel} inherits from: it deploys the later one, which may not be the one meant. Write each key once there` }))
+    }
+    // A value Helm reads otherwise than written (010 is 8) in a _common
+    // above: Helm renders it for every deployment below. Said in the words
+    // given for the _common's own file; refused or listed there, under it.
+    for (const d of layerFindings.filter(f => f.code === 'yaml.read-differently')) {
+      findings.push(finding({ code: 'stack.read-differently', file: lf, helm: 'renders', ...(d.at ? { at: d.at } : {}), message: d.message }))
     }
   }
   let template = chartName ? await repo.template(chartName) : absent('')

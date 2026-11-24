@@ -18,6 +18,8 @@
  *     crUnreadable,           { file, why, kind } when it cannot be read, else null
  *     doc,                    routing.yaml parsed, null when it is not YAML
  *     uses, usesUnknown,      the shared configs it uses; why that cannot be told
+ *     unresolved,             each shared config it uses and cannot get, as said
+ *                             (they are among `errors` too)
  *     errors, warnings,       what the save checks say of it
  *     made,                   the resource routing.yaml makes now, or null
  *     stale,                  the resource is not what routing.yaml makes now
@@ -111,7 +113,7 @@ export function loadRouting(repo, dep) {
       findings.push(finding({ code: 'routing.cr-unreadable', file: crFile, helm: 'fails', message: `${crFile} cannot be read (${c.why})` }))
     }
     const crUnreadable = c.state === 'unreadable' ? { file: crFile, why: c.why, kind: c.kind } : null
-    const base = { dep: key, file, crFile, cr, crUnreadable, doc: null, uses: [], usesUnknown: null, errors: [], warnings: [], made: null, stale: false }
+    const base = { dep: key, file, crFile, cr, crUnreadable, doc: null, uses: [], usesUnknown: null, unresolved: [], errors: [], warnings: [], made: null, stale: false }
     if (r.state === 'absent') {
       if (c.state === 'ok') {
         findings.push(finding({ code: 'routing.orphaned', file: crFile, helm: 'renders-differently',
@@ -127,7 +129,7 @@ export function loadRouting(repo, dep) {
     const refs = sharedRefProblems(doc, shared)
     if (refs.length) findings.push(finding({ code: 'routing.shared-unresolved', file, helm: 'n/a', message: refs.join('; ') }))
     const built = buildRouting(text, shared)
-    const value = { ...base, text, doc, uses: why ? [] : sharedNamesIn(doc), usesUnknown: why }
+    const value = { ...base, text, doc, uses: why ? [] : sharedNamesIn(doc), usesUnknown: why, unresolved: refs }
     if (built.errors) {
       findings.push(finding({ code: 'routing.problem', file, helm: 'n/a', message: built.errors.join('; ') }))
       // A routing.yaml with errors makes no resource: one that is there

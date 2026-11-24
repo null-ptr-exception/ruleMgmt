@@ -188,8 +188,9 @@ export async function checkRuleObjects(dir, repo) {
  * The deployment folder `dir` rendered with Helm as Preview renders it
  * (`stack` its resolveStack), and each rule object it renders checked by
  * the checker for its type. Helm or a checker missing: CannotCheck.
- * @returns { rendered, ok, warned, title, output } — rendered false: Helm
- *   failed, and output is what it said
+ * @returns { rendered, ok, warned, title, output, tools, lint } — rendered
+ *   false: Helm failed, and output is what it said. `lint`: each object
+ *   with a lint finding, `{ object, output }`; `tools`: the checkers run
  */
 export async function renderAndCheck(dir, stack, { root = stack.repo?.root ?? path.dirname(dir) } = {}) {
   let rendered
@@ -209,7 +210,7 @@ export async function renderAndCheck(dir, stack, { root = stack.repo?.root ?? pa
   const tools = check.tools?.length ? ` (${check.tools.join(', ')})` : ''
   // A lint finding passes, as in Preview, but is not a clean pass.
   const title = !check.passed ? `failed${tools}` : check.warned ? `passed with warnings${tools}` : `passed${tools}`
-  return { rendered: true, ok: check.passed, warned: !!check.warned, skipped: !!check.skipped, title, output: check.output || '' }
+  return { rendered: true, ok: check.passed, warned: !!check.warned, skipped: !!check.skipped, title, output: check.output || '', tools: check.tools ?? [], lint: check.lint ?? [] }
 }
 
 // The shared notification configs (#123) are at the gitops repo's root, the

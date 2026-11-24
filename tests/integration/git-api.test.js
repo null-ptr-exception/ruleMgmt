@@ -154,6 +154,24 @@ describe('Git API', () => {
     }
   })
 
+  // A repo `git init` made and nothing committed to: HEAD names a branch
+  // that has no commit yet.
+  it('GET /status of a repository with no commits yet: its branch and what is in the folder, not a 500', async () => {
+    const saved = tmpDir
+    const empty = await fs.mkdtemp(path.join(os.tmpdir(), 'git-api-empty-'))
+    try {
+      await git(empty, 'init', '-b', 'trunk')
+      await fs.writeFile(path.join(empty, 'new.txt'), 'x')
+      tmpDir = empty
+      const { status, data } = await api('GET', '/api/v2/git/status')
+      expect(status, JSON.stringify(data)).toBe(200)
+      expect(data).toEqual({ branch: 'trunk', changes: { modified: [], added: ['new.txt'], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false })
+    } finally {
+      tmpDir = saved
+      await fs.rm(empty, { recursive: true, force: true })
+    }
+  })
+
   it('GET /log includes file changes per commit', async () => {
     const { data } = await api('GET', '/api/v2/git/log?limit=1')
     const latest = data[0]

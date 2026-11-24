@@ -40,7 +40,11 @@ function hasRemote() {
   return !!process.env.GITLAB_TOKEN
 }
 
+// The branch HEAD names — also when it has no commit yet (a repo just made
+// by `git init`), which rev-parse cannot say. A detached HEAD is "HEAD".
 async function getBranch(cwd) {
+  const named = await git(cwd, 'symbolic-ref', '--short', '-q', 'HEAD').catch(() => '')
+  if (named.trim()) return named.trim()
   const result = await git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD')
   return result.trim()
 }

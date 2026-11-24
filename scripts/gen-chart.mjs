@@ -27,11 +27,17 @@ import { decide } from '../server/repo/policy.js'
 import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 
 const args = process.argv.slice(2)
+const USAGE = 'usage: node scripts/gen-chart.mjs <chart-dir> [--check]'
+// Asked for, the usage is an answer: stdout, exit 0.
+if (args.includes('-h') || args.includes('--help')) {
+  console.log(USAGE)
+  process.exit(0)
+}
 const check = args.includes('--check')
 const chartDir = args.find(a => !a.startsWith('--'))
 
 if (!chartDir) {
-  console.error('usage: node scripts/gen-chart.mjs <chart-dir> [--check]')
+  console.error(USAGE)
   process.exit(2)
 }
 

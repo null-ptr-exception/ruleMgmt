@@ -126,6 +126,15 @@ async function renderAll(root, toRender, opts) {
   }
 }
 
+// A lint finding passes: said as a pass, with only the objects it is in,
+// one line each in the checker's own words (its "FAILED:" heading left out,
+// which a lint finding is not).
+function lintSaid(r, copy, shown) {
+  const tools = r.tools.length ? ` (${r.tools.join(', ')})` : ''
+  const objects = r.lint.map(l => `${l.object}: ${asRepo(l.output, copy, shown).split('\n').map(line => line.trim()).filter(line => line && line !== 'FAILED:').join(' | ')}`)
+  return [`its rules pass the check${tools}, with a lint finding in ${objects.length} object${objects.length === 1 ? '' : 's'}:`, ...objects].join('\n')
+}
+
 async function renderIn(root, toRender, { jobs, shown, deployments, templates, named }) {
   const copy = await copyRepo(root)
   const cleanup = await helmHome()
@@ -157,7 +166,7 @@ async function renderIn(root, toRender, { jobs, shown, deployments, templates, n
       const output = asRepo(r.output, copy.root, shown)
       if (!r.rendered) return [{ ...at, action: 'refuse', code: 'deployment.render', message: `Helm could not render it: ${output}` }]
       if (!r.ok) return [{ ...at, action: 'refuse', code: 'deployment.rules', message: `its rules ${r.title}: ${output}` }]
-      if (r.warned) return [{ ...at, action: 'warn', code: 'deployment.rules-lint', message: `its rules ${r.title}: ${output}` }]
+      if (r.warned) return [{ ...at, action: 'warn', code: 'deployment.rules-lint', message: lintSaid(r, copy.root, shown) }]
       return []
     })))
     return [...notCopied, ...each.flat()]

@@ -102,6 +102,48 @@ describe.skipIf(!CAN_RUN)('check-repo', () => {
     expect(data.problems.every(p => p.group === P1)).toBe(true)
   })
 
+  // Catches: saying one thing twice — the shared config a routing.yaml
+  // cannot get is a problem of the file by two checks.
+  it('a routing.yaml using a shared config from a file with problems: said once under the deployment', () => {
+    const SHARED_BROKEN = 'configs:\n  relay-webhook: { type: webhook, url: http://relay.example:8080, urlSecret: { name: a, key: b } }\n'
+    const uses = more => `labels:\n  severity: [critical]\nconfigs:\n  relay-webhook: { shared: true }\n${more}cells:\n  - match: { severity: critical }\n    configs: [relay-webhook]\n`
+    const SENTENCE = 'configs.relay-webhook: uses the shared config relay-webhook, but _shared/notification-configs.yaml has problems — fix it first'
+    write('_shared/notification-configs.yaml', SHARED_BROKEN)
+    write(`${P1}/routing.yaml`, uses(''))
+    // And one with a mistake of its own beside it: that one is still said.
+    write(`${S1}/routing.yaml`, uses('  mail: { type: email }\n'))
+    const { status, data } = json()
+    expect(status).toBe(1)
+    const of = dep => data.problems.filter(p => p.group === dep).map(p => `${p.code}: ${p.message}`)
+    expect(of(P1)).toEqual([`routing.shared-unresolved: ${SENTENCE}`])
+    expect(of(S1)).toHaveLength(2)
+    expect(of(S1)[0]).toBe(`routing.shared-unresolved: ${SENTENCE}`)
+    expect(of(S1)[1]).toMatch(/^routing\.problem: configs\.mail: /)
+    expect(of(S1)[1]).not.toContain('uses the shared config')
+    const r = run([repo])
+    expect(r.out.split(SENTENCE)).toHaveLength(3)
+    expect(r.out.trim().split('\n').pop()).toBe('check-repo: 1 Template, 3 deployments: 4 refused, 0 not checked, 0 warnings')
+  })
+
+  // Catches: a warning that reads as a failure, or one nobody can read —
+  // every object of the deployment, the clean ones too, run into one line.
+  it('a lint finding of promtool (a row written twice): a warning naming each object it is in, one per line', () => {
+    edit(`${P1}/values.yaml`, '    - warn_bytes: 104857600\n', '    - warn_bytes: 104857600\n    - warn_bytes: 104857600\n')
+    const r = run([repo])
+    expect(r.status, r.all).toBe(0)
+    const lines = r.out.trimEnd().split('\n')
+    expect(lines).toHaveLength(4)
+    expect(lines[0]).toBe(P1)
+    expect(lines[1]).toBe(`  warning      ${P1}: its rules pass the check (promtool), with a lint finding in 1 object:`)
+    // promtool's own words for the object, on its line.
+    expect(lines[2]).toBe('                 mariadb-alerts-production-mariadb-traffic-network-receive-1-1: lint error 1 duplicate rule(s) found. | Metric: MariadbTrafficNetworkReceive_WarnBytes | Label(s): | namespace: prod-db | owner: app-a | severity: warning | Might cause inconsistency while recording expressions')
+    expect(lines[3]).toBe('check-repo: 1 Template, 3 deployments: 0 refused, 0 not checked, 1 warning')
+    expect(r.out).not.toMatch(/FAILED|SUCCESS|passed with warnings/)
+    const { data } = json()
+    expect(codes(data)).toEqual([`warn deployment.rules-lint ${P1}`])
+    expect(data.problems[0].message.split('\n')).toHaveLength(2)
+  })
+
   // Catches: leaving the shared configs out when no deployment uses them.
   it('a shared configs file with problems that no deployment uses (Commit only lists it): exit 1', () => {
     write('_shared/notification-configs.yaml', 'configs:\n  relay: { type: nosuch }\n')

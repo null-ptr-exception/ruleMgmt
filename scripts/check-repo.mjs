@@ -80,6 +80,8 @@ function said(p) {
     if (m.startsWith(`${lead}: `)) m = m.slice(lead.length + 2)
     else if (m.startsWith(`${lead} `)) m = m.slice(lead.length + 1)
   }
+  // The objects of a lint warning stay a line each, under the warning.
+  if (p.code === 'deployment.rules-lint') return `${p.file}: ${m}`.split('\n').join(`\n${' '.repeat(17)}`)
   return `${p.file}: ${m}`.replace(/\s*\n\s*/g, ' | ')
 }
 

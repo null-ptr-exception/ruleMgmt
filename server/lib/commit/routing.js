@@ -64,7 +64,15 @@ export async function routingFindings(repo, dep, { registry, layers = [], policy
   if (loaded.state === 'absent') return done()
   const d = decide(loaded.findings, policy)
   const { refuse, list, warn } = d
-  out.facts.push(...factsOf(d, dep))
+  // A shared config the file cannot get is among routing.yaml's problems
+  // too: where both are refused it is said once, as the shared config's,
+  // and the file's own problems without it.
+  const unresolvedRefused = refuse.some(f => f.code === 'routing.shared-unresolved')
+  const ownErrors = loaded.value.errors.filter(e => !loaded.value.unresolved.includes(e))
+  out.facts.push(...factsOf(d, dep).flatMap(f => (
+    !(unresolvedRefused && f.action === 'refuse' && f.code === 'routing.problem') ? [f]
+      : ownErrors.length ? [{ ...f, message: ownErrors.join('; ') }] : []
+  )))
   // Every refusal is said at once; a shared config the file does not give
   // is a routing.yaml problem too, which is then not listed again.
   const unresolved = refuse.filter(f => f.code === 'routing.shared-unresolved')

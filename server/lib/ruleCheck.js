@@ -247,7 +247,9 @@ export async function checkRules(renderedYaml) {
             ...warned.map(r => `${r.objName}:\n${r.output}`),
             rest.map(r => `${r.objName}: ${r.output || 'SUCCESS'}`).join('\n'),
           ].filter(Boolean).join('\n\n')
-      return { passed: true, warned: warned.length > 0, tools, unchecked, errors: [], output: withNote(output) }
+      // `lint`: each object with a lint finding and what the checker said of
+      // it, for a caller that names only those.
+      return { passed: true, warned: warned.length > 0, lint: warned.map(r => ({ object: r.objName, output: r.output })), tools, unchecked, errors: [], output: withNote(output) }
     }
     const output = failed.map(r => `${r.objName}:\n${r.output}`).join('\n\n')
     return { passed: false, tools, unchecked, errors: [output], output: withNote(output) }

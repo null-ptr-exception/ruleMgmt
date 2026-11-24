@@ -769,7 +769,7 @@ shared-absent	SH	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged	regene
 shared-absent	SH	commit	refused	409	deployments/t/c	no	-	unresolved	renders	0	1	unjudged	routing-shared-unresolved	
 shared-absent	SH	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
 shared-absent	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but there are no shared configs (_shar	
-shared-absent	SH	check-repo	refused	exit 1	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:routing.problem	
+shared-absent	SH	check-repo	refused	exit 1	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved	
 shared-not-yaml	SH	get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	errors=1 stale=true warnings=0	
 shared-not-yaml	SH	shared-get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	exists=true errors=1 uses=relay overlaps=0 stale=true unreadable=false	
 shared-not-yaml	SH	shared-put	refused	400	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	-	
@@ -778,7 +778,7 @@ shared-not-yaml	SH	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged	rege
 shared-not-yaml	SH	commit	refused	409	deployments/t/c	no	-	unresolved	renders	0	1	unjudged	routing-shared-unresolved,routing-shared-broken	
 shared-not-yaml	SH	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
 shared-not-yaml	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but _shared/notification-configs.yaml	
-shared-not-yaml	SH	check-repo	refused	exit 1	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:routing.problem,refuse:shared.problem	
+shared-not-yaml	SH	check-repo	refused	exit 1	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:shared.problem	
 shared-refused-entry	SH	get	listed	200	_shared/notification-configs.yaml	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
 shared-refused-entry	SH	shared-get	listed	200	-	no	-	crd-fails	renders	0	1	differs	exists=true errors=1 uses=relay overlaps=0 stale=true unreadable=false	
 shared-refused-entry	SH	shared-put	refused	400	_shared/notification-configs.yaml	no	-	crd-fails	renders	0	1	differs	-	
@@ -787,7 +787,7 @@ shared-refused-entry	SH	regenerate	ok	200	-	no	-	crd-fails	renders	0	1	differs	r
 shared-refused-entry	SH	commit	refused	409	deployments/t/c	no	-	crd-fails	renders	0	1	differs	routing-shared-unresolved,routing-shared-broken	
 shared-refused-entry	SH	preview	ok	200	-	no	-	crd-fails	renders	0	1	differs	amc=1	
 shared-refused-entry	SH	check-deployment	refused	exit 1	routing.yaml	no	-	crd-fails	renders	0	1	differs	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but _shared/notification-configs.yaml	
-shared-refused-entry	SH	check-repo	refused	exit 1	deployments/t/c/routing.yaml	no	-	crd-fails	renders	0	1	differs	refuse:routing.shared-unresolved,refuse:routing.problem,refuse:shared.problem	
+shared-refused-entry	SH	check-repo	refused	exit 1	deployments/t/c/routing.yaml	no	-	crd-fails	renders	0	1	differs	refuse:routing.shared-unresolved,refuse:shared.problem	
 shared-unused-entry	SH	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
 shared-unused-entry	SH	shared-get	ok	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=relay overlaps=0 stale=false unreadable=false	
 shared-unused-entry	SH	shared-put	ok	200	-	no	_shared/notification-configs.yaml	ok	renders	0	1	routes	written=2	
@@ -823,7 +823,7 @@ shared-unreadable	SH	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged	re
 shared-unreadable	SH	commit	refused	409	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	file-unreadable	
 shared-unreadable	SH	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
 shared-unreadable	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but _shared/notification-configs.yaml	
-shared-unreadable	SH	check-repo	cannot-check	exit 2	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:routing.problem,refuse:shared.unreadable	
+shared-unreadable	SH	check-repo	cannot-check	exit 2	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:shared.unreadable	
 shared-link-inside	SH	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
 shared-link-inside	SH	shared-get	ok	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=relay overlaps=0 stale=false unreadable=false	
 shared-link-inside	SH	shared-put	ok	200	-	no	_shared/notification-configs.yaml	ok	renders	0	1	routes	written=2	
@@ -841,7 +841,7 @@ shared-link-outside	SH	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged	
 shared-link-outside	SH	commit	refused	409	deployments/t/c	no	-	unresolved	renders	0	1	unjudged	routing-shared-unresolved,routing-shared-broken	
 shared-link-outside	SH	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
 shared-link-outside	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but _shared/notification-configs.yaml	
-shared-link-outside	SH	check-repo	cannot-check	exit 2	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:routing.problem,refuse:shared.unreadable	
+shared-link-outside	SH	check-repo	cannot-check	exit 2	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:shared.unreadable	
 shared-dangling-link	SH	get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	errors=1 stale=true warnings=0	
 shared-dangling-link	SH	shared-get	listed	200	_shared/notification-configs.yaml	no	-	unresolved	renders	0	1	unjudged	exists=true errors=1 uses=relay overlaps=0 stale=true unreadable=false	
 shared-dangling-link	SH	shared-put	ok	200	-	no	_shared/notification-configs.yaml	ok	renders	0	1	routes	written=2	
@@ -850,7 +850,7 @@ shared-dangling-link	SH	regenerate	ok	200	-	no	-	unresolved	renders	0	1	unjudged
 shared-dangling-link	SH	commit	refused	409	deployments/t/c	no	-	unresolved	renders	0	1	unjudged	routing-shared-unresolved,routing-shared-broken	
 shared-dangling-link	SH	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
 shared-dangling-link	SH	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.relay: uses the shared config relay, but _shared/notification-configs.yaml	
-shared-dangling-link	SH	check-repo	cannot-check	exit 2	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:routing.problem,refuse:shared.unreadable	
+shared-dangling-link	SH	check-repo	cannot-check	exit 2	deployments/t/c/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:shared.unreadable	
 shared-dir-link	SH	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
 shared-dir-link	SH	shared-get	ok	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=relay overlaps=0 stale=false unreadable=false	
 shared-dir-link	SH	shared-put	refused	409	_shared/notification-configs.yaml	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
@@ -870,7 +870,7 @@ shared-ref-missing	A	sync	refused	400	deployments/t/a	no	-	unresolved	renders	0	
 shared-ref-missing	A	commit	refused	409	deployments/t/a	no	-	unresolved	renders	0	1	unjudged	routing-shared-unresolved	
 shared-ref-missing	A	preview	ok	200	-	no	-	unresolved	renders	0	1	unjudged	amc=1	
 shared-ref-missing	A	check-deployment	refused	exit 1	routing.yaml	no	-	unresolved	renders	0	1	unjudged	Routing: routing.yaml has problems   configs.nope: there is no shared config named nope	
-shared-ref-missing	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved,refuse:routing.problem	
+shared-ref-missing	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	unresolved	renders	0	1	unjudged	refuse:routing.shared-unresolved	
 shared-ref-missing	A	schema	ok	valid	-	no	-	unresolved	renders	0	1	unjudged	-	
 sync-yaml-unreadable	SH	get	unreadable	409	sync.yaml	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
 sync-yaml-unreadable	SH	shared-get	unreadable	409	sync.yaml	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts

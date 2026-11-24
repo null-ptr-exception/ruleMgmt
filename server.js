@@ -11,8 +11,8 @@ import gitRouter from './server/routes/git.js'
 import foldersRouter from './server/routes/folders.js'
 import syncRouter from './server/routes/sync.js'
 import routingSharedRouter from './server/routes/routingShared.js'
-import { getChartsDir, getDeploymentsDir } from './server/lib/chartDiscovery.js'
-import { initGitIfNone, scaffoldSamplesIfNeeded } from './server/repo/setup.js'
+import { getChartsDir, getDeploymentsDir, findAlertTemplateCharts } from './server/lib/chartDiscovery.js'
+import { initGitIfNone, scaffoldSamplesIfNeeded, hasCommittedContent, writeGitignoreIfNone, StartRefused } from './server/repo/setup.js'
 import { logger, httpLogger } from './server/lib/logger.js'
 import { jsonBody } from './server/http/body.js'
 import { answerUncaught } from './server/http/route.js'
@@ -53,10 +53,21 @@ app.use((req, res, next) => {
 
 const BASE_PATH = process.env.JUPYTERHUB_SERVICE_PREFIX || '/'
 const GITOPS_DIR_V2 = process.env.GITOPS_DIR || path.join(__dirname, 'gitops')
+// Said first: without GITOPS_DIR the repo is the folder beside this file
+// (/app/gitops in the image), whatever is mounted elsewhere.
+logger.info(process.env.GITOPS_DIR
+  ? `Serving the gitops repo in ${GITOPS_DIR_V2} (GITOPS_DIR)`
+  : `Serving the gitops repo in ${GITOPS_DIR_V2} — the default, as GITOPS_DIR is not set: a repo mounted or kept anywhere else is not read`)
 
 // Auto-init git in local dev mode (no JupyterHub)
 if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
-  if (await initGitIfNone(GITOPS_DIR_V2)) logger.info(`Git initialized in ${GITOPS_DIR_V2}`)
+  try {
+    if (await initGitIfNone(GITOPS_DIR_V2)) logger.info(`Git initialized in ${GITOPS_DIR_V2}`)
+  } catch (err) {
+    if (!(err instanceof StartRefused)) throw err
+    logger.error(err.message)
+    process.exit(1)
+  }
 }
 
 // A MAX_VALUES_BYTES that is not used as written is said once.
@@ -65,13 +76,27 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
   if (note) logger.warn(note)
 }
 
-// Scaffold sample chart templates if none exist
+// The sample Templates and deployments, when there is no Template — only in
+// a repo with no commit of its own content. One that has such commits is
+// somebody's: a Templates folder that is empty, or looked for under another
+// name (CHARTS_DIR), is said, and nothing is copied in.
 {
   const chartsDir = getChartsDir(GITOPS_DIR_V2, process.env.CHARTS_DIR)
   const deploymentsDir = getDeploymentsDir(GITOPS_DIR_V2, process.env.DEPLOYMENTS_DIR)
   const sampleDir = path.join(__dirname, 'sample')
-  const scaffolded = await scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir)
-  if (scaffolded) logger.info(`Scaffolded sample data into ${chartsDir}`)
+  if (await hasCommittedContent(GITOPS_DIR_V2)) {
+    if ((await findAlertTemplateCharts(chartsDir)).length === 0) {
+      logger.info(`No Template in ${chartsDir}: the sample data is only copied into a repo with no commit of its own content, and this one has some. If the Templates are in another folder, set CHARTS_DIR (and DEPLOYMENTS_DIR)`)
+    }
+  } else {
+    const scaffolded = await scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir)
+    if (scaffolded) {
+      logger.info(`Scaffolded sample data into ${chartsDir}`)
+      // With it, the .gitignore a gitops repo should have: left for the
+      // first Commit, as the sample is.
+      if (await writeGitignoreIfNone(GITOPS_DIR_V2)) logger.info(`Wrote ${path.join(GITOPS_DIR_V2, '.gitignore')}: Helm's Chart.lock and charts/*.tgz are not committed`)
+    }
+  }
 }
 
 // A write killed between its temp file and its rename leaves the temp file:

@@ -33,11 +33,17 @@ import { decide } from '../server/repo/policy.js'
 import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 
 const args = process.argv.slice(2)
+const USAGE = 'usage: node scripts/import-rules.mjs <rules.yaml> <chart-dir> [--dry-run]'
+// Asked for, the usage is an answer: stdout, exit 0.
+if (args.includes('-h') || args.includes('--help')) {
+  console.log(USAGE)
+  process.exit(0)
+}
 const dryRun = args.includes('--dry-run')
 const [rulesFile, chartDir] = args.filter(a => !a.startsWith('--'))
 
 if (!rulesFile || !chartDir) {
-  console.error('usage: node scripts/import-rules.mjs <rules.yaml> <chart-dir> [--dry-run]')
+  console.error(USAGE)
   process.exit(2)
 }
 

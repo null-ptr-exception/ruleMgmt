@@ -50,12 +50,18 @@ import { valuesLimitNote } from '../server/repo/limits.js'
 if (valuesLimitNote()) console.error(`warn: ${valuesLimitNote()}`)
 
 const args = process.argv.slice(2)
+const USAGE = 'usage: node scripts/gen-rules.mjs <chart-dir> [--check] [--init]'
+// Asked for, the usage is an answer: stdout, exit 0.
+if (args.includes('-h') || args.includes('--help')) {
+  console.log(USAGE)
+  process.exit(0)
+}
 const check = args.includes('--check')
 const init = args.includes('--init')
 const chartDir = args.find(a => !a.startsWith('--'))
 
 if (!chartDir) {
-  console.error('usage: node scripts/gen-rules.mjs <chart-dir> [--check] [--init]')
+  console.error(USAGE)
   process.exit(2)
 }
 

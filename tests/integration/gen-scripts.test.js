@@ -603,3 +603,24 @@ describe('import-rules with groups whose names make one key', () => {
     expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
   })
 })
+
+// Asking for the usage is not a mistake: it is printed where a pipe reads
+// it and the tool exits 0, as check-deployment and check-repo do. Run with
+// no argument it is still a wrong call: stderr, exit 2.
+describe('--help of the generator scripts', () => {
+  const SCRIPTS = { 'gen-rules': GEN_RULES, 'gen-chart': GEN_CHART, 'import-rules': IMPORT_RULES }
+  const cases = Object.keys(SCRIPTS).flatMap(name => [[name, '--help'], [name, '-h']])
+  it.each(cases)('%s %s: the usage on stdout, exit 0, nothing written', async (name, flag) => {
+    const r = spawnSync('node', [SCRIPTS[name], flag], { encoding: 'utf-8', cwd: tmpDir })
+    expect(r.status, r.stdout + r.stderr).toBe(0)
+    expect(r.stdout).toMatch(new RegExp(`^usage: node scripts/${name}\\.mjs `))
+    expect(r.stderr).toBe('')
+    expect(await fs.readdir(tmpDir)).toEqual(['chart'])
+  })
+  it.each(Object.keys(SCRIPTS))('%s with no argument: the usage on stderr, exit 2', name => {
+    const r = spawnSync('node', [SCRIPTS[name]], { encoding: 'utf-8', cwd: tmpDir })
+    expect(r.status).toBe(2)
+    expect(r.stderr).toMatch(/^usage: /)
+    expect(r.stdout).toBe('')
+  })
+})

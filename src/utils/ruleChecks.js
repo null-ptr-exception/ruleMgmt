@@ -146,6 +146,22 @@ export function checkRules(schema) {
         }
       }
 
+      // A carriage return: Prometheus takes one, but the chart cannot carry
+      // it — in the block an annotation or expr is written as, YAML reads it
+      // as a line break and the file no longer parses; in a quoted label it
+      // becomes a space.
+      const named = rule.raw ? [['the rule', rule.raw]] : [['expr', rule.expr], ['for', rule.for], ['keep_firing_for', rule.keep_firing_for], ...entries.map(e => [e.key, e.value])]
+      for (const [key, value] of named) {
+        if (typeof value !== 'string' || !value.includes('\r')) continue
+        findings.push({
+          severity: 'save',
+          kind: 'carriage-return',
+          group,
+          alert: rule.alert,
+          message: `${where}: "${key}" has a carriage return (\\r) — the generated chart cannot keep one; take it out`,
+        })
+      }
+
       // An alert's labels and annotations are templates to Prometheus and
       // vmalert (a recording rule's labels are not): one with a {{ that no }}
       // follows cannot be read, and the whole object is refused.

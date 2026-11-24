@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
 import { Alert, Button, Empty, Modal, Segmented, Space, Typography, message } from 'antd'
-import { SaveOutlined, EyeOutlined, DeleteOutlined, EditOutlined, AppstoreOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { SaveOutlined, EyeOutlined, DeleteOutlined, EditOutlined, AppstoreOutlined, UnorderedListOutlined, ShareAltOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import NotificationConfigs from '../components/NotificationConfigs'
+import SharedConfigs from '../components/SharedConfigs'
 import RoutesMatrix, { describeMatch } from '../components/RoutesMatrix'
 import RoutesList from '../components/RoutesList'
 import { TimingFields } from '../components/RoutingTiming'
@@ -11,7 +12,7 @@ import RoutingLabelsModal from '../components/RoutingLabelsModal'
 import RoutingMergeConflicts from '../components/RoutingMergeConflicts'
 import PreviewModal from '../components/PreviewModal'
 import { parseRouting, emptyRouting, reshapeLabels, setDefaultTiming, toSave } from '../utils/routingModel'
-import { getRouting, saveRouting, removeRouting, renderDeployment, getSyncSource } from '../utils/chartApi'
+import { getRouting, saveRouting, removeRouting, renderDeployment, getSyncSource, getSharedConfigs } from '../utils/chartApi'
 import { ROUTING } from '../utils/outputs'
 import { syncFailedNotice } from '../utils/syncNotice'
 
@@ -50,6 +51,18 @@ export default function RoutingView() {
   const [preview, setPreview] = useState(null)
   // Grid or list; unset follows the labels — a list from three on.
   const [view, setView] = useState(null)
+  // The repo's shared notification configs (#123): their own page, and what
+  // a deployment's `{ shared: true }` stands for.
+  const [showShared, setShowShared] = useSessionState('routing:shared', false)
+  const [shared, setShared] = useState(null)
+
+  useEffect(() => {
+    if (showShared) return
+    let stale = false
+    // A failed read is said, not left looking like one still loading.
+    getSharedConfigs().then(s => { if (!stale) setShared(s) })
+    return () => { stale = true }
+  }, [showShared, selectedFolder, reloadKey])
 
   const deployment = selectedFolder ? selectedFolder.split('/').pop() : null
   const readOnly = !!frozenSource
@@ -129,7 +142,14 @@ export default function RoutingView() {
     cancelText: 'Keep editing',
   })
 
+  async function openShared() {
+    if (dirty && !readOnly && !(await confirmDiscardEdits())) return
+    setDirty(false)
+    setShowShared(true)
+  }
+
   async function handleFolderSelect(selection) {
+    setShowShared(false)
     if (!selection) {
       setSelectedFolder(null)
       setSelectedChart(null)
@@ -270,6 +290,7 @@ export default function RoutingView() {
     )
 
   function main() {
+    if (showShared) return <SharedConfigs />
     if (!selectedFolder) return <Empty style={{ margin: 'auto' }} description="Select a deployment from the folder tree" />
     if (!loaded) return <Empty style={{ margin: 'auto' }} description="Loading..." />
     if (loaded.error) return <Empty style={{ margin: 'auto' }} description={loaded.error} />
@@ -301,7 +322,7 @@ export default function RoutingView() {
         {loaded.stale && !dirty && staleAlert}
         <section>
           <Title level={5} style={{ marginTop: 0 }}>Notify</Title>
-          <NotificationConfigs routing={routing} onChange={edit} readOnly={readOnly} describeMatch={describeMatch} />
+          <NotificationConfigs routing={routing} onChange={edit} readOnly={readOnly} describeMatch={describeMatch} shared={shared} />
         </section>
         <section>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -344,6 +365,9 @@ export default function RoutingView() {
   return (
     <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
       <div style={{ width: 300, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflowY: 'auto', background: '#fff' }}>
+        <div style={{ padding: '10px 16px 0' }}>
+          <Button block type={showShared ? 'primary' : 'default'} icon={<ShareAltOutlined />} onClick={openShared}>Shared configs</Button>
+        </div>
         <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af' }}>
           Deployments
         </div>
@@ -356,12 +380,12 @@ export default function RoutingView() {
       </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
-        {frozenSource && selectedFolder && (
+        {!showShared && frozenSource && selectedFolder && (
           <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
             Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.
           </div>
         )}
-        {selectedFolder && (
+        {!showShared && selectedFolder && (
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
             <Title level={4} style={{ margin: 0 }}>{selectedFolder} / Routing</Title>
           </div>
@@ -369,7 +393,7 @@ export default function RoutingView() {
         <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
           {main()}
         </div>
-        {routing && (
+        {!showShared && routing && (
           <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
             <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!canSave}>Save</Button>
             {!isNew && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
@@ -380,7 +404,7 @@ export default function RoutingView() {
               : <Button danger icon={<DeleteOutlined />} disabled={readOnly} onClick={handleRemove}>Remove routing</Button>}
           </div>
         )}
-        {broken && (
+        {!showShared && broken && (
           <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
             <span style={{ flex: 1 }} />
             <Button danger icon={<DeleteOutlined />} disabled={readOnly} onClick={handleRemove}>Remove routing</Button>

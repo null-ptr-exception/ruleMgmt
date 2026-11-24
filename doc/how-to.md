@@ -369,7 +369,9 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    webhook URL with a token or password in it is refused; put the URL in a
    Secret in the deployment's namespace and give its name and key instead
    (AlertForge cannot see the cluster, so check the Secret exists). These
-   configs belong to this deployment; another deployment has its own.
+   configs belong to this deployment; another deployment has its own. A
+   config several deployments use can be shared instead — see
+   [Share a config between deployments](#share-a-config-between-deployments).
    An email config's **More settings** sets its sender, SMTP server, user
    and password (from a Secret), TLS, headers such as the subject, and the
    text and HTML body. Each one left empty is the platform's own setting
@@ -437,6 +439,47 @@ comments and all. A `routing.yaml` with problems makes no resource, so one
 that is there is `stale` too. On a sync target, `stale` also means its
 routing is not its source's (`differsFromSource`); its Save is off, so the
 page names the source and points to **Regenerate** in the Git panel.
+
+### Share a config between deployments
+
+A config the same in several deployments — one relay address for every
+region — is kept once, in the repo's shared configs
+([format](rules-format.md#shared-configs)), and each deployment uses it by
+name. Open **Routing** → **Shared configs**:
+
+- **Add**, **Edit** and **Delete** a shared config, with the same dialog as a
+  deployment's own. A shared config cannot read a Secret: a Secret lives in
+  each deployment's own namespace, so a webhook with a token in a Secret, or an
+  SMTP server with its own login, stays in each deployment's routing. The
+  dialog does not offer those settings: a shared e-mail config goes through
+  the platform's SMTP server, a shared webhook does not authenticate. Saving
+  keeps the file's comments and layout; a changed config is written again
+  whole, and a comment at the end of its lines goes with it.
+- **Used by** lists the deployments that use each config, a sync target with
+  the source it is copied from. Before a change is saved, the page lists them:
+  saving writes the shared file and makes every one of their
+  AlertmanagerConfigs again, all together. If one cannot be made — its
+  `routing.yaml` has a problem — nothing is written, and the page names it.
+  `routing.yaml` files do not change. Commit what it wrote.
+- **Rename** renames the config in the shared file and in every `routing.yaml`
+  that uses it (its cells too, comments kept), and makes their resources again.
+  It is refused when one of them has a config of its own by the new name.
+- A config still used cannot be deleted: the page says by whom.
+- **Behind** — the shared file was edited with git, or pulled, and the
+  resources made from it were not made again. The page lists them, and a
+  commit is refused, naming each one. **Regenerate** makes them all again.
+  A config taken out of the file while a deployment still uses it, or a file
+  that cannot be read, also refuses the commit (see [Commit](#commit)).
+
+On a deployment's Routing page, **Add from shared** picks a shared config: it
+is marked *shared* and shown read-only, with what it sends to. A config of the
+deployment's own with the same name is replaced at once when it says the same;
+when it does not, the page shows both and asks. **Make local copy** turns a
+shared one into a config of the deployment's own, with the same settings,
+which no later change to the shared one reaches.
+
+Shared configs, like the rest of the repo, can be changed by anyone who can
+edit it.
 
 ### Work across many groups at once
 
@@ -527,10 +570,15 @@ always has, so the commit goes through and names it as a reminder — see
 
 A commit is refused, too, while any deployment:
 
-- has a routing resource that is not what its `routing.yaml` says: either
-  file edited by hand, or the object labels changed (`RULE_OBJECT_LABELS`
-  and the rest) since it was made — Alertmanager would stop loading it and
-  its notifications stop without a word
+- has a routing resource that is not what its `routing.yaml` and the shared
+  configs it uses say: either file edited by hand, or the object labels
+  changed (`RULE_OBJECT_LABELS` and the rest) since it was made — Alertmanager
+  would stop loading it and its notifications stop without a word
+- uses a shared config (`{ shared: true }`) the shared configs do not give:
+  the config was taken out of `_shared/notification-configs.yaml`, the file
+  was removed, or it has problems. The refusal names the config and each
+  deployment using it, and the file when it has problems. Regenerate cannot
+  fix it: put the config back, or fix the file
 - has a routing resource with no `routing.yaml` left — remove it, or put
   `routing.yaml` back
 - follows another through sync, and its routing is not its source's
@@ -553,8 +601,9 @@ target's from its source; it writes the files and commits nothing, so look
 at the changes, then commit. One that cannot be made is listed, and the
 commit stays refused.
 
-A `routing.yaml` with problems does not stop a commit: the commit goes
-through and names it, to fix on its Routing page.
+A `routing.yaml` with problems of its own does not stop a commit: the commit
+goes through and names it, to fix on its Routing page. Nor does a shared
+configs file with problems that no deployment uses: it is named the same way.
 
 A commit waits for a save in progress — of a Template, a chart, a folder
 or a deployment, in this tab or another — and a save waits for a commit,
@@ -721,6 +770,12 @@ cannot read, helm or a checker missing, or a file it cannot read.
   repo's `.gitignore` keeps them out ([setup](gitops-repo-setup.md)).
 - Pass the site's labels with `-e` as for `gen-rules --check`, or every
   AlertmanagerConfig is reported as out of date.
+- A `routing.yaml` using shared configs is checked with the repo's
+  `_shared/notification-configs.yaml` — the one at the root of the git
+  checkout the deployment is in, or of the folder given with
+  `--repo <root>` (before the deployment). No file above that root is read.
+  When neither tells the root, it exits 2 and says so. git in the container
+  may refuse a checkout another uid owns: pass `--repo /work` then.
 
 In the gitops repo's CI, check every deployment a change touches. A changed
 file belongs to the nearest folder above it with both `Chart.yaml` and
@@ -804,6 +859,10 @@ alertmanagerConfigMatcherStrategy:
 - **`alertmanagerConfigMatcherStrategy: None`**: otherwise the operator adds a
   `namespace` matcher for the namespace the AlertmanagerConfig is in, and
   alerts from anywhere else never reach its routes.
+- **`alertmanagerConfigNamespaceSelector`**: an AlertmanagerConfig is read only
+  from the namespaces it selects — by default the Alertmanager's own. Set it
+  (e.g. `{}` for every namespace) when deployments are released into other
+  namespaces; a Secret a config reads must be in the deployment's namespace.
 
 The operator puts each AlertmanagerConfig under Alertmanager's root route with
 `continue: true` — the generated file says so too — so it does not stop other

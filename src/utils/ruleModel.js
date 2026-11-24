@@ -33,12 +33,12 @@ const ESCAPED_RE = new RegExp(`${HELM_PASSTHROUGH_RE.source}|\\{\\{+|\\{(?=${VAR
  * them verbatim. A `}}` on its own is text to Helm and stays.
  *
  * A raw string (backticks) holds the text as it is; one holding a backtick
- * (`{{ \`raw\` }}`) or a carriage return, which a raw string drops, is
- * written as a quoted string instead. Helm replaces the action before YAML
+ * (`{{ \`raw\` }}`) is written as a quoted string instead. (A carriage
+ * return, which a raw string would drop, is refused at save: ruleChecks.) Helm replaces the action before YAML
  * reads the line, so either form is fine inside a YAML double-quoted label.
  */
 export function escapePrometheusTemplates(str) {
-  return String(str).replace(ESCAPED_RE, text => (/[`\r]/.test(text)
+  return String(str).replace(ESCAPED_RE, text => (text.includes('`')
     ? `{{ ${JSON.stringify(text)} }}`
     : '{{ `' + text + '` }}'))
 }

@@ -35,9 +35,10 @@ async function readOr(file) {
  * table, written out. Returns `{ text, cr }`, or `{ errors }`.
  *
  * The object's labels follow the site's setting at the time it is generated,
- * as the rule objects do.
+ * as the rule objects do. `shared` is the repo's shared notification configs
+ * (readSharedConfigs in sharedConfigs.js), or null when it has none.
  */
-export function buildRouting(input) {
+export function buildRouting(input, shared = null) {
   let text = input
   let routing = input
   if (typeof input === 'string') {
@@ -50,7 +51,7 @@ export function buildRouting(input) {
     text = yaml.dump(input, { lineWidth: -1 })
   }
   const meta = metaForProfile(objectMetaFromEnv(), ROUTING_KIND)
-  const { text: cr, errors } = generateRouting(routing, { meta })
+  const { text: cr, errors } = generateRouting(routing, { meta, shared })
   return errors ? { errors } : { text, cr }
 }
 
@@ -86,7 +87,7 @@ export async function readRouting(dir) {
  * targets; else both files, the resource made again from routing.yaml so a
  * stale or missing one is not copied. Neither file: nothing to copy.
  */
-export async function checkedRouting(dir) {
+export async function checkedRouting(dir, shared = null) {
   const current = await readRouting(dir)
   // A resource with nothing to make it from: neither Routing page shows it,
   // and a read-only target could not remove it.
@@ -94,7 +95,7 @@ export async function checkedRouting(dir) {
     return { errors: [`${ROUTING_CR_FILE} is there without a routing.yaml to make it from: remove it, or put routing.yaml back`] }
   }
   if (current.text === null) return current
-  const built = buildRouting(current.text)
+  const built = buildRouting(current.text, shared)
   if (built.errors) return { errors: built.errors }
   return { text: current.text, cr: built.cr }
 }
@@ -150,13 +151,14 @@ async function putRouting(dir, { text, cr }) {
  * A deployment's routing as GET returns it: `null` when it has no
  * routing.yaml; otherwise its text, its problems (the same check as saving
  * it) and whether the AlertmanagerConfig on disk is what routing.yaml
- * generates now — a hand edit to routing.yaml, or a change to the site's
- * object labels, leaves it behind until routing.yaml is saved again.
+ * generates now — a hand edit to routing.yaml or to a shared config it uses,
+ * or a change to the site's object labels, leaves it behind until it is
+ * generated again.
  */
-export async function routingState(dir) {
+export async function routingState(dir, shared = null) {
   const { text, cr } = await readRouting(dir)
   if (text === null) return null
-  const built = buildRouting(text)
+  const built = buildRouting(text, shared)
   // A routing.yaml with errors makes no resource: one that is there was
   // made from an older text, so it is behind too (#179).
   if (built.errors) return { text, errors: built.errors, stale: cr !== null }

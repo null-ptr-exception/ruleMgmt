@@ -37,6 +37,8 @@
  *   amtool-tests.yaml               (3) optional — alert labels → the
  *                                       receivers `amtool config routes test`
  *                                       must route them to
+ *   shared.yaml                     optional input — the repo's shared
+ *                                       notification configs (#123)
  */
 
 import fs from 'fs'
@@ -47,7 +49,7 @@ import yaml from 'js-yaml'
 import { parseRulesDir } from '../../src/utils/rulesFile.js'
 import { generateProducts } from '../../src/utils/drift.js'
 import { parseObjectMeta, metaForProfile } from '../../src/utils/objectMeta.js'
-import { generateRouting } from '../../src/utils/routingGenerator.js'
+import { generateRouting, checkSharedConfigs } from '../../src/utils/routingGenerator.js'
 import { profileOfObject, profileFor } from '../../src/utils/outputs.js'
 
 /**
@@ -297,11 +299,24 @@ export function listRoutingCases() {
     .sort()
 }
 
+/**
+ * A routing case's shared configs (#123): its optional shared.yaml, as the
+ * repo's _shared/notification-configs.yaml is read, or null.
+ */
+export function routingCaseShared(name) {
+  const file = path.join(ROUTING_CASES_DIR, name, 'shared.yaml')
+  if (!fs.existsSync(file)) return null
+  const doc = yaml.load(fs.readFileSync(file, 'utf-8'))
+  const errors = checkSharedConfigs(doc)
+  if (errors.length) throw new Error(`${name}: shared.yaml does not pass the checks:\n  ${errors.join('\n  ')}`)
+  return { configs: doc.configs, errors }
+}
+
 /** The generated templates/alertmanagerconfig.yaml for a routing case. */
 export function generateRoutingCase(name) {
   const dir = path.join(ROUTING_CASES_DIR, name)
   const routing = yaml.load(fs.readFileSync(path.join(dir, 'routing.yaml'), 'utf-8'))
-  const { text, errors } = generateRouting(routing, { meta: metaForProfile(caseObjectMeta(dir), 'routing') })
+  const { text, errors } = generateRouting(routing, { meta: metaForProfile(caseObjectMeta(dir), 'routing'), shared: routingCaseShared(name) })
   if (errors) throw new Error(`${name}: routing.yaml does not pass the checks:\n  ${errors.join('\n  ')}`)
   return text
 }

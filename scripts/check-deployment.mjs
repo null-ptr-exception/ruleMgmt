@@ -16,6 +16,10 @@
  * and charts/ into the deployment folder; the gitops repo's .gitignore keeps
  * them out (doc/gitops-repo-setup.md).
  *
+ * A routing.yaml using shared notification configs (#123) is checked with
+ * the repo's _shared/notification-configs.yaml: the repo is the git checkout
+ * the deployment is in, or the root given with --repo.
+ *
  * Whether the AlertmanagerConfig is current depends on the site's object
  * labels (RULE_OBJECT_LABELS and friends): pass them with -e, as for
  * `gen-rules --check`.
@@ -29,11 +33,13 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import yaml from 'js-yaml'
-import { checkRules, renderChart } from '../server/lib/ruleCheck.js'
+import { checkRules, renderChart, runCommand } from '../server/lib/ruleCheck.js'
 import { routingState, ROUTING_FILE, ROUTING_CR_FILE } from '../server/lib/routingFiles.js'
+import { readSharedConfigs } from '../server/lib/sharedConfigs.js'
+import { sharedNamesIn } from '../src/utils/routingGenerator.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 
-const USAGE = 'usage: node scripts/check-deployment.mjs <deployment folder>'
+const USAGE = 'usage: node scripts/check-deployment.mjs [--repo <gitops repo root>] <deployment folder>'
 
 /** A reason the deployment could not be checked at all: exit 2. */
 class CannotCheck extends Error {}
@@ -91,8 +97,36 @@ async function checkRuleObjects(dir) {
   return { ok: check.passed, lines: [`Rules: ${title}`, check.output].filter(Boolean) }
 }
 
-async function checkRouting(dir) {
-  const state = await routingState(dir)
+// The shared notification configs (#123) are at the gitops repo's root, the
+// one file the server reads: the root given with --repo, else the git
+// checkout the deployment is in. Never a folder above it.
+async function repoRoot(dir, given) {
+  if (given) {
+    const root = path.resolve(given)
+    const rel = path.relative(root, dir)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) throw new CannotCheck(`${dir} is not inside the repo ${root}`)
+    return root
+  }
+  try {
+    const { stdout } = await runCommand('git', ['-C', dir, 'rev-parse', '--show-toplevel'])
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+async function checkRouting(dir, repo) {
+  // Where the shared configs are matters only to a routing.yaml using one.
+  let shared = null
+  const text = await fs.readFile(path.join(dir, ROUTING_FILE), 'utf-8').catch(err => { if (err.code === 'ENOENT') return null; throw err })
+  let uses = []
+  try { uses = text === null ? [] : sharedNamesIn(yaml.load(text)) } catch { /* routingState says why */ }
+  if (uses.length) {
+    const root = await repoRoot(dir, repo)
+    if (!root) throw new CannotCheck(`${ROUTING_FILE} uses shared configs (${uses.join(', ')}), and the repo's root cannot be told: run it in the repo's git checkout, or pass --repo <the gitops repo's root>`)
+    shared = await readSharedConfigs(root)
+  }
+  const state = await routingState(dir, shared)
   if (!state) return { ok: true, lines: [`Routing: no ${ROUTING_FILE} — not checked`] }
   if (state.errors.length) {
     return { ok: false, lines: [`Routing: ${ROUTING_FILE} has problems`, ...state.errors.map(e => `  ${e}`)] }
@@ -102,7 +136,7 @@ async function checkRouting(dir) {
       ok: false,
       lines: [
         `Routing: ${ROUTING_CR_FILE} is not what ${ROUTING_FILE} generates now.`,
-        `  ${ROUTING_FILE} was edited by hand, or the site's object labels changed: save it again in AlertForge.`,
+        `  ${ROUTING_FILE} or a shared config it uses was edited by hand, or the site's object labels changed: save it again in AlertForge.`,
         '  If the labels are set by the site (RULE_OBJECT_LABELS …), pass them with -e.',
       ],
     }
@@ -116,7 +150,12 @@ async function main() {
     console.log(USAGE)
     return 0
   }
-  if (args.length !== 1) {
+  let repo = null
+  if (args[0] === '--repo') {
+    repo = args[1]
+    args.splice(0, 2)
+  }
+  if (args.length !== 1 || repo === undefined) {
     console.error(USAGE)
     return 2
   }
@@ -135,7 +174,7 @@ async function main() {
     // (an unreadable routing.yaml) does not hide what was checked before it.
     let ok = true
     for (const step of [checkRuleObjects, checkRouting]) {
-      const result = await step(dir)
+      const result = await step(dir, repo)
       console.log(result.lines.join('\n'))
       ok &&= result.ok
     }

@@ -218,6 +218,29 @@ export async function removeRouting(chart, deployment, folder) {
   return res.json()
 }
 
+// ─── Shared notification configs (#123) ──────────────────────────────────────
+
+const SHARED_URL = `${BASE}/routing/shared`
+
+// { file, exists, text, configs, errors, usage, stale, dirProblem }, or { error }.
+export async function getSharedConfigs() {
+  const res = await apiFetch(SHARED_URL)
+  if (!res.ok) return { error: (await res.json().catch(() => ({}))).error || 'Could not read the shared configs' }
+  return res.json()
+}
+
+const sharedWrite = async (url, method, body) => {
+  const res = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) })
+  if (!res.ok) return { ok: false, ...(await res.json().catch(() => ({}))) }
+  return { ok: true, ...(await res.json()) }
+}
+
+// `shared` is { configs }. A refusal carries { error, problems | failed | usedBy }.
+export const saveSharedConfigs = shared => sharedWrite(SHARED_URL, 'PUT', { shared })
+export const renameSharedConfig = (from, to) => sharedWrite(`${SHARED_URL}/rename`, 'POST', { from, to })
+// { regenerated, failed }
+export const regenerateShared = () => sharedWrite(`${SHARED_URL}/regenerate`, 'POST')
+
 // ─── Render ──────────────────────────────────────────────────────────────────
 
 export async function renderDeployment(chart, deployment, folder) {

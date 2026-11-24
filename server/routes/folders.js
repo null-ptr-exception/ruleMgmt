@@ -7,6 +7,7 @@ import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
 import { wrapValues, countAlerts } from '../lib/subchart.js'
 import { isDeploymentDir, isSafeSyncPath } from '../lib/sync.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
+import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 
 const EXCLUDED_DIRS = new Set(['.git', 'node_modules', '.cache'])
 // What a new deployment asks of its Template's version: any.
@@ -51,10 +52,14 @@ async function listChildren(baseDir, parentPath) {
     return []
   }
   const inDeployment = parentPath ? await isDeploymentDir(dir) : false
+  // The shared notification configs' folder (#123) is no folder of the tree
+  // — unless it is one of the repo's own, with other things in it.
+  const hideShared = !parentPath && await inSharedDir(baseDir, SHARED_DIR)
 
   const folders = []
   for (const e of entries) {
     if (!e.isDirectory() || isExcluded(e.name) || isChartDir(e.name, inDeployment)) continue
+    if (hideShared && e.name === SHARED_DIR) continue
     const nodePath = parentPath ? `${parentPath}/${e.name}` : e.name
     const absPath = path.join(baseDir, nodePath)
 
@@ -113,6 +118,7 @@ async function collectDeployments(baseDir, parentPath, chartsDirName, results) {
   for (const e of entries) {
     if (!e.isDirectory() || isExcluded(e.name)) continue
     if (!parentPath && e.name === chartsDirName) continue
+    if (!parentPath && await inSharedDir(baseDir, e.name)) continue
 
     const nodePath = parentPath ? `${parentPath}/${e.name}` : e.name
     const absPath = path.join(baseDir, nodePath)

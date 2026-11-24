@@ -76,6 +76,14 @@ describe('runtime Docker image', () => {
     expect(missing, 'add these to the final stage of the Dockerfile').toEqual([])
   })
 
+  // The image installs only `dependencies`: a package the server imports
+  // from devDependencies is not there, and the server does not start.
+  it('installs every package server.js loads', () => {
+    const { packages } = importGraph('server.js')
+    expect(packages).toContain('yaml')
+    expect(packages.filter(p => !RUNTIME_PACKAGES.has(p)), 'a devDependency is not in the image').toEqual([])
+  })
+
   it('every file server.js loads exists, extension included (Node ESM does not guess)', () => {
     expect(files.filter(f => !fs.existsSync(path.join(ROOT, f)))).toEqual([])
   })

@@ -42,7 +42,7 @@
 import yaml from 'js-yaml'
 import { ROUTING } from './outputs.js'
 import { KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
-import { routingSchema, configSchema, configNameProblem, schemaProblems, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
+import { routingSchema, configSchema, configNameProblem, schemaProblems, sharedConfigsSchema, isSharedRef, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
 
 // The page marks a timing field with the same check the save makes (#93).
 export { timingProblem } from './routingSchema.js'
@@ -124,15 +124,109 @@ export function configProblems(name, config) {
   return credentialProblems(where, config)
 }
 
+// ── the shared notification configs (#123) ──────────────────────────────────
+
+export const SHARED_DIR = '_shared'
+export const SHARED_FILE = `${SHARED_DIR}/notification-configs.yaml`
+
+// What a config reads from a Secret, by where it is written.
+const SECRET_FIELDS = {
+  email: [['authPassword'], ['tlsConfig', 'ca']],
+  webhook: [['urlSecret'], ['authorization'], ['basicAuth'], ['tlsConfig', 'ca']],
+}
+
+/**
+ * The fields of a config that read a Secret. A Secret is read from the
+ * namespace of each deployment the config is in, so a shared one would mean
+ * a Secret to keep the same in every namespace, which AlertForge cannot see.
+ */
+export function secretFieldsOf(config) {
+  return (SECRET_FIELDS[config?.type] || [])
+    .filter(path => path.reduce((at, key) => (at && typeof at === 'object' ? at[key] : undefined), config) !== undefined)
+    .map(path => path.join('.'))
+}
+
+function sharedSecretProblems(where, config) {
+  const fields = secretFieldsOf(config)
+  return fields.length
+    ? [`${where}: a shared config cannot read a Secret (${fields.join(', ')}) — a Secret is read from each deployment's own namespace; keep this config in the routing.yaml of each deployment that needs it`]
+    : []
+}
+
+/** One shared config's problems — what the Shared configs page checks before adding it. */
+export function sharedConfigProblems(name, config) {
+  const errors = configProblems(name, config).map(forShared)
+  return errors.length ? errors : sharedSecretProblems(`configs.${name}`, config)
+}
+
+// The same refusal, with advice a shared config can follow: it cannot read
+// a Secret, so a credential goes with each deployment's own config.
+const forShared = message => message.replace('put it in a Secret and use urlSecret',
+  'a shared config cannot read a Secret, so keep this webhook in each deployment\'s routing, with urlSecret')
+
+/**
+ * Every problem with the parsed shared notification configs: each config is
+ * checked as a deployment's own is (the same schema and credential checks),
+ * and may not read a Secret.
+ */
+export function checkSharedConfigs(doc) {
+  const shape = schemaProblems(sharedConfigsSchema, doc, [], { file: SHARED_FILE })
+  const configs = doc && typeof doc === 'object' && !Array.isArray(doc) && doc.configs && typeof doc.configs === 'object' ? doc.configs : {}
+  const errors = []
+  for (const [name, config] of Object.entries(configs)) {
+    if (shape.some(m => m.startsWith(`configs.${name}:`) || m.startsWith(`configs.${name}.`))) continue
+    errors.push(...credentialProblems(`configs.${name}`, config).map(forShared), ...sharedSecretProblems(`configs.${name}`, config))
+  }
+  return [...shape, ...errors]
+}
+
+/** The names a routing uses from the shared configs. */
+export function sharedNamesIn(routing) {
+  const configs = routing && typeof routing === 'object' && routing.configs && typeof routing.configs === 'object' ? routing.configs : {}
+  return Object.entries(configs).filter(([, c]) => isSharedRef(c)).map(([name]) => name)
+}
+
+/**
+ * The routing with each `{ shared: true }` replaced by the shared config of
+ * its name, as the resource is generated from it. `shared` is
+ * `{ configs, errors }` as read from the shared file, or null when there is
+ * none; one that cannot be resolved is left, for checkRouting to name.
+ */
+export function resolveShared(routing, shared) {
+  const names = sharedNamesIn(routing)
+  if (!names.length || !shared || shared.errors?.length) return routing
+  const configs = Object.fromEntries(Object.entries(routing.configs).map(([name, c]) => (
+    isSharedRef(c) && Object.hasOwn(shared.configs, name) ? [name, shared.configs[name]] : [name, c]
+  )))
+  return { ...routing, configs }
+}
+
+/**
+ * Each `{ shared: true }` of a routing that the shared configs (`shared`,
+ * as for resolveShared) do not resolve, as messages. `named(where)` leaves
+ * out one the shape check already names.
+ */
+export function sharedRefProblems(routing, shared, named = () => false) {
+  return sharedNamesIn(routing).flatMap(name => {
+    const where = `configs.${name}`
+    if (named(where)) return []
+    if (!shared) return [`${where}: uses the shared config ${name}, but there are no shared configs (${SHARED_FILE})`]
+    if (shared.errors?.length) return [`${where}: uses the shared config ${name}, but ${SHARED_FILE} has problems — fix it first`]
+    if (!Object.hasOwn(shared.configs, name)) return [`${where}: there is no shared config named ${name}`]
+    return []
+  })
+}
+
 /**
  * Every problem with a parsed routing.yaml, as messages naming where it is.
  * An empty list means it can be generated.
  *
  * The shape and types first (routingSchema.js); the rules between its parts
  * only for a file of the right shape, so they never meet a value of the
- * wrong type.
+ * wrong type. A config used from the shared configs (`shared`, see
+ * resolveShared) must be there; the shared file is checked on its own.
  */
-export function checkRouting(routing) {
+export function checkRouting(routing, { shared = null } = {}) {
   const shape = schemaProblems(routingSchema, routing)
 
   // The checks past the shape run on whatever part is well formed, so a
@@ -154,9 +248,10 @@ export function checkRouting(routing) {
     if (new Set(values).size !== values.length) errors.push(`labels.${name}: a value is listed twice`)
   }
   for (const [name, config] of Object.entries(configs)) {
-    if (!isMap(config) || named(`configs.${name}`)) continue
+    if (!isMap(config) || named(`configs.${name}`) || isSharedRef(config)) continue
     errors.push(...credentialProblems(`configs.${name}`, config))
   }
+  if (configsOk) errors.push(...sharedRefProblems(r, shared, named))
 
   const seen = new Map()
   ;(Array.isArray(r.cells) ? r.cells : []).forEach((cell, i) => {
@@ -290,12 +385,14 @@ export const escapeBraces = text => text.replace(/[{}]{2,}/g, m => (/\{\{|\}\}/.
 /**
  * The file for templates/: the AlertmanagerConfig for a parsed routing.yaml.
  * `meta` is the object's labels and annotations (objectMeta.js), already
- * resolved for this kind of object. Returns `{ text }`, or `{ errors }` when
+ * resolved for this kind of object; `shared`, the repo's shared configs
+ * (resolveShared), each written into the resource in full. Returns `{ text }`, or `{ errors }` when
  * the routing does not pass checkRouting.
  */
-export function generateRouting(routing, { meta = {} } = {}) {
-  const errors = checkRouting(routing)
+export function generateRouting(routing, { meta = {}, shared = null } = {}) {
+  const errors = checkRouting(routing, { shared })
   if (errors.length) return { errors }
+  routing = resolveShared(routing, shared)
   const name = '__ALERTFORGE_NAME__'
   const doc = {
     // prometheus-operator's AlertmanagerConfig — config/outputs.json.

@@ -78,8 +78,8 @@ async function previewCheck() {
   }
 }
 
-function check(target = dir, env = {}) {
-  const r = spawnSync('node', [SCRIPT, target], { encoding: 'utf-8', env: { ...process.env, ...env } })
+function check(target = dir, env = {}, args = []) {
+  const r = spawnSync('node', [SCRIPT, ...args, target], { encoding: 'utf-8', env: { ...process.env, ...env } })
   return { code: r.status, out: `${r.stdout}${r.stderr}` }
 }
 
@@ -309,5 +309,69 @@ describe('check-deployment on a folder it cannot check', () => {
     const { code, out } = check(path.join(gitops, 'charts'))
     expect(out).toContain('is not a deployment')
     expect(code).toBe(2)
+  })
+})
+
+// A routing.yaml using shared notification configs (#123) is checked with
+// the file the server reads: _shared/ at the repo's root — the git checkout,
+// or --repo — and never one above it.
+describe.skipIf(!CAN_RUN)('check-deployment with shared configs', () => {
+  const SHARED_ROUTING = ROUTING.replace('ops: { type: email, to: ops@example.com }', 'ops: { shared: true }')
+  const shared = to => `configs:\n  ops: { type: email, to: ${to} }\n`
+  const writeShared = async (root, to) => {
+    await fs.mkdir(path.join(root, '_shared'), { recursive: true })
+    await fs.writeFile(path.join(root, '_shared', 'notification-configs.yaml'), shared(to))
+  }
+  // routing.yaml and its resource, made with the shared configs at the repo's root.
+  const withRouting = async () => {
+    const built = buildRouting(SHARED_ROUTING, { configs: { ops: { type: 'email', to: 'ops@example.com' } }, errors: [] })
+    await writeRouting(dir, built)
+  }
+
+  it('reads the shared configs at the root of the git checkout', async () => {
+    execFileSync('git', ['init', '-q', gitops])
+    await writeShared(gitops, 'ops@example.com')
+    await withRouting()
+    const { code, out } = check()
+    expect(out).toContain('Routing: passed')
+    expect(code).toBe(0)
+  })
+
+  it('never one above the repo', async () => {
+    // The repo is a folder inside another one, which has shared configs.
+    const repo = path.join(gitops, 'inner')
+    await fs.mkdir(repo)
+    await fs.rename(path.join(gitops, 'charts'), path.join(repo, 'charts'))
+    await fs.rename(path.join(gitops, 'deployments'), path.join(repo, 'deployments'))
+    dir = path.join(repo, 'deployments', 'tiny', 'prod')
+    execFileSync('git', ['init', '-q', repo])
+    await writeShared(gitops, 'ops@example.com')
+    await withRouting()
+    const { code, out } = check()
+    expect(out).toContain('uses the shared config ops, but there are no shared configs')
+    expect(code).toBe(1)
+  })
+
+  it('takes the root from --repo, and says when it cannot tell it', async () => {
+    await writeShared(gitops, 'ops@example.com')
+    await withRouting()
+    let r = check()
+    expect(r.out).toMatch(/uses shared configs \(ops\), and the repo's root cannot be told: .*--repo/)
+    expect(r.code).toBe(2)
+    r = check(dir, {}, ['--repo', gitops])
+    expect(r.out).toContain('Routing: passed')
+    expect(r.code).toBe(0)
+    r = check(dir, {}, ['--repo', path.join(gitops, 'charts')])
+    expect(r.out).toMatch(/is not inside the repo/)
+    expect(r.code).toBe(2)
+  })
+
+  it('names a shared file that cannot be read, and does not crash', async () => {
+    execFileSync('git', ['init', '-q', gitops])
+    await fs.mkdir(path.join(gitops, '_shared', 'notification-configs.yaml'), { recursive: true })
+    await withRouting()
+    const { code, out } = check()
+    expect(out).toContain('_shared/notification-configs.yaml has problems')
+    expect(code).toBe(1)
   })
 })

@@ -497,6 +497,9 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 - In an alerting rule's label or annotation, a `{{` with no `}}` after it
   (`a {{`): Prometheus reads them as templates and refuses the whole object. A
   `}}` alone is plain text, and a recording rule's labels are no template
+- A carriage return (`\r`) anywhere in a rule's text. Prometheus takes one,
+  but the generated chart cannot carry it: YAML reads it as a line break
+  where an annotation or `expr` is written, and as a space in a label
 - In `for` or `keep_firing_for`, a brace next to a `${column}` (`{${window}}`):
   it can only make the duration something no evaluator reads
 - A name shared between `vars` and a column, or a name that is `selector`
@@ -849,6 +852,58 @@ required. A value of the wrong type — a list where a name goes, a number where
 text goes — is refused where it is. Only a file of the right shape is checked
 for the rest of the table above (cells against `labels` and `configs`,
 credentials in a `url`), so fixing the first problems can show new ones.
+
+### Shared configs
+
+A config several deployments notify — the same in-cluster relay in every
+region, say — can be written once for the whole repo, in
+`_shared/notification-configs.yaml`, and used by name:
+
+```yaml
+# _shared/notification-configs.yaml
+configs:
+  relay-webhook: { type: webhook, url: http://alert-relay.monitoring.svc:8080 }
+  ops-email:     { type: email, to: ops@example.com }
+```
+
+```yaml
+# deployments/shop/prod/routing.yaml
+configs:
+  relay-webhook: { shared: true }                    # the shared one of this name
+  db-email:      { type: email, to: db@example.com } # this deployment's own
+cells:
+  - match: { severity: critical, team: db }
+    configs: [relay-webhook, db-email]
+```
+
+- A shared config is written as a `configs` entry of `routing.yaml` is, and is
+  checked the same way: the same keys and the same refusals as in the tables
+  above and below.
+- **It cannot read a Secret** — `urlSecret`, `authorization`, `basicAuth`, a
+  CA from a Secret, an e-mail `authPassword` (so no `smarthost` either, which
+  needs one). A Secret is read from the namespace of each deployment the
+  resource is in, which AlertForge cannot see, so one change would not reach
+  them all. A config that needs a Secret stays in the `routing.yaml` of each
+  deployment, with the Secret in that deployment's namespace.
+- `{ shared: true }` is all a use says. A name with no shared config, or a
+  shared file with problems, is refused when `routing.yaml` is saved, and
+  refuses a commit when the shared file changed under it. A
+  deployment's own config and a shared one cannot have the same name in one
+  `routing.yaml`: it is one or the other.
+- The generated AlertmanagerConfig carries the shared config in full, exactly
+  as if `routing.yaml` held it. A `routing.yaml` with no `{ shared: true }` is
+  generated as before, whether the repo has shared configs or not.
+- `_shared/` holds only this file: it is not shown in the tree, and no
+  deployment or sync target can be made under it. A repo that already has a
+  `_shared/` folder of its own — anything else in it — keeps it as an ordinary
+  folder, shown in the tree with its deployments, and cannot use shared
+  configs until it is renamed.
+- A rename writes the new name where the old one was, in the shared file and
+  in each `routing.yaml` using it; a name YAML would read bare as something
+  else (`123`, `true`, `0x10`) is quoted.
+
+When a shared config changes, every resource made from it changes too — see
+[Share a config between deployments](how-to.md#share-a-config-between-deployments).
 
 ### E-mail settings
 

@@ -18,6 +18,8 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { readRouting, buildRouting, writeRouting, checkedRouting, copyRouting, ROUTING_CR_FILE } from './routingFiles.js'
 import { isDeploymentDir, isSafeSyncPath, normalizeSyncPath, readSyncRegistry, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
+import { readSharedConfigs, inSharedDir, SHARED_FILE } from './sharedConfigs.js'
+import { sharedRefProblems } from '../../src/utils/routingGenerator.js'
 
 const SYNC_FILE = 'sync.yaml'
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
@@ -42,6 +44,8 @@ export async function listFolderDeployments(gitopsDir) {
       if (inDeployment && (e.name === 'templates' || e.name === 'charts')) continue
       const child = rel ? `${rel}/${e.name}` : e.name
       if (path.resolve(gitopsDir, child) === chartsDir) continue
+      // The shared configs' folder holds no deployment (#123).
+      if (!rel && await inSharedDir(gitopsDir, child)) continue
       const isDeployment = await isDeploymentDir(path.join(gitopsDir, child))
       if (isDeployment) found.push(child)
       await walk(child, isDeployment)
@@ -169,6 +173,14 @@ async function syncRegistryFindings(gitopsDir) {
   return { findings, readable: true }
 }
 
+const parsedOrNull = text => {
+  try {
+    return yaml.load(text)
+  } catch {
+    return null
+  }
+}
+
 async function sameRouting(gitopsDir, a, b) {
   const [x, y] = await Promise.all([readRouting(path.join(gitopsDir, a)), readRouting(path.join(gitopsDir, b))])
   return x.text === y.text && x.cr === y.cr
@@ -180,6 +192,14 @@ export async function deploymentCommitBlockers(gitopsDir) {
   const routingProblems = []
   const registry = sync.readable ? await readSyncRegistry(gitopsDir) : { syncs: [] }
   const deployments = await listFolderDeployments(gitopsDir)
+  // A routing.yaml using a shared config is made with it (#123): a change to
+  // the shared file leaves every resource made from it behind.
+  const shared = await readSharedConfigs(gitopsDir)
+  // Who uses a shared config the shared file does not give: a resource made
+  // now would have no one to send to. Blocks, unlike a routing.yaml's own
+  // problems: the file was changed — removed, broken, a config taken out —
+  // under deployments that were fine.
+  const unresolved = []
   // What Regenerate would make: a source behind makes its targets again too.
   const fixes = new Set()
   const brokenSources = new Set()
@@ -199,7 +219,14 @@ export async function deploymentCommitBlockers(gitopsDir) {
       }
       continue
     }
-    const built = buildRouting(text)
+    const refs = sharedRefProblems(parsedOrNull(text), shared)
+    if (refs.length) {
+      unresolved.push(dep)
+      findings.push({ severity: 'commit', kind: 'routing-shared-unresolved', deployment: dep, regenerable: false,
+        description: `${dep}: ${refs.join('; ')}` })
+      continue
+    }
+    const built = buildRouting(text, shared)
     if (built.errors) {
       routingProblems.push({ deployment: dep, errors: built.errors })
       brokenSources.add(dep)
@@ -207,9 +234,19 @@ export async function deploymentCommitBlockers(gitopsDir) {
     }
     if (built.cr !== cr) {
       findings.push({ severity: 'commit', kind: 'routing-stale', deployment: dep, regenerable: true,
-        description: `${dep}: its AlertmanagerConfig is behind its routing.yaml or the site's object labels — use Regenerate` })
+        description: `${dep}: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate` })
       fixes.add(dep)
       for (const t of getTargetsForSource(registry, dep)) fixes.add(t)
+    }
+  }
+
+  // The shared file itself: blocks while it is used, else only listed.
+  if (shared?.errors.length) {
+    if (unresolved.length) {
+      findings.push({ severity: 'commit', kind: 'routing-shared-broken', deployment: SHARED_FILE, regenerable: false,
+        description: `${SHARED_FILE} has problems and is used by ${unresolved.join(', ')}: ${shared.errors.join('; ')}` })
+    } else {
+      routingProblems.push({ deployment: SHARED_FILE, errors: shared.errors })
     }
   }
 
@@ -244,12 +281,13 @@ export async function regenerateRouting(gitopsDir) {
     const { findings, readable } = await deploymentCommitBlockers(gitopsDir)
     if (!readable) return { regenerated, failed: [{ deployment: SYNC_FILE, error: 'not valid YAML: fix it first' }] }
     const registry = await readSyncRegistry(gitopsDir)
+    const shared = await readSharedConfigs(gitopsDir)
 
     for (const f of findings.filter(f => f.kind === 'routing-stale')) {
       try {
         const dir = path.join(gitopsDir, f.deployment)
         const { text } = await readRouting(dir)
-        const built = buildRouting(text)
+        const built = buildRouting(text, shared)
         if (built.errors) throw new Error(built.errors.join('; '))
         await writeRouting(dir, { text, cr: built.cr })
         regenerated.push(f.deployment)
@@ -270,7 +308,7 @@ export async function regenerateRouting(gitopsDir) {
         // workspace, holding a deployment (as copyToTargets checks).
         if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
         if (!(await isDeploymentDir(path.join(gitopsDir, target)))) throw new Error('not a deployment on disk')
-        const routing = await checkedRouting(path.join(gitopsDir, source))
+        const routing = await checkedRouting(path.join(gitopsDir, source), shared)
         if (routing.errors) throw new Error(`its source ${source} has routing problems`)
         if (await sameRoutingAs(gitopsDir, target, routing)) continue
         await copyRouting(path.join(gitopsDir, source), path.join(gitopsDir, target), routing)

@@ -15,6 +15,7 @@ import {
 } from '../lib/sync.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 import { readRouting, restoreRouting, checkedRouting } from '../lib/routingFiles.js'
+import { readSharedConfigs, inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
 import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
 import { getDepName } from '../lib/subchart.js'
 
@@ -26,6 +27,7 @@ async function validateSyncPath(gitopsDir, candidate) {
   if (!isSafeSyncPath(candidate, chartsDirName())) {
     return `Invalid path: ${candidate}`
   }
+  if (await inSharedDir(gitopsDir, candidate)) return `${candidate}: ${SHARED_DIR}/ holds the shared notification configs, and no deployment`
   const absDir = path.join(gitopsDir, candidate)
   if (!(await isDeploymentDir(absDir))) {
     return `${candidate} is not a valid deployment`
@@ -105,7 +107,7 @@ export default function syncRouter() {
         // refused, not half of it, with both files' problems at once. A
         // resource behind its routing.yaml is made again rather than copied
         // (#166).
-        const routing = await checkedRouting(sourceDir)
+        const routing = await checkedRouting(sourceDir, await readSharedConfigs(req.gitopsDir))
         if (refusal || routing.errors) {
           const reasons = [refusal?.error, routing.errors && 'its routing.yaml has problems'].filter(Boolean)
           return { status: 400, body: {

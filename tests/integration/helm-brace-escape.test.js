@@ -35,9 +35,9 @@ function rendered(escape) {
 }
 
 // A rule's text: Prometheus templates, braces beside a ${column}, backticks
-// and quotes in a template, a carriage return a raw string would drop.
+// and quotes in a template. (A carriage return is refused at save.)
 const RULE_TEXTS = [
-  ...TEXTS, '{{ `raw` }}', '{{ printf "%s" `a` }}', '{{ `a"b` }}', 'a\r{{ "\r" }}', '{{ "}}" }}', 'x{{{', 'a {{ b',
+  ...TEXTS, '{{ `raw` }}', '{{ printf "%s" `a` }}', '{{ `a"b` }}', '{{ "}}" }}', 'x{{{', 'a {{ b',
   '{${host}}', '${host}}}', '{{${host}', '{{ $value }}${host}', '${host}{{ $value }}', '{ ${host} }', 'up{x="${host}{"}',
   '{{ $labels.x }}\n{{ $value }}',
 ]

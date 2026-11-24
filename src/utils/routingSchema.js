@@ -311,6 +311,26 @@ export const configSchema = z.discriminatedUnion('type', [email, webhook], {
   error: iss => (isMap(iss.input) ? `type must be one of ${CONFIG_TYPES.join(', ')}` : 'must be a map with a "type"'),
 })
 
+/**
+ * A config of the repo's shared library (#123), used by name: `{ shared: true }`
+ * in a routing.yaml's configs. The name is the shared config's.
+ */
+export const sharedRefSchema = strictMap({
+  shared: z.literal(true, { error: 'shared must be true: { shared: true } uses the shared config of this name' }),
+}, 'must be a map with a "type"')
+
+/** Whether a routing.yaml's config is a use of the shared one by its name. */
+export const isSharedRef = config => isMap(config) && Object.hasOwn(config, 'shared')
+
+// A routing.yaml's config: its own, or `{ shared: true }`. Which one is read
+// from the `shared` key, so a mistake in either gets that one's message.
+const configEntry = z.unknown()
+  .superRefine((config, ctx) => {
+    const result = (isSharedRef(config) ? sharedRefSchema : configSchema).safeParse(config)
+    if (!result.success) for (const issue of result.error.issues) ctx.addIssue(issue)
+  })
+  .meta({ anyOf: [jsonOf(configSchema), jsonOf(sharedRefSchema)] })
+
 /** Why a config's name is refused, or null. */
 export function configNameProblem(name) {
   if (name.startsWith('_')) return `names starting with "_" are reserved (${DROP_RECEIVER} notifies nobody)`
@@ -342,12 +362,26 @@ export const routingSchema = strictMap({
   defaults: strictMap(timing, 'must be a map').optional(),
   configs: names({
     nameProblem: configNameProblem,
-    value: configSchema,
+    value: configEntry,
     notAMap: 'must be a map of name → config',
     json: { propertyNames: { pattern: CONFIG_NAME_RE.source } },
   }).optional(),
   cells: z.array(cell, { error: 'must be a list' }).optional(),
 }, 'routing.yaml must be a map with labels, configs and cells')
+
+/**
+ * The repo's shared notification configs (#123), _shared/notification-configs.yaml:
+ * a `configs` map written as routing.yaml's is, used from a routing.yaml by
+ * name. Each config is checked as a deployment's own (configSchema).
+ */
+export const sharedConfigsSchema = strictMap({
+  configs: names({
+    nameProblem: configNameProblem,
+    value: configSchema,
+    notAMap: 'must be a map of name → config',
+    json: { propertyNames: { pattern: CONFIG_NAME_RE.source } },
+  }),
+}, 'the shared notification configs must be a map with configs')
 
 // ── messages ────────────────────────────────────────────────────────────────
 
@@ -364,7 +398,7 @@ const isName = (path, i) => (
 )
 
 /** One issue as the message shown: where it is, then what is wrong. */
-function message(issue, path = issue.path) {
+function message(issue, path = issue.path, file = 'routing.yaml') {
   const last = path.at(-1)
   // "groupWait must be …" is said of the map holding groupWait — unless the
   // key is a name the user chose that happens to be the message's first word.
@@ -375,13 +409,16 @@ function message(issue, path = issue.path) {
   const where = pathText(path)
   if (!where) {
     // The file itself: not a map, or a top-level key it does not know.
-    return issue.code === 'unrecognized_keys' ? `routing.yaml: ${issue.message}` : issue.message
+    return issue.code === 'unrecognized_keys' ? `${file}: ${issue.message}` : issue.message
   }
   return `${where}: ${issue.message}`
 }
 
-/** Every way a value breaks the schema, as messages; empty when it fits. */
-export function schemaProblems(schema, value, basePath = []) {
+/**
+ * Every way a value breaks the schema, as messages; empty when it fits.
+ * `file` names the file in a message about the file itself.
+ */
+export function schemaProblems(schema, value, basePath = [], { file = 'routing.yaml' } = {}) {
   const result = schema.safeParse(value)
   if (result.success) return []
   const out = []
@@ -389,9 +426,9 @@ export function schemaProblems(schema, value, basePath = []) {
     const path = [...basePath, ...issue.path]
     // Several unknown keys come as one issue: one message for each, by name.
     if (issue.code === 'unrecognized_keys') {
-      for (const key of issue.keys) out.push(message({ ...issue, message: `unknown key "${key}" (${issue.message})` }, path))
+      for (const key of issue.keys) out.push(message({ ...issue, message: `unknown key "${key}" (${issue.message})` }, path, file))
     } else {
-      out.push(message(issue, path))
+      out.push(message(issue, path, file))
     }
   }
   return [...new Set(out)]

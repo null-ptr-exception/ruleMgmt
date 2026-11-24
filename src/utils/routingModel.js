@@ -321,3 +321,17 @@ export function toSave(routing) {
     ...rest,
   }
 }
+
+/**
+ * Whether two configs say the same: the same keys and values, in any order
+ * of keys (`{ to, type }` is `{ type, to }`); a list's order counts.
+ */
+export function sameConfig(a, b) {
+  if (a === b) return true
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((x, i) => sameConfig(x, b[i]))
+  }
+  if (!isMap(a) || !isMap(b)) return false
+  const keys = Object.keys(a)
+  return keys.length === Object.keys(b).length && keys.every(k => Object.hasOwn(b, k) && sameConfig(a[k], b[k]))
+}

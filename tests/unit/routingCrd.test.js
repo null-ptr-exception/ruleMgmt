@@ -3,8 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import yaml from 'js-yaml'
 import Ajv from 'ajv'
-import { routingSpec } from '../../src/utils/routingGenerator.js'
-import { listRoutingCases, ROUTING_CASES_DIR } from '../blind/harness.js'
+import { routingSpec, resolveShared } from '../../src/utils/routingGenerator.js'
+import { listRoutingCases, ROUTING_CASES_DIR, routingCaseShared } from '../blind/harness.js'
 
 /**
  * The generated AlertmanagerConfig's spec against the operator's own CRD
@@ -32,7 +32,8 @@ function closed(schema) {
 const validate = new Ajv({ allErrors: true, unknownFormats: 'ignore' }).compile(closed(CRD))
 const problems = spec => (validate(spec) ? [] : validate.errors.map(e => `${e.dataPath} ${e.message}`))
 
-const caseRouting = name => yaml.load(fs.readFileSync(path.join(ROUTING_CASES_DIR, name, 'routing.yaml'), 'utf-8'))
+// A case using shared configs (#123) has them written in, as generated.
+const caseRouting = name => resolveShared(yaml.load(fs.readFileSync(path.join(ROUTING_CASES_DIR, name, 'routing.yaml'), 'utf-8')), routingCaseShared(name))
 
 describe('the CRD schema', () => {
   it.each(listRoutingCases())('accepts the spec generated for %s', name => {

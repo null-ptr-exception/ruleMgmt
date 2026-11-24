@@ -67,9 +67,8 @@ describe('escapePrometheusTemplates', () => {
     // A template as it has always been written: in a raw string.
     ['{{ $value }}', '{{ `{{ $value }}` }}'],
     ['{{ "}}" }}', '{{ `{{ "}}` }}" }}'],
-    // A raw string cannot hold a backtick, or keep a carriage return.
+    // A raw string cannot hold a backtick.
     ['{{ `raw` }}', '{{ "{{ `raw` }}" }}'],
-    ['a\r{{ "\r" }}', 'a\r{{ "{{ \\"\\r\\" }}" }}'],
     // A {{ that no }} follows, as a whole run.
     ['a {{', 'a {{ `{{` }}'],
     ['x{{{', 'x{{ `{{{` }}'],

@@ -165,6 +165,25 @@ describe('a {{ with no }} after it', () => {
   })
 })
 
+// promtool takes a carriage return in a label or annotation; the generated
+// chart cannot: in a block scalar YAML reads it as a line break (the file no
+// longer parses), in a quoted label as a space.
+describe('a carriage return', () => {
+  const found = rule => checkRules(chart([rule])).filter(f => f.kind === 'carriage-return')
+  it.each([
+    [{ alert: 'A', expr: 'cpu > ${warn}', annotations: { s: 'a\rb' } }, 's'],
+    [{ alert: 'A', expr: 'cpu > ${warn}', labels: { l: 'a\rb' } }, 'l'],
+    [{ alert: 'A', expr: 'cpu\r > ${warn}' }, 'expr'],
+    [{ record: 'r:x', expr: 'cpu > ${warn}', labels: { l: 'a\r' } }, 'l'],
+  ])('is refused at save: %j', (rule, key) => {
+    expect(found(rule)).toEqual([expect.objectContaining({ severity: 'save', message: expect.stringContaining(`"${key}" has a carriage return`) })])
+  })
+
+  it('a line break is not', () => {
+    expect(found({ alert: 'A', expr: 'cpu > ${warn}', annotations: { s: 'a\nb' } })).toEqual([])
+  })
+})
+
 describe('optional column with no default, mid-string', () => {
   it('rejects it in the middle of an annotation value', () => {
     const findings = checkRules(chart([

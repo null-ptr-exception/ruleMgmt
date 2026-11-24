@@ -1,0 +1,4 @@
+configs:
+  relay-webhook: { type: webhook, url: http://alert-relay.monitoring.svc:8080, sendResolved: false }
+  ops-email:     { type: email, to: ops@example.com, headers: { Subject: "[{{ .CommonLabels.severity }}] ops" } }
+  unused:        { type: webhook, url: http://nobody.example.com/ }

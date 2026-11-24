@@ -6,6 +6,7 @@ import { getDepName, wrapValues, unwrapValues, countAlerts } from '../lib/subcha
 import { valuesRefusal, saveValues, copyToTargets, okWith } from '../lib/deploymentWrite.js'
 import { readSyncRegistry, writeSyncRegistry, withSyncRegistryLock, isTarget, applyUnlink, normalizeSyncPath, isDeploymentDir, getSourceForTarget } from '../lib/sync.js'
 import { buildRouting, writeRouting, removeRouting, routingState, readRouting } from '../lib/routingFiles.js'
+import { readSharedConfigs } from '../lib/sharedConfigs.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -211,7 +212,9 @@ export default function deploymentsRouter() {
       if (isTarget(registry, folder)) {
         return { status: 409, body: { error: `${folder} is synced from another deployment and is read-only` } }
       }
-      await write(dir)
+      // A write may refuse what it was given: { status, body }.
+      const refused = await write(dir)
+      if (refused) return refused
       const syncFailed = await copyToTargets(req.gitopsDir, registry, folder, { values: false, routing: true })
       return { status: 200, body: okWith(syncFailed) }
     })
@@ -224,7 +227,7 @@ export default function deploymentsRouter() {
     try {
       const at = await routingTarget(req, res, { write: false })
       if (!at) return
-      const state = await routingState(at.dir)
+      const state = await routingState(at.dir, await readSharedConfigs(req.gitopsDir))
       if (!state) return res.status(404).json({ error: 'This deployment has no routing.yaml' })
       // A sync target is held to its source's files (#179): one that is not
       // its source's is behind as well, though its own two files agree.
@@ -250,11 +253,15 @@ export default function deploymentsRouter() {
     try {
       const at = await routingTarget(req, res)
       if (!at) return
-      const built = buildRouting(input)
-      if (built.errors) {
-        return res.status(400).json({ error: 'routing.yaml has problems', problems: built.errors })
-      }
-      const { status, body } = await writeRoutingAndSync(req, at, dir => writeRouting(dir, built))
+      // A config used from the shared configs (#123) is written in full:
+      // read and built under the lock, so a change to them made meanwhile is
+      // never written over with the old one.
+      const { status, body } = await writeRoutingAndSync(req, at, async dir => {
+        const built = buildRouting(input, await readSharedConfigs(req.gitopsDir))
+        if (built.errors) return { status: 400, body: { error: 'routing.yaml has problems', problems: built.errors } }
+        await writeRouting(dir, built)
+        return null
+      })
       res.status(status).json(body)
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -265,7 +272,7 @@ export default function deploymentsRouter() {
     try {
       const at = await routingTarget(req, res)
       if (!at) return
-      const { status, body } = await writeRoutingAndSync(req, at, removeRouting)
+      const { status, body } = await writeRoutingAndSync(req, at, async dir => { await removeRouting(dir); return null })
       res.status(status).json(body)
     } catch (err) {
       res.status(500).json({ error: err.message })

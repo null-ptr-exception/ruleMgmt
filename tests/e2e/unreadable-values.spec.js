@@ -46,3 +46,34 @@ test.describe('a deployment whose values.yaml cannot be read', () => {
     await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 })
+
+// A value Helm (YAML 1.1) reads otherwise than it looks: shown as Helm reads
+// it, and the page says why.
+test.describe('a deployment whose values hold 010', () => {
+  const OCTAL = 'e2e-octal-values'
+  const DIR = `deployments/${OCTAL}/dev`
+  const THR = 'group: cpu\ncolumns:\n  namespace: {type: string, required: true}\n  thr: {type: number}\nrules:\n  - alert: CpuHigh\n    expr: cpu{ns="${namespace}"} > ${thr}\n'
+  test.afterAll(async ({ request }) => { await removeChart(request, OCTAL) })
+
+  test('shows 8, as Helm reads it, and says why', async ({ page, request }) => {
+    await removeChart(request, OCTAL)
+    expect((await request.post('/api/v2/charts', { data: { name: OCTAL } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/templates/${OCTAL}/rules`, { data: { files: { 'cpu.yaml': THR } } })).ok()).toBeTruthy()
+    expect((await request.post('/api/v2/folders/init', { data: { folder: DIR, chart: OCTAL } })).status()).toBeLessThan(300)
+    await fs.writeFile(path.join(WORKSPACE, DIR, 'values.yaml'), `${OCTAL}:\n  cpu:\n    - namespace: shop\n      thr: 010\n`)
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = page.locator('.ant-tree')
+    for (const segment of ['deployments', OCTAL]) {
+      const node = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${segment}$`) }).first()
+      await expect(node).toBeVisible({ timeout: 8000 })
+      const switcher = node.locator('.ant-tree-switcher_close')
+      if (await switcher.count() > 0) await switcher.click()
+    }
+    await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
+      .first().locator('.ant-tree-node-content-wrapper').click()
+    await page.getByText('cpu', { exact: true }).first().click()
+    await expect(page.locator('.ant-table-tbody').getByRole('spinbutton').first()).toHaveValue('8', { timeout: 8000 })
+    await expect(page.getByTestId('values-read-notes')).toContainText('Helm reads 010 as 8 (YAML 1.1)', { timeout: 8000 })
+  })
+})

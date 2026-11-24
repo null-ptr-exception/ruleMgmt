@@ -154,8 +154,6 @@ async function chartsIn(dir) {
  *   doc       the folder's own values.yaml
  *   problems  why Helm renders none of it, or renders what AlertForge
  *             cannot show: `{ kind, description }`, naming the layer
- *   valueIssues  values Helm versions read differently or not at all (a
- *             null, a group that is not a list), in a stack's files
  */
 export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) } = {}) {
   const templatesDir = path.resolve(gitopsDir, chartsDirName())
@@ -171,7 +169,7 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
   const keys = []
   const layers = []
   const problems = []
-  const result = { chart: null, keys, layers, problems, doc: {}, valueIssues: [], groups: new Set(), dependencyNames: [], claims: null }
+  const result = { chart: null, keys, layers, problems, doc: {}, groups: new Set(), dependencyNames: [], claims: null }
   // The snapshot it was read from: what is read later reads the same.
   Object.defineProperty(result, 'repo', { value: repo, enumerable: false })
   // The folder's own values are read only when something needs them: a
@@ -330,10 +328,6 @@ export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) 
   if (!layers.length && !startsAsLayer) return result
   const groups = await templateGroups(repo, result.chart)
   result.groups = groups
-  result.valueIssues = [
-    ...valueIssuesIn(result.doc, keys, `${rel(gitopsDir, dir)}/values.yaml`, groups),
-    ...layers.flatMap(l => valueIssuesIn(l.doc, l.keys, `${l.path}/values.yaml`, groups)),
-  ]
   if (own?.error) problems.push(problem('values-unreadable', `${rel(gitopsDir, dir)}/values.yaml cannot be read (${own.error}), so Helm cannot render it`))
   return result
 }
@@ -369,46 +363,12 @@ export function mergeValues(base, over) {
   return out
 }
 
-const FIX = 'write [] to clear a group, or remove the key to inherit it'
 
-/**
- * What one file's values hold that Helm does not read as AlertForge shows
- * it: a null (Helm versions read it as removing the key, as nothing, or as
- * an error), a group that is not a list of rows or Common Values that is not
- * a map (Helm stops on the Template's schema). `groups` are the Template's
- * groups; a key it does not know is left alone unless it is null.
- */
-export function valueIssuesIn(parsed, keys, file, groups = new Set()) {
-  const out = []
-  const say = (where, what) => out.push(`${file}: ${where} is ${what} — ${FIX}`)
-  let v = parsed
-  for (const [i, k] of keys.entries()) {
-    if (!isPlainObject(v)) return out
-    if (k in v && v[k] === null && keys.length > 1) { say(keys.slice(0, i + 1).join('.'), 'null'); return out }
-    if (!isPlainObject(v[k])) return out
-    v = v[k]
-  }
-  if (!isPlainObject(v)) return out
-  for (const [k, val] of Object.entries(v)) {
-    if (k === '_common') {
-      if (val === null) say('Common Values', 'null')
-      else if (!isPlainObject(val)) say('Common Values', `${JSON.stringify(val)}, not a map`)
-      else for (const [ck, cv] of Object.entries(val)) if (cv === null) say(`Common Values' ${ck}`, 'null')
-      continue
-    }
-    if (val === null) say(`the group ${k}`, 'null')
-    else if (groups.has(k) && !Array.isArray(val)) say(`the group ${k}`, `${JSON.stringify(val)}, not a list of rows`)
-  }
-  return out
-}
-
-/** Kept for the save check's text: the same, as one file. */
-export const nullsIn = valueIssuesIn
 
 /**
  * What the layers and the folder's own values add up to, as the Template
  * sees them (its own values.yaml left out), bare: `{ layers: [{ path,
- * values }], own, merged, nulls }`, layers nearest first. Each chart passes
+ * values }], own, merged }`, layers nearest first. Each chart passes
  * down only what is under the next one's key. `own` may be given (what is
  * about to be written) instead of the file's.
  */
@@ -422,7 +382,6 @@ export function stackValues(stack, { own } = {}) {
     layers: stack.layers.map(l => ({ path: l.path, values: l.keys.reduce(at, l.doc) })),
     own: own === undefined ? unwrapPath(stack.doc, stack.keys) : own,
     merged,
-    nulls: stack.valueIssues,
   }
 }
 

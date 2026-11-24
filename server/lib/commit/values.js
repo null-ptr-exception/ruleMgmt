@@ -28,6 +28,6 @@ export async function valuesFindings(gitopsDir, dep, stack, { repo = openRepo(gi
   const findings = d.refuse.map(f => ({ severity: 'commit', kind: loaded.state === 'ok' ? `values-${f.code.split('.').pop()}` : 'values-unreadable', deployment: dep, regenerable: false,
     description: f.code === 'values.unreadable' ? f.message
       : loaded.state === 'invalid' ? `${dep}: values.yaml cannot be read (${f.message.replace(/^\S+ (line (\d+): )?/, (_, l, n) => (n ? `line ${n}: ` : ''))}), so Helm cannot render it`
-        : `${dep}: values.yaml: ${f.message}` }))
+        : /^\S+\.yaml( line \d+)?: /.test(f.message) ? `${dep}: ${f.message}` : `${dep}: values.yaml: ${f.message}` }))
   return { findings, warnings: [...d.list, ...d.warn].map(f => f.message) }
 }

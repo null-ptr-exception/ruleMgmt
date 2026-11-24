@@ -9,11 +9,13 @@ import os from 'os'
 import path from 'path'
 import { checkRules, renderChart, runCommand } from './ruleCheck.js'
 import { ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
-import { resolveStack, readStackValues } from './stack.js'
+import { resolveStack } from './stack.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadRouting, commonResource } from '../repo/routing.js'
 import { decide } from '../repo/policy.js'
 import { ROUTING_POLICIES } from '../repo/routingPolicy.js'
+import { loadDeployment } from '../repo/deployment.js'
+import { findingsOf } from '../repo/loaded.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 /** A reason the deployment could not be checked at all: exit 2. */
@@ -66,6 +68,7 @@ export async function checkRuleObjects(dir, repo) {
   // checked against any other root than the repo's.
   let root = path.dirname(dir)
   let stack, nulls
+  let twice
   try {
     stack = await resolveStack(root, dir)
     if (stack.firstLayerPath !== undefined) {
@@ -79,7 +82,23 @@ export async function checkRuleObjects(dir, repo) {
       root = found
       stack = await resolveStack(root, dir)
     }
-    nulls = stack.layers.length ? (await readStackValues(root, dir, stack)).nulls : []
+    // Its values as Helm reads them (repo/deployment.js): one that cannot
+    // be read is not checked as if it held none.
+    // Read from the repo's root when it can be told (--repo, or git), so a
+    // link to another file of the repo is read as Helm reads it; else from
+    // the folder it is in, as before.
+    let valuesRoot = root
+    if (stack.firstLayerPath === undefined) {
+      const found = await repoRoot(dir, repo).catch(err => { if (err instanceof CannotCheck) return {}; throw err })
+      if (found.root) valuesRoot = found.root
+    }
+    const dep = await loadDeployment(openRepo(valuesRoot), path.relative(valuesRoot, dir).split(path.sep).join('/'))
+    if (dep.state !== 'ok') {
+      const why = dep.state === 'unreadable' ? dep.why : findingsOf(dep).map(f => f.message).join('; ')
+      return { ok: false, lines: [`Values: not checked — ${dep.file} cannot be read: ${why}`] }
+    }
+    nulls = findingsOf(dep).filter(f => f.code === 'values.null-on-stack').map(f => f.message)
+    twice = findingsOf(dep).filter(f => f.code === 'stack.duplicate-key').map(f => f.message)
   } catch (err) {
     if (err instanceof CannotCheck) throw err
     return { ok: false, lines: [`Rules: not checked — its _common stack cannot be read (${err.code || err.message})`] }
@@ -100,6 +119,7 @@ export async function checkRuleObjects(dir, repo) {
   // A lint finding passes, as in Preview, but is not a clean pass.
   const title = !check.passed ? `failed${tools}` : check.warned ? `passed with warnings${tools}` : `passed${tools}`
   const lines = [`Rules: ${title}`, check.output].filter(Boolean)
+  if (twice.length) lines.push(...twice.map(t => `Values: warning: ${t}`))
   if (nulls.length) lines.push('Values: some are null — Helm versions read a null differently:', ...nulls.map(n => `  ${n}`))
   return { ok: check.passed && !nulls.length, lines }
 }

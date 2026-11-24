@@ -213,6 +213,10 @@ they were, so comments added by hand survive. Four things can stop it:
   another is changed in its source, which the dialog names). A problem a
   deployment had before the change does not stop it, nor does a deployment
   whose `values.yaml` cannot be read; the others are still checked.
+  Each deployment is checked as its own save checks it — the new schema
+  and columns, its `_common` and the Template's own values counted, every
+  file the change migrates as it will be written. A value of a column the
+  change renames counts as new under its new name.
 
 ### Change a chart people are already using
 
@@ -335,6 +339,13 @@ chart → **Create**.
 Under a folder with a `_common` for that chart, it inherits from it and
 writes nothing of its own (see [Share settings across a folder](#share-settings-across-a-folder)).
 
+It is made only where it can deploy: when the chart's own `values.yaml` or
+`rules/` cannot be read, or what the chart or the `_common` gives stops Helm
+or the rule checker (a group written as a map, a Common Value of `0` a
+derived window reads as `[0m]`), **Create** says so, naming the file, and
+nothing is written. Required cells left empty are fine: they are filled in
+the editor, and its Save asks for them.
+
 Its `Chart.yaml` asks for any version of the chart (`">=0.0.0-0"`): there
 is one copy of each chart, and a new version of one is a clone of it under
 another name.
@@ -397,7 +408,17 @@ as written (`010`, `1_0`, `on` mean to Helm what they did), and comments,
 anchors and the order of keys stay too. In `Chart.yaml` only the
 dependency's `name` and `repository` change. So a make and then a remove
 give back every file byte for byte — but for the example rows a make
-copied into a deployment, which the dialog lists.
+copied into a deployment, which the dialog lists. Only the document Helm
+reads is moved: a byte order mark at the start and a `---` with anything
+after it stay where they are.
+
+What a deployment's values already are is not judged: Helm renders each
+deployment it changes before and after, and nothing is written unless it
+deploys the same. A deployment is not re-attached when its values cannot be
+moved as Helm reads them: a `values.yaml` that cannot be read (a folder, a
+link leading outside the repo), values not under the Template's name (Helm
+passes none of them on), a key written twice, or a Template whose own
+`values.yaml` cannot be read. The dialog names each, with why.
 
 Before anything is written, Helm renders every deployment it would touch,
 with the same steps as Preview; once written, Helm renders them again, and
@@ -918,10 +939,17 @@ A commit is refused, too, while any deployment:
 - has a `values.yaml` that cannot be read as values at all: not YAML, YAML
   AlertForge cannot tell Helm's reading of, a folder, a link out of the repo,
   or no map under the chart's name
+- renders on a `_common` stack with a `null` in it — in its own values, a
+  `_common`'s or the Template's: Helm 3.15 and 3.19 deploy different things
+  for it (one keeps the null, the other removes the key and takes what is
+  above it, or the default), so what deploys would depend on the Helm
+  version. The message names the file and the key: give it a value, or
+  delete the line
 
 A deployment's other value problems do not refuse the commit: Helm stopping
 on a cell, a value Helm reads otherwise (`010`), values not under the
-chart's name, a key written twice, a `null` on a `_common` stack. They are
+chart's name, a key written twice (in its own values, or in a `_common` it
+renders on: Helm deploys the later one, which may not be the one meant). They are
 listed under the deployment after the commit, as rows the row identity label
 cannot tell apart are; `check-repo` refuses them.
 
@@ -1165,7 +1193,10 @@ renders it with Helm and runs `promtool` (or `vmalert`) on each rule object,
 as **Preview** does, and checks its `routing.yaml` as the **Routing** page
 reads it — including whether `templates/alertmanagerconfig.yaml` is still what
 `routing.yaml` generates, whether one is there with no `routing.yaml`, and
-whether a `_common` chart it renders on has one of its own:
+whether a `_common` chart it renders on has one of its own. It reads the
+deployment's `values.yaml` as the editor does, within the same size limit
+(`MAX_VALUES_BYTES`): one that cannot be read — a folder, a link leading
+outside the repo, a file over the limit — fails the check, naming it.
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \

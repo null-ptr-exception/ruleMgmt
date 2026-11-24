@@ -183,3 +183,26 @@ describe('a rules file edited by hand into one the parser refuses', () => {
     expect(data.problems.map(p => p.message)).toEqual(['spc row 1, derived "w": its unit "q" is not one of ms, s, m, h, d, w, y — fix the rules file'])
   })
 })
+
+describe('a new deployment that could not deploy', () => {
+  const IS_ROOT = process.getuid?.() === 0
+  it.skipIf(IS_ROOT)('is not made when its Template\'s rules cannot be read, and the folder is left as it was', async () => {
+    await fs.chmod(path.join(tmpDir, 'charts/demo/rules'), 0o000)
+    try {
+      const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/new', chart: 'demo' })
+      expect(status).toBe(409)
+      expect(data.error).toMatch(/Not made: deployments\/team\/new would not deploy .*charts\/demo\/rules/)
+      await expect(fs.stat(path.join(tmpDir, 'deployments/team/new'))).rejects.toThrow()
+    } finally {
+      await fs.chmod(path.join(tmpDir, 'charts/demo/rules'), 0o755)
+    }
+  })
+
+  it('is not made when the Template\'s values.yaml is not YAML, naming it', async () => {
+    await fs.writeFile(path.join(tmpDir, 'charts/demo/values.yaml'), 'spc: [\n')
+    const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/new', chart: 'demo' })
+    expect(status).toBe(409)
+    expect(data.file).toBe('charts/demo/values.yaml')
+    await expect(fs.stat(path.join(tmpDir, 'deployments/team/new'))).rejects.toThrow()
+  })
+})

@@ -1,8 +1,11 @@
 import express from 'express'
 import path from 'path'
 import { chartDrift, readChartModel } from '../lib/chartFiles.js'
-import { getDepName, unwrapValues } from '../lib/subchart.js'
-import { resolveStack, readStackValues, mergeValues } from '../lib/stack.js'
+import { resolveStack, mergeValues } from '../lib/stack.js'
+import { openRepo } from '../repo/openRepo.js'
+import { loadDeployment } from '../repo/deployment.js'
+import { findingsOf, NotLoadedError } from '../repo/loaded.js'
+import { explain } from '../repo/policy.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
 import { derivedTable, groupName } from '../../src/utils/rulesFile.js'
@@ -10,9 +13,7 @@ import { logger } from '../lib/logger.js'
 import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
-import { readTextIfThere, parseIfThere } from '../lib/readIfThere.js'
 import { NAME_RE, isRepoPath, insideReal } from '../lib/safePath.js'
-import { loadValues } from '../../src/utils/valuesText.js'
 
 // One segment of a file name: not a path, not hidden.
 const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.)[^/\\\0]+$/
@@ -138,27 +139,20 @@ export default function renderRouter() {
       // parses wins. On a `_common` stack, what the layers and the deployment
       // add up to — and the Template's own values under a group none of them
       // gives, which Helm renders too.
+      // The values as Helm coalesces them (repo/deployment.js): one that
+      // cannot be read fails the summary (logged), rather than showing
+      // another file's rows. What AlertForge cannot tell Helm renders from a
+      // null on the stack is said beside the render.
       let valueWarnings = []
       const readValues = async () => {
-        if (stack?.layers.length) {
-          const stacked = await readStackValues(req.gitopsDir, deploymentsDir, stack)
-          valueWarnings = stacked.nulls
-          const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), loadValues)) || {}
-          return mergeValues(defaults, stacked.merged)
-        }
-        const candidates = folder
-          ? [path.join(deploymentsDir, 'values.yaml'), path.join(deploymentsDir, `${deployment}-values.yaml`)]
-          : [path.join(deploymentsDir, `${deployment}-values.yaml`)]
-        // Not there: the next one. One that cannot be read or parsed fails
-        // the summary (logged), rather than showing another file's rows.
-        for (const candidate of candidates) {
-          const text = await readTextIfThere(candidate)
-          if (text === null) continue
-          return unwrapValues(loadValues(text) || {}, stack?.keys[0] ?? await getDepName(path.dirname(candidate)))
-        }
-        return null
+        const rel = folder ? String(folder).replace(/\\/g, '/').replace(/\/+$/, '') : `${process.env.DEPLOYMENTS_DIR || 'deployments'}/${chart}/${deployment}-values.yaml`
+        const dep = await loadDeployment(openRepo(req.gitopsDir), rel, { chart: folder ? undefined : chart })
+        if (dep.state !== 'ok') throw new NotLoadedError(dep)
+        valueWarnings = findingsOf(dep).filter(f => f.code === 'values.null-on-stack' || explain(f, 'preview').action === 'warn').map(f => f.message)
+        return dep.value.effective
       }
-      const readDefaults = async () => (await parseIfThere(path.join(chartDir, 'values.yaml'), loadValues)) || {}
+      // The values read are what the Template sees, its own values.yaml in them.
+      const readDefaults = async () => ({})
       const summary = await buildSummary(output, chartModel, readValues, readDefaults).catch(err => {
         logger.error({ err, chart: template, deployment }, 'buildSummary failed, falling back to raw YAML')
         return null

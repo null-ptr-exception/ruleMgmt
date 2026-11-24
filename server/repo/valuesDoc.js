@@ -13,13 +13,18 @@
  *   addMissing    another file's entries a map lacks, copied in as written
  *   setDependency one dependency's `name` and `repository`, as written otherwise
  *
- * Each returns `{ text }` or `{ why }`. Indenting a block of YAML by the same
+ * Each returns `{ text }` or `{ why }`. Only the first document is edited,
+ * as it is the only one Helm reads: a byte order mark before it stays at the
+ * start of the file, and a `---` with anything after it stays at the end,
+ * as written. This is the one place that edits a values file's text.
+ *
+ * Indenting a block of YAML by the same
  * amount on every line keeps what it means: block scalars and flow
  * collections are read relative to their parent, and the continuation lines
  * of a quoted or plain scalar are folded whatever their indentation.
  */
 
-import { parseDocument, isMap, isScalar, isSeq } from 'yaml'
+import { parseAllDocuments, parseDocument, isMap, isScalar, isSeq } from 'yaml'
 
 const lineStart = (t, i) => t.lastIndexOf('\n', i - 1) + 1
 const column = (t, i) => i - lineStart(t, i)
@@ -28,18 +33,46 @@ const dedentLines = (s, n) => s.split('\n').map(l => l.replace(new RegExp(`^ {0,
 const withNewline = s => (s.endsWith('\n') || s === '' ? s : `${s}\n`)
 
 /**
+ * A text split around the document Helm reads: `{ head, body, tail }`, a
+ * byte order mark at the start (head), the first document (body), and
+ * from the `---` of a second document to the end (tail), each as written.
+ */
+function splitDoc(text) {
+  const head = text.startsWith('\uFEFF') ? '\uFEFF' : ''
+  const rest = text.slice(head.length)
+  const docs = parseAllDocuments(rest)
+  const list = Array.isArray(docs) ? docs : [docs]
+  const cut = list.length > 1 ? list[1].range[0] : rest.length
+  return { head, body: rest.slice(0, cut), tail: rest.slice(cut) }
+}
+
+// An edit of the first document, with what is around it put back.
+const aroundDoc = edit => (text, ...args) => {
+  if (typeof text !== 'string') return { why: 'cannot be read' }
+  const { head, body, tail } = splitDoc(text)
+  const out = edit(body, ...args)
+  return typeof out.text === 'string' ? { ...out, text: head + (tail ? withNewline(out.text) : out.text) + tail } : out
+}
+
+/**
  * The document and its top-level map, or `{ why }`. A file with no values
- * — empty, comments only, or `{}` — is an empty map: Helm reads it as none.
- * `text` is then what to edit: the `{}` taken out.
+ * — empty, comments only, `{}` or `~` — is an empty map: Helm reads it as
+ * none. `text` is then what to edit: the `{}` or `~` taken out.
  */
 export function loadMap(text) {
   if (typeof text !== 'string') return { why: 'cannot be read' }
+  const { body } = splitDoc(text)
+  return loadBody(body)
+}
+
+function loadBody(text) {
   const doc = parseDocument(text)
   if (doc.errors.length) return { why: `is not valid YAML (${doc.errors[0].message.split('\n')[0]})` }
   if (doc.contents === null) return { doc, map: { items: [] }, text }
-  if (!isMap(doc.contents)) return { why: 'does not hold a map at its top level' }
-  if (doc.contents.flow) {
-    if (doc.contents.items.length) return { why: 'is written as one flow map ({…}): write it as block YAML' }
+  const none = isScalar(doc.contents) && doc.contents.value === null
+  if (!none && !isMap(doc.contents)) return { why: 'does not hold a map at its top level' }
+  if (none || doc.contents.flow) {
+    if (!none && doc.contents.items.length) return { why: 'is written as one flow map ({…}): write it as block YAML' }
     const [from, to] = doc.contents.range
     const bare = text.slice(0, from) + text.slice(to)
     return { doc: parseDocument(bare), map: { items: [] }, text: bare }
@@ -95,7 +128,7 @@ function mapAt(text, top, keys) {
 }
 
 const reload = text => {
-  const out = loadMap(text)
+  const out = loadBody(text)
   return out.why ? { why: `would not be valid YAML after the change (${out.why})` } : { text }
 }
 
@@ -104,8 +137,8 @@ const reload = text => {
  * `common:`. An entry that is not there is left out (null text); `create`
  * adds `common: { key: {} }` instead.
  */
-export function wrapEntry(text, keys, key, { wrapper = 'common', create = false } = {}) {
-  const loaded = loadMap(text)
+export const wrapEntry = aroundDoc((text, keys, key, { wrapper = 'common', create = false } = {}) => {
+  const loaded = loadBody(text)
   if (loaded.why) return loaded
   text = loaded.text
   const at = mapAt(text, loaded.map, keys)
@@ -123,14 +156,14 @@ export function wrapEntry(text, keys, key, { wrapper = 'common', create = false 
   const [from, to] = spanOf(text, map, pair, end)
   const entry = withNewline(text.slice(from, to))
   return reload(`${text.slice(0, from)}${' '.repeat(childIndent)}${wrapper}:\n${indentLines(entry, 2)}${text.slice(to)}`)
-}
+})
 
 /**
  * The entry `wrapper` of the map at `keys`, which holds only `key`, taken
  * up one level: `common:\n  key: …` → `key: …`. Not there: unchanged.
  */
-export function liftEntry(text, keys, key, { wrapper = 'common' } = {}) {
-  const loaded = loadMap(text)
+export const liftEntry = aroundDoc((text, keys, key, { wrapper = 'common' } = {}) => {
+  const loaded = loadBody(text)
   if (loaded.why) return loaded
   text = loaded.text
   const at = mapAt(text, loaded.map, keys)
@@ -154,7 +187,7 @@ export function liftEntry(text, keys, key, { wrapper = 'common' } = {}) {
   if (!/^\s*[^\s#][^\n]*:\s*(#[^\n]*)?\n(\s*(#[^\n]*)?\n)*$/.test(head)) return { why: `writes something on the ${wrapper}: line` }
   const by = column(text, inner.key.range[0]) - column(text, pair.key.range[0])
   return reload(text.slice(0, from) + dedentLines(withNewline(text.slice(innerStart, to)), by) + text.slice(to))
-}
+})
 
 /**
  * The entries of the map at `fromKeys` in `baseText` that the map at `keys`
@@ -164,7 +197,8 @@ export function liftEntry(text, keys, key, { wrapper = 'common' } = {}) {
  * there is added; one written `{}` is written as a block.
  * @returns {{ text, added: [key] }|{ why }}
  */
-export function addMissing(text, keys, baseText, fromKeys, { only = null } = {}) {
+export const addMissing = aroundDoc(addMissingIn)
+function addMissingIn(text, keys, baseText, fromKeys, { only = null } = {}) {
   const base = loadMap(baseText)
   if (base.why) return { why: `the file it comes from ${base.why}` }
   baseText = base.text
@@ -173,7 +207,7 @@ export function addMissing(text, keys, baseText, fromKeys, { only = null } = {})
   let out = text
   // Make the map there, as a block.
   for (let n = 1; n <= keys.length; n++) {
-    const loaded = loadMap(out)
+    const loaded = loadBody(out)
     if (loaded.why) return loaded
     out = loaded.text
     const at = mapAt(out, loaded.map, keys.slice(0, n))
@@ -199,7 +233,7 @@ export function addMissing(text, keys, baseText, fromKeys, { only = null } = {})
   for (const bpair of from.map.items) {
     const k = keyOf(bpair)
     if (only && !only.includes(k)) continue
-    const loaded = loadMap(out)
+    const loaded = loadBody(out)
     if (loaded.why) return loaded
     out = loaded.text
     const at = mapAt(out, loaded.map, keys)
@@ -208,7 +242,7 @@ export function addMissing(text, keys, baseText, fromKeys, { only = null } = {})
     if (mine) {
       // A map in both: what the base gives that this one lacks, key by key.
       if (isMap(mine.value) && isMap(bpair.value) && !only) {
-        const deeper = addMissing(out, [...keys, k], baseText, [...fromKeys, k])
+        const deeper = addMissingIn(out, [...keys, k], baseText, [...fromKeys, k])
         if (deeper.why) return deeper
         out = deeper.text
         if (deeper.added.length) added.push(...deeper.added.map(d => `${k}.${d}`))

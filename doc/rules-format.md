@@ -757,14 +757,15 @@ and a sync refuse, naming the file, line or row and column:
 | `010`, `0777`, `1_000`, `0_7` in a number column | Helm reads `010` as 8, `0777` as 511, `1_000` as 1000 | the number as you mean it (`8`, `10`), or `'010'` in quotes for text |
 | `yes`, `no`, `on`, `off`, `y`, `n` | Helm reads them as true and false | `true` / `false`, or `'yes'` in quotes for the text |
 | a key `y:`, `n:`, `on:` | Helm reads the key as `"true"` / `"false"` | `'y':` in quotes |
-| a key written twice in one map | Helm keeps the last one; which was meant cannot be told | each key once |
+| a key written twice in one map | Helm keeps the last one; which was meant cannot be told. In a `_common`, every deployment under it is warned too (its save, Preview, check-deployment, Commit's list) | each key once |
 | a value of the wrong type for its column, outside its `enum`, a row that is not a map, a group that is not a list | the Template's schema stops Helm | what the column asks for |
-| a `null` on a `_common` stack, in a deployment's values, a `_common`'s or the Template's | Helm 3.15 and 3.19 read it differently (one removes the key, the other keeps it): AlertForge cannot tell what is deployed | leave the key out to inherit it, `[]` to clear a group |
+| a `null` on a `_common` stack, in a deployment's values, a `_common`'s or the Template's | Helm 3.15 and 3.19 deploy different things (one keeps the null, the other removes the key and falls back to the layer above or the default): what deploys depends on the Helm version. Commit refuses it too | a value, or leave the key out to inherit it, `[]` to clear a group |
 | syntax AlertForge does not read the same as Helm: a tag (`!!binary`, `!foo`), `?` keys, an indentation digit (`\|2`), a tab Helm's reading depends on, a file larger than `MAX_VALUES_BYTES` (1 MiB) | AlertForge cannot tell what Helm reads | plain YAML: no tags, `key: value`, spaces for indentation |
 | a `values.yaml` that is a folder, or a link leading outside the repo | Helm renders the Template's own values and says nothing: what is deployed is not in the repo | a file in the repo |
 
 The editor writes none of these: it quotes `'010'`, `'yes'` and the like
-itself. Opening a deployment shows the values as Helm reads them (`010` shows
+itself. Opening a deployment shows the values as Helm reads them, and says
+which ones it reads otherwise than they are written (`010` shows
 as 8). Commit does not refuse these: it lists them under the deployment, and
 `check-repo` refuses them. A key written twice, a required cell written
 `''` and a value a label cannot take are listed by Commit too. A

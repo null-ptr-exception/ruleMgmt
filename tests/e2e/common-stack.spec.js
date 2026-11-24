@@ -74,6 +74,6 @@ test.describe('A deployment on a _common', () => {
     await write(`${PROD}/values.yaml`, `common:\n  ${CHART}:\n    mariadb_saturation_cpu: null\n`)
     const modal = await preview(page, await openProd(page))
     await expect(modal.getByText('Some values are null')).toBeVisible({ timeout: 15000 })
-    await expect(modal.getByText(`${PROD}/values.yaml: the group mariadb_saturation_cpu is null`, { exact: false })).toBeVisible()
+    await expect(modal.getByText(`${PROD}/values.yaml: mariadb_saturation_cpu is null on a _common stack: Helm 3.15 and 3.19 deploy different things`, { exact: false })).toBeVisible()
   })
 })

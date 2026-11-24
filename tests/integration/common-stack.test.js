@@ -157,10 +157,16 @@ describe.skipIf(!HAS_HELM)('Preview', () => {
     expect((await api('POST', `/api/v2/render/${CHART}/dev${q('shop/team-b/dev')}`)).data.error).toContain(SHOP)
   })
 
+  it('a key its _common writes twice is said, naming the file and the line', async () => {
+    await write(`${SHOP}/values.yaml`, `${CHART}:\n  _common:\n    owner: a\n    owner: b\n`)
+    const { data } = await api('POST', `/api/v2/render/${CHART}/inherit${q('shop/inherit')}`)
+    expect(data.valueWarnings).toEqual(expect.arrayContaining([expect.stringMatching(new RegExp(`^${SHOP}/values.yaml line 4: the key owner is written twice: Helm keeps the last one.* — in the _common ${SHOP}`))]))
+  })
+
   it('a hand-written null is pointed out', async () => {
     await write('shop/inherit/values.yaml', `common:\n  ${CHART}:\n    ${DISK}: null\n`)
     const { data } = await api('POST', `/api/v2/render/${CHART}/inherit${q('shop/inherit')}`)
-    expect(data.valueWarnings).toEqual([expect.stringContaining(`shop/inherit/values.yaml: the group ${DISK} is null`)])
+    expect(data.valueWarnings).toEqual([expect.stringMatching(new RegExp(`shop/inherit/values.yaml: .*null at ${DISK}`))])
   })
 })
 
@@ -210,7 +216,7 @@ describe('the editor and its save', () => {
       const { status, data } = await api('POST', `/api/v2/deployments/${CHART}/inherit${q('shop/inherit')}`, { values })
       expect(status, JSON.stringify(values)).toBe(400)
       // A null on a stack: Helm 3.15 and 3.19 read it differently, so AlertForge cannot tell.
-      expect(data.problems[0].message, JSON.stringify(values)).toMatch(/cannot tell what Helm renders: .*null|must be a list of rows, not false/)
+      expect(data.problems[0].message, JSON.stringify(values)).toMatch(/is null on a _common stack: Helm 3.15 and 3.19 deploy different things|must be a list of rows, not false/)
     }
     expect(yaml.load(await read('shop/inherit/values.yaml'))).toEqual({ common: { [CHART]: {} } })
   })
@@ -241,12 +247,12 @@ describe('the commit checks', () => {
       .toBe(`shop/inherit: its _common chart ${SHOP} is not in the repo`)
   })
 
-  it('list a hand-written null in a layer for the deployments under it (Helm versions read it differently): not a reason to refuse', async () => {
+  it('a hand-written null in a layer stops the commit for the deployments under it (Helm versions deploy it differently), naming the layer\'s file and key', async () => {
     await write(`${TEAM_B}/values.yaml`, `common:\n  ${CHART}:\n    ${DISK}: null\n`)
-    const { findings, valueWarnings } = await deploymentCommitBlockers(tmpDir)
-    expect(findings).toEqual([])
-    expect(valueWarnings).toEqual([expect.objectContaining({ deployment: 'shop/team-b/dev' })])
-    expect(valueWarnings[0].warnings[0]).toMatch(/cannot tell what Helm renders: the _common layer \d up writes a null at /)
+    const { findings } = await deploymentCommitBlockers(tmpDir)
+    const dev = findings.filter(f => f.deployment === 'shop/team-b/dev')
+    expect(dev).toEqual([expect.objectContaining({ kind: 'values-null-on-stack' })])
+    expect(dev[0].description).toMatch(new RegExp(`${TEAM_B}/values.yaml: ${DISK} is null on a _common stack: Helm 3.15 and 3.19 deploy different things.*Give it a value, or delete the line`))
   })
 
   it('call the _common chart one when a version is asked of it', async () => {

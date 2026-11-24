@@ -8,6 +8,10 @@
  *            (deployments/t/_common/demo), or a legacy flat file
  *            (deployments/demo/f-values.yaml, given to Helm with -f)
  *     chart  the Template when the folder's Chart.yaml names none (a flat file)
+ *     next   the Template as a change not written yet will make it:
+ *            { model, validate, every } (its columns, its schema's check);
+ *            either left out is the Template's as it is; `every`: each kind
+ *            of check is made (findings/values.js). Not kept for the snapshot.
  *
  *   unreadable / invalid  its values file cannot be read (a folder, no
  *                         permission, a link to nothing or out of the repo),
@@ -30,8 +34,8 @@
  */
 import path from 'path'
 import { finding } from './finding.js'
-import { absent, invalid, ok, unreadable } from './loaded.js'
-import { coalesce } from './coalesce.js'
+import { absent, findingsOf, invalid, ok, unreadable } from './loaded.js'
+import { coalesce, firstNull } from './coalesce.js'
 import { chartsDir } from './template.js'
 import { isName } from '../lib/safePath.js'
 import { valueFindings } from './findings/values.js'
@@ -45,7 +49,8 @@ const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'a list' : isMap(v
 
 export const isFlatFile = rel => /-values\.yaml$/.test(rel)
 
-export function loadDeployment(repo, rel, { chart } = {}) {
+export function loadDeployment(repo, rel, { chart, next } = {}) {
+  if (next) return build(repo, rel, { chart, next })
   return repo.memo('deployment', `${rel}\0${chart ?? ''}`, () => build(repo, rel, { chart }))
 }
 
@@ -64,14 +69,14 @@ function modelOf(repo, template) {
   })
 }
 
-async function build(repo, rel, { chart }) {
+async function build(repo, rel, { chart, next }) {
   const flat = isFlatFile(rel)
   const file = flat ? rel : `${rel}/values.yaml`
   const isLayer = !flat && isCommonChartPath(rel)
   const own = await repo.helmYaml(file)
   if (own.state === 'unreadable') return unreadable(file, own.why)
   if (own.state === 'invalid') return own
-  const findings = [...own.findings]
+  const findings = [...findingsOf(own)]
   const doc = own.state === 'ok' ? own.value : Object.create(null)
 
   const stack = flat ? null : await resolveStack(repo.root, path.join(repo.root, rel), { repo })
@@ -102,6 +107,15 @@ async function build(repo, rel, { chart }) {
   } else if (!flat && keys.length) bare = Object.create(null)
 
   const layerValues = stack ? stackValues(stack, { own: bare }).layers : []
+  // A key a _common above writes twice: Helm takes the later one, and it
+  // deploys; which of the two the author meant cannot be told. Said to
+  // every entry point that reads the layer (policy.js: warned, listed).
+  for (const l of stack?.layers ?? []) {
+    const lf = `${l.path}/values.yaml`
+    for (const d of findingsOf(await repo.helmYaml(lf)).filter(f => f.code === 'yaml.duplicate-key')) {
+      findings.push(finding({ code: 'stack.duplicate-key', file: lf, helm: 'renders', ...(d.at ? { at: d.at } : {}), message: `${d.message.replace(/ Write each key once$/, '')} — in the _common ${l.path}, which ${rel} inherits from: it deploys the later one, which may not be the one meant. Write each key once there` }))
+    }
+  }
   let template = chartName ? await repo.template(chartName) : absent('')
   // A schema AlertForge cannot check as Helm does: the values are still
   // checked by the editor's rules, and the schema is said to be unchecked.
@@ -122,17 +136,22 @@ async function build(repo, rel, { chart }) {
     tpl = { name: chartName, dir: `${chartsDir()}/${chartName}`, chart: null, version: null, defaults: Object.create(null), schema: null, validate: () => [] }
   }
 
+  if (tpl && next?.validate) tpl = { ...tpl, validate: next.validate }
   const merged = coalesce({ defaults: tpl?.defaults ?? {}, layers: layerValues.map(l => l.values).reverse(), own: bare, mode: flat ? 'flat' : 'chart', stacked: isLayer })
   for (const u of merged.unsure) {
-    findings.push(finding({ code: 'values.null-on-stack', file, helm: 'unknown', at: { path: u.path }, message: `${file}: AlertForge cannot tell what Helm renders: ${u.why}. Remove the null to inherit the value, or write the value plainly` }))
+    // The file the null is written in: the deployment's, a layer's or the Template's.
+    const same = v => JSON.stringify(firstNull(v ?? {})) === JSON.stringify(u.path)
+    const where = same(bare) ? file : (layerValues.find(l => same(l.values))?.path ?? null)
+    const inFile = where === file || where === null ? (where ?? (tpl ? `${tpl.dir}/values.yaml` : file)) : `${where}/values.yaml`
+    findings.push(finding({ code: 'values.null-on-stack', file, helm: 'unknown', at: { path: u.path }, message: `${inFile}: ${u.path.join('.') || 'the values'} is null on a _common stack: Helm 3.15 and 3.19 deploy different things for it (one keeps the null, the other removes the key and takes what is above it, or the default), so what deploys depends on the Helm version (${u.why}). Give it a value, or delete the line to inherit it` }))
   }
-  const columns = tpl ? await modelOf(repo, tpl) : { model: null }
+  const columns = tpl && next && next.model !== undefined ? { model: next.model } : tpl ? await modelOf(repo, tpl) : { model: null }
   if (columns.why) findings.push(finding({ code: 'template.unusable', file: `${tpl.dir}/rules`, helm: 'fails', message: `the Template ${chartName}'s rules cannot be read (${tpl.dir}/rules: ${columns.why}): its columns cannot be checked` }))
   const dep = {
     rel, file, flat, isLayer, chart: chartName, keys, doc, bare,
     layers: layerValues, effective: merged.value, template: tpl,
     model: columns.model, stack,
   }
-  if (!merged.unsure.length) findings.push(...valueFindings(dep))
+  if (!merged.unsure.length) findings.push(...valueFindings(dep, { every: !!next?.every }))
   return ok(dep, findings)
 }

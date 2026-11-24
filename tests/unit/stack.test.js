@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mergeValues, nullsIn, wrapPath, unwrapPath, replaceAtPath } from '../../server/lib/stack.js'
+import { mergeValues, wrapPath, unwrapPath, replaceAtPath } from '../../server/lib/stack.js'
 
 // Helm's merge of a _common layer's values and a deployment's (#100), as the
 // Helm 3.12, 3.15 and 3.19 renders of the same files showed it: maps key by
@@ -40,17 +40,3 @@ describe('the keys of a stack', () => {
   })
 })
 
-describe('nullsIn', () => {
-  it('names a null group, Common Values, a Common Values key, and an empty wrapping key', () => {
-    expect(nullsIn({ common: { demo: { disk: null, _common: { owner: null } } } }, ['common', 'demo'], 'a/values.yaml')).toEqual([
-      'a/values.yaml: the group disk is null — write [] to clear a group, or remove the key to inherit it',
-      'a/values.yaml: Common Values\' owner is null — write [] to clear a group, or remove the key to inherit it',
-    ])
-    expect(nullsIn({ common: { demo: { _common: null } } }, ['common', 'demo'], 'f')).toEqual([expect.stringContaining('f: Common Values is null')])
-    expect(nullsIn({ common: { demo: null } }, ['common', 'demo'], 'f')).toEqual([expect.stringContaining('f: common.demo is null')])
-  })
-
-  it('finds none in values without one', () => {
-    expect(nullsIn({ common: { demo: { disk: [] } } }, ['common', 'demo'], 'f')).toEqual([])
-  })
-})

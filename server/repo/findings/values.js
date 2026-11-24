@@ -11,7 +11,10 @@
  * (a group it inherits from a _common, a Common Value a layer gives) is the
  * layer's: its code is under `stack.` (policy.js: a save warns, Commit lists).
  *
- *   valueFindings(dep) → Finding[]
+ *   valueFindings(dep, { every }) → Finding[]
+ *     every  each kind of check, not only up to the first that finds a
+ *            problem: a migration tells a new problem from one the values
+ *            had, which a problem of the first kind would hide
  */
 import { finding } from '../finding.js'
 import { valueProblems, rowIdentityRepeats } from '../../../src/utils/rulesFile.js'
@@ -84,7 +87,7 @@ function ownsIt(bare, below, group, column) {
   return !below.some(v => has(v, group, column))
 }
 
-export function valueFindings(dep) {
+export function valueFindings(dep, { every = false } = {}) {
   const { file, effective, bare, template, model, layers, isLayer } = dep
   const out = []
   if (!template) return out
@@ -96,16 +99,17 @@ export function valueFindings(dep) {
   const schema = template.validate(effective)
   for (const f of schema) {
     const w = schemaWording(f, effective, model)
-    const own = f.detail?.keyword === 'required' || mine(w.group, w.column)
+    const own = (f.detail?.keyword === 'required' && w.group === '_common') || mine(w.group, w.column)
     out.push(finding({ code: own ? 'values.schema' : 'stack.schema', file, helm: 'fails', at: { path: f.at?.path ?? [] }, message: own ? w.message : `${w.message} (given by a _common above, or the Template)`, detail: cell('', w) }))
   }
-  if (schema.length || !model) return out
+  if (!model || (schema.length && !every)) return out
 
   // 2. The editor's checks, only on values the schema lets through.
   for (const p of valueProblems(effective, model)) {
     if (isLayer && p.required && p.group === '_common') continue
-    // A required cell left empty is the deployment's to fill, whoever left it so.
-    const own = p.required || mine(p.group, p.column)
+    // A required Common Value left empty is the deployment's to fill,
+    // whoever left it so; a cell of a row a _common gives is the _common's.
+    const own = (p.required && p.group === '_common') || mine(p.group, p.column)
     const kind = p.required ? 'required-empty' : /derived/.test(p.message) ? 'derived' : 'cell'
     out.push(finding({
       code: `${own ? 'values' : 'stack'}.${kind}`, file, helm: 'renders',
@@ -114,7 +118,7 @@ export function valueFindings(dep) {
       detail: cell('', p, p.required ? { required: true } : {}),
     }))
   }
-  if (out.length) return out
+  if (out.length && !every) return out
   const sel = selectorValueProblems(effective, model)
   for (const p of sel.problems) {
     const own = mine(p.group, p.column)

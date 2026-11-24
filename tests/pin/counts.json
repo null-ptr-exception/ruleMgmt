@@ -1,13 +1,13 @@
 {
   "lint": {
-    "total": 288,
+    "total": 269,
     "byKind": {
       "childProcess": 1,
       "fs": 35,
-      "fsUse": 169,
-      "helper": 21,
-      "yaml": 19,
-      "yamlParse": 43
+      "fsUse": 167,
+      "helper": 16,
+      "yaml": 18,
+      "yamlParse": 32
     },
     "byFile": {
       "scripts/gen-chart.mjs": 7,
@@ -21,12 +21,12 @@
       "server/lib/chartUsage.js": 2,
       "server/lib/commit/sync.js": 4,
       "server/lib/commit/template.js": 6,
-      "server/lib/commonEdit.js": 36,
+      "server/lib/commonEdit.js": 29,
       "server/lib/deploymentCheck.js": 6,
       "server/lib/deploymentWalk.js": 9,
       "server/lib/deploymentWrite.js": 11,
       "server/lib/helmCheck.js": 2,
-      "server/lib/migrate.js": 3,
+      "server/lib/migrate.js": 2,
       "server/lib/reservedNames.js": 2,
       "server/lib/routingFiles.js": 13,
       "server/lib/ruleCheck.js": 6,
@@ -34,7 +34,6 @@
       "server/lib/stack.js": 8,
       "server/lib/subchart.js": 4,
       "server/lib/sync.js": 10,
-      "server/lib/valuesText.js": 5,
       "server/routes/charts.js": 12,
       "server/routes/deployments/lifecycle.js": 8,
       "server/routes/deployments/list.js": 8,
@@ -43,32 +42,31 @@
       "server/routes/folders/create.js": 11,
       "server/routes/folders/tree.js": 12,
       "server/routes/git.js": 9,
-      "server/routes/render.js": 6,
       "server/routes/sync.js": 6,
       "server/routes/templates.js": 17
     }
   },
   "yamlParseSites": {
-    "serverAndScripts": 43,
+    "serverAndScripts": 32,
     "src": 9,
     "byFileKind": {
       "Chart.yaml": 19,
-      "Template values.yaml": 8,
-      "deployment values": 5,
+      "Template values.yaml": 3,
+      "deployment values": 4,
       "routing.yaml": 0,
       "rules files": 0,
       "shared configs": 0,
       "sync.yaml": 2,
-      "unknown": 9
+      "unknown": 4
     }
   },
   "swallowingCatches": {
-    "total": 49,
+    "total": 47,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
       "server/lib/chartDiscovery.js": 6,
-      "server/lib/commonEdit.js": 10,
+      "server/lib/commonEdit.js": 8,
       "server/lib/deploymentCheck.js": 1,
       "server/lib/deploymentWalk.js": 1,
       "server/lib/deploymentWrite.js": 1,
@@ -90,7 +88,7 @@
     }
   },
   "ownEnoentChecks": {
-    "total": 30,
+    "total": 29,
     "byFile": {
       "scripts/gen-chart.mjs": 2,
       "scripts/gen-rules.mjs": 4,
@@ -99,7 +97,6 @@
       "server/lib/chartUsage.js": 1,
       "server/lib/commit/sync.js": 1,
       "server/lib/commit/template.js": 1,
-      "server/lib/commonEdit.js": 1,
       "server/lib/deploymentCheck.js": 2,
       "server/lib/deploymentWalk.js": 2,
       "server/lib/deploymentWrite.js": 1,

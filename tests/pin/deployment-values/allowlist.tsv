@@ -2,65 +2,37 @@
 # category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
 # Edited by hand: a fix removes its line; a new disagreement needs one.
 id	entry	kind	category	reason
-number-col-text	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-number-col-text	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-integer-col-float	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-string-col-bool	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-string-col-bool	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-enum-miss	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-enum-miss	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-required-miss	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+integer-col-float	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+string-col-bool	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+enum-miss	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+required-miss	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 required-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 required-empty	save-json	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 required-empty	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
-duration-number	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-duration-bad	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-number-col-false	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-number-col-false	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+duration-number	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+duration-bad	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 row-negative	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 row-negative	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
-row-negative	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-cell-list	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-cell-list	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-row-scalar	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-group-not-list	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-group-not-list	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-common-not-map	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-group-null	common-plan	refuses-what-helm-renders	policy	a null is refused: Helm versions read it differently (remove the key, or write [])
-common-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-common-team-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-once-group-null	common-plan	refuses-what-helm-renders	policy	a null is refused: Helm versions read it differently (remove the key, or write [])
-y11-yes	migration-preview	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
+row-negative	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+group-not-list	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+common-not-map	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+common-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+common-team-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 y11-yes	migration-apply	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-off-enum	migration-preview	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
 y11-off-enum	migration-apply	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-sexagesimal	migration-preview	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-y11-sexagesimal	migration-apply	accepts-what-helm-fails	bug	#202: Helm reads yes/off as true/false and 1:30 as text, and its schema refuses them; the check reads YAML 1.2
-quoted-number	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-quoted-number	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 dup-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 comment-only	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 comment-only	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
-bom	common-apply	5xx	bug	no issue yet: a values file that starts with a byte-order mark makes the _common write answer 500 and put everything back
 empty-file	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 empty-file	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 null-doc	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 null-doc	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
-null-doc	common-plan	refuses-what-helm-renders	bug	no issue yet: the _common plan reads values with a parser that refuses a second document or an empty file
-demo-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-trailing-dashes	common-plan	refuses-what-helm-renders	bug	no issue yet: the _common plan reads values with a parser that refuses a second document or an empty file
-second-doc	common-plan	refuses-what-helm-renders	bug	no issue yet: the _common plan reads values with a parser that refuses a second document or an empty file
-second-doc-broken	common-plan	refuses-what-helm-renders	bug	no issue yet: the _common plan reads values with a parser that refuses a second document or an empty file
-unwrapped	common-plan	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-unwrapped	common-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	migration-preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-wrong-wrapper	common-plan	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-wrong-wrapper	common-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
@@ -70,39 +42,29 @@ stack-unwrapped	preview	accepts-what-helm-fails	bug	#203: values not under the c
 stack-unwrapped	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 common-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 common-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
-common-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+common-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 row-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 row-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
-row-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+row-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 derived-overflow	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 derived-overflow	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
-derived-overflow	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+derived-overflow	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 unreadable-dir	save-text	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
 unreadable-dir	common-plan	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
 unreadable-dir	commit	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
 tpl-common-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 tpl-common-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
-tpl-common-zero	init	accepts-what-helm-fails	bug	no issue yet: a new deployment is made without checking that Helm can render and the checker accepts it
-tpl-common-zero	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-tpl-common-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-tpl-null-merge	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+tpl-common-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+tpl-null-merge	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 tpl-null-merge	gen-rules	accepts-what-helm-fails	out-of-scope	gen-rules checks the Template's own values; the null that fails is the deployment's
-tpl-not-yaml	migration-preview	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
 tpl-not-yaml	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
-tpl-unreadable	migration-preview	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
 tpl-unreadable	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
-tpl-rules-unreadable	init	accepts-what-helm-fails	bug	no issue yet: a new deployment is made without checking that Helm can render and the checker accepts it
 stack-x-null	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 stack-x-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-stack-x-number-text	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-stack-x-number-text	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 layer-common-zero	save-text	accepts-what-helm-fails	bug	no issue yet: the save's derived-value check does not count the Template's or the _common's values
 layer-common-zero	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 layer-common-zero	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 layer-group-map	save-text	refuses-what-helm-renders	policy	a _common group that is not a list of rows is refused: every deployment that does not set the group fails
-layer-group-map	init	accepts-what-helm-fails	bug	no issue yet: a new deployment is made without checking that Helm can render and the checker accepts it
-layer-group-map	check-deployment	refuses-what-helm-renders	policy	a _common group that is not a list of rows is refused: every deployment that does not set the group fails
-flat-number-text	migration-apply	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-number-text	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-not-yaml	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
 flat-empty	save-text	refuses-what-helm-renders	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
@@ -112,14 +74,8 @@ flat-wrapped	preview	accepts-what-helm-fails	out-of-scope	legacy flat <name>-val
 common-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 common-empty	save-json	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 common-empty	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
-common-wrong-type	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-common-wrong-type	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-cell-map	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-cell-map	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-two-bad-cells	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-two-bad-cells	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-y11-octal-string	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
-y11-octal-string	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
+common-wrong-type	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+y11-octal-string	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 dup-key-block	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key-block	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
 dup-key-block	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
@@ -158,5 +114,8 @@ layer-unwrapped	save-text	refuses-what-helm-renders	policy	values not under the 
 layer-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
 flat-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
 unreadable-dir	migration-apply	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo
+unreadable-dir	check-deployment	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
 link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	common-plan	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	check-deployment	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 layer-link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo

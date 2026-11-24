@@ -39,10 +39,17 @@ describe('the default', () => {
     expect(invalid('a', [f('values.derived', 'renders', { deploy: 'fails' })]).state).toBe('invalid')
   })
 
-  it('what Helm fails on is refused by every table but Commit, which lists it; no table lets it pass unsaid', () => {
-    for (const name of Object.keys(POLICIES)) {
-      const d = decide([f('values.schema', 'fails'), f('yaml.cannot-read', 'unknown'), f('values.not-under-chart-key', 'renders-differently')], name)
-      expect(d[name === 'commit' ? 'list' : 'refuse'], name).toHaveLength(3)
+  it('what Helm fails on is refused by every table (Commit lists it), unless a row of the table says why not', () => {
+    const facts = [f('values.schema', 'fails'), f('yaml.cannot-read', 'unknown'), f('values.not-under-chart-key', 'renders-differently'), f('values.derived', 'renders', { deploy: 'fails' })]
+    for (const [name, table] of Object.entries(POLICIES)) {
+      for (const fact of facts) {
+        const d = decide([fact], name)
+        const by = name === 'commit' ? 'list' : 'refuse'
+        if (d[by].length) continue
+        // Let through or said otherwise: only by a row with its reason.
+        expect(Object.values(table.rows), `${name} ${fact.code}`).toContain(explain(fact, name))
+      }
+      expect(decide([f('yaml.cannot-read', 'unknown')], name)[name === 'commit' ? 'list' : 'refuse'], name).toHaveLength(1)
     }
   })
 

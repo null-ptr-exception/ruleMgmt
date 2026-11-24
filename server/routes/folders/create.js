@@ -14,7 +14,11 @@ import { deploymentOnCommon, ANY_VERSION } from '../../lib/commonEdit.js'
 import { writeWhole } from '../../lib/routingFiles.js'
 import { parseIfThere, errorAnswer } from '../../lib/readIfThere.js'
 import { repoPathProblem, isName, insideReal } from '../../lib/safePath.js'
-import { loadValues } from '../../../src/utils/valuesText.js'
+import { openRepo } from '../../repo/openRepo.js'
+import { loadDeployment } from '../../repo/deployment.js'
+import { findingsOf } from '../../repo/loaded.js'
+import { decide } from '../../repo/policy.js'
+import { chartsDir as chartsRel } from '../../repo/template.js'
 
 // What a new deployment asks of its Template's version: any.
 export const ANY_TEMPLATE_VERSION = ANY_VERSION
@@ -114,15 +118,36 @@ export function initRoutes(router) {
 
       // The Template's groups, from its values.yaml: none when it has none;
       // one that cannot be read or parsed is said, not taken for none.
+      // The Template's values, as Helm reads them: a group it has starts empty.
+      const valuesFile = `${chartsRel()}/${chart}/values.yaml`
+      const tplValues = await openRepo(req.gitopsDir).helmYaml(valuesFile)
+      if (tplValues.state === 'unreadable') return res.status(409).json({ error: `Not made: ${valuesFile} cannot be read: ${tplValues.why}`, file: valuesFile })
+      if (tplValues.state === 'invalid') {
+        const what = findingsOf(tplValues).some(f => f.code === 'yaml.not-yaml') ? 'not valid YAML' : 'not values Helm reads'
+        return res.status(409).json({ error: `Not made: ${valuesFile} cannot be read: ${what} (${findingsOf(tplValues).map(f => f.message).join('; ')})`, file: valuesFile })
+      }
       const emptyValues = {}
-      const defaults = (await parseIfThere(path.join(chartDir, 'values.yaml'), loadValues)) || {}
-      for (const [key, val] of Object.entries(defaults)) {
+      for (const [key, val] of Object.entries(tplValues.state === 'ok' ? tplValues.value : {})) {
         if (Array.isArray(val)) emptyValues[key] = []
       }
 
       // Everything is read: from here on it is written. A refusal above
-      // made no folder.
-      await fs.mkdir(deployDir, { recursive: true })
+      // made no folder; one below takes back what was made.
+      const made = await fs.mkdir(deployDir, { recursive: true })
+      const takeBack = async () => {
+        if (made) await fs.rm(made, { recursive: true, force: true })
+        else for (const f of ['Chart.yaml', 'values.yaml']) await fs.rm(path.join(deployDir, f), { force: true })
+      }
+      // Loaded as Helm reads it, once written: what the Template or the
+      // _common gives that Helm fails on is said, and nothing is kept.
+      const notMade = async () => {
+        const dep = await loadDeployment(openRepo(req.gitopsDir), folder)
+        const problems = dep.state === 'unreadable' ? [`${dep.file} cannot be read: ${dep.why}`] : decide(findingsOf(dep), 'init').refuse.map(f => f.message)
+        if (!problems.length) return false
+        await takeBack()
+        res.status(409).json({ error: `Not made: ${folder} would not deploy (${problems.join('; ')})`, problems })
+        return true
+      }
 
       // Under a folder with a _common for this Template (#102): on it, and
       // writing nothing of its own — it inherits everything, a group the
@@ -130,6 +155,7 @@ export function initRoutes(router) {
       if (onCommon) {
         await writeWhole(path.join(deployDir, 'Chart.yaml'), onCommon.chartYaml)
         await writeWhole(path.join(deployDir, 'values.yaml'), onCommon.valuesYaml)
+        if (await notMade()) return
         return res.json({ status: 'created', chart, folder, inheritsFrom: onCommon.inheritsFrom })
       }
       // Helm reads this as a URL, and the file is committed and rendered on
@@ -155,6 +181,7 @@ export function initRoutes(router) {
 
       const wrapped = wrapValues(emptyValues, chart)
       await writeWhole(path.join(deployDir, 'values.yaml'), dumpForHelm(wrapped, { lineWidth: -1 }))
+      if (await notMade()) return
 
       res.json({ status: 'created', chart, folder })
     } catch (err) {

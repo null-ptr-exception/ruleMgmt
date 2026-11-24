@@ -2,7 +2,7 @@
 // re-indented, never parsed and written again, so every value means to
 // Helm (YAML 1.1) what it did.
 import { describe, it, expect } from 'vitest'
-import { loadMap, wrapEntry, liftEntry, addMissing, setDependency } from '../../server/lib/valuesText.js'
+import { loadMap, wrapEntry, liftEntry, addMissing, setDependency } from '../../../server/repo/valuesDoc.js'
 
 const FILE = `# top
 global:
@@ -94,5 +94,28 @@ describe('setDependency', () => {
 describe('loadMap', () => {
   it('an empty file, comments only or {} are no values', () => {
     for (const t of ['', '# x\n', '{}\n']) expect(loadMap(t).map.items).toEqual([])
+  })
+})
+
+describe('only the document Helm reads is edited', () => {
+  const OK = 'demo:\n  cpu:\n    - job: api # first\n'
+  it('a byte order mark stays at the start of the file', () => {
+    const out = wrapEntry(`﻿${OK}`, [], 'demo', { create: true })
+    expect(out.text).toBe('﻿common:\n  demo:\n    cpu:\n      - job: api # first\n')
+    expect(liftEntry(out.text, [], 'demo').text).toBe(`﻿${OK}`)
+  })
+  it.each([
+    ['a second document', '---\ndemo:\n  cpu: []\n'],
+    ['a second document Helm never reads', '---\n[\n'],
+    ['a --- with nothing after it', '---\n'],
+  ])('%s stays after the first, as written', (_, tail) => {
+    const out = wrapEntry(OK + tail, [], 'demo', { create: true })
+    expect(out.text).toBe(`common:\n  demo:\n    cpu:\n      - job: api # first\n${tail}`)
+    expect(liftEntry(out.text, [], 'demo').text).toBe(OK + tail)
+    expect(addMissing('demo: {}\n' + tail, ['demo'], OK, ['demo']).text).toBe(`demo:\n  cpu:\n    - job: api # first\n${tail}`)
+  })
+  it('a file that is only ~ has no values: an empty map', () => {
+    expect(loadMap('~\n').map.items).toEqual([])
+    expect(wrapEntry('~\n', [], 'demo', { create: true }).text).toBe('\ncommon:\n  demo: {}\n')
   })
 })

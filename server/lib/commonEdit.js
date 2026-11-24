@@ -20,7 +20,7 @@
  * them). Files are changed as text (valuesText.js): every value stays as it
  * was written, so a make and a remove give back the same files, but for the
  * Template's example rows a make copies into a deployment that did not write
- * a group. What deploys is compared as Helm renders it, before and after
+ * a group. Values are read as Helm reads them (server/repo/). What deploys is compared as Helm renders it, before and after
  * (helmCheck.js). A sync target is not re-attached by itself: it moves with
  * its source (#103).
  */
@@ -30,16 +30,20 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { isDeepStrictEqual } from 'util'
 import { createHash } from 'crypto'
-import { resolveStack, readStackValues, stackValues, readChart, mergeValues, valueIssuesIn, wrapPath } from './stack.js'
+import { resolveStack, readStackValues, stackValues, readChart, wrapPath } from './stack.js'
 import { walkDeployments, excludedFolder } from './deploymentWalk.js'
 import { isCommonChartDir, isDeploymentDir, readSyncRegistry, getSourceForTarget, getTargetsForSource, normalizeSyncPath } from './sync.js'
 import { writeWhole } from './routingFiles.js'
-import { loadMap, wrapEntry, liftEntry, addMissing, setDependency } from './valuesText.js'
+import { loadMap, wrapEntry, liftEntry, addMissing, setDependency } from '../repo/valuesDoc.js'
 import { helmAvailable, renderAll, sameRender } from './helmCheck.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 import { isRepoPath } from './safePath.js'
-import { loadValues } from '../../src/utils/valuesText.js'
+import { openRepo } from '../repo/openRepo.js'
+import { loadDeployment } from '../repo/deployment.js'
+import { findingsOf } from '../repo/loaded.js'
+import { decide } from '../repo/policy.js'
+import { chartsDir } from '../repo/template.js'
 
 /** The name every `_common` chart has: the key its deployments' values are under. */
 export const COMMON_CHART = 'common'
@@ -57,15 +61,20 @@ const refuse = (status, error, extra = {}) => ({ status, body: { error, ...extra
 /** Where a `_common` for `chart` in `folder` is. */
 export const commonPathOf = (folder, chart) => [...segmentsOf(folder), COMMON_DIR, chart].join('/')
 
-// The Template's own values: what a group no chart gives renders with.
-async function templateDefaults(gitopsDir, chart) {
-  try {
-    const doc = loadValues(await fs.readFile(path.join(gitopsDir, chartsDirName(), chart, 'values.yaml'), 'utf-8'))
-    return isPlainObject(doc) ? doc : {}
-  } catch {
-    return {}
-  }
+// The Template's own values (what a group no chart gives renders with), and
+// their text: `{ defaults, text }`, or `{ file, why }` when they cannot be
+// read — no move is planned on a guess of what the Template gives.
+async function templateValues(repo, chart) {
+  const dir = chartsDir()
+  if (dir === null) return { file: String(process.env.CHARTS_DIR), why: 'CHARTS_DIR is no folder of the repo' }
+  const file = `${dir}/${chart}/values.yaml`
+  const read = await repo.helmYaml(file)
+  if (read.state === 'absent') return { defaults: {}, text: '{}\n' }
+  if (read.state === 'unreadable') return { file, why: `${file} cannot be read: ${read.why}` }
+  if (read.state === 'invalid') return { file, why: read.findings.map(f => f.message).join('; ') }
+  return { defaults: read.value, text: (await repo.file(file)).value.text }
 }
+const templateRefusal = (verb, t) => refuse(409, `${verb}: the Template's values cannot be read (${t.why})`, { problems: [{ path: t.file, message: t.why }] })
 const groupsOf = defaults => Object.entries(defaults).filter(([, v]) => Array.isArray(v)).map(([k]) => k)
 
 /**
@@ -80,28 +89,28 @@ async function loadItems(gitopsDir) {
     if (d.kind === 'unreadable') { unreadable.push(d.path || '.'); continue }
     const abs = path.join(gitopsDir, d.path)
     const stack = await resolveStack(gitopsDir, abs)
-    await readStackValues(gitopsDir, abs, stack)
     items.push({ path: d.path, kind: d.kind, abs, stack, chain: [d.path, ...stack.layers.map(l => l.path)] })
   }
   return { items, byPath: new Map(items.map(i => [i.path, i])), unreadable }
 }
 
-// What a deployment renders: the Template's values under what its stack gives.
-const renderedOf = (item, defaults) => mergeValues(defaults, stackValues(item.stack).merged)
+// What a deployment renders, as Helm coalesces its values (repo/deployment.js),
+// or null when they cannot be worked out.
+async function renderedOf(repo, rel) {
+  const dep = await loadDeployment(repo, rel)
+  if (dep.state !== 'ok' || dep.value.stack.problems.length || findingsOf(dep).some(f => f.code === 'values.null-on-stack')) return null
+  return JSON.parse(JSON.stringify(dep.value.effective))
+}
 
 // The text of a chart folder's values.yaml: `{ text }` (null when there is
 // none), or `{ why }` when it cannot be read or is not a block map — then
 // AlertForge cannot move it as written, and Helm may not render it.
-async function valuesText(item) {
-  let text
-  try {
-    text = await fs.readFile(path.join(item.abs, 'values.yaml'), 'utf-8')
-  } catch (err) {
-    if (err.code === 'ENOENT') return { text: null }
-    return { why: `values.yaml cannot be read (${err.code || 'error'})` }
-  }
-  const loaded = loadMap(text)
-  return loaded.why ? { why: `values.yaml ${loaded.why}` } : { text }
+async function valuesText(repo, item) {
+  const read = await repo.file(`${item.path}/values.yaml`)
+  if (read.state === 'absent') return { text: null }
+  if (read.state === 'unreadable') return { why: `values.yaml cannot be read (${read.why})` }
+  const loaded = loadMap(read.value.text)
+  return loaded.why ? { why: `values.yaml ${loaded.why}` } : { text: read.value.text }
 }
 
 // The link in a `_common` chart's charts/ that leads to `toAbs`.
@@ -220,19 +229,34 @@ async function isAlertTemplate(gitopsDir, chart) {
  * (`'values'`). One Helm cannot render is a problem: the change would not
  * be one AlertForge can tell keeps it the same.
  */
-async function baseline(gitopsDir, items, defaults) {
+async function baseline(gitopsDir, items, repo) {
   if (await helmAvailable()) {
     const renders = await renderAll(gitopsDir, items.map(i => i.path))
     const problems = [...renders].filter(([, r]) => r.error).map(([rel, r]) => ({ path: rel, message: `Helm cannot render it as it is (${r.error}): fix it first` }))
     return { checkedWith: 'helm', before: renders, problems }
   }
-  return { checkedWith: 'values', before: new Map(items.map(i => [i.path, renderedOf(i, defaults)])), problems: [] }
+  const before = new Map()
+  const problems = []
+  for (const i of items) {
+    const v = await renderedOf(repo, i.path)
+    if (v === null) problems.push({ path: i.path, message: 'AlertForge cannot work out the values it deploys as it is: fix it first' })
+    before.set(i.path, v)
+  }
+  return { checkedWith: 'values', before, problems }
 }
 
-const valueProblems = (text, keys, rel, groups) => {
-  let doc
-  try { doc = loadValues(text) } catch (err) { return [`${rel}: would not be valid YAML (${err.reason || err.message})`] }
-  return valueIssuesIn(doc, keys, rel, new Set(groups))
+/**
+ * Why a chart's values cannot be moved, as messages: what they are now, as
+ * the move's table (policy.js, `commonMove`) refuses it, and the moved text
+ * as Helm would read it.
+ */
+async function moveProblems(repo, y, text) {
+  const file = `${y.path}/values.yaml`
+  const now = await loadDeployment(repo, y.path)
+  const out = now.state === 'unreadable' ? [`${file} cannot be read: ${now.why}`] : decide(findingsOf(now), 'commonMove').refuse.map(f => f.message)
+  const moved = await repo.with([[file, text]]).helmYaml(file)
+  if (moved.state !== 'ok') out.push(`${file} would not be read by Helm after the move (${findingsOf(moved).map(f => f.message).join('; ') || moved.why})`)
+  return out
 }
 
 /**
@@ -256,11 +280,12 @@ export async function planCreate(gitopsDir, folderIn, chart) {
   const holder = await fs.lstat(path.join(gitopsDir, folder, COMMON_DIR)).catch(() => null)
   if (holder && !holder.isDirectory()) return refuse(409, `${folder}/${COMMON_DIR} is there and is not a folder`)
 
+  const repo = openRepo(gitopsDir)
+  const tpl = await templateValues(repo, chart)
+  if (tpl.why) return templateRefusal('Not made', tpl)
   const { items, byPath, unreadable } = await loadItems(gitopsDir)
   const registry = await readSyncRegistry(gitopsDir)
-  const defaults = await templateDefaults(gitopsDir, chart)
-  const templateText = await fs.readFile(path.join(gitopsDir, chartsDirName(), chart, 'values.yaml'), 'utf-8').catch(() => '{}\n')
-  const groups = groupsOf(defaults)
+  const groups = groupsOf(tpl.defaults)
 
   // The `_common` of the nearest folder above, if any: the new one stacks on it.
   const segments = segmentsOf(folder)
@@ -346,7 +371,7 @@ export async function planCreate(gitopsDir, folderIn, chart) {
       change.files.push(...new Set(pointed.writes.map(w => (w.rel.startsWith(`${y.path}/charts/`) ? `${y.path}/charts/` : w.rel))))
     }
     if (y.kind !== 'chart-only') {
-      const own = await valuesText(y)
+      const own = await valuesText(repo, y)
       if (own.why) { problems.push({ path: y.path, message: own.why }); continue }
       const newKeys = [...prefix, COMMON_CHART, innerName, ...y.stack.keys.slice(j + 1)]
       const wrapped = own.text === null ? { text: null } : wrapEntry(own.text, prefix, key, { create: j === 0 })
@@ -356,17 +381,18 @@ export async function planCreate(gitopsDir, folderIn, chart) {
       // the Template's example rows; the new `_common` clears every group,
       // so the rows it deployed are copied into it, as the Template has them.
       if (text !== null && j === 0 && !nextRel) {
-        const mine = getPath(loadValues(own.text) ?? {}, [...prefix, key])
+        const read = await repo.helmYaml(`${y.path}/values.yaml`)
+        const mine = getPath(read.state === 'ok' ? read.value : {}, [...prefix, key])
         const missing = groups.filter(g => !(isPlainObject(mine) && g in mine))
         if (missing.length) {
-          const added = addMissing(text, newKeys, templateText, [], { only: missing })
+          const added = addMissing(text, newKeys, tpl.text, [], { only: missing })
           if (added.why) { problems.push({ path: y.path, message: `cannot be re-attached: its values.yaml ${added.why}` }); continue }
           text = added.text
           change.exampleRows = added.added
         }
       }
       if (text !== null && text !== own.text) {
-        const issues = valueProblems(text, newKeys, `${y.path}/values.yaml`, groups)
+        const issues = await moveProblems(repo, y, text)
         if (issues.length) { problems.push(...issues.map(message => ({ path: y.path, message }))); continue }
         writes.push({ rel: `${y.path}/values.yaml`, content: text })
         change.files.push(`${y.path}/values.yaml`)
@@ -376,7 +402,7 @@ export async function planCreate(gitopsDir, folderIn, chart) {
     if (change.files.length || y.kind !== 'common') changes.push(change)
     if (y.kind !== 'common') verify.push(y)
   }
-  const checked = await baseline(gitopsDir, toRender, defaults)
+  const checked = await baseline(gitopsDir, toRender, repo)
   problems.push(...checked.problems)
   if (problems.length) {
     return refuse(409, `Not made: ${[...new Set(problems.map(p => p.path))].join(', ')} cannot be re-attached as ${problems.length > 1 ? 'they are' : 'it is'}`, { problems })
@@ -409,7 +435,6 @@ export async function planCreate(gitopsDir, folderIn, chart) {
     created: commonRel,
     before: checked.before,
     checkedWith: checked.checkedWith,
-    defaults,
   }
 }
 
@@ -459,12 +484,13 @@ export async function planDelete(gitopsDir, commonRelIn) {
   if (!n || n.stack.problems.length) {
     return refuse(409, `Not removed: ${commonRel} has a problem — fix it first, or remove it by hand`, { problems: (n?.stack.problems || []).map(p => ({ path: commonRel, message: p.description })) })
   }
-  const nValues = await valuesText(n)
+  const repo = openRepo(gitopsDir)
+  const nValues = await valuesText(repo, n)
   if (nValues.why) return refuse(409, `Not removed: ${commonRel}/${nValues.why}`, { problems: [{ path: commonRel, message: nValues.why }] })
   const nText = nValues.text ?? '{}\n'
   const chart = n.stack.chart
-  const defaults = await templateDefaults(gitopsDir, chart)
-  const groups = groupsOf(defaults)
+  const tpl = await templateValues(repo, chart)
+  if (tpl.why) return templateRefusal('Not removed', tpl)
   const nextRel = n.stack.layers[0]?.path ?? null
   const nextAbs = nextRel ? path.join(gitopsDir, nextRel) : path.join(gitopsDir, chartsDirName(), chart)
   const nextName = nextRel ? COMMON_CHART : chart
@@ -491,7 +517,7 @@ export async function planDelete(gitopsDir, commonRelIn) {
       writes.push(...pointed.writes)
       change.files.push(...new Set(pointed.writes.map(w => (w.rel.startsWith(`${y.path}/charts/`) ? `${y.path}/charts/` : w.rel))))
     }
-    const own = await valuesText(y)
+    const own = await valuesText(repo, y)
     if (own.why) { problems.push({ path: y.path, message: own.why }); continue }
     let text = own.text
     if (text !== null) {
@@ -507,7 +533,7 @@ export async function planDelete(gitopsDir, commonRelIn) {
       change.copiedDown = merged.added
     }
     if (text !== null && text !== own.text) {
-      const issues = valueProblems(text, [...prefix, nextName, ...y.stack.keys.slice(j + 1)], `${y.path}/values.yaml`, groups)
+      const issues = await moveProblems(repo, y, text)
       if (issues.length) { problems.push(...issues.map(message => ({ path: y.path, message }))); continue }
       writes.push({ rel: `${y.path}/values.yaml`, content: text })
       change.files.push(`${y.path}/values.yaml`)
@@ -516,7 +542,7 @@ export async function planDelete(gitopsDir, commonRelIn) {
     if (change.files.length || y.kind !== 'common') changes.push(change)
     if (y.kind !== 'common') verify.push(y)
   }
-  const checked = await baseline(gitopsDir, toRender, defaults)
+  const checked = await baseline(gitopsDir, toRender, repo)
   problems.push(...checked.problems)
   if (problems.length) {
     return refuse(409, `Not removed: ${[...new Set(problems.map(p => p.path))].join(', ')} cannot be detached as ${problems.length > 1 ? 'they are' : 'it is'}`, { problems })
@@ -540,7 +566,6 @@ export async function planDelete(gitopsDir, commonRelIn) {
     removed: commonRel,
     before: checked.before,
     checkedWith: checked.checkedWith,
-    defaults,
   }
 }
 
@@ -615,12 +640,10 @@ export async function applyPlan(gitopsDir, planned) {
       if (!sameRender(before, now)) differs.push({ path: rel, why: now.error ? `Helm cannot render it (${now.error})` : 'Helm renders other objects' })
     }
   } else {
+    const now = openRepo(gitopsDir)
     for (const [rel, before] of planned.before) {
-      const abs = path.join(gitopsDir, rel)
-      const stack = await resolveStack(gitopsDir, abs)
-      await readStackValues(gitopsDir, abs, stack)
-      const after = mergeValues(planned.defaults, stackValues(stack).merged)
-      if (stack.problems.length || stack.valueIssues.length || !isDeepStrictEqual(JSON.parse(JSON.stringify(before)), JSON.parse(JSON.stringify(after)))) differs.push({ path: rel, why: 'the values it is given differ' })
+      const after = await renderedOf(now, rel)
+      if (after === null || !isDeepStrictEqual(before, after)) differs.push({ path: rel, why: 'the values it is given differ' })
     }
   }
   if (differs.length) {

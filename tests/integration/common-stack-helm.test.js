@@ -15,7 +15,10 @@ import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
 import { renderChart } from '../../server/lib/ruleCheck.js'
-import { resolveStack, readStackValues } from '../../server/lib/stack.js'
+import { resolveStack } from '../../server/lib/stack.js'
+import { openRepo } from '../../server/repo/openRepo.js'
+import { loadDeployment } from '../../server/repo/deployment.js'
+import { findingsOf } from '../../server/repo/loaded.js'
 import { planCreate, planDelete, applyPlan, deploymentOnCommon } from '../../server/lib/commonEdit.js'
 
 const HELM = process.env.HELM_BIN || 'helm'
@@ -108,7 +111,8 @@ const cases = [
   ['first layer values not under the Template key', async r => {
     await r.base(1); await r.write(`${L1}/values.yaml`, { _common: { owner: 'flat', namespace: 'c1' }, ...empty, [DISK]: [{ warn_pct: 85, critical_pct: 95 }] }); await r.onLayer(1, {})
   }, 20, 'same'],
-  ['the deployment wraps one level short', async r => { await r.base(2); await r.deployment('shop/b/d', [r.fileDep('shop/b/d', L2)], { common: { [C]: { [DISK]: [] } } }) }, 6, 'same'],
+  // Helm renders what the layers give; what the deployment wrote reaches no Template: said.
+  ['the deployment wraps one level short', async r => { await r.base(2); await r.deployment('shop/b/d', [r.fileDep('shop/b/d', L2)], { common: { [C]: { [DISK]: [] } } }) }, 6, 'value'],
   ['a link under another folder name', async r => {
     await r.base(1); await fs.rm(r.abs(`${L1}/charts`), { recursive: true }); await r.link(L1, 'tpl', `charts/${C}`); await r.onLayer(1, {})
   }, 6, 'same'],
@@ -225,18 +229,21 @@ describe.skipIf(!HAS_HELM).concurrent('a stack as Helm renders it', { timeout: 6
     if (helmSays !== 'varies') expect(Array.isArray(helm) ? helm.length : helm, 'what Helm renders').toBe(helmSays)
 
     const stack = await resolveStack(r.root, r.abs(dir))
-    const values = await readStackValues(r.root, r.abs(dir), stack).catch(err => ({ error: err.message, nulls: [] }))
+    // What the loader says of the values: anything Helm fails on, reads
+    // otherwise, or AlertForge cannot tell.
+    const dep = await loadDeployment(openRepo(r.root), dir)
+    const issues = dep.state !== 'ok' ? [dep.state] : findingsOf(dep).filter(f => f.helm !== 'renders' && !f.detail?.stack).map(f => f.code)
     if (jsSays === 'same') {
       expect(stack.problems).toEqual([])
-      expect(values.nulls).toEqual([])
+      expect(issues).toEqual([])
       // The Template rendered with what AlertForge works out it is given.
-      const { merged } = values
+      const merged = dep.value.effective
       const file = path.join(r.root, 'merged.yaml')
       await fs.writeFile(file, yaml.dump(merged))
       const js = alertsOf(execFileSync(HELM, ['template', 'x', r.abs(`charts/${stack.chart}`), '-f', file], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }))
       expect(js).toEqual(helm)
     } else if (jsSays === 'value') {
-      expect(values.nulls.length, 'a value issue').toBeGreaterThan(0)
+      expect(issues.length, 'a value issue').toBeGreaterThan(0)
     } else {
       expect(stack.problems.map(p => p.description).join('\n')).toMatch(jsSays)
     }

@@ -13,36 +13,30 @@ import fs from 'fs/promises'
 import path from 'path'
 import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
 import { getDepName } from './subchart.js'
-import { unwrapPath, wrapPath, replaceAtPath, resolveStack, stackValues } from './stack.js'
+import { unwrapPath, wrapPath, replaceAtPath } from './stack.js'
 import { readSyncRegistry, isTarget, getSourceForTarget } from './sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'
-import { valueProblems } from '../../src/utils/rulesFile.js'
-import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { openRepo } from '../repo/openRepo.js'
+import { loadDeployment, isFlatFile } from '../repo/deployment.js'
+import { findingsOf } from '../repo/loaded.js'
+import { decide } from '../repo/policy.js'
+import { schemaProblem, schemaValidator } from '../repo/schema.js'
 
-// A problem that is a `_common` layer's, not this deployment's: in a group
-// the deployment does not write, or a Common Value a layer gives and the
-// deployment does not.
-function isInherited(p, own, layers) {
-  if (p.group === '_common') {
-    const mine = own?._common && typeof own._common === 'object' ? own._common : {}
-    return !(p.column in mine) && layers.some(l => l.values?._common && typeof l.values._common === 'object' && p.column in l.values._common)
-  }
-  return p.group !== undefined && p.group !== null && !(own && p.group in own)
+// One problem as the same one before and after a change: its kind, cell and
+// what it says, leaving out the file and line (the migrated file is written
+// again) and what it quotes in brackets — a row overlap names the selected
+// values, which a new selector level adds to.
+function problemKey(f) {
+  const { group, row, column } = f.detail ?? {}
+  return [f.code, group, row, column, f.message.replace(/^\S+\.yaml( line \d+)?: /, '').replace(/\([^)]*\)/g, '()')].join('|')
 }
 
-// Everything a values save would refuse, both kinds at once (a save stops at
-// the first kind). Each names its cell in its message.
-function allProblems(bare, model) {
-  return [...valueProblems(bare, model), ...selectorValueProblems(bare, model).problems]
-}
-
-// One problem as the same one before and after a change: its group, row,
-// column and what it says, leaving out what it quotes in brackets — a
-// row overlap names the selected values, which a new selector level adds to.
-function problemKey(p) {
-  return [p.group, p.row, p.column, String(p.message || '').replace(/\([^)]*\)/g, '()')].join('|')
+// What a save would refuse in a deployment's values (policy.js, `migration`).
+async function saveRefuses(repo, rel, chart, next) {
+  const dep = await loadDeployment(repo, rel, { chart: isFlatFile(rel) ? chart : undefined, next })
+  if (dep.state === 'unreadable') return [{ code: 'values.unreadable', message: `${dep.file} cannot be read: ${dep.why}` }]
+  return decide(findingsOf(dep), 'migration').refuse
 }
 
 function rowsChanged(before, after) {
@@ -117,8 +111,6 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
   const befores = new Map() // deployment path → its rows before
   const afters = new Map()  // deployment path → its rows after
   const missing = new Set() // deployments with no values file yet
-  const docs = new Map()    // deployment path → the migrated file, parsed
-  const kinds = new Map()   // deployment path → 'common' for a _common chart
   for (const dep of found) {
     const readonly = isTarget(registry, dep.path)
     // A Chart.yaml with no values.yaml: Helm renders the Template's own
@@ -171,44 +163,37 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
       orphaned,
       problems: [],
     })
-    kinds.set(dep.path, dep.kind)
 
     // Only the chart's own block is replaced; anything else at the top of a
     // folder deployment's values.yaml (global:, other dependencies) stays.
     // On a stack, everything beside the chart's rows stays too, wherever it is.
     const wrapped = keys.length > 1 || (keys.length && parsed && typeof parsed === 'object' && keys[0] in parsed)
     const doc = wrapped ? replaceAtPath(parsed, keys, after) : wrapPath(after, keys)
-    docs.set(dep.path, doc)
     texts.set(dep.path, dumpForHelm(doc, { lineWidth: -1 }))
     files.set(dep.path, valuesFile)
     befores.set(dep.path, before)
     afters.set(dep.path, after)
   }
 
-  // Each migrated file is checked as a values save checks it, on its stack:
-  // what its _common layers give counts, migrated too when they are in this
-  // plan; what is a layer's own is the layer's. A _common chart need not
-  // give a required Common Value, its deployments may; its rows are whole.
+  // Each migrated file is checked as a values save checks it (#176): the
+  // repo as it will be, every migrated file written, loaded with the new
+  // Template's columns and schema, and decided by the migration's table
+  // (policy.js). What a _common gives is the _common's; a _common need not
+  // give a required Common Value, its deployments may (repo/deployment.js).
   if (model) {
+    const rel = file => path.relative(gitopsDir, file).replace(/\\/g, '/')
+    const after = repo.with([...texts.keys()].map(p => [rel(files.get(p)), texts.get(p)]))
+    const problem = targetSchema && typeof targetSchema === 'object' ? schemaProblem(targetSchema) : 'no schema'
+    const next = { model, every: true, ...(problem ? {} : { validate: schemaValidator(targetSchema, `${chart}/values.schema.json`) }) }
     for (const entry of deployments) {
       if (entry.noValues) continue
-      const before = befores.get(entry.path)
-      const after = afters.get(entry.path)
-      const dir = path.join(gitopsDir, entry.path)
-      const stack = docs.has(entry.path) && (await fs.stat(dir).then(s => s.isDirectory(), () => false)) ? await resolveStack(gitopsDir, dir) : null
-      const onStack = stack && stack.layers.length
-      const now = onStack ? stackValues(stack, { own: before }) : null
-      const then = onStack
-        ? stackValues({ ...stack, layers: stack.layers.map(l => (docs.has(l.path) ? { ...l, doc: docs.get(l.path) } : l)) }, { own: after })
-        : null
-      const keep = (p, own, values) => !(onStack && isInherited(p, own, values.layers)) && !(kinds.get(entry.path) === 'common' && p.required && p.group === '_common')
       // With no model to say what the values were valid against (rules/
       // that does not parse), nothing can be told to be new: none is refused.
-      const had = beforeModel
-        ? new Set(allProblems(onStack ? now.merged : before, beforeModel).filter(p => keep(p, before, now ?? {})).map(problemKey))
-        : null
-      entry.problems = allProblems(onStack ? then.merged : after, model).filter(p => keep(p, after, then ?? {}))
-        .map(p => ({ ...p, before: had ? had.has(problemKey(p)) : true }))
+      const had = beforeModel ? new Set((await saveRefuses(repo, entry.path, chart, { model: beforeModel, every: true })).map(problemKey)) : null
+      entry.problems = (await saveRefuses(after, entry.path, chart, next)).map(f => {
+        const { group, row, column } = f.detail ?? {}
+        return { message: f.message, ...(group !== undefined ? { group, row: row ?? null } : {}), ...(column !== undefined ? { column } : {}), before: had ? had.has(problemKey(f)) : true }
+      })
     }
   }
 

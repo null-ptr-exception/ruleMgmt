@@ -210,35 +210,36 @@
   },
   "a deployment on a _common, with a hand-written null": {
     "blockers": {
-      "findings": [],
-      "routingProblems": [],
-      "routingWarnings": [],
-      "valueWarnings": [
+      "findings": [
         {
+          "severity": "commit",
+          "kind": "values-null-on-stack",
           "deployment": "deployments/stack/s",
-          "warnings": [
-            "deployments/stack/s/values.yaml: AlertForge cannot tell what Helm renders: the deployment's values writes a null at cpu: on a _common stack Helm 3.15 and 3.19 do not read a null the same way (one removes the key, the other keeps it or keeps what is under it). Remove the null to inherit the value, or write the value plainly"
-          ]
+          "regenerable": false,
+          "description": "deployments/stack/s: deployments/stack/s/values.yaml: cpu is null on a _common stack: Helm 3.15 and 3.19 deploy different things for it (one keeps the null, the other removes the key and takes what is above it, or the default), so what deploys depends on the Helm version (the deployment's values writes a null at cpu: on a _common stack Helm 3.15 and 3.19 do not read a null the same way (one removes the key, the other keeps it or keeps what is under it)). Give it a value, or delete the line to inherit it"
         }
       ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
       "unreadable": [],
       "regenerable": 0,
       "readable": true
     },
     "commit": {
-      "status": 200,
+      "status": 409,
       "data": {
-        "sha": "<sha>",
-        "message": "check",
-        "unconverted": [],
-        "valueWarnings": [
+        "error": "Commit refused",
+        "findings": [
           {
+            "severity": "commit",
+            "kind": "values-null-on-stack",
             "deployment": "deployments/stack/s",
-            "warnings": [
-              "deployments/stack/s/values.yaml: AlertForge cannot tell what Helm renders: the deployment's values writes a null at cpu: on a _common stack Helm 3.15 and 3.19 do not read a null the same way (one removes the key, the other keeps it or keeps what is under it). Remove the null to inherit the value, or write the value plainly"
-            ]
+            "regenerable": false,
+            "description": "deployments/stack/s: deployments/stack/s/values.yaml: cpu is null on a _common stack: Helm 3.15 and 3.19 deploy different things for it (one keeps the null, the other removes the key and takes what is above it, or the default), so what deploys depends on the Helm version (the deployment's values writes a null at cpu: on a _common stack Helm 3.15 and 3.19 do not read a null the same way (one removes the key, the other keeps it or keeps what is under it)). Give it a value, or delete the line to inherit it"
           }
-        ]
+        ],
+        "regenerable": 0
       }
     }
   },

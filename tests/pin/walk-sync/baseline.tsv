@@ -240,9 +240,9 @@ link-outside	W	users	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-
 link-outside	W	migration	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
 link-outside	W	routing-get	absent	400	-	no	-	link	renders	0	1	-	-	misses-what-helm-renders
 link-outside	W	preview	refused	400	-	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
-link-outside	W	check-deployment	ok	exit 0	-	no	-	link	renders	0	1	-	-	
+link-outside	W	check-deployment	refused	exit 1	-	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
 link-outside	W	sync-to	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
-link-outside	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	link	renders	0	1	copy	-	
+link-outside	W	sync-from	unreadable	409	deployments/w/out/values.yaml	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
 link-outside	W	commit	ok	200	-	no	-	link	renders	0	1	-	-	
 link-loop	W	tree	absent	200	-	no	-	link	no-chart	-	-	-	not shown	
 link-loop	W	list	absent	200	-	no	-	link	no-chart	-	-	-	not found	
@@ -369,23 +369,23 @@ values-yaml11	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	alertCount=1
 values-yaml11	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
 values-yaml11	W	folder-list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
 values-yaml11	W	users	deployment	200	-	no	-	folder	fails	1	-	-	found	
-values-yaml11	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found	
+values-yaml11	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found problems=1	
 values-yaml11	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	check-deployment	refused	exit 1	-	no	-	folder	fails	1	-	-	-	
 values-yaml11	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments/w/d/templates/alertmanagerconfig.yaml,deployments/w/d/values.yaml,sync.yaml	folder	fails	1	-	copy	-	
-values-yaml11	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	fails	1	-	source-fails	-	accepts-what-helm-fails
-values-yaml11	W	commit	ok	200	-	no	-	folder	fails	1	-	-	-	accepts-what-helm-fails
+values-yaml11	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+values-yaml11	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
 values-is-folder	W	tree	deployment	200	-	no	-	folder	renders-empty	0	0	-	alertCount=0	
 values-is-folder	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=null	
 values-is-folder	W	folder-list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=0	
 values-is-folder	W	users	deployment	200	-	no	-	folder	renders-empty	0	0	-	found	
-values-is-folder	W	migration	error	500	deployments/w/d	no	-	folder	renders-empty	0	0	-	-	5xx
+values-is-folder	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found problems=1	
 values-is-folder	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
 values-is-folder	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
-values-is-folder	W	check-deployment	ok	exit 0	-	no	-	folder	renders-empty	0	0	-	-	
+values-is-folder	W	check-deployment	refused	exit 1	-	no	-	folder	renders-empty	0	0	-	-	
 values-is-folder	W	sync-to	error	500	-	no	-	folder	renders-empty	0	0	-	-	5xx
-values-is-folder	W	sync-from	error	500	-	no	-	folder	renders-empty	0	0	-	-	5xx
+values-is-folder	W	sync-from	unreadable	409	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	-	
 values-is-folder	W	commit	refused	409	deployments/w/d	no	-	folder	renders-empty	0	0	-	values-unreadable	
 empty-folder	W	tree	folder	200	-	no	-	folder	no-chart	-	-	-	-	
 empty-folder	W	list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	

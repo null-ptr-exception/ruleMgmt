@@ -69,6 +69,7 @@ const SAVE_ROWS = {
   'template.schema-unchecked': { action: 'warn', why: 'a Template schema AlertForge cannot check as Helm does is the Template\'s: the deployment is checked by its columns, and Preview by Helm' },
 }
 const LISTED = why => ({ action: 'list', why })
+const MOVED = { action: 'ignore', why: 'moved as written, and rendered by Helm before and after the move: the same values deploy the same way' }
 
 /** The tables, one per entry point. */
 export const POLICIES = Object.freeze({
@@ -88,6 +89,8 @@ export const POLICIES = Object.freeze({
       'values.selector': LISTED(EDITOR),
       'yaml.duplicate-key': LISTED('Helm keeps the last of two keys; said so it can be written once'),
       'values.flat-not-checked': LISTED('a legacy <name>-values.yaml is not supported: said, not checked'),
+      'values.null-on-stack': { action: 'refuse', why: 'a null on a _common stack deploys differently on the two supported Helm versions (one keeps it, the other removes the key and falls back to the layer above or the default): what deploys would depend on the Helm version' },
+      'stack.duplicate-key': LISTED('a key a _common writes twice deploys the later one, which may not be the one meant: said'),
     },
   }),
   checkRepo: definePolicy('checkRepo', {
@@ -99,9 +102,43 @@ export const POLICIES = Object.freeze({
       'values.selector': { action: 'warn', why: EDITOR },
       'yaml.duplicate-key': { action: 'warn', why: 'Helm keeps the last of two keys: it renders, the text should say it once' },
       'values.flat-not-checked': { action: 'warn', why: 'a legacy <name>-values.yaml is not supported: said, not checked' },
+      'stack.duplicate-key': { action: 'warn', why: 'a key a _common writes twice deploys the later one, which may not be the one meant' },
     },
   }),
-  preview: definePolicy('preview'),
+  preview: definePolicy('preview', {
+    rows: {
+      'stack.duplicate-key': { action: 'warn', why: 'a key a _common writes twice deploys the later one, which may not be the one meant' },
+    },
+  }),
+  // A new deployment writes no values of its own: what it deploys is the
+  // Template's and its _common's. What Helm fails on there is refused, so
+  // it is not made where it cannot deploy.
+  init: definePolicy('init', {
+    rows: {
+      'values.required-empty': { action: 'ignore', why: 'a new deployment is made to be filled in: its required cells are said when it is saved' },
+      'values.rows-alike': { action: 'ignore', why: 'rows the row identity label cannot tell apart are said when it is saved' },
+      'template.schema-unchecked': { action: 'ignore', why: 'a Template schema AlertForge cannot check is the Template\'s: the deployment is checked by its columns' },
+    },
+  }),
+  // Making or removing a _common moves each chart's values as written, and
+  // Helm renders every deployment it touches before and after: what Helm
+  // makes of the values does not change, so what they already are is not
+  // the move's to judge. What it refuses is what it cannot move as Helm
+  // reads it.
+  commonMove: definePolicy('commonMove', {
+    rows: {
+      'values.schema': MOVED,
+      'values.cell': MOVED,
+      'values.derived': MOVED,
+      'values.required-empty': MOVED,
+      'values.selector': MOVED,
+      'values.rows-alike': MOVED,
+      'stack.*': { action: 'ignore', why: 'a problem of the stack itself is said by the plan as the chart\'s; one of the values a layer gives is moved as it is' },
+      'yaml.read-differently': { action: 'ignore', why: 'the text is moved as written: Helm reads it the same way before and after' },
+      'template.schema-unchecked': { action: 'ignore', why: 'a Template schema AlertForge cannot check is the Template\'s; Helm renders the deployments before and after' },
+      'yaml.duplicate-key': { action: 'refuse', why: 'which of the two keys to move cannot be told from the text' },
+    },
+  }),
   migration: definePolicy('migration', { rows: SAVE_ROWS }),
 })
 

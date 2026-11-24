@@ -68,6 +68,8 @@ export default function AlertUserView() {
   const [dirty, setDirty] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [saveWarnings, setSaveWarnings] = useState([])
+  // What Helm reads otherwise than the file looks (010 is 8): shown as Helm reads it, and said.
+  const [readNotes, setReadNotes] = useState([])
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
   const [previewCheck, setPreviewCheck] = useState(null)
@@ -179,6 +181,7 @@ export default function AlertUserView() {
       setStackInfo(data.stack || null)
       setStackProblems(data.stackProblems || null)
       setLoadedVersion(data.version || null)
+      setReadNotes((data.findings || []).filter(f => f.code === 'yaml.read-differently').map(f => f.message))
       const parsed = data.parsed || {}
       const { _common, ...rest } = parsed
       setCommonValues(_common || {})
@@ -912,6 +915,9 @@ export default function AlertUserView() {
               {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
               {saveWarnings.length > 0 && (
                 <Text type="warning" data-testid="values-warnings" style={{ fontSize: 12 }}>{saveWarnings.join('; ')}</Text>
+              )}
+              {readNotes.length > 0 && !dirty && (
+                <Text type="warning" data-testid="values-read-notes" style={{ fontSize: 12 }}>{readNotes.join('; ')}</Text>
               )}
             </div>
           </>

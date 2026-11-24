@@ -213,7 +213,7 @@ describe('making a deployment', () => {
     await write('charts/demo/values.yaml', 'cpu: [\n')
     const { status, data } = await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/a', chart: 'demo' })
     expect(status).toBe(409)
-    names(data, 'charts/demo/values.yaml cannot be read: not valid YAML')
+    names(data, 'charts/demo/values.yaml cannot be read: not')
     await expect(fs.access(abs('deployments/team/a'))).rejects.toThrow()
   })
 

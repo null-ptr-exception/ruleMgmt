@@ -3,7 +3,7 @@ import yaml from 'js-yaml'
 import { withSyncRegistryLock } from '../lib/sync.js'
 import { regenerateRouting } from '../lib/commitChecks.js'
 import {
-  readSharedConfigs, routingUsers, usageOf, unreadableOf, staleUsers, sharedDirProblem, writeShared, renameShared, updateConfigsInText, SHARED_FILE,
+  readSharedConfigs, routingUsers, usageOf, overlapsOf, unreadableOf, staleUsers, sharedDirProblem, writeShared, renameShared, updateConfigsInText, SHARED_FILE,
 } from '../lib/sharedConfigs.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 
@@ -18,7 +18,8 @@ export default function routingSharedRouter() {
   router.use(answersWithoutPaths)
 
   // { file, exists, text, configs, errors, usage: { name: [{ deployment,
-  // syncedFrom? }] }, stale: [deployment], unreadable: [{ deployment, error }],
+  // syncedFrom? }] }, overlaps: { overlaps: [{ config, count, deployments,
+  // more }], unchecked, synced } (sharedOverlap.js), stale: [deployment], unreadable: [{ deployment, error }],
   // dirProblem }
   router.get('/', async (req, res) => {
     try {
@@ -32,6 +33,7 @@ export default function routingSharedRouter() {
         errors: shared?.errors ?? [],
         warnings: shared?.warnings ?? [],
         usage: usageOf(users),
+        overlaps: overlapsOf(users, shared),
         stale: await staleUsers(req.gitopsDir, users, shared),
         unreadable: unreadableOf(users),
         dirProblem: await sharedDirProblem(req.gitopsDir),

@@ -250,3 +250,32 @@ test('shared configs that cannot be read are said so on a deployment\'s Routing 
   await expect(page.getByTestId('shared-read-error')).toContainText('Could not read them')
   await expect(page.getByTestId('notification-configs')).toContainText('the shared configs cannot be read')
 })
+
+// Two deployments whose cells send one alert to the same shared config:
+// said on the page, gone once the cells cannot match one alert.
+test('the page says when two deployments send the same alert to one shared config', async ({ page, request }) => {
+  expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
+  const own = team => `labels:\n  severity: [critical]\n  team: [${team}]\nconfigs:\n  relay-webhook: { shared: true }\ncells:\n  - match: { severity: critical, team: ${team} }\n    configs: [relay-webhook]\n`
+  expect((await request.put(routingUrl(A), { data: { routing: own('db') } })).ok()).toBeTruthy()
+  expect((await request.put(routingUrl(B), { data: { routing: routing('  relay-webhook: { shared: true }\n') } })).ok()).toBeTruthy()
+  await openShared(page)
+  const hint = page.getByTestId('shared-overlaps')
+  await expect(hint).toContainText(`${A} (severity=critical, team=db), ${B} (severity=critical)`)
+  await expect(hint).toContainText('each of these cells can get an alert a cell of another of these deployments gets too')
+  await expect(hint).toContainText('alertmanagerConfigMatcherStrategy: None')
+
+  // Both name team, with two values: no alert reaches both.
+  expect((await request.put(routingUrl(B), { data: { routing: own('web') } })).ok()).toBeTruthy()
+  await page.goto('about:blank')
+  await openShared(page)
+  await expect(page.getByTestId('shared-overlaps').filter({ hasText: `${A} (severity=critical, team=db)` })).toHaveCount(0)
+})
+
+// A config may be named constructor: the page loads, and counts its users.
+test('a shared config named constructor is listed with who uses it', async ({ page, request }) => {
+  expect((await putShared(request, { constructor: { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
+  const r = 'labels:\n  severity: [critical]\nconfigs:\n  constructor: { shared: true }\ncells:\n  - match: { severity: critical }\n    configs: [constructor]\n'
+  expect((await request.put(routingUrl(A), { data: { routing: r } })).ok()).toBeTruthy()
+  await openShared(page)
+  await expect(page.getByTestId('used-by-constructor')).toHaveText('1 deployment')
+})

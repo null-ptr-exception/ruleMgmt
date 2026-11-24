@@ -4,6 +4,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant
 import { ConfigDialog, configTarget } from './NotificationConfigs'
 import { sharedConfigProblems } from '../utils/routingGenerator'
 import { configNameProblem } from '../utils/routingSchema'
+import { overlapText } from '../utils/sharedOverlap'
 import { blankForm, toForm } from '../utils/configForm'
 import { getSharedConfigs, saveSharedConfigs, renameSharedConfig, regenerateShared } from '../utils/chartApi'
 
@@ -40,7 +41,7 @@ export default function SharedConfigs() {
   if (state.error) return <Empty style={{ margin: 'auto' }} description={state.error} />
 
   const usage = state.usage || {}
-  const usersOf = name => usage[name] || []
+  const usersOf = name => (Object.hasOwn(usage, name) ? usage[name] : [])
   // A file with problems, or a _shared/ of the repo's own: fixed by hand.
   const readOnly = !!state.dirProblem || state.errors.length > 0
 
@@ -141,6 +142,25 @@ export default function SharedConfigs() {
       {state.warnings?.length > 0 && (
         <Alert type="warning" showIcon data-testid="shared-warnings" message="Worth knowing about these configs"
           description={<List items={state.warnings} />} />
+      )}
+      {(state.overlaps?.overlaps?.length > 0 || state.overlaps?.unchecked?.length > 0) && (
+        <Alert type="info" showIcon data-testid="shared-overlaps"
+          message="Some deployments send the same alert to one shared config"
+          description={(
+            <>
+              {state.overlaps.overlaps.length > 0 && <List items={state.overlaps.overlaps.map(overlapText)} />}
+              {state.overlaps.unchecked.length > 0 && (
+                <div data-testid="shared-overlaps-unchecked">
+                  Not compared — their routing has problems, so what they match is not what they say: {state.overlaps.unchecked.join(', ')}
+                </div>
+              )}
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                With alertmanagerConfigMatcherStrategy: None (what the how-to sets up), each of these cells notifies the config,
+                so it gets that alert once per deployment. Synced copies are not listed: their cells are their source&apos;s.
+                Nothing is refused: this is only said.
+              </Text>
+            </>
+          )} />
       )}
       {state.stale.length > 0 && (
         <Alert type="warning" showIcon data-testid="shared-stale"

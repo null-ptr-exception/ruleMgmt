@@ -24,6 +24,7 @@ import { readRouting, buildRouting, writeWhole, ROUTING_FILE, ROUTING_CR_FILE } 
 import { listFolderDeployments } from './commitChecks.js'
 import { readSyncRegistry, getSourceForTarget } from './sync.js'
 import { copyToTargets } from './deploymentWrite.js'
+import { sharedCellOverlaps } from '../../src/utils/sharedOverlap.js'
 
 export { SHARED_DIR, SHARED_FILE }
 
@@ -156,9 +157,22 @@ function refuseUnreadable(users, what) {
 export function usageOf(users) {
   const usage = {}
   for (const { deployment, uses, syncedFrom } of users) {
-    for (const name of uses) (usage[name] ||= []).push({ deployment, ...(syncedFrom ? { syncedFrom } : {}) })
+    // Own keys only: a config may be named constructor or toString.
+    for (const name of uses) (Object.hasOwn(usage, name) ? usage[name] : (usage[name] = [])).push({ deployment, ...(syncedFrom ? { syncedFrom } : {}) })
   }
   return usage
+}
+
+/**
+ * Cells of different deployments that send one alert to the same shared
+ * config (sharedOverlap.js): `{ overlaps, unchecked, synced }`. A
+ * routing.yaml that cannot be read is left out — the page names those on
+ * their own; one the save would refuse is listed as unchecked.
+ */
+export function overlapsOf(users, shared) {
+  return sharedCellOverlaps(users
+    .filter(u => !u.unreadable && u.uses.length)
+    .map(u => ({ deployment: u.deployment, routing: parsedRouting(u.text), ...(u.syncedFrom ? { syncedFrom: u.syncedFrom } : {}) })), shared)
 }
 
 export async function sharedUsage(gitopsDir) {
@@ -269,7 +283,7 @@ export async function writeShared(gitopsDir, text) {
   const removed = {}
   for (const user of users) {
     for (const name of user.uses) {
-      if (!Object.hasOwn(shared.configs, name)) (removed[name] ||= []).push(user.deployment)
+      if (!Object.hasOwn(shared.configs, name)) (Object.hasOwn(removed, name) ? removed[name] : (removed[name] = [])).push(user.deployment)
     }
   }
   if (Object.keys(removed).length) {

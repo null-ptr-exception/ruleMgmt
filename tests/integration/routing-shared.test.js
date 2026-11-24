@@ -175,6 +175,62 @@ describe('changing a shared config', () => {
 
 // A routing.yaml that cannot be read may use any shared config: a change
 // that left it behind would leave it sending to the old address.
+// Cells of different deployments that send one alert to the same shared
+// config: said on the Shared configs page, never refused.
+describe('the same alert to one shared config from two deployments', () => {
+  it('is one entry listing the deployments and their cells; a synced target is left out, counted', async () => {
+    const { data } = await api('GET', '/api/v2/routing/shared')
+    expect(data.overlaps).toEqual({
+      overlaps: [{
+        config: 'relay-webhook', count: 3, more: 0,
+        deployments: [A, B, C].map(deployment => ({ deployment, cells: [{ severity: 'critical' }], more: 0 })),
+      }],
+      unchecked: [],
+      synced: 1,
+    })
+  })
+
+  it('goes once the cells cannot match one alert, and neither the save nor the commit is refused', async () => {
+    const two = own => `labels:\n  severity: [critical]\n  team: [${own}]\nconfigs:\n  relay-webhook: { shared: true }\ncells:\n  - match: { severity: critical, team: ${own} }\n    configs: [relay-webhook]\n`
+    // A and B both name team, with two values; C (and its target) stop using it.
+    expect((await putRouting(A, two('db'))).status).toBe(200)
+    expect((await putRouting(B, two('web'))).status).toBe(200)
+    expect((await putRouting(C, routing('').replace('relay-webhook: { shared: true }', 'own: { type: webhook, url: http://own:8080 }').replace('configs: [relay-webhook]', 'configs: [own]'))).status).toBe(200)
+    expect((await api('GET', '/api/v2/routing/shared')).data.overlaps.overlaps).toEqual([])
+    // B with no team: it is no condition for B, so A's db cell and B's meet.
+    const saved = await putRouting(B, routing(''))
+    expect(saved.status).toBe(200)
+    const { data } = await api('GET', '/api/v2/routing/shared')
+    expect(data.overlaps.overlaps.map(o => o.deployments.map(d => d.deployment))).toEqual([[A, B]])
+    expect((await commit()).status).toBe(200)
+  })
+
+  // Written by hand, a cell missing a label would match every value of it:
+  // not compared, and said so.
+  it('leaves out a routing.yaml the save would refuse, naming it', async () => {
+    await write(`${B}/routing.yaml`, 'labels:\n  severity: [critical]\n  team: [db]\nconfigs:\n  relay-webhook: { shared: true }\ncells:\n  - match: { severity: critical }\n    configs: [relay-webhook]\n')
+    const { data } = await api('GET', '/api/v2/routing/shared')
+    expect(data.overlaps.unchecked).toEqual([B])
+    expect(data.overlaps.overlaps[0].deployments.map(d => d.deployment)).toEqual([A, C])
+  })
+})
+
+describe('a shared config named constructor', () => {
+  it('is read, used and listed like any other', async () => {
+    const text = sharedText(RELAY).replace('  ops-email:', '  constructor: { type: webhook, url: http://c:8080 }\n  ops-email:')
+    expect((await api('PUT', '/api/v2/routing/shared', { shared: text })).status).toBe(200)
+    const r = 'labels:\n  severity: [critical]\nconfigs:\n  constructor: { shared: true }\ncells:\n  - match: { severity: critical }\n    configs: [constructor]\n'
+    expect((await putRouting(A, r)).status).toBe(200)
+    const { status, data } = await api('GET', '/api/v2/routing/shared')
+    expect(status).toBe(200)
+    expect(data.usage.constructor).toEqual([{ deployment: A }])
+    // Taken out while A uses it: refused, naming A.
+    const gone = await api('PUT', '/api/v2/routing/shared', { shared: sharedText(RELAY) })
+    expect(gone.status).toBe(409)
+    expect(gone.data.usedBy).toEqual({ constructor: [A] })
+  })
+})
+
 describe('a user whose routing.yaml cannot be read', () => {
   const breakB = () => write(`${B}/routing.yaml`, routing('').replace('cells:', 'cells: [\n'))
 
@@ -445,6 +501,10 @@ describe.skipIf(!HAS_AMTOOL)(amtoolTitle('two deployments using one shared confi
     try {
       await fs.writeFile(path.join(dir, 'alertmanager.yml'), yaml.dump(merged))
       expect(() => execFileSync('amtool', ['check-config', path.join(dir, 'alertmanager.yml')], { stdio: 'pipe' })).not.toThrow()
+      // One alert, both deployments' cells: the shared webhook is notified
+      // once through each receiver — the reason the Shared configs page says so.
+      const routed = execFileSync('amtool', ['config', 'routes', 'test', `--config.file=${path.join(dir, 'alertmanager.yml')}`, 'severity=critical'], { encoding: 'utf-8' })
+      expect(routed.trim().split(',').filter(r => r.endsWith('/relay-webhook'))).toHaveLength(2)
       // Without the prefix, the two would clash: amtool refuses that.
       await fs.writeFile(path.join(dir, 'clash.yml'), yaml.dump({ ...merged, receivers: [...merged.receivers, { name: merged.receivers.at(-1).name }] }))
       expect(() => execFileSync('amtool', ['check-config', path.join(dir, 'clash.yml')], { stdio: 'pipe' })).toThrow()

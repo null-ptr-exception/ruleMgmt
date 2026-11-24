@@ -49,7 +49,8 @@ export function parseRouting(text) {
 const labelNames = routing => Object.keys(routing.labels)
 
 /** A combination's identity: its values in label order. */
-export const matchKey = (routing, match) => JSON.stringify(labelNames(routing).map(name => match?.[name]))
+// Own keys only: a label may be named constructor.
+export const matchKey = (routing, match) => JSON.stringify(labelNames(routing).map(name => (match && Object.hasOwn(match, name) ? match[name] : undefined)))
 
 /** Every combination of the labels' values, the first label outermost. */
 export function combinations(labels) {
@@ -315,8 +316,8 @@ export function toSave(routing) {
     .sort((a, b) => rank(a.cell) - rank(b.cell) || a.i - b.i)
     .map(({ cell }) => {
       const { match, configs, ...rest } = cell
-      const ordered = Object.fromEntries(labelNames(routing).filter(n => match[n] !== undefined).map(n => [n, match[n]]))
-      for (const [n, v] of Object.entries(match)) if (!(n in ordered)) ordered[n] = v
+      const ordered = Object.fromEntries(labelNames(routing).filter(n => Object.hasOwn(match, n) && match[n] !== undefined).map(n => [n, match[n]]))
+      for (const [n, v] of Object.entries(match)) if (!Object.hasOwn(ordered, n)) ordered[n] = v
       const out = { match: ordered, configs }
       for (const key of TIMING_KEYS) if (rest[key] !== undefined) out[key] = rest[key]
       for (const [k, v] of Object.entries(rest)) if (!TIMING_KEYS.includes(k)) out[k] = v

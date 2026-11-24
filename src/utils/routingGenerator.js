@@ -156,7 +156,7 @@ export function routingWarnings(routing, { shared = null } = {}) {
   const configs = routing && typeof routing === 'object' && routing.configs && typeof routing.configs === 'object' ? routing.configs : {}
   return Object.entries(configs).flatMap(([name, c]) => {
     if (!isSharedRef(c)) return configWarnings(name, c)
-    const used = shared?.configs?.[name]
+    const used = shared?.configs && Object.hasOwn(shared.configs, name) ? shared.configs[name] : undefined
     return used ? configWarnings(name, used).map(w => w.replace(`configs.${name}:`, `configs.${name} (shared):`)) : []
   })
 }

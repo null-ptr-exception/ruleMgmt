@@ -63,3 +63,28 @@ describe('__proto__ as a name', () => {
     expect(merged.x).toBe(undefined)
   })
 })
+
+// Config and label names in routing are the user's too (CONFIG_NAME_RE and
+// LABEL_NAME_RE take constructor, toString).
+describe('routing names that are also Object.prototype\'s', () => {
+  it('counts the users of a shared config named constructor', async () => {
+    const { usageOf } = await import('../../../server/lib/sharedConfigs.js')
+    expect(usageOf([{ deployment: 'a', uses: ['constructor', 'tostring'] }, { deployment: 'b', uses: ['constructor'] }]))
+      .toEqual({ constructor: [{ deployment: 'a' }, { deployment: 'b' }], tostring: [{ deployment: 'a' }] })
+  })
+
+  it('finds no shared config by a name the shared file does not have', async () => {
+    const { routingWarnings } = await import('../routingGenerator.js')
+    expect(routingWarnings({ configs: { constructor: { shared: true } } }, { shared: { configs: {} } })).toEqual([])
+    const shared = { configs: { constructor: { type: 'email', to: 'undisclosed-recipients:;' } } }
+    expect(routingWarnings({ configs: { constructor: { shared: true } } }, { shared })).toEqual(['configs.constructor (shared): to "undisclosed-recipients:;" is a group with no members — this config notifies nobody'])
+  })
+
+  it('writes a routing with a label named constructor that a cell leaves out', async () => {
+    const yaml = (await import('js-yaml')).default
+    const { toSave, matchKey } = await import('../routingModel.js')
+    const routing = { labels: { severity: ['critical'], constructor: ['x'] }, configs: { a: { type: 'webhook', url: 'http://x' } }, cells: [{ match: { severity: 'critical' }, configs: ['a'] }] }
+    expect(yaml.load(yaml.dump(toSave(routing))).cells).toEqual([{ match: { severity: 'critical' }, configs: ['a'] }])
+    expect(matchKey(routing, { severity: 'critical' })).toBe(matchKey(routing, { severity: 'critical', constructor: undefined }))
+  })
+})

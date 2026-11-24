@@ -721,6 +721,21 @@ name. Open **Routing** → **Shared configs**:
   that uses it (its cells too, comments kept), and makes their resources again.
   It is refused when one of them has a config of its own by the new name.
 - A config still used cannot be deleted: the page says by whom.
+- **The same alert twice** — the page lists the cells of different
+  deployments that pick one shared config and can match one alert. Two cells
+  can when every label both have holds the same value in each; a label only
+  one of them has is no condition for the other. `shop/a`'s
+  `{severity: critical}` and `shop/b`'s `{severity: critical, team: db}` can
+  (a critical `team=db` alert reaches both); two cells with `team: db` and
+  `team: web` cannot. With `alertmanagerConfigMatcherStrategy: None`, as set
+  up [below](#let-alertmanager-load-the-notification-routing), the config is notified once
+  per deployment. All the deployments of one shared config are one line —
+  the first 20, then how many more. A sync target is not listed: its
+  routing is its source's, so it always matches what its source does; when
+  the two are on the same Alertmanager, that config gets each of those
+  alerts twice. A `routing.yaml` the save would refuse (written by hand,
+  say, with a cell that leaves a label out) is not compared, and named.
+  Only said: nothing is refused.
 - **Behind** — the shared file was edited with git, or pulled, and the
   resources made from it were not made again. The page lists them, and a
   commit is refused, naming each one. **Regenerate** makes them all again.
@@ -1229,6 +1244,11 @@ routes from seeing an alert. It also means two deployments under one
 Alertmanager whose `routing.yaml` cover the same label combination both notify
 for it: keep each deployment's alerts apart by a label, such as one that names
 the deployment.
+When both pick the same config — a shared one, say — that config gets the
+alert once for each: each deployment's receiver has a name of its own, and
+Alertmanager does not merge them (measured, Alertmanager 0.28.1; with the
+`OnNamespace` strategy, once). The Shared configs page lists such cells
+(see [Share a config between deployments](#share-a-config-between-deployments)).
 
 ### If rules deploy but never fire
 

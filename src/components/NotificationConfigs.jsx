@@ -308,7 +308,7 @@ export default function NotificationConfigs({ routing, onChange, readOnly, descr
   // at once when they say the same, else only once asked.
   function useShared(name) {
     setAdding(false)
-    const own = routing.configs[name]
+    const own = Object.hasOwn(routing.configs, name) ? routing.configs[name] : undefined
     const use = () => onChange(putConfig(routing, name, { shared: true }, { was: name }))
     if (own === undefined || sameConfig(own, sharedConfigs[name])) return use()
     const show = config => <pre style={{ fontSize: 12, margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(config, null, 2)}</pre>
@@ -329,7 +329,7 @@ export default function NotificationConfigs({ routing, onChange, readOnly, descr
     })
   }
 
-  const addable = Object.keys(sharedConfigs).filter(n => !(routing.configs[n]?.shared === true))
+  const addable = Object.keys(sharedConfigs).filter(n => !(Object.hasOwn(routing.configs, n) && routing.configs[n]?.shared === true))
 
   return (
     <div data-testid="notification-configs">

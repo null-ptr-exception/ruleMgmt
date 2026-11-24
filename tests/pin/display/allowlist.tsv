@@ -2,13 +2,13 @@
 # category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
 # Edited by hand: a fix removes its line; a new disagreement needs one.
 id	entry	kind	category	reason
-unwrapped	editor	rows-differ+value-differs	bug	#203: values not under the chart's name are shown as the deployment's, and Helm passes none of them to the Template (the page says so beside them)
+unwrapped	editor	rows-differ+value-differs	bug	no issue yet: values not under the chart's name are shown as the deployment's, and Helm passes none of them to the Template (the page says so beside them)
 unreadable-dir	preview	no-count-helm-renders	bug	no issue yet: Preview renders it and shows the raw YAML with no summary and no word why (the summary's read refuses the values file, only logged); the rule owner page refuses the same file
 link-outside	editor	no-count-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
 link-outside	preview	no-count-helm-renders	bug	no issue yet: Preview renders it and shows the raw YAML with no summary and no word why (the summary's read refuses the values file, only logged); the rule owner page refuses the same file
 cond-no	editor	rows-differ+value-differs	policy	the page says the deployment is turned off by its condition (Helm renders none of it) and still opens its rows to edit
 layer-link-outside	preview	no-count-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
-layer-unwrapped	editor	value-differs	bug	#203: values not under the chart's name are shown as the deployment's, and Helm passes none of them to the Template (the page says so beside them)
+layer-unwrapped	editor	value-differs	bug	no issue yet: values not under the chart's name are shown as the deployment's, and Helm passes none of them to the Template (the page says so beside them)
 link-outside	all-list	no-count-helm-renders	policy	a values.yaml that is a link leading outside the repo is never read through the link: the Sync dialogs give no row count for it (Helm on this machine renders through it)
 layer-link-outside	all-list	no-count-helm-renders	policy	a _common values.yaml that is a link leading outside the repo is never read through the link: the Sync dialogs give no row count for the deployments on it (Helm on this machine renders through it)
 layer-cannot-tell	all-list	no-count-helm-renders	policy	a _common whose values.yaml AlertForge cannot tell Helm's reading of is left to Helm: Preview shows what Helm renders without a summary, and no row count is given, as its values are not known

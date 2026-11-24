@@ -411,6 +411,18 @@ test('a routing.yaml that fails the checks can still be removed', async ({ page,
   expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
 })
 
+test('an AlertmanagerConfig left without its routing.yaml is named, and can be removed', async ({ page, request }) => {
+  const routing = { labels: { severity: ['critical'] }, configs: {}, cells: [] }
+  expect((await request.put(routingUrl(FOLDER), { data: { routing } })).ok()).toBeTruthy()
+  await fs.rm(path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml'))
+  await openRouting(page, FOLDER)
+  await expect(page.getByTestId('routing-error')).toContainText('templates/alertmanagerconfig.yaml is there without a routing.yaml', { timeout: 8000 })
+  await page.getByTestId('routing-orphan-remove').click()
+  await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
+  await expect(page.getByRole('button', { name: 'Set up routing' })).toBeVisible({ timeout: 8000 })
+  expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
+})
+
 // Coming from a deployment with a table, a failing one must not keep it on screen.
 test('switching to a deployment whose routing.yaml fails leaves no table on screen', async ({ page, request }) => {
   const routing = { labels: { severity: ['critical'] }, configs: {}, cells: [] }

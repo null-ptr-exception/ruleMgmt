@@ -78,7 +78,7 @@ export default function RoutingView() {
         setDirty(false)
         setAddedLabels([])
       } else if (state.error) {
-        setLoaded({ error: state.error })
+        setLoaded({ error: state.error, file: state.file, unreadable: state.unreadable })
       } else {
         setLoaded(state)
         setDirty(false)
@@ -294,7 +294,17 @@ export default function RoutingView() {
     if (showShared) return <SharedConfigs />
     if (!selectedFolder) return <Empty style={{ margin: 'auto' }} description="Select a deployment from the folder tree" />
     if (!loaded) return <Empty style={{ margin: 'auto' }} description="Loading..." />
-    if (loaded.error) return <Empty style={{ margin: 'auto' }} description={loaded.error} />
+    // A resource left without its routing.yaml is still deployed: it can
+    // be removed here, as routing is.
+    if (loaded.error) {
+      return (
+        <Empty style={{ margin: 'auto' }} description={<span data-testid="routing-error">{loaded.error}</span>}>
+          {loaded.file && !loaded.unreadable && !readOnly && (
+            <Button danger icon={<DeleteOutlined />} data-testid="routing-orphan-remove" onClick={handleRemove}>Remove routing</Button>
+          )}
+        </Empty>
+      )
+    }
     if (loaded.none && !routing) {
       return (
         <Empty style={{ margin: 'auto' }} description={

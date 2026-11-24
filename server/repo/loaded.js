@@ -35,10 +35,22 @@ function noValue(obj) {
 
 export const absent = (file = '') => noValue({ state: 'absent', file })
 
-export function unreadable(file, why) {
+/**
+ * `kind` says the same as `why`, for code to decide on (why is for people):
+ * 'permission', 'folder' (a folder where the file should be), 'not-a-folder'
+ * (a file where a folder should be), 'dangling-link', 'outside-link',
+ * 'not-a-file' (a pipe, a device …), 'too-big', or 'other'.
+ */
+export const UNREADABLE_KINDS = Object.freeze(['permission', 'folder', 'not-a-folder', 'dangling-link', 'outside-link', 'not-a-file', 'too-big', 'other'])
+
+export function unreadable(file, why, kind = 'other') {
   if (typeof why !== 'string' || !why) throw new TypeError('an unreadable file says why')
-  return noValue({ state: 'unreadable', file, why })
+  if (!UNREADABLE_KINDS.includes(kind)) throw new TypeError(`an unreadable file's kind is one of ${UNREADABLE_KINDS.join(', ')}, not ${JSON.stringify(kind)}`)
+  return noValue({ state: 'unreadable', file, why, kind })
 }
+
+/** A link that is the file itself: a write replaces the link, never what it leads to. */
+export const isLinkKind = kind => kind === 'dangling-link' || kind === 'outside-link'
 
 export function invalid(file, findings) {
   if (!Array.isArray(findings) || !findings.length) throw new TypeError('an invalid file says what is wrong with it')

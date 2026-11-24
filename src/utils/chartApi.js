@@ -200,11 +200,16 @@ const routingUrl = (chart, deployment, folder) =>
   `${BASE}/deployments/${encodeURIComponent(chart)}/${encodeURIComponent(deployment)}/routing?folder=${encodeURIComponent(folder)}`
 
 // { text, errors, stale }; null when the deployment has no routing.yaml;
-// { error } when it could not be read.
+// { error, file, unreadable } when it could not be read, or when its
+// AlertmanagerConfig is there without a routing.yaml (`file` names it, and
+// `unreadable` is left out).
 export async function getRouting(chart, deployment, folder) {
   const res = await apiFetch(routingUrl(chart, deployment, folder))
   if (res.status === 404) return null
-  if (!res.ok) return { error: (await res.json().catch(() => ({}))).error || 'Could not read routing' }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    return { error: body.error || 'Could not read routing', ...(body.file ? { file: body.file } : {}), ...(body.unreadable ? { unreadable: true } : {}) }
+  }
   return res.json()
 }
 

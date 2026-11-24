@@ -57,6 +57,8 @@ const WHY = {
   EIO: 'the disk could not read it',
 }
 const reason = err => WHY[err?.code] ?? 'it could not be read'
+const KIND = { EACCES: 'permission', EPERM: 'permission', ENOTDIR: 'not-a-folder', EISDIR: 'folder' }
+const failed = (key, err) => unreadable(key, reason(err), KIND[err?.code] ?? 'other')
 
 function kindOf(st) {
   if (st.isFile()) return null
@@ -69,13 +71,27 @@ function kindOf(st) {
 
 const tooBig = `it is larger than ${MAX_FILE_BYTES / 1024 / 1024} MiB, the most Helm reads in a chart file`
 
+// A save puts a new file in the old one's place (write, then rename), so a
+// read may look at one file and open the next. That is not a file that cannot
+// be read: it is looked at again. Only a path that keeps changing is said so.
+const CHANGED = Symbol('changed')
+const TRIES = 5
+
 export async function readRepoFile(root, rel, { overlay } = {}) {
   const key = repoRel(rel)
+  for (let n = 1; ; n++) {
+    const loaded = await readOnce(root, rel, key, overlay)
+    if (loaded !== CHANGED) return loaded
+    if (n === TRIES) return unreadable(key, 'it kept changing while it was being read')
+  }
+}
+
+async function readOnce(root, rel, key, overlay) {
   if (overlay?.has(key)) {
     const data = overlay.get(key)
     if (data === null) return absent(key)
     const file = asFile(data)
-    return file.bytes.length > MAX_FILE_BYTES ? unreadable(key, tooBig) : ok(file)
+    return file.bytes.length > MAX_FILE_BYTES ? unreadable(key, tooBig, 'too-big') : ok(file)
   }
   const abs = inside(root, key)
   if (!abs) throw new TypeError(`not a path in the repo: ${JSON.stringify(rel)}`)
@@ -85,25 +101,25 @@ export async function readRepoFile(root, rel, { overlay } = {}) {
   try {
     link = await fs.lstat(abs)
   } catch (err) {
-    return err.code === 'ENOENT' ? absent(key) : unreadable(key, reason(err))
+    return err.code === 'ENOENT' ? absent(key) : failed(key, err)
   }
   // 2. Where it leads: inside the repo, and to something.
   if (link.isSymbolicLink()) {
     const target = await fs.stat(abs).catch(err => err)
-    if (target instanceof Error) return unreadable(key, target.code === 'ENOENT' ? 'a link to a file that is not there' : reason(target))
+    if (target instanceof Error) return target.code === 'ENOENT' ? unreadable(key, 'a link to a file that is not there', 'dangling-link') : failed(key, target)
   }
   let real
   try {
     real = await insideReal(root, key)
   } catch (err) {
-    return unreadable(key, reason(err))
+    return failed(key, err)
   }
-  if (!real) return unreadable(key, 'it is a link that leads outside the repo')
+  if (!real) return unreadable(key, 'it is a link that leads outside the repo', 'outside-link')
   const st = await fs.stat(abs).catch(err => err)
-  if (st instanceof Error) return st.code === 'ENOENT' ? absent(key) : unreadable(key, reason(st))
+  if (st instanceof Error) return st.code === 'ENOENT' ? absent(key) : failed(key, st)
   const kind = kindOf(st)
-  if (kind) return unreadable(key, kind)
-  if (st.size > MAX_FILE_BYTES) return unreadable(key, tooBig)
+  if (kind) return unreadable(key, kind, st.isDirectory() ? 'folder' : 'not-a-file')
+  if (st.size > MAX_FILE_BYTES) return unreadable(key, tooBig, 'too-big')
 
   // 3. Read it: opened without waiting (a pipe swapped in meanwhile does not
   // hang), checked again on the open file, read in chunks up to the limit.
@@ -111,13 +127,13 @@ export async function readRepoFile(root, rel, { overlay } = {}) {
   try {
     fh = await fs.open(abs, constants.O_RDONLY | constants.O_NONBLOCK | (constants.O_NOCTTY ?? 0))
   } catch (err) {
-    return err.code === 'ENOENT' ? absent(key) : unreadable(key, reason(err))
+    return err.code === 'ENOENT' ? absent(key) : failed(key, err)
   }
   try {
     const now = await fh.stat()
     const again = kindOf(now)
-    if (again) return unreadable(key, again)
-    if (now.dev !== st.dev || now.ino !== st.ino) return unreadable(key, 'it changed while it was being read')
+    if (again) return unreadable(key, again, now.isDirectory() ? 'folder' : 'not-a-file')
+    if (now.dev !== st.dev || now.ino !== st.ino) return CHANGED
     const chunks = []
     let total = 0
     for (;;) {
@@ -126,11 +142,11 @@ export async function readRepoFile(root, rel, { overlay } = {}) {
       if (bytesRead === 0) break
       chunks.push(buf.subarray(0, bytesRead))
       total += bytesRead
-      if (total > MAX_FILE_BYTES) return unreadable(key, tooBig)
+      if (total > MAX_FILE_BYTES) return unreadable(key, tooBig, 'too-big')
     }
     return ok(asFile(Buffer.concat(chunks, total)))
   } catch (err) {
-    return unreadable(key, reason(err))
+    return failed(key, err)
   } finally {
     await fh.close().catch(() => {})
   }

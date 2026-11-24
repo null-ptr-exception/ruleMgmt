@@ -696,6 +696,22 @@ that is there is `stale` too. On a sync target, `stale` also means its
 routing is not its source's (`differsFromSource`); its Save is off, so the
 page names the source and points to **Regenerate** in the Git panel.
 
+A file the page cannot read is named, never taken for "no routing": a
+`routing.yaml` or `templates/alertmanagerconfig.yaml` with no permission, a
+folder in its place, a link to nothing or a link that leads out of the repo,
+and a `sync.yaml` that cannot be read (the answer is 409, `unreadable: true`).
+A link to a file elsewhere in the repo is read through. An
+AlertmanagerConfig left without its `routing.yaml` — still deployed, with
+no table saying so — is named too: remove it (**Remove routing**), or put
+`routing.yaml` back. A save is refused only when a file it would replace
+cannot be read (no permission, a folder in its place); a file that is a
+link — to nothing, or out of the repo — is replaced by the file saved, and
+what it led to is left alone. **Remove routing** removes files it cannot
+read, and is refused, before anything is removed, by a folder where one of
+them should be or a file where `templates/` should be. No save, removal,
+sync or Regenerate writes outside the repo: a `templates/` (or `_shared/`)
+that is a link leading out of it refuses the write, naming the file.
+
 ### Share a config between deployments
 
 A config the same in several deployments — one relay address for every
@@ -721,6 +737,16 @@ name. Open **Routing** → **Shared configs**:
   that uses it (its cells too, comments kept), and makes their resources again.
   It is refused when one of them has a config of its own by the new name.
 - A config still used cannot be deleted: the page says by whom.
+- A `sync.yaml` that cannot be read stops the page, a save and a rename,
+  naming it: without it, which deployment is whose target — and so whose
+  resource a change reaches — cannot be told. A shared file that cannot be
+  read (no permission, a folder in its place) is named the same way when it
+  is saved or renamed; one that is a link (to nothing, or out of the repo)
+  is named on the page and by a rename, and replaced by the file a save
+  writes, from the page or as text alike. A `_shared/` that is a link
+  leading out of the repo refuses every write. A deployment whose
+  AlertmanagerConfig cannot be read is listed, and stops only a change to a
+  shared config it uses.
 - **The same alert twice** — the page lists the cells of different
   deployments that pick one shared config and can match one alert. Two cells
   can when every label both have holds the same value in each; a label only
@@ -867,6 +893,9 @@ A commit is refused, too, while any deployment:
   fix it: put the config back, or fix the file
 - has a routing resource with no `routing.yaml` left — remove it, or put
   `routing.yaml` back
+- has a `routing.yaml` or routing resource that cannot be read (no
+  permission, a folder in its place, a link to nothing or out of the repo),
+  named by its path
 - follows another through sync, and its routing is not its source's
 - uses a Template that is no longer in the repo (deleted outside AlertForge)
 - asks in its `Chart.yaml` for one exact version of its Template (e.g.
@@ -890,6 +919,9 @@ commit stays refused.
 A `routing.yaml` with problems of its own does not stop a commit: the commit
 goes through and names it, to fix on its Routing page. Nor does a shared
 configs file with problems that no deployment uses: it is named the same way.
+Nor does an AlertmanagerConfig in a `_common` chart's `templates/`, which
+every deployment on that chart deploys with no `routing.yaml` saying so: it
+is named for each of them (`check-deployment` fails on it).
 
 A commit waits for a save in progress — of a Template, a chart, a folder
 or a deployment, in this tab or another — and a save waits for a commit,
@@ -901,9 +933,10 @@ commit hook that fails — is reported as a failure, naming it, instead.
 
 These checks are AlertForge's commit button only. A commit made with git, or
 in the Gitea web editor, is left to CI: `check-deployment` (see below) fails
-a deployment whose routing resource is behind, whose `routing.yaml` has
-problems (which AlertForge's commit only names), or whose Template does not
-render; `sync.yaml` is not checked there.
+a deployment whose routing resource is behind or left without its
+`routing.yaml`, whose `routing.yaml` has problems (which AlertForge's commit
+only names), which gets an AlertmanagerConfig from a `_common` chart, or
+whose Template does not render; `sync.yaml` is not checked there.
 
 ---
 
@@ -1112,7 +1145,8 @@ different.
 renders it with Helm and runs `promtool` (or `vmalert`) on each rule object,
 as **Preview** does, and checks its `routing.yaml` as the **Routing** page
 reads it — including whether `templates/alertmanagerconfig.yaml` is still what
-`routing.yaml` generates:
+`routing.yaml` generates, whether one is there with no `routing.yaml`, and
+whether a `_common` chart it renders on has one of its own:
 
 ```bash
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/work" "$IMAGE" \
@@ -1123,7 +1157,9 @@ It exits 0 when both pass, 1 when the deployment has a problem (printed) —
 Helm failing to render it included — and 2 when it could not check: wrong
 arguments, a folder that is not a folder deployment (its own `Chart.yaml`
 and `values.yaml`), site settings it cannot read, helm or a checker missing,
-a file it cannot read, or a repo root it cannot tell (below).
+a file it cannot read (a `routing.yaml` or routing resource included: no
+permission, a folder in its place, a link to nothing or out of the repo), or
+a repo root it cannot tell (below).
 
 - Mount the gitops repo whole: the deployment finds its chart through
   `file://../../../charts/<chart>`.
@@ -1147,8 +1183,10 @@ a file it cannot read, or a repo root it cannot tell (below).
   rather than check against a smaller folder; given a folder inside the repo
   (`--repo /work/deployments`), one without the `charts/` folder, it exits 2
   saying that is not the repo's root. A deployment that renders its Template
-  directly, with no `routing.yaml` using shared configs, needs no root: git
-  and `--repo` are not read for it.
+  directly, with no `routing.yaml` using shared configs, needs no root: when
+  neither git nor `--repo` gives one, it is checked all the same, and a
+  `routing.yaml` that is a link is read wherever it leads, as Helm reads it
+  (with a root, a link leading out of it is not read).
 
 In the gitops repo's CI, check every deployment a change touches. A changed
 file belongs to the nearest folder above it with both `Chart.yaml` and

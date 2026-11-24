@@ -7,12 +7,13 @@
 import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import yaml from 'js-yaml'
 import { checkRules, renderChart, runCommand } from './ruleCheck.js'
-import { routingState, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
-import { readSharedConfigs } from './sharedConfigs.js'
-import { sharedNamesIn } from '../../src/utils/routingGenerator.js'
+import { ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
 import { resolveStack, readStackValues } from './stack.js'
+import { openRepo } from '../repo/openRepo.js'
+import { loadRouting, commonResource } from '../repo/routing.js'
+import { decide } from '../repo/policy.js'
+import { ROUTING_POLICIES } from '../repo/routingPolicy.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 /** A reason the deployment could not be checked at all: exit 2. */
@@ -125,32 +126,58 @@ async function repoRoot(dir, given) {
   }
 }
 
-export async function checkRouting(dir, repo) {
-  // Where the shared configs are matters only to a routing.yaml using one.
-  let shared = null
-  const text = await fs.readFile(path.join(dir, ROUTING_FILE), 'utf-8').catch(err => { if (err.code === 'ENOENT') return null; throw err })
-  let uses = []
-  try { uses = text === null ? [] : sharedNamesIn(yaml.load(text)) } catch { /* routingState says why */ }
-  if (uses.length) {
-    const { root, why } = await repoRoot(dir, repo)
-    if (!root) throw new CannotCheck(`${ROUTING_FILE} uses shared configs (${uses.join(', ')}), and the repo's root cannot be told — git says: ${why}. ${NO_ROOT_HINT}`)
-    shared = await readSharedConfigs(root)
+/**
+ * The routing check, by the checkDeployment policy (routingPolicy.js):
+ * what deploys is what routing.yaml says, or it fails. A file that cannot
+ * be read is a reason the deployment cannot be checked (exit 2).
+ */
+export async function checkRouting(dir, given) {
+  // The repo's root matters to a routing.yaml using a shared config, and to
+  // a link leading out of the deployment; without one, the folder above it.
+  let found
+  try {
+    found = await repoRoot(dir, given)
+  } catch (err) {
+    if (!(err instanceof CannotCheck)) throw err
+    found = { refused: err }
   }
-  const state = await routingState(dir, shared)
-  if (!state) return { ok: true, lines: [`Routing: no ${ROUTING_FILE} — not checked`] }
-  if (state.errors.length) {
-    return { ok: false, lines: [`Routing: ${ROUTING_FILE} has problems`, ...state.errors.map(e => `  ${e}`)] }
+  // With no root, there is no repo boundary to keep to: a link is followed
+  // wherever it leads, as Helm follows it (the filesystem's root stands in).
+  const root = found.root ?? path.parse(path.resolve(dir)).root
+  const dep = path.relative(root, dir).split(path.sep).join('/')
+  if (!dep || dep.startsWith('..') || path.isAbsolute(dep)) throw new CannotCheck(`Routing: ${dir} is not a deployment folder inside the repo ${root}`)
+  const repo = openRepo(root)
+  const loaded = await loadRouting(repo, dep)
+  if (loaded.state === 'unreadable') throw new CannotCheck(`Routing: ${path.basename(loaded.file)} cannot be read (${loaded.why})`)
+  if (loaded.state === 'ok' && loaded.value.uses.length && !found.root) {
+    if (found.refused) throw found.refused
+    throw new CannotCheck(`${ROUTING_FILE} uses shared configs (${loaded.value.uses.join(', ')}), and the repo's root cannot be told — git says: ${found.why}. ${NO_ROOT_HINT}`)
   }
-  if (state.stale) {
-    return {
-      ok: false,
-      lines: [
-        `Routing: ${ROUTING_CR_FILE} is not what ${ROUTING_FILE} generates now.`,
-        `  ${ROUTING_FILE} or a shared config it uses was edited by hand, or the site's object labels changed: save it again in AlertForge.`,
-        '  If the labels are set by the site (RULE_OBJECT_LABELS …), pass them with -e.',
-      ],
-    }
+  // An AlertmanagerConfig a _common chart hands to it (#100).
+  let layers
+  try {
+    ({ layers } = await resolveStack(root, dir))
+  } catch (err) {
+    return { ok: false, lines: [`Routing: not checked — its ${COMMON_DIR} stack cannot be read (${err.code || err.message})`] }
   }
+  const common = (await Promise.all(layers.map(l => commonResource(repo, l.path)))).filter(Boolean)
+  const findings = [...common, ...(loaded.state === 'ok' ? loaded.findings : [])]
+  const { refuse, warn } = decide(findings, ROUTING_POLICIES.checkDeployment)
+  const unreadable = loaded.state === 'ok' && refuse.some(f => f.code === 'routing.cr-unreadable') && loaded.value.crUnreadable
+  if (unreadable) throw new CannotCheck(`Routing: ${ROUTING_CR_FILE} cannot be read (${unreadable.why})`)
+  const lines = []
+  const said = f => f.code === 'routing.problem'
+    ? [`Routing: ${ROUTING_FILE} has problems`, ...loaded.value.errors.map(e => `  ${e}`)]
+    : f.code === 'routing.stale'
+      ? [
+          `Routing: ${ROUTING_CR_FILE} is not what ${ROUTING_FILE} generates now.`,
+          `  ${ROUTING_FILE} or a shared config it uses was edited by hand, or the site's object labels changed: save it again in AlertForge.`,
+          '  If the labels are set by the site (RULE_OBJECT_LABELS …), pass them with -e.',
+        ]
+      : [`Routing: ${f.message}`]
+  for (const f of refuse) lines.push(...said(f))
+  if (refuse.length) return { ok: false, lines }
+  if (loaded.state === 'absent') return { ok: true, lines: [`Routing: no ${ROUTING_FILE} — not checked`] }
   // Passed all the same: what its configs will do that is worth saying.
-  return { ok: true, lines: [`Routing: passed`, ...(state.warnings || []).map(w => `  warning: ${w}`)] }
+  return { ok: true, lines: [`Routing: passed`, ...warn.map(f => `  warning: ${f.message}`)] }
 }

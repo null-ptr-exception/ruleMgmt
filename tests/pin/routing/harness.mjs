@@ -225,6 +225,8 @@ export async function runRow(ws, c) {
     const res = await api('GET', '/api/v2/routing/shared')
     const d = res.data || {}
     const me = sub.dep
+    // A refusal (409, unreadable: true) has none of the page's lists.
+    if (res.status !== 200) return { res, d: {}, me, appValue: '-' }
     const used = Object.entries(d.usage || {}).filter(([, us]) => us.some(u => u.deployment === me)).map(([n]) => n)
     const overlaps = (d.overlaps?.overlaps || []).filter(o => (o.deployments || []).some(x => JSON.stringify(x).includes(me))).length
     const appValue = `exists=${d.exists} errors=${d.errors?.length ?? '-'} uses=${used.join('+') || '-'} overlaps=${overlaps} stale=${(d.stale || []).includes(me)} unreadable=${(d.unreadable || []).some(u => u.deployment === me)}${d.dirProblem ? ' dirProblem' : ''}`

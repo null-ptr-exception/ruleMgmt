@@ -149,7 +149,10 @@ describe('a sync that fails for a new target', () => {
     const errors = console.error
     console.error = () => {}
     try {
-      expect((await api('POST', '/api/v2/sync', { source: SRC, target: 'deployments/team/new' })).status).toBe(500)
+      // Named before anything is written: nothing to roll back.
+      const res = await api('POST', '/api/v2/sync', { source: SRC, target: 'deployments/team/new' })
+      expect(res.status).toBe(409)
+      expect(res.data).toMatchObject({ unreadable: true, file: `${SRC}/routing.yaml` })
     } finally {
       console.error = errors
       await fs.chmod(path.join(tmpDir, SRC, 'routing.yaml'), 0o644)

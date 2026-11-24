@@ -297,11 +297,11 @@ describe('a shared file that cannot be read', () => {
     expect((await putRouting(A, routing('').replace('relay-webhook: { shared: true }', 'relay-webhook: { type: webhook, url: http://own:2 }'))).status).toBe(200)
     const { status, data } = await api('GET', '/api/v2/routing/shared')
     expect(status).toBe(200)
-    expect(data.errors).toEqual(['_shared/notification-configs.yaml cannot be read (EISDIR)'])
+    expect(data.errors).toEqual(['_shared/notification-configs.yaml cannot be read (it is a folder, not a file)'])
     // B and C still use it: the commit says so, naming the file.
     const c = await commit()
     expect(c.status).toBe(409)
-    expect(c.data.findings.find(f => f.kind === 'routing-shared-broken').description).toMatch(/cannot be read \(EISDIR\)/)
+    expect(c.data.findings.find(f => f.kind === 'routing-shared-broken').description).toMatch(/cannot be read \(it is a folder, not a file\)/)
     expect((await api('POST', '/api/v2/routing/shared/regenerate')).status).toBe(200)
   })
 })

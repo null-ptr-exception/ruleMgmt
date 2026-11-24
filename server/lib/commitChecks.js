@@ -14,9 +14,12 @@
  */
 
 import path from 'path'
-import { readRouting, buildRouting, writeRouting, checkedRouting, copyRouting } from './routingFiles.js'
+import { writeRouting, routingToCopy, copyRouting, registryOrRefusal, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
+import { writeProblems } from '../repo/writePath.js'
 import { isDeploymentDir, isSafeSyncPath, readSyncRegistry, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
-import { readSharedConfigs } from './sharedConfigs.js'
+import { openRepo } from '../repo/openRepo.js'
+import { loadRouting } from '../repo/routing.js'
+import { loadShared, sharedForBuild } from '../repo/shared.js'
 import { listDeploymentPaths, walkDeployments } from './deploymentWalk.js'
 import { resolveStack } from './stack.js'
 import { insideReal } from './safePath.js'
@@ -52,7 +55,8 @@ export async function deploymentCommitBlockers(gitopsDir) {
   const unreadable = walked.filter(d => d.kind === 'unreadable').map(d => ({ path: d.path || '.', error: d.error }))
   // A routing.yaml using a shared config is made with it (#123): a change to
   // the shared file leaves every resource made from it behind.
-  const shared = await readSharedConfigs(gitopsDir)
+  const repo = openRepo(gitopsDir)
+  const shared = sharedForBuild(await loadShared(repo))
   // Who uses a shared config the shared file does not give: a resource made
   // now would have no one to send to. Blocks, unlike a routing.yaml's own
   // problems: the file was changed — removed, broken, a config taken out —
@@ -73,7 +77,7 @@ export async function deploymentCommitBlockers(gitopsDir) {
     const followed = getSourceForTarget(registry, dep)
     if (followed && followed !== dep) continue
 
-    const routing = await routingFindings(gitopsDir, dep, { shared, registry })
+    const routing = await routingFindings(repo, dep, { registry, layers: stack.layers })
     findings.push(...routing.findings)
     routingProblems.push(...routing.problems)
     routingWarnings.push(...routing.warnings)
@@ -93,6 +97,13 @@ export async function deploymentCommitBlockers(gitopsDir) {
   return { findings, routingProblems, routingWarnings, valueWarnings, unreadable, regenerable: fixes.size, readable: sync.readable }
 }
 
+// A deployment's routing files would land outside the repo (a templates/
+// that is a link leading out): named, nothing written.
+async function refuseOutside(gitopsDir, dep) {
+  const problem = await writeProblems(gitopsDir, [`${dep}/${ROUTING_FILE}`, `${dep}/${ROUTING_CR_FILE}`])
+  if (problem) throw new Error(`${problem.file} cannot be written: ${problem.why}`)
+}
+
 /**
  * Every resource that is behind its routing.yaml is made again from it (the
  * text is left as it is, comments and all); then every target whose routing
@@ -104,18 +115,22 @@ export async function regenerateRouting(gitopsDir) {
   return withSyncRegistryLock(gitopsDir, async () => {
     const regenerated = []
     const failed = []
+    // Who is whose target cannot be told without sync.yaml: named first.
+    const read = await registryOrRefusal(gitopsDir)
+    if (read.refusal) return { regenerated, failed: [{ deployment: SYNC_FILE, error: read.notYaml ? 'not valid YAML: fix it first' : read.refusal.body.error }] }
+    const { registry } = read
     const { findings, readable } = await deploymentCommitBlockers(gitopsDir)
     if (!readable) return { regenerated, failed: [{ deployment: SYNC_FILE, error: 'not valid YAML: fix it first' }] }
-    const registry = await readSyncRegistry(gitopsDir)
-    const shared = await readSharedConfigs(gitopsDir)
+    const repo = openRepo(gitopsDir)
 
+    // One that cannot be read is named, not made again.
+    for (const f of findings.filter(f => f.kind === 'file-unreadable' && f.deployment)) failed.push({ deployment: f.deployment, error: f.description })
     for (const f of findings.filter(f => f.kind === 'routing-stale')) {
       try {
-        const dir = path.join(gitopsDir, f.deployment)
-        const { text } = await readRouting(dir)
-        const built = buildRouting(text, shared)
-        if (built.errors) throw new Error(built.errors.join('; '))
-        await writeRouting(dir, { text, cr: built.cr })
+        const loaded = await loadRouting(repo, f.deployment)
+        if (loaded.state !== 'ok' || !loaded.value.made) throw new Error(loaded.state === 'ok' ? loaded.value.errors.join('; ') : `${loaded.file} cannot be read`)
+        await refuseOutside(gitopsDir, f.deployment)
+        await writeRouting(path.join(gitopsDir, f.deployment), { text: loaded.value.text, cr: loaded.value.made })
         regenerated.push(f.deployment)
       } catch (err) {
         failed.push({ deployment: f.deployment, error: err.code || err.message })
@@ -135,7 +150,9 @@ export async function regenerateRouting(gitopsDir) {
         if (!isSafeSyncPath(target, chartsDirName())) throw new Error('not a path sync may write to')
         if (!(await insideReal(gitopsDir, target))) throw new Error('not a path sync may write to: it leads outside the repo')
         if (!(await isDeploymentDir(path.join(gitopsDir, target)))) throw new Error('not a deployment on disk')
-        const routing = await checkedRouting(path.join(gitopsDir, source), shared)
+        await refuseOutside(gitopsDir, target)
+        // Read before anything is written: the source as it is made now.
+        const routing = await routingToCopy(openRepo(gitopsDir), source)
         if (routing.errors) throw new Error(`its source ${source} has routing problems`)
         if (await sameRoutingAs(gitopsDir, target, routing)) continue
         await copyRouting(path.join(gitopsDir, source), path.join(gitopsDir, target), routing)

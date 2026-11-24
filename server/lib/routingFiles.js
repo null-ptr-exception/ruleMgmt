@@ -12,14 +12,17 @@ import { constants as fsConstants } from 'fs'
 import fs from 'fs/promises'
 import { randomBytes } from 'crypto'
 import path from 'path'
-import yaml from 'js-yaml'
-import { generateRouting } from '../../src/utils/routingGenerator.js'
-import { objectMetaFromEnv, metaForProfile } from '../../src/utils/objectMeta.js'
-import { ROUTING_KIND } from '../../src/utils/outputs.js'
+import { ROUTING_FILE, ROUTING_CR_FILE, buildRouting, loadRouting, routingFiles } from '../repo/routing.js'
+import { decide } from '../repo/policy.js'
+import { ROUTING_POLICIES } from '../repo/routingPolicy.js'
+import { readSyncRegistry } from './sync.js'
 
-export const ROUTING_FILE = 'routing.yaml'
-export const ROUTING_CR_FILE = path.join('templates', 'alertmanagerconfig.yaml')
+const SYNC_FILE = 'sync.yaml'
 
+export { ROUTING_FILE, ROUTING_CR_FILE, buildRouting }
+
+// Only for a write's own snapshot of what to put back (writeRouting, a
+// sync's rollback): every check reads the repo through server/repo.
 async function readOr(file) {
   try {
     return await fs.readFile(file, 'utf-8')
@@ -30,29 +33,25 @@ async function readOr(file) {
 }
 
 /**
- * routing.yaml's text and the AlertmanagerConfig for it, from what a client
- * sent: the file's text, kept as written (comments and all), or the parsed
- * table, written out. Returns `{ text, cr }`, or `{ errors }`.
- *
- * The object's labels follow the site's setting at the time it is generated,
- * as the rule objects do. `shared` is the repo's shared notification configs
- * (readSharedConfigs in sharedConfigs.js), or null when it has none.
+ * An answer naming a file that cannot be read: 409, `unreadable: true`,
+ * never a 500. `loaded` is a Loaded that is not ok, or { file, why }.
  */
-export function buildRouting(input, shared = null) {
-  let text = input
-  let routing = input
-  if (typeof input === 'string') {
-    try {
-      routing = yaml.load(input)
-    } catch (err) {
-      return { errors: [`routing.yaml is not valid YAML: ${err.reason || err.message}`] }
-    }
-  } else {
-    text = yaml.dump(input, { lineWidth: -1 })
+export const unreadableAnswer = ({ file, why }) => ({ status: 409, body: { error: `${file} cannot be read (${why})`, file, unreadable: true } })
+
+const ERRNO_WHY = { EACCES: 'permission denied', EPERM: 'permission denied', EISDIR: 'it is a folder, not a file' }
+
+/**
+ * The sync registry, or the answer naming it when it cannot be read: a
+ * sync.yaml taken for "no syncs" would leave every target behind.
+ * @returns { registry } | { refusal: { status, body }, notYaml }
+ */
+export async function registryOrRefusal(gitopsDir) {
+  try {
+    return { registry: await readSyncRegistry(gitopsDir) }
+  } catch (err) {
+    const why = err?.name === 'YAMLException' ? 'it is not valid YAML' : ERRNO_WHY[err?.code] ?? 'it could not be read'
+    return { refusal: unreadableAnswer({ file: SYNC_FILE, why }), notYaml: err?.name === 'YAMLException' }
   }
-  const meta = metaForProfile(objectMetaFromEnv(), ROUTING_KIND)
-  const { text: cr, errors, warnings } = generateRouting(routing, { meta, shared })
-  return errors ? { errors } : { text, cr, warnings }
 }
 
 /** Both files, or — when either write fails — both as they were. */
@@ -82,22 +81,24 @@ export async function readRouting(dir) {
 }
 
 /**
- * A deployment's routing as a sync copies it (#166): `{ errors }` when its
- * routing.yaml fails the save checks, so a broken one is not spread to
- * targets; else both files, the resource made again from routing.yaml so a
- * stale or missing one is not copied. Neither file: nothing to copy.
+ * A source's routing as a sync copies it to its targets (#166): both files,
+ * the resource made again from routing.yaml so a stale or missing one is
+ * not copied; `{ errors }` when the copy is refused (syncCopy policy: a
+ * routing.yaml the save would refuse, a resource left without one), and
+ * `{ unreadable }` (a Loaded) when routing.yaml cannot be read. Neither
+ * file: nothing to copy, `{ text: null, cr: null }`.
  */
-export async function checkedRouting(dir, shared = null) {
-  const current = await readRouting(dir)
+export async function routingToCopy(repo, source) {
+  const loaded = await loadRouting(repo, source)
+  if (loaded.state === 'unreadable') return { unreadable: loaded, errors: [`${loaded.file} cannot be read (${loaded.why})`] }
+  if (loaded.state === 'absent') return routingFiles(loaded)
+  const { refuse } = decide(loaded.findings, ROUTING_POLICIES.syncCopy)
   // A resource with nothing to make it from: neither Routing page shows it,
   // and a read-only target could not remove it.
-  if (current.text === null && current.cr !== null) {
-    return { errors: [`${ROUTING_CR_FILE} is there without a routing.yaml to make it from: remove it, or put routing.yaml back`] }
-  }
-  if (current.text === null) return current
-  const built = buildRouting(current.text, shared)
-  if (built.errors) return { errors: built.errors }
-  return { text: current.text, cr: built.cr }
+  const said = f => (f.code === 'routing.problem' ? loaded.value.errors
+    : f.code === 'routing.orphaned' ? [`${ROUTING_CR_FILE} is there without a routing.yaml to make it from: remove it, or put routing.yaml back`] : [f.message])
+  if (refuse.length) return { errors: refuse.flatMap(said) }
+  return { text: loaded.value.text, cr: loaded.value.made }
 }
 
 /**
@@ -145,22 +146,4 @@ async function putRouting(dir, { text, cr }) {
       await writeWhole(abs, content)
     }
   }
-}
-
-/**
- * A deployment's routing as GET returns it: `null` when it has no
- * routing.yaml; otherwise its text, its problems (the same check as saving
- * it) and whether the AlertmanagerConfig on disk is what routing.yaml
- * generates now — a hand edit to routing.yaml or to a shared config it uses,
- * or a change to the site's object labels, leaves it behind until it is
- * generated again.
- */
-export async function routingState(dir, shared = null) {
-  const { text, cr } = await readRouting(dir)
-  if (text === null) return null
-  const built = buildRouting(text, shared)
-  // A routing.yaml with errors makes no resource: one that is there was
-  // made from an older text, so it is behind too (#179).
-  if (built.errors) return { text, errors: built.errors, warnings: [], stale: cr !== null }
-  return { text, errors: [], warnings: built.warnings, stale: built.cr !== cr }
 }

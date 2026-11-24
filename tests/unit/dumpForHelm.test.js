@@ -46,7 +46,7 @@ describe('dumpForHelm', () => {
     // The files the server dumps with plain yaml.dump are ones Helm does not
     // read: sync.yaml, routing.yaml (its resource is generated elsewhere),
     // and promtool's temporary rules file.
-    const allowed = new Set(['server/lib/sync.js', 'server/lib/routingFiles.js', 'server/routes/routingShared.js', 'server/lib/ruleCheck.js'])
+    const allowed = new Set(['server/lib/sync.js', 'server/repo/routing.js', 'server/lib/sharedConfigs.js', 'server/lib/ruleCheck.js'])
     const offenders = walk(path.join(ROOT, 'server')).filter(f => f.endsWith('.js'))
       .filter(f => /\byaml\.dump\(/.test(fs.readFileSync(f, 'utf-8')))
       .map(f => path.relative(ROOT, f))

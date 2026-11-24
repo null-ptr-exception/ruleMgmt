@@ -1,74 +1,94 @@
 /** Reading routing for the commit check and Regenerate (#179). */
 
-import path from 'path'
-import yaml from 'js-yaml'
-import { readRouting, buildRouting, ROUTING_CR_FILE } from '../routingFiles.js'
 import { getTargetsForSource } from '../sync.js'
-import { SHARED_FILE } from '../sharedConfigs.js'
-import { sharedRefProblems } from '../../../src/utils/routingGenerator.js'
+import { SHARED_FILE } from '../../repo/shared.js'
+import { openRepo } from '../../repo/openRepo.js'
+import { loadRouting, routingFiles, commonResource } from '../../repo/routing.js'
+import { decide } from '../../repo/policy.js'
+import { ROUTING_POLICIES } from '../../repo/routingPolicy.js'
 
-const parsedOrNull = text => {
-  try {
-    return yaml.load(text)
-  } catch {
-    return null
-  }
+// Both files of a deployment; one that cannot be read is like no other.
+const filesOf = async (repo, dep) => {
+  const loaded = await loadRouting(repo, dep)
+  return loaded.state === 'unreadable' ? { text: undefined, cr: undefined } : routingFiles(loaded)
 }
 
-export async function sameRouting(gitopsDir, a, b) {
-  const [x, y] = await Promise.all([readRouting(path.join(gitopsDir, a)), readRouting(path.join(gitopsDir, b))])
-  return x.text === y.text && x.cr === y.cr
+/** Whether two deployments' routing files are the same (a target and its source). */
+export async function sameRouting(gitopsDir, a, b, repo = openRepo(gitopsDir)) {
+  const [x, y] = await Promise.all([filesOf(repo, a), filesOf(repo, b)])
+  return x.text !== undefined && y.text !== undefined && x.text === y.text && x.cr === y.cr
 }
 
-export async function sameRoutingAs(gitopsDir, dep, { text, cr }) {
-  const now = await readRouting(path.join(gitopsDir, dep))
+export async function sameRoutingAs(gitopsDir, dep, { text, cr }, repo = openRepo(gitopsDir)) {
+  const now = await filesOf(repo, dep)
   return now.text === text && now.cr === cr
 }
 
+const KIND = {
+  'routing.orphaned': 'routing-orphaned',
+  'routing.shared-unresolved': 'routing-shared-unresolved',
+  'routing.stale': 'routing-stale',
+  'routing.cr-unreadable': 'file-unreadable',
+}
+
 /**
- * One deployment's own routing, as a commit checks it (#179): a resource
- * left without its routing.yaml, or a shared config it uses that the
- * shared file does not give, blocks (`findings`; `unresolved` for the
- * second); a routing.yaml with errors is listed (`problems`, `broken`);
- * what its configs will do that is worth saying is listed for it and each
- * of its sync targets (`warnings`); a resource behind its routing.yaml
- * blocks, and Regenerate makes it and its targets again (`fixes`).
+ * One deployment's own routing, as a commit checks it (#179), by the
+ * commit policy (routingPolicy.js): a file that cannot be read, a resource
+ * left without its routing.yaml or behind it, or a shared config it uses
+ * that the shared file does not give, blocks (`findings`; `unresolved`
+ * for the last); a routing.yaml with errors, and an AlertmanagerConfig in
+ * a _common chart it renders on, are listed (`problems`; `broken` for the
+ * first); what its configs will do that is worth saying is listed for it
+ * and each of its sync targets (`warnings`); Regenerate makes a resource
+ * behind and its targets again (`fixes`).
  * Not for a sync target: it is held to its source's files.
+ * `layers`: the _common charts it renders on (resolveStack's layers).
  * @returns { findings, problems, warnings, unresolved, broken, fixes }
  */
-export async function routingFindings(gitopsDir, dep, { shared, registry }) {
+export async function routingFindings(repo, dep, { registry, layers = [] }) {
   const out = { findings: [], problems: [], warnings: [], unresolved: false, broken: false, fixes: [] }
-  const { text, cr } = await readRouting(path.join(gitopsDir, dep))
-  if (text === null) {
-    if (cr !== null) {
-      out.findings.push({ severity: 'commit', kind: 'routing-orphaned', deployment: dep,
-        description: `${dep}: ${ROUTING_CR_FILE} is there without a routing.yaml — remove it, or put routing.yaml back` })
-    }
+  const common = (await Promise.all(layers.map(l => commonResource(repo, l.path)))).filter(Boolean)
+  const said = decide(common, ROUTING_POLICIES.commit)
+  // One entry per deployment: the Commit dialog lists them by deployment.
+  const listed = said.list.map(f => f.message)
+  const done = () => {
+    if (listed.length) out.problems.push({ deployment: dep, errors: listed })
     return out
   }
-  const refs = sharedRefProblems(parsedOrNull(text), shared)
-  if (refs.length) {
+  for (const f of said.refuse) out.findings.push({ severity: 'commit', kind: 'routing-common-resource', deployment: dep, regenerable: false, description: `${dep}: ${f.message}` })
+
+  const loaded = await loadRouting(repo, dep)
+  if (loaded.state === 'unreadable') {
+    out.findings.push({ severity: 'commit', kind: 'file-unreadable', deployment: dep, regenerable: false, description: `${loaded.file} cannot be read (${loaded.why})` })
+    return done()
+  }
+  if (loaded.state === 'absent') return done()
+  const { refuse, list, warn } = decide(loaded.findings, ROUTING_POLICIES.commit)
+  // Every refusal is said at once; a shared config the file does not give
+  // is a routing.yaml problem too, which is then not listed again.
+  const unresolved = refuse.filter(f => f.code === 'routing.shared-unresolved')
+  for (const f of refuse) {
+    const kind = KIND[f.code] ?? 'routing-problem'
+    out.findings.push({ severity: 'commit', kind, deployment: dep,
+      ...(kind === 'routing-orphaned' ? {} : { regenerable: kind === 'routing-stale' }),
+      description: kind === 'file-unreadable' ? f.message : `${dep}: ${f.message}` })
+  }
+  if (unresolved.length) {
     out.unresolved = true
-    out.findings.push({ severity: 'commit', kind: 'routing-shared-unresolved', deployment: dep, regenerable: false,
-      description: `${dep}: ${refs.join('; ')}` })
-    return out
+    return done()
   }
-  const built = buildRouting(text, shared)
-  if (built.errors) {
-    out.problems.push({ deployment: dep, errors: built.errors })
+  if (list.some(f => f.code === 'routing.problem')) {
+    listed.push(...loaded.value.errors)
     out.broken = true
-    return out
+    return done()
   }
   // A synced target is its source's copy: it says the same.
-  if (built.warnings.length) {
-    for (const d of [dep, ...getTargetsForSource(registry, dep).filter(t => t !== dep)]) out.warnings.push({ deployment: d, warnings: built.warnings })
+  if (warn.length) {
+    const warnings = warn.map(f => f.message)
+    for (const d of [dep, ...getTargetsForSource(registry, dep).filter(t => t !== dep)]) out.warnings.push({ deployment: d, warnings })
   }
-  if (built.cr !== cr) {
-    out.findings.push({ severity: 'commit', kind: 'routing-stale', deployment: dep, regenerable: true,
-      description: `${dep}: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate` })
-    out.fixes.push(dep, ...getTargetsForSource(registry, dep))
-  }
-  return out
+  if (refuse.some(f => f.code === 'routing.stale')) out.fixes.push(dep, ...getTargetsForSource(registry, dep))
+  return done()
 }
 
 /**
@@ -76,7 +96,7 @@ export async function routingFindings(gitopsDir, dep, { shared, registry }) {
  * it: what its configs will do that is worth saying is listed
  * (`warnings`); its problems block while a deployment uses it
  * (`unresolved`, the deployments routingFindings said so of), and are
- * only listed when none does (`problems`).
+ * only listed when none does (`problems`). `shared` is sharedForBuild's.
  * @returns { findings, problems, warnings }
  */
 export function sharedFileFindings(shared, unresolved) {

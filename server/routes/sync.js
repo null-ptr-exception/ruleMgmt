@@ -14,8 +14,10 @@ import {
   applyUnlink,
 } from '../lib/sync.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
-import { readRouting, restoreRouting, checkedRouting } from '../lib/routingFiles.js'
-import { readSharedConfigs, inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
+import { readRouting, restoreRouting, routingToCopy, unreadableAnswer } from '../lib/routingFiles.js'
+import { inSharedDir, SHARED_DIR } from '../lib/sharedConfigs.js'
+import { openRepo } from '../repo/openRepo.js'
+import { writeProblems, writeRefusal } from '../repo/writePath.js'
 import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
 import { newDeploymentProblem } from '../lib/deploymentWalk.js'
 import { writeWhole } from '../lib/routingFiles.js'
@@ -121,7 +123,11 @@ export default function syncRouter() {
         // refused, not half of it, with both files' problems at once. A
         // resource behind its routing.yaml is made again rather than copied
         // (#166).
-        const routing = await checkedRouting(sourceDir, await readSharedConfigs(req.gitopsDir))
+        const routing = await routingToCopy(openRepo(req.gitopsDir), source)
+        if (routing.unreadable) return unreadableAnswer(routing.unreadable)
+        // The target's routing files would land outside the repo: nothing is written.
+        const outside = await writeProblems(req.gitopsDir, [`${target}/routing.yaml`, `${target}/templates/alertmanagerconfig.yaml`])
+        if (outside) return writeRefusal(outside)
         if (refusal || routing.errors) {
           const reasons = [refusal?.error, routing.errors && 'its routing.yaml has problems'].filter(Boolean)
           return { status: 400, body: {

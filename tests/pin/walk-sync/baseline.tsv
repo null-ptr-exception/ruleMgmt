@@ -466,10 +466,10 @@ sync-not-yaml	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws YAMLExcepti
 sync-not-yaml	Y	sync-post	error	500	-	no	-	-	-	-	-	-	-	5xx
 sync-not-yaml	Y	sync-unlink	error	500	-	no	-	-	-	-	-	-	-	5xx
 sync-not-yaml	Y	save-copy	error	500	-	no	-	-	-	-	-	-	-	5xx
-sync-not-yaml	Y	routing-copy	error	500	-	no	-	-	-	-	-	-	-	5xx
+sync-not-yaml	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
 sync-not-yaml	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:not valid YAML: fix it first	
 sync-not-yaml	Y	delete-source	error	500	-	no	-	-	-	-	-	-	unlinked=- left=unreadable YAMLException	5xx
-sync-not-yaml	Y	target-readonly	error	500	-	no	-	-	-	-	-	-	-	5xx
+sync-not-yaml	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
 sync-not-yaml	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
 sync-top-list	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
 sync-top-list	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 0 findings	
@@ -696,18 +696,18 @@ sync-unreadable	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws EACCES | 
 sync-unreadable	Y	sync-post	error	500	-	no	-	-	-	-	-	-	-	5xx
 sync-unreadable	Y	sync-unlink	error	500	-	no	-	-	-	-	-	-	-	5xx
 sync-unreadable	Y	save-copy	error	500	sync.yaml	no	-	-	-	-	-	-	-	5xx
-sync-unreadable	Y	routing-copy	error	500	sync.yaml	no	-	-	-	-	-	-	-	5xx
-sync-unreadable	Y	regenerate	error	500	-	no	-	-	-	-	-	-	regenerated=- failed=-	5xx
+sync-unreadable	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-unreadable	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml cannot be read (permission denied)	
 sync-unreadable	Y	delete-source	error	500	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable EACCES	5xx
-sync-unreadable	Y	target-readonly	error	500	sync.yaml	no	-	-	-	-	-	-	-	5xx
+sync-unreadable	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
 sync-unreadable	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	file-unreadable	
 sync-is-folder	Y	sync-get	error	500	-	no	-	-	-	-	-	-	-	5xx
 sync-is-folder	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws EISDIR | commit: throws EISDIR	
 sync-is-folder	Y	sync-post	error	500	-	no	-	-	-	-	-	-	-	5xx
 sync-is-folder	Y	sync-unlink	error	500	-	no	-	-	-	-	-	-	-	5xx
 sync-is-folder	Y	save-copy	error	500	-	no	-	-	-	-	-	-	-	5xx
-sync-is-folder	Y	routing-copy	error	500	-	no	-	-	-	-	-	-	-	5xx
-sync-is-folder	Y	regenerate	error	500	-	no	-	-	-	-	-	-	regenerated=- failed=-	5xx
+sync-is-folder	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-is-folder	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml cannot be read (it is a folder, not a file)	
 sync-is-folder	Y	delete-source	error	500	-	no	-	-	-	-	-	-	unlinked=- left=unreadable EISDIR	5xx
-sync-is-folder	Y	target-readonly	error	500	-	no	-	-	-	-	-	-	-	5xx
+sync-is-folder	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
 sync-is-folder	Y	commit	error	500	-	no	-	-	-	-	-	-	-	5xx

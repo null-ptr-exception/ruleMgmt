@@ -6,7 +6,10 @@
  * is a change to every resource made from it: they are all made again and
  * written together, or none is.
  *
- *   readSharedConfigs   the file, parsed and checked; null when there is none
+ * The file and each deployment's routing are read through server/repo
+ * (shared.js, routing.js); this module writes them.
+ *
+ *   routingUsers        every deployment with a routing.yaml, and what it uses
  *   sharedUsage         who uses each shared config
  *   writeShared         the file and every resource made from it, all or none
  *   renameShared        a shared config's name, in the file and every user
@@ -18,98 +21,33 @@ import yaml from 'js-yaml'
 import { parseDocument, Document, isMap, isScalar, isSeq } from 'yaml'
 import { readsAsNonString } from '../../src/utils/yamlScalar.js'
 import { sameConfig } from '../../src/utils/routingModel.js'
-import { checkSharedConfigs, sharedConfigWarnings, sharedNamesIn, SHARED_DIR, SHARED_FILE } from '../../src/utils/routingGenerator.js'
+import { SHARED_DIR, SHARED_FILE } from '../../src/utils/routingGenerator.js'
 import { configNameProblem } from '../../src/utils/routingSchema.js'
-import { readRouting, buildRouting, writeWhole, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
+import { buildRouting, writeWhole, registryOrRefusal, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
 import { listFolderDeployments } from './commitChecks.js'
-import { readSyncRegistry, getSourceForTarget } from './sync.js'
+import { getSourceForTarget, getTargetsForSource } from './sync.js'
 import { copyToTargets } from './deploymentWrite.js'
 import { sharedCellOverlaps } from '../../src/utils/sharedOverlap.js'
+import { openRepo } from '../repo/openRepo.js'
+import { loadRouting } from '../repo/routing.js'
+import { loadShared, loadSharedDir, parseShared, sharedDirProblemOf } from '../repo/shared.js'
+import { isLinkKind } from '../repo/loaded.js'
+import { writeProblems, writeRefusal, targetWriteProblem } from '../repo/writePath.js'
 
 export { SHARED_DIR, SHARED_FILE }
 
 const sharedPath = gitopsDir => path.join(gitopsDir, SHARED_FILE)
 
-/** The file's configs from its text: `{ text, configs, errors, warnings }`. */
-export function parseSharedConfigs(text) {
-  let doc
-  try {
-    doc = yaml.load(text)
-  } catch (err) {
-    return { text, configs: {}, errors: [`${SHARED_FILE} is not valid YAML: ${err.reason || err.message}`], warnings: [] }
-  }
-  const errors = checkSharedConfigs(doc)
-  return { text, configs: errors.length ? {} : doc.configs, errors, warnings: errors.length ? [] : sharedConfigWarnings(doc) }
-}
-
-/** The shared configs as they are on disk, or null when the repo has none. */
-export async function readSharedConfigs(gitopsDir) {
-  let text
-  try {
-    text = await fs.readFile(sharedPath(gitopsDir), 'utf-8')
-  } catch (err) {
-    if (err.code === 'ENOENT') return null
-    // A file there that cannot be read is the shared configs' problem, as a
-    // syntax error is: a deployment using none of them goes on as before.
-    return { text: null, configs: {}, errors: [`${SHARED_FILE} cannot be read (${err.code || 'error'})`], warnings: [] }
-  }
-  return parseSharedConfigs(text)
-}
-
-/**
- * Why _shared/ cannot hold the shared configs, or null: it is a folder of
- * the repo's own, with something besides them in it.
- */
-export async function sharedDirProblem(gitopsDir) {
-  let entries
-  try {
-    entries = await fs.readdir(path.join(gitopsDir, SHARED_DIR))
-  } catch {
-    return null
-  }
-  const own = path.basename(SHARED_FILE)
-  // writeWhole's temp files start with `_`, next to the file.
-  const others = entries.filter(e => e !== own && !e.startsWith(`_${own}.`))
-  return others.length
-    ? `${SHARED_DIR}/ is a folder of this repo's (it holds ${others.slice(0, 3).join(', ')}${others.length > 3 ? ', …' : ''}): rename it to use shared notification configs, which are kept there`
-    : null
-}
-
 /**
  * Whether `relPath` (in the repo) is under _shared/ while that is the shared
  * configs' folder: nothing else is there, so nothing under it is a folder of
  * the tree, a deployment or a sync target, and nothing can be made there. A
- * repo's own _shared/ (sharedDirProblem) is a folder like any other, and
+ * repo's own _shared/ (sharedDirProblemOf) is a folder like any other, and
  * shared configs are refused instead. The one rule for every place that asks.
  */
 export async function inSharedDir(gitopsDir, relPath) {
   const first = String(relPath ?? '').split(/[\\/]/).filter(s => s && s !== '.')[0]
-  return first === SHARED_DIR && !(await sharedDirProblem(gitopsDir))
-}
-
-const parsedRouting = text => {
-  try {
-    return yaml.load(text)
-  } catch {
-    return null
-  }
-}
-
-// Why a routing.yaml's text cannot be read for the shared configs it uses,
-// or null. Such a file may use any of them: nothing can tell.
-function unreadableReason(text) {
-  let doc
-  try {
-    doc = yaml.load(text)
-  } catch (err) {
-    return `${ROUTING_FILE} is not valid YAML: ${err.reason || err.message}`
-  }
-  const isMapDoc = doc !== null && typeof doc === 'object' && !Array.isArray(doc)
-  if (!isMapDoc) return `${ROUTING_FILE} is not a map`
-  if (doc.configs !== undefined && (doc.configs === null || typeof doc.configs !== 'object' || Array.isArray(doc.configs))) {
-    return `${ROUTING_FILE}'s configs is not a map`
-  }
-  return null
+  return first === SHARED_DIR && !sharedDirProblemOf(await loadSharedDir(openRepo(gitopsDir)))
 }
 
 /**
@@ -119,38 +57,58 @@ function unreadableReason(text) {
  * uses a shared config cannot be told.
  * @returns [{ deployment, text, uses: [name], syncedFrom?, unreadable? }]
  */
-export async function routingUsers(gitopsDir) {
-  const registry = await readSyncRegistry(gitopsDir).catch(() => ({ syncs: [] }))
-  const out = []
-  for (const deployment of await listFolderDeployments(gitopsDir)) {
+export async function routingUsers(repo) {
+  const { registry, refusal } = await registryOrRefusal(repo.root)
+  if (refusal) return { refusal }
+  const users = []
+  for (const deployment of await listFolderDeployments(repo.root)) {
     const source = getSourceForTarget(registry, deployment)
     const synced = source && source !== deployment ? { syncedFrom: source } : {}
-    let text
-    try {
-      ;({ text } = await readRouting(path.join(gitopsDir, deployment)))
-    } catch (err) {
-      out.push({ deployment, text: null, uses: [], ...synced, unreadable: `${ROUTING_FILE} cannot be read (${err.code || 'error'})` })
+    const loaded = await loadRouting(repo, deployment)
+    if (loaded.state === 'unreadable') {
+      users.push({ deployment, text: null, doc: null, uses: [], ...synced, unreadable: `${ROUTING_FILE} cannot be read (${loaded.why})` })
       continue
     }
-    if (text === null) continue
-    const why = unreadableReason(text)
-    out.push({ deployment, text, uses: why ? [] : sharedNamesIn(parsedRouting(text)), ...synced, ...(why ? { unreadable: why } : {}) })
+    if (loaded.state === 'absent' || loaded.value.text === null) continue
+    const r = loaded.value
+    // Its resource cannot be read, so it cannot be made again either: it
+    // stops only a change to a config it uses (refuseUnreadable).
+    const cr = r.crUnreadable ? { crUnreadable: `${r.crUnreadable.file} cannot be read (${r.crUnreadable.why})` } : {}
+    users.push({ deployment, text: r.text, doc: r.doc, uses: r.uses, ...synced, ...(r.usesUnknown ? { unreadable: r.usesUnknown } : {}), ...cr, routing: r })
   }
-  return out
+  return { users, registry }
 }
 
-/** The deployments whose routing.yaml cannot be read: [{ deployment, error }]. */
-export const unreadableOf = users => users.filter(u => u.unreadable).map(u => ({ deployment: u.deployment, error: u.unreadable }))
+/** The deployments whose routing.yaml or resource cannot be read: [{ deployment, error }]. */
+export const unreadableOf = users => users.filter(u => u.unreadable || u.crUnreadable).map(u => ({ deployment: u.deployment, error: u.unreadable || u.crUnreadable }))
 
-// A change to the shared configs is refused while any routing.yaml cannot
-// be read: it may use the config being changed, and would be left behind.
-function refuseUnreadable(users, what) {
-  const unreadable = unreadableOf(users)
-  if (!unreadable.length) return null
+// A change to the shared configs is refused while a routing.yaml cannot be
+// read (it may use the config being changed, and would be left behind),
+// or while a deployment using a config being changed has a resource that
+// cannot be read (it could not be made again). One whose resource cannot be
+// read and uses none of them is left as it is. `touches(user)`: it uses a
+// config being changed.
+function refuseUnreadable(users, what, touches) {
+  const unknown = users.filter(u => u.unreadable)
+  if (unknown.length) {
+    return { status: 409, body: {
+      error: `${what}: the routing.yaml of ${unknown.map(u => u.deployment).join(', ')} cannot be read, so whether it uses a shared config cannot be told — fix it first`,
+      unreadable: unreadableOf(unknown),
+    } }
+  }
+  const stuck = users.filter(u => u.crUnreadable && touches(u))
+  if (!stuck.length) return null
   return { status: 409, body: {
-    error: `${what}: the routing.yaml of ${unreadable.map(u => u.deployment).join(', ')} cannot be read, so whether it uses a shared config cannot be told — fix it first`,
-    unreadable,
+    error: `${what}: ${stuck.map(u => u.crUnreadable).join('; ')}, and it uses a shared config being changed — fix it first`,
+    unreadable: unreadableOf(stuck),
   } }
+}
+
+// The files a write would put, and every sync target's copy after it: one
+// that would land outside the repo refuses the whole write.
+async function outsideProblem(gitopsDir, registry, rels, sources) {
+  const targets = sources.flatMap(s => getTargetsForSource(registry, s).filter(t => t !== s))
+  return await writeProblems(gitopsDir, rels) ?? targetWriteProblem(gitopsDir, targets, t => [`${t}/${ROUTING_FILE}`, `${t}/${ROUTING_CR_FILE}`])
 }
 
 /** Shared config name → [{ deployment, syncedFrom? }] using it. */
@@ -172,11 +130,7 @@ export function usageOf(users) {
 export function overlapsOf(users, shared) {
   return sharedCellOverlaps(users
     .filter(u => !u.unreadable && u.uses.length)
-    .map(u => ({ deployment: u.deployment, routing: parsedRouting(u.text), ...(u.syncedFrom ? { syncedFrom: u.syncedFrom } : {}) })), shared)
-}
-
-export async function sharedUsage(gitopsDir) {
-  return usageOf(await routingUsers(gitopsDir))
+    .map(u => ({ deployment: u.deployment, routing: u.doc, ...(u.syncedFrom ? { syncedFrom: u.syncedFrom } : {}) })), shared)
 }
 
 /**
@@ -184,20 +138,20 @@ export async function sharedUsage(gitopsDir) {
  * their routing.yaml and the shared configs make now (a target: not its
  * source's). Regenerate makes them again.
  */
-export async function staleUsers(gitopsDir, users, shared) {
+export function staleUsers(users) {
   const stale = new Set()
+  const byName = new Map(users.map(u => [u.deployment, u]))
   // Sources first: a target whose source is behind is behind with it.
   const ordered = [...users.filter(u => !u.syncedFrom), ...users.filter(u => u.syncedFrom)]
   for (const user of ordered) {
     if (!user.uses.length) continue
-    const { cr } = await readRouting(path.join(gitopsDir, user.deployment))
+    const mine = user.routing
     if (user.syncedFrom) {
-      const source = await readRouting(path.join(gitopsDir, user.syncedFrom))
-      if (stale.has(user.syncedFrom) || source.text !== user.text || source.cr !== cr) stale.add(user.deployment)
+      const source = byName.get(user.syncedFrom)?.routing
+      if (stale.has(user.syncedFrom) || !source || source.text !== mine.text || source.cr !== mine.cr) stale.add(user.deployment)
       continue
     }
-    const built = buildRouting(user.text, shared)
-    if (built.errors || built.cr !== cr) stale.add(user.deployment)
+    if (mine.errors.length || mine.made !== mine.cr) stale.add(user.deployment)
   }
   return users.map(u => u.deployment).filter(d => stale.has(d))
 }
@@ -238,7 +192,9 @@ function planUsers(gitopsDir, users, shared, rewrite = u => u.text) {
   const sources = []
   const failed = []
   for (const user of users) {
-    if (user.syncedFrom) continue
+    // A target is copied from its source; one whose resource cannot be read
+    // uses no config being changed (refuseUnreadable): its own is the same.
+    if (user.syncedFrom || user.crUnreadable) continue
     const text = rewrite(user)
     const built = buildRouting(text, shared)
     if (built.errors) {
@@ -255,8 +211,7 @@ function planUsers(gitopsDir, users, shared, rewrite = u => u.text) {
 
 // Each source's targets get its routing again: a target's files are its
 // source's. One that cannot be written is reported, as a save reports it.
-async function copyToSyncTargets(gitopsDir, sources) {
-  const registry = await readSyncRegistry(gitopsDir).catch(() => ({ syncs: [] }))
+async function copyToSyncTargets(gitopsDir, registry, sources) {
   const failed = []
   for (const source of sources) failed.push(...await copyToTargets(gitopsDir, registry, source, { values: false, routing: true }))
   return failed
@@ -270,14 +225,26 @@ async function copyToSyncTargets(gitopsDir, sources) {
  * write, naming it. A shared config still used cannot be removed.
  * @returns { status, body }
  */
-export async function writeShared(gitopsDir, text) {
-  const dirProblem = await sharedDirProblem(gitopsDir)
+export async function writeShared(gitopsDir, input) {
+  const repo = openRepo(gitopsDir)
+  const dirProblem = sharedDirProblemOf(await loadSharedDir(repo))
   if (dirProblem) return { status: 409, body: { error: dirProblem } }
-  const shared = parseSharedConfigs(text)
+  // The file is replaced as a whole, and put back if a write fails: one
+  // that cannot be read (no permission, a folder) could be neither. A link
+  // that is the file itself is replaced by the file; its folder must be the
+  // repo's (writeProblem, below).
+  const before = await loadShared(repo)
+  if (before.state === 'unreadable' && !isLinkKind(before.kind)) return unreadableAnswer(before)
+  const current = before.state === 'ok' ? before.value : null
+  const text = typeof input === 'string' ? input : textFromPage(input, current)
+  const shared = parseShared(text)
   if (shared.errors.length) return { status: 400, body: { error: `${SHARED_FILE} has problems`, problems: shared.errors } }
 
-  const all = await routingUsers(gitopsDir)
-  const unreadable = refuseUnreadable(all, 'Not written')
+  const { users: all, registry, refusal } = await routingUsers(repo)
+  if (refusal) return refusal
+  const was = current && !current.errors.length ? current.configs : null
+  const changed = name => !was || !Object.hasOwn(was, name) || !Object.hasOwn(shared.configs, name) || !sameConfig(was[name], shared.configs[name])
+  const unreadable = refuseUnreadable(all, 'Not written', u => u.uses.some(changed))
   if (unreadable) return unreadable
   const users = all.filter(u => u.uses.length)
   const removed = {}
@@ -297,10 +264,19 @@ export async function writeShared(gitopsDir, text) {
   if (failed.length) {
     return { status: 400, body: { error: `Not written: the routing of ${failed.map(f => f.deployment).join(', ')} cannot be made with these shared configs`, failed } }
   }
+  const outside = await outsideProblem(gitopsDir, registry, [SHARED_FILE, ...files.map(f => f.rel)], sources)
+  if (outside) return writeRefusal(outside)
   const notWritten = await writeAll([{ abs: sharedPath(gitopsDir), content: text, rel: SHARED_FILE }, ...files])
   if (notWritten) return notWritten
-  const syncFailed = await copyToSyncTargets(gitopsDir, sources)
+  const syncFailed = await copyToSyncTargets(gitopsDir, registry, sources)
   return { status: 200, body: { ok: true, written: [SHARED_FILE, ...files.map(f => f.rel)], ...(shared.warnings.length ? { warnings: shared.warnings } : {}), ...(syncFailed.length ? { syncFailed } : {}) } }
+}
+
+// The page sends { configs }: written into the file as it is, its comments
+// and layout kept (updateConfigsInText); anew when there is no such file.
+function textFromPage(input, current) {
+  const configs = input.configs && typeof input.configs === 'object' && !Array.isArray(input.configs) ? input.configs : null
+  return (configs && current?.text && !current.errors.length && updateConfigsInText(current.text, configs)) || yaml.dump(input, { lineWidth: -1 })
 }
 
 /**
@@ -399,7 +375,10 @@ export function updateConfigsInText(text, configs) {
  * @returns { status, body }
  */
 export async function renameShared(gitopsDir, from, to) {
-  const current = await readSharedConfigs(gitopsDir)
+  const repo = openRepo(gitopsDir)
+  const loaded = await loadShared(repo)
+  if (loaded.state === 'unreadable') return unreadableAnswer(loaded)
+  const current = loaded.state === 'ok' ? loaded.value : null
   if (!current) return { status: 404, body: { error: 'There are no shared notification configs' } }
   if (current.errors.length) return { status: 400, body: { error: `${SHARED_FILE} has problems: fix it first`, problems: current.errors } }
   if (!Object.hasOwn(current.configs, from)) return { status: 404, body: { error: `There is no shared config named ${from}` } }
@@ -408,21 +387,24 @@ export async function renameShared(gitopsDir, from, to) {
   if (to === from) return { status: 400, body: { error: 'The new name is the same' } }
   if (Object.hasOwn(current.configs, to)) return { status: 409, body: { error: `${to} is already a shared config` } }
 
-  const all = await routingUsers(gitopsDir)
-  const unreadable = refuseUnreadable(all, 'Not renamed')
+  const { users: all, registry, refusal } = await routingUsers(repo)
+  if (refusal) return refusal
+  const unreadable = refuseUnreadable(all, 'Not renamed', u => u.uses.includes(from))
   if (unreadable) return unreadable
   const users = all.filter(u => u.uses.includes(from))
-  const clash = users.filter(u => !u.syncedFrom && Object.hasOwn(parsedRouting(u.text)?.configs || {}, to)).map(u => u.deployment)
+  const clash = users.filter(u => !u.syncedFrom && Object.hasOwn(u.doc?.configs || {}, to)).map(u => u.deployment)
   if (clash.length) return { status: 409, body: { error: `${clash.join(', ')} already ${clash.length > 1 ? 'have' : 'has'} a config named ${to}`, clash } }
 
   const text = renameConfigInText(current.text, from, to)
-  const shared = parseSharedConfigs(text)
+  const shared = parseShared(text)
   const { files, sources, failed } = planUsers(gitopsDir, users, shared, u => renameConfigInText(u.text, from, to))
   if (failed.length) {
     return { status: 400, body: { error: `Not renamed: the routing of ${failed.map(f => f.deployment).join(', ')} cannot be made`, failed } }
   }
+  const outside = await outsideProblem(gitopsDir, registry, [SHARED_FILE, ...files.map(f => f.rel)], sources)
+  if (outside) return writeRefusal(outside)
   const notWritten = await writeAll([{ abs: sharedPath(gitopsDir), content: text, rel: SHARED_FILE }, ...files])
   if (notWritten) return notWritten
-  const syncFailed = await copyToSyncTargets(gitopsDir, sources)
+  const syncFailed = await copyToSyncTargets(gitopsDir, registry, sources)
   return { status: 200, body: { ok: true, written: [SHARED_FILE, ...files.map(f => f.rel)], ...(syncFailed.length ? { syncFailed } : {}) } }
 }

@@ -8,7 +8,9 @@ import path from 'path'
 import os from 'os'
 import express from 'express'
 import renderRouter from '../../server/routes/render.js'
-import { buildRouting, writeRouting, routingState } from '../../server/lib/routingFiles.js'
+import { buildRouting, writeRouting } from '../../server/lib/routingFiles.js'
+import { openRepo } from '../../server/repo/openRepo.js'
+import { loadRouting } from '../../server/repo/routing.js'
 
 const SCRIPT = path.resolve('scripts/check-deployment.mjs')
 const has = (bin, args) => { try { execFileSync(bin, args, { stdio: 'ignore' }); return true } catch { return false } }
@@ -160,9 +162,43 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
     expect(code).toBe(1)
   })
 
+  it('with no repo root, reads a routing.yaml linked to a file elsewhere in the repo', async () => {
+    await writeRouting(dir, buildRouting(ROUTING))
+    await fs.mkdir(path.join(gitops, 'notes'))
+    await fs.rename(path.join(dir, 'routing.yaml'), path.join(gitops, 'notes', 'r.yaml'))
+    await fs.symlink('../../../notes/r.yaml', path.join(dir, 'routing.yaml'))
+    const { code, out } = check()
+    expect(out).toContain('Routing: passed')
+    expect(code).toBe(0)
+  })
+
+  it.skipIf(process.getuid?.() === 0)('names a resource it cannot read in a folder whose name has brackets', async () => {
+    const odd = path.join(gitops, 'deployments', 'tiny', 'prod (old)')
+    await fs.rename(dir, odd)
+    dir = odd
+    await writeRouting(dir, buildRouting(ROUTING))
+    const cr = path.join(dir, 'templates', 'alertmanagerconfig.yaml')
+    await fs.chmod(cr, 0)
+    try {
+      const { code, out } = check(dir, {}, ['--repo', gitops])
+      expect(out).toContain('Routing: templates/alertmanagerconfig.yaml cannot be read (permission denied)')
+      expect(code).toBe(2)
+    } finally {
+      await fs.chmod(cr, 0o644)
+    }
+  })
+
+  it('a deployment that is the repo\'s root itself is a named refusal, not a crash', () => {
+    const { code, out } = check(dir, {}, ['--repo', dir])
+    expect(out).not.toContain('TypeError')
+    expect(out).toContain('is not a deployment folder inside the repo')
+    expect(code).toBe(2)
+  })
+
   it('reports routing.yaml\'s problems as the Routing page does', async () => {
     await fs.writeFile(path.join(dir, 'routing.yaml'), ROUTING.replace('configs: [ops]', 'configs: [nobody]'))
-    const { errors } = await routingState(dir)
+    // The Routing page's reading of it: the one loader.
+    const { errors } = (await loadRouting(openRepo(path.dirname(dir)), path.basename(dir))).value
     expect(errors.length).toBeGreaterThan(0)
     const { code, out } = check()
     expect(out).toContain('Routing: routing.yaml has problems')
@@ -261,7 +297,7 @@ describe.skipIf(!CAN_RUN)('check-deployment when it cannot check', () => {
     try {
       const { code, out } = check()
       expect(out).toContain('helm could not render the deployment')
-      expect(out).toMatch(/could not check: EACCES/)
+      expect(out).toContain('Routing: routing.yaml cannot be read (permission denied)')
       expect(out).not.toContain('    at ')
       expect(code).toBe(2)
     } finally {

@@ -1,10 +1,11 @@
 import express from 'express'
-import yaml from 'js-yaml'
 import { withSyncRegistryLock } from '../lib/sync.js'
 import { regenerateRouting } from '../lib/commitChecks.js'
 import {
-  readSharedConfigs, routingUsers, usageOf, overlapsOf, unreadableOf, staleUsers, sharedDirProblem, writeShared, renameShared, updateConfigsInText, SHARED_FILE,
+  routingUsers, usageOf, overlapsOf, unreadableOf, staleUsers, writeShared, renameShared, SHARED_FILE,
 } from '../lib/sharedConfigs.js'
+import { openRepo } from '../repo/openRepo.js'
+import { loadShared, loadSharedDir, sharedDirProblemOf, sharedForBuild } from '../repo/shared.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
 import { answerRejections } from '../lib/answerRejections.js'
 
@@ -22,10 +23,14 @@ export default function routingSharedRouter() {
   // syncedFrom? }] }, overlaps: { overlaps: [{ config, count, deployments,
   // more }], unchecked, synced } (sharedOverlap.js), stale: [deployment], unreadable: [{ deployment, error }],
   // dirProblem }
+  // A sync.yaml that cannot be read is named (409): who is whose target,
+  // and so who uses what, cannot be told without it.
   router.get('/', async (req, res) => {
     try {
-      const shared = await readSharedConfigs(req.gitopsDir)
-      const users = await routingUsers(req.gitopsDir)
+      const repo = openRepo(req.gitopsDir)
+      const shared = sharedForBuild(await loadShared(repo))
+      const { users, refusal } = await routingUsers(repo)
+      if (refusal) return res.status(refusal.status).json(refusal.body)
       res.json({
         file: SHARED_FILE,
         exists: !!shared,
@@ -35,9 +40,9 @@ export default function routingSharedRouter() {
         warnings: shared?.warnings ?? [],
         usage: usageOf(users),
         overlaps: overlapsOf(users, shared),
-        stale: await staleUsers(req.gitopsDir, users, shared),
+        stale: staleUsers(users),
         unreadable: unreadableOf(users),
-        dirProblem: await sharedDirProblem(req.gitopsDir),
+        dirProblem: sharedDirProblemOf(await loadSharedDir(repo)),
       })
     } catch (err) {
       res.status(500).json({ error: err.message })
@@ -51,18 +56,8 @@ export default function routingSharedRouter() {
       return res.status(400).json({ error: 'shared is required: the text of the shared configs, or { configs }' })
     }
     try {
-      const { status, body } = await withSyncRegistryLock(req.gitopsDir, async () => {
-        // The page sends { configs }: written into the file as it is, its
-        // comments and layout kept (updateConfigsInText).
-        let text = input
-        if (typeof input !== 'string') {
-          const current = await readSharedConfigs(req.gitopsDir)
-          const configs = input.configs && typeof input.configs === 'object' && !Array.isArray(input.configs) ? input.configs : null
-          text = (configs && current?.text && !current.errors.length && updateConfigsInText(current.text, configs)) ||
-            yaml.dump(input, { lineWidth: -1 })
-        }
-        return writeShared(req.gitopsDir, text)
-      })
+      // Text or the page's { configs }: one write, one answer (writeShared).
+      const { status, body } = await withSyncRegistryLock(req.gitopsDir, () => writeShared(req.gitopsDir, input))
       res.status(status).json(body)
     } catch (err) {
       res.status(500).json({ error: err.code || err.message })

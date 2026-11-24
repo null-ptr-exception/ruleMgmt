@@ -130,5 +130,11 @@ export const CASES = [
   { id: 'shared-reaches-nobody', target: 'SH', shared: 'configs:\n  relay: { type: email, to: "undisclosed-recipients:;" }\n' },
   { id: 'shared-dir-holds-more', target: 'SH', files: { '_shared/notes.txt': 'mine\n' } },
   { id: 'shared-unreadable', target: 'SH', shared: { mode: 0, content: BASE.SHARED } },
+  { id: 'shared-link-inside', target: 'SH', shared: { link: '../notes/shared.yaml' }, files: { 'notes/shared.yaml': BASE.SHARED } },
+  { id: 'shared-link-outside', target: 'SH', shared: { link: '__OUTSIDE__' } },
+  { id: 'shared-dangling-link', target: 'SH', shared: { link: 'nowhere.yaml' } },
+  { id: 'shared-dir-link', target: 'SH', files: { _shared: { link: 'notes/sh' }, 'notes/sh/notification-configs.yaml': BASE.SHARED } },
+  { id: 'shared-ref-missing', target: 'A', text: R({ configs: [OPS, HOOK, 'nope: { shared: true }'], cells: `${CELLS}  - match: { severity: critical, team: web }\n    configs: [nope]\n` }) },
+  { id: 'sync-yaml-unreadable', target: 'SH', files: { 'sync.yaml': { dirMode: 0 } } },
   { id: 'shared-smtp-absent', target: 'SH', shared: 'configs:\n  relay: { type: email, to: relay@example.com }\n', smtp: false },
 ]

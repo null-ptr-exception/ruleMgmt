@@ -26,6 +26,27 @@ const read = rel => readRepoFile(repo, rel)
 const CAN_CHMOD = process.getuid?.() !== 0
 
 describe('a file of the repo', () => {
+  // A save writes a new file and renames it over the old one. A read at the
+  // same moment gets the old text or the new, never "cannot be read".
+  it('a file being saved over while it is read: one of its texts', async () => {
+    const rel = 'deployments/a/values.yaml'
+    const abs = path.join(repo, rel)
+    write(rel, 'a: 0\n')
+    let saving = true
+    const saver = (async () => {
+      for (let i = 1; saving; i++) {
+        await fs.promises.writeFile(`${abs}.tmp`, `a: ${i}\n`)
+        await fs.promises.rename(`${abs}.tmp`, abs)
+      }
+    })()
+    const seen = []
+    for (let i = 0; i < 2000; i++) seen.push(await read(rel))
+    saving = false
+    await saver
+    expect(seen.filter(l => l.state !== 'ok').map(l => l.why ?? l.state)).toEqual([])
+    expect(seen.every(l => /^a: \d+\n$/.test(l.value.text))).toBe(true)
+  })
+
   it('a file: its text and its bytes', async () => {
     write('deployments/a/values.yaml', 'a: 1\n')
     const r = await read('deployments/a/values.yaml')

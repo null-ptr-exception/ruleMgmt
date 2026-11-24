@@ -876,8 +876,8 @@ unwrapped	A	common-apply	refused-other	plan 409	-	no	-	renders-fewer	0	1	Down:up
 unwrapped	A	migration-preview	ok	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	accepts-what-helm-fails
 unwrapped	A	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	after: renders 3	accepts-what-helm-fails
 unwrapped	A	commit	listed	200	deployments/t/a	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
-unwrapped	A	preview	ok	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	alerts=1	accepts-what-helm-fails
-unwrapped	A	check-deployment	ok	exit 0	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	accepts-what-helm-fails
+unwrapped	A	preview	refused	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	alerts=1	
+unwrapped	A	check-deployment	refused	exit 1	deployments/t/a/values.yaml	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 unwrapped	A	check-repo	refused	exit 1	deployments/t/a/values.yaml	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	refuse:values.not-under-chart-key,warn:values.required-empty	
 wrong-wrapper	A	get	ok	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	{"demox":{"cpu":[{"job":"api"}]}}	
 wrong-wrapper	A	save-text	refused	400	deployments/t/a/values.yaml	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
@@ -887,8 +887,8 @@ wrong-wrapper	A	common-apply	refused-other	plan 409	-	no	-	renders-fewer	0	1	Dow
 wrong-wrapper	A	migration-preview	listed	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 wrong-wrapper	A	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	after: renders 1	accepts-what-helm-fails
 wrong-wrapper	A	commit	listed	200	deployments/t/a	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
-wrong-wrapper	A	preview	ok	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	alerts=1	accepts-what-helm-fails
-wrong-wrapper	A	check-deployment	ok	exit 0	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	accepts-what-helm-fails
+wrong-wrapper	A	preview	refused	200	-	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	alerts=1	
+wrong-wrapper	A	check-deployment	refused	exit 1	deployments/t/a/values.yaml	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	-	
 wrong-wrapper	A	check-repo	refused	exit 1	deployments/t/a/values.yaml	no	-	renders-fewer	0	1	Down:up{team=""} == 0	ok	promtool3=ok vmalert=ok	refuse:values.not-under-chart-key,warn:values.required-empty	
 common-zero	A	get	ok	200	-	no	-	deploy-fails	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[0m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	fails	promtool3=fails vmalert=ok	{"job":"api"}	
 common-zero	A	save-text	refused	400	-	no	-	deploy-fails	0	3	CpuHigh:rate(cpu{job="api",team="shop"}[5m]) > 80 | CpuRate:rate(cpu_total{job="api"}[0m]) > 0 | Down:up{team="shop"} == 0 | sev=warning	fails	promtool3=fails vmalert=ok	-	
@@ -1153,8 +1153,8 @@ stack-unwrapped	S	init	ok	200	-	no	deployments/s/n/Chart.yaml,deployments/s/n/va
 stack-unwrapped	S	migration-preview	ok	200	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	accepts-what-helm-fails
 stack-unwrapped	S	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/s/x/values.yaml,deployments/t/a/values.yaml,deployments/t/b/values.yaml	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	after: renders-fewer 1	accepts-what-helm-fails
 stack-unwrapped	S	commit	listed	200	deployments/s/x	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
-stack-unwrapped	S	preview	ok	200	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	alerts=1	accepts-what-helm-fails
-stack-unwrapped	S	check-deployment	ok	exit 0	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	accepts-what-helm-fails
+stack-unwrapped	S	preview	refused	200	-	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	alerts=1	
+stack-unwrapped	S	check-deployment	refused	exit 1	deployments/s/x/values.yaml	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	-	
 stack-unwrapped	S	check-repo	refused	exit 1	deployments/s/x/values.yaml	no	-	renders-fewer	0	1	Down:up{team="shop"} == 0	ok	promtool3=ok vmalert=ok	refuse:values.not-under-chart-key	
 stack-x-null	S	get	ok	200	-	no	-	fails	1	-	-	-	-	{}	
 stack-x-null	S	save-text	refused	400	deployments/s/x/values.yaml	no	-	fails	1	-	-	-	-	-	

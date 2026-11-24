@@ -6,7 +6,7 @@ import { resolveStack, blockingProblems, CANNOT_TELL } from '../lib/stack.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment } from '../repo/deployment.js'
 import { findingsOf, NotLoadedError } from '../repo/loaded.js'
-import { decide, explain } from '../repo/policy.js'
+import { decide, explain, unsaidByHelm } from '../repo/policy.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { selfCheckRendered, tallyRendered, summarizeGroups, possibleAlerts } from '../../src/utils/renderSummary.js'
 import { derivedTable, groupName } from '../../src/utils/rulesFile.js'
@@ -160,9 +160,23 @@ export default function renderRouter() {
       // another file's rows. What AlertForge cannot tell Helm renders from a
       // null on the stack is said beside the render.
       let valueWarnings = []
+      const valuesRepo = openRepo(gitopsDir)
+      const loadValues = () => loadDeployment(valuesRepo, folder || `${process.env.DEPLOYMENTS_DIR || 'deployments'}/${chart}/${deployment}${LEGACY_VALUES_SUFFIX}`, { chart: folder ? undefined : chart })
+      // Values Helm passes none of to the Template (not under the chart's
+      // name): it renders the Template's own, and the rules pass. The check
+      // fails, saying what a save of the same text says — also when Helm
+      // then renders no rule at all, which alone reads "skipped, nothing to
+      // check". Values that cannot be loaded are the summary's to report, below.
+      const unsaid = await loadValues().then(dep => unsaidByHelm(findingsOf(dep), 'preview'), err => {
+        logger.error({ err, chart: template, deployment }, 'reading the values failed, checking the render without them')
+        return []
+      })
+      if (unsaid.length) {
+        const said = unsaid.map(f => f.message).join('\n')
+        check = { ...check, passed: false, skipped: false, output: check.output && !check.skipped ? `${said}\n${check.output}` : said }
+      }
       const readValues = async () => {
-        const rel = folder || `${process.env.DEPLOYMENTS_DIR || 'deployments'}/${chart}/${deployment}${LEGACY_VALUES_SUFFIX}`
-        const dep = await loadDeployment(openRepo(gitopsDir), rel, { chart: folder ? undefined : chart })
+        const dep = await loadValues()
         if (dep.state !== 'ok') throw new NotLoadedError(dep)
         valueWarnings = findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code) || explain(f, 'preview').action === 'warn').map(f => f.message)
         // A null on the stack: what the two Helm versions deploy differs, so

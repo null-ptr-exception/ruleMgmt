@@ -311,6 +311,82 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
     expect(check().out).toContain(preview.output)
   })
 
+  // Values not under the chart's name: Helm passes none of them to the
+  // Template and renders the Template's own without a word, so the rules it
+  // renders pass. Preview says what a save of the same text says.
+  const UNWRAPPED = [
+    ['not under any name', 'expr: up == 0\n'],
+    ['under another name', 'tinny:\n  expr: up == 0\n'],
+  ]
+  const NOT_UNDER = 'the values are not under tiny: Helm passes none of them to the Template tiny, and renders only its own. Write them under tiny:'
+  for (const [name, text] of UNWRAPPED) {
+    it(`Preview's check fails values ${name}, in the words a save refuses them with`, async () => {
+      await fs.writeFile(path.join(gitops, 'charts', 'tiny', 'values.yaml'), 'expr: up == 1\n')
+      await fs.writeFile(path.join(dir, 'values.yaml'), text)
+      const preview = await previewCheck()
+      expect(preview.passed).toBe(false)
+      expect(preview.output).toContain(`deployments/tiny/prod/values.yaml: ${NOT_UNDER}`)
+      // Said once, before what the checker says of the rules Helm rendered.
+      expect(preview.output.split('are not under').length - 1).toBe(1)
+    })
+  }
+
+  // The Template renders nothing without the values: not "skipped, nothing
+  // to check", which would read as nothing being wrong.
+  it('Preview\'s check fails values not under the chart\'s name when Helm then renders no rule at all', async () => {
+    await fs.writeFile(path.join(gitops, 'charts', 'tiny', 'templates', 'rules.yaml'), `{{- if .Values.expr }}\n${TEMPLATE}{{- end }}\n`)
+    await fs.writeFile(path.join(dir, 'values.yaml'), 'expr: up == 0\n')
+    const preview = await previewCheck()
+    expect(preview.passed).toBe(false)
+    expect(preview.skipped).toBeFalsy()
+    expect(preview.output).toBe(`deployments/tiny/prod/values.yaml: ${NOT_UNDER}`)
+  })
+
+  // check-deployment says the same, and fails: it is a deployment, and
+  // would not deploy what was written (exit 1). The rules Helm rendered
+  // (the Template's own) are still checked and said.
+  for (const [name, text] of UNWRAPPED) {
+    it(`fails a deployment whose values are ${name} (exit 1), in the words a save refuses them with`, async () => {
+      await fs.writeFile(path.join(gitops, 'charts', 'tiny', 'values.yaml'), 'expr: up == 1\n')
+      await fs.writeFile(path.join(dir, 'values.yaml'), text)
+      const { code, out } = check(dir, {}, ['--repo', gitops])
+      expect(out).toContain('Rules: passed (promtool)')
+      expect(out).toContain(`Values: failed — deployments/tiny/prod/values.yaml: ${NOT_UNDER}`)
+      expect(out.split('are not under').length - 1).toBe(1)
+      expect(code).toBe(1)
+      // Preview's check says the same sentence.
+      expect((await previewCheck()).output).toContain(`deployments/tiny/prod/values.yaml: ${NOT_UNDER}`)
+    })
+  }
+
+  it('says values not under the chart\'s name beside Helm\'s error when Helm cannot render the Template\'s own', async () => {
+    await fs.writeFile(path.join(dir, 'values.yaml'), 'expr: up == 0\n')
+    await fs.writeFile(path.join(gitops, 'charts', 'tiny', 'templates', 'rules.yaml'), '{{ fail "no expr" }}\n')
+    const { code, out } = check(dir, {}, ['--repo', gitops])
+    expect(out).toContain('helm could not render the deployment')
+    expect(out).toContain(`Values: failed — deployments/tiny/prod/values.yaml: ${NOT_UNDER}`)
+    expect(code).toBe(1)
+  })
+
+  it('passes values under the chart\'s name and an empty values.yaml, with no word about the name', async () => {
+    await fs.writeFile(path.join(gitops, 'charts', 'tiny', 'values.yaml'), 'expr: up == 1\n')
+    for (const text of ['tiny:\n  expr: up == 0\n', '']) {
+      await fs.writeFile(path.join(dir, 'values.yaml'), text)
+      const { code, out } = check(dir, {}, ['--repo', gitops])
+      expect(out).not.toContain('not under')
+      expect(code).toBe(0)
+    }
+  })
+
+  it('Preview\'s check passes values under the chart\'s name, and a deployment with no values of its own', async () => {
+    await fs.writeFile(path.join(gitops, 'charts', 'tiny', 'values.yaml'), 'expr: up == 1\n')
+    expect((await previewCheck()).passed).toBe(true)
+    await fs.writeFile(path.join(dir, 'values.yaml'), '')
+    const empty = await previewCheck()
+    expect(empty.passed).toBe(true)
+    expect(empty.output).not.toContain('not under')
+  })
+
   it('runs with no writable home, as any uid in a container does, and leaves no temp folder behind', async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'check-deployment-tmpdir-'))
     try {

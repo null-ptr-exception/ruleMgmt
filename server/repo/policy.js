@@ -132,6 +132,14 @@ export const POLICIES = Object.freeze({
       'stack.duplicate-key': { action: 'warn', why: 'a key a _common writes twice deploys the later one, which may not be the one meant' },
     },
   }),
+  // check-deployment renders the deployment with Helm, as Preview does,
+  // and fails it on what Helm fails on; of this table it says what Helm
+  // renders without a word (unsaidByHelm), and fails on it too.
+  checkDeployment: definePolicy('checkDeployment', {
+    rows: {
+      'stack.duplicate-key': { action: 'warn', why: 'a key a _common writes twice deploys the later one, which may not be the one meant' },
+    },
+  }),
   // A new deployment writes no values of its own: what it deploys is the
   // Template's and its _common's. What Helm fails on there is refused, so
   // it is not made where it cannot deploy.
@@ -192,6 +200,17 @@ export function explain(f, policy) {
   if (defaultAction(f) === 'refuse') return table.default ?? { action: 'refuse', why: DEFAULT_WHY }
   return { action: 'ignore', why: 'Helm renders it as written' }
 }
+
+/**
+ * What a table refuses that Helm renders without a word: Preview and
+ * check-deployment show what Helm makes of a deployment, and Helm says
+ * itself what it stops on, so of their table's refusals they say the ones
+ * its render does not show. Values not under the chart's name: Helm passes
+ * none of them to the Template, renders the Template's own, and the rules
+ * it renders pass.
+ */
+const UNSAID_BY_HELM = Object.freeze(['values.not-under-chart-key'])
+export const unsaidByHelm = (findings, policy) => decide(findings, policy).refuse.filter(f => UNSAID_BY_HELM.includes(f.code))
 
 export function decide(findings, policy) {
   const table = tableOf(policy)

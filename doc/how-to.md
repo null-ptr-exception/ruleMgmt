@@ -733,6 +733,12 @@ missing, a file in its `templates/` starting with `_` holds a rule object, or
 a 1.x rule file left beside the generated ones renders every alert twice —
 and the message names it.
 
+It fails as well when the deployment's `values.yaml` holds values that are
+not under the chart's name (`cpu: […]` at the top, or under another name):
+Helm passes none of them to the Template and renders only the Template's
+own, so the rules it shows are not the ones written. The message names the
+file and the name to write them under, as a save of the same text does.
+
 A lint problem — most often two rows producing an alert with the same name and
 the same labels — shows as **passed with warnings**, in yellow, with the object
 listed first. It does not stop a save or a commit. promtool compares only the
@@ -1449,6 +1455,12 @@ that line beside the check and no summary of values AlertForge cannot read. `che
 renders such a deployment as well, and refuses it as Commit does (exit 1),
 as it refuses such values of the deployment's own.
 
+Values of the deployment that are not under the chart's name (`cpu: […]` at
+the top, or under another name) fail the check (exit 1), with the sentence a
+save of the same text is refused with: Helm passes none of them to the
+Template and renders only the Template's own, so the rules pass while none
+of what was written deploys.
+
 Generated files of a Template that are out of date are not reported here:
 `gen-rules --check` and `check-repo` report them.
 
@@ -1462,7 +1474,7 @@ It exits:
 | Exit | When | Example |
 |---|---|---|
 | 0 | it is a deployment, and every check passes | `deployments/shop/prod` renders, its rules load, its routing is current (values AlertForge cannot tell Helm's reading of, which Helm renders, are checked as rendered and said) |
-| 1 | it is a deployment, and it would not deploy as written or is wrong: Helm fails to render it, a rule check fails, or a file of its own cannot be read (its `values.yaml`, `routing.yaml` or routing resource: no permission, a folder in its place, a link to nothing or out of the repo) | `values.yaml` is a link to a file that is not there |
+| 1 | it is a deployment, and it would not deploy as written or is wrong: Helm fails to render it, a rule check fails, its values are not under the chart's name (Helm passes none of them to the Template), or a file of its own cannot be read (its `values.yaml`, `routing.yaml` or routing resource: no permission, a folder in its place, a link to nothing or out of the repo) | `values.yaml` is a link to a file that is not there |
 | 2 | it is not a deployment, or AlertForge cannot tell: wrong arguments; a folder that is not a folder deployment (its own `Chart.yaml` naming a Template, and a `values.yaml`); a folder that is a link, or is reached through one (named, with the folder to check instead); a folder outside the repo given with `--repo`; a `Chart.yaml` that cannot be read or used (whether it is a deployment cannot be told); site settings it cannot read; helm or a checker missing; a repo root it cannot tell (below) | `deployments/shop/old` has a `Chart.yaml` with no `dependencies` |
 
 - Mount the gitops repo whole: the deployment finds its chart through

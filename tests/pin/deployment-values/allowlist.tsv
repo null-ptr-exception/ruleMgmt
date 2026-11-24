@@ -31,15 +31,9 @@ null-doc	save-text	refuses-what-helm-renders	policy	a required column must be fi
 null-doc	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
 unwrapped	migration-preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 unwrapped	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-unwrapped	preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-unwrapped	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 wrong-wrapper	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-wrong-wrapper	preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-wrong-wrapper	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 stack-unwrapped	migration-preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 stack-unwrapped	migration-apply	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-stack-unwrapped	preview	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
-stack-unwrapped	check-deployment	accepts-what-helm-fails	bug	#203: values not under the chart's name pass, and the rows written there never render (fewer alerts than rows)
 common-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 common-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
 common-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)

@@ -149,3 +149,42 @@ test.describe('a deployment whose group is not a list of rows', () => {
     await expect(page.getByRole('button', { name: 'Add instance' })).toBeVisible()
   })
 })
+
+// Values written by hand at the top of values.yaml, not under the chart's
+// name: Helm passes none of them to the Template. Preview does not say
+// "skipped: nothing to check" (or "passed") for it; its check fails with the
+// sentence a save of the same text is refused with.
+test.describe('a deployment whose values are not under the chart\'s name', () => {
+  const BARE = 'e2e-bare-values'
+  const DIR = `deployments/${BARE}/dev`
+  test.afterAll(async ({ request }) => { await removeChart(request, BARE) })
+
+  test('Preview\'s check fails and says where to write them', async ({ page, request }) => {
+    await removeChart(request, BARE)
+    expect((await request.post('/api/v2/charts', { data: { name: BARE } })).ok()).toBeTruthy()
+    expect((await request.post(`/api/v2/templates/${BARE}/rules`, { data: { files: { 'cpu.yaml': CPU } } })).ok()).toBeTruthy()
+    expect((await request.post('/api/v2/folders/init', { data: { folder: DIR, chart: BARE } })).status()).toBeLessThan(300)
+    await fs.writeFile(path.join(WORKSPACE, DIR, 'values.yaml'), 'cpu:\n  - namespace: shop\n')
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    const tree = page.locator('.ant-tree')
+    for (const segment of ['deployments', BARE]) {
+      const node = tree.locator('.ant-tree-treenode').filter({ hasText: new RegExp(`^${segment}$`) }).first()
+      await expect(node).toBeVisible({ timeout: 8000 })
+      const switcher = node.locator('.ant-tree-switcher_close')
+      if (await switcher.count() > 0) await switcher.click()
+    }
+    await tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).filter({ hasText: 'dev' })
+      .first().locator('.ant-tree-node-content-wrapper').click()
+    await page.getByText('cpu', { exact: true }).first().click()
+    await page.getByRole('button', { name: 'Preview' }).click()
+
+    const alert = page.getByRole('dialog').locator('.ant-alert').first()
+    await expect(alert).toHaveClass(/ant-alert-error/, { timeout: 15000 })
+    await expect(alert.getByText('Promtool check failed')).toBeVisible()
+    await expect(alert).toContainText(`${DIR}/values.yaml: the values are not under ${BARE}: Helm passes none of them to the Template ${BARE}, and renders only its own. Write them under ${BARE}:`)
+    await expect(alert).not.toContainText('Nothing to check')
+    // Not saved by looking: the file is as it was written.
+    expect(await fs.readFile(path.join(WORKSPACE, DIR, 'values.yaml'), 'utf-8')).toBe('cpu:\n  - namespace: shop\n')
+  })
+})

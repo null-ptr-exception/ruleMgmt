@@ -15,7 +15,7 @@ import { openRepoAt, inRealRoot, exists, realPath, lookAt, namesIn } from '../re
 import { realBaseOf } from '../repo/paths.js'
 import { folderEntry } from '../repo/walk.js'
 import { ROUTING_FILE, ROUTING_CR_FILE, loadRouting, commonResource } from '../repo/routing.js'
-import { decide } from '../repo/policy.js'
+import { decide, unsaidByHelm } from '../repo/policy.js'
 import { ROUTING_POLICIES } from '../repo/routingPolicy.js'
 import { loadDeployment } from '../repo/deployment.js'
 import { findingsOf } from '../repo/loaded.js'
@@ -113,6 +113,10 @@ export async function checkRuleObjects(dir, repo) {
   let root = path.dirname(dir)
   let stack, nulls
   let twice
+  // Values Helm passes none of to the Template (not under the chart's
+  // name): it renders the Template's own, and the rules pass. The
+  // deployment would not deploy what was written: said, and it fails.
+  let unsaid
   // Values AlertForge cannot tell Helm's reading of: Helm, at hand, decides.
   let cannotTell = null
   // The repo's root as best told, which Helm's messages are said against.
@@ -162,6 +166,7 @@ export async function checkRuleObjects(dir, repo) {
     }
     nulls = cannotTell ? [] : findingsOf(dep).filter(f => /\.null-on-stack$/.test(f.code)).map(f => f.message)
     twice = cannotTell ? [] : findingsOf(dep).filter(f => f.code === 'stack.duplicate-key').map(f => f.message)
+    unsaid = cannotTell ? [] : unsaidByHelm(findingsOf(dep), 'checkDeployment').map(f => `Values: failed — ${f.message}`)
   } catch (err) {
     if (err instanceof CannotCheck) throw err
     return { ok: false, lines: [`Rules: not checked — its _common stack cannot be read (${err.code || err.message})`] }
@@ -172,11 +177,11 @@ export async function checkRuleObjects(dir, repo) {
   const layerCannotTell = stack.problems.filter(p => p.kind === CANNOT_TELL && !cannotTell).map(p => `Values: ${p.description}`)
   if (layerCannotTell.length) cannotTell = layerCannotTell.join('\n')
   const rules = await renderAndCheck(dir, stack, { root: valuesRoot ?? root })
-  if (!rules.rendered) return { ok: false, lines: ['helm could not render the deployment:', rules.output, ...(cannotTell ? [cannotTell] : [])] }
-  const lines = [`Rules: ${rules.title}`, rules.output, cannotTell].filter(Boolean)
+  if (!rules.rendered) return { ok: false, lines: ['helm could not render the deployment:', rules.output, ...(cannotTell ? [cannotTell] : []), ...unsaid] }
+  const lines = [`Rules: ${rules.title}`, rules.output, cannotTell, ...unsaid].filter(Boolean)
   if (twice.length) lines.push(...twice.map(t => `Values: warning: ${t}`))
   if (nulls.length) lines.push('Values: some are null — Helm versions read a null differently:', ...nulls.map(n => `  ${n}`))
-  return { ok: rules.ok && !nulls.length, lines }
+  return { ok: rules.ok && !nulls.length && !unsaid.length, lines }
 }
 
 /**

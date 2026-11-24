@@ -1,5 +1,5 @@
 // The four states of a file, and one snapshot of the repo.
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
@@ -26,25 +26,45 @@ const read = rel => readRepoFile(repo, rel)
 const CAN_CHMOD = process.getuid?.() !== 0
 
 describe('a file of the repo', () => {
-  // A save writes a new file and renames it over the old one. A read at the
-  // same moment gets the old text or the new, never "cannot be read".
-  it('a file being saved over while it is read: one of its texts', async () => {
-    const rel = 'deployments/a/values.yaml'
+  // A save writes a new file and renames it over the old one. A read that
+  // looked at the old file and opens the new one reads again: it gets the new
+  // text, never "cannot be read". The save is placed between the look and
+  // the open, where a busy machine puts it now and then.
+  const savedBeforeOpen = (rel, times) => {
     const abs = path.join(repo, rel)
-    write(rel, 'a: 0\n')
-    let saving = true
-    const saver = (async () => {
-      for (let i = 1; saving; i++) {
-        await fs.promises.writeFile(`${abs}.tmp`, `a: ${i}\n`)
-        await fs.promises.rename(`${abs}.tmp`, abs)
+    const open = fs.promises.open
+    let n = 0
+    return vi.spyOn(fs.promises, 'open').mockImplementation(async (file, ...rest) => {
+      if (file === abs && n < times) {
+        n += 1
+        fs.writeFileSync(`${abs}.tmp`, `a: ${n}\n`)
+        fs.renameSync(`${abs}.tmp`, abs)
       }
-    })()
-    const seen = []
-    for (let i = 0; i < 2000; i++) seen.push(await read(rel))
-    saving = false
-    await saver
-    expect(seen.filter(l => l.state !== 'ok').map(l => l.why ?? l.state)).toEqual([])
-    expect(seen.every(l => /^a: \d+\n$/.test(l.value.text))).toBe(true)
+      return open.call(fs.promises, file, ...rest)
+    })
+  }
+
+  it('a file saved over between the look and the read: its new text', async () => {
+    const rel = 'deployments/a/values.yaml'
+    write(rel, 'a: 0\n')
+    const spy = savedBeforeOpen(rel, 1)
+    try {
+      const loaded = await read(rel)
+      expect(loaded.state).toBe('ok')
+      expect(loaded.value.text).toBe('a: 1\n')
+    } finally { spy.mockRestore() }
+  })
+
+  it('a file saved over at every read: said so, after a few tries', async () => {
+    const rel = 'deployments/a/values.yaml'
+    write(rel, 'a: 0\n')
+    const spy = savedBeforeOpen(rel, Infinity)
+    try {
+      const loaded = await read(rel)
+      expect(loaded.state).toBe('unreadable')
+      expect(loaded.why).toBe('it kept changing while it was being read')
+      expect(spy.mock.calls.length).toBe(5)
+    } finally { spy.mockRestore() }
   })
 
   it('a file: its text and its bytes', async () => {

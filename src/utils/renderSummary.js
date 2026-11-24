@@ -145,7 +145,7 @@ const alertsFor = rMap => [...rMap.entries()]
  * guess as the chart's problem. Those are left unmatched here instead of
  * force-matched — see `unmatchedGroups`.
  */
-export function summarizeGroups({ rendered, possible, groupRows, schema, types = {}, onceGroups = [] }) {
+export function summarizeGroups({ rendered, possible, groupRows, schema, types = {}, onceGroups = [], derived = {} }) {
   const once = new Set(onceGroups)
   const keys = new Set([...Object.keys(possible), ...Object.keys(groupRows), ...once])
   const matchedNames = new Set()
@@ -168,7 +168,8 @@ export function summarizeGroups({ rendered, possible, groupRows, schema, types =
     // A group whose profile is not syntax-checked (`validate: none`, #65, #76)
     // says so on its own row: one "passed" must not read as all of the chart.
     const checked = (profileFor(types[valuesKey])?.validate ?? 'promtool') !== 'none'
-    return { name, valuesKey, rowCount, state, alerts, missing, checked, records, once: once.has(valuesKey) }
+    // Each row's derived values (#118), when the group has any.
+    return { name, valuesKey, rowCount, state, alerts, missing, checked, records, once: once.has(valuesKey), ...(derived[valuesKey] ? { derived: derived[valuesKey] } : {}) }
   }).sort((a, b) => a.valuesKey.localeCompare(b.valuesKey))
 
   // Rendered groups no group above claimed — every x-custom-template group's

@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import { execFileSync } from 'child_process'
+import { execFileSync, execFile } from 'child_process'
 import express from 'express'
 import yaml from 'js-yaml'
 import { renderChart } from '../../server/lib/ruleCheck.js'
@@ -126,5 +126,51 @@ describe('a deployment on a _common stack', () => {
     expect(await windows(ON_STACK)).toEqual(['0m'])
     await own({ _common: { base: 2 }, spc: [{ job: 'a', freq_num: 3 }] })
     expect(await windows(ON_STACK)).toEqual(['6m'])
+  })
+})
+
+describe('the other ways in', () => {
+  const ROOT = path.resolve(import.meta.dirname, '../..')
+  const genRules = () => new Promise(resolve => execFile(process.execPath, [path.join(ROOT, 'scripts/gen-rules.mjs'), 'charts/demo', '--check'], { cwd: tmpDir },
+    (err, stdout, stderr) => resolve({ code: err ? err.code : 0, out: `${stdout}${stderr}` })))
+
+  it('gen-rules warns of the Template\'s own values.yaml whose Common Value of 0 makes a range of 0', async () => {
+    await fs.writeFile(path.join(tmpDir, 'charts/demo/values.yaml'), yaml.dump({ _common: { base: 0 }, spc: [{ job: 'a', freq_num: 3 }] }))
+    const { out } = await genRules()
+    expect(out).toContain('warn   values.yaml: spc row 1, derived "w": it comes to 0, and a range has to be more than 0')
+  })
+
+  it.skipIf(!HAS_HELM)('which Helm renders as [0m]', async () => {
+    await fs.writeFile(path.join(tmpDir, 'charts/demo/values.yaml'), yaml.dump({ _common: { base: 0 }, spc: [{ job: 'a', freq_num: 3 }] }))
+    const abs = path.join(tmpDir, 'charts/demo')
+    const windows = yaml.loadAll(await renderChart(abs, ['template', 'demo', abs])).filter(d => d?.kind === 'PrometheusRule')
+      .flatMap(d => d.spec.groups.flatMap(g => g.rules.map(r => r.labels.window)))
+    expect(windows).toEqual(['0m'])
+  })
+
+  it('a page saving over a newer save is refused, and the newer one kept', async () => {
+    const first = await save(DIRECT, { spc: [{ job: 'a', freq_num: 3 }] })
+    expect(first.status).toBe(200)
+    const newer = await api('POST', `/api/v2/deployments/demo/spc${q(DIRECT)}`, { values: { spc: [{ job: 'a', freq_num: 5 }] }, version: first.data.version })
+    expect(newer.status).toBe(200)
+    const stale = await api('POST', `/api/v2/deployments/demo/spc${q(DIRECT)}`, { values: { spc: [{ job: 'a', freq_num: 4 }] }, version: first.data.version })
+    expect(stale.status).toBe(409)
+    expect(yaml.load(await fs.readFile(path.join(tmpDir, DIRECT, 'values.yaml'), 'utf-8')).demo.spc).toEqual([{ job: 'a', freq_num: 5 }])
+  })
+
+  it('values text that is not YAML is a 400 saying so, nothing written', async () => {
+    const before = await fs.readFile(path.join(tmpDir, DIRECT, 'values.yaml'), 'utf-8')
+    const { status, data } = await save(DIRECT, 'demo:\n  spc: [\n')
+    expect(status).toBe(400)
+    expect(data.error).toBe('values.yaml is not valid YAML')
+    expect(await fs.readFile(path.join(tmpDir, DIRECT, 'values.yaml'), 'utf-8')).toBe(before)
+  })
+
+  it('a rules file with a syntax error beside a derived value is a 400 naming the file, nothing written', async () => {
+    const before = await fs.readFile(path.join(tmpDir, 'charts/demo/rules/spc.yaml'), 'utf-8')
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { '_common.yaml': COMMON, 'spc.yaml': SPC.replace('rules:', 'rules: [') } })
+    expect(status).toBe(400)
+    expect(data.errors.join('\n')).toMatch(/^spc\.yaml/m)
+    expect(await fs.readFile(path.join(tmpDir, 'charts/demo/rules/spc.yaml'), 'utf-8')).toBe(before)
   })
 })

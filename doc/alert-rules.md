@@ -113,6 +113,18 @@ summary: "receive is {{ $value }} B/s in prod"
 
 You never write the escaping yourself.
 
+## Windows computed per row: `derived`
+
+A window that depends on a row's numbers — `freq_num` samples of
+`spc_point + 2` minutes — is a [`derived`](rules-format.md#derived) value of
+the group: `short_w: { expr: "freq_num * (spc_point + 2)", unit: m }`, used as
+`${short_w}`. The generator compiles it to Sprig, so Helm computes it per row;
+AlertForge computes the same thing the same way — the row, then its Common
+Values (a `_common` folder's included), then the default — to refuse at save a
+row whose value cannot be deployed (`[0m]`, a negative `for`, an overflow), and
+to show the rule owner each row's value in Preview, beside the alerts it
+produced. What Preview shows is what Helm renders.
+
 ## Log alerts: groups of another type
 
 A group's `type` says what kind of rules it holds. Left out it is

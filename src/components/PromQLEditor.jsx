@@ -2,10 +2,11 @@ import { useEffect, useRef } from 'react'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection, Decoration, MatchDecorator, ViewPlugin } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { bracketMatching, syntaxHighlighting, HighlightStyle } from '@codemirror/language'
+import { bracketMatching, syntaxHighlighting, HighlightStyle, ensureSyntaxTree } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { PromQLExtension } from '@prometheus-io/codemirror-promql'
+import { withColumnRefs } from '../utils/promqlLint'
 
 const MONO = "'Fira Code', 'Cascadia Code', 'Consolas', 'DejaVu Sans Mono', monospace"
 
@@ -103,6 +104,22 @@ export default function PromQLEditor({ value = '', onChange, metrics = [], minHe
     if (!containerRef.current) return
 
     const promql = new PromQLExtension()
+    // The PromQL lint, with each ${column} read as a value of its length
+    // (promqlLint.js): as written, PromQL calls every reference outside a
+    // string an error, and the whole query was underlined a moment after
+    // the editor opened.
+    const plain = promql.getLinter()
+    promql.setLinter({
+      promQL() {
+        const lint = plain.promQL()
+        return view => withColumnRefs(view.state.doc.toString(), text => {
+          const state = text === view.state.doc.toString() ? view.state
+            : view.state.update({ changes: { from: 0, to: view.state.doc.length, insert: text } }).state
+          ensureSyntaxTree(state, text.length, 1000)
+          return lint({ state })
+        })
+      },
+    })
 
     // If we have a metrics dict, wire up a static completion provider
     if (metrics.length) {

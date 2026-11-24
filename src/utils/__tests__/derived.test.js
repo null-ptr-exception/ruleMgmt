@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseDerived, derivedColumns, compileSprig, evalDerived, derivedPosition, mergePosition } from '../derived.js'
+import { parseDerived, derivedColumns, compileSprig, evalDerived, derivedPosition, mergePosition, renameInDerived } from '../derived.js'
 import { durationCellFault } from '../duration.js'
 
 const cell = name => `.${name}`
@@ -140,5 +140,17 @@ describe('an offset whose checker takes 0', () => {
     expect(mergePosition('time', 'duration')).toBe('duration')
     expect(mergePosition('time', 'offset')).toBe('offset')
     expect(mergePosition('time', 'range')).toBe('range')
+  })
+})
+
+describe('renameInDerived: a column renamed is renamed where an expression reads it', () => {
+  it.each([
+    ['freq_num * (spc_point + 2)', 'freq_num', 'freq', 'freq * (spc_point + 2)'],
+    ['freq_num * freq_num_2 + freq_num', 'freq_num', 'f', 'f * freq_num_2 + f'],
+    ['afreq_num + 2', 'freq_num', 'f', 'afreq_num + 2'],
+    ['3 * (a+a)', 'a', 'b', '3 * (b+b)'],
+  ])('%s, %s → %s', (expr, from, to, want) => {
+    expect(renameInDerived(expr, from, to)).toBe(want)
+    expect(derivedColumns(parseDerived(renameInDerived(expr, from, to)))).not.toContain(from)
   })
 })

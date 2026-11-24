@@ -104,6 +104,17 @@ test.describe('expr editor highlighting', () => {
         [el, ...el.querySelectorAll('span')].map(e => getComputedStyle(e).color))
       expect(new Set(colours)).toEqual(new Set(['rgb(253, 186, 116)']))   // #fdba74
     }
+    // The PromQL lint runs a moment after each change: a real mistake is
+    // marked, and once it is gone nothing is — the references included.
+    const editor = page.locator('.cm-content').first()
+    await editor.click()
+    await page.keyboard.press('ControlOrMeta+End')
+    await page.keyboard.type(' >> 1')
+    await expect(editor.locator('.cm-lintRange-error').first()).toBeVisible({ timeout: 5000 })
+    for (let i = 0; i < 5; i++) await page.keyboard.press('Backspace')
+    await expect(editor).toHaveText('rate(cpu_seconds_total{namespace="${namespace}"}[5m]) > ${warn}')
+    await expect(editor.locator('.cm-lintRange-error')).toHaveCount(0, { timeout: 5000 })
+    await expect(refs).toHaveCount(2)
   })
 
   test('a vlogs group has no PromQL colours, but its ${column} is still marked', async ({ page }) => {

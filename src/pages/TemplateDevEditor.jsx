@@ -10,7 +10,7 @@ import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { syncFailedNotice } from '../utils/syncNotice'
 import { parseRulesDir, schemaToModel, groupFileText, commonFileText, hasCommonFile, GROUP_KEY_RE } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
-import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
+import { columnUsage, commonColumnUsage, ruleVars } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import SelectorLabelsList, { SelectorLabelsHint } from '../components/SelectorLabelsList'
 import { profileNames, profileFor, isPromQLType, canonicalType, DEFAULT_TYPE } from '../utils/outputs'
@@ -18,6 +18,7 @@ import { GROUP_FIELDS, GROUP_FIELD_NAMES, BASE_GROUP_FIELDS } from '../utils/gro
 import yaml from 'js-yaml'
 import { renameSelectorColumn } from '../utils/selectorContract'
 import { repeatsText, REPEATS_FIX } from '../utils/drift'
+import { DERIVED_UNITS, parseDerived, derivedColumns, renameInDerived } from '../utils/derived'
 import {
   listCharts, createChart, deleteChart, cloneChart,
   getChartInfo, saveChartRules, saveChartMeta,
@@ -278,6 +279,67 @@ function VarsEditor({ vars, onChange }) {
         onChange(Object.fromEntries(next.filter(r => r.key).map(r => [r.key, r.value])))
       }}
     />
+  )
+}
+
+// A group's derived values (#118): a value computed per row from its integer
+// columns, with a unit, used as ${name} in a range or a `for`. Rows are kept
+// here, so a half-typed name or expression stays as typed; the model gets
+// the named ones. `taken` says whether a name is another's (a column, a
+// common column, a vars entry, another derived value).
+function DerivedEditor({ derived, usage, taken, onChange }) {
+  const [rows, setRows] = useState(() => Object.entries(derived || {}).map(([name, d]) => ({ name, expr: d.expr ?? '', unit: d.unit })))
+  // A column renamed elsewhere rewrites the expressions (renameColumn): the
+  // rows follow the model when only the expressions changed.
+  useEffect(() => {
+    setRows(prev => prev.map(r => (derived?.[r.name] && derived[r.name].expr !== r.expr ? { ...r, expr: derived[r.name].expr } : r)))
+  }, [derived])
+  const send = next => {
+    setRows(next)
+    const out = {}
+    for (const r of next) {
+      if (!r.name || Object.hasOwn(out, r.name)) continue
+      let columns = []
+      try { columns = derivedColumns(parseDerived(r.expr)) } catch { /* the save says what is wrong */ }
+      out[r.name] = { expr: r.expr, ...(r.unit ? { unit: r.unit } : {}), columns }
+    }
+    onChange(Object.keys(out).length ? out : undefined)
+  }
+  const set = (i, patch) => send(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  return (
+    <div data-testid="derived-editor">
+      {rows.map((r, i) => {
+        const clash = r.name && (taken(r.name) || rows.some((o, j) => j !== i && o.name === r.name))
+        let exprError = null
+        if (r.expr) { try { parseDerived(r.expr) } catch (e) { exprError = e.message } }
+        return (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Input size="small" aria-label={`Derived ${i + 1} name`} value={r.name} placeholder="name"
+                status={clash ? 'error' : undefined}
+                onChange={e => set(i, { name: e.target.value.trim() })} style={{ width: 150, fontWeight: 600 }} />
+              <Input size="small" aria-label={`Derived ${i + 1} expression`} value={r.expr} placeholder="freq_num * (spc_point + 2)"
+                status={exprError ? 'error' : undefined}
+                onChange={e => set(i, { expr: e.target.value })} style={{ flex: 1, fontFamily: 'monospace' }} />
+              <Select size="small" aria-label={`Derived ${i + 1} unit`} value={r.unit} placeholder="unit" style={{ width: 80 }}
+                options={DERIVED_UNITS.map(u => ({ value: u, label: u }))}
+                onChange={unit => set(i, { unit })} />
+              <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={`Remove derived ${i + 1}`}
+                onClick={() => send(rows.filter((_, j) => j !== i))} />
+            </div>
+            {clash && <Text type="danger" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>{`"${r.name}" is already a name in this group`}</Text>}
+            {exprError && <Text type="danger" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>{exprError}</Text>}
+            {!r.unit && <Text type="warning" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>⚠ a unit is needed: the value is a duration</Text>}
+            {r.name && !clash && (
+              <Text type={usage[r.name] ? 'secondary' : 'warning'} style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>
+                {usage[r.name] ? `Used by ${usage[r.name].join(', ')}` : '⚠ Not used by any rule'}
+              </Text>
+            )}
+          </div>
+        )
+      })}
+      <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setRows([...rows, { name: '', expr: '', unit: 'm' }])}>Add derived</Button>
+    </div>
   )
 }
 
@@ -665,8 +727,9 @@ export default function TemplateDevEditor() {
   // A column some rule matches under another label (#133) — common ones too.
   const renamedLabels = renamedSelectorLabels(group)
   const groupColumns = group && !group.custom
-    // ${selector} is the group's selector matchers when it has selectors (#60)
-    ? [...Object.keys(group.columns), ...commonNames, ...(group.selectors?.length ? ['selector'] : [])]
+    // ${selector} is the group's selector matchers when it has selectors (#60);
+    // a vars entry and a derived value (#118) are referenced as ${name} too.
+    ? [...Object.keys(group.columns), ...commonNames, ...Object.keys(group.derived || {}), ...Object.keys(group.vars || {}), ...(group.selectors?.length ? ['selector'] : [])]
     : []
   // Merged column definitions the rule cards need to say "blank leaves this rule out".
   const columnDefs = group && !group.custom
@@ -676,6 +739,11 @@ export default function TemplateDevEditor() {
   // Which rules reference each column — the "Used by" annotation, and the flag
   // for a column no rule uses.
   const usedByColumn = columnUsage(group && !group.custom ? group : {})
+  // Which rules use each derived value (#118), by its own name.
+  const derivedUsage = Object.create(null)
+  for (const r of (group && !group.custom ? group.rules : [])) {
+    for (const n of ruleVars(r)) if (Object.hasOwn(group.derived || {}, n)) (derivedUsage[n] ||= []).push(r.alert || r.record || '(unnamed)')
+  }
   // A common column's usage spans every group.
   const commonUsage = commonColumnUsage(model.groups, model.common.columns)
 
@@ -685,9 +753,13 @@ export default function TemplateDevEditor() {
   // group's columns and _common's, which share one namespace.
   function renameColumn(target, oldName, newName) {
     const own = target === COMMON ? model.common.columns : model.groups[target]?.columns || {}
+    // A derived value's name (#118) is taken too: ${name} could not tell
+    // them apart. For a common column, every group's.
+    const derivedNames = Object.values(target === COMMON ? model.groups : { [target]: model.groups[target] })
+      .flatMap(g => Object.keys(g?.derived || {}))
     const taken = target === COMMON
-      ? Object.keys(own)
-      : [...Object.keys(own), ...Object.keys(model.common.columns || {})]
+      ? [...Object.keys(own), ...derivedNames]
+      : [...Object.keys(own), ...Object.keys(model.common.columns || {}), ...derivedNames]
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
       message.warning(`"${newName}" is not a valid column name`)
       return false
@@ -712,6 +784,13 @@ export default function TemplateDevEditor() {
     // A selector keeps its place, and the label it matches (#121).
     for (const key of target === COMMON ? Object.keys(model.groups) : [target]) {
       if (model.groups[key].selectors?.includes(oldName)) updateGroup(key, g => renameSelectorColumn(g, oldName, newName))
+      // A derived expression reading it reads it by its new name (#118).
+      if (Object.values(model.groups[key].derived || {}).some(d => d.columns?.includes(oldName))) {
+        updateGroup(key, g => ({ ...g, derived: Object.fromEntries(Object.entries(g.derived).map(([n, d]) => {
+          const expr = renameInDerived(d.expr, oldName, newName)
+          return [n, { ...d, expr, columns: (d.columns || []).map(c => (c === oldName ? newName : c)) }]
+        })) }))
+      }
     }
   }
   function removeColumn(target, name) {
@@ -929,6 +1008,7 @@ export default function TemplateDevEditor() {
                           rule={rule}
                           columns={groupColumns}
                           columnDefs={columnDefs}
+                          derived={group.derived}
                           collapsed={!!collapsedRules[`${activeGroup}:${i}`]}
                           onToggleCollapse={() => setCollapsedRules(p => ({ ...p, [`${activeGroup}:${i}`]: !p[`${activeGroup}:${i}`] }))}
                           onChange={next => setRules(group.rules.map((r, idx) => idx === i ? next : r))}
@@ -984,6 +1064,29 @@ export default function TemplateDevEditor() {
                         </Text>
                       )}
                     </div>
+                    )}
+
+                    {!group.once && (
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                          <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Derived</Text>
+                          <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
+                        </div>
+                        <DerivedEditor
+                          key={activeGroup}
+                          derived={group.derived}
+                          usage={derivedUsage}
+                          taken={name => name === 'selector' || Object.hasOwn(group.columns, name) || Object.hasOwn(model.common.columns, name) || Object.hasOwn(group.vars || {}, name)}
+                          onChange={d => updateGroup(activeGroup, g => {
+                            const { derived: _, ...rest } = g
+                            return d ? { ...rest, derived: d } : rest
+                          })}
+                        />
+                        <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                          A value computed for each row from its integer columns (+ - * and brackets), with a unit:
+                          {' ${name}'} in a range or a for. Preview shows each row&apos;s value.
+                        </Text>
+                      </div>
                     )}
 
                     <div style={{ marginBottom: 20 }}>

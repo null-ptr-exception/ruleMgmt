@@ -153,6 +153,15 @@ export function evalDerived(tree, row, { unit, position } = {}) {
   return { value: value.toString() }
 }
 
+/**
+ * The expression with the column `from` read as `to`, the rest as written:
+ * renaming a column renames it where a derived value reads it.
+ *   renameInDerived('freq_num * (freq_num_2 + 1)', 'freq_num', 'freq') → 'freq * (freq_num_2 + 1)'
+ */
+export function renameInDerived(text, from, to) {
+  return typeof text === 'string' ? text.replace(/[A-Za-z_][A-Za-z0-9_]*/g, name => (name === from ? to : name)) : text
+}
+
 /** PromQL with every quoted string emptied: what is left is the query itself. */
 export const withoutStrings = text => text.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`[^`]*`/g, '""')
 

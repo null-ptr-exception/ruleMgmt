@@ -370,6 +370,12 @@ rate(x[60m])`. The generator writes it as Sprig, reading each cell the way
   replaces it; a Common Value of `0` is used as it is, not the default. A
   row that leaves `base` out, under `_common: { base: 0 }`, computes
   `freq_num * base` as 0 — `[0m]` — and the save is refused, naming the row.
+- **Preview shows each row's values**, computed the same way, from what Helm
+  reads (the Template's own `values.yaml` included): `21m`, *omitted* for a
+  row that leaves a column it reads empty, or why a value cannot be deployed.
+- **In the editor**, a group's **Derived** section adds, changes and removes
+  them; a rule using `${short_w}` is not marked unresolved, a name already a
+  column's is marked, and renaming a column renames it in the expressions.
 - A `once` group has no rows, so it has no `derived`. A `derived` name may
   not be a column's, a `vars` entry's, a `_common` column's or `selector`.
 

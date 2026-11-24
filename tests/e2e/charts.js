@@ -42,3 +42,15 @@ export async function openTemplateChart(page, chart) {
     await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 2000 })
   }).toPass({ timeout: 20000 })
 }
+
+/**
+ * Wait for an antd modal (`.ant-modal`) to finish opening. While it zooms
+ * in, Playwright can find a button "stable" at a point it is about to leave
+ * and click there: the click lands on the modal's wrapper and is lost (seen
+ * in a trace: the first try was intercepted by .ant-modal-wrap, the retry
+ * clicked mid-zoom, and the dialog stayed on its first step).
+ */
+export async function openedModal(modal) {
+  await expect(modal).toBeVisible({ timeout: 10000 })
+  await expect(modal).not.toHaveClass(/ant-zoom-(appear|enter)/)
+}

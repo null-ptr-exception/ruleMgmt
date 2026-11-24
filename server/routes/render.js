@@ -5,6 +5,7 @@ import { getDepName, unwrapValues } from '../lib/subchart.js'
 import { resolveStack, readStackValues, mergeValues } from '../lib/stack.js'
 import { getCommonSchema, isAlertGroup } from '../../src/utils/schemaUtils.js'
 import { selfCheckRendered, tallyRendered, summarizeGroups } from '../../src/utils/renderSummary.js'
+import { derivedTable } from '../../src/utils/rulesFile.js'
 import { logger } from '../lib/logger.js'
 import { checkRules, renderChart } from '../lib/ruleCheck.js'
 import yaml from 'js-yaml'
@@ -19,7 +20,7 @@ const FOLDER_DEPLOYMENT_SEGMENT_RE = /^(?!\.{1,2}$)[^/\\]+$/
 // of the template's alerts produced nothing, and whether a group is empty
 // (no rows) versus filled-but-silent (rows, zero alerts). Plus any value keys
 // the schema no longer has — orphans left by a migration that didn't finish.
-async function buildSummary(renderedYaml, { model, schema }, readValues) {
+async function buildSummary(renderedYaml, { model, schema }, readValues, readDefaults = async () => ({})) {
   let rendered
   try {
     rendered = tallyRendered(renderedYaml)
@@ -60,7 +61,11 @@ async function buildSummary(renderedYaml, { model, schema }, readValues) {
 
   const types = Object.fromEntries(Object.entries(model?.groups || {}).map(([k, g]) => [k, g.type]))
   const onceGroups = Object.entries(model?.groups || {}).filter(([, g]) => g.once).map(([k]) => k)
-  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema, types, onceGroups })
+  // Each row's derived values (#118), computed as the save check computes
+  // them, from what Helm reads: the Template's values.yaml under the
+  // deployment's (its Common Values too), on a stack what the layers add.
+  const derived = model && values ? derivedTable(mergeValues(await readDefaults(), values), model) : {}
+  const { groups, unmatchedGroups } = summarizeGroups({ rendered, possible, groupRows, schema, types, onceGroups, derived })
   return { total: rendered.total, groups, unmatchedGroups, orphanFields: [...orphanFields] }
 }
 
@@ -149,7 +154,8 @@ export default function renderRouter() {
         }
         return null
       }
-      const summary = await buildSummary(output, chartModel, readValues).catch(err => {
+      const readDefaults = async () => (await parseIfThere(path.join(chartDir, 'values.yaml'), yaml.load)) || {}
+      const summary = await buildSummary(output, chartModel, readValues, readDefaults).catch(err => {
         logger.error({ err, chart: template, deployment }, 'buildSummary failed, falling back to raw YAML')
         return null
       })

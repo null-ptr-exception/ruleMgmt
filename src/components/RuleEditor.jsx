@@ -36,7 +36,7 @@ const label = text => (
  * it replaces the literal with ${name} here and opens a column for it in the
  * rule owner's table. Anything left un-marked stays fixed and they never see it.
  */
-export default function RuleEditor({ rule, columns = [], columnDefs = {}, collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn, exprLanguage = 'promql' }) {
+export default function RuleEditor({ rule, columns = [], columnDefs = {}, derived, collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn, exprLanguage = 'promql' }) {
   const exprApi = useRef(null)
   const [naming, setNaming] = useState(null)
   const [varName, setVarName] = useState('')
@@ -129,8 +129,9 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
   // A column with no default that the expression reads: a row that leaves it
   // blank produces no alert at all for this rule.
   const exprVars = new Set([...varsIn(rule.expr || ''), ...varsIn(rule.for || '')])
-  const dropsRule = used.filter(name =>
-    exprVars.has(name) && columnDefs[name] && columnDefs[name].default === undefined && !columnDefs[name].required)
+  // A derived value (#118) stands for the columns it reads.
+  const dropsRule = [...new Set(used.filter(name => exprVars.has(name)).flatMap(name => derived?.[name]?.columns ?? [name]))]
+    .filter(name => columnDefs[name] && columnDefs[name].default === undefined && !columnDefs[name].required)
 
   const severity = (rule.labels || {}).severity
   const summary = (rule.raw || rule.expr || '').split('\n')[0]

@@ -171,10 +171,50 @@ function GroupRow({ group }) {
           </tbody>
         </table>
       )}
+
+      {group.derived && group.derived.rows.length > 0 && <DerivedTable group={group} />}
     </div>
   )
 }
 
+// Each row's derived values (#118), as Helm renders them: what a range or a
+// `for` in this group will be, row by row. A row that leaves a column it
+// reads empty has no rule using it ("omitted"); one whose value cannot be
+// deployed says why.
+function DerivedTable({ group }) {
+  const { names, rows } = group.derived
+  return (
+    <table data-testid={`derived-${group.name}`} style={{ marginTop: 8, fontSize: 13, borderCollapse: 'collapse' }}>
+      <thead>
+        <tr>
+          <th style={head}>Row</th>
+          {names.map(n => <th key={n} style={head}><Text style={{ fontFamily: 'monospace' }}>{n}</Text></th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(r => (
+          <tr key={r.row} data-testid={`derived-${group.name}-row-${r.row}`}>
+            <td style={cell}><Text type="secondary">{r.row}{r.label ? ` · ${r.label}` : ''}</Text></td>
+            {names.map(n => {
+              const v = r.values[n] || {}
+              return (
+                <td key={n} style={cell} data-testid={`derived-${group.name}-${r.row}-${n}`}>
+                  {v.value !== undefined
+                    ? <Text style={{ fontFamily: 'monospace' }}>{v.value}{v.unit}</Text>
+                    : v.omitted
+                      ? <Text type="secondary">omitted</Text>
+                      : <Text type="danger">{v.problem}</Text>}
+                </td>
+              )
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+const head = { padding: '2px 16px 2px 0', textAlign: 'left', fontWeight: 600, color: '#555' }
 const cell = { padding: '2px 16px 2px 0' }
 const preStyle = {
   background: '#0f172a', color: '#7dd3fc', padding: 16, borderRadius: 8,

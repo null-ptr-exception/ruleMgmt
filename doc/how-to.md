@@ -50,6 +50,8 @@ owner's table.
 
 The expression now reads `${recv_warn}` and a column of that name exists. To
 use a column that already exists, pick it from **Insert variable** instead.
+In the editor a `${…}` is shown in orange; a PromQL mistake around it is
+underlined in red, the reference itself is not.
 
 Anything you leave unmarked stays fixed, and the rule owner never sees it.
 
@@ -72,6 +74,33 @@ Type it. All three take the same three kinds of value:
 | Prometheus template | `{{ $value }}` | evaluated when the alert fires |
 
 Blank rows in Labels and Annotations only become real once you name the key.
+
+### Work out a window from a row's numbers
+
+When a window is computed from two columns — `freq_num` samples of
+`spc_point + 2` minutes each — add it under **Derived**: a name (`short_w`),
+an expression (`freq_num * (spc_point + 2)`) and a unit (`m`). Rules use it as
+`${short_w}`, in a range, a subquery, an `offset`, `for` or
+`keep_firing_for`:
+
+```
+rate(x[${short_w}]) > 2 * rate(x[${long_w}])
+```
+
+- The expression is `+ - *`, brackets, whole numbers and the group's or
+  `_common`'s **integer** columns. A `number` column can hold `2.5`: make it
+  an integer column first (a row with a decimal has to be changed before the
+  save takes the change).
+- A unit is required: the value is a duration. Changing the unit (`m` to
+  `s`) changes every row's window; look at Preview after.
+- Renaming a column renames it in the expressions that read it.
+- A row that leaves a column it reads empty, with no default, has no rule
+  using it, as for a column.
+- Saving a deployment computes it for every row, the way Helm reads the row
+  (the row, then its Common Values, then the default), and refuses a row
+  where it comes to 0 in a range, overflows, or is negative in a `for`.
+- Preview shows each row's values. See
+  [derived](rules-format.md#derived) for the whole format.
 
 ### Set a group's type and its group fields
 
@@ -556,6 +585,9 @@ group produced, by alert name and severity. It also points out:
 - a group with rows but no alerts, usually a blank cell that drops a rule
 - value fields the template no longer has, left over from an older version of
   the chart
+- for a group with derived values, each row's values (`21m`, `60m`) as Helm
+  renders them; *omitted* for a row that leaves a column they read empty, and
+  the reason for one that cannot be deployed
 
 **Raw YAML** switches to the rendered resources themselves. Save first;
 Preview saves for you.

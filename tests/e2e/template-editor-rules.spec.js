@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import yaml from 'js-yaml'
-import { removeChart, openTemplateChart } from './charts.js'
+import { openedModal, removeChart, openTemplateChart } from './charts.js'
 
 // The editor now loads a chart's rules/*.yaml (or adapts a schema-only chart),
 // and Save goes through the one atomic POST /:chart/rules. This drives that
@@ -153,7 +153,9 @@ rules:
       await page.locator('input[value="warn"]').locator('xpath=following::button[1]').click()
       await page.getByRole('button', { name: 'Save' }).first().click()
       const dialog = page.locator('.ant-modal').filter({ hasText: 'breaks existing deployments' })
+      await openedModal(dialog)
       await dialog.getByRole('button', { name: 'Continue' }).click()   // step 1 -> map
+      await expect(dialog.locator('.ant-steps-item-process')).toContainText('Map')
       await dialog.getByRole('button', { name: 'Continue' }).click()   // step 2 -> preview, cut off
       await expect(page.locator('.ant-message')).toContainText('The preview could not be worked out', { timeout: 8000 })
       await expect(dialog.getByRole('button', { name: 'Continue' })).toBeVisible()

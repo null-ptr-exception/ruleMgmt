@@ -903,6 +903,35 @@ export function derivedRows(values, model) {
   return out
 }
 
+/**
+ * Preview's table of derived values (#118): per group with any, the names,
+ * and each row's values (derivedRows) beside what tells the row apart — its
+ * text and selector cells, read as Helm reads the row.
+ *
+ * @returns { [group]: { names: [..], rows: [{ row: 1-based, label, values }] } }
+ *   label: 'job=a, env=prod' (may be '')
+ */
+export function derivedTable(values, model) {
+  const computed = derivedRows(values, model)
+  const merges = Object.keys(model?.common?.columns || {}).length > 0
+  const out = {}
+  for (const [group, rows] of Object.entries(computed)) {
+    const entry = model.groups[group]
+    const names = Object.keys(entry.derived || {})
+    const telling = rowIdentityColumns(groupGenDef(entry, model.common))
+    out[group] = {
+      names,
+      rows: rows.map((vals, i) => {
+        const raw = values[group][i]
+        const seen = merges ? helmMerge(raw, values?._common) : (raw && typeof raw === 'object' ? raw : {})
+        const label = telling.filter(c => Object.hasOwn(seen, c) && seen[c] !== null && seen[c] !== '').map(c => `${c}=${seen[c]}`).join(', ')
+        return { row: i + 1, label, values: vals }
+      }),
+    }
+  }
+  return out
+}
+
 export function valueProblems(values, model) {
   const problems = []
   const isEmpty = v => v === null || v === ''

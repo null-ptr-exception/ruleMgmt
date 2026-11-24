@@ -314,6 +314,28 @@ export async function realPlace(base, ...parts) {
 /** The repo's own real path, as realPlace compares a path with it. */
 export const realBaseOf = base => fs.realpath(path.resolve(base)).catch(() => path.resolve(base))
 
+/**
+ * Where an open file or folder really is, by its descriptor (Linux's
+ * /proc/self/fd): 'inside' the repo whose real path is `realBase`,
+ * 'outside' it, or in 'git-dir'; null where descriptors cannot be looked
+ * up this way (another system), and the caller checks as before. What a
+ * path led to when it was opened is what is read, whatever is swapped in
+ * at that path meanwhile.
+ */
+export async function openedPlace(fd, realBase) {
+  let real
+  try {
+    real = await fs.realpath(`/proc/self/fd/${fd}`)
+  } catch {
+    return null
+  }
+  // A descriptor that is no path (deleted since it was opened) is no place in the repo.
+  if (!path.isAbsolute(real)) return 'outside'
+  const r = path.relative(realBase, real)
+  if (r !== '' && (r.startsWith('..') || path.isAbsolute(r))) return 'outside'
+  return r.split(path.sep).some(x => x.toLowerCase() === '.git') ? 'git-dir' : 'inside'
+}
+
 /** realPlace for a `target` already inside the repo whose real path is `realBase`. */
 export async function placeOf(target, realBase) {
   let at = target

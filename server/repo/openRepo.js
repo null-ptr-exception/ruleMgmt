@@ -126,7 +126,7 @@ function makeRepo(root, overlay, sharedFiles, log) {
     dir(rel) {
       const key = rel === '' ? '' : repoRel(rel)
       log.dirs.add(key)
-      return memo('dir', key, () => readRepoDir(root, key, { overlay }))
+      return memo('dir', key, () => readRepoDir(root, key, { overlay, realRoot: realRoot() }))
     },
     templateFiles(dir) {
       const key = repoRel(dir)

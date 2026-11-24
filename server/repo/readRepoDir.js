@@ -17,7 +17,8 @@
  */
 import fs from 'fs/promises'
 import path from 'path'
-import { inside, realPlace } from './paths.js'
+import { constants } from 'fs'
+import { inside, realPlace, realBaseOf, placeOf, openedPlace } from './paths.js'
 
 // A folder AlertForge may not touch, in words (as the walk says it).
 const LINK_WORDS = { outside: 'it is a link that leads outside the repo', 'git-dir': "it is a link into git's own folder" }
@@ -57,7 +58,7 @@ async function leadsTo(root, rel, to) {
   return why === 'git-dir' ? 'git' : why ? 'outside' : 'inside'
 }
 
-export async function readRepoDir(root, rel, { overlay } = {}) {
+export async function readRepoDir(root, rel, { overlay, realRoot } = {}) {
   // '' is the repo's own folder.
   const key = rel === '' ? '' : repoRel(rel)
   const abs = key ? inside(root, key) : root
@@ -74,17 +75,26 @@ export async function readRepoDir(root, rel, { overlay } = {}) {
   }
   if (!st.isDirectory()) return unreadable(key, 'a file is where a folder should be', 'not-a-folder')
   let place
+  const realBase = await (realRoot ?? realBaseOf(root))
   try {
-    place = await realPlace(root, key)
+    place = key ? await placeOf(abs, realBase) : await realPlace(root, key)
   } catch (err) {
     return unreadable(key, reason(err), KIND[err.code] ?? 'other')
   }
   if (place.why) return unreadable(key, LINK_WORDS[place.why], 'outside-link')
+  // Listed through the folder as opened, which is looked at first: what a
+  // link swapped in at its path meanwhile leads to is not listed.
   let list
+  let dh
   try {
-    list = await fs.readdir(abs, { withFileTypes: true })
+    dh = await fs.open(abs, constants.O_RDONLY | (constants.O_DIRECTORY ?? 0))
+    const opened = await openedPlace(dh.fd, realBase)
+    if (opened !== null && opened !== 'inside') return unreadable(key, LINK_WORDS[opened === 'git-dir' ? 'git-dir' : 'outside'], 'outside-link')
+    list = await fs.readdir(opened === null ? abs : `/proc/self/fd/${dh.fd}`, { withFileTypes: true })
   } catch (err) {
     return err.code === 'ENOENT' ? absent(key) : unreadable(key, reason(err), KIND[err.code] ?? 'other')
+  } finally {
+    await dh?.close().catch(() => {})
   }
   const links = new Map()
   for (const e of list) {

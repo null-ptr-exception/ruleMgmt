@@ -22,7 +22,7 @@ import fs from 'fs/promises'
 import { constants } from 'fs'
 import path from 'path'
 import { Buffer } from 'node:buffer'
-import { inside, placeOf, realBaseOf } from './paths.js'
+import { inside, placeOf, realBaseOf, openedPlace } from './paths.js'
 import { absent, ok, unreadable } from './loaded.js'
 
 /** Helm refuses a chart file larger than this (5 MiB, Helm 3.19); AlertForge reads no file larger. */
@@ -111,8 +111,9 @@ async function readOnce(root, rel, key, overlay, realRoot) {
     if (target instanceof Error) return target.code === 'ENOENT' ? unreadable(key, 'a link to a file that is not there', 'dangling-link') : failed(key, target)
   }
   let place
+  const realBase = await (realRoot ?? realBaseOf(root))
   try {
-    place = await placeOf(abs, await (realRoot ?? realBaseOf(root)))
+    place = await placeOf(abs, realBase)
   } catch (err) {
     return failed(key, err)
   }
@@ -138,6 +139,16 @@ async function readOnce(root, rel, key, overlay, realRoot) {
     const again = kindOf(now)
     if (again) return unreadable(key, again, now.isDirectory() ? 'folder' : 'not-a-file')
     if (now.dev !== st.dev || now.ino !== st.ino) return CHANGED
+    // What was opened, wherever the path leads now: in the repo, and not
+    // in git's own folder, before any byte of it is read. Where the open
+    // file cannot be looked up, the path is looked at again, as before.
+    const opened = await openedPlace(fh.fd, realBase)
+    const at = opened ?? (await placeOf(abs, realBase)).why ?? 'inside'
+    if (at !== 'inside') return unreadable(key, at === 'git-dir' ? "it is a link into git's own folder" : 'it is a link that leads outside the repo', 'outside-link')
+    if (opened === null) {
+      const again2 = await fs.stat(abs).catch(err => err)
+      if (again2 instanceof Error || again2.dev !== now.dev || again2.ino !== now.ino) return CHANGED
+    }
     const chunks = []
     let total = 0
     for (;;) {

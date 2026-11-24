@@ -1,0 +1,1749 @@
+{
+  "a Template whose Chart.yaml is broken": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/a",
+          "kind": "template-version",
+          "description": "deployments/team/a: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/b",
+          "kind": "template-version",
+          "description": "deployments/team/b: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/c",
+          "kind": "template-version",
+          "description": "deployments/team/c: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/d",
+          "kind": "template-version",
+          "description": "deployments/team/d: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/a",
+            "kind": "template-version",
+            "description": "deployments/team/a: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/b",
+            "kind": "template-version",
+            "description": "deployments/team/b: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/c",
+            "kind": "template-version",
+            "description": "deployments/team/c: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/d",
+            "kind": "template-version",
+            "description": "deployments/team/d: its Template demo's Chart.yaml is not valid YAML (unexpected end of the stream within a flow collection), so Helm cannot render it"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "a Template whose rules cannot be read": {
+    "blockers": {
+      "findings": [],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "chart-unreadable",
+            "chart": "demo",
+            "description": "demo: charts/demo/rules cannot be read (permission denied) — fix it before committing"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "a config that notifies nobody": {
+    "blockers": {
+      "findings": [],
+      "routingProblems": [],
+      "routingWarnings": [
+        {
+          "deployment": "deployments/team/c",
+          "warnings": [
+            "configs.ops: to \"undisclosed-recipients:;\" is a group with no members — this config notifies nobody"
+          ]
+        }
+      ],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 200,
+      "data": {
+        "sha": "<sha>",
+        "message": "check",
+        "unconverted": [],
+        "routingWarnings": [
+          {
+            "deployment": "deployments/team/c",
+            "warnings": [
+              "configs.ops: to \"undisclosed-recipients:;\" is a group with no members — this config notifies nobody"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "a deployment asking for another version of its Template": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/c",
+          "kind": "template-version",
+          "description": "deployments/team/c: its Chart.yaml gives no version for the Template demo — write version: \">=0.0.0-0\" (any version), so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/d",
+          "kind": "template-version",
+          "description": "deployments/team/d: its Chart.yaml asks for the Template demo at version 9.9.9, but the Template is 0.1.0 — write version: \">=0.0.0-0\" (any version), or 0.1.0, so Helm cannot render it"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/c",
+            "kind": "template-version",
+            "description": "deployments/team/c: its Chart.yaml gives no version for the Template demo — write version: \">=0.0.0-0\" (any version), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/d",
+            "kind": "template-version",
+            "description": "deployments/team/d: its Chart.yaml asks for the Template demo at version 9.9.9, but the Template is 0.1.0 — write version: \">=0.0.0-0\" (any version), or 0.1.0, so Helm cannot render it"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "a deployment inside another's folder": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-stale",
+          "deployment": "deployments/team/a/inner",
+          "regenerable": true,
+          "description": "deployments/team/a/inner: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 1,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-stale",
+            "deployment": "deployments/team/a/inner",
+            "regenerable": true,
+            "description": "deployments/team/a/inner: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+          }
+        ],
+        "regenerable": 1
+      }
+    }
+  },
+  "a deployment on a _common, with a hand-written null": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "values-null",
+          "deployment": "deployments/stack/s",
+          "regenerable": false,
+          "description": "deployments/stack/s: deployments/stack/s/values.yaml: the group cpu is null — write [] to clear a group, or remove the key to inherit it"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "values-null",
+            "deployment": "deployments/stack/s",
+            "regenerable": false,
+            "description": "deployments/stack/s: deployments/stack/s/values.yaml: the group cpu is null — write [] to clear a group, or remove the key to inherit it"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "a folder that cannot be read": {
+    "blockers": {
+      "findings": [],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [
+        {
+          "path": "deployments/hidden",
+          "error": "EACCES"
+        }
+      ],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 200,
+      "data": {
+        "sha": "<sha>",
+        "message": "check",
+        "unconverted": [],
+        "unreadable": [
+          {
+            "path": "deployments/hidden",
+            "error": "EACCES"
+          }
+        ]
+      }
+    }
+  },
+  "a resource edited by hand": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-stale",
+          "deployment": "deployments/team/c",
+          "regenerable": true,
+          "description": "deployments/team/c: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 1,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-stale",
+            "deployment": "deployments/team/c",
+            "regenerable": true,
+            "description": "deployments/team/c: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+          }
+        ],
+        "regenerable": 1
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [
+          "deployments/team/c"
+        ],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [],
+        "routingProblems": [],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 200,
+        "data": {
+          "sha": "<sha>",
+          "message": "after",
+          "unconverted": []
+        }
+      }
+    }
+  },
+  "a routing.yaml edited by hand": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-stale",
+          "deployment": "deployments/team/a",
+          "regenerable": true,
+          "description": "deployments/team/a: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-target-differs",
+          "deployment": "deployments/team/b",
+          "regenerable": true,
+          "description": "deployments/team/b: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 2,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-stale",
+            "deployment": "deployments/team/a",
+            "regenerable": true,
+            "description": "deployments/team/a: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/b",
+            "regenerable": true,
+            "description": "deployments/team/b: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+          }
+        ],
+        "regenerable": 2
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [
+          "deployments/team/a",
+          "deployments/team/b"
+        ],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [],
+        "routingProblems": [],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 200,
+        "data": {
+          "sha": "<sha>",
+          "message": "after",
+          "unconverted": []
+        }
+      }
+    }
+  },
+  "a routing.yaml removed, its resource left": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-orphaned",
+          "deployment": "deployments/team/c",
+          "description": "deployments/team/c: templates/alertmanagerconfig.yaml is there without a routing.yaml — remove it, or put routing.yaml back"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-orphaned",
+            "deployment": "deployments/team/c",
+            "description": "deployments/team/c: templates/alertmanagerconfig.yaml is there without a routing.yaml — remove it, or put routing.yaml back"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "a routing.yaml with errors": {
+    "blockers": {
+      "findings": [],
+      "routingProblems": [
+        {
+          "deployment": "deployments/team/c",
+          "errors": [
+            "routing.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+          ]
+        }
+      ],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 200,
+      "data": {
+        "sha": "<sha>",
+        "message": "check",
+        "unconverted": [],
+        "routingProblems": [
+          {
+            "deployment": "deployments/team/c",
+            "errors": [
+              "routing.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "a shared config used and not there": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-shared-unresolved",
+          "deployment": "deployments/team/c",
+          "regenerable": false,
+          "description": "deployments/team/c: configs.relay: uses the shared config relay, but there are no shared configs (_shared/notification-configs.yaml)"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-shared-unresolved",
+            "deployment": "deployments/team/c",
+            "regenerable": false,
+            "description": "deployments/team/c: configs.relay: uses the shared config relay, but there are no shared configs (_shared/notification-configs.yaml)"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "a source whose routing.yaml has errors, and its target": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-target-differs",
+          "deployment": "deployments/team/b",
+          "regenerable": false,
+          "description": "deployments/team/b: its routing is not its source's (deployments/team/a), whose routing.yaml has problems — fix the source first"
+        }
+      ],
+      "routingProblems": [
+        {
+          "deployment": "deployments/team/a",
+          "errors": [
+            "routing.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+          ]
+        }
+      ],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/b",
+            "regenerable": false,
+            "description": "deployments/team/b: its routing is not its source's (deployments/team/a), whose routing.yaml has problems — fix the source first"
+          }
+        ],
+        "regenerable": 0
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/b",
+            "regenerable": false,
+            "description": "deployments/team/b: its routing is not its source's (deployments/team/a), whose routing.yaml has problems — fix the source first"
+          }
+        ],
+        "routingProblems": [
+          {
+            "deployment": "deployments/team/a",
+            "errors": [
+              "routing.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+            ]
+          }
+        ],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 409,
+        "data": {
+          "error": "Commit refused",
+          "findings": [
+            {
+              "severity": "commit",
+              "kind": "routing-target-differs",
+              "deployment": "deployments/team/b",
+              "regenerable": false,
+              "description": "deployments/team/b: its routing is not its source's (deployments/team/a), whose routing.yaml has problems — fix the source first"
+            }
+          ],
+          "regenerable": 0
+        }
+      }
+    }
+  },
+  "a sync target edited by hand": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-target-differs",
+          "deployment": "deployments/team/b",
+          "regenerable": true,
+          "description": "deployments/team/b: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 1,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/b",
+            "regenerable": true,
+            "description": "deployments/team/b: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+          }
+        ],
+        "regenerable": 1
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [
+          "deployments/team/b"
+        ],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [],
+        "routingProblems": [],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 200,
+        "data": {
+          "sha": "<sha>",
+          "message": "after",
+          "unconverted": []
+        }
+      }
+    }
+  },
+  "nothing behind": {
+    "blockers": {
+      "findings": [],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 200,
+      "data": {
+        "sha": "<sha>",
+        "message": "check",
+        "unconverted": []
+      }
+    }
+  },
+  "several deployments, each with another problem": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs[1]: deployments/team/a is listed as a source again (first in syncs[0])"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-stale",
+          "deployment": "deployments/team/a",
+          "regenerable": true,
+          "description": "deployments/team/a: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-orphaned",
+          "deployment": "deployments/team/c",
+          "description": "deployments/team/c: templates/alertmanagerconfig.yaml is there without a routing.yaml — remove it, or put routing.yaml back"
+        },
+        {
+          "severity": "commit",
+          "kind": "values-unreadable",
+          "deployment": "deployments/team/d",
+          "regenerable": false,
+          "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/e",
+          "kind": "template-version",
+          "description": "deployments/team/e: its Chart.yaml asks for the Template demo at version 9.9.9, but the Template is 0.1.0 — write version: \">=0.0.0-0\" (any version), or 0.1.0, so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "kind": "values-unreadable",
+          "deployment": "deployments/team/e",
+          "regenerable": false,
+          "description": "deployments/team/e: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-target-differs",
+          "deployment": "deployments/team/b",
+          "regenerable": true,
+          "description": "deployments/team/b: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-target-differs",
+          "deployment": "deployments/team/d",
+          "regenerable": true,
+          "description": "deployments/team/d: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+        }
+      ],
+      "routingProblems": [
+        {
+          "deployment": "_shared/notification-configs.yaml",
+          "errors": [
+            "_shared/notification-configs.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+          ]
+        }
+      ],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 3,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[1]: deployments/team/a is listed as a source again (first in syncs[0])"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-stale",
+            "deployment": "deployments/team/a",
+            "regenerable": true,
+            "description": "deployments/team/a: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-orphaned",
+            "deployment": "deployments/team/c",
+            "description": "deployments/team/c: templates/alertmanagerconfig.yaml is there without a routing.yaml — remove it, or put routing.yaml back"
+          },
+          {
+            "severity": "commit",
+            "kind": "values-unreadable",
+            "deployment": "deployments/team/d",
+            "regenerable": false,
+            "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/e",
+            "kind": "template-version",
+            "description": "deployments/team/e: its Chart.yaml asks for the Template demo at version 9.9.9, but the Template is 0.1.0 — write version: \">=0.0.0-0\" (any version), or 0.1.0, so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "kind": "values-unreadable",
+            "deployment": "deployments/team/e",
+            "regenerable": false,
+            "description": "deployments/team/e: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/b",
+            "regenerable": true,
+            "description": "deployments/team/b: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/d",
+            "regenerable": true,
+            "description": "deployments/team/d: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+          }
+        ],
+        "regenerable": 3
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [
+          "deployments/team/a",
+          "deployments/team/b",
+          "deployments/team/d"
+        ],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[1]: deployments/team/a is listed as a source again (first in syncs[0])"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-orphaned",
+            "deployment": "deployments/team/c",
+            "description": "deployments/team/c: templates/alertmanagerconfig.yaml is there without a routing.yaml — remove it, or put routing.yaml back"
+          },
+          {
+            "severity": "commit",
+            "kind": "values-unreadable",
+            "deployment": "deployments/team/d",
+            "regenerable": false,
+            "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/e",
+            "kind": "template-version",
+            "description": "deployments/team/e: its Chart.yaml asks for the Template demo at version 9.9.9, but the Template is 0.1.0 — write version: \">=0.0.0-0\" (any version), or 0.1.0, so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "kind": "values-unreadable",
+            "deployment": "deployments/team/e",
+            "regenerable": false,
+            "description": "deployments/team/e: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+          }
+        ],
+        "routingProblems": [
+          {
+            "deployment": "_shared/notification-configs.yaml",
+            "errors": [
+              "_shared/notification-configs.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+            ]
+          }
+        ],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 409,
+        "data": {
+          "error": "Commit refused",
+          "findings": [
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml syncs[1]: deployments/team/a is listed as a source again (first in syncs[0])"
+            },
+            {
+              "severity": "commit",
+              "kind": "routing-orphaned",
+              "deployment": "deployments/team/c",
+              "description": "deployments/team/c: templates/alertmanagerconfig.yaml is there without a routing.yaml — remove it, or put routing.yaml back"
+            },
+            {
+              "severity": "commit",
+              "kind": "values-unreadable",
+              "deployment": "deployments/team/d",
+              "regenerable": false,
+              "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+            },
+            {
+              "severity": "commit",
+              "deployment": "deployments/team/e",
+              "kind": "template-version",
+              "description": "deployments/team/e: its Chart.yaml asks for the Template demo at version 9.9.9, but the Template is 0.1.0 — write version: \">=0.0.0-0\" (any version), or 0.1.0, so Helm cannot render it"
+            },
+            {
+              "severity": "commit",
+              "kind": "values-unreadable",
+              "deployment": "deployments/team/e",
+              "regenerable": false,
+              "description": "deployments/team/e: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+            }
+          ],
+          "regenerable": 0
+        }
+      }
+    }
+  },
+  "sync.yaml not YAML": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml : is not valid YAML (unexpected end of the stream within a flow collection)"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": false
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml : is not valid YAML (unexpected end of the stream within a flow collection)"
+          }
+        ],
+        "regenerable": 0
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [],
+        "failed": [
+          {
+            "deployment": "sync.yaml",
+            "error": "not valid YAML: fix it first"
+          }
+        ]
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml : is not valid YAML (unexpected end of the stream within a flow collection)"
+          }
+        ],
+        "routingProblems": [],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": false
+      },
+      "commit": {
+        "status": 409,
+        "data": {
+          "error": "Commit refused",
+          "findings": [
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml : is not valid YAML (unexpected end of the stream within a flow collection)"
+            }
+          ],
+          "regenerable": 0
+        }
+      }
+    }
+  },
+  "sync.yaml spelling a target another way": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-target-differs",
+          "deployment": "deployments/team/b",
+          "regenerable": true,
+          "description": "deployments/team/b: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 1,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/b",
+            "regenerable": true,
+            "description": "deployments/team/b: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+          }
+        ],
+        "regenerable": 1
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [
+          "deployments/team/b"
+        ],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [],
+        "routingProblems": [],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 200,
+        "data": {
+          "sha": "<sha>",
+          "message": "after",
+          "unconverted": []
+        }
+      }
+    }
+  },
+  "sync.yaml with every kind of bad entry": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs[0]: target deployments/team/gone is not a deployment"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs[0]: a target is not a path (7)"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs[1]: deployments/team/c is listed as its own target"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs[3]: deployments/team/a is listed as a source again (first in syncs[0])"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs[4]: source deployments/none is not a deployment"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs[5]: is not { source, targets: [...] }"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs[6]: is not { source, targets: [...] }"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml : deployments/team/b follows two sources: deployments/team/a and deployments/team/c"
+        },
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml : deployments/team/b follows deployments/team/a and is a source itself: sync does not chain"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-target-differs",
+          "deployment": "deployments/team/d",
+          "regenerable": true,
+          "description": "deployments/team/d: its routing is not its source's (deployments/team/b) — use Regenerate to copy it again"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-target-differs",
+          "deployment": "deployments/team/e",
+          "regenerable": true,
+          "description": "deployments/team/e: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 2,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[0]: target deployments/team/gone is not a deployment"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[0]: a target is not a path (7)"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[1]: deployments/team/c is listed as its own target"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[3]: deployments/team/a is listed as a source again (first in syncs[0])"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[4]: source deployments/none is not a deployment"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[5]: is not { source, targets: [...] }"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[6]: is not { source, targets: [...] }"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml : deployments/team/b follows two sources: deployments/team/a and deployments/team/c"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml : deployments/team/b follows deployments/team/a and is a source itself: sync does not chain"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/d",
+            "regenerable": true,
+            "description": "deployments/team/d: its routing is not its source's (deployments/team/b) — use Regenerate to copy it again"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-target-differs",
+            "deployment": "deployments/team/e",
+            "regenerable": true,
+            "description": "deployments/team/e: its routing is not its source's (deployments/team/a) — use Regenerate to copy it again"
+          }
+        ],
+        "regenerable": 2
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [
+          "deployments/team/d",
+          "deployments/team/e"
+        ],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[0]: target deployments/team/gone is not a deployment"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[0]: a target is not a path (7)"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[1]: deployments/team/c is listed as its own target"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[3]: deployments/team/a is listed as a source again (first in syncs[0])"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[4]: source deployments/none is not a deployment"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[5]: is not { source, targets: [...] }"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs[6]: is not { source, targets: [...] }"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml : deployments/team/b follows two sources: deployments/team/a and deployments/team/c"
+          },
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml : deployments/team/b follows deployments/team/a and is a source itself: sync does not chain"
+          }
+        ],
+        "routingProblems": [],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 409,
+        "data": {
+          "error": "Commit refused",
+          "findings": [
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml syncs[0]: target deployments/team/gone is not a deployment"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml syncs[0]: a target is not a path (7)"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml syncs[1]: deployments/team/c is listed as its own target"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml syncs[3]: deployments/team/a is listed as a source again (first in syncs[0])"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml syncs[4]: source deployments/none is not a deployment"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml syncs[5]: is not { source, targets: [...] }"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml syncs[6]: is not { source, targets: [...] }"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml : deployments/team/b follows two sources: deployments/team/a and deployments/team/c"
+            },
+            {
+              "severity": "commit",
+              "kind": "sync-registry",
+              "description": "sync.yaml : deployments/team/b follows deployments/team/a and is a source itself: sync does not chain"
+            }
+          ],
+          "regenerable": 0
+        }
+      }
+    }
+  },
+  "sync.yaml: syncs is not a list": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "sync-registry",
+          "description": "sync.yaml syncs: is not a list"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "sync-registry",
+            "description": "sync.yaml syncs: is not a list"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "the Template deleted": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/a",
+          "kind": "template-missing",
+          "description": "deployments/team/a: its Template demo is not in the repo"
+        },
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/b",
+          "kind": "template-missing",
+          "description": "deployments/team/b: its Template demo is not in the repo"
+        },
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/c",
+          "kind": "template-missing",
+          "description": "deployments/team/c: its Template demo is not in the repo"
+        },
+        {
+          "severity": "commit",
+          "deployment": "deployments/team/d",
+          "kind": "template-missing",
+          "description": "deployments/team/d: its Template demo is not in the repo"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/a",
+            "kind": "template-missing",
+            "description": "deployments/team/a: its Template demo is not in the repo"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/b",
+            "kind": "template-missing",
+            "description": "deployments/team/b: its Template demo is not in the repo"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/c",
+            "kind": "template-missing",
+            "description": "deployments/team/c: its Template demo is not in the repo"
+          },
+          {
+            "severity": "commit",
+            "deployment": "deployments/team/d",
+            "kind": "template-missing",
+            "description": "deployments/team/d: its Template demo is not in the repo"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "the object labels change: every routing behind": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-stale",
+          "deployment": "deployments/team/a",
+          "regenerable": true,
+          "description": "deployments/team/a: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-stale",
+          "deployment": "deployments/team/c",
+          "regenerable": true,
+          "description": "deployments/team/c: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 3,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-stale",
+            "deployment": "deployments/team/a",
+            "regenerable": true,
+            "description": "deployments/team/a: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-stale",
+            "deployment": "deployments/team/c",
+            "regenerable": true,
+            "description": "deployments/team/c: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+          }
+        ],
+        "regenerable": 3
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [
+          "deployments/team/a",
+          "deployments/team/c",
+          "deployments/team/b"
+        ],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [],
+        "routingProblems": [],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 200,
+        "data": {
+          "sha": "<sha>",
+          "message": "after",
+          "unconverted": []
+        }
+      }
+    }
+  },
+  "the shared configs broken while used": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-shared-unresolved",
+          "deployment": "deployments/team/c",
+          "regenerable": false,
+          "description": "deployments/team/c: configs.relay: uses the shared config relay, but _shared/notification-configs.yaml has problems — fix it first"
+        },
+        {
+          "severity": "commit",
+          "kind": "routing-shared-broken",
+          "deployment": "_shared/notification-configs.yaml",
+          "regenerable": false,
+          "description": "_shared/notification-configs.yaml has problems and is used by deployments/team/c: _shared/notification-configs.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-shared-unresolved",
+            "deployment": "deployments/team/c",
+            "regenerable": false,
+            "description": "deployments/team/c: configs.relay: uses the shared config relay, but _shared/notification-configs.yaml has problems — fix it first"
+          },
+          {
+            "severity": "commit",
+            "kind": "routing-shared-broken",
+            "deployment": "_shared/notification-configs.yaml",
+            "regenerable": false,
+            "description": "_shared/notification-configs.yaml has problems and is used by deployments/team/c: _shared/notification-configs.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  },
+  "the shared configs broken, used by no one": {
+    "blockers": {
+      "findings": [],
+      "routingProblems": [
+        {
+          "deployment": "_shared/notification-configs.yaml",
+          "errors": [
+            "_shared/notification-configs.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+          ]
+        }
+      ],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 200,
+      "data": {
+        "sha": "<sha>",
+        "message": "check",
+        "unconverted": [],
+        "routingProblems": [
+          {
+            "deployment": "_shared/notification-configs.yaml",
+            "errors": [
+              "_shared/notification-configs.yaml is not valid YAML: unexpected end of the stream within a flow collection"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "the shared configs notifying nobody, used": {
+    "blockers": {
+      "findings": [],
+      "routingProblems": [],
+      "routingWarnings": [
+        {
+          "deployment": "deployments/team/c",
+          "warnings": [
+            "configs.relay (shared): to \"undisclosed-recipients:;\" is a group with no members — this config notifies nobody"
+          ]
+        },
+        {
+          "deployment": "_shared/notification-configs.yaml",
+          "warnings": [
+            "configs.relay: to \"undisclosed-recipients:;\" is a group with no members — this config notifies nobody"
+          ]
+        }
+      ],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 200,
+      "data": {
+        "sha": "<sha>",
+        "message": "check",
+        "unconverted": [],
+        "routingWarnings": [
+          {
+            "deployment": "deployments/team/c",
+            "warnings": [
+              "configs.relay (shared): to \"undisclosed-recipients:;\" is a group with no members — this config notifies nobody"
+            ]
+          },
+          {
+            "deployment": "_shared/notification-configs.yaml",
+            "warnings": [
+              "configs.relay: to \"undisclosed-recipients:;\" is a group with no members — this config notifies nobody"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "the shared configs used, routing made before they changed": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "routing-stale",
+          "deployment": "deployments/team/c",
+          "regenerable": true,
+          "description": "deployments/team/c: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [],
+      "unreadable": [],
+      "regenerable": 1,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "routing-stale",
+            "deployment": "deployments/team/c",
+            "regenerable": true,
+            "description": "deployments/team/c: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate"
+          }
+        ],
+        "regenerable": 1
+      }
+    },
+    "regenerate": {
+      "status": 200,
+      "data": {
+        "regenerated": [
+          "deployments/team/c"
+        ],
+        "failed": []
+      }
+    },
+    "afterRegenerate": {
+      "blockers": {
+        "findings": [],
+        "routingProblems": [],
+        "routingWarnings": [],
+        "valueWarnings": [],
+        "unreadable": [],
+        "regenerable": 0,
+        "readable": true
+      },
+      "commit": {
+        "status": 200,
+        "data": {
+          "sha": "<sha>",
+          "message": "after",
+          "unconverted": []
+        }
+      }
+    }
+  },
+  "values that are not YAML, a values.yaml that is a folder, rows that repeat": {
+    "blockers": {
+      "findings": [
+        {
+          "severity": "commit",
+          "kind": "values-unreadable",
+          "deployment": "deployments/team/c",
+          "regenerable": false,
+          "description": "deployments/team/c: values.yaml cannot be read (it is a folder, not a file), so Helm cannot render it"
+        },
+        {
+          "severity": "commit",
+          "kind": "values-unreadable",
+          "deployment": "deployments/team/d",
+          "regenerable": false,
+          "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+        }
+      ],
+      "routingProblems": [],
+      "routingWarnings": [],
+      "valueWarnings": [
+        {
+          "deployment": "deployments/team/a",
+          "warnings": [
+            "cpu: rows 1 and 2 set the same namespace \"p\" — they get the same alertforge_row, so Prometheus pairs their alerts by position again; tell them apart in a text or true/false column"
+          ]
+        }
+      ],
+      "unreadable": [],
+      "regenerable": 0,
+      "readable": true
+    },
+    "commit": {
+      "status": 409,
+      "data": {
+        "error": "Commit refused",
+        "findings": [
+          {
+            "severity": "commit",
+            "kind": "values-unreadable",
+            "deployment": "deployments/team/c",
+            "regenerable": false,
+            "description": "deployments/team/c: values.yaml cannot be read (it is a folder, not a file), so Helm cannot render it"
+          },
+          {
+            "severity": "commit",
+            "kind": "values-unreadable",
+            "deployment": "deployments/team/d",
+            "regenerable": false,
+            "description": "deployments/team/d: values.yaml cannot be read (not valid YAML (unexpected end of the stream within a flow collection)), so Helm cannot render it"
+          }
+        ],
+        "regenerable": 0
+      }
+    }
+  }
+}

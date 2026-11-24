@@ -14,20 +14,16 @@
  */
 
 import path from 'path'
-import { readRouting, buildRouting, writeRouting, checkedRouting, copyRouting, ROUTING_CR_FILE } from './routingFiles.js'
+import { readRouting, buildRouting, writeRouting, checkedRouting, copyRouting } from './routingFiles.js'
 import { isDeploymentDir, isSafeSyncPath, readSyncRegistry, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
-import { readSharedConfigs, SHARED_FILE } from './sharedConfigs.js'
-import { sharedRefProblems } from '../../src/utils/routingGenerator.js'
+import { readSharedConfigs } from './sharedConfigs.js'
 import { listDeploymentPaths, walkDeployments } from './deploymentWalk.js'
 import { resolveStack } from './stack.js'
-import { valuesWarnings } from './deploymentWrite.js'
-import { parseIfThere, UnreadableError } from './readIfThere.js'
 import { insideReal } from './safePath.js'
-import { loadValues } from '../../src/utils/valuesText.js'
-import { templateProblem } from './commit/template.js'
-import { stackNulls } from './commit/values.js'
-import { syncRegistryFindings, SYNC_FILE } from './commit/sync.js'
-import { parsedOrNull, sameRouting, sameRoutingAs } from './commit/routing.js'
+import { templateFindings } from './commit/template.js'
+import { valuesFindings } from './commit/values.js'
+import { syncRegistryFindings, syncTargetFindings, SYNC_FILE } from './commit/sync.js'
+import { routingFindings, sharedFileFindings, sameRoutingAs } from './commit/routing.js'
 
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
@@ -68,90 +64,32 @@ export async function deploymentCommitBlockers(gitopsDir) {
   for (const dep of deployments) {
     // Read once for both.
     const stack = await resolveStack(gitopsDir, path.join(gitopsDir, dep))
-    const template = await templateProblem(gitopsDir, dep, stack)
-    if (template) findings.push({ severity: 'commit', deployment: dep, ...template })
-    const nulls = stackNulls(stack)
-    if (nulls.length) findings.push({ severity: 'commit', kind: 'values-null', deployment: dep, regenerable: false, description: `${dep}: ${nulls.join('; ')}` })
-    // A values.yaml that cannot be read, or is not YAML, renders nothing:
-    // said as a stack says it for a deployment on one, not passed over.
-    let valuesText
-    try {
-      valuesText = await parseIfThere(path.join(gitopsDir, dep, 'values.yaml'), text => { loadValues(text); return text })
-    } catch (err) {
-      if (!stack.problems.some(p => p.kind === 'values-unreadable')) {
-        findings.push({ severity: 'commit', kind: 'values-unreadable', deployment: dep, regenerable: false,
-          description: `${dep}: values.yaml cannot be read (${err.why || err.message}), so Helm cannot render it` })
-      }
-      valuesText = null
-    }
-    // A Template that cannot be read is the chart check's finding
-    // (chart-unreadable): this deployment's warnings wait for it.
-    const repeats = valuesText === null ? [] : await valuesWarnings(gitopsDir, path.join(gitopsDir, dep), valuesText, { stack })
-      .catch(err => { if (err instanceof UnreadableError) return []; throw err })
-    if (repeats.length) valueWarnings.push({ deployment: dep, warnings: repeats })
+    findings.push(...await templateFindings(gitopsDir, dep, stack))
+    const values = await valuesFindings(gitopsDir, dep, stack)
+    findings.push(...values.findings)
+    if (values.warnings.length) valueWarnings.push({ deployment: dep, warnings: values.warnings })
     // A target is held to its source below. One listed as its own target is
     // no target (sync.yaml is refused for it too): its routing is checked.
     const followed = getSourceForTarget(registry, dep)
     if (followed && followed !== dep) continue
 
-    const { text, cr } = await readRouting(path.join(gitopsDir, dep))
-    if (text === null) {
-      if (cr !== null) {
-        findings.push({ severity: 'commit', kind: 'routing-orphaned', deployment: dep,
-          description: `${dep}: ${ROUTING_CR_FILE} is there without a routing.yaml — remove it, or put routing.yaml back` })
-      }
-      continue
-    }
-    const refs = sharedRefProblems(parsedOrNull(text), shared)
-    if (refs.length) {
-      unresolved.push(dep)
-      findings.push({ severity: 'commit', kind: 'routing-shared-unresolved', deployment: dep, regenerable: false,
-        description: `${dep}: ${refs.join('; ')}` })
-      continue
-    }
-    const built = buildRouting(text, shared)
-    if (built.errors) {
-      routingProblems.push({ deployment: dep, errors: built.errors })
-      brokenSources.add(dep)
-      continue
-    }
-    // A synced target is its source's copy: it says the same.
-    if (built.warnings.length) {
-      for (const d of [dep, ...getTargetsForSource(registry, dep).filter(t => t !== dep)]) routingWarnings.push({ deployment: d, warnings: built.warnings })
-    }
-    if (built.cr !== cr) {
-      findings.push({ severity: 'commit', kind: 'routing-stale', deployment: dep, regenerable: true,
-        description: `${dep}: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate` })
-      fixes.add(dep)
-      for (const t of getTargetsForSource(registry, dep)) fixes.add(t)
-    }
+    const routing = await routingFindings(gitopsDir, dep, { shared, registry })
+    findings.push(...routing.findings)
+    routingProblems.push(...routing.problems)
+    routingWarnings.push(...routing.warnings)
+    if (routing.unresolved) unresolved.push(dep)
+    if (routing.broken) brokenSources.add(dep)
+    for (const f of routing.fixes) fixes.add(f)
   }
 
-  // The shared file itself: blocks while it is used, else only listed.
-  if (shared?.warnings?.length) routingWarnings.push({ deployment: SHARED_FILE, warnings: shared.warnings })
-  if (shared?.errors.length) {
-    if (unresolved.length) {
-      findings.push({ severity: 'commit', kind: 'routing-shared-broken', deployment: SHARED_FILE, regenerable: false,
-        description: `${SHARED_FILE} has problems and is used by ${unresolved.join(', ')}: ${shared.errors.join('; ')}` })
-    } else {
-      routingProblems.push({ deployment: SHARED_FILE, errors: shared.errors })
-    }
-  }
+  const sharedFile = sharedFileFindings(shared, unresolved)
+  routingWarnings.push(...sharedFile.warnings)
+  findings.push(...sharedFile.findings)
+  routingProblems.push(...sharedFile.problems)
 
-  // A sync target is held to its source's files, not its own routing.yaml.
-  for (const dep of deployments) {
-    const source = getSourceForTarget(registry, dep)
-    if (!source || source === dep || !(await isDeploymentDir(path.join(gitopsDir, source)))) continue
-    if (await sameRouting(gitopsDir, source, dep)) continue
-    if (brokenSources.has(source)) {
-      findings.push({ severity: 'commit', kind: 'routing-target-differs', deployment: dep, regenerable: false,
-        description: `${dep}: its routing is not its source's (${source}), whose routing.yaml has problems — fix the source first` })
-    } else {
-      findings.push({ severity: 'commit', kind: 'routing-target-differs', deployment: dep, regenerable: true,
-        description: `${dep}: its routing is not its source's (${source}) — use Regenerate to copy it again` })
-      fixes.add(dep)
-    }
-  }
+  const targets = await syncTargetFindings(gitopsDir, deployments, registry, brokenSources)
+  findings.push(...targets.findings)
+  for (const f of targets.fixes) fixes.add(f)
   return { findings, routingProblems, routingWarnings, valueWarnings, unreadable, regenerable: fixes.size, readable: sync.readable }
 }
 

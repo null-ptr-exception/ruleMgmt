@@ -30,7 +30,7 @@ const exactWanted = v => {
  * at another version than the one exact version the deployment asks for.
  * A range (`>=0.0.0-0`, which AlertForge writes) is not judged.
  */
-export async function templateProblem(gitopsDir, dep, stack) {
+async function templateProblem(gitopsDir, dep, stack) {
   const dir = path.join(gitopsDir, dep)
   const own = await fileDependencyProblem(gitopsDir, dir, dep)
   // Gone since the walk: not there to commit.
@@ -89,4 +89,15 @@ async function fileDependencyProblem(gitopsDir, dir, dep) {
     }
   }
   return null
+}
+
+/**
+ * One deployment's Template, as a commit checks it: what keeps Helm from
+ * finding it (templateProblem), as the deployment's blocking finding.
+ * `stack` is the deployment's resolveStack.
+ * @returns [finding] — none, or one
+ */
+export async function templateFindings(gitopsDir, dep, stack) {
+  const template = await templateProblem(gitopsDir, dep, stack)
+  return template ? [{ severity: 'commit', deployment: dep, ...template }] : []
 }

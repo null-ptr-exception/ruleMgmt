@@ -22,7 +22,7 @@
       "server/lib/commit/routing.js": 2,
       "server/lib/commit/sync.js": 4,
       "server/lib/commit/template.js": 6,
-      "server/lib/commitChecks.js": 3,
+      "server/lib/commit/values.js": 3,
       "server/lib/commonEdit.js": 36,
       "server/lib/deploymentCheck.js": 9,
       "server/lib/deploymentWalk.js": 9,

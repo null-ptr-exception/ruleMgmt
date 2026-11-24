@@ -3,7 +3,8 @@
 import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
-import { isDeploymentDir, normalizeSyncPath } from '../sync.js'
+import { isDeploymentDir, normalizeSyncPath, getSourceForTarget } from '../sync.js'
+import { sameRouting } from './routing.js'
 
 export const SYNC_FILE = 'sync.yaml'
 
@@ -65,4 +66,30 @@ export async function syncRegistryFindings(gitopsDir) {
     if (distinct.length && hasTargets.has(target)) findings.push(finding('', `${target} follows ${distinct[0]} and is a source itself: sync does not chain`))
   }
   return { findings, readable: true }
+}
+
+/**
+ * Every sync target, as a commit checks it (#179): held to its source's
+ * files, not its own routing.yaml. One whose routing is not its source's
+ * blocks; Regenerate copies it again (`fixes`) unless the source's own
+ * routing.yaml has problems (`brokenSources`, from routingFindings).
+ * `deployments` in the order the walk gave them; `registry` as read.
+ * @returns { findings, fixes }
+ */
+export async function syncTargetFindings(gitopsDir, deployments, registry, brokenSources) {
+  const out = { findings: [], fixes: [] }
+  for (const dep of deployments) {
+    const source = getSourceForTarget(registry, dep)
+    if (!source || source === dep || !(await isDeploymentDir(path.join(gitopsDir, source)))) continue
+    if (await sameRouting(gitopsDir, source, dep)) continue
+    if (brokenSources.has(source)) {
+      out.findings.push({ severity: 'commit', kind: 'routing-target-differs', deployment: dep, regenerable: false,
+        description: `${dep}: its routing is not its source's (${source}), whose routing.yaml has problems — fix the source first` })
+    } else {
+      out.findings.push({ severity: 'commit', kind: 'routing-target-differs', deployment: dep, regenerable: true,
+        description: `${dep}: its routing is not its source's (${source}) — use Regenerate to copy it again` })
+      out.fixes.push(dep)
+    }
+  }
+  return out
 }

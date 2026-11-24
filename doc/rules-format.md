@@ -1157,7 +1157,9 @@ cells:
   checked the same way: the same keys and the same refusals as in the tables
   above and below.
 - **It cannot read a Secret** — `urlSecret`, `authorization`, `basicAuth`, a
-  CA from a Secret, an e-mail `authPassword`. A shared e-mail config may set
+  CA from a Secret, an e-mail `authPassword` or `authSecret`, and so no
+  `authIdentity` either, which needs a password of its own: a shared config
+  with `authIdentity` or `authSecret` is refused, saying so. A shared e-mail config may set
   its own `smarthost`, with the warning below: with no password of its own,
   it is handed the platform's login. A Secret is read from the namespace of each deployment the
   resource is in, which AlertForge cannot see, so one change would not reach
@@ -1200,6 +1202,8 @@ configs:
     smarthost: smtp.example.com:587
     authUsername: alertforge
     authPassword: { name: smtp-auth, key: password }  # a Secret in this namespace
+    authIdentity: alertforge                          # AUTH PLAIN's identity, usually the user
+    authSecret: { name: smtp-auth, key: cram-secret } # CRAM-MD5's secret, a Secret too
     requireTLS: true
     tlsConfig:
       ca: { secret: { name: smtp-ca, key: ca.crt } }
@@ -1217,6 +1221,8 @@ configs:
 | `to` | `to` | **required** |
 | `from`, `smarthost`, `authUsername` | the same name | the platform's setting |
 | `authPassword: { name, key }` | `authPassword`, a Secret reference | the platform's setting |
+| `authIdentity` | `authIdentity` | the platform's `smtp_auth_identity` (sent by AUTH PLAIN) |
+| `authSecret: { name, key }` | `authSecret`, a Secret reference | the platform's `smtp_auth_secret` (CRAM-MD5) |
 | `requireTLS` | `requireTLS` | the platform's setting |
 | `tlsConfig.insecureSkipVerify`, `tlsConfig.ca: { secret: { name, key } }` | `tlsConfig` | the platform's TLS settings. Written, `tlsConfig` **replaces** them for this config (Alertmanager 0.28 and later), it is not merged with them |
 | `sendResolved` | `sendResolved` | no mail when an alert resolves |
@@ -1226,7 +1232,18 @@ configs:
 
 - The names are the AlertmanagerConfig's (camelCase), not `alertmanager.yml`'s
   snake_case.
-- **The password is only ever a Secret's name and key**: the AlertmanagerConfig
+- **`authIdentity` and `authSecret` take the place of the platform's** for
+  this config: Alertmanager sends the config's own identity, and makes the
+  CRAM-MD5 answer with its own secret (measured, Alertmanager 0.28.1).
+  `authIdentity` needs the config's own `authUsername` and `authPassword`
+  (AUTH PLAIN sends all three; without them, the platform's user name and
+  password go with this identity). `authSecret` needs the config's own
+  `authUsername` (CRAM-MD5 sends the user name and an answer made with the
+  secret, no password). With a `smarthost` of its own the password is
+  needed too, as for any login there: a server that offers PLAIN before
+  CRAM-MD5 gets the user name with a password, and without one of its own
+  that is the platform's (measured).
+- **The password is only ever a Secret's name and key**, and so is `authSecret`: the AlertmanagerConfig
   has no field for a password itself, and one in `routing.yaml` would be in git.
   As with `urlSecret`, AlertForge cannot see the cluster: when the Secret or its
   key is missing, the operator drops the whole AlertmanagerConfig.
@@ -1246,7 +1263,7 @@ configs:
   `smtp_from` set (kube-prometheus-stack sets neither by default). Without them
   Alertmanager cannot build its configuration (`no global SMTP smarthost set`),
   and no notification of any kind goes out.
-- Not supported yet: `hello`, `authIdentity`, `authSecret`, `forceImplicitTLS`
+- Not supported yet: `hello`, `forceImplicitTLS`
   (port 465 uses implicit TLS anyway), `threading`, and TLS settings other than
   the two above.
 - A `routing.yaml` with these fields is refused by an AlertForge from before
@@ -1258,7 +1275,7 @@ What is saved, but said — a warning never refuses a save or a commit:
 |---|---|
 | An e-mail `to` that is only groups with no members — `undisclosed-recipients:;`, `Ops team: ;`, `a:;, b:;` | Alertmanager takes it and sends to nobody: the config notifies no one. A group with members (`oncall: a@x.com, b@y.com;`), or one beside an address, is an ordinary list |
 | A `smarthost` of the config's own with no `authUsername` and no `authPassword` (a shared config has no password) | Alertmanager fills each missing login field from its global settings, whatever the server: the platform's SMTP user name and password — and its identity and secret, where set — are used with this server (AUTH PLAIN sends identity, user name and password; LOGIN user name and password; CRAM-MD5 the user name and an HMAC made with the secret). With `tlsConfig.insecureSkipVerify: true`, to anyone who answers there |
-| A `smarthost` of the config's own with its own `authUsername` and `authPassword` | Its user name and password are its own, but the platform's identity (PLAIN) and secret (CRAM-MD5), where set, are still used with this server |
+| A `smarthost` of the config's own with its own `authUsername` and `authPassword`, and no `authIdentity` or no `authSecret` | Its user name and password are its own, but what it leaves out — the platform's identity (PLAIN), secret (CRAM-MD5), or both, where set — is still used with this server: a server that offers CRAM-MD5 gets an answer made with the platform's secret instead of the password (measured, 0.28.1). One warning, naming what is left and the field to write (`authIdentity`, usually the same as `authUsername`; `authSecret`); with both written, nothing is said |
 | A `smarthost` of the config's own with `requireTLS: false` | No STARTTLS: LOGIN sends the password in clear, CRAM-MD5 runs in clear (PLAIN is refused by Alertmanager's mail client) |
 
 A warning is shown in the config dialog (where Add stays on), on the Routing
@@ -1269,12 +1286,14 @@ commit, and by `check-deployment` (`warning:` under `Routing: passed`).
 
 | Refused | Why |
 |---|---|
-| `from`, `smarthost`, `authUsername` or `text` that is not text, or is empty; `html` that is not text; `requireTLS` or `sendResolved` that is not `true` / `false` | The AlertmanagerConfig needs them non-empty, of that type |
-| `to`, `from`, `smarthost`, `authUsername` with spaces before or after it | The Routing page trims them: opening the config there and saving would change the value without a word |
+| `from`, `smarthost`, `authUsername`, `authIdentity` or `text` that is not text (said apart: a number, `true`, a date is to be quoted), or is empty; `html` that is not text; `requireTLS` or `sendResolved` that is not `true` / `false` | The AlertmanagerConfig needs them non-empty, of that type |
+| `to`, `from`, `smarthost`, `authUsername`, `authIdentity` with spaces before or after it | The Routing page trims them: opening the config there and saving would change the value without a word |
 | A `from` with no address in it, or with a line break — the same check as `to` (a template needs no `@`) | A line break would add mail headers |
 | A header named `Authorization` or `Proxy-Authorization` (any case), or a header other than `Subject` with a word that looks like a token (20 characters or more, letters and digits, no `.`; a hyphenated word is judged part by part) | A credential does not belong in `routing.yaml`, which is in git, and a mail header cannot be read from a Secret. The subject is not judged: long names with digits are common there |
 | A `smarthost` that is not `host:port` — no port (`smtp.example.com`), an empty port (`smtp.example.com:`), more than one `:` outside `[ ]` (`smtp://x:25`, `::1:25`) | Alertmanager refuses it, and with it its whole configuration. As in Alertmanager, the port is not read as a number |
-| `authPassword` written as text, or with keys besides `name` and `key` | Only a Secret reference; another key would be dropped without a word |
+| `authPassword` or `authSecret` written as text, or with keys besides `name` and `key` | Only a Secret reference; another key would be dropped without a word |
+| An `authIdentity` with a line break or another control character | It is one value of the login |
+| `authIdentity` without both `authUsername` and `authPassword` of the config's own; `authSecret` without `authUsername` of its own — whatever the server | Alertmanager fills in the platform's (measured, 0.28.1): someone else's login under this config's identity, or the platform's user name with this secret |
 | `authPassword` without `authUsername`; with a `smarthost` of its own, `authUsername` without `authPassword` too | They are a pair: Alertmanager would fill the missing half from the platform's settings |
 | A `tlsConfig` that is not a map, is empty, or has keys besides `insecureSkipVerify` and `ca`; `insecureSkipVerify` not `true` / `false`; a `ca` other than `{ secret: { name, key } }` | Only these two for now; an empty one would still replace the platform's |
 | `headers` that is not a map; a header name that is empty or has a space, `:` or a character that is not printable; a value that is not text; a `Subject` with a line break | Alertmanager writes the name into the mail as it is |

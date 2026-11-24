@@ -133,7 +133,16 @@ export function configWarnings(name, config) {
     if (config.authUsername === undefined && config.authPassword === undefined) {
       out.push(`${where}: smarthost ${config.smarthost} has no login of its own — Alertmanager fills in the platform's global SMTP user name and password (and its identity and secret, where set), so they are used with this server${anyone}`)
     } else if (config.authUsername !== undefined && config.authPassword !== undefined) {
-      out.push(`${where}: smarthost ${config.smarthost} has its own login, but Alertmanager still uses the platform's SMTP identity (AUTH PLAIN) and secret (CRAM-MD5), where set, with this server${anyone}`)
+      // One warning, for what the config leaves to the platform: its
+      // identity (AUTH PLAIN), its secret (CRAM-MD5), or both — each sent
+      // only where the platform sets one and the server asks for that.
+      const left = [
+        config.authIdentity === undefined ? ['SMTP identity (AUTH PLAIN)', 'authIdentity (usually the same as authUsername)'] : null,
+        config.authSecret === undefined ? ['SMTP secret (CRAM-MD5)', 'authSecret'] : null,
+      ].filter(Boolean)
+      if (left.length) {
+        out.push(`${where}: smarthost ${config.smarthost} has its own login, but Alertmanager still uses the platform's ${left.map(l => l[0]).join(' and ')}, where set, with this server${anyone} — to use the config's own, write ${left.map(l => l[1]).join(' or ')}`)
+      }
     }
     if (config.requireTLS === false) {
       out.push(`${where}: smarthost ${config.smarthost} with requireTLS: false — no STARTTLS, so a password may cross the network in clear`)
@@ -175,7 +184,7 @@ export const SHARED_FILE = `${SHARED_DIR}/notification-configs.yaml`
 
 // What a config reads from a Secret, by where it is written.
 const SECRET_FIELDS = {
-  email: [['authPassword'], ['tlsConfig', 'ca']],
+  email: [['authPassword'], ['authSecret'], ['tlsConfig', 'ca']],
   webhook: [['urlSecret'], ['authorization'], ['basicAuth'], ['tlsConfig', 'ca']],
 }
 
@@ -199,9 +208,25 @@ function sharedSecretProblems(where, config) {
 
 /** One shared config's problems — what the Shared configs page checks before adding it. */
 export function sharedConfigProblems(name, config) {
-  const errors = configProblems(name, config).map(forShared)
-  return errors.length ? errors : sharedSecretProblems(`configs.${name}`, config)
+  const own = sharedLoginProblems(`configs.${name}`, config)
+  const errors = withoutLoginPairing(configProblems(name, config), `configs.${name}`, own).map(forShared)
+  return errors.length || own.length ? [...own, ...errors] : sharedSecretProblems(`configs.${name}`, config)
 }
+
+// An e-mail identity or secret of its own needs a login of its own — a
+// password or secret, both Secrets — which a shared config cannot read. Said
+// at once, rather than first asking for the login it cannot have.
+const SHARED_LOGIN_KEYS = ['authIdentity', 'authSecret']
+function sharedLoginProblems(where, config) {
+  if (config?.type !== 'email' || !config || typeof config !== 'object') return []
+  const keys = SHARED_LOGIN_KEYS.filter(k => Object.hasOwn(config, k))
+  return keys.length
+    ? [`${where}: a shared config cannot use ${keys.join(' or ')} — ${keys.length > 1 ? 'they go' : 'it goes'} with a login of its own, and a password or secret is read from a Secret in each deployment's namespace; keep this config in the routing.yaml of each deployment that needs it`]
+    : []
+}
+const withoutLoginPairing = (messages, where, own) => (own.length
+  ? messages.filter(m => !SHARED_LOGIN_KEYS.some(k => m.startsWith(`${where}: ${k} goes with a`)))
+  : messages)
 
 // The same refusal, with advice a shared config can follow: it cannot read
 // a Secret, so a credential goes with each deployment's own config.
@@ -217,11 +242,15 @@ export function checkSharedConfigs(doc) {
   const shape = schemaProblems(sharedConfigsSchema, doc, [], { file: SHARED_FILE })
   const configs = doc && typeof doc === 'object' && !Array.isArray(doc) && doc.configs && typeof doc.configs === 'object' ? doc.configs : {}
   const errors = []
+  let kept = shape
   for (const [name, config] of Object.entries(configs)) {
-    if (shape.some(m => m.startsWith(`configs.${name}:`) || m.startsWith(`configs.${name}.`))) continue
+    const own = sharedLoginProblems(`configs.${name}`, config)
+    kept = withoutLoginPairing(kept, `configs.${name}`, own)
+    errors.push(...own)
+    if (own.length || kept.some(m => m.startsWith(`configs.${name}:`) || m.startsWith(`configs.${name}.`))) continue
     errors.push(...credentialProblems(`configs.${name}`, config).map(forShared), ...sharedSecretProblems(`configs.${name}`, config))
   }
-  return [...shape, ...errors]
+  return [...kept, ...errors]
 }
 
 /** The names a routing uses from the shared configs. */
@@ -338,14 +367,14 @@ export function tlsConfigFor(tls) {
 
 // An e-mail config's fields, in this order; one not written is left to the
 // platform's Alertmanager settings (#159).
-const EMAIL_KEYS = ['to', 'from', 'smarthost', 'authUsername', 'authPassword', 'requireTLS', 'tlsConfig', 'sendResolved', 'headers', 'text', 'html']
+const EMAIL_KEYS = ['to', 'from', 'smarthost', 'authUsername', 'authPassword', 'authIdentity', 'authSecret', 'requireTLS', 'tlsConfig', 'sendResolved', 'headers', 'text', 'html']
 
 function emailConfig(config) {
   const out = {}
   for (const key of EMAIL_KEYS) {
     const value = config[key]
     if (value === undefined) continue
-    if (key === 'authPassword') out[key] = secretKey(value)
+    if (key === 'authPassword' || key === 'authSecret') out[key] = secretKey(value)
     else if (key === 'tlsConfig') out[key] = tlsConfigFor(value)
     // The resource takes headers as a list of key and value.
     else if (key === 'headers') {

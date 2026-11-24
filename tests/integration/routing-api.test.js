@@ -107,6 +107,29 @@ describe('PUT routing', () => {
     expect((await get('eu/prod')).body).toMatchObject({ errors: [], warnings: said })
   })
 
+  // An e-mail config's own SMTP identity and secret, beside its own login:
+  // written into the resource, and the warning names only what is left to
+  // the platform. Without a login of its own, refused.
+  it('takes authIdentity and authSecret with a login of their own, and refuses them without', async () => {
+    const dir = makeDeployment('asia/prod')
+    const own = 'db-email:    { type: email,   to: db@example.com, smarthost: smtp.db.example.com:587, authUsername: db, authPassword: { name: db-smtp, key: password }'
+    const withIdentity = ROUTING.replace('db-email:    { type: email,   to: db@example.com', `${own}, authIdentity: db`)
+    const res = await putRouting('asia/prod', withIdentity)
+    expect(res.status).toBe(200)
+    expect(res.body.warnings).toEqual(['configs.db-email: smarthost smtp.db.example.com:587 has its own login, but Alertmanager still uses the platform\'s SMTP secret (CRAM-MD5), where set, with this server — to use the config\'s own, write authSecret'])
+    expect(read(dir, CR)).toContain('authIdentity: db')
+    const both = ROUTING.replace('db-email:    { type: email,   to: db@example.com', `${own}, authIdentity: db, authSecret: { name: db-smtp, key: cram }`)
+    const res2 = await putRouting('asia/prod', both)
+    expect(res2.status).toBe(200)
+    expect(res2.body.warnings ?? []).toEqual([])
+    expect(read(dir, CR)).toContain('          authIdentity: db\n          authSecret:\n            name: db-smtp\n            key: cram\n')
+    const alone = ROUTING.replace('db-email:    { type: email,   to: db@example.com', 'db-email:    { type: email,   to: db@example.com, authIdentity: db')
+    const refused = await putRouting('asia/prod', alone)
+    expect(refused.status).toBe(400)
+    expect(JSON.stringify(refused.body)).toMatch(/authIdentity goes with a login of its own/)
+    expect(read(dir, 'routing.yaml')).toBe(both)
+  })
+
   it('takes the table too, written out as YAML', async () => {
     const dir = makeDeployment('asia/prod')
     const res = await putRouting('asia/prod', yaml.load(ROUTING))

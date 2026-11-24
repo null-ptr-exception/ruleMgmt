@@ -427,6 +427,8 @@ const email = c => ({
   ...(c.smarthost !== undefined ? { smarthost: c.smarthost } : {}),
   ...(c.authUsername !== undefined ? { auth_username: c.authUsername } : {}),
   ...(c.authPassword ? { auth_password: SECRET_STAND_IN } : {}),
+  ...(c.authIdentity !== undefined ? { auth_identity: c.authIdentity } : {}),
+  ...(c.authSecret ? { auth_secret: SECRET_STAND_IN } : {}),
   ...(c.requireTLS !== undefined ? { require_tls: c.requireTLS } : {}),
   ...(c.tlsConfig ? { tls_config: tls(c.tlsConfig) } : {}),
   ...(c.sendResolved !== undefined ? { send_resolved: c.sendResolved } : {}),

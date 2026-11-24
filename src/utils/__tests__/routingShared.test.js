@@ -45,6 +45,19 @@ describe('the shared configs file', () => {
     expect(secretFieldsOf(config)).toEqual([field])
   })
 
+  // An identity or secret of its own needs a password of its own, a Secret
+  // too: a shared config can have neither.
+  it('refuses an e-mail config with authSecret or authIdentity, saying at once that a shared config cannot use them', () => {
+    const CANNOT = keys => `configs.x: a shared config cannot use ${keys} — ${keys.includes(' or ') ? 'they go' : 'it goes'} with a login of its own, and a password or secret is read from a Secret in each deployment's namespace; keep this config in the routing.yaml of each deployment that needs it`
+    expect(checkSharedConfigs({ configs: { x: { ...ops, authIdentity: 'u' } } })).toEqual([CANNOT('authIdentity')])
+    expect(sharedConfigProblems('x', { ...ops, authIdentity: 'u' })).toEqual([CANNOT('authIdentity')])
+    expect(checkSharedConfigs({ configs: { x: { ...ops, authUsername: 'u', authSecret: { name: 's', key: 'c' } } } })).toEqual([CANNOT('authSecret')])
+    expect(checkSharedConfigs({ configs: { x: { ...ops, authIdentity: 'u', authSecret: { name: 's', key: 'c' } } } })).toEqual([CANNOT('authIdentity or authSecret')])
+    expect(secretFieldsOf({ ...ops, authUsername: 'u', authPassword: { name: 's', key: 'p' }, authSecret: { name: 's', key: 'c' } })).toEqual(['authPassword', 'authSecret'])
+    // A shared config with neither is checked as before.
+    expect(checkSharedConfigs({ configs: { x: ops } })).toEqual([])
+  })
+
   it('takes a TLS setting without a Secret', () => {
     expect(checkSharedConfigs({ configs: { x: { ...relay, tlsConfig: { insecureSkipVerify: true } } } })).toEqual([])
   })

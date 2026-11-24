@@ -123,6 +123,14 @@ function EmailSettings({ email, set, noSecrets }) {
             <SecretFields label="Password" name={email.passwordName} keyValue={email.passwordKey}
               onName={v => set({ passwordName: v })} onKey={v => set({ passwordKey: v })} />
           </Field>
+          {/* An identity with a user and password of its own, a secret with a user of its own: else Alertmanager fills in the platform's. */}
+          <Field label="SMTP identity (AUTH PLAIN) — with a user and password of its own; usually the user">
+            <Input aria-label="SMTP identity" placeholder={PLATFORM} value={email.authIdentity} onChange={e => set({ authIdentity: e.target.value })} />
+          </Field>
+          <Field label="SMTP secret (CRAM-MD5), from a Secret — with a user of its own">
+            <SecretFields label="CRAM-MD5 secret" name={email.cramSecretName} keyValue={email.cramSecretKey}
+              onName={v => set({ cramSecretName: v })} onKey={v => set({ cramSecretKey: v })} />
+          </Field>
         </>
       )}
       <div style={{ display: 'flex', gap: 8 }}>

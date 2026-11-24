@@ -88,6 +88,28 @@
                     ],
                     "additionalProperties": false
                   },
+                  "authIdentity": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "authSecret": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      "key": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "key"
+                    ],
+                    "additionalProperties": false
+                  },
                   "requireTLS": {
                     "type": "boolean"
                   },

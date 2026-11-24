@@ -220,19 +220,66 @@ describe('e-mail fields', () => {
   })
 
   // Its own user name and password are its own; the platform's identity
-  // and secret are still used (measured): said, more softly.
-  it('accepts a server of its own with its own login, saying the platform\'s identity and secret are still used', () => {
-    expect(said({ smarthost: 'other.example.com:587', ...LOGIN })).toEqual([])
-    expect(warned({ smarthost: 'other.example.com:587', ...LOGIN })).toEqual(['configs.c: smarthost other.example.com:587 has its own login, but Alertmanager still uses the platform\'s SMTP identity (AUTH PLAIN) and secret (CRAM-MD5), where set, with this server'])
+  // and secret are still used unless the config has its own (measured,
+  // Alertmanager 0.28.1: a CRAM-MD5 server gets an answer made with the
+  // platform's secret): one warning, naming what is left to the platform.
+  const STILL = (what, write) => `configs.c: smarthost other.example.com:587 has its own login, but Alertmanager still uses the platform's ${what}, where set, with this server — to use the config's own, write ${write}`
+  const BOTH = STILL('SMTP identity (AUTH PLAIN) and SMTP secret (CRAM-MD5)', 'authIdentity (usually the same as authUsername) or authSecret')
+  const IDENTITY = STILL('SMTP identity (AUTH PLAIN)', 'authIdentity (usually the same as authUsername)')
+  const SECRET = STILL('SMTP secret (CRAM-MD5)', 'authSecret')
+  const SECRET_REF = { name: 'smtp-auth', key: 'secret' }
+  it('accepts a server of its own with its own login, saying in one warning which of the platform\'s identity and secret are still used', () => {
+    const own = { smarthost: 'other.example.com:587', ...LOGIN }
+    expect(said(own)).toEqual([])
+    expect(warned(own)).toEqual([BOTH])
+    expect(said({ ...own, authIdentity: 'u' })).toEqual([])
+    expect(warned({ ...own, authIdentity: 'u' })).toEqual([SECRET])
+    expect(said({ ...own, authSecret: SECRET_REF })).toEqual([])
+    expect(warned({ ...own, authSecret: SECRET_REF })).toEqual([IDENTITY])
+    expect(said({ ...own, authIdentity: 'u', authSecret: SECRET_REF })).toEqual([])
+    expect(warned({ ...own, authIdentity: 'u', authSecret: SECRET_REF })).toEqual([])
+    // The skipped certificate check is said with it.
+    expect(warned({ ...own, authSecret: SECRET_REF, tlsConfig: { insecureSkipVerify: true } }))
+      .toEqual([IDENTITY.replace(' — to use', ' — and with insecureSkipVerify, to anyone who answers there — to use')])
     expect(said(LOGIN)).toEqual([])
     expect(warned(LOGIN)).toEqual([])
+    // The platform's server with a whole login of its own: taken, nothing to say.
+    expect(said({ ...LOGIN, authIdentity: 'u', authSecret: SECRET_REF })).toEqual([])
+    expect(warned({ ...LOGIN, authIdentity: 'u', authSecret: SECRET_REF })).toEqual([])
+  })
+
+  // AUTH PLAIN sends identity, user name and password: an identity alone, or
+  // with only a user name, goes out with the platform's password (measured,
+  // 0.28.1) — with or without a server of its own.
+  it.each([
+    [{ authIdentity: 'team' }],
+    [{ authIdentity: 'team', authUsername: 'u' }],
+    [{ smarthost: 'other.example.com:587', authIdentity: 'team' }],
+  ])('refuses %j: an identity goes with a login of its own', extra => {
+    expect(said(extra)).toContain('configs.c: authIdentity goes with a login of its own: write authUsername and authPassword too — without them Alertmanager sends the platform\'s user name and password with it')
+  })
+
+  // CRAM-MD5 sends the user name and an answer made with the secret, no
+  // password: a user name and secret are a login (measured, 0.28.1: a CRAM-MD5
+  // server gets the config's own). A secret with no user name goes out with
+  // the platform's.
+  it('refuses a secret without a user name of its own, and takes one with it', () => {
+    for (const extra of [{ authSecret: SECRET_REF }, { smarthost: 'other.example.com:587', authSecret: SECRET_REF }]) {
+      expect(said(extra)).toContain('configs.c: authSecret goes with a user name of its own: write authUsername too — without it Alertmanager sends the platform\'s user name with this secret')
+    }
+    expect(said({ authUsername: 'u', authSecret: SECRET_REF })).toEqual([])
+    // A server of its own still needs the password too: a server offering
+    // PLAIN first would get the platform's (measured).
+    expect(said({ smarthost: 'other.example.com:587', authUsername: 'u', authSecret: SECRET_REF })).toEqual([HALF])
   })
 
   it.each([
-    [{ from: ' ' }, 'configs.c: from must be text, not empty'],
-    [{ smarthost: 5 }, 'configs.c: smarthost must be text, not empty'],
-    [{ authUsername: '' }, 'configs.c: authUsername must be text, not empty'],
-    [{ text: '' }, 'configs.c: text must be text, not empty'],
+    [{ from: ' ' }, 'configs.c: from must not be empty'],
+    [{ smarthost: 5 }, 'configs.c: smarthost must be text — quote it if YAML reads it as a number, true or false, or a date'],
+    [{ authUsername: '' }, 'configs.c: authUsername must not be empty'],
+    [{ authUsername: true }, 'configs.c: authUsername must be text — quote it if YAML reads it as a number, true or false, or a date'],
+    [{ authUsername: new Date('2026-11-22') }, 'configs.c: authUsername must be text — quote it if YAML reads it as a number, true or false, or a date'],
+    [{ text: '' }, 'configs.c: text must not be empty'],
     [{ html: 5 }, 'configs.c: html must be text'],
     [{ requireTLS: 'yes' }, 'configs.c: requireTLS must be true or false'],
     [{ sendResolved: 1 }, 'configs.c: sendResolved must be true or false'],
@@ -260,7 +307,16 @@ describe('e-mail fields', () => {
     [{ text: '{{ .Alerts }} {{ end' }, 'configs.c: text has a {{ with no }} after it: Alertmanager cannot read the template'],
     [{ html: '{{' }, 'configs.c: html has a {{ with no }} after it: Alertmanager cannot read the template'],
     [{ from: '{{ .CommonLabels.team' }, 'configs.c: from has a {{ with no }} after it: Alertmanager cannot read the template'],
-    [{ hello: 'x' }, 'configs.c: unknown key "hello" (expected type, to, from, smarthost, authUsername, authPassword, requireTLS, tlsConfig, sendResolved, headers, text, html)'],
+    [{ hello: 'x' }, 'configs.c: unknown key "hello" (expected type, to, from, smarthost, authUsername, authPassword, authIdentity, authSecret, requireTLS, tlsConfig, sendResolved, headers, text, html)'],
+    [{ ...LOGIN, authIdentity: '' }, 'configs.c: authIdentity must not be empty'],
+    [{ ...LOGIN, authIdentity: 5 }, 'configs.c: authIdentity must be text — quote it if YAML reads it as a number, true or false, or a date'],
+    [{ ...LOGIN, authIdentity: ['a'] }, 'configs.c: authIdentity must be text — quote it if YAML reads it as a number, true or false, or a date'],
+    [{ ...LOGIN, authIdentity: null }, 'configs.c: authIdentity must be text — quote it if YAML reads it as a number, true or false, or a date'],
+    [{ ...LOGIN, authIdentity: ' u' }, 'configs.c: authIdentity must have no spaces around it'],
+    [{ ...LOGIN, authIdentity: 'a\nb' }, 'configs.c: authIdentity must not contain a line break or other control character'],
+    [{ ...LOGIN, authSecret: 'plain' }, 'configs.c: authSecret must be a Secret\'s name and key, { name, key }: put the value in a Secret in this namespace, not in routing.yaml'],
+    [{ ...LOGIN, authSecret: { name: 's' } }, 'configs.c.authSecret: key is required'],
+    [{ ...LOGIN, authSecret: { name: 's', key: 'k', optional: true } }, 'configs.c.authSecret: unknown key "optional" (expected name, key)'],
   ])('refuses %j', (extra, message) => {
     expect(said(extra)).toContain(message)
   })
@@ -269,6 +325,9 @@ describe('e-mail fields', () => {
     { smarthost: '[::1]:25', ...LOGIN }, { smarthost: ':25', ...LOGIN },
     { text: 'a }} b' }, { html: '' }, { headers: { Subject: '' } }, { headers: {} },
     { tlsConfig: { insecureSkipVerify: false } },
+    // An identity is any one line of text: the resource takes one character or more.
+    { ...LOGIN, authIdentity: 'u' }, { ...LOGIN, authIdentity: 'team@example.com' }, { ...LOGIN, authIdentity: 'yes' }, { ...LOGIN, authIdentity: '{{ x }}' },
+    { ...LOGIN, authSecret: { name: 'smtp-auth', key: 'cram.secret' } },
   ])('accepts %j', extra => {
     expect(said(extra)).toEqual([])
   })

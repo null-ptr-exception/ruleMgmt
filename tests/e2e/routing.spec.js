@@ -719,6 +719,44 @@ test('an e-mail config takes its sender, server, password and CA from the dialog
   expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs['db-email']).toEqual(want)
 })
 
+// An identity and secret of its own take the place of the platform's; each
+// needs the config's own user and password.
+test('an e-mail config takes its own SMTP identity and secret, and the warning names only what is left', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
+  await openRouting(page)
+  await addConfig(page, 'db-email', async dialog => {
+    await chooseOption(page, dialog, 'Config type', 'email')
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByText('More settings').click()
+    await dialog.getByLabel('SMTP server').fill('smtp.example.com:587')
+    // Without a login of its own: refused.
+    await dialog.getByLabel('SMTP identity').fill('alertforge')
+    await expect(dialog.getByTestId('config-problems')).toContainText('authIdentity goes with a login of its own')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('SMTP user').fill('alertforge')
+    await dialog.getByLabel('Password Secret name').fill('smtp-auth')
+    await dialog.getByLabel('Password Secret key').fill('password')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeEnabled()
+    const warnings = dialog.getByTestId('config-warnings')
+    await expect(warnings).toContainText('platform\'s SMTP secret (CRAM-MD5)')
+    await expect(warnings).not.toContainText('SMTP identity (AUTH PLAIN)')
+    await dialog.getByLabel('CRAM-MD5 secret Secret name').fill('smtp-auth')
+    await dialog.getByLabel('CRAM-MD5 secret Secret key').fill('cram')
+    await expect(warnings).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await pick(page, 'cell-critical', ['db-email'])
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  const want = {
+    type: 'email', to: 'db@example.com', smarthost: 'smtp.example.com:587', authUsername: 'alertforge',
+    authPassword: { name: 'smtp-auth', key: 'password' }, authIdentity: 'alertforge', authSecret: { name: 'smtp-auth', key: 'cram' },
+  }
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs['db-email']).toEqual(want)
+  const { type: _, ...fields } = want
+  expect((await previewedConfig(page)).spec.receivers.find(r => r.name === 'db-email').emailConfigs).toEqual([fields])
+})
+
 test('a subject and text with {{ }} reach the AlertmanagerConfig exactly as written', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
   await openRouting(page)

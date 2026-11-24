@@ -359,6 +359,16 @@ describe('the shared file edited with git', () => {
     expect(save.data.warnings).toEqual([expect.stringContaining('configs.ops-email: smarthost relay.example.com:25 has no login of its own')])
   })
 
+  // A shared config has no password, so no identity or secret of its own.
+  it('refuses a shared e-mail config with authIdentity or authSecret', async () => {
+    for (const extra of ['authIdentity: ops', 'authSecret: { name: s, key: cram }']) {
+      const text = sharedText(RELAY).replace('ops-email: { type: email, to: ops@example.com }', `ops-email: { type: email, to: ops@example.com, ${extra} }`)
+      const save = await api('PUT', '/api/v2/routing/shared', { shared: text })
+      expect(save.status, extra).toBe(400)
+      expect(JSON.stringify(save.data), extra).toMatch(/a shared config cannot use auth(Identity|Secret)/)
+    }
+  })
+
   it('lists a shared file with problems that nobody uses, and lets the commit through', async () => {
     for (const dep of [A, B, C]) expect((await api('DELETE', `/api/v2/deployments/demo/${path.basename(dep)}/routing${q(dep)}`)).status).toBe(200)
     await write(SHARED, 'configs:\n  relay-webhook: { type: webhook }\n')

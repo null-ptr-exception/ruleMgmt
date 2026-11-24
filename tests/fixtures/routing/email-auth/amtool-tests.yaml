@@ -1,0 +1,6 @@
+# The route test loads the whole config, so amtool also reads auth_identity
+# and auth_secret (a Secret as a stand-in) — see toAlertmanagerConfig.
+- labels: { severity: critical }
+  receivers: [team-email, other-team]
+- labels: { severity: warning }
+  receivers: [yes-email]

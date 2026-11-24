@@ -15,6 +15,7 @@ const fromChoice = v => (v === DEFAULT ? undefined : v === 'yes')
 
 const blankEmail = {
   from: '', smarthost: '', authUsername: '', passwordName: '', passwordKey: '',
+  authIdentity: '', cramSecretName: '', cramSecretKey: '',
   requireTLS: DEFAULT, sendResolved: DEFAULT, insecureSkipVerify: DEFAULT, caName: '', caKey: '',
   headers: [], text: '',
   // default: Alertmanager's HTML; none: text only (html: ""); custom: html.
@@ -65,6 +66,9 @@ function emailForm(config) {
     authUsername: config.authUsername ?? '',
     passwordName: config.authPassword?.name ?? '',
     passwordKey: config.authPassword?.key ?? '',
+    authIdentity: config.authIdentity ?? '',
+    cramSecretName: config.authSecret?.name ?? '',
+    cramSecretKey: config.authSecret?.key ?? '',
     requireTLS: toChoice(config.requireTLS),
     sendResolved: toChoice(config.sendResolved),
     ...tlsForm(config.tlsConfig),
@@ -111,6 +115,8 @@ function emailFrom(form) {
     smarthost: word(f.smarthost),
     authUsername: word(f.authUsername),
     authPassword: f.passwordName.trim() || f.passwordKey.trim() ? { name: f.passwordName.trim(), key: f.passwordKey.trim() } : undefined,
+    authIdentity: word(f.authIdentity),
+    authSecret: f.cramSecretName.trim() || f.cramSecretKey.trim() ? { name: f.cramSecretName.trim(), key: f.cramSecretKey.trim() } : undefined,
     requireTLS: fromChoice(f.requireTLS),
     tlsConfig: tlsFrom(f),
     sendResolved: fromChoice(f.sendResolved),
@@ -149,6 +155,7 @@ export function fromForm(form) {
 const PLACES = [
   ['urlSecret', 'URL Secret'],
   ['authPassword', 'SMTP password Secret'],
+  ['authSecret', 'SMTP secret (CRAM-MD5) Secret'],
   ['authorization.credentials', 'token Secret'],
   ['authorization', 'authorization'],
   ['basicAuth.username', 'user name Secret'],

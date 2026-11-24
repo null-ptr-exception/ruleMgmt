@@ -274,6 +274,13 @@ describe('e-mail fields', () => {
       .toEqual([{ to: 'db@example.com', authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } }])
   })
 
+  it('writes authIdentity as it is and authSecret as a reference to a Secret, after the password', () => {
+    const login = { authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } }
+    const out = emailOf({ authSecret: { name: 'smtp-auth', key: 'cram' }, authIdentity: 'u', ...login })
+    expect(out).toEqual([{ to: 'db@example.com', ...login, authIdentity: 'u', authSecret: { name: 'smtp-auth', key: 'cram' } }])
+    expect(Object.keys(out[0])).toEqual(['to', 'authUsername', 'authPassword', 'authIdentity', 'authSecret'])
+  })
+
   it('writes tlsConfig with a CA from a Secret', () => {
     expect(emailOf({ tlsConfig: { insecureSkipVerify: true, ca: { secret: { name: 'smtp-ca', key: 'ca.crt' } } } }))
       .toEqual([{ to: 'db@example.com', tlsConfig: { insecureSkipVerify: true, ca: { secret: { name: 'smtp-ca', key: 'ca.crt' } } } }])

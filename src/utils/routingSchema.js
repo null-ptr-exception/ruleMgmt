@@ -249,7 +249,10 @@ const headers = names({
   }
 })
 
-const filled = key => text(`${key} must be text, not empty`)
+// Not text, and empty, are told apart: `5` or `true` is to be quoted, a
+// blank is to be filled in. What YAML made of the value is not echoed.
+const filled = key => z.string({ error: `${key} must be text — quote it if YAML reads it as a number, true or false, or a date` })
+  .regex(TEXT_RE, { error: `${key} must not be empty` })
 
 // Nothing can tell whether an address exists; this only refuses what cannot
 // be one, and a line break, which would let `to` add mail headers. A `to`
@@ -286,6 +289,12 @@ const email = strictMap({
   }).optional(),
   authUsername: trimmed('authUsername', filled('authUsername')).optional(),
   authPassword: credentialRef('authPassword').optional(),
+  // Each takes the place of the platform's global SMTP identity (AUTH PLAIN)
+  // and secret (CRAM-MD5) for this config (measured, Alertmanager 0.28.1).
+  // The resource takes an identity of one character or more.
+  authIdentity: trimmed('authIdentity', filled('authIdentity')
+    .refine(v => !hasControl(v), { error: 'authIdentity must not contain a line break or other control character' })).optional(),
+  authSecret: credentialRef('authSecret').optional(),
   requireTLS: bool('requireTLS').optional(),
   tlsConfig: tlsConfigSchema.optional(),
   sendResolved: bool('sendResolved').optional(),
@@ -296,6 +305,19 @@ const email = strictMap({
 }, 'must be a map with a "type"').superRefine((config, ctx) => {
   if (config.authPassword !== undefined && config.authUsername === undefined) {
     ctx.addIssue({ code: 'custom', message: 'authPassword needs authUsername: they are a pair' })
+  }
+  // An identity or secret of its own with the platform's user name and
+  // password is someone else's login under this config's name: Alertmanager
+  // sends the platform's user name and password with it (measured, 0.28.1).
+  // AUTH PLAIN sends the identity with the user name and password; CRAM-MD5
+  // sends the user name and an answer made with the secret, no password
+  // (Alertmanager 0.28.1, measured: a CRAM-MD5 server gets the config's own
+  // user and secret). One left out is the platform's.
+  if (config.authIdentity !== undefined && (config.authUsername === undefined || config.authPassword === undefined)) {
+    ctx.addIssue({ code: 'custom', message: 'authIdentity goes with a login of its own: write authUsername and authPassword too — without them Alertmanager sends the platform\'s user name and password with it' })
+  }
+  if (config.authSecret !== undefined && config.authUsername === undefined) {
+    ctx.addIssue({ code: 'custom', message: 'authSecret goes with a user name of its own: write authUsername too — without it Alertmanager sends the platform\'s user name with this secret' })
   }
   // A server of the config's own without its own login is taken, and
   // warned about (configWarnings): Alertmanager hands it the platform's.

@@ -1,6 +1,7 @@
 import yaml from 'js-yaml'
 import { varsIn, danglingRefs } from './ruleModel.js'
-import { profileNames, typeNames, profileOfObject, PROFILES, DEFAULT_TYPE } from './outputs.js'
+import { GROUP_FIELD_NAMES } from './groupFields.js'
+import { profileNames, typeNames, profileFor, profileOfObject, unknownProfileMark, PROFILES, PROFILE_ANNOTATION_KEYS, DEFAULT_TYPE } from './outputs.js'
 
 /**
  * Import Prometheus alerting rules into an editor schema — see issue #57.
@@ -25,25 +26,31 @@ const RULE_FIELDS = ['alert', 'expr', 'for', 'keep_firing_for', 'labels', 'annot
 const RECORD_FIELDS = ['record', 'expr', 'labels']
 
 // vmalert reads a group with no `type` as `type: prometheus`.
-const EVALUATOR_DEFAULT_TYPE = 'prometheus'
-
 /**
- * The AlertForge type of a group taken from a rendered object (#65): what
+ * The AlertForge profile of a group taken from a rendered object (#65): what
  * its kind, its group's fields and its annotations say, as Preview reads
  * the object — the group's own `type` there is the evaluator's (vmalert's
- * `prometheus` or `vlogs`), not a profile name. `undefined` is the default
- * profile; null, no profile writes such a group. A VMRule group with no
- * `type` is vmalert's default, so it reads as one that says it.
+ * `prometheus` or `vlogs`, none being `prometheus`), not a profile name.
+ * Null when no profile writes such a group.
+ *
+ * An unmarked PrometheusRule written for Prometheus 3 outside AlertForge
+ * can carry group labels, which prometheus2 has not: taken in as that, every
+ * alert would lose them. When the object carries no mark at all and another
+ * profile of its kind has every field the group sets, it is that one, and
+ * `because` says which fields decided it.
  */
-function objectGroupType(doc, group) {
+function objectGroupProfile(doc, group) {
   const one = { apiVersion: doc.apiVersion, kind: doc.kind, metadata: doc.metadata, spec: { groups: [group] } }
-  let profile = profileOfObject(one)
-  const kindReadsType = Object.values(PROFILES).some(p => p.kind === doc.kind && p.apiVersion === doc.apiVersion && 'type' in p.groupFields)
-  if (!profile && group?.type === undefined && kindReadsType) {
-    profile = profileOfObject({ ...one, spec: { groups: [{ ...group, type: EVALUATOR_DEFAULT_TYPE }] } })
-  }
-  if (!profile) return null
-  return profile.name === DEFAULT_TYPE ? undefined : profile.name
+  const profile = profileOfObject(one)
+  if (!profile) return { profile: null }
+  const set = GROUP_FIELD_NAMES.filter(k => group?.[k] !== undefined)
+  const missing = set.filter(k => !profile.groupKeys.includes(k))
+  const marked = PROFILE_ANNOTATION_KEYS.some(k => Object.hasOwn(doc.metadata?.annotations || {}, k))
+  if (!missing.length || marked) return { profile }
+  const fits = Object.values(PROFILES).find(p => p !== profile && p.kind === doc.kind && p.apiVersion === doc.apiVersion &&
+    Object.entries(p.groupFields).every(([k, v]) => (group?.[k] ?? profile.groupFields[k]) === v) &&
+    set.every(k => p.groupKeys.includes(k)))
+  return fits ? { profile: fits, because: missing } : { profile }
 }
 
 /** Whether a document is a rendered object of a kind some profile writes. */
@@ -151,17 +158,23 @@ export function importRules(yamlText) {
       // AlertForge's own.
       let group = source
       if (fromObject) {
-        const type = objectGroupType(doc, source)
-        if (type === null) {
+        const { profile, because } = objectGroupProfile(doc, source)
+        if (!profile) {
           warnings.push(`${where}: a ${doc.kind} group${source.type !== undefined ? ` of type "${source.type}"` : ''} has no output profile (${profileNames().join(', ')}) — group skipped`)
           continue
         }
+        const mark = unknownProfileMark(doc)
+        if (mark) warnings.push(`${where}: annotation ${mark.key} is "${mark.value}", which names no output profile — taken in as ${profile.name}`)
+        if (because) warnings.push(`${where}: has ${because.join(', ')}, which a ${DEFAULT_TYPE} group has not — taken in as ${profile.name}`)
         group = { ...source }
-        if (type === undefined) delete group.type
-        else group.type = type
+        if (profile.name === DEFAULT_TYPE) delete group.type
+        else group.type = profile.name
       } else if (group.type !== undefined && !typeNames().includes(group.type)) {
         warnings.push(`${where}: type "${group.type}" has no output profile (${typeNames().join(', ')}) — group skipped`)
         continue
+      } else if (group.type === 'prometheus') {
+        // A vmalert rules file says the same for VictoriaMetrics' metrics.
+        warnings.push(`${where}: type "prometheus" is taken as ${DEFAULT_TYPE} (Prometheus 2) — for a vmalert rules file, make it vm`)
       }
       const rules = (group.rules || [])
         .map(rule => importRule(rule, warnings, where))
@@ -170,9 +183,22 @@ export function importRules(yamlText) {
         warnings.push(`${where}: no rules found`)
         continue
       }
-      // The rule-group fields travel with it; interval and limit used to be dropped.
-      const fields = Object.fromEntries(['type', 'interval', 'limit']
+      // The rule-group fields travel with it (#182) — those the group's
+      // profile has. One it does not have, or one AlertForge does not write,
+      // is said, not dropped unseen.
+      const opened = profileFor(group.type).groupKeys
+      const fields = Object.fromEntries(['type', ...opened]
         .filter(k => group[k] !== undefined).map(k => [k, group[k]]))
+      const left = Object.keys(group).filter(k => !['name', 'rules', 'type', ...opened].includes(k))
+      const theirs = left.filter(k => GROUP_FIELD_NAMES.includes(k))
+      const unknown = left.filter(k => !GROUP_FIELD_NAMES.includes(k))
+      if (theirs.length) {
+        // The type as written; and where the field is, among the same kind.
+        const own = profileFor(group.type)
+        const others = Object.values(PROFILES).filter(p => p !== own && p.kind === own.kind && theirs.every(k => p.groupKeys.includes(k))).map(p => p.name)
+        warnings.push(`${where}: ${theirs.join(', ')} not taken — a ${group.type ?? own.name} group has no such field${others.length ? ` (a ${others.join(' or ')} group has)` : ''}`)
+      }
+      if (unknown.length) warnings.push(`${where}: ${unknown.join(', ')} not taken — AlertForge does not write ${unknown.length > 1 ? 'these group fields' : 'this group field'}`)
       groups.push({ key: toGroupKey(group.name, groups.length), name: group.name, ...fields, rules, columns: columnsOf(rules) })
     }
   }
@@ -211,7 +237,7 @@ export function modelGroupFromImport(group, commonNames = []) {
     // it is imported as once (#70) — what it renders stays the same. Nothing
     // is guessed: the template owner turns it per-row when they add columns.
     ...(Object.keys(columns).length ? {} : { once: true }),
-    ...Object.fromEntries(['type', 'interval', 'limit'].filter(k => group[k] !== undefined).map(k => [k, group[k]])),
+    ...Object.fromEntries(['type', ...GROUP_FIELD_NAMES].filter(k => group[k] !== undefined).map(k => [k, group[k]])),
     columns,
     rules: group.rules,
   }

@@ -9,7 +9,7 @@ import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
 import yaml from 'js-yaml'
-import { profileOfObject } from '../../src/utils/outputs.js'
+import { profileOfObject, unknownProfileMark } from '../../src/utils/outputs.js'
 import { createLimit } from './limit.js'
 
 // execFile's default maxBuffer is 1MiB; large chart renders or rule sets
@@ -37,14 +37,19 @@ export function runCommand(command, args, options = {}) {
 // counted and reported as not syntax-checked.
 export function objectsByValidator(renderedYaml, profileOf = profileOfObject) {
   const objects = []
+  const notes = []
   let unchecked = 0
   yaml.loadAll(renderedYaml, doc => {
     const profile = profileOf(doc)
     if (!profile || !Array.isArray(doc?.spec?.groups)) return
+    // A mark no profile writes (by hand, or a newer AlertForge's): said,
+    // with what the object was checked as.
+    const mark = unknownProfileMark(doc)
+    if (mark) notes.push(`${doc.metadata?.name || 'an object'}: annotation ${mark.key} is "${mark.value}", which names no output profile — checked as ${profile.name}${VALIDATORS[profile.validate] ? `, with ${VALIDATORS[profile.validate].label}` : ''}`)
     if (VALIDATORS[profile.validate]) objects.push({ doc, validator: profile.validate })
     else unchecked++
   })
-  return { objects, unchecked }
+  return { objects, unchecked, notes }
 }
 
 // promtool reports lint problems (duplicate rules, for one) under "FAILED:"
@@ -133,9 +138,9 @@ const checkerLimit = createLimit(CHECKER_CONCURRENCY)
 // groups into one file made promtool report "groupname ... is repeated in the
 // same file", a false positive that fires for any sufficiently large deployment.
 export async function checkRules(renderedYaml) {
-  let objects, unchecked
+  let objects, unchecked, notes
   try {
-    ;({ objects, unchecked } = objectsByValidator(renderedYaml))
+    ;({ objects, unchecked, notes } = objectsByValidator(renderedYaml))
   } catch (err) {
     return {
       passed: false,
@@ -148,7 +153,7 @@ export async function checkRules(renderedYaml) {
   const uncheckedNote = unchecked
     ? `${unchecked} object(s) not syntax-checked — their output profile has "validate": "none".`
     : ''
-  const withNote = text => [text, uncheckedNote].filter(Boolean).join('\n')
+  const withNote = text => [text, uncheckedNote, ...notes].filter(Boolean).join('\n')
   // Which checkers ran, in a fixed order — Preview names them in its title.
   const tools = Object.keys(VALIDATORS).filter(v => objects.some(o => o.validator === v))
 

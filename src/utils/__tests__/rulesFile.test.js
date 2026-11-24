@@ -636,3 +636,63 @@ describe('valueProblems', () => {
       .toEqual(['_common:null:owner', 'cpu:0:pod_regex'])
   })
 })
+
+// #182: the evaluator's group fields, as each type has them.
+describe('group fields by type', () => {
+  const vm = `group: g
+type: vm
+interval: 1m
+labels: {team: shop, 'on': 'yes'}
+eval_offset: 30s
+concurrency: 2
+eval_alignment: false
+headers: ['X-Scope-OrgID: 1']
+params: {nocache: ['1']}
+columns: {}
+rules:
+  - alert: A
+    expr: up == 0
+`
+  it('reads a vm group\'s fields and writes them back as they were', async () => {
+    const { parseGroupFile: parse, groupFileText } = await import('../rulesFile.js')
+    const { group, errors } = parse(vm, 'g')
+    expect(errors).toEqual([])
+    expect(group).toMatchObject({ labels: { team: 'shop', on: 'yes' }, eval_offset: '30s', concurrency: 2, eval_alignment: false, headers: ['X-Scope-OrgID: 1'], params: { nocache: ['1'] } })
+    const again = parse(groupFileText(group), 'g')
+    expect(again.errors).toEqual([])
+    expect(again.group).toEqual(group)
+  })
+
+  it('refuses a field the type does not have, saying which it has', async () => {
+    const { parseGroupFile: parse } = await import('../rulesFile.js')
+    expect(parse(vm.replace('type: vm', 'type: prometheus2'), 'g').errors).toContain('g.yaml: labels is not a group field of a prometheus2 group — it has interval, limit, query_offset; prometheus3, vm, vlogs have labels')
+    // As the file names the type.
+    expect(parse(vm.replace('type: vm', 'type: prometheus'), 'g').errors).toContain('g.yaml: concurrency is not a group field of a prometheus group — it has interval, limit, query_offset; vm, vlogs have concurrency')
+    expect(parse(vm.replace('type: vm\n', 'type: vm\nquery_offset: 1m\n'), 'g').errors).toEqual([expect.stringMatching(/^g\.yaml: query_offset is not a group field of a vm group — it has interval, limit, labels, eval_offset/)])
+  })
+
+  // A check reading another field reads it in whatever shape it is.
+  it('reports a malformed selectors, selectorLabels or rules beside group labels, never throwing', async () => {
+    const { parseRulesDir: parseDir } = await import('../rulesFile.js')
+    for (const [type, bad, says] of [
+      ['prometheus3', 'selectors: foo\n', 'selectors must be a list'],
+      ['vm', 'selectors: {a: b}\n', 'selectors must be a list'],
+      ['vm', 'selectors: [a]\nselectorLabels: foo\n', 'selectorLabels must map'],
+      ['prometheus3', 'selectors: [a]\nrules: foo\n', 'rules is required and must be a list'],
+    ]) {
+      const text = `type: ${type}\nlabels: {team: x}\n${bad}columns:\n  a: {type: string}\n${bad.includes('rules:') ? '' : 'rules: []\n'}`
+      const { errors } = parseDir({ 'g.yaml': text })
+      expect(errors.join('\n')).toContain(says)
+    }
+  })
+
+  it('says a negative duration is negative, not a format error', async () => {
+    const { parseGroupFile: parse } = await import('../rulesFile.js')
+    expect(parse('type: vm\ninterval: 1m\neval_offset: -30s\ncolumns: {}\nrules: []\n', 'g').errors).toEqual(["g.yaml: eval_offset -30s is negative — a group's eval_offset is 0s or more here"])
+  })
+
+  it('refuses a limit past what is held exactly', async () => {
+    const { parseGroupFile: parse } = await import('../rulesFile.js')
+    expect(parse('limit: 99999999999999999999\ncolumns: {}\nrules: []\n', 'g').errors).toContain('g.yaml: limit "100000000000000000000" must be a whole number, 0 or more')
+  })
+})

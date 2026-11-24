@@ -1,3 +1,5 @@
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -30,6 +32,39 @@ def deployment(root: Path, rel: str) -> Path:
     (folder / "Chart.yaml").write_text(DEPLOYMENT_CHART, encoding="utf-8")
     (folder / "values.yaml").write_text("cpu-alerts: {}\n", encoding="utf-8")
     return folder
+
+
+MIXED_PROFILES = """
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata: {name: rel-p2}
+spec:
+  groups: [{name: p2, rules: [{alert: A, expr: up == 0}]}]
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata: {name: rel-p3, annotations: {alertforge.io/profile: prometheus3}}
+spec:
+  groups: [{name: p3, labels: {team: x}, rules: [{alert: A, expr: up == 0}]}]
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata: {name: rel-vm}
+spec:
+  groups: [{name: vm, type: prometheus, rules: [{alert: A, expr: up == 0}]}]
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata: {name: rel-vm-untyped}
+spec:
+  groups: [{name: vm2, rules: [{alert: A, expr: up == 0}]}]
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata: {name: rel-logs}
+spec:
+  groups: [{name: logs, type: vlogs, rules: [{alert: A, expr: 'error | stats count() as n'}]}]
+"""
 
 
 class RenderAndCheckTest(unittest.TestCase):
@@ -194,28 +229,50 @@ spec:
 
         self.assertEqual(code, 1)
 
-    def test_check_rules_passes_a_render_whose_rules_all_opt_out_of_promtool(self):
-        # A vlogs-only chart: its VMRule is validate: none, so there is nothing
-        # for promtool to check and nothing wrong with that (#65).
-        rendered = """
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMRule
-metadata:
-  name: panics
-spec:
-  groups:
-    - name: panics
-      type: vlogs
-      rules:
-        - alert: Panics
-          expr: '"panic" | stats count() as n | filter n:>0'
-"""
+    def run_check(self, rendered, returncode=0, missing=()):
+        """check_rules with a fake run_command: the commands, the exit code and stderr."""
+        calls = []
+
+        def fake(command, cwd=None):
+            calls.append(command)
+            if command[0] in missing:
+                return subprocess.CompletedProcess(args=command, returncode=127, stdout="", stderr=f"failed to execute {command[0]}: not found\n")
+            return subprocess.CompletedProcess(args=command, returncode=returncode, stdout="", stderr="")
+
         stderr = StringIO()
-        with patch("render_and_check.run_command") as run, redirect_stderr(stderr):
-            code = check_rules(RenderTarget("vlogs-only", Path("."), Path("c"), Path("c/values.yaml")), rendered, "promtool")
+        with patch("render_and_check.run_command", side_effect=fake), redirect_stderr(stderr), redirect_stdout(StringIO()):
+            code = check_rules(RenderTarget("t", Path("."), Path("c"), Path("c/values.yaml")), rendered, checkers={"promtool": "promtool", "promtool3": "/opt/promtool3", "vmalert": "vmalert"})
+        return calls, code, stderr.getvalue()
+
+    def test_check_rules_checks_each_profile_with_its_own_tool(self):
+        # As Preview: promtool for prometheus2, promtool 3 for an object
+        # marked prometheus3, vmalert for vm (no type is vmalert's
+        # prometheus) and vlogs — one file per object for the last two.
+        calls, code, _ = self.run_check(MIXED_PROFILES)
         self.assertEqual(code, 0)
-        run.assert_not_called()
-        self.assertIn("promtool cannot check", stderr.getvalue())
+        self.assertEqual(sorted(c[0] for c in calls), ["/opt/promtool3", "promtool", "vmalert", "vmalert", "vmalert"])
+        self.assertEqual([c[1:3] for c in calls if c[0] == "/opt/promtool3"], [["check", "rules"]])
+        self.assertTrue(all(c[1] == "-dryRun" and c[2].startswith("-rule=") for c in calls if c[0] == "vmalert"))
+
+    def test_check_rules_says_a_missing_tool_and_does_not_pass(self):
+        calls, code, err = self.run_check(MIXED_PROFILES, missing=("/opt/promtool3",))
+        self.assertEqual(code, 2)
+        self.assertIn("promtool 3 is not available: /opt/promtool3 — 1 object(s) not checked", err)
+
+    @unittest.skipUnless(shutil.which(os.environ.get("PROMTOOL3_BIN") or "promtool3") and shutil.which("promtool") and shutil.which("vmalert"), "promtool, promtool 3 or vmalert not installed")
+    def test_check_rules_with_the_real_tools(self):
+        # promtool 2 refuses the group labels; promtool 3 takes them.
+        stdout = StringIO()
+        with redirect_stdout(stdout), redirect_stderr(StringIO()):
+            code = check_rules(RenderTarget("t", Path("."), Path("c"), Path("c/values.yaml")), MIXED_PROFILES)
+        self.assertEqual(code, 0, stdout.getvalue())
+        self.assertIn("t: promtool 3 check rules passed (1 object(s))", stdout.getvalue())
+        self.assertIn("t: vmalert -dryRun passed (3 object(s))", stdout.getvalue())
+
+    def test_check_rules_fails_when_a_checker_refuses_an_object(self):
+        _, code, err = self.run_check(MIXED_PROFILES, returncode=255)
+        self.assertEqual(code, 1)
+        self.assertIn("vmalert -dryRun failed for rel-vm", err)
 
     def test_check_rules_returns_nonzero_when_promtool_fails(self):
         target = RenderTarget("cpu-alerts", Path("."), Path("charts/cpu-alerts"), Path("charts/cpu-alerts/values.yaml"))
@@ -242,7 +299,8 @@ spec:
             with redirect_stderr(StringIO()):
                 code = check_rules(target, rendered, "promtool")
 
-        self.assertEqual(code, 2)
+        # A failed check is 1; 2 is a checker that is not there.
+        self.assertEqual(code, 1)
 
     def test_run_command_reports_missing_binary_cleanly(self):
         with patch("subprocess.run", side_effect=FileNotFoundError("No such file or directory")):

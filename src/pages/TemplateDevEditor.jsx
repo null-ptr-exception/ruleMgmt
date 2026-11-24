@@ -13,7 +13,9 @@ import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import SelectorLabelsList, { SelectorLabelsHint } from '../components/SelectorLabelsList'
-import { profileNames, isPromQLType, canonicalType, DEFAULT_TYPE } from '../utils/outputs'
+import { profileNames, profileFor, isPromQLType, canonicalType, DEFAULT_TYPE } from '../utils/outputs'
+import { GROUP_FIELDS, EXTRA_GROUP_FIELDS } from '../utils/groupFields'
+import yaml from 'js-yaml'
 import { renameSelectorColumn } from '../utils/selectorContract'
 import { repeatsText, REPEATS_FIX } from '../utils/drift'
 import {
@@ -102,7 +104,50 @@ function SelectorsEditor({ group, commonColumns, onChange }) {
   )
 }
 
-function GroupSettings({ group, commonColumns = {}, onChange }) {
+// A map or a list is typed as flow YAML: {team: shop}, ["X-Scope-OrgID: 1"].
+const asFieldText = v => (v === undefined ? '' : (typeof v === 'object' ? yaml.dump(v, { flowLevel: 0, lineWidth: -1 }).trim() : String(v)))
+const FIELD_PLACEHOLDER = { labels: '{team: shop}', list: '["X-Scope-OrgID: 1"]', params: '{nocache: ["1"]}', duration: 'default', integer: 'default' }
+
+// One input per group field the group's type has beyond interval and limit
+// (#182), by what its value is. What a value may be is the save's to say,
+// as for interval and limit.
+function GroupFieldInput({ name, value, onSet, onUnreadable }) {
+  const kind = GROUP_FIELDS[name].kind
+  const [draft, setDraft] = useState(asFieldText(value))
+  const [unreadable, setUnreadable] = useState(false)
+  useEffect(() => { setDraft(asFieldText(value)); setUnreadable(false) }, [value])
+  // Text that is not YAML never reaches the group, so Save would save the
+  // value from before: the editor is told, and Save waits for it. Gone with
+  // the field (another type, another group), it shows the group's value again.
+  useEffect(() => { onUnreadable?.(unreadable ? draft : null) }, [unreadable])
+  useEffect(() => () => onUnreadable?.(null), [])
+  const label = <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>{name}</Text>
+  if (kind === 'integer') {
+    return <span>{label}<InputNumber size="small" aria-label={`Group ${name}`} style={{ width: 80 }} placeholder="default" min={0} precision={0}
+      value={value ?? null} onChange={v => onSet(v)} /></span>
+  }
+  if (kind === 'boolean') {
+    return <span>{label}<Select size="small" aria-label={`Group ${name}`} style={{ width: 90 }} allowClear placeholder="default"
+      value={value === undefined ? undefined : String(value)} options={[{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }]}
+      onChange={v => onSet(v === undefined ? undefined : v === 'true')} /></span>
+  }
+  const structured = kind !== 'duration'
+  const commit = () => {
+    const text = draft.trim()
+    if (text === '') { setUnreadable(false); onSet(undefined); return }
+    if (!structured) { onSet(text); return }
+    try { onSet(yaml.load(text)); setUnreadable(false) } catch { setUnreadable(true) }
+  }
+  return <span>{label}<Input size="small" aria-label={`Group ${name}`} style={{ width: structured ? 200 : 80 }} status={unreadable ? 'error' : undefined}
+    title={unreadable ? 'Not YAML — e.g. {team: shop}' : undefined}
+    placeholder={FIELD_PLACEHOLDER[kind]} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onPressEnter={commit} /></span>
+}
+
+// Display names for a non-PromQL group's checker and language.
+const CHECKER_NAMES = { promtool: 'promtool', promtool3: 'promtool 3', vmalert: 'vmalert' }
+const QUERY_NAMES = { promql: 'PromQL', metricsql: 'MetricsQL', logsql: 'LogsQL' }
+
+function GroupSettings({ group, commonColumns = {}, onChange, onUnreadable }) {
   // once (#70): the group renders once per deployment and has no rows, so it
   // cannot have columns — turned on only once they are gone.
   const hasColumns = Object.keys(group.columns || {}).length > 0
@@ -140,12 +185,24 @@ function GroupSettings({ group, commonColumns = {}, onChange }) {
         <InputNumber size="small" aria-label="Group limit" style={{ width: 90 }} placeholder="none" min={0} precision={0}
           value={group.limit ?? null} onChange={v => set('limit', v)} />
       </span>
+      {(profileFor(group.type)?.groupKeys || []).filter(k => EXTRA_GROUP_FIELDS.includes(k)).map(key => (
+        <GroupFieldInput key={key} name={key} value={group[key]} onSet={v => set(key, v)} onUnreadable={text => onUnreadable?.(key, text)} />
+      ))}
+      {/* Left from another type: shown, never dropped unseen — the save refuses it until it is taken off. */}
+      {EXTRA_GROUP_FIELDS.filter(k => group[k] !== undefined && !(profileFor(group.type)?.groupKeys || []).includes(k)).map(key => (
+        <Tag key={key} color="red" closable data-testid={`group-field-not-of-type-${key}`} closeIcon={<span aria-label={`Remove ${key}`}>×</span>}
+          onClose={e => { e.preventDefault(); set(key, undefined) }}>
+          {key}: not a {profileFor(group.type)?.name} field — Save refuses it
+        </Tag>
+      ))}
       {!group.once && isPromQLType(group.type) && (
         <SelectorsEditor group={group} commonColumns={commonColumns} onChange={onChange} />
       )}
       {!isPromQLType(group.type) && (
         <Text type="secondary" style={{ fontSize: 12 }}>
-          expr is not PromQL here — Preview cannot syntax-check it
+          expr is not PromQL here — {CHECKER_NAMES[profileFor(group.type)?.validate]
+            ? `Preview checks it as ${QUERY_NAMES[profileFor(group.type).query]} with ${CHECKER_NAMES[profileFor(group.type).validate]}`
+            : 'Preview cannot syntax-check it'}
         </Text>
       )}
     </div>
@@ -245,6 +302,8 @@ export default function TemplateDevEditor() {
   const [order, setOrder] = useState([])
   const [activeGroup, setActiveGroup] = useSessionState('templates:alert', null)
   const [dirty, setDirty] = useState(false)
+  // Group fields whose text is not YAML, by group.field (GroupFieldInput).
+  const unreadableFields = useRef({})
   const [dirtyFiles, setDirtyFiles] = useState(() => new Set())
   const [parseErrors, setParseErrors] = useState([])
   const [drift, setDrift] = useState(null)
@@ -401,6 +460,17 @@ export default function TemplateDevEditor() {
   // its own dialog — the server is never told it was confirmed here (#185).
   async function handleSave(overwrite = false) {
     if (!activeChart) return
+
+    // A group field whose text could not be read: saving now would save the
+    // value from before it, silently.
+    const unread = Object.entries(unreadableFields.current)
+    if (unread.length) {
+      Modal.error({
+        title: 'Save was refused',
+        content: unread.map(([at, text]) => `${at}: ${JSON.stringify(text)} is not YAML — correct it, or empty the field`).join('\n'),
+      })
+      return
+    }
 
     if (!overwrite && Object.keys(originalRef.current).length) {
       const fresh = await getChartInfo(activeChart)
@@ -811,7 +881,8 @@ export default function TemplateDevEditor() {
                   <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeGroup(activeGroup)}>Remove</Button>
                 </div>
 
-                {!group.custom && <GroupSettings group={group} commonColumns={model.common.columns} onChange={fn => updateGroup(activeGroup, fn)} />}
+                {!group.custom && <GroupSettings group={group} commonColumns={model.common.columns} onChange={fn => updateGroup(activeGroup, fn)}
+                  onUnreadable={(key, text) => { const at = `${activeGroup}.${key}`; if (text === null) delete unreadableFields.current[at]; else unreadableFields.current[at] = text }} />}
 
                 {group.custom ? (
                   <Alert type="info" showIcon

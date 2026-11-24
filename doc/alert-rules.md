@@ -121,7 +121,11 @@ Prometheus 2.x, and the group is emitted as a `PrometheusRule`.
 `type: prometheus3` is PromQL for Prometheus 3.13 or later: a `PrometheusRule`
 too, marked with the annotation `alertforge.io/profile: prometheus3`, and
 checked with Prometheus 3's promtool, which takes UTF-8 label names such as
-`service.name` and `offset 0s`. `type: vm` makes `expr` MetricsQL, evaluated by VMAlert
+`service.name` and `offset 0s`. Prometheus 3's experimental functions
+(`double_exponential_smoothing`, `limitk`, `limit_ratio` …) are refused by
+that check: Preview runs promtool without
+`--enable-feature=promql-experimental-functions`, as a Prometheus not started
+with the flag would refuse them too. `type: vm` makes `expr` MetricsQL, evaluated by VMAlert
 against VictoriaMetrics, and the group is emitted as a `VMRule` with
 `type: prometheus` on it (vmalert's name for its metrics source). `type: vlogs`
 makes `expr` LogsQL, evaluated against VictoriaLogs, and the group is emitted
@@ -164,8 +168,24 @@ What differs for a `vm` or `vlogs` group:
   new one created, and the alerts reload. Between `vm` and `vlogs` the
   objects stay `VMRule` with the same names and are updated in place. Saving
   says which.
+- **Group fields follow the type.** Prometheus 3 and vmalert read group
+  `labels`; vmalert has `eval_offset`, `concurrency` and more; Prometheus has
+  `query_offset`. A group sets only those its type has — see
+  [group fields by type](rules-format.md#group-fields-by-type). Importing a
+  group brings the ones its type has along and says which it left out.
 - **Importing a `VMRule`** reads its groups' `type` as vmalert does:
   `type: prometheus`, or none, is a `vm` group; `type: vlogs` a `vlogs` one.
+  Preview and `check-deployment` read a `VMRule` from a hand-written template
+  the same way: a group with no `type` is checked with vmalert as MetricsQL.
+- **Importing a `PrometheusRule`**: one marked `alertforge.io/profile:
+  prometheus3` is a `prometheus3` group. One with no mark but group `labels`
+  (written for Prometheus 3 elsewhere) is taken in as `prometheus3` too, and
+  the import says so — as `prometheus2` its alerts would lose the labels. A
+  mark that names no profile is said, and the object is read, imported and
+  checked as `prometheus2`.
+- **A plain rules file** (`groups:` at the top) is read as AlertForge's: its
+  `type: prometheus` is `prometheus2`, and the import says so — a vmalert
+  rules file means VictoriaMetrics by it; make those groups `vm`.
 
 ## Recording rules and once groups
 
@@ -412,7 +432,9 @@ The keys are profile names — what a group's `type` says (see
 `prometheus` is `prometheus2`; naming one profile under both is an error.
 `prometheus3` is a profile of its own: a group moved to it takes its
 `prometheus3` key, not `prometheus`'s — set both when the two Prometheus
-select their rules alike. The annotation `alertforge.io/profile` is
+select their rules alike. Saving a group moved to `prometheus3` while the site sets
+labels or annotations for `prometheus` and none for `prometheus3` says which
+ones its objects lose. The annotation `alertforge.io/profile` is
 AlertForge's own, and a site setting it in `RULE_OBJECT_ANNOTATIONS` or
 `RULE_OBJECT_ANNOTATIONS_BY_PROFILE` stops the server at startup. A
 profile's value replaces the site-wide one for the same key, an empty value
@@ -500,6 +522,37 @@ every `expr` line moves.
 The one thing not kept is trailing whitespace at the end of a value — a
 summary ending in a column that was empty used to render with a trailing
 space. It means nothing to PromQL or an annotation.
+
+### Upgrading to the four group types
+
+Group `type` now has four values — `prometheus2`, `prometheus3`, `vm`,
+`vlogs` — each with its own group fields. Nothing has to change on upgrade:
+
+- **`type: prometheus`, or no type, keeps working.** It is `prometheus2`,
+  the profile's new name. A rules file that says `prometheus` is left as it
+  is, and its chart generates byte for byte what it did — no chart turns
+  `stale`, and nothing in the cluster changes.
+- **A site's `prometheus` key keeps working.** `RULE_OBJECT_LABELS_BY_PROFILE`
+  and `RULE_OBJECT_ANNOTATIONS_BY_PROFILE` read it as `prometheus2`. Writing
+  both `prometheus` and `prometheus2` is an error the server stops on. Before
+  moving a group to `prometheus3`, give `prometheus3` its own key if the
+  Prometheus that loads it selects by one: it does not take `prometheus`'s.
+- **The image carries a second promtool**, Prometheus 3's, as
+  `/usr/local/bin/promtool3` (`PROMTOOL3_BIN` points elsewhere). Without it a
+  `prometheus3` group's Preview says promtool 3 is not available, and
+  `check-deployment` exits 2. A machine running the tests installs it with
+  `scripts/install-checkers.sh`.
+- **`scripts/render_and_check.py`** checks every rule object with its
+  type's checker, as Preview does — promtool 3 (`PROMTOOL3_BIN` or `promtool3`)
+  for `prometheus3`, vmalert (`VMALERT_BIN` or `vmalert`) for `vm` and
+  `vlogs` — instead of skipping all but `prometheus2`. It exits 1 when one
+  fails, and 2 when a checker it needs is not installed: not checked is not
+  passed, as with `check-deployment`.
+- **A limit past 2^53** (`limit: 99999999999999999999`), which promtool
+  refused anyway, is now refused at save.
+- **An import** of a `VMRule` whose groups say `type: prometheus`, or no
+  type, now gives `vm` groups instead of `prometheus2` ones, and an imported
+  group brings the group fields its type has, saying which it left out.
 
 ## Changing a chart that people are already using
 

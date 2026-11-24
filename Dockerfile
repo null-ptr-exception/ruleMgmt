@@ -55,7 +55,9 @@ ARG PROMETHEUS3_VERSION
 RUN apk add --no-cache git
 RUN git clone --depth 1 --branch ${PROMETHEUS3_VERSION} https://github.com/prometheus/prometheus /src
 WORKDIR /src
-# The same module upgrades as promtool's, where 3.x's are older.
+# The same module upgrades as promtool's, where 3.x's are older. Checked
+# against v3.13.5's go.mod (x/crypto v0.57.0, x/net v0.60.0, x/text v0.42.0,
+# grpc v1.83.1): each pin is newer — compare again when the version moves.
 RUN go get \
       golang.org/x/crypto@v0.58.0 \
       golang.org/x/net@v0.62.0 \

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseOutputs, PROFILES, ROUTING, profileFor, profileOfObject, profileNames, typeNames, canonicalType, isPromQLType, refusesZeroOffset, PROFILE_ANNOTATION_KEYS, DEFAULT_TYPE } from '../outputs'
+import { parseOutputs, PROFILES, ROUTING, profileFor, profileOfObject, profileNames, typeNames, canonicalType, isPromQLType, refusesZeroOffset, unknownProfileMark, PROFILE_ANNOTATION_KEYS, DEFAULT_TYPE } from '../outputs'
 
 // config/outputs.json — the format table in #65.
 const good = () => ({
@@ -44,6 +44,22 @@ describe('parseOutputs', () => {
     expect(msg).toMatch(/"outputs.vlogs.aliases": "vlogs" is a profile of its own/)
     expect(msg).toMatch(/"outputs.vlogs.aliases": "Logs" is not a profile name/)
     expect(msg).toMatch(/"outputs.vlogs.aliases": "routing" is the name of the routing resource/)
+  })
+
+  it('takes groupKeys that are group fields AlertForge writes, in their own order', () => {
+    const d = good(); d.outputs.vlogs.groupKeys = ['labels', 'interval']
+    expect(parseOutputs(d).vlogs.groupKeys).toEqual(['interval', 'labels'])
+    expect(parseOutputs(good()).vlogs.groupKeys).toEqual(['interval', 'limit'])
+    d.outputs.vlogs.groupKeys = ['tenant']
+    expect(problems(d)).toMatch(/"outputs.vlogs.groupKeys" must list group fields AlertForge writes/)
+    const e = good(); e.outputs.vlogs.groupFields = { labels: 'x' }
+    expect(problems(e)).toMatch(/groupFields.labels" is set elsewhere/)
+  })
+
+  it('opens each shipped type its own group fields', () => {
+    expect(PROFILES.prometheus2.groupKeys).toEqual(['interval', 'limit', 'query_offset'])
+    expect(PROFILES.prometheus3.groupKeys).toEqual(['interval', 'limit', 'query_offset', 'labels'])
+    for (const p of [PROFILES.vm, PROFILES.vlogs]) expect(p.groupKeys).toEqual(['interval', 'limit', 'labels', 'eval_offset', 'eval_delay', 'concurrency', 'eval_alignment', 'headers', 'notifier_headers', 'params'])
   })
 
   it('takes annotations of non-empty strings under annotation keys', () => {
@@ -158,8 +174,12 @@ describe('finding a profile', () => {
     expect(profileOfObject(marked('prometheus3')).name).toBe('prometheus3')
     // A mark no profile writes is not prometheus3's.
     expect(profileOfObject(marked('prometheus9')).name).toBe('prometheus2')
+    expect(unknownProfileMark(marked('prometheus9'))).toEqual({ key: 'alertforge.io/profile', value: 'prometheus9' })
+    expect(unknownProfileMark(marked('prometheus3'))).toBeNull()
+    expect(unknownProfileMark(pr)).toBeNull()
     expect(profileOfObject(vl).name).toBe('vlogs')
-    expect(profileOfObject(vmNoType)).toBeNull()
+    // vmalert reads a group with no type as `type: prometheus`: metric rules.
+    expect(profileOfObject(vmNoType).name).toBe('vm')
     const vm = { ...vl, spec: { groups: [{ name: 'd', type: 'prometheus' }] } }
     expect(profileOfObject(vm).name).toBe('vm')
     expect(profileOfObject({ ...vl, spec: { groups: [{ name: 'e', type: 'graphite' }] } })).toBeNull()

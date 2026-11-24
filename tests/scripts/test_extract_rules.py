@@ -148,9 +148,21 @@ kind: VMRule
 spec:
   groups:
     - name: other
+      type: graphite
       rules: []
 """
         self.assertEqual(split_rule_groups(rendered), ([], {}))
+
+    def test_a_vmrule_group_with_no_type_is_vm_as_vmalert_reads_it(self):
+        rendered = """
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+spec:
+  groups:
+    - name: other
+      rules: []
+"""
+        self.assertEqual(split_rule_groups(rendered), ([], {"vm": 1}))
 
     def test_a_prometheus3_object_is_skipped_not_given_to_promtool_2(self):
         # Marked by its annotation: promtool 2.x refuses what 3.x reads.

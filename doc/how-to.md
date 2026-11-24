@@ -73,15 +73,29 @@ Type it. All three take the same three kinds of value:
 
 Blank rows in Labels and Annotations only become real once you name the key.
 
-### Set a group's type, interval or limit
+### Set a group's type and its group fields
 
 The row under the group's name: **Type** (`prometheus2`, `prometheus3` for
-Prometheus 3.13 or later, `vm` for MetricsQL
-on VictoriaMetrics, or `vlogs` for LogsQL log alerts), **Interval** (a duration such as `30s`; blank is the
-evaluator's default) and **Limit** (blank is no limit). They apply to the
-whole group. Switching the type changes what `expr` is written in, and the
-group's objects are replaced when it is saved — see
+Prometheus 3.13 or later, `vm` for MetricsQL on VictoriaMetrics, or `vlogs`
+for LogsQL log alerts), **Interval** (a duration such as `30s`; blank is the
+evaluator's default) and **Limit** (blank is no limit), then the other group
+fields that type has — for example `query_offset` on `prometheus2`,
+`query_offset` and `labels` on `prometheus3`, `labels`, `eval_offset`,
+`concurrency` and the rest of vmalert's on `vm` and `vlogs` (the full list:
+[group fields by type](rules-format.md#group-fields-by-type)). A map or a list
+is typed as YAML on one line: `{team: shop}`, `["X-Scope-OrgID: 1"]`. They
+apply to the whole group.
+
+Switching the type changes what `expr` is written in and which fields the row
+offers. A field the new type does not have stays, shown as a red tag —
+`labels: not a prometheus2 field — Save refuses it` — and Save refuses the
+group until you take it off with its ×, or switch back. Between kinds
+(`PrometheusRule` ↔ `VMRule`) the group's objects are replaced when it is
+saved; within one they are updated in place — see
 [alert-rules.md](alert-rules.md#log-alerts-groups-of-another-type).
+
+Severity written in a group's `labels` counts in Preview's summary for every
+alert of the group that has none of its own.
 
 ### Render rules once per deployment, or record a series
 

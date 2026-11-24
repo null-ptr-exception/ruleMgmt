@@ -33,7 +33,8 @@ async function buildSummary(renderedYaml, { model, schema }, readValues) {
   for (const [key, g] of Object.entries(model?.groups || {})) {
     possible[key] = (g.rules || [])
       .filter(r => r.alert)
-      .map(r => ({ alert: r.alert, severity: r.labels?.severity ?? '' }))
+      // A rule without its own severity takes its group's labels' (#182).
+      .map(r => ({ alert: r.alert, severity: r.labels?.severity ?? g.labels?.severity ?? '' }))
   }
 
   const schemaGroups = new Set(schema ? Object.keys(schema.properties || {}).filter(isAlertGroup) : [])

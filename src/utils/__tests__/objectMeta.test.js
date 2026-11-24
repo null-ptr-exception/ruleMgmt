@@ -190,7 +190,7 @@ describe('values for one output profile', () => {
 
   it('is an error to set one profile under its name and its alias both', () => {
     const { errors } = parseObjectMeta({ labelsByProfile: '{"prometheus":{"a":"1"},"prometheus2":{"a":"2"}}' })
-    expect(errors).toEqual(['RULE_OBJECT_LABELS_BY_PROFILE: "prometheus2" names the prometheus2 profile, which another key already sets — write it once'])
+    expect(errors).toEqual(['RULE_OBJECT_LABELS_BY_PROFILE: "prometheus" and "prometheus2" are one profile (prometheus2) — write it once'])
   })
 
   // prometheus3's objects are told apart by it (Preview, import).

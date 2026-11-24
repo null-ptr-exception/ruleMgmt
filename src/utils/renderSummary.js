@@ -111,7 +111,9 @@ export function tallyRendered(renderedYaml) {
       for (const r of g?.rules || []) {
         if (r?.record) recordsByGroup.set(g.name, (recordsByGroup.get(g.name) || 0) + 1)
         if (!r?.alert) continue
-        const key = `${r.alert}\u0000${r?.labels?.severity ?? ''}`
+        // A rule's own severity, else its group's (#182): the evaluator gives
+        // every rule the group's labels, its own winning.
+        const key = `${r.alert}\u0000${r?.labels?.severity ?? g?.labels?.severity ?? ''}`
         m.set(key, (m.get(key) || 0) + 1)
         total++
       }

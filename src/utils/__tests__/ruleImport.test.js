@@ -135,6 +135,50 @@ spec:
     }
   })
 
+  // #182: the fields the type has travel; the others are said, not dropped unseen.
+  it('carries the group fields its type has, and says which it leaves', () => {
+    const vm = vmrule.replace('type: vlogs', 'type: prometheus').replace('limit: 5', 'limit: 5\n      labels: {team: x}\n      eval_offset: 10s\n      concurrency: 2\n      query_offset: 1m\n      debug: true')
+    const { groups, warnings } = importRules(vm)
+    expect(groups[0]).toMatchObject({ type: 'vm', labels: { team: 'x' }, eval_offset: '10s', concurrency: 2 })
+    expect(groups[0]).not.toHaveProperty('query_offset')
+    expect(modelGroupFromImport(groups[0])).toMatchObject({ labels: { team: 'x' }, eval_offset: '10s', concurrency: 2 })
+    expect(warnings).toEqual(['panics: query_offset not taken — a vm group has no such field', 'panics: debug not taken — AlertForge does not write this group field'])
+
+    const pr = 'apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nspec:\n  groups:\n    - name: g\n      query_offset: 1m\n      labels: {team: x}\n      rules:\n        - alert: A\n          expr: up == 0\n'
+    // No mark, but group labels, which only prometheus3 has of PrometheusRule:
+    // a Prometheus 3 object made outside AlertForge. Taken as prometheus2,
+    // every alert would lose them.
+    const two = importRules(pr)
+    expect(two.groups[0]).toMatchObject({ type: 'prometheus3', query_offset: '1m', labels: { team: 'x' } })
+    expect(two.warnings).toEqual(['g: has labels, which a prometheus2 group has not — taken in as prometheus3'])
+    // Without them it stays prometheus2.
+    const plain = importRules(pr.replace('      labels: {team: x}\n', ''))
+    expect(plain.groups[0]).not.toHaveProperty('type')
+    expect(plain.warnings).toEqual([])
+    // A field no profile of the kind has with the others: kept as it is, and said.
+    const neither = importRules(pr.replace('query_offset: 1m', 'eval_offset: 1m'))
+    expect(neither.groups[0]).not.toHaveProperty('type')
+    expect(neither.warnings).toEqual(['g: eval_offset, labels not taken — a prometheus2 group has no such field'])
+    const three = importRules(pr.replace('spec:', 'metadata:\n  annotations: {alertforge.io/profile: prometheus3}\nspec:'))
+    expect(three.groups[0]).toMatchObject({ type: 'prometheus3', query_offset: '1m', labels: { team: 'x' } })
+    expect(three.warnings).toEqual([])
+  })
+
+  it('names the type as the rules file wrote it, and where the field is', () => {
+    const file = 'groups:\n  - name: g\n    type: prometheus\n    labels: {team: x}\n    rules:\n      - alert: A\n        expr: up == 0\n'
+    expect(importRules(file).warnings).toEqual([
+      'g: type "prometheus" is taken as prometheus2 (Prometheus 2) — for a vmalert rules file, make it vm',
+      'g: labels not taken — a prometheus group has no such field (a prometheus3 group has)',
+    ])
+  })
+
+  it('says a mark that names no profile, and what the object is taken in as', () => {
+    const pr = 'apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata:\n  annotations: {alertforge.io/profile: prometheus4}\nspec:\n  groups:\n    - name: g\n      rules:\n        - alert: A\n          expr: up == 0\n'
+    const { groups, warnings } = importRules(pr)
+    expect(groups[0]).not.toHaveProperty('type')
+    expect(warnings).toEqual(['g: annotation alertforge.io/profile is "prometheus4", which names no output profile — taken in as prometheus2'])
+  })
+
   it('takes a PrometheusRule in as the default type, and a rules file\'s type as written', () => {
     const pr = vmrule.replace('operator.victoriametrics.com/v1beta1', 'monitoring.coreos.com/v1').replace('VMRule', 'PrometheusRule').replace('      type: vlogs\n', '')
     expect(importRules(pr).groups[0]).not.toHaveProperty('type')

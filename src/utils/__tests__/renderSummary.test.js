@@ -72,6 +72,17 @@ describe('tallyRendered', () => {
     expect(byGroup.get('traffic').get('TrafficHigh\u0000critical')).toBe(1)
   })
 
+  // #182: prometheus3 and vmalert give every rule its group's labels.
+  it('takes a rule\'s severity from its group\'s labels when it has none, its own winning', () => {
+    const { byGroup } = tallyRendered(CR([
+      { name: 'svc', labels: { severity: 'critical' }, rules: [
+        { alert: 'Down' },
+        { alert: 'Down', labels: { severity: 'info' } },
+      ] },
+    ]))
+    expect([...byGroup.get('svc').entries()]).toEqual([['Down\u0000critical', 1], ['Down\u0000info', 1]])
+  })
+
   it('ignores documents that are not the alert kind', () => {
     const { total } = tallyRendered('---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: x\n')
     expect(total).toBe(0)

@@ -461,7 +461,7 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
 
   return {
     groupName: alertGroup.replace(/_/g, '-'),
-    groupFields: { interval: alertDef.interval, limit: alertDef.limit },
+    groupFields: { interval: alertDef.interval, limit: alertDef.limit, ...(alertDef.groupFieldsExtra || {}) },
     // The parser has already refused a type with no profile.
     profile: profileFor(alertDef.groupType),
     valuesKey: alertGroup,

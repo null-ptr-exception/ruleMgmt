@@ -84,7 +84,7 @@ function cleanMap(parsed, source, warnings, removable = false) {
  * A _BY_PROFILE variable: profile name → key/value pairs. Its shape and its
  * profile names are errors; the values inside are checked like any other.
  */
-function parseByProfile(json, source, warnings, errors) {
+function parseByProfile(json, source, warnings, errors, written = {}) {
   if (!json) return {}
   let parsed
   try {
@@ -98,6 +98,7 @@ function parseByProfile(json, source, warnings, errors) {
     return {}
   }
   const out = {}
+  const keyOf = {}
   for (const [profile, pairs] of Object.entries(parsed)) {
     // An own key: a name such as "constructor" is not a profile. An alias
     // (`prometheus`, prometheus2's name before Prometheus 3 had a profile)
@@ -109,8 +110,9 @@ function parseByProfile(json, source, warnings, errors) {
       errors.push(`${source}: "${profile}" must be a JSON object of key/value pairs`)
     } else {
       const name = profile === ROUTING_KIND ? profile : canonicalType(profile)
-      if (Object.hasOwn(out, name)) errors.push(`${source}: "${profile}" names the ${name} profile, which another key already sets — write it once`)
-      else out[name] = cleanMap(pairs, `${source}.${profile}`, warnings, true)
+      // Said with the keys as the site wrote them.
+      if (Object.hasOwn(out, name)) errors.push(`${source}: "${keyOf[name]}" and "${profile}" are one profile (${name}) — write it once`)
+      else { out[name] = cleanMap(pairs, `${source}.${profile}`, warnings, true); keyOf[name] = profile; written[name] ??= profile }
     }
   }
   return out
@@ -124,8 +126,10 @@ function parseByProfile(json, source, warnings, errors) {
 export function parseObjectMeta({ labels, annotations, labelsByProfile, annotationsByProfile } = {}) {
   const warnings = []
   const errors = []
-  const byLabels = parseByProfile(labelsByProfile, 'RULE_OBJECT_LABELS_BY_PROFILE', warnings, errors)
-  const byAnnotations = parseByProfile(annotationsByProfile, 'RULE_OBJECT_ANNOTATIONS_BY_PROFILE', warnings, errors)
+  // Each profile's key as the site wrote it (`prometheus`), for messages.
+  const profileKeys = {}
+  const byLabels = parseByProfile(labelsByProfile, 'RULE_OBJECT_LABELS_BY_PROFILE', warnings, errors, profileKeys)
+  const byAnnotations = parseByProfile(annotationsByProfile, 'RULE_OBJECT_ANNOTATIONS_BY_PROFILE', warnings, errors, profileKeys)
   // The annotation a profile tells its objects apart by (prometheus3's) is
   // AlertForge's: a site's value would make Preview and import read the
   // object as another profile, or take the mark off.
@@ -145,6 +149,7 @@ export function parseObjectMeta({ labels, annotations, labelsByProfile, annotati
     labels: { ...BUILT_IN_LABELS, ...parseMap(labels, 'RULE_OBJECT_LABELS', warnings) },
     annotations: siteAnnotations,
     byProfile,
+    profileKeys,
     warnings,
     errors
   }

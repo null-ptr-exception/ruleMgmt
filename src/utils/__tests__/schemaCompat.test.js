@@ -161,6 +161,19 @@ describe('groupTypeChanges', () => {
     expect(describeChange(groupTypeChanges(model('vm'), model(undefined))[0])).toMatch(/its objects become PrometheusRule instead of VMRule: the old ones are deleted/)
   })
 
+  // The site's labels for prometheus2 (e.g. the release a ruleSelector
+  // matches) are not prometheus3's: the objects would stop being loaded.
+  it('says which site labels a type change takes off the objects', async () => {
+    const { parseObjectMeta } = await import('../objectMeta.js')
+    const meta = parseObjectMeta({ labels: '{"team":"x"}', labelsByProfile: '{"prometheus":{"release":"kps"}}', annotationsByProfile: '{"prometheus":{"note":"two"}}' })
+    const [change] = groupTypeChanges(model('prometheus'), model('prometheus3'), meta)
+    expect(describeChange(change)).toBe('app: type changed from prometheus to prometheus3 — its objects stay PrometheusRule with the same names and are updated in place; their rules are now read and checked as prometheus3. Its objects lose the site\'s labels release=kps and annotations note=two, set under "prometheus" and not under "prometheus3": an evaluator that selects rules by one stops loading them, with no error — set prometheus3 in RULE_OBJECT_LABELS_BY_PROFILE / RULE_OBJECT_ANNOTATIONS_BY_PROFILE first')
+    // Nothing to say when prometheus3 has its own, or the site sets none.
+    const both = parseObjectMeta({ labelsByProfile: '{"prometheus":{"release":"kps"},"prometheus3":{"release":"kps3"}}' })
+    expect(groupTypeChanges(model(undefined), model('prometheus3'), both)[0]).not.toHaveProperty('metaLost')
+    expect(groupTypeChanges(model(undefined), model('prometheus3'), parseObjectMeta({ labels: '{"release":"kps"}' }))[0]).not.toHaveProperty('metaLost')
+  })
+
   it('says nothing when the type is the same, spelled out or left out', () => {
     expect(groupTypeChanges(model(undefined), model('prometheus'))).toEqual([])
     // prometheus is prometheus2's alias: the same profile.

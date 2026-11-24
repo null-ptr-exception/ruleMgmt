@@ -5,28 +5,32 @@
       "apiVersion": "monitoring.coreos.com/v1",
       "kind": "PrometheusRule",
       "validate": "promtool",
-      "query": "promql"
+      "query": "promql",
+      "groupKeys": ["interval", "limit", "query_offset"]
     },
     "prometheus3": {
       "apiVersion": "monitoring.coreos.com/v1",
       "kind": "PrometheusRule",
       "annotations": { "alertforge.io/profile": "prometheus3" },
       "validate": "promtool3",
-      "query": "promql"
+      "query": "promql",
+      "groupKeys": ["interval", "limit", "query_offset", "labels"]
     },
     "vm": {
       "apiVersion": "operator.victoriametrics.com/v1beta1",
       "kind": "VMRule",
       "groupFields": { "type": "prometheus" },
       "validate": "vmalert",
-      "query": "metricsql"
+      "query": "metricsql",
+      "groupKeys": ["interval", "limit", "labels", "eval_offset", "eval_delay", "concurrency", "eval_alignment", "headers", "notifier_headers", "params"]
     },
     "vlogs": {
       "apiVersion": "operator.victoriametrics.com/v1beta1",
       "kind": "VMRule",
       "groupFields": { "type": "vlogs" },
       "validate": "vmalert",
-      "query": "logsql"
+      "query": "logsql",
+      "groupKeys": ["interval", "limit", "labels", "eval_offset", "eval_delay", "concurrency", "eval_alignment", "headers", "notifier_headers", "params"]
     }
   },
   "routing": {

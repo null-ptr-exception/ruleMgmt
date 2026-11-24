@@ -37,11 +37,18 @@ def load_profiles(path: Path = OUTPUTS_FILE) -> list[dict]:
     ]
 
 
+EVALUATOR_DEFAULT_TYPE = "prometheus"
+
+
 def profile_of(document: dict, profiles: list[dict]) -> dict | None:
     """The profile a rendered resource came from, as outputs.js profileOfObject decides it."""
 
     groups = (document.get("spec") or {}).get("groups")
     first = groups[0] if isinstance(groups, list) and groups and isinstance(groups[0], dict) else {}
+    of_kind = [p for p in profiles if document.get("apiVersion") == p["apiVersion"] and document.get("kind") == p["kind"]]
+    # vmalert reads a group with no `type` as `type: prometheus`.
+    if "type" not in first and any("type" in p["groupFields"] for p in of_kind):
+        first = {**first, "type": EVALUATOR_DEFAULT_TYPE}
     annotations = (document.get("metadata") or {}).get("annotations")
     annotations = annotations if isinstance(annotations, dict) else {}
     matches = [
@@ -104,6 +111,39 @@ def split_rule_groups(rendered_yaml: str, profiles: list[dict] | None = None) ->
         groups.extend(rule_groups)
 
     return groups, skipped
+
+
+def split_by_validator(rendered_yaml: str, profiles: list[dict] | None = None) -> tuple[dict[str, list[tuple[str, list[dict]]]], dict[str, int]]:
+    """Each checker's objects, as (object name, spec.groups), and the objects no checker reads, by profile.
+
+    The checker is the profile's `validate`, as Preview has it: promtool
+    (Prometheus 2.x), promtool3, vmalert. One whose profile says `none` is
+    counted, not checked.
+    """
+
+    profiles = load_profiles() if profiles is None else profiles
+    try:
+        documents = list(yaml.safe_load_all(rendered_yaml))
+    except yaml.YAMLError as exc:
+        raise RuleExtractionError(f"failed to parse rendered YAML: {exc}") from exc
+
+    by_validator: dict[str, list[tuple[str, list[dict]]]] = {}
+    unchecked: dict[str, int] = {}
+    for i, document in enumerate(documents):
+        if not isinstance(document, dict):
+            continue
+        profile = profile_of(document, profiles)
+        if profile is None:
+            continue
+        groups = (document.get("spec") or {}).get("groups")
+        if not isinstance(groups, list) or not all(isinstance(g, dict) for g in groups):
+            raise RuleExtractionError(f"{profile['kind']} spec.groups must be a list of mappings")
+        if profile["validate"] == "none":
+            unchecked[profile["name"]] = unchecked.get(profile["name"], 0) + 1
+            continue
+        name = ((document.get("metadata") or {}).get("name")) or f"object-{i + 1}"
+        by_validator.setdefault(profile["validate"], []).append((str(name), groups))
+    return by_validator, unchecked
 
 
 def skipped_note(skipped: dict[str, int]) -> str:

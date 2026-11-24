@@ -679,6 +679,42 @@ spec:
     // summary and the self-check have to read them from there. Reading the
     // schema instead left every group with no possible alerts: `missing` never
     // fired, and no `{{ }}` was ever checked.
+    // #182: severity written on the group, not the rule.
+    it('counts a severity its group\'s labels give, and does not call that alert missing', async () => {
+      const rulesDir = path.join(tmpDir, 'charts', 'test-chart', 'rules')
+      await fs.mkdir(rulesDir, { recursive: true })
+      try {
+        await fs.writeFile(path.join(rulesDir, 'svc.yaml'), 'group: svc\ntype: prometheus3\nlabels: {severity: critical}\ncolumns:\n  job: {type: string}\nrules:\n  - alert: SvcDown\n    expr: up{job="${job}"} == 0\n')
+        await fs.writeFile(schemaFile(), JSON.stringify({
+          type: 'object',
+          properties: { svc: { type: 'array', items: { type: 'object', properties: { job: { type: 'string' } } } } },
+        }))
+        await fs.writeFile(valuesFile(), yaml.dump({ svc: [{ job: 'api' }] }))
+        await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-svc-1-1
+  annotations: { alertforge.io/profile: prometheus3 }
+spec:
+  groups:
+    - name: svc
+      labels: { severity: critical }
+      rules:
+        - alert: SvcDown
+          expr: up{job="api"} == 0
+`)
+        process.env.PROMTOOL3_BIN = fakePromtool
+        const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+        const svc = data.summary.groups.find(g => g.name === 'svc')
+        expect(svc.alerts).toEqual([{ alert: 'SvcDown', severity: 'critical', count: 1 }])
+        expect(svc.missing).toEqual([])
+      } finally {
+        delete process.env.PROMTOOL3_BIN
+        await fs.rm(rulesDir, { recursive: true, force: true })
+      }
+    })
+
     it('reads a migrated chart\'s rules/ for missing alerts and preserved {{ }}', async () => {
       const rulesDir = path.join(tmpDir, 'charts', 'test-chart', 'rules')
       await fs.mkdir(rulesDir, { recursive: true })

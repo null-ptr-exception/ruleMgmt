@@ -82,6 +82,7 @@ the query lives in `vars` so there is only ever one copy of it.
 | `type` | no | Which kind of rules these are, and so what they are wrapped in: `prometheus2` (the default — `expr` is PromQL for Prometheus 2.x, emitted as a `PrometheusRule`; `prometheus` is the same), `prometheus3` (PromQL for Prometheus 3.13 or later, a `PrometheusRule` marked with the annotation `alertforge.io/profile: prometheus3`, checked with promtool 3), `vm` (`expr` is MetricsQL, evaluated by VMAlert against VictoriaMetrics, emitted as a `VMRule` with `type: prometheus` on the group) or `vlogs` (`expr` is LogsQL, evaluated against VictoriaLogs, emitted as a `VMRule`). The choices are the profiles in `config/outputs.json` — see [output profiles](#output-profiles) |
 | `interval` | no | How often the group is evaluated — a [duration](#durations) such as `30s`, `1m`, `1h30m`. Left out, the evaluator's own default applies |
 | `limit` | no | Maximum series the group may produce — a whole number, `0` or more. Left out, there is no limit |
+| `query_offset`, `labels`, `eval_offset`, … | no | The evaluator's other group fields — which ones depends on `type`, see [group fields by type](#group-fields-by-type) |
 | `selectors` | no | The selector columns, coarsest first — see [selectors](#selectors-a-default-with-exceptions) |
 | `selectorLabels` | no | Selector column → the label it matches, when the two names differ — see [matching a label of another name](#matching-a-label-of-another-name) |
 | `vars` | no | Edit-time text substitutions |
@@ -97,9 +98,44 @@ has to be quoted when written by hand: `group: "null"`, `selectors: ["true",
 workload]`. The editor quotes such names when it saves, and leaves ordinary
 names bare.
 
-`type`, `interval` and `limit` belong to the whole group and are the
-template owner's, set per group (in the editor, the group's settings row).
-Different groups in one chart may have different types.
+`type`, `interval`, `limit` and the fields below belong to the whole group
+and are the template owner's, set per group (in the editor, the group's
+settings row). Different groups in one chart may have different types.
+
+### Group fields by type
+
+Each evaluator reads its own group fields. A group may set those its `type`
+has; one it does not have is refused at save, saying which it has — so a
+group whose type changed keeps nothing the new evaluator would refuse, or
+ignore. They are written into every object of the group as they are.
+
+| Field | `prometheus2` | `prometheus3` | `vm`, `vlogs` | Value |
+|---|---|---|---|---|
+| `interval`, `limit` | yes | yes | yes | as above |
+| `query_offset` | yes | yes | — | a duration: how far back the group's queries look, for late data. Prometheus 2.53 or later (the operator drops it for an older `spec.version`) |
+| `labels` | — | yes | yes | label name → text, added to every rule of the group (a rule's own label of the same name wins), recording rules included. Text or a Prometheus template, `{{ $labels.job }}`; not `${column}` or a `vars` entry — one object holds many rows. Not a label the group's selectors match. A `prometheus3` name may be UTF-8 (`service.name`); a `vm`/`vlogs` one is letters, digits and `_` |
+| `eval_offset` | — | — | yes | a duration: the point inside each `interval` the group is evaluated at. Needs `interval`, no longer than it (equal is fine), and not with `eval_delay` |
+| `eval_delay` | — | — | yes | a duration the evaluation time is moved back by |
+| `concurrency` | — | — | yes | a whole number, `0` or more: rules evaluated at once |
+| `eval_alignment` | — | — | yes | `true` or `false` |
+| `headers`, `notifier_headers` | — | — | yes | a list of `"Name: value"` texts, sent with each query / notification |
+| `params` | — | — | yes | name → a list of texts, added to each query: `{nocache: ["1"]}`. A name with an empty list has no values and is not written |
+
+Example — `type: prometheus3` with `labels: {team: shop}` gives every alert of
+the group `team: shop`; changed to `type: prometheus2`, the save refuses it:
+`labels is not a group field of a prometheus2 group — it has interval, limit,
+query_offset`.
+
+AlertForge is stricter than the evaluator in a few places, on purpose: a
+duration is text with a unit (`query_offset: 0` is refused — write `0s`), a
+negative `eval_offset` or `eval_delay` is refused (vmalert takes `-30s`; every
+duration AlertForge writes is `0s` or more), a negative `limit` is refused
+(promtool takes `-1`; vmalert does not), `eval_offset` needs an `interval`
+even when it is `0s`, a `vm`/`vlogs` label name keeps to the classic
+set, a label value is quoted text, and an unclosed `{{` in a label value is
+refused. `tenant`, a group's `debug` and `partial_response_strategy` are not
+written by AlertForge: a rules file with one is refused, and an import leaves
+it out and says so.
 
 ### `columns`
 

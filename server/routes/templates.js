@@ -226,7 +226,7 @@ export default function templatesRouter() {
       })
       // A group changing output profile replaces its objects (#65): a notice,
       // shown with a breaking change or on its own after the save.
-      notices.push(...groupTypeChanges(beforeModel, model), ...groupOnceChanges(beforeModel, model), ...groupSelectorChanges(beforeModel, model), ...groupSelectorLabelChanges(beforeModel, model))
+      notices.push(...groupTypeChanges(beforeModel, model, objectMetaFromEnv()), ...groupOnceChanges(beforeModel, model), ...groupSelectorChanges(beforeModel, model), ...groupSelectorLabelChanges(beforeModel, model))
       const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
       if (!confirmBreaking && isBreaking) {
         const { deployments, unreadable } = await findChartUsage(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)

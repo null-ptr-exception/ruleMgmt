@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Render Helm alert charts and validate extracted rules with promtool."""
+"""Render Helm alert charts and check their rule objects as Preview does.
+
+Each object goes to its output profile's checker: promtool (Prometheus 2.x),
+promtool 3 (prometheus3 groups) or vmalert -dryRun (vm and vlogs). Exit code:
+0 when every object passed, 1 when one failed or the render did, 2 when a
+checker needed is not installed — not checked is not passed, as in
+scripts/check-deployment.mjs.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +22,7 @@ from pathlib import Path
 
 import yaml
 
-from extract_rules import RuleExtractionError, skipped_note, split_rule_groups
+from extract_rules import RuleExtractionError, split_by_validator
 
 
 @dataclass(frozen=True)
@@ -199,41 +206,73 @@ def render_target(target: RenderTarget) -> tuple[int, str]:
     return 0, result.stdout
 
 
-def check_rules(target: RenderTarget, rendered_yaml: str, promtool: str) -> int:
+# The checkers, as the server runs them (server/lib/ruleCheck.js).
+LABELS = {"promtool": "promtool", "promtool3": "promtool 3", "vmalert": "vmalert"}
+MISSING = 2
+
+
+def default_checkers(promtool: str = "promtool") -> dict[str, str]:
+    return {
+        "promtool": promtool,
+        "promtool3": os.environ.get("PROMTOOL3_BIN") or "promtool3",
+        "vmalert": os.environ.get("VMALERT_BIN") or "vmalert",
+    }
+
+
+def run_checker(validator: str, binary: str, groups: list[dict], tmp: Path, name: str) -> subprocess.CompletedProcess:
+    path = tmp / f"{re.sub(r'[^a-zA-Z0-9_.-]', '_', name)}.yaml"
+    path.write_text(yaml.safe_dump({"groups": groups}, default_flow_style=False, sort_keys=False), encoding="utf-8")
+    args = [binary, "-dryRun", f"-rule={path}"] if validator == "vmalert" else [binary, "check", "rules", str(path)]
+    return run_command(args)
+
+
+def check_rules(target: RenderTarget, rendered_yaml: str, promtool: str = "promtool", checkers: dict[str, str] | None = None) -> int:
+    checkers = checkers or default_checkers(promtool)
     try:
-        groups, skipped = split_rule_groups(rendered_yaml)
+        by_validator, unchecked = split_by_validator(rendered_yaml)
     except RuleExtractionError as exc:
         print(f"{target.name}: {exc}", file=sys.stderr)
         return 1
-    if skipped:
-        print(f"{target.name}: {skipped_note(skipped)}", file=sys.stderr)
+    if unchecked:
+        parts = ", ".join(f"{n} {name}" for name, n in sorted(unchecked.items()))
+        print(f"{target.name}: {sum(unchecked.values())} object(s) not syntax-checked ({parts}): their output profile has validate: none", file=sys.stderr)
 
-    if not groups:
-        # Rules that all opt out of promtool (validate: none, e.g. vlogs) are
-        # fine — the note above says so. Rendering no rules at all is not.
-        if skipped:
+    if not by_validator:
+        if unchecked:
             return 0
-        print(f"{target.name}: no PrometheusRule spec.groups found", file=sys.stderr)
+        print(f"{target.name}: no rule objects found", file=sys.stderr)
         return 1
 
+    failed = missing = False
     with tempfile.TemporaryDirectory(prefix="alertforge-rules-") as tmp:
-        rules_path = Path(tmp) / "rules.yaml"
-        rules_path.write_text(
-            yaml.safe_dump({"groups": groups}, default_flow_style=False, sort_keys=False),
-            encoding="utf-8",
-        )
-        result = run_command([promtool, "check", "rules", str(rules_path)])
+        for validator, objects in sorted(by_validator.items()):
+            label, binary = LABELS[validator], checkers[validator]
+            if validator == "promtool":
+                # One file for every object, as before: promtool 2 reads them together.
+                results = [("", run_checker(validator, binary, [g for _, gs in objects for g in gs], Path(tmp), "promtool"))]
+            else:
+                # One file per object, as Preview: a group's name repeats across its objects.
+                results = [(name, run_checker(validator, binary, groups, Path(tmp), f"{validator}-{i}-{name}")) for i, (name, groups) in enumerate(objects)]
+            for name, result in results:
+                if result.returncode == 127 and result.stderr.startswith("failed to execute"):
+                    print(f"{target.name}: {label} is not available: {binary} — {len(objects)} object(s) not checked", file=sys.stderr)
+                    missing = True
+                    break
+                if result.stdout:
+                    print(result.stdout, end="")
+                if result.stderr:
+                    print(result.stderr, file=sys.stderr, end="")
+                if result.returncode != 0:
+                    how = "-dryRun" if validator == "vmalert" else "check rules"
+                    print(f"{target.name}: {label} {how} failed{f' for {name}' if name else ''}", file=sys.stderr)
+                    failed = True
+            else:
+                how = "-dryRun" if validator == "vmalert" else "check rules"
+                print(f"{target.name}: {label} {how} passed ({len(objects)} object(s))")
 
-    if result.stdout:
-        print(result.stdout, end="")
-    if result.stderr:
-        print(result.stderr, file=sys.stderr, end="")
-    if result.returncode != 0:
-        print(f"{target.name}: promtool check rules failed", file=sys.stderr)
-        return result.returncode
-
-    print(f"{target.name}: promtool check rules passed")
-    return 0
+    if failed:
+        return 1
+    return MISSING if missing else 0
 
 
 def run_target(target: RenderTarget, promtool: str, build_deps: bool) -> int:
@@ -249,24 +288,24 @@ def run_target(target: RenderTarget, promtool: str, build_deps: bool) -> int:
                 temp_target = copy_target_root_to_temp(target, Path(tmp))
                 dependency_code = build_dependencies(temp_target)
                 if dependency_code != 0:
-                    return dependency_code
+                    return 1
 
                 render_code, rendered_yaml = render_target(temp_target)
                 if render_code != 0:
-                    return render_code
+                    return 1
 
                 return check_rules(target, rendered_yaml, promtool)
 
     render_code, rendered_yaml = render_target(target)
     if render_code != 0:
-        return render_code
+        return 1
 
     return check_rules(target, rendered_yaml, promtool)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Render alert charts and run promtool check rules.",
+        description="Render alert charts and check their rule objects with promtool, promtool 3 or vmalert, by output profile.",
     )
     parser.add_argument(
         "mode",
@@ -281,7 +320,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--promtool",
         default="promtool",
-        help="promtool binary path. Defaults to PATH lookup.",
+        help="promtool (Prometheus 2.x) binary path. Defaults to PATH lookup. promtool 3 is PROMTOOL3_BIN or promtool3, vmalert VMALERT_BIN or vmalert.",
     )
     parser.add_argument(
         "--build-dependencies",
@@ -304,12 +343,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"render_and_check.py: no {args.mode} targets found under {root}", file=sys.stderr)
         return 1
 
-    failures = 0
-    for target in targets:
-        if run_target(target, args.promtool, args.build_dependencies) != 0:
-            failures += 1
-
-    return 1 if failures else 0
+    codes = [run_target(target, args.promtool, args.build_dependencies) for target in targets]
+    # A failure is 1; with none, a checker that was not there is 2.
+    if any(code not in (0, MISSING) for code in codes):
+        return 1
+    return MISSING if MISSING in codes else 0
 
 
 if __name__ == "__main__":

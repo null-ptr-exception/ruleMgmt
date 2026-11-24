@@ -1,0 +1,41 @@
+{{- $chunks := chunk 100 ($.Values.http | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: {{ $.Release.Name }}-http-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: http
+      type: prometheus
+      interval: 1m
+      limit: 5
+      labels:
+        team: shop
+        "on": "yes"
+      eval_offset: 1m
+      concurrency: 2
+      eval_alignment: false
+      headers:
+        - "X-Scope-OrgID: 1"
+      notifier_headers:
+        - "X-Team: shop"
+      params:
+        nocache:
+          - "1"
+        extra_label:
+          - env=prod
+          - tier=1_000
+          - a,b
+      rules:
+        {{- range $rows }}
+        - alert: HTTPErrors
+          expr: |-
+            rate(http_errors_total{job="{{ .job }}"}[5m]) > 1
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

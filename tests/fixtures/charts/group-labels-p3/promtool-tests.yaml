@@ -1,0 +1,23 @@
+# rule_files is filled in by the harness: one file per rendered object.
+# Runs with promtool 3: 2.x refuses a group's labels ("field labels not found").
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="api"}'
+        values: '0x10'
+    alert_rule_test:
+      # The group's labels, the rule's team over the group's; the template
+      # in a group label is expanded like a rule's.
+      - eval_time: 5m
+        alertname: SvcDown
+        exp_alerts:
+          - exp_labels: { job: api, team: ops, severity: critical, service.name: checkout, origin: api }
+    promql_expr_test:
+      # The recording rule carries the group's labels too.
+      - expr: 'svc:up:sum'
+        eval_time: 5m
+        exp_samples:
+          - labels: '{__name__="svc:up:sum", job="api", team="shop", severity="critical", "service.name"="checkout", origin="{{ $labels.job }}"}'
+            value: 0

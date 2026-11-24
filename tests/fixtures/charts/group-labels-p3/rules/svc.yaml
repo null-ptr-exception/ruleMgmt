@@ -1,0 +1,19 @@
+# Group labels (Prometheus 3): every rule of the group gets them, a rule's
+# own label of the same name wins, and a recording rule gets them too. A
+# prometheus3 name may be UTF-8 (service.name); a value may be a Prometheus
+# template, written through Helm as it is. With query_offset, Prometheus
+# evaluates the group's queries that far back.
+type: prometheus3
+interval: 1m
+query_offset: 1m
+labels: { team: shop, severity: critical, service.name: checkout, origin: '{{ $labels.job }}' }
+
+columns:
+  job: { type: string, required: true }
+
+rules:
+  - alert: SvcDown
+    expr: 'up{job="${job}"} == 0'
+    labels: { team: ops }
+  - record: 'svc:up:sum'
+    expr: 'sum by (job) (up{job="${job}"})'

@@ -32,6 +32,7 @@ export const MAX_ROWS_PER_OBJECT = 100
 // cannot drift from what is emitted.
 import { profileFor } from './outputs.js'
 import { durationScalar, nameScalar } from './yamlScalar.js'
+import { EXTRA_GROUP_FIELDS, renderGroupField } from './groupFields.js'
 
 // The generator runs in the browser as well as in scripts, so size is measured
 // with TextEncoder rather than Buffer.
@@ -90,11 +91,12 @@ export function rowLoopHeader(hasCommon) {
 }
 
 /**
- * The Prometheus rule-group fields the template owner sets — how often the
- * group is evaluated and how many series it may produce. They belong to the
- * group, so every object the group is split into carries them.
+ * The rule-group fields the template owner sets — how often the group is
+ * evaluated, how many series it may produce, and the rest its profile has
+ * (groupFields.js). They belong to the group, so every object the group is
+ * split into carries them.
  */
-function renderGroupFields({ interval, limit } = {}, profile) {
+function renderGroupFields({ interval, limit, ...extra } = {}, profile) {
   let out = ''
   // The profile's own group fields first (e.g. `type: vlogs`), then the
   // template owner's.
@@ -103,6 +105,8 @@ function renderGroupFields({ interval, limit } = {}, profile) {
   // resource's field is text (#172).
   if (interval !== undefined && interval !== '') out += `      interval: ${durationScalar(interval)}\n`
   if (limit !== undefined && limit !== '') out += `      limit: ${limit}\n`
+  // The evaluator's other fields (#182), in a fixed order.
+  for (const key of EXTRA_GROUP_FIELDS) if (extra[key] !== undefined) out += renderGroupField(key, extra[key])
   return out
 }
 

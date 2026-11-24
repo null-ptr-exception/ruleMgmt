@@ -1,0 +1,33 @@
+{{- $chunks := chunk 100 ($.Values.svc | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-svc-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    alertforge.io/profile: prometheus3
+spec:
+  groups:
+    - name: svc
+      interval: 1m
+      query_offset: 1m
+      labels:
+        team: shop
+        severity: critical
+        service.name: checkout
+        origin: "{{ `{{` }} $labels.job {{ `}}` }}"
+      rules:
+        {{- range $rows }}
+        - alert: SvcDown
+          expr: |-
+            up{job="{{ .job }}"} == 0
+          labels:
+            team: ops
+        - record: svc:up:sum
+          expr: |-
+            sum by (job) (up{job="{{ .job }}"})
+        {{- end }}
+{{- end }}

@@ -27,11 +27,12 @@
  */
 
 import raw from '../../config/outputs.json' with { type: 'json' }
+import { GROUP_FIELD_NAMES, BASE_GROUP_FIELDS } from './groupFields.js'
 
 export const DEFAULT_TYPE = 'prometheus2'
 
 const TOP_KEYS = ['outputs', 'routing']
-const PROFILE_KEYS = ['apiVersion', 'kind', 'groupFields', 'annotations', 'aliases', 'validate', 'query']
+const PROFILE_KEYS = ['apiVersion', 'kind', 'groupFields', 'annotations', 'aliases', 'validate', 'query', 'groupKeys']
 // The language a group's expr is written in. It decides the checks that read
 // the expr itself — ranges, offsets, label matchers (#117, #118, selectors) —
 // which PromQL and MetricsQL share and LogsQL has none of. Which checker runs
@@ -49,10 +50,10 @@ const VALIDATE = ['promtool', 'promtool3', 'vmalert', 'none']
 const ANNOTATION_KEY_RE = /^([a-z0-9]([-a-z0-9.]*[a-z0-9])?\/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$/
 const NAME_RE = /^[a-z][a-z0-9_-]*$/
 // Written by the generator (name, rules) or by the template owner (interval,
-// limit) — a profile cannot set them too. A rules file's `type` is not one of
+// limit and the rest of groupFields.js) — a profile cannot set them too. A rules file's `type` is not one of
 // them: it only picks the profile and is never written out as it is; the
 // `type: vlogs` a VMRule group carries comes from the profile's groupFields.
-const RESERVED_GROUP_FIELDS = ['name', 'rules', 'interval', 'limit']
+const RESERVED_GROUP_FIELDS = ['name', 'rules', ...GROUP_FIELD_NAMES]
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 
@@ -83,6 +84,11 @@ export function parseOutputs(doc, source = 'config/outputs.json') {
       }
       if (!VALIDATE.includes(profile.validate)) errors.push(`"${at}.validate" must be one of ${VALIDATE.join(', ')} — it has no default`)
       if (!QUERY.includes(profile.query)) errors.push(`"${at}.query" must be one of ${QUERY.join(', ')} — it has no default`)
+      // The group fields a template owner may set on this profile's groups
+      // (#182); interval and limit when it says nothing.
+      if (profile.groupKeys !== undefined && !(Array.isArray(profile.groupKeys) && profile.groupKeys.every(k => GROUP_FIELD_NAMES.includes(k)))) {
+        errors.push(`"${at}.groupKeys" must list group fields AlertForge writes: ${GROUP_FIELD_NAMES.join(', ')}`)
+      }
       if (profile.aliases !== undefined) {
         if (!Array.isArray(profile.aliases)) {
           errors.push(`"${at}.aliases" must be a list of names`)
@@ -129,6 +135,8 @@ export function parseOutputs(doc, source = 'config/outputs.json') {
     aliases: p.aliases || [],
     validate: p.validate,
     query: p.query,
+    // In the order they are written, whatever order the file lists them in.
+    groupKeys: GROUP_FIELD_NAMES.filter(k => (p.groupKeys || BASE_GROUP_FIELDS).includes(k)),
   }]))
 }
 
@@ -200,13 +208,23 @@ export function refusesZeroOffset(type) {
  * on every group and the annotations it puts on the object. Null for a
  * resource no profile produces.
  */
+// vmalert reads a group with no `type` as `type: prometheus`: a VMRule from
+// a hand-written template that leaves it out holds metric rules.
+const EVALUATOR_DEFAULT_TYPE = 'prometheus'
+
+/** The profiles whose objects have this apiVersion and kind. */
+const profilesOfKind = doc => Object.values(PROFILES).filter(p => doc?.apiVersion === p.apiVersion && doc?.kind === p.kind)
+
 export function profileOfObject(doc) {
   if (!doc || typeof doc !== 'object') return null
   const group = Array.isArray(doc.spec?.groups) ? doc.spec.groups[0] : undefined
   const annotations = isMap(doc.metadata?.annotations) ? doc.metadata.annotations : {}
-  const matches = Object.values(PROFILES).filter(p =>
-    doc.apiVersion === p.apiVersion && doc.kind === p.kind &&
-    Object.entries(p.groupFields).every(([k, v]) => group?.[k] === v) &&
+  const ofKind = profilesOfKind(doc)
+  // The evaluator's own default for a field a profile of this kind writes.
+  const readsType = ofKind.some(p => 'type' in p.groupFields)
+  const groupValue = k => (group?.[k] === undefined && k === 'type' && readsType ? EVALUATOR_DEFAULT_TYPE : group?.[k])
+  const matches = ofKind.filter(p =>
+    Object.entries(p.groupFields).every(([k, v]) => groupValue(k) === v) &&
     Object.entries(p.annotations).every(([k, v]) => annotations[k] === v))
   // The most specific match wins: a VMRule group with `type: vlogs` is the
   // vlogs profile even if a profile with no groupFields also emits VMRule,
@@ -214,4 +232,19 @@ export function profileOfObject(doc) {
   const weight = p => Object.keys(p.groupFields).length + Object.keys(p.annotations).length
   matches.sort((a, b) => weight(b) - weight(a))
   return matches[0] || null
+}
+
+/**
+ * A profile's mark on an object that names no profile of its kind — an
+ * `alertforge.io/profile: prometheus4` written by hand: the object is read
+ * as the unmarked profile, which is said. Null when there is none.
+ */
+export function unknownProfileMark(doc) {
+  const annotations = isMap(doc?.metadata?.annotations) ? doc.metadata.annotations : {}
+  const ofKind = profilesOfKind(doc)
+  for (const key of PROFILE_ANNOTATION_KEYS) {
+    if (!Object.hasOwn(annotations, key)) continue
+    if (!ofKind.some(p => p.annotations[key] === annotations[key])) return { key, value: annotations[key] }
+  }
+  return null
 }

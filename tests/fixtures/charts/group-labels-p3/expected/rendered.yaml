@@ -1,0 +1,13 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# A key "<kind> <name>" is an object of that kind; a bare name is a PrometheusRule.
+blind-svc-1-1:
+  - name: svc
+    interval: 1m
+    query_offset: 1m
+    labels: { team: shop, severity: critical, service.name: checkout, origin: '{{ $labels.job }}' }
+    rules:
+      - alert: SvcDown
+        expr: 'up{job="api"} == 0'
+        labels: { team: ops }
+      - record: 'svc:up:sum'
+        expr: 'sum by (job) (up{job="api"})'

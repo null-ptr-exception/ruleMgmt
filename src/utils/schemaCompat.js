@@ -10,6 +10,7 @@
 
 import yaml from 'js-yaml'
 import { profileFor } from './outputs.js'
+import { metaForProfile } from './objectMeta.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { selectorLabelsFor } from './selectorContract.js'
 
@@ -194,9 +195,19 @@ const DESCRIPTIONS = {
   'group-once-changed': c => c.to === 'once'
     ? `${c.group}: now renders once per deployment — its objects are renamed (no chunk index): the old ones are deleted and new ones created, and its rows are no longer read`
     : `${c.group}: now renders once per row — its objects are renamed (with a chunk index): the old ones are deleted and new ones created`,
-  'group-type-changed': c => c.toKind === c.fromKind
-    ? `${c.group}: type changed from ${c.from} to ${c.to} — its objects stay ${c.toKind} with the same names and are updated in place; their rules are now read and checked as ${c.to}`
-    : `${c.group}: type changed from ${c.from} to ${c.to} — its objects become ${c.toKind} instead of ${c.fromKind}: the old ones are deleted and new ones created, and the alerts are reloaded`
+  'group-type-changed': c => {
+    const from = c.fromWritten ?? c.from
+    const to = c.toWritten ?? c.to
+    const head = c.toKind === c.fromKind
+      ? `${c.group}: type changed from ${from} to ${to} — its objects stay ${c.toKind} with the same names and are updated in place; their rules are now read and checked as ${c.to}`
+      : `${c.group}: type changed from ${from} to ${to} — its objects become ${c.toKind} instead of ${c.fromKind}: the old ones are deleted and new ones created, and the alerts are reloaded`
+    if (!c.metaLost) return head
+    const what = [
+      c.metaLost.labels.length ? `labels ${c.metaLost.labels.join(', ')}` : '',
+      c.metaLost.annotations.length ? `annotations ${c.metaLost.annotations.join(', ')}` : '',
+    ].filter(Boolean).join(' and ')
+    return `${head}. Its objects lose the site's ${what}, set under "${c.metaLost.key}" and not under "${c.to}": an evaluator that selects rules by one stops loading them, with no error — set ${c.to} in RULE_OBJECT_LABELS_BY_PROFILE / RULE_OBJECT_ANNOTATIONS_BY_PROFILE first`
+  },
 }
 
 /**
@@ -204,8 +215,13 @@ const DESCRIPTIONS = {
  * Not breaking — no row loses anything — but every object of the group is
  * replaced by one of another kind, or, within a kind (vlogs and vm are both
  * VMRule), read as another language: it is always said.
+ *
+ * `objectMeta` is the site's (objectMetaFromEnv). When the site gives the old
+ * profile's objects labels or annotations of their own and the new profile
+ * none, the change lists what the objects lose: the evaluator may select
+ * them by one (`release: kps`), and stop loading them without a word.
  */
-export function groupTypeChanges(beforeModel, afterModel) {
+export function groupTypeChanges(beforeModel, afterModel, objectMeta = null) {
   const changes = []
   for (const [group, after] of Object.entries(afterModel?.groups || {})) {
     const before = beforeModel?.groups?.[group]
@@ -213,7 +229,19 @@ export function groupTypeChanges(beforeModel, afterModel) {
     const from = profileFor(before.type)
     const to = profileFor(after.type)
     if (!from || !to || from.name === to.name) continue
-    changes.push({ kind: 'group-type-changed', group, from: from.name, to: to.name, fromKind: from.kind, toKind: to.kind })
+    const change = { kind: 'group-type-changed', group, from: from.name, to: to.name, fromKind: from.kind, toKind: to.kind }
+    // The types as the files say them, for the message (`prometheus`).
+    if (before.type !== undefined && before.type !== from.name) change.fromWritten = before.type
+    if (after.type !== undefined && after.type !== to.name) change.toWritten = after.type
+    if (objectMeta?.byProfile?.[from.name] && !objectMeta.byProfile[to.name]) {
+      const was = metaForProfile(objectMeta, from.name)
+      const now = metaForProfile(objectMeta, to.name)
+      const gone = map => Object.entries(was[map]).filter(([k, v]) => now[map][k] !== v).map(([k, v]) => `${k}=${v}`)
+      const labels = gone('labels')
+      const annotations = gone('annotations')
+      if (labels.length || annotations.length) change.metaLost = { labels, annotations, key: objectMeta.profileKeys?.[from.name] ?? from.name }
+    }
+    changes.push(change)
   }
   return changes
 }

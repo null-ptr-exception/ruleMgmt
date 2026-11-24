@@ -35,6 +35,7 @@ import yaml from 'js-yaml'
 import { groupGenDef, modelToSchema } from './rulesFile.js'
 import { normalizeRules, groupShardSizes } from './templateGenerator.js'
 import { profileFor } from './outputs.js'
+import { GROUP_FIELD_NAMES, renderedGroupValue } from './groupFields.js'
 import { needsQuote, keyScalar, readsAsNonStringInYaml11, KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
 import { selectorLabelsFor } from './selectorContract.js'
 
@@ -182,6 +183,17 @@ function omitDefaults(values, columns) {
   return Object.fromEntries(Object.entries(values).filter(([name]) => !omittable(columns[name])))
 }
 
+// An empty map or list is not written, so it is asserted absent.
+const isEmpty = v => v !== null && typeof v === 'object' && Object.keys(v).length === 0
+function groupFieldAsserts(group) {
+  return GROUP_FIELD_NAMES.filter(k => group[k] !== undefined && group[k] !== '').map(k => {
+    const value = renderedGroupValue(k, group[k])
+    return isEmpty(value)
+      ? { notExists: { path: `spec.groups[0].${k}` } }
+      : { equal: { path: `spec.groups[0].${k}`, value } }
+  })
+}
+
 export function generateHelmUnittestSuite(model) {
   const schema = model?.groups ? modelToSchema(model) : null
   // A group with no rules (`rules: []`) generates no template, so there is
@@ -243,6 +255,8 @@ export function generateHelmUnittestSuite(model) {
           { equal: { path: 'metadata.name', value: doc.name } },
           { equal: { path: 'spec.groups[0].name', value: base } },
           ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
+          // The template owner's group fields (#182), as the evaluator reads them.
+          ...groupFieldAsserts(group),
           // The mark a profile is told apart by (prometheus3's annotation).
           ...Object.entries(profile.annotations).map(([k, v]) => ({ equal: { path: `metadata.annotations["${k}"]`, value: v } })),
           { lengthEqual: { path: 'spec.groups[0].rules', count: doc.rules.length } },

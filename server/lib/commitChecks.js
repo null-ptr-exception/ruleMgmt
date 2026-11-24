@@ -13,22 +13,22 @@
  * is left to CI.
  */
 
-import fs from 'fs/promises'
 import path from 'path'
-import yaml from 'js-yaml'
 import { readRouting, buildRouting, writeRouting, checkedRouting, copyRouting, ROUTING_CR_FILE } from './routingFiles.js'
-import { isDeploymentDir, isSafeSyncPath, normalizeSyncPath, readSyncRegistry, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
+import { isDeploymentDir, isSafeSyncPath, readSyncRegistry, withSyncRegistryLock, getSourceForTarget, getTargetsForSource } from './sync.js'
 import { readSharedConfigs, SHARED_FILE } from './sharedConfigs.js'
 import { sharedRefProblems } from '../../src/utils/routingGenerator.js'
 import { listDeploymentPaths, walkDeployments } from './deploymentWalk.js'
 import { resolveStack } from './stack.js'
 import { valuesWarnings } from './deploymentWrite.js'
-import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
-import { parseIfThere, readTextIfThere, UnreadableError } from './readIfThere.js'
+import { parseIfThere, UnreadableError } from './readIfThere.js'
 import { insideReal } from './safePath.js'
 import { loadValues } from '../../src/utils/valuesText.js'
+import { templateProblem } from './commit/template.js'
+import { stackNulls } from './commit/values.js'
+import { syncRegistryFindings, SYNC_FILE } from './commit/sync.js'
+import { parsedOrNull, sameRouting, sameRoutingAs } from './commit/routing.js'
 
-const SYNC_FILE = 'sync.yaml'
 const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
 
 /**
@@ -37,165 +37,6 @@ const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
  */
 export async function listFolderDeployments(gitopsDir) {
   return listDeploymentPaths(gitopsDir)
-}
-
-// A version as Helm's semver library reads one: a leading v, a part left
-// out read as 0 (`2.0` is 2.0.0), build metadata ignored when it compares.
-const VERSION = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
-const parseVersion = v => {
-  const m = VERSION.exec(String(v).trim())
-  return m ? { at: [m[1], m[2] ?? '0', m[3] ?? '0'].map(Number).join('.') + (m[4] ? `-${m[4]}` : '') } : null
-}
-// A constraint that is one version and nothing else — `2.1.0`, `=2.1.0`,
-// `v2.1.0` — all three parts written: `2.1` and every range are not judged.
-const exactWanted = v => {
-  const text = String(v).trim().replace(/^=\s*/, '')
-  return /^v?\d+\.\d+\.\d+(?:[-+]\S*)?$/.test(text) ? parseVersion(text) : null
-}
-
-/**
- * What stops the Template a deployment renders from being found, so Helm
- * renders none of the deployment: not in the repo (deleted with git), a
- * Chart.yaml with no version Helm reads, or (changed by hand, or pulled)
- * at another version than the one exact version the deployment asks for.
- * A range (`>=0.0.0-0`, which AlertForge writes) is not judged.
- */
-async function templateProblem(gitopsDir, dep, stack) {
-  const dir = path.join(gitopsDir, dep)
-  const own = await fileDependencyProblem(gitopsDir, dir, dep)
-  // Gone since the walk: not there to commit.
-  if (own === undefined) return null
-  if (own) return own
-  // Its `_common` stack (#100): what Helm renders nothing from, or stops
-  // on. Below the deployment Helm fetches nothing, so a version or a
-  // repository a `_common` asks for is not checked: Helm does not read it.
-  if (stack.problems.length) return { ...stack.problems[0], description: `${dep}: ${stack.problems[0].description}` }
-  return null
-}
-
-// The first problem with a chart folder's file:// dependencies, null when
-// there is none, undefined when its Chart.yaml is gone (deleted since the
-// walk, #187: not there to commit).
-async function fileDependencyProblem(gitopsDir, dir, dep) {
-  let chart
-  try {
-    chart = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8')) || {}
-  } catch (err) {
-    if (err.code === 'ENOENT') return undefined
-    throw err
-  }
-  for (const d of chart.dependencies || []) {
-    const repo = typeof d?.repository === 'string' ? d.repository : ''
-    const at = repo.startsWith('file://') ? path.resolve(dir, repo.slice('file://'.length)) : null
-    if (!at) continue
-    // A `_common` chart is named as one, not as a Template.
-    const common = isCommonChartPath(at)
-    const what = common ? `${COMMON_DIR} chart` : 'Template'
-    const noun = `${what} ${common ? path.relative(gitopsDir, at).replace(/\\/g, '/') : d.name || repo}`
-    const problem = description => ({ kind: 'template-version', description: `${dep}: ${description}, so Helm cannot render it` })
-    let template
-    let text
-    try {
-      text = await readTextIfThere(path.join(at, 'Chart.yaml'))
-    } catch (err) {
-      // There, and not readable: its real reason, not "not YAML".
-      return problem(`its ${noun}'s Chart.yaml cannot be read (${err.why || err.message})`)
-    }
-    if (text === null) return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
-    try {
-      template = yaml.load(text)
-    } catch (err) {
-      return problem(`its ${noun}'s Chart.yaml is not valid YAML (${err.reason || err.message})`)
-    }
-    const has = template && typeof template === 'object' ? parseVersion(template.version ?? '') : null
-    if (!has) return problem(`its ${noun}'s Chart.yaml has no version Helm reads (${JSON.stringify(template?.version ?? null)})`)
-    const wants = d.version
-    if (wants === undefined || wants === null || wants === false || String(wants).trim() === '') {
-      return problem(`its Chart.yaml gives no version for the ${noun} — write version: ">=0.0.0-0" (any version)`)
-    }
-    const exact = exactWanted(wants)
-    if (exact && exact.at !== has.at) {
-      return problem(`its Chart.yaml asks for the ${noun} at version ${wants}, but the ${what} is ${template.version} — write version: ">=0.0.0-0" (any version), or ${template.version}`)
-    }
-  }
-  return null
-}
-
-// A hand-written null in a stacked deployment's values or a layer's (#100):
-// Helm versions read it differently, so what is deployed cannot be told.
-const stackNulls = stack => (stack.layers.length ? stack.valueIssues : [])
-
-/**
- * sync.yaml as written, entry by entry: what readSyncRegistry would skip,
- * and what it reads but cannot be right — a chain, a target with two
- * sources, a path that is not a deployment.
- */
-async function syncRegistryFindings(gitopsDir) {
-  let raw
-  try {
-    raw = await fs.readFile(path.join(gitopsDir, SYNC_FILE), 'utf-8')
-  } catch (err) {
-    if (err.code === 'ENOENT') return { findings: [], readable: true }
-    throw err
-  }
-  const finding = (where, why) => ({ severity: 'commit', kind: 'sync-registry', description: `${SYNC_FILE} ${where}: ${why}` })
-  let data
-  try {
-    data = yaml.load(raw) || {}
-  } catch (err) {
-    // Nothing else can be read from it: the sync links are not known.
-    return { findings: [finding('', `is not valid YAML (${err.reason || err.message})`)], readable: false }
-  }
-  if (data.syncs === undefined || data.syncs === null) return { findings: [], readable: true }
-  if (!Array.isArray(data.syncs)) return { findings: [finding('syncs', 'is not a list')], readable: true }
-
-  const findings = []
-  const sourcesOf = new Map() // target → the entries that list it
-  const entryOf = new Map()   // source → its first entry's index
-  for (const [i, s] of data.syncs.entries()) {
-    const where = `syncs[${i}]`
-    if (!s || typeof s.source !== 'string' || !Array.isArray(s.targets)) {
-      findings.push(finding(where, 'is not { source, targets: [...] }'))
-      continue
-    }
-    const source = normalizeSyncPath(s.source)
-    if (entryOf.has(source)) findings.push(finding(where, `${source} is listed as a source again (first in syncs[${entryOf.get(source)}])`))
-    else entryOf.set(source, i)
-    if (!(await isDeploymentDir(path.join(gitopsDir, source)))) findings.push(finding(where, `source ${source} is not a deployment`))
-    for (const t of s.targets) {
-      if (typeof t !== 'string') {
-        findings.push(finding(where, `a target is not a path (${JSON.stringify(t)})`))
-        continue
-      }
-      const target = normalizeSyncPath(t)
-      if (target === source) findings.push(finding(where, `${source} is listed as its own target`))
-      else if (!(await isDeploymentDir(path.join(gitopsDir, target)))) findings.push(finding(where, `target ${target} is not a deployment`))
-      if (!sourcesOf.has(target)) sourcesOf.set(target, [])
-      sourcesOf.get(target).push(source)
-    }
-  }
-  const hasTargets = new Set(data.syncs
-    .filter(s => s && typeof s.source === 'string' && Array.isArray(s.targets) && s.targets.length)
-    .map(s => normalizeSyncPath(s.source)))
-  for (const [target, from] of sourcesOf) {
-    const distinct = [...new Set(from)].filter(s => s !== target)
-    if (distinct.length > 1) findings.push(finding('', `${target} follows two sources: ${distinct.join(' and ')}`))
-    if (distinct.length && hasTargets.has(target)) findings.push(finding('', `${target} follows ${distinct[0]} and is a source itself: sync does not chain`))
-  }
-  return { findings, readable: true }
-}
-
-const parsedOrNull = text => {
-  try {
-    return yaml.load(text)
-  } catch {
-    return null
-  }
-}
-
-async function sameRouting(gitopsDir, a, b) {
-  const [x, y] = await Promise.all([readRouting(path.join(gitopsDir, a)), readRouting(path.join(gitopsDir, b))])
-  return x.text === y.text && x.cr === y.cr
 }
 
 export async function deploymentCommitBlockers(gitopsDir) {
@@ -367,9 +208,4 @@ export async function regenerateRouting(gitopsDir) {
     }
     return { regenerated, failed }
   })
-}
-
-async function sameRoutingAs(gitopsDir, dep, { text, cr }) {
-  const now = await readRouting(path.join(gitopsDir, dep))
-  return now.text === text && now.cr === cr
 }

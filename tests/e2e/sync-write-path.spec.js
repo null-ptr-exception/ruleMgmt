@@ -46,6 +46,32 @@ test.describe.serial('sync write path', () => {
     }
   })
 
+  // #166: a source whose routing.yaml a save would refuse is not synced
+  // either: neither its values nor its routing.
+  test('Sync to... says why a source with broken routing is refused, and does not sync', async ({ page, request }) => {
+    const file = onDisk(`${SRC}/routing.yaml`)
+    await fs.writeFile(file, 'labels: [\n')
+    try {
+      await openTree(page)
+      await deploymentNode(page, 'src').locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+      await page.locator('.ant-dropdown-menu-item:visible', { hasText: 'Sync to...' }).click()
+      const modal = page.getByRole('dialog')
+      const row = modal.locator('.ant-list-item').filter({ hasText: TGT })
+      await row.locator('.ant-checkbox-input').click()
+      await modal.getByText(new RegExp(`I understand, overwrite ${TGT}`)).click()
+      await modal.getByRole('button', { name: 'Confirm sync' }).click()
+
+      await expect(modal.getByText(`${TGT}: ${SRC} cannot be synced: its routing.yaml has problems`)).toBeVisible({ timeout: 5000 })
+      await expect(modal.getByTestId('sync-problems')).toContainText('routing.yaml is not valid YAML')
+      const { source } = await (await request.get(`/api/v2/sync?target=${encodeURIComponent(TGT)}`)).json()
+      expect(source).toBeNull()
+      await modal.getByRole('button', { name: 'Cancel' }).click()
+      await expect(modal).not.toBeVisible()
+    } finally {
+      await fs.rm(file, { force: true })
+    }
+  })
+
   test('Sync to... says why a source with broken values is refused, and does not sync', async ({ page, request }) => {
     const file = onDisk(`${SRC}/values.yaml`)
     const good = await fs.readFile(file, 'utf8')
@@ -65,6 +91,8 @@ test.describe.serial('sync write path', () => {
       const { source } = await (await request.get(`/api/v2/sync?target=${encodeURIComponent(TGT)}`)).json()
       expect(source).toBeNull()
       await modal.getByRole('button', { name: 'Cancel' }).click()
+      // Until it has closed, the dialog takes the right-click below.
+      await expect(modal).not.toBeVisible()
 
       // Sync from... on the target says the same, and forgets it once closed.
       const fromMenu = async () => {

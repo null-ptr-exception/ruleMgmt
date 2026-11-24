@@ -143,6 +143,121 @@ describe('POST /sync refuses a source a values save would refuse', () => {
   })
 })
 
+describe('POST /sync checks the source\'s routing (#166)', () => {
+  const CR = 'templates/alertmanagerconfig.yaml'
+  const putRouting = async text => expect((await api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: text })).status).toBe(200)
+  const fresh = async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: TGT, chart: 'demo' })).status).toBe(200)
+    return { values: await read(`${TGT}/values.yaml`), routing: await exists(`${TGT}/routing.yaml`) }
+  }
+
+  it.each([
+    ['not YAML', 'labels: [\n'],
+    ['empty', ''],
+    ['failing a save check', 'labels:\n  env: [prod, prod]\n'],
+  ])('a routing.yaml that is %s refuses the whole sync, and the target is left as it was', async (_, broken) => {
+    await setup([])
+    await putRouting(await routingFixture())
+    await fs.writeFile(path.join(tmpDir, SRC, 'routing.yaml'), broken)
+    const before = await fresh()
+
+    const { status, data } = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+
+    expect(status).toBe(400)
+    expect(data.error).toBe(`${SRC} cannot be synced: its routing.yaml has problems`)
+    expect(data.problems.length).toBeGreaterThan(0)
+    expect({ values: await read(`${TGT}/values.yaml`), routing: await exists(`${TGT}/routing.yaml`) }).toEqual(before)
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
+  })
+
+  it('a resource behind its routing.yaml is made again, not copied', async () => {
+    await setup([])
+    const routing = await routingFixture()
+    await putRouting(routing)
+    const made = await read(`${SRC}/${CR}`)
+    // routing.yaml edited by hand, the resource not regenerated.
+    const edited = routing.replace('4h', '6h')
+    expect(edited).not.toBe(routing)
+    await fs.writeFile(path.join(tmpDir, SRC, 'routing.yaml'), edited)
+
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+
+    expect(await read(`${TGT}/routing.yaml`)).toBe(edited)
+    const copied = await read(`${TGT}/${CR}`)
+    expect(copied).not.toBe(made)
+    // What a save of that routing.yaml makes (read before the save, which
+    // copies to the target too).
+    await putRouting(edited)
+    expect(copied).toBe(await read(`${SRC}/${CR}`))
+  })
+
+  it('a resource edited by hand is made again from routing.yaml, not copied', async () => {
+    await setup([])
+    await putRouting(await routingFixture())
+    const made = await read(`${SRC}/${CR}`)
+    await fs.writeFile(path.join(tmpDir, SRC, CR), `# edited by hand\n${made}`)
+
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+    expect(await read(`${TGT}/${CR}`)).toBe(made)
+  })
+
+  it('a resource without a routing.yaml refuses the sync', async () => {
+    await setup([])
+    await putRouting(await routingFixture())
+    await fs.rm(path.join(tmpDir, SRC, 'routing.yaml'))
+    const before = await fresh()
+
+    const { status, data } = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+
+    expect(status).toBe(400)
+    expect(data.problems).toEqual([{ message: expect.stringContaining('without a routing.yaml') }])
+    expect({ values: await read(`${TGT}/values.yaml`), routing: await exists(`${TGT}/routing.yaml`) }).toEqual(before)
+    expect(await exists(`${TGT}/${CR}`)).toBe(false)
+  })
+
+  it('broken values and broken routing are both listed', async () => {
+    await setup([])
+    await putRouting(await routingFixture())
+    await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo:\n  cpu: [\n')
+    await fs.writeFile(path.join(tmpDir, SRC, 'routing.yaml'), 'labels: [\n')
+
+    const { status, data } = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+
+    expect(status).toBe(400)
+    expect(data.error).toBe(`${SRC} cannot be synced: values.yaml is not valid YAML; its routing.yaml has problems`)
+    expect(data.problems.map(p => p.message)).toEqual([expect.any(String), expect.stringContaining('routing.yaml is not valid YAML')])
+  })
+
+  it('a target that has routing of its own keeps it, byte for byte, when the sync is refused', async () => {
+    await setup([])
+    const routing = await routingFixture()
+    await putRouting(routing)
+    expect((await api('POST', '/api/v2/folders/init', { folder: TGT, chart: 'demo' })).status).toBe(200)
+    expect((await api('PUT', `/api/v2/deployments/demo/tgt/routing${q(TGT)}`, { routing: routing.replace('4h', '8h') })).status).toBe(200)
+    const before = { routing: await read(`${TGT}/routing.yaml`), cr: await read(`${TGT}/${CR}`), values: await read(`${TGT}/values.yaml`) }
+    await fs.writeFile(path.join(tmpDir, SRC, 'routing.yaml'), 'labels: [\n')
+
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(400)
+    expect({ routing: await read(`${TGT}/routing.yaml`), cr: await read(`${TGT}/${CR}`), values: await read(`${TGT}/values.yaml`) }).toEqual(before)
+  })
+
+  it('a resource that is missing is made', async () => {
+    await setup([])
+    await putRouting(await routingFixture())
+    const made = await read(`${SRC}/${CR}`)
+    await fs.rm(path.join(tmpDir, SRC, CR))
+
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+    expect(await read(`${TGT}/${CR}`)).toBe(made)
+  })
+
+  it('a source without routing syncs as before', async () => {
+    await setup([])
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+    expect(await exists(`${TGT}/routing.yaml`)).toBe(false)
+  })
+})
+
 describe('POST /sync checks a source whose Chart.yaml dependency has no name', () => {
   it('refuses its values.yaml when it is not YAML', async () => {
     await setup([])

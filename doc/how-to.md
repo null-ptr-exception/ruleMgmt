@@ -337,8 +337,8 @@ target shows its source's routing, read-only; edit the source. **Remove
 routing** deletes both files.
 
 The page only edits a `routing.yaml` that passes the checks below. One that
-does not — after a hand edit, a merge, or a sync from a source that fails
-them — is not drawn as a table: the page lists what is wrong, and the file is
+does not — after a hand edit, a merge, or checks that have become stricter
+since it was saved — is not drawn as a table: the page lists what is wrong, and the file is
 fixed by hand (or removed with **Remove routing** and set up again).
 
 The page rewrites `routing.yaml` when it saves, so comments in a hand-written
@@ -403,7 +403,13 @@ copied to it.
   next save of the source; **Sync to...** marks such a target the same way.
 - A source with values a save would refuse — a required value left empty, a
   value that cannot go in a label, a `values.yaml` that is not YAML — cannot
-  be synced. The dialog lists what to fix in the source first.
+  be synced, nor one whose `routing.yaml` a save would refuse: neither file
+  is copied. The dialog lists what to fix in the source first. A source
+  whose routing resource is behind its `routing.yaml` (edited by hand) gives
+  the target the resource made from it, not the old one; the source itself
+  keeps deploying the old one until its routing is saved. A routing
+  resource left without its `routing.yaml` refuses the sync too: remove it,
+  or put `routing.yaml` back.
 - Deleting a source lets go of its targets: each keeps what it has and can
   be edited again. The **Delete** dialog lists them, and each can be deleted
   along with the source instead. Deleting it through the API does the same,

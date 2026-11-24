@@ -115,10 +115,10 @@ export async function copyChartDependencies(srcDir, dstDir) {
 
 /**
  * Throws when a file cannot be written. `chart`, `values` and `routing` pick
- * the files; `valuesContent` is what to write as values.yaml, when the caller
- * has already read and checked it.
+ * the files; `valuesContent` and `routingContent` are what to write, when
+ * the caller has already read and checked them.
  */
-export async function copyToTarget(srcDir, dstDir, { chart = true, values = true, routing = true, valuesContent } = {}) {
+export async function copyToTarget(srcDir, dstDir, { chart = true, values = true, routing = true, valuesContent, routingContent } = {}) {
   await fs.mkdir(dstDir, { recursive: true })
   if (chart) await copyChartDependencies(srcDir, dstDir)
   if (values) {
@@ -127,7 +127,7 @@ export async function copyToTarget(srcDir, dstDir, { chart = true, values = true
   }
   // Notification routing (#92) follows values.yaml: the target gets the
   // source's, or loses its own when the source has none.
-  if (routing) await copyRouting(srcDir, dstDir)
+  if (routing) await copyRouting(srcDir, dstDir, routingContent)
 }
 
 /**

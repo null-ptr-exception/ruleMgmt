@@ -80,11 +80,31 @@ export async function readRouting(dir) {
 }
 
 /**
- * Make `dstDir`'s routing what `srcDir`'s is: both files copied as they are,
- * or removed when the source has none.
+ * A deployment's routing as a sync copies it (#166): `{ errors }` when its
+ * routing.yaml fails the save checks, so a broken one is not spread to
+ * targets; else both files, the resource made again from routing.yaml so a
+ * stale or missing one is not copied. Neither file: nothing to copy.
  */
-export async function copyRouting(srcDir, dstDir) {
-  await putRouting(dstDir, await readRouting(srcDir))
+export async function checkedRouting(dir) {
+  const current = await readRouting(dir)
+  // A resource with nothing to make it from: neither Routing page shows it,
+  // and a read-only target could not remove it.
+  if (current.text === null && current.cr !== null) {
+    return { errors: [`${ROUTING_CR_FILE} is there without a routing.yaml to make it from: remove it, or put routing.yaml back`] }
+  }
+  if (current.text === null) return current
+  const built = buildRouting(current.text)
+  if (built.errors) return { errors: built.errors }
+  return { text: current.text, cr: built.cr }
+}
+
+/**
+ * Make `dstDir`'s routing what `srcDir`'s is: both files copied as they are,
+ * or removed when the source has none. `routing` is what to copy, when the
+ * caller has already read and checked it.
+ */
+export async function copyRouting(srcDir, dstDir, routing) {
+  await putRouting(dstDir, routing ?? await readRouting(srcDir))
 }
 
 /** Put back what readRouting read — a rollback. */

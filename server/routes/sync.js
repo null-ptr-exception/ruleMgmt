@@ -14,7 +14,7 @@ import {
   applyUnlink,
 } from '../lib/sync.js'
 import { newReservedSegment, reservedError } from '../lib/reservedNames.js'
-import { readRouting, restoreRouting } from '../lib/routingFiles.js'
+import { readRouting, restoreRouting, checkedRouting } from '../lib/routingFiles.js'
 import { valuesRefusal, copyToTarget } from '../lib/deploymentWrite.js'
 import { getDepName } from '../lib/subchart.js'
 
@@ -101,8 +101,18 @@ export default function syncRouter() {
         const content = await fs.readFile(path.join(sourceDir, 'values.yaml'), 'utf-8')
         const depName = await getDepName(sourceDir)
         const refusal = await valuesRefusal(req.gitopsDir, depName, depName, content)
-        if (refusal) {
-          return { status: 400, body: { ...refusal, error: `${source} cannot be synced: ${refusal.error}` } }
+        // Nor routing the save checks would refuse: the whole sync is
+        // refused, not half of it, with both files' problems at once. A
+        // resource behind its routing.yaml is made again rather than copied
+        // (#166).
+        const routing = await checkedRouting(sourceDir)
+        if (refusal || routing.errors) {
+          const reasons = [refusal?.error, routing.errors && 'its routing.yaml has problems'].filter(Boolean)
+          return { status: 400, body: {
+            ...refusal,
+            error: `${source} cannot be synced: ${reasons.join('; ')}`,
+            problems: [...(refusal?.problems || []), ...(routing.errors || []).map(message => ({ message }))],
+          } }
         }
         const targetValuesFile = path.join(targetDir, 'values.yaml')
         const prevTargetValues = await fs.readFile(targetValuesFile, 'utf-8').catch(() => null)
@@ -119,7 +129,7 @@ export default function syncRouter() {
           // The bytes checked above, not a second read a `git pull` could
           // change. Chart.yaml comes too: a target on another Template, or a
           // new one at another depth, renders what the source does (#180).
-          await copyToTarget(sourceDir, targetDir, { valuesContent: content })
+          await copyToTarget(sourceDir, targetDir, { valuesContent: content, routingContent: routing })
         } catch (copyErr) {
           // Best-effort rollback: restore the target's previous content and
           // take the link back out of the registry. If the rollback itself

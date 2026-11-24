@@ -36,7 +36,7 @@
  */
 
 import yaml from 'js-yaml'
-import { normalizeRules, columnsInQuotedValues } from './templateGenerator.js'
+import { normalizeRules, columnsInQuotedValues, rowIdentityColumns, ROW_IDENTITY_LABEL } from './templateGenerator.js'
 import { typeNames, profileFor, profileNames, isPromQLType, refusesZeroOffset } from './outputs.js'
 import { EXTRA_GROUP_FIELDS, groupFieldProblems } from './groupFields.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
@@ -321,7 +321,7 @@ export function customTemplateGroups(schema) {
  * / `interval` / `limit` in the shape it already understands, so this builds
  * that in memory without ever writing it to disk.
  */
-export function groupGenDef(group) {
+export function groupGenDef(group, common = {}) {
   const { properties, required } = columnsToSchema(group.columns)
   const def = { type: 'array', 'x-rules': group.rules.map(canonicalRule) }
   if (group.vars && Object.keys(group.vars).length) def.vars = { ...group.vars }
@@ -330,6 +330,8 @@ export function groupGenDef(group) {
     def.derived = Object.fromEntries(Object.entries(group.derived).map(([n, d]) => [n, { expr: d.expr, ...(d.unit !== undefined ? { unit: d.unit } : {}) }]))
   }
   if (group.once) def.once = true
+  // The chart's row identity label, carried to each group's generator.
+  if (common?.rowIdentity === true) def.rowIdentity = true
   if (group.selectors?.length) def.selectors = [...group.selectors]
   if (group.selectorLabels) def.selectorLabels = { ...group.selectorLabels }
   // `type` is JSON Schema's here (`array`), so the group's output type rides
@@ -355,7 +357,7 @@ export function genSchema(model, originalSchema = null) {
   const schema = modelToSchema(model, originalSchema)
   for (const [key, group] of Object.entries(model.groups || {})) {
     if (group.custom) continue
-    schema.properties[key] = { ...schema.properties[key], ...groupGenDef(group) }
+    schema.properties[key] = { ...schema.properties[key], ...groupGenDef(group, model.common) }
   }
   return schema
 }
@@ -410,18 +412,26 @@ export function groupFileText(group) {
   return lines.join('\n') + '\n'
 }
 
-/** The rules/_common.yaml text for a chart's common columns. */
-export function commonFileText(columns) {
-  const lines = ['columns:']
-  for (const [name, col] of Object.entries(columns)) lines.push(`  ${name}: ${flowColumn(col)}`)
+/**
+ * The rules/_common.yaml text for a chart's common columns and settings.
+ * `rowIdentity` is written when the file has it (true, or false written
+ * out), so a chart without it reads as it always has and one with it keeps
+ * its file.
+ */
+export function commonFileText(columns, { rowIdentity } = {}) {
+  const lines = typeof rowIdentity === 'boolean' ? [`rowIdentity: ${rowIdentity}`] : []
+  if (Object.keys(columns || {}).length || typeof rowIdentity !== 'boolean') lines.push('columns:')
+  for (const [name, col] of Object.entries(columns || {})) lines.push(`  ${name}: ${flowColumn(col)}`)
   return lines.join('\n') + '\n'
 }
+
+/** Whether a chart's model has anything for rules/_common.yaml. */
+export const hasCommonFile = common => Object.keys(common?.columns || {}).length > 0 || typeof common?.rowIdentity === 'boolean'
 
 /** { '<key>.yaml': text, ..., '_common.yaml'?: text } — the files on disk. */
 export function modelToFiles(model) {
   const files = {}
-  const commonCols = model.common?.columns || {}
-  if (Object.keys(commonCols).length) files['_common.yaml'] = commonFileText(commonCols)
+  if (hasCommonFile(model.common)) files['_common.yaml'] = commonFileText(model.common.columns, model.common)
   for (const [key, group] of sortedGroups(model.groups)) {
     if (group.custom) continue
     files[`${key}.yaml`] = groupFileText(group)
@@ -679,8 +689,12 @@ export function parseGroupFile(text, filename) {
 export function parseCommonFile(text) {
   const errors = []
   const doc = loadMapping(text, '_common.yaml', errors)
-  rejectUnknown(doc, ['columns'], '_common.yaml', errors)
-  return { columns: parseColumns(doc.columns, '_common.yaml columns', errors), errors }
+  rejectUnknown(doc, ['rowIdentity', 'columns'], '_common.yaml', errors)
+  // The row identity label (see templateGenerator.js), off unless written.
+  if (doc.rowIdentity !== undefined && typeof doc.rowIdentity !== 'boolean') {
+    errors.push('_common.yaml: rowIdentity must be true or false')
+  }
+  return { columns: parseColumns(doc.columns, '_common.yaml columns', errors), ...(typeof doc.rowIdentity === 'boolean' ? { rowIdentity: doc.rowIdentity } : {}), errors }
 }
 
 /**
@@ -693,8 +707,9 @@ export function parseRulesDir(files) {
   const model = { common: { columns: {} }, groups: {} }
 
   if (files['_common.yaml'] !== undefined) {
-    const { columns, errors: e } = parseCommonFile(files['_common.yaml'])
+    const { columns, rowIdentity, errors: e } = parseCommonFile(files['_common.yaml'])
     model.common.columns = columns
+    if (rowIdentity !== undefined) model.common.rowIdentity = rowIdentity
     errors.push(...e)
   }
   const commonNames = new Set(Object.keys(model.common.columns))
@@ -773,6 +788,47 @@ const typeOk = (value, type) =>
  */
 // A required cell left out or empty: `required: true` on the problem.
 const REQUIRED = 'required — fill it in'
+
+const listed = nums => (nums.length === 2 ? nums.join(' and ') : `${nums.slice(0, -1).join(', ')} and ${nums[nums.length - 1]}`)
+
+/**
+ * Rows the row identity label (rowIdentity) cannot tell apart: in a group
+ * with it, rows setting the same identifying cells — read as Helm reads the
+ * row, merged with _common — get the same alertforge_row, and Prometheus
+ * pairs their alerts by position again. Never a refusal: the rows render as
+ * before, only that one thing is lost.
+ * @returns [{ group, rows: [1-based], message }]
+ */
+export function rowIdentityRepeats(values, model) {
+  if (model?.common?.rowIdentity !== true || !values || typeof values !== 'object') return []
+  const common = values._common && typeof values._common === 'object' && !Array.isArray(values._common) ? values._common : {}
+  const found = []
+  for (const [key, group] of sortedGroups(model.groups)) {
+    if (group.custom || group.once || !Array.isArray(values[key])) continue
+    if (!(group.rules || []).some(r => r.alert !== undefined && r.raw === undefined)) continue
+    const columns = rowIdentityColumns(groupGenDef(group, model.common))
+    if (!columns.length) continue
+    const byCells = new Map()
+    values[key].forEach((row, i) => {
+      if (!row || typeof row !== 'object') return
+      const cells = columns.filter(c => Object.hasOwn(row, c) || Object.hasOwn(common, c))
+        .map(c => [c, Object.hasOwn(row, c) ? row[c] : common[c]])
+      const id = JSON.stringify(cells)
+      if (!byCells.has(id)) byCells.set(id, { cells, rows: [] })
+      byCells.get(id).rows.push(i + 1)
+    })
+    for (const { cells, rows } of byCells.values()) {
+      if (rows.length < 2) continue
+      const same = cells.length ? `the same ${cells.map(([c, v]) => `${c} ${JSON.stringify(v)}`).join(', ')}` : 'none of'
+      found.push({
+        group: key,
+        rows,
+        message: `${key}: rows ${listed(rows)} set ${same} ${cells.length ? '' : `${columns.join(', ')} `}— they get the same ${ROW_IDENTITY_LABEL}, so Prometheus pairs their alerts by position again; tell them apart in a text or true/false column`.replace(/ {2,}/g, ' '),
+      })
+    }
+  }
+  return found
+}
 
 export function valueProblems(values, model) {
   const problems = []

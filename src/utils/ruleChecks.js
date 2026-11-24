@@ -23,6 +23,7 @@ import { normalizeRules, columnFallbacks } from './templateGenerator.js'
 import { danglingRefs, ruleVars, varsIn, nestedPlaceholders, hasUnclosedTemplate } from './ruleModel.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { selectorTemplateProblems } from './selectorContract.js'
+import { ROW_IDENTITY_LABEL } from './reservedNames.js'
 
 const WHOLE_REF_RE = /^\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}$/
 
@@ -93,6 +94,19 @@ export function checkRules(schema) {
     }
 
     if (!Array.isArray(alertDef['x-rules'])) continue
+
+    // The row identity label's name is AlertForge's, on or off: a rule's own
+    // label of that name would be written twice once it is on.
+    for (const rule of rules) {
+      if (rule.raw || !(rule.labels || []).some(l => l.key === ROW_IDENTITY_LABEL)) continue
+      findings.push({
+        severity: 'save',
+        kind: 'reserved-label',
+        group,
+        alert: rule.alert,
+        message: `${rule.alert ? `rule "${rule.alert}"` : `recording rule "${rule.record}"`}: the label ${ROW_IDENTITY_LABEL} is reserved for AlertForge's row identity label`,
+      })
+    }
 
     const requiredSet = new Set([...(alertDef?.items?.required || []), ...commonRequired])
     const { mayBeAbsent } = columnFallbacks(alertDef, commonProps, requiredSet)

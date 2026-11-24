@@ -22,7 +22,7 @@ import { resolveStack, stackValues, unwrapPath, wrapPath, valueIssuesIn } from '
 import { readChartModel } from './chartFiles.js'
 import { copyRouting, writeWhole } from './routingFiles.js'
 import { getTargetsForSource, isSafeSyncPath, isDeploymentDir } from './sync.js'
-import { valueProblems } from '../../src/utils/rulesFile.js'
+import { valueProblems, rowIdentityRepeats } from '../../src/utils/rulesFile.js'
 import { selectorValueProblems } from '../../src/utils/selectorContract.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
@@ -102,6 +102,26 @@ export async function valuesRefusal(gitopsDir, dir, values, { chartName, stack: 
   if (!stack.layers.length) return problemsOf(bare, model, keep)
   const { merged, layers } = stackValues(stack, { own: bare })
   return problemsOf(merged, model, p => keep(p) && !isInherited(p, bare, layers))
+}
+
+/**
+ * What a save of these values lets through but is worth saying (never a
+ * refusal): rows the row identity label cannot tell apart. Read as Helm
+ * reads them — on a stack, merged with what the deployment inherits.
+ * `values` as valuesRefusal takes it; [] when there is nothing to say.
+ */
+export async function valuesWarnings(gitopsDir, dir, values, { chartName, stack: resolved } = {}) {
+  const stack = resolved ?? await resolveStack(gitopsDir, dir)
+  let bare = values
+  if (typeof values === 'string') {
+    try { bare = unwrapPath(yaml.load(values) || {}, stack.keys) } catch { return [] }
+  }
+  const chart = stack.chart || chartName
+  if (!chart || !bare || typeof bare !== 'object') return []
+  const { model } = await readChartModel(path.join(gitopsDir, chartsDirName(), chart))
+  if (!model) return []
+  const merged = stack.layers.length ? stackValues(stack, { own: bare }).merged : bare
+  return rowIdentityRepeats(merged, model).map(r => r.message)
 }
 
 /**
@@ -251,5 +271,6 @@ export async function saveValues(gitopsDir, registry, folder, values, { chartNam
   const text = typeof values === 'string' ? values : dumpForHelm(wrapPath(values, keys), { lineWidth: -1 })
   await fs.writeFile(path.join(dir, 'values.yaml'), text, 'utf-8')
   const syncFailed = await copyToTargets(gitopsDir, registry, folder, { values: true, routing: false })
-  return { status: 200, body: { ...okWith(syncFailed), version: await valuesVersion(gitopsDir, dir, await resolveStack(gitopsDir, dir)) } }
+  const warnings = await valuesWarnings(gitopsDir, dir, values, { chartName, stack })
+  return { status: 200, body: { ...okWith(syncFailed), version: await valuesVersion(gitopsDir, dir, await resolveStack(gitopsDir, dir)), ...(warnings.length ? { warnings } : {}) } }
 }

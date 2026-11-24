@@ -112,7 +112,7 @@ async function main() {
       continue
     }
 
-    const genDef = model?.groups?.[group] ? groupGenDef(model.groups[group]) : alertDef
+    const genDef = model?.groups?.[group] ? groupGenDef(model.groups[group], model.common) : alertDef
     const content = generateGroupTemplate(group, genDef, '{{ .Release.Name }}', schema, { objectMeta })
     if (!content) {
       results.push(['skip', group, 'no rules to generate'])

@@ -118,6 +118,18 @@ rule's expr where the label matchers go — `cpu{${selector}}`. Those columns
 become `.*`-or-a-name, and give each a default, usually `.*`. See
 [rules-format.md](rules-format.md#selectors-a-default-with-exceptions).
 
+### Keep alerts when rows are inserted or removed
+
+On Prometheus, a row inserted, removed or moved in the middle of a group
+restarts the `for` of every alert after it in the same object. To keep each
+row's alerts, open **Common Variables** in the Template editor, turn on
+**Row identity label**, and **Save**: each alerting rule of a group with
+text, true/false or selector columns gets a label `alertforge_row`. Turning
+it on (or off) is itself a change every alert sees once — new alerts in
+Alertmanager, one or two more notifications per group — so do it at a quiet
+time, and never match a silence on `alertforge_row`. See
+[the row identity label](rules-format.md#the-row-identity-label-rowidentity).
+
 ### Hand-write a rule
 
 When a rule needs something the fields do not cover — `limit`,

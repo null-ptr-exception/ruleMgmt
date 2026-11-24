@@ -22,6 +22,7 @@ import { readSharedConfigs, SHARED_FILE } from './sharedConfigs.js'
 import { sharedRefProblems } from '../../src/utils/routingGenerator.js'
 import { listDeploymentPaths, walkDeployments } from './deploymentWalk.js'
 import { resolveStack } from './stack.js'
+import { valuesWarnings } from './deploymentWrite.js'
 import { COMMON_DIR, isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 const SYNC_FILE = 'sync.yaml'
@@ -193,6 +194,8 @@ export async function deploymentCommitBlockers(gitopsDir) {
   const routingProblems = []
   // Never blocking: what a routing's configs will do that is worth saying.
   const routingWarnings = []
+  // Never blocking either: rows the row identity label cannot tell apart.
+  const valueWarnings = []
   const registry = sync.readable ? await readSyncRegistry(gitopsDir) : { syncs: [] }
   const walked = await walkDeployments(gitopsDir)
   const deployments = walked.filter(d => d.kind === 'deployment').map(d => d.path)
@@ -218,6 +221,9 @@ export async function deploymentCommitBlockers(gitopsDir) {
     if (template) findings.push({ severity: 'commit', deployment: dep, ...template })
     const nulls = stackNulls(stack)
     if (nulls.length) findings.push({ severity: 'commit', kind: 'values-null', deployment: dep, regenerable: false, description: `${dep}: ${nulls.join('; ')}` })
+    const valuesText = await fs.readFile(path.join(gitopsDir, dep, 'values.yaml'), 'utf-8').catch(() => null)
+    const repeats = valuesText === null ? [] : await valuesWarnings(gitopsDir, path.join(gitopsDir, dep), valuesText, { stack })
+    if (repeats.length) valueWarnings.push({ deployment: dep, warnings: repeats })
     // A target is held to its source below. One listed as its own target is
     // no target (sync.yaml is refused for it too): its routing is checked.
     const followed = getSourceForTarget(registry, dep)
@@ -281,7 +287,7 @@ export async function deploymentCommitBlockers(gitopsDir) {
       fixes.add(dep)
     }
   }
-  return { findings, routingProblems, routingWarnings, unreadable, regenerable: fixes.size, readable: sync.readable }
+  return { findings, routingProblems, routingWarnings, valueWarnings, unreadable, regenerable: fixes.size, readable: sync.readable }
 }
 
 /**

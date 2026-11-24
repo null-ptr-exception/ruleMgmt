@@ -25,3 +25,9 @@ export function isCommonChartPath(relPath) {
   const segments = String(relPath ?? '').split(/[\\/]/).filter(s => s && s !== '.')
   return segments.length >= 2 && segments[segments.length - 2] === COMMON_DIR
 }
+
+/**
+ * The label AlertForge's row identity option puts on each alerting rule
+ * (templateGenerator.js): a user's label of that name would be written twice.
+ */
+export const ROW_IDENTITY_LABEL = 'alertforge_row'

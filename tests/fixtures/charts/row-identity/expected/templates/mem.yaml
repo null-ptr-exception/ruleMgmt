@@ -1,0 +1,21 @@
+{{- $chunks := chunk 100 ($.Values.mem | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-mem-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: mem
+      rules:
+        {{- $common := $.Values._common | default dict }}
+        {{- range $rows }}
+        {{- $row := merge . $common }}
+        - alert: MemHigh
+          expr: |-
+            mem_used_ratio{env="{{ $row.env }}"} > {{ $row.threshold }}
+        {{- end }}
+{{- end }}

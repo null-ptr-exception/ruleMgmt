@@ -504,6 +504,86 @@ Typically `cluster`, `env`, `team` — one value for the whole deployment, but
 every row needs it. Putting them in the table would mean retyping them on every
 row.
 
+### The row identity label (`rowIdentity`)
+
+Off unless written. `rowIdentity: true` in `_common.yaml` (or the switch in
+the Template editor's **Common Variables**) gives each alerting rule of a
+group with rows a label `alertforge_row`, a hash of the row's identifying
+cells:
+
+```yaml
+# rules/_common.yaml
+rowIdentity: true
+columns:
+  env: { type: string, required: true }
+```
+
+**What it is for.** On a reload Prometheus pairs the rules it had with the new
+ones by name and labels. Every row of a group renders rules of the same name
+and, mostly, the same labels, so they are paired by position: insert, remove
+or reorder a row in the middle and every alert after it in the same object
+starts its `for` again. With the label, each row's rules are paired with
+themselves. A row that moves to another object (a chunk of 100 rows, a shard)
+still starts again: that is another rule group. vmalert pairs rules by their
+expression and is not affected either way.
+
+**Which cells.** Of the group's own `string` and `boolean` columns and its
+`selectors` (a `_common` one included), the cells the row sets — in its own
+values or, for a `_common` column, in the `_common` it inherits. Not `number`,
+`integer` or `duration` columns, so a threshold or a window edited keeps the
+alert. Not a cell the row leaves out, even one with a default: a column added
+to the group, or a default changed, leaves every row's label as it was. A
+cell written out with its default's value is a cell set (`page: false` and no
+`page` differ). A group with none of these columns gets no label, nor does a
+recording rule (its series would change), a `raw` rule (written by hand) or a
+once group (no rows).
+
+**Two rows with the same cells** — the same identifying values, differing
+only in thresholds — get the same label, and Prometheus pairs their alerts
+by position again. A deployment's save and a commit say so, naming the rows
+(a warning; the save goes through); tell them apart in a text or true/false
+column to fix it.
+
+**The value** is the first 16 hex digits of the sha256 of those cells as
+JSON, as Go writes it (Helm's `toJson`): keys sorted, no spaces, `<`, `>` and
+`&` written as `\u003c`, `\u003e`, `\u0026`. It can be worked out by hand — here
+a row setting `namespace`, `workload` and `team`, not `page`:
+
+```bash
+printf '%s' '{"namespace":"prod","team":"db\u0026ops","workload":"api"}' | sha256sum | cut -c1-16
+# 9bcd584eefe5c529
+```
+
+**An AlertForge from before this setting** refuses a `_common.yaml` with
+`rowIdentity` in it, as an unknown key, so the chart cannot be saved or
+regenerated there; templates already generated still render as they are.
+`rowIdentity: false` written out is off, and stays in the file.
+
+**Turning it on, or off, once** changes every alert's labels, measured with
+Alertmanager 0.27 and 0.28:
+
+- Alertmanager sees each alert as a new one. Per group, one or two more
+  notifications: one listing the old and the new alert together (or, with
+  `group_by: ['...']`, the new one alone), and one more for the old alert
+  resolved when `send_resolved` is on.
+- The same alert is listed twice for about 4 minutes, until Prometheus stops
+  sending the old one and it resolves. A rule whose `for` is longer than that
+  has a gap instead: the old one resolves before the new one fires.
+- Each alert starts its `for` again (measured on Prometheus 2.54, on a reload
+  and on a restart, and on vmalert, on a reload).
+- Existing silences keep working, and so do inhibit rules whose `equal` does
+  not list `alertforge_row`. A source alert that fires later than its target
+  (a longer `for`) lets one target notification through. Turn it on at a
+  quiet time.
+
+**Do not match a silence, or an inhibit rule's `equal`, on `alertforge_row`**:
+its value changes whenever one of the row's identifying cells does. A silence
+made from an alert in Alertmanager's UI starts with every label of it,
+`alertforge_row` included — remove that matcher before saving it.
+
+`alertforge_row` is reserved: a rule's or a group's own label of that name is
+refused at save, whether the option is on or not.
+
 ## The escape hatch
 
 When a rule needs something the fields do not cover, write that one entry as
@@ -540,6 +620,8 @@ cover has somewhere to go, so rejecting unknown keys costs nobody anything.
 - In `for` or `keep_firing_for`, a brace next to a `${column}` (`{${window}}`):
   it can only make the duration something no evaluator reads
 - A name shared between `vars` and a column, or a name that is `selector`
+- A rule's or a group's label named `alertforge_row`, the
+  [row identity label](#the-row-identity-label-rowidentity)'s
 - A `vars` entry referencing another `vars` entry
 - An optional column with no default referenced from the middle of a string
 - `group:` not matching the filename
@@ -671,6 +753,13 @@ A [once group](#once-groups) has no rows and so no chunk: its objects are
 
 Neither ever changes an alert's identity: the `alert` names and labels are
 identical however the group is split. Only `metadata.name` differs.
+
+On a reload, Prometheus pairs a group's rules by name and labels, and the
+rules of the rows of one object share them: a row inserted, removed or moved
+in the middle restarts every alert after it in that object (Prometheus 2.54
+and 3; vmalert is not affected). Adding a row at the end does not. The
+[row identity label](#the-row-identity-label-rowidentity) keeps each row's
+state.
 
 ## Output profiles
 

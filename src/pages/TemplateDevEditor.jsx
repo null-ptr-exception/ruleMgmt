@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, Tooltip, Tag, message } from 'antd'
+import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, Tooltip, Tag, Switch, message } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, ImportOutlined, EditOutlined } from '@ant-design/icons'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
@@ -8,7 +8,7 @@ import KVEditor from '../components/KVEditor'
 import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
 import { syncFailedNotice } from '../utils/syncNotice'
-import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_RE } from '../utils/rulesFile'
+import { parseRulesDir, schemaToModel, groupFileText, commonFileText, hasCommonFile, GROUP_KEY_RE } from '../utils/rulesFile'
 import { importRules, modelGroupFromImport } from '../utils/ruleImport'
 import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
@@ -388,7 +388,7 @@ export default function TemplateDevEditor() {
     touch(`${key}.yaml`)
   }
   const updateCommonColumns = fn => {
-    setModel(m => ({ ...m, common: { columns: fn(m.common.columns) } }))
+    setModel(m => ({ ...m, common: { ...m.common, columns: fn(m.common.columns) } }))
     touch('_common.yaml')
   }
 
@@ -440,10 +440,9 @@ export default function TemplateDevEditor() {
 
   function buildFiles() {
     const files = {}
-    const common = model.common.columns
-    if (Object.keys(common).length) {
+    if (hasCommonFile(model.common)) {
       files['_common.yaml'] = dirtyFiles.has('_common.yaml') || !originalRef.current['_common.yaml']
-        ? commonFileText(common) : originalRef.current['_common.yaml']
+        ? commonFileText(model.common.columns, model.common) : originalRef.current['_common.yaml']
     }
     for (const key of order) {
       const g = model.groups[key]
@@ -855,6 +854,34 @@ export default function TemplateDevEditor() {
                 <Text type="secondary" style={{ fontSize: 12, display: 'block', margin: '12px 0 16px' }}>
                   Filled in once per deployment, read by every row of every group.
                 </Text>
+                <div data-testid="row-identity" style={{ marginBottom: 20, padding: 12, border: '1px solid #f0f0f0', borderRadius: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Switch size="small" aria-label="Row identity label" checked={model.common.rowIdentity === true}
+                      onChange={on => {
+                        setModel(m => {
+                          const { rowIdentity: _was, ...rest } = m.common
+                          return { ...m, common: on ? { ...rest, rowIdentity: true } : rest }
+                        })
+                        touch('_common.yaml')
+                      }} />
+                    <Text strong style={{ fontSize: 13 }}>Row identity label</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{model.common.rowIdentity === true ? 'on' : 'off'}</Text>
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                    Gives every alerting rule of a group with text, true/false or selector columns a label <Text code>alertforge_row</Text>,
+                    a hash of those cells. Prometheus then keeps each alert&apos;s state when rows are inserted, removed or reordered;
+                    without it, every alert after the change in the same object starts its <Text code>for</Text> again.
+                    Not on recording rules, raw rules or once groups.
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }} data-testid="row-identity-once">
+                    Turning it on or off, once: Alertmanager sees every alert as a new one — one or two more notifications per group,
+                    the same alert listed twice for about 4 minutes until the old one resolves, and each alert starts its <Text code>for</Text> again.
+                    Existing silences and inhibit rules keep working.
+                  </Text>
+                  <Text type="warning" style={{ fontSize: 12, display: 'block', marginTop: 6 }} data-testid="row-identity-silences">
+                    Do not match a silence, or an inhibit rule&apos;s equal, on alertforge_row: its value changes whenever a row&apos;s identifying cells change.
+                  </Text>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
                     Columns{missingDescriptions(model.common.columns) > 0 && (

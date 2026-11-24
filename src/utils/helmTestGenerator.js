@@ -33,7 +33,8 @@
 import { parseDerived, evalDerived } from './derived.js'
 import yaml from 'js-yaml'
 import { groupGenDef, modelToSchema } from './rulesFile.js'
-import { normalizeRules, groupShardSizes } from './templateGenerator.js'
+import { createHash } from 'crypto'
+import { normalizeRules, groupShardSizes, rowIdentityColumns, ROW_IDENTITY_LABEL } from './templateGenerator.js'
 import { profileFor } from './outputs.js'
 import { GROUP_FIELD_NAMES, renderedGroupValue } from './groupFields.js'
 import { needsQuote, keyScalar, readsAsNonStringInYaml11, KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
@@ -133,7 +134,30 @@ function expectedMap(entries, bareKeys) {
   }))
 }
 
-function ruleAsserts(group, rules, groupText, bareKeys) {
+/**
+ * The row identity label's value for these cells, worked out here rather
+ * than read from the template: Go's JSON of the identifying cells the row
+ * sets (keys sorted, no spaces, <, > and & escaped, as Sprig's toJson writes
+ * it), its sha256, the first 16 hex digits.
+ *
+ * JSON.stringify and Go's encoding/json write every string Helm can read the
+ * same way once <, >, &, U+2028 and U+2029 are escaped as Go does: control
+ * characters as \b, \f, \n, \r, \t or \u00XX in both (Go since 1.22; Helm
+ * 3.15.4 is built with Go 1.22.6, 3.19.0 with 1.24.7), everything else as
+ * it is. The two places they would differ — a lone surrogate, bytes that are
+ * not UTF-8 — cannot reach the template: Helm refuses such a values.yaml
+ * ("invalid Unicode character escape code", "invalid leading UTF-8 octet").
+ */
+export function rowIdentityValue(columns, cells) {
+  const str = s => JSON.stringify(s).replace(/[<>&\u2028\u2029]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+  const json = `{${[...columns].sort().filter(c => Object.hasOwn(cells, c)).map(c => {
+    const v = cells[c]
+    return `${str(c)}:${typeof v === 'string' ? str(v) : JSON.stringify(v)}`
+  }).join(',')}}`
+  return createHash('sha256').update(json).digest('hex').slice(0, 16)
+}
+
+function ruleAsserts(group, rules, groupText, bareKeys, identity = null) {
   const asserts = []
   rules.forEach((rule, i) => {
     if (rule.raw) return
@@ -153,9 +177,10 @@ function ruleAsserts(group, rules, groupText, bareKeys) {
       ? { equal: { path: `${path}.for`, value: substitute(rule.for, text) } }
       : { notExists: { path: `${path}.for` } })
     for (const field of ['labels', 'annotations']) {
-      if (!rule[field]?.length) continue
+      const extra = field === 'labels' && identity ? [[ROW_IDENTITY_LABEL, identity]] : []
+      if (!rule[field]?.length && !extra.length) continue
       const value = field === 'annotations' ? e => blockValue(e.value, text) : e => labelValue(e, text)
-      const expected = expectedMap(rule[field].map(e => [e.key, value(e)]), bareKeys)
+      const expected = expectedMap([...(rule[field] || []).map(e => [e.key, value(e)]), ...extra], bareKeys)
       asserts.push({ equal: { path: `${path}.${field}`, value: expected } })
     }
   })
@@ -200,7 +225,7 @@ export function generateHelmUnittestSuite(model) {
   // nothing to render or to test.
   const groups = Object.entries(model?.groups || {})
     .filter(([, g]) => !g.custom)
-    .map(([key, g]) => [key, g, groupShardSizes(key, groupGenDef(g), schema)])
+    .map(([key, g]) => [key, g, groupShardSizes(key, groupGenDef(g, model.common), schema)])
     .filter(([, , sizes]) => sizes.length > 0)
   if (!groups.length) return ''
 
@@ -211,7 +236,11 @@ export function generateHelmUnittestSuite(model) {
 
   for (const [key, group, sizes] of groups) {
     const template = `templates/${key.replace(/_/g, '-')}.yaml`
-    const rules = normalizeRules(key, groupGenDef(group))
+    const genDef = groupGenDef(group, model.common)
+    const rules = normalizeRules(key, genDef)
+    // The row identity label (when the chart has it on), for a row's cells.
+    const identityColumns = genDef.rowIdentity && !group.once ? rowIdentityColumns(genDef) : []
+    const identityOf = cells => (identityColumns.length ? rowIdentityValue(identityColumns, cells) : null)
     // The objects the group renders as, each with its slice of the rules.
     const base = key.replace(/_/g, '-')
     let start = 0
@@ -260,7 +289,7 @@ export function generateHelmUnittestSuite(model) {
           // The mark a profile is told apart by (prometheus3's annotation).
           ...Object.entries(profile.annotations).map(([k, v]) => ({ equal: { path: `metadata.annotations["${k}"]`, value: v } })),
           { lengthEqual: { path: 'spec.groups[0].rules', count: doc.rules.length } },
-          ...ruleAsserts(group, doc.rules, text, bareKeys),
+          ...ruleAsserts(group, doc.rules, text, bareKeys, identityOf({ ...commonValues, ...ownValues })),
         ]),
       ],
     })
@@ -277,7 +306,8 @@ export function generateHelmUnittestSuite(model) {
       template,
       release: { name: RELEASE },
       set: setFor(key, omitDefaults(commonValues, commonColumns), omitDefaults(ownValues, ownColumns), group.once),
-      asserts: perDocument(doc => ruleAsserts(group, doc.rules, withDefaults, bareKeys)),
+      asserts: perDocument(doc => ruleAsserts(group, doc.rules, withDefaults, bareKeys,
+        identityOf({ ...omitDefaults(commonValues, commonColumns), ...omitDefaults(ownValues, ownColumns) }))),
     })
   }
 

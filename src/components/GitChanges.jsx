@@ -47,7 +47,7 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
         const data = await res.json().catch(() => ({}))
         // A routing.yaml with errors does not stop a commit (#179), but it
         // is not what deploys: say which, to fix on their Routing page.
-        if (data.routingProblems?.length || data.routingWarnings?.length || data.unconverted?.length || data.unreadable?.length) {
+        if (data.routingProblems?.length || data.routingWarnings?.length || data.valueWarnings?.length || data.unconverted?.length || data.unreadable?.length) {
           Modal.warning({
             title: 'Changes committed',
             content: (
@@ -67,6 +67,14 @@ export default function GitChanges({ gitStatus, onRefresh, onSelectFile }) {
                     <div style={{ marginTop: 8 }}>Worth knowing about their notification configs:</div>
                     <ul data-testid="commit-routing-warnings" style={{ paddingLeft: 18, margin: '4px 0 8px' }}>
                       {data.routingWarnings.map(w => <li key={w.deployment}>{w.deployment}: {w.warnings.join('; ')}</li>)}
+                    </ul>
+                  </>
+                )}
+                {data.valueWarnings?.length > 0 && (
+                  <>
+                    <div style={{ marginTop: 8 }}>Rows the row identity label cannot tell apart:</div>
+                    <ul data-testid="commit-value-warnings" style={{ paddingLeft: 18, margin: '4px 0 8px' }}>
+                      {data.valueWarnings.map(w => <li key={w.deployment}>{w.deployment}: {w.warnings.join('; ')}</li>)}
                     </ul>
                   </>
                 )}

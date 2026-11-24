@@ -1,0 +1,15 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-up-1
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: up
+      rules:
+        {{- $row := $.Values._common | default dict }}
+        - alert: TargetDown
+          expr: |-
+            up{env="{{ $row.env }}"} == 0

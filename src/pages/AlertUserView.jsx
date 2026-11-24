@@ -67,6 +67,7 @@ export default function AlertUserView() {
   const [filters, setFilters] = useState({})
   const [dirty, setDirty] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
+  const [saveWarnings, setSaveWarnings] = useState([])
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
   const [previewCheck, setPreviewCheck] = useState(null)
@@ -492,10 +493,13 @@ export default function AlertUserView() {
     })
   }
 
-  // The deployment was saved; a sync target that was not is named.
+  // The deployment was saved; a sync target that was not is named, and what
+  // the save let through but is worth saying (rows the row identity label
+  // cannot tell apart).
   function warnSyncFailed(result) {
     const notice = syncFailedNotice(result.syncFailed)
     if (notice) message.warning({ content: notice, duration: 10 })
+    setSaveWarnings(result.warnings || [])
   }
 
   async function handleSave() {
@@ -535,6 +539,8 @@ export default function AlertUserView() {
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
     warnSyncFailed(result)
+    // The overview has no line of its own for them.
+    if (result.warnings?.length) message.warning({ content: result.warnings.join('; '), duration: 10 })
     return true
   }
 
@@ -895,6 +901,9 @@ export default function AlertUserView() {
                 <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>
               )}
               {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
+              {saveWarnings.length > 0 && (
+                <Text type="warning" data-testid="values-warnings" style={{ fontSize: 12 }}>{saveWarnings.join('; ')}</Text>
+              )}
             </div>
           </>
         ) : (

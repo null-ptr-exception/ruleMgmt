@@ -1,0 +1,30 @@
+# Identifying columns: the selectors (namespace, workload) and the group's
+# own text and true/false columns (page, team) — not threshold or window.
+# env is _common's and not a selector: not in the hash. Only the cells a
+# row sets are in it: one leaving page or team out is hashed without them.
+selectors: [namespace, workload]
+
+columns:
+  namespace: { type: string, required: true }
+  workload:  { type: string, required: true }
+  page:      { type: boolean, default: false }
+  team:      { type: string }
+  threshold: { type: number, default: 80 }
+  window:    { type: duration, default: 5m }
+
+rules:
+  - alert: CpuHigh
+    expr: avg_over_time(cpu_usage{${selector}}[${window}]) > ${threshold}
+    for: 1m
+    labels: { severity: warning }
+    annotations: { page: '${page}', owner: '${team}' }
+  # No labels of its own: it gets a labels map with only the identity.
+  - alert: CpuStuck
+    expr: cpu_usage{${selector}} > 50
+  # A recording rule keeps its series: no label.
+  - record: cpu:avg5m
+    expr: avg_over_time(cpu_usage{${selector}}[5m])
+  # Written by hand: no label.
+  - raw: |
+      alert: CpuRaw
+      expr: cpu_usage{${selector}} > 60

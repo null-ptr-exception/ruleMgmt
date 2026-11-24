@@ -1,6 +1,7 @@
 import yaml from 'js-yaml'
 import { varsIn, danglingRefs } from './ruleModel.js'
 import { GROUP_FIELD_NAMES } from './groupFields.js'
+import { ROW_IDENTITY_LABEL } from './reservedNames.js'
 import { profileNames, typeNames, profileFor, profileOfObject, unknownProfileMark, PROFILES, PROFILE_ANNOTATION_KEYS, DEFAULT_TYPE } from './outputs.js'
 
 /**
@@ -73,6 +74,14 @@ export function toGroupKey(name, index) {
     .replace(/^_+|_+$/g, '')
     .toLowerCase()
   return /^[a-z]/.test(slug) ? slug : `group_${slug}`
+}
+
+// The row identity label is AlertForge's own (a rule's label of that name is
+// refused): rules exported from a chart that had it on come in without it.
+function withoutRowIdentity(rule) {
+  if (!rule?.labels || typeof rule.labels !== 'object' || !Object.hasOwn(rule.labels, ROW_IDENTITY_LABEL)) return null
+  const { [ROW_IDENTITY_LABEL]: _row, ...labels } = rule.labels
+  return { ...rule, labels }
 }
 
 function importRecord(rule, warnings, where) {
@@ -176,9 +185,17 @@ export function importRules(yamlText) {
         // A vmalert rules file says the same for VictoriaMetrics' metrics.
         warnings.push(`${where}: type "prometheus" is taken as ${DEFAULT_TYPE} (Prometheus 2) — for a vmalert rules file, make it vm`)
       }
+      let stripped = 0
       const rules = (group.rules || [])
-        .map(rule => importRule(rule, warnings, where))
+        .map(rule => {
+          const without = withoutRowIdentity(rule)
+          if (without) stripped++
+          return importRule(without ?? rule, warnings, where)
+        })
         .filter(Boolean)
+      if (stripped) {
+        warnings.push(`${where}: label ${ROW_IDENTITY_LABEL} left out of ${stripped} rule${stripped === 1 ? '' : 's'} — it is AlertForge's row identity label, which the chart adds itself when Row identity label is on in Common Variables`)
+      }
       if (rules.length === 0) {
         warnings.push(`${where}: no rules found`)
         continue

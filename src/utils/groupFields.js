@@ -17,6 +17,7 @@
  */
 
 import { durationFault, durationNs } from './duration.js'
+import { ROW_IDENTITY_LABEL } from './reservedNames.js'
 import { durationScalar, keyScalar, nameScalar } from './yamlScalar.js'
 import { hasUnclosedTemplate } from './ruleModel.js'
 
@@ -71,6 +72,7 @@ function groupLabels(value, group, profile) {
     if (typeof text !== 'string') return `labels "${name}": the value must be text — quote it, e.g. "${text}"`
     if (name === '') return 'labels: a label name cannot be empty'
     if (name.startsWith('__')) return `labels "${name}": a name starting with __ is reserved`
+    if (name === ROW_IDENTITY_LABEL) return `labels "${name}": the name is reserved for AlertForge's row identity label`
     // Prometheus 3 takes any UTF-8 name (service.name); the others the
     // classic set.
     if (profile.validate !== 'promtool3' && !CLASSIC_NAME.test(name)) {

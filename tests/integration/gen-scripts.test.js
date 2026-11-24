@@ -420,6 +420,29 @@ describe('import-rules.mjs', () => {
     expect(check.status, check.stdout).toBe(0)
   })
 
+  // Rules exported from a cluster where the chart had the row identity
+  // label on carry alertforge_row, a name a rule may not have.
+  it('takes rules carrying alertforge_row without it, and says so', async () => {
+    run(GEN_RULES, [chartDir])
+    await fs.writeFile(rulesFile, `groups:
+  - name: disk
+    rules:
+      - alert: DiskFull
+        expr: disk_used{namespace="prod"} > 90
+        labels: {severity: warning, alertforge_row: 9bcd584eefe5c529}
+      - alert: DiskGone
+        expr: absent(disk_used{namespace="prod"})
+        labels: {alertforge_row: 9bcd584eefe5c529}
+`)
+    const imported = run(IMPORT_RULES, [rulesFile, chartDir])
+    expect(imported.status, imported.stdout).toBe(0)
+    expect(imported.stdout).toContain("disk: label alertforge_row left out of 2 rules — it is AlertForge's row identity label")
+    expect(imported.stdout).not.toContain('ERROR')
+    const written = await fs.readFile(path.join(chartDir, 'rules', 'disk.yaml'), 'utf-8')
+    expect(written).not.toContain('alertforge_row')
+    expect(written).toContain('severity: warning')
+  })
+
   it('migrates a chart that has no rules/ yet, in the same step', async () => {
     const imported = run(IMPORT_RULES, [rulesFile, chartDir])
     expect(imported.status, imported.stdout).toBe(0)

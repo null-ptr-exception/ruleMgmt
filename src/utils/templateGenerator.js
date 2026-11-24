@@ -23,6 +23,7 @@ import { needsQuote, durationScalar, nameScalar, keyScalar } from './yamlScalar.
 import { profileFor } from './outputs.js'
 import { isAlertGroup, getCommonSchema } from './schemaUtils.js'
 import { selectorLabelsFor } from './selectorContract.js'
+import { ROW_IDENTITY_LABEL } from './reservedNames.js'
 
 function toPascalCase(str) {
   return str.split(/[_\s-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')
@@ -161,7 +162,40 @@ function guarded(text, guards, refVar, indent) {
   )
 }
 
-function renderRule(rule, ref, refVar, defaults, selectorCall = null) {
+/**
+ * The row identity label (an opt-in per chart): Prometheus matches the rules
+ * it had before a reload with the new ones by name and labels, and every row
+ * of a group renders rules of the same name and labels — so they are matched
+ * by position, and inserting or removing a row in the middle restarts every
+ * alert after it. With this label each alerting rule names its row: a hash
+ * of the row's identifying cells, the same wherever the row is.
+ */
+export { ROW_IDENTITY_LABEL }
+
+/**
+ * The columns a row is told apart by: the group's own text and true/false
+ * columns, and its selector columns. Not numbers or durations — a threshold
+ * or a window edited keeps the alert — and not _common's other columns, one
+ * value per deployment. Sorted, as the hash reads them.
+ */
+export function rowIdentityColumns(alertDef) {
+  const own = alertDef?.items?.properties || {}
+  const told = Object.keys(own).filter(c => (own[c]?.type === 'string' && own[c]?.['x-type'] !== 'duration') || own[c]?.type === 'boolean')
+  return [...new Set([...(alertDef?.selectors || []), ...told])].sort()
+}
+
+/**
+ * The label's value Helm renders: the first 16 hex digits of the sha256 of
+ * the identifying cells the row sets, as JSON (sorted keys, Go's encoding).
+ * Only those it sets — merged with _common, as Helm reads the row — not a
+ * default and not a column it leaves out: a column added to the group, or a
+ * default changed, leaves every existing row's value as it was.
+ */
+function rowIdentityLine(columns, refVar) {
+  return `            ${ROW_IDENTITY_LABEL}: "{{ pick ${refVar} ${columns.map(c => JSON.stringify(c)).join(' ')} | toJson | sha256sum | trunc 16 }}"`
+}
+
+function renderRule(rule, ref, refVar, defaults, selectorCall = null, rowIdentity = null) {
   const indent = ' '.repeat(8)
   if (rule.raw) return guarded(renderRawRule(rule.raw, ref, defaults, selectorCall), rule.guards, refVar, indent)
 
@@ -186,8 +220,10 @@ function renderRule(rule, ref, refVar, defaults, selectorCall = null) {
       ? guarded(line, [].concat(rule.keepFiringGuard), refVar, '          ')
       : line)
   }
-  if (rule.labels?.length) {
-    parts.push(`          labels:\n` + rule.labels.map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults)).join('\n'))
+  if (rule.labels?.length || rowIdentity) {
+    const lines = (rule.labels || []).map(l => renderEntry(l, ref, refVar, ' '.repeat(12), defaults))
+    if (rowIdentity) lines.push(rowIdentity)
+    parts.push(`          labels:\n` + lines.join('\n'))
   }
   if (rule.annotations?.length) {
     parts.push(`          annotations:\n` + rule.annotations.map(a => renderEntry(a, ref, refVar, ' '.repeat(12), defaults, true)).join('\n'))
@@ -454,8 +490,15 @@ function buildGroupParts(alertGroup, alertDef, commonVars) {
   }
   const renderDefaults = Object.keys(derived).length ? { ...defaults, [DERIVED]: derived } : defaults
 
+  // The row identity label, when the chart turns it on: on the alerting
+  // rules of a group with rows and something to tell them apart by. Not on
+  // a recording rule (its series would change), a raw rule (written by
+  // hand) or a once group (no rows).
+  const identity = alertDef.rowIdentity && !legacy && !once ? rowIdentityColumns(alertDef) : []
+  const identityLine = identity.length ? rowIdentityLine(identity, refVar) : null
+
   const ruleTexts = attachGuards(rules, mayBeAbsent, derived)
-    .map(rule => renderRule(rule, ref, refVar, renderDefaults, selectorCall(rule)))
+    .map(rule => renderRule(rule, ref, refVar, renderDefaults, selectorCall(rule), identityLine))
 
   if (ruleTexts.length === 0) return null
 

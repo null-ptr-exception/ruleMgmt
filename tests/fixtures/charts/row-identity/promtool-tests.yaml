@@ -1,0 +1,37 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'cpu_usage{namespace="prod", workload="api"}'
+        values: '95x10'
+      - series: 'cpu_usage{namespace="dev", workload="web"}'
+        values: '85x10'
+    alert_rule_test:
+      # Each row's alert carries its own alertforge_row (dev's threshold is 90).
+      - eval_time: 5m
+        alertname: CpuHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: prod, workload: api, alertforge_row: 9bcd584eefe5c529 }
+            exp_annotations: { page: 'false', owner: 'db&ops' }
+      - eval_time: 5m
+        alertname: CpuStuck
+        exp_alerts:
+          - exp_labels: { namespace: prod, workload: api, alertforge_row: 9bcd584eefe5c529 }
+          - exp_labels: { namespace: dev, workload: web, alertforge_row: 3d4b96ef0896658b }
+      # The raw rule has none.
+      - eval_time: 5m
+        alertname: CpuRaw
+        exp_alerts:
+          - exp_labels: { namespace: prod, workload: api }
+          - exp_labels: { namespace: dev, workload: web }
+    promql_expr_test:
+      # The recording rule's series has no alertforge_row.
+      - expr: 'cpu:avg5m'
+        eval_time: 5m
+        exp_samples:
+          - labels: 'cpu:avg5m{namespace="prod", workload="api"}'
+            value: 95
+          - labels: 'cpu:avg5m{namespace="dev", workload="web"}'
+            value: 85

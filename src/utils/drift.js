@@ -30,7 +30,7 @@ export function generateProducts(model, originalSchema, objectMeta) {
   const templates = {}
   for (const [group, entry] of Object.entries(model.groups || {})) {
     if (entry.custom) continue
-    const content = generateGroupTemplate(group, groupGenDef(entry), '{{ .Release.Name }}', schema, { objectMeta })
+    const content = generateGroupTemplate(group, groupGenDef(entry, model.common), '{{ .Release.Name }}', schema, { objectMeta })
     if (content) templates[templateFileName(group)] = content
   }
   return {

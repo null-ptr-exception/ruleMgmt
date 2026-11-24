@@ -1,0 +1,5 @@
+# The row identity label on: each alerting rule of a group with rows and
+# identifying columns gets alertforge_row, a hash of those cells.
+rowIdentity: true
+columns:
+  env: { type: string, required: true }

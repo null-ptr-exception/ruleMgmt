@@ -21,7 +21,7 @@
  * stacks on a re-attached `_common` gets the extra level too. Removing one
  * does the reverse: each chart right on it gets the `_common`'s entries it
  * lacks copied in (maps key by key, a group's rows whole, as Helm merges
- * them). Files are changed as text (valuesText.js): every value stays as it
+ * them). Files are changed as text (repo/valuesDoc.js): every value stays as it
  * was written, so a make and a remove give back the same files, but for the
  * Template's example rows a make copies into a deployment that did not write
  * a group. Values are read as Helm reads them (server/repo/). What deploys
@@ -201,14 +201,12 @@ async function folderProblem(repo, folder) {
   const link = await linkOnTheWay(repo.root, folder)
   if (link) return `${folder}: ${link.why} — AlertForge makes no ${COMMON_DIR} through a link${link.use}`
   if ((await repo.dir(segments.join('/'))).state !== 'ok') return `${folder} is not a folder of the repo`
-  let inChart = false
   for (let i = 1; i <= segments.length; i++) {
     const prefix = segments.slice(0, i).join('/')
-    const excluded = await excludedFolder(repo, prefix, { inChart })
+    const excluded = await excludedFolder(repo, prefix)
     if (excluded) return `${folder}: ${prefix} is ${excluded}, which AlertForge does not look into`
     if (await isCommonChart(repo, prefix)) return `${folder} is inside the ${COMMON_DIR} chart ${prefix}`
     if (await isDeployment(repo, prefix)) return `${folder} is ${i === segments.length ? 'a deployment' : `inside the deployment ${prefix}`}: a ${COMMON_DIR} goes in a folder that holds deployments`
-    inChart = false
   }
   if (segments.includes(COMMON_DIR)) return `${folder} is inside a ${COMMON_DIR} folder`
   return null

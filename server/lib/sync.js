@@ -52,7 +52,6 @@ export function isSafeSyncPath(candidate, chartsDirName) {
   // `..`, no folder starting with a dot, no NUL (paths.js).
   const normalized = normalizeSyncPath(candidate)
   if (pathProblem(normalized, 'create')) return false
-  if (normalized === '.' || normalized === '' || normalized === '..' || normalized.startsWith('../')) return false
   const firstSegment = normalized.split('/')[0]
   if (firstSegment === chartsDirName) return false
   return true
@@ -93,7 +92,7 @@ export function applySync(registry, source, target) {
 
 // Remove `target` from whichever source it's under. If that source is left
 // with zero targets, drop the entry entirely — this is what lets a former
-// source be folded into a different tree later (see "Merging two trees").
+// source become a target of another source later.
 export function applyUnlink(registry, target) {
   if (!findEntryForTarget(registry, target)) {
     return { ok: false, error: `${target} is not currently synced` }

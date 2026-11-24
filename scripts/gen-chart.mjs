@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate a chart's templates from its values.schema.json, without the UI.
+ * Generate a chart's templates from its rules/, without the UI.
  *
  *   node scripts/gen-chart.mjs <chart-dir>            write templates/
  *   node scripts/gen-chart.mjs <chart-dir> --check    compare only, never write

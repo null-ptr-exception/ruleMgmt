@@ -8,7 +8,7 @@ const DELETE = '__delete__'
 const NEEDS_DECISION = new Set(['column-removed', 'group-removed'])
 
 /**
- * The breaking-change flow (issue #57, 收斂四 §六): a change that would orphan
+ * The breaking-change flow (issue #57): a change that would orphan
  * a rule owner's rows is made in place, with the template owner declaring how
  * each disappearing column maps; the server then rewrites every deployment's
  * values.yaml. Cloning is the escape hatch.

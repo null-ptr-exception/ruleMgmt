@@ -62,15 +62,15 @@ function failFs(on) {
 }
 
 async function ask(method, p, body, ms) {
-  const started = Date.now()
+  const started = performance.now()
   try {
     const res = await fetch(`${baseURL}${p}`, {
       method, headers: { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(ms),
     })
-    return { status: res.status, text: await res.text(), ms: Date.now() - started }
+    return { status: res.status, text: await res.text(), ms: Math.round(performance.now() - started) }
   } catch (err) {
-    return { status: 'no answer', text: err.name, ms: Date.now() - started }
+    return { status: 'no answer', text: err.name, ms: Math.round(performance.now() - started) }
   }
 }
 

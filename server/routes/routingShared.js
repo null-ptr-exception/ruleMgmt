@@ -13,7 +13,7 @@ import { route, declaredRoutes, map } from '../http/route.js'
 const PUT_BODY = z.object({
   shared: z.union([z.string(), map()], { error: iss => (iss.input === undefined ? 'shared is required: the text of the shared configs, or { configs }' : 'shared must be the text of the shared configs, or { configs }') }),
 })
-// A config's name now and the one it is given (checked by renameShared).
+// A config's name now and the one it is given (checked by planRename, lib/sharedConfigs.js).
 const RENAME_BODY = z.object({ from: z.string().min(1), to: z.string().min(1) })
 
 /**
@@ -51,7 +51,8 @@ export default function routingSharedRouter() {
     } }
   }))
 
-  // A write that fails says why: the error's code (EACCES, EROFS …).
+  // An error thrown on the way is a 500 with its code or message (a file
+  // that cannot be written is the writer's 409, not this).
   const saysWhy = write => async (input, ctx) => {
     try {
       return await write(input, ctx)

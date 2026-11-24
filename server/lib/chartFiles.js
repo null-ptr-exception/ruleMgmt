@@ -1,7 +1,8 @@
 /**
  * A Template's source and products as the repo loader reads them, and the
  * drift between them (#57). Shared by the templates, render and git routes
- * and the command line tools; the writes are the writer's (repo/changes/).
+ * and the command line tools. The server's writes are the writer's
+ * (repo/changes/); the command line tools write with writeToolFiles, below.
  */
 
 import path from 'path'

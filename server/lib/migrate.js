@@ -1,6 +1,6 @@
 /**
  * Rewriting every deployment's values.yaml when a chart's schema changes in a
- * breaking way — the write-back the design (issue #57, 收斂四 §六) needed.
+ * breaking way (issue #57).
  *
  * Detection (`diffSchema`), the affected-deployment list (`findDeploymentsUsing`)
  * and the row transform (`migrateValues` / `migrationLosses`) already exist;

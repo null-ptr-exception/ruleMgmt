@@ -66,7 +66,7 @@ export async function templateForNewDeployment(gitopsDir, chart, folder, repo = 
   // finding says so); one of templates/ is.
   // Its values.yaml is the new deployment's caller's to read and say (init).
   const refuse = decide(loaded.findings, TEMPLATE_POLICIES.init).refuse.filter(f => !/^template\.values-/.test(f.code))
-  // Said as the new deployment's own check says it (folders/create.js).
+  // Said as the new deployment's own check says it (repo/changes/create-deployment.js).
   if (refuse.length) {
     const problems = refuse.map(f => f.message)
     return { status: 409, error: `Not made: ${folder} would not deploy (${problems.join('; ')})`, problems }

@@ -325,9 +325,9 @@ describe.skipIf(!CAN_RUN)('check-repo', () => {
       const child = spawn('node', [SCRIPT, repo, '--jobs', '1'], { env: env({ TMPDIR: tmp }), stdio: 'ignore' })
       const exited = new Promise(resolve => child.on('exit', (c, s) => resolve(c ?? s)))
       // Stopped once Helm is at work in the copy.
-      const started = Date.now()
+      const started = performance.now()
       while (!fs.readdirSync(tmp).length || !fs.readdirSync(tmp).some(n => fs.readdirSync(path.join(tmp, n)).length)) {
-        if (Date.now() - started > 30000) throw new Error('it never started')
+        if (performance.now() - started > 30000) throw new Error('it never started')
         await new Promise(r => setTimeout(r, 50))
       }
       await new Promise(r => setTimeout(r, 500))

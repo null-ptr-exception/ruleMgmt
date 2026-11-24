@@ -1,9 +1,11 @@
 /**
  * Where a write would land: never outside the repo. A folder on the way
  * that is a link leading out of the repo (`_shared -> /elsewhere`,
- * `templates -> /elsewhere`) refuses the write; a link to a folder of the
- * repo is written through. The file itself may be a link: a write replaces
- * the link (writeWhole renames over it), never what it leads to.
+ * `templates -> /elsewhere`) refuses the write (writeProblem); so does one
+ * that is a link to a folder of the repo (linkedFolderProblem): the writer
+ * asks both of every plan (placeProblem). The file itself may be a link: a
+ * write replaces the link (the writer renames a new file over it), never
+ * what it leads to.
  *
  *   writeProblem(root, rel) → null, or { file, why } for an answer
  *   writeProblems(root, rels) → the first problem among them, or null
@@ -41,7 +43,7 @@ export async function writeProblems(root, rels) {
   return null
 }
 
-/** The answer for a write that would land outside the repo. */
+/** The 409 for a file that cannot be written: { file, why } → "<file> cannot be written: <why>". */
 export const writeRefusal = ({ file, why }) => ({ status: 409, body: { error: `${file} cannot be written: ${why}`, file } })
 
 /**

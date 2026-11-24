@@ -7,7 +7,7 @@
  * written together, or none is.
  *
  * The file and each deployment's routing are read through server/repo
- * (shared.js, routing.js); this module writes them.
+ * (shared.js, routing.js); this module plans what is written.
  *
  *   routingUsers        every deployment with a routing.yaml, and what it uses
  *   sharedUsage         who uses each shared config
@@ -189,7 +189,7 @@ export async function planShared(repo, input) {
   // The file is replaced as a whole, and put back if a write fails: one
   // that cannot be read (no permission, a folder) could be neither. A link
   // that is the file itself is replaced by the file; its folder must be the
-  // repo's (writeProblem, below).
+  // repo's (repo/changes/shared.js asks placeRefusal).
   const before = await loadShared(repo)
   if (before.state === 'unreadable' && !isLinkKind(before.kind)) return { refusal: unreadableAnswer(before) }
   const current = before.state === 'ok' ? before.value : null

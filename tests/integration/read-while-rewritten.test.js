@@ -9,8 +9,8 @@ import { spawn } from 'child_process'
 import { resolveValuesFile } from '../../server/repo/locate.js'
 
 const WRITER = `
-const fs = require('fs'); const f = process.argv[1]; const end = Date.now() + 3000
-while (Date.now() < end) { try { fs.unlinkSync(f) } catch {} fs.writeFileSync(f, 'a: 1\\n') }
+const fs = require('fs'); const f = process.argv[1]; const end = performance.now() + 3000
+while (performance.now() < end) { try { fs.unlinkSync(f) } catch {} fs.writeFileSync(f, 'a: 1\\n') }
 `
 
 describe('which file holds a deployment\'s values, while it is written again', () => {

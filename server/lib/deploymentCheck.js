@@ -43,7 +43,7 @@ export async function locateDeployment(arg, given) {
   if (dir) return { dir, root }
   // Given a repo, a folder outside it is none of its deployments.
   if (given) return { dir: abs, root, outside: `${abs} is not inside the repo ${path.resolve(given)}` }
-  if (!given && !(await exists(path.join(root, '.git')))) {
+  if (!(await exists(path.join(root, '.git')))) {
     const parent = await realBaseOf(path.dirname(abs))
     return { dir: path.join(parent, path.basename(abs)), root: null }
   }

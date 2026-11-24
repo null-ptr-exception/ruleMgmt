@@ -110,9 +110,9 @@ describe.skipIf(IS_ROOT)('the server, after a route fails outside its own error 
     expect(child.exitCode).toBe(null)
     expect((await ask('GET', '/api/v2/user')).status).toBe(200)
     // A write right after it is not kept waiting on the commit lock.
-    const started = Date.now()
+    const started = performance.now()
     expect((await ask('POST', '/api/v2/charts', { name: 'NOT A NAME' })).status).toBe(400)
-    expect(Date.now() - started).toBeLessThan(5000)
+    expect(performance.now() - started).toBeLessThan(5000)
   })
 
   // A path no route has — a route no page calls was taken out, or there

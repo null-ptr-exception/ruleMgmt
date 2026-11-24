@@ -276,17 +276,6 @@ export function inside(base, ...parts) {
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel)) ? target : null
 }
 
-/**
- * `inside`, and where the path really is — through any link on the way —
- * also in `base`'s real place: a link in the repo to a folder or a file
- * outside it is refused (null), one to a place in the repo is fine. The
- * part of the path that is not there yet is taken as it will be made.
- * A folder on the way that cannot be looked into is an UnreadableError
- * naming that folder (a 409 from a route), with the failure's `code`:
- *
- *   deployments/w (mode 000), asked for deployments/w/d
- *     → "deployments/w cannot be read: permission denied"
- */
 // The deepest folder above `at` that resolves is the one that cannot be
 // looked into.
 async function unreadableOnTheWay(at, err) {
@@ -360,7 +349,17 @@ export async function placeOf(target, realBase) {
 /** What realPlace's `why` is, in words. */
 export const PLACE_WHY = Object.freeze({ outside: 'it leads outside the repo', 'git-dir': "it leads into git's own folder" })
 
-/** realPlace's target when AlertForge may touch it, or null. */
+/**
+ * `inside`, and where the path really is — through any link on the way —
+ * also in `base`'s real place: a link in the repo to a folder or a file
+ * outside it is refused (null), one to a place in the repo is fine. The
+ * part of the path that is not there yet is taken as it will be made.
+ * A folder on the way that cannot be looked into is an UnreadableError
+ * naming that folder (a 409 from a route), with the failure's `code`:
+ *
+ *   deployments/w (mode 000), asked for deployments/w/d
+ *     → "deployments/w cannot be read: permission denied"
+ */
 export async function insideReal(base, ...parts) {
   const { target, why } = await realPlace(base, ...parts)
   return why ? null : target

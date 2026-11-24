@@ -1,5 +1,5 @@
 /**
- * Repo.git: the one way to call git with a value that came from a request.
+ * repoGit(root): the one way to call git with a value that came from a request.
  * Such a value is never read by git as an option: it goes after
  * `--end-of-options`, or is the value of an option in the same argument
  * (`--message=<text>`); names git gives back are read with `-z`.

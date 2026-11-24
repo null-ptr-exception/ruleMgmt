@@ -106,15 +106,6 @@ export function refusalBody(found, dep) {
   return { error: headline(found), problems, ...(dep?.proposals?.length ? { proposals: dep.proposals } : {}) }
 }
 
-/**
- * The target's Chart.yaml gets the source's `dependencies`, so it renders the
- * same Template at the same version (#180). A `file://` path is relative to
- * the Chart.yaml, so it is worked out again from where the target is; the
- * target keeps its own `name` and other fields. A new target gets the
- * source's Chart.yaml with its own folder name. Nothing is written when the
- * dependencies are already the same, so a hand-written Chart.yaml keeps its
- * comments. Returns whether it wrote.
- */
 // A relative file:// path, or null (an absolute one, another scheme, or an
 // empty path, which is copied as it is).
 const relativeFilePath = repo => (typeof repo === 'string' && /^file:\/\/(?!\/)./.test(repo) ? repo.slice('file://'.length) : null)
@@ -155,8 +146,12 @@ export function sourceChart(text) {
 
 /**
  * The target's Chart.yaml (`dstText`, null when there is none) given the
- * dependencies of its source's (`sourceChart`), or null when it already
- * depends on the same.
+ * dependencies of its source's (`sourceChart`), so it renders the same
+ * Template at the same version (#180); null when it already depends on
+ * the same, so a hand-written Chart.yaml keeps its comments. A `file://`
+ * path is relative to the Chart.yaml, so it is worked out again from where
+ * the target is; the target keeps its own `name` and other fields. A new
+ * target gets the source's Chart.yaml with its own folder name.
  */
 export function chartCopyText({ src, deps: srcDeps }, srcDir, dstText, dstDir) {
   const dependencies = srcDeps.map(d => {
@@ -245,11 +240,9 @@ export async function targetCopy(repo, source, target, { values = true, chart = 
   return { files }
 }
 
-// Why sync may not write to `target` of `source`, or null. sync.yaml can be
+// Why sync may not write to `target`, or null. sync.yaml can be
 // hand-edited or arrive by `git pull`, so an entry is not trusted.
-async function targetProblem(repo, source, target) {
-  if (target === source) return 'listed as its own sync target'
-  if (!isSafeSyncPath(target, chartsDirName())) return 'not a path sync may write to'
+async function targetProblem(repo, target) {
   // Through a link, still in the repo.
   if (!(await insideReal(repo.root, target))) return 'not a path sync may write to: it leads outside the repo'
   if (!(await isDeployment(repo, target))) return 'not a deployment on disk'
@@ -280,7 +273,7 @@ export async function syncTargets(repo, registry, source) {
         const read = await repo.file(`${target}/${f}`)
         if (read.state === 'unreadable') return { refusal: { status: 409, body: { error: `${target}/${f} cannot be read: ${read.why}`, file: `${target}/${f}`, unreadable: true } } }
       }
-      const problem = await targetProblem(repo, source, target)
+      const problem = await targetProblem(repo, target)
       if (problem) throw new Error(problem)
       targets.push(target)
     } catch (err) {

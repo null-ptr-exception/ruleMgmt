@@ -482,7 +482,7 @@ describe('import-rules.mjs', () => {
   })
 })
 
-// The sample chart is the golden fixture for the rules/ format (#57 P8): it is
+// The sample chart is the golden fixture for the rules/ format (#57): it is
 // committed fully migrated, so any generator change that alters its products
 // shows up here as drift, and has to be regenerated and reviewed on purpose.
 describe('sample chart golden (sample/charts/mariadb-alerts)', () => {

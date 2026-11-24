@@ -33,7 +33,8 @@ defineChange('delete-deployment', {
     // plan made again under the lock is not checked by the route.
     const link = await deploymentLinkProblem(repo.root, dir)
     if (link) return { refusal: { status: 400, body: { error: link } } }
-    // Which file holds its values (resolve.js): the folder's own deployment,
+    // Which file holds its values (as locate.js resolveValuesFile, read here
+    // through the snapshot): the folder's own deployment,
     // named after the folder, is values.yaml when there is one; any other
     // name a legacy `<name>-values.yaml` beside it.
     // Anything at values.yaml — a file, one that cannot be read, a link,

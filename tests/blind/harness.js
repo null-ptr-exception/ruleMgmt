@@ -1,5 +1,5 @@
 /**
- * Generator blind tests — see issue #57 §15 (P8b).
+ * Generator blind tests (issue #57).
  *
  * The golden sample chart and the helm-unittest suites both have the same
  * weakness: their expected output comes from the generator (or from the model

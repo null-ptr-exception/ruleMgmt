@@ -10,7 +10,7 @@
  *                           (yaml.read-differently: `010` is 8 to Helm) and
  *                           each key written twice (yaml.duplicate-key)
  *   repo.json(rel)        → Promise<Loaded<unknown>>
- *   repo.dir(rel)         → Promise<Loaded<{ entries, links }>>: a folder
+ *   repo.dir(rel)         → Promise<Loaded<{ entries, links, targets }>>: a folder
  *                           (readRepoDir.js); '' the repo's own
  *   repo.templateFiles(dir) → Promise<Loaded<TemplateFiles>>: every file of
  *                           the Template folder at `dir` (template.js)

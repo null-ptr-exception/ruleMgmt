@@ -79,10 +79,10 @@ if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
 {
   const swept = await sweepTempFiles(GITOPS_DIR_V2)
   if (swept.length) logger.info(`Removed ${swept.length} temp file(s) a write left: ${swept.join(', ')}`)
-  // And the copies of the repo a plan checks in, left by a server killed meanwhile.
   // Content a write moved aside and did not put back or remove is never
   // removed: said, and Commit refuses while it is there.
   for (const said of parkedSaid(await parkedItems(GITOPS_DIR_V2), templatesDirRel())) logger.warn(said)
+  // And the copies of the repo a plan checks in, left by a server killed meanwhile.
   const copies = await sweepTempCopies()
   if (copies.length) logger.info(`Removed ${copies.length} temp cop${copies.length > 1 ? 'ies' : 'y'} of the repo left by a stopped server`)
 }

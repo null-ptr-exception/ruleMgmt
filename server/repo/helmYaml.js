@@ -43,9 +43,14 @@
  *   - the file must be a map (an empty file, `~` and comments only are {})
  *
  *   readHelmYaml(text | Buffer, { file }) →
- *     { ok: true, value }                 value: the map Helm reads; objects
+ *     { ok: true, value, forms, duplicates }
+ *                                         value: the map Helm reads; objects
  *                                         have no prototype, every key is
  *                                         the object's own ('__proto__' too)
+ *                                         forms / duplicates: what Helm reads
+ *                                         otherwise than a YAML 1.2 reader,
+ *                                         and keys written twice (MAX_NOTES
+ *                                         of each at most)
  *     { ok: false, why, finding }         finding: code yaml.*, helm says
  *                                         what Helm does with the text
  *

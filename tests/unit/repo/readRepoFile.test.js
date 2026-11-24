@@ -121,10 +121,10 @@ describe('a file of the repo', () => {
   it.skipIf(!HAS_MKFIFO)('a pipe, or a link to one, is unreadable at once: it is never read, and no writer is waited for', async () => {
     execFileSync('mkfifo', [path.join(repo, 'deployments/a/pipe')])
     fs.symlinkSync('pipe', path.join(repo, 'deployments/a/values.yaml'))
-    const t0 = Date.now()
+    const t0 = performance.now()
     expect(await read('deployments/a/pipe')).toMatchObject({ state: 'unreadable', why: 'it is a pipe, not a file' })
     expect(await read('deployments/a/values.yaml')).toMatchObject({ state: 'unreadable', why: 'it is a pipe, not a file' })
-    expect(Date.now() - t0).toBeLessThan(5000)
+    expect(performance.now() - t0).toBeLessThan(5000)
   })
 
   it('a link to /dev/zero is refused before anything is read', async () => {

@@ -47,7 +47,8 @@ export async function deploymentCommitBlockers(gitopsDir) {
  * every deployment the walk found.
  */
 export async function collectDeploymentChecks(gitopsDir, { policy = 'commit', repo = openRepo(gitopsDir) } = {}) {
-  // `repo` is one snapshot for every deployment: a Template is read once.
+  // `repo` is one snapshot for every deployment: a Template is read once
+  // (templateFindings and sameRouting open a snapshot of their own).
   const sync = await syncRegistryFindings(repo, { policy })
   const findings = [...sync.findings]
   const facts = [...sync.facts]

@@ -77,12 +77,12 @@ afterAll(async () => {
 })
 
 async function ask(method, p, { body, type = 'application/json', headers = {} } = {}) {
-  const started = Date.now()
+  const started = performance.now()
   try {
     const res = await fetch(baseURL + p, { method, body, headers: body === undefined ? headers : { 'Content-Type': type, ...headers }, signal: AbortSignal.timeout(5000) })
-    return { status: res.status, text: await res.text(), ms: Date.now() - started }
+    return { status: res.status, text: await res.text(), ms: performance.now() - started }
   } catch (err) {
-    return { status: 'no answer', text: err.name, ms: Date.now() - started }
+    return { status: 'no answer', text: err.name, ms: performance.now() - started }
   }
 }
 

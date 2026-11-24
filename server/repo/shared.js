@@ -66,7 +66,7 @@ export function sharedForBuild(loaded) {
   return { text: null, configs: {}, errors: [`${loaded.file} cannot be read (${loaded.why})`], warnings: [] }
 }
 
-// writeWhole's temp files start with `_`, next to the file.
+// The writer's temp and parked files start with `_`, next to the file (write.js TEMP_FILE, PARKED_NAME).
 const own = path.basename(SHARED_FILE)
 const isOwn = e => e === own || e.startsWith(`_${own}.`)
 

@@ -209,13 +209,6 @@ async function build(repo, rel, { chart, next }) {
 }
 
 /**
- * The alert rows a loaded deployment deploys, as Helm renders them: the
- * rows of each of the Template's groups in what the Template sees (its own
- * values over each `_common`'s over the Template's defaults), 0 when its
- * dependency is not rendered, null when Helm stops on it or AlertForge
- * cannot tell what Helm makes of it. `dep` is loadDeployment's answer.
- */
-/**
  * Whether the rows a loaded deployment deploys can be said: it loads, and
  * nothing in it is one Helm stops on or AlertForge cannot tell Helm's
  * reading of (a null on a _common stack included). Where not, every place
@@ -223,6 +216,13 @@ async function build(repo, rel, { chart, next }) {
  */
 export const rowsKnown = dep => dep.state === 'ok' && !dep.findings.some(f => f.helm === 'fails' || f.helm === 'unknown')
 
+/**
+ * The alert rows a loaded deployment deploys, as Helm renders them: the
+ * rows of each of the Template's groups in what the Template sees (its own
+ * values over each `_common`'s over the Template's defaults), 0 when its
+ * dependency is not rendered, null when Helm stops on it or AlertForge
+ * cannot tell what Helm makes of it. `dep` is loadDeployment's answer.
+ */
 export function deployedRows(dep) {
   if (!rowsKnown(dep)) return null
   if (dep.findings.some(f => f.code === 'stack.stack-off')) return 0

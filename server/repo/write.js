@@ -161,8 +161,8 @@ async function expectedFolder(root, dirRel) {
   return null
 }
 
-// One entry of a plan's files: a file's text (null: removed), a link, or
-// a folder removed.
+// One entry of a plan's files: a file's text (null: removed), a link, a
+// folder made, or a folder removed (emptied, or whole).
 const entryOf = f => (f.removeWhole ? { rel: repoRel(f.rel), removeWhole: true }
   : f.removeFolder ? { rel: repoRel(f.rel), removeFolder: true }
   : f.makeFolder ? { rel: repoRel(f.rel), makeFolder: true }
@@ -489,7 +489,6 @@ async function putBack(root, step) {
   const b = step.before
   if (b.kind === 'absent') return fs.rm(step.abs, { force: true })
   if (b.kind === 'moved') return fs.rename(b.aside, step.abs)
-  if (b.kind === 'folder') { await fs.mkdir(step.abs); return fs.chmod(step.abs, b.mode) }
   const tmp = tempName(step.dir, path.basename(step.abs))
   try {
     if (b.kind === 'link') await fs.symlink(b.to, tmp)
@@ -504,9 +503,11 @@ async function putBack(root, step) {
 /**
  * Write `files` ([{ rel, text }], text null to remove; { rel, link } a
  * link; { rel, makeFolder: true } a folder; { rel, removeFolder: true }
- * an emptied folder) into the repo at
- * `root`, all or none; `places` (rel → real folder) the folders they must
- * be written in. The caller holds the commit lock.
+ * an emptied folder; { rel, removeWhole: true } a folder with all it
+ * holds) into the repo at `root`, all or none; `places` (rel → real
+ * folder) the folders they must be written in. applyChange calls it
+ * holding the commit lock; a command line tool (lib/chartFiles.js
+ * writeToolFiles) calls it with no lock and no `places`.
  *   → { ok: true, written: [rel] }
  *   → { ok: false, answer: { status: 409, body: { error, file } } }   nothing changed
  *   → { ok: false, answer: { status: 500, body: { error, file, notRestored, left? } } }

@@ -7,7 +7,7 @@ import {
 } from '../blind/harness.js'
 
 /**
- * Generator blind tests — issue #57 §15 (P8b). What a case is and why the
+ * Generator blind tests (issue #57). What a case is and why the
  * expectations are written by hand: tests/blind/harness.js.
  */
 

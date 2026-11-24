@@ -93,7 +93,7 @@ export default function templatesRouter() {
     return { status: 200, body: { deployments } }
   }))
 
-  // Save Chart.yaml metadata (name, description, version)
+  // Save a Template's description into its Chart.yaml.
   // The editor's Save writes the description, and only that: the rest
   // of Chart.yaml is read from disk, so a page loaded before a pull cannot
   // write back the version it loaded — every deployment asks for one.

@@ -4,8 +4,8 @@
  * half-written.
  *
  *   withSyncRegistryLock(dir, fn)   run fn holding the lock; calls queue
- *   holdSyncRegistryLock            Express middleware: a write request holds
- *                                   it until its answer ends
+ *   holdSyncRegistryLock            Express middleware: a request that is
+ *                                   not a GET holds it until its answer ends
  *   holdsLock(dir)                  whether the running call already holds it
  *   lockWaiters(dir)                how many calls wait for it
  *
@@ -48,14 +48,16 @@ export function withSyncRegistryLock(gitopsDir, fn) {
 export const HOLD_LIMIT_MS = 60000
 
 /**
- * Express middleware: a request that writes files holds the same lock as a
- * commit until its response is sent, so a commit never adds or checks a
- * chart half-written (a save writes rules, then templates, then the schema).
- * Reads are not held, nor OPTIONS. It is let go when the handler answers,
- * whether or not the client is still there, or after HOLD_LIMIT_MS. The
- * lock is not re-entrant: a handler behind this that takes
- * withSyncRegistryLock itself gets an error at once, not a wait on itself.
- * The deployments and sync routers take it inside their handlers instead.
+ * Express middleware: the request holds the same lock as a commit until
+ * its response is sent. On the routes that change the work tree with git
+ * (push, discard, pull, sync: routes/git.js) and on the migration preview
+ * (routes/templates.js), which must not read between two files of a save.
+ * GET, HEAD and OPTIONS are not held. It is let go when the handler
+ * answers, whether or not the client is still there, or after
+ * HOLD_LIMIT_MS. The lock is not re-entrant: a handler behind this that
+ * takes withSyncRegistryLock itself gets an error at once, not a wait on
+ * itself. A save does not use this: the writer (write.js applyChange)
+ * takes the lock for the write alone.
  */
 export function holdSyncRegistryLock(req, res, next) {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next()

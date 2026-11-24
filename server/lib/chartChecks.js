@@ -98,9 +98,8 @@ export async function collectChartChecks(gitopsDir, { policy = 'commit', repo = 
       continue
     }
     const t = loaded.value
-    // Schema carries no rule data (see modelToSchema in rulesFile.js), so a
-    // migrated chart's rules are checked from rules/*.yaml (rebuilt in the
-    // old x-rules-per-group shape the checks expect, without writing it).
+    // The rule checks' findings, made by the loader from rules/*.yaml
+    // (repo/findings/template.js: the schema carries no rule data).
     for (const f of t.ruleChecks) findings.push({ ...f, chart: name, description: `${name}/${f.group}: ${f.message}` })
     const d = decide(loaded.findings, policy)
     const { refuse, list, warn } = d

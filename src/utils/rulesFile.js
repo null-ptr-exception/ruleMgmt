@@ -730,7 +730,7 @@ export function parseGroupFile(text, filename) {
   })
   if (!Array.isArray(doc.rules)) errors.push(`${filename}.yaml: rules is required and must be a list`)
 
-  // Rule-group fields, the template owner's (#57 §一). `type` picks the output
+  // Rule-group fields, the template owner's (#57). `type` picks the output
   // profile (config/outputs.json, #65); the rest are the evaluator's (#182):
   // only those the group's profile has, each checked as its evaluator reads
   // it (groupFields.js).

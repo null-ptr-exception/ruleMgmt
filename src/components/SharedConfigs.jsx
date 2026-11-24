@@ -59,6 +59,7 @@ export default function SharedConfigs() {
     if (!result.ok) return refused(result)
     message.success(`${what}: ${result.written.length} file${result.written.length > 1 ? 's' : ''} written — commit them from the Git panel`)
     if (result.syncFailed?.length) message.warning(`Not copied to ${result.syncFailed.map(f => f.target).join(', ')}`)
+    if (result.warnings?.length) message.warning({ content: result.warnings.join(' '), duration: 10 })
     reload()
   }
 
@@ -136,6 +137,10 @@ export default function SharedConfigs() {
         <Alert type="error" showIcon data-testid="shared-unreadable"
           message="Some routing.yaml cannot be read — no shared config can be changed until they are fixed"
           description={<List items={state.unreadable.map(u => `${u.deployment}: ${u.error}`)} />} />
+      )}
+      {state.warnings?.length > 0 && (
+        <Alert type="warning" showIcon data-testid="shared-warnings" message="Worth knowing about these configs"
+          description={<List items={state.warnings} />} />
       )}
       {state.stale.length > 0 && (
         <Alert type="warning" showIcon data-testid="shared-stale"

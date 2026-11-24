@@ -28,6 +28,7 @@ export default function routingSharedRouter() {
         text: shared?.text ?? null,
         configs: shared?.configs ?? {},
         errors: shared?.errors ?? [],
+        warnings: shared?.warnings ?? [],
         usage: usageOf(users),
         stale: await staleUsers(req.gitopsDir, users, shared),
         unreadable: unreadableOf(users),

@@ -234,15 +234,23 @@ const trimmed = (key, schema) => schema.refine(v => typeof v !== 'string' || !TE
   error: `${key} must have no spaces around it`,
 })
 
+// An RFC 5322 group with no members — `undisclosed-recipients:;`, a name
+// then `:` and `;` — or a list of only such groups. Alertmanager takes it,
+// and sends to nobody: accepted for `to`, with a warning (emailWarnings).
+const GROUP_NAME = '(?:"[^"]*"|[^:;,@"]*[^\\s:;,@"][^:;,@"]*)'
+const EMPTY_GROUPS_RE = new RegExp(`^\\s*${GROUP_NAME}\\s*:\\s*;(?:\\s*,\\s*${GROUP_NAME}\\s*:\\s*;)*\\s*$`)
+export const isEmptyGroupList = v => typeof v === 'string' && EMPTY_GROUPS_RE.test(v)
+
 // An address, or a template that gives one when an alert is sent (no @
 // needed then). A line break would let it add mail headers (`Bcc:`).
-const address = (key, schema) => templated(key, trimmed(key, schema
+// `emptyGroup`: a group with no members passes too (`to` only).
+const address = (key, schema, { emptyGroup = false } = {}) => templated(key, trimmed(key, schema
   .refine(v => !hasControl(v), { error: `${key} must not contain a line break or other control character` })
-  .refine(v => !TEXT_RE.test(v) || v.includes('{{') || /[^@\s]@[^@\s]/.test(v), { error: `${key} must be an e-mail address, such as db-team@example.com` })))
+  .refine(v => !TEXT_RE.test(v) || v.includes('{{') || /[^@\s]@[^@\s]/.test(v) || (emptyGroup && isEmptyGroupList(v)), { error: `${key} must be an e-mail address, such as db-team@example.com` })))
 
 const email = strictMap({
   type: z.literal('email'),
-  to: address('to', text('to is required')),
+  to: address('to', text('to is required'), { emptyGroup: true }),
   // Each of these, left out, is the platform's own setting (#159).
   from: address('from', filled('from')).optional(),
   smarthost: trimmed('smarthost', filled('smarthost')).superRefine((v, ctx) => {
@@ -262,11 +270,12 @@ const email = strictMap({
   if (config.authPassword !== undefined && config.authUsername === undefined) {
     ctx.addIssue({ code: 'custom', message: 'authPassword needs authUsername: they are a pair' })
   }
-  // Alertmanager fills a missing user name and password from its global
-  // settings whatever the server, so a server of this config's own, without
-  // its own login, would be handed the platform's.
-  if (config.smarthost !== undefined && (config.authUsername === undefined || config.authPassword === undefined)) {
-    ctx.addIssue({ code: 'custom', message: 'smarthost needs authUsername and authPassword: without them the platform\'s SMTP user name and password would be sent to this server' })
+  // A server of the config's own without its own login is taken, and
+  // warned about (configWarnings): Alertmanager hands it the platform's.
+  // Half a login is not: Alertmanager fills the missing half from the
+  // platform's, which this would silently mix (measured, 0.27 and 0.28).
+  if (config.smarthost !== undefined && (config.authUsername === undefined) !== (config.authPassword === undefined)) {
+    ctx.addIssue({ code: 'custom', message: 'smarthost with only half a login: Alertmanager would fill in the other half from the platform\'s SMTP settings — write both authUsername and authPassword, or neither' })
   }
 })
 

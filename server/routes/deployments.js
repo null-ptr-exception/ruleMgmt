@@ -314,13 +314,16 @@ export default function deploymentsRouter() {
       // A config used from the shared configs (#123) is written in full:
       // read and built under the lock, so a change to them made meanwhile is
       // never written over with the old one.
+      let warnings = []
       const { status, body } = await writeRoutingAndSync(req, at, async dir => {
         const built = buildRouting(input, await readSharedConfigs(req.gitopsDir))
         if (built.errors) return { status: 400, body: { error: 'routing.yaml has problems', problems: built.errors } }
         await writeRouting(dir, built)
+        // Saved all the same: what the configs will do that is worth saying.
+        warnings = built.warnings
         return null
       })
-      res.status(status).json(body)
+      res.status(status).json(status < 300 && warnings.length && body && typeof body === 'object' ? { ...body, warnings } : body)
     } catch (err) {
       res.status(500).json({ error: err.message })
     }

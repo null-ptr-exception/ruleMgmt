@@ -170,6 +170,14 @@ describe.skipIf(!CAN_RUN)('check-deployment', () => {
     expect(code).toBe(1)
   })
 
+  it('passes a routing whose config notifies nobody, and says so', async () => {
+    const routing = ROUTING.replace('ops@example.com', '"undisclosed-recipients:;"')
+    await writeRouting(dir, buildRouting(routing))
+    const { code, out } = check()
+    expect(out).toContain('Routing: passed\n  warning: configs.ops: to "undisclosed-recipients:;" is a group with no members — this config notifies nobody')
+    expect(code).toBe(0)
+  })
+
   it('passes a routing.yaml whose AlertmanagerConfig is current', async () => {
     await writeRouting(dir, buildRouting(ROUTING))
     const { code, out } = check()

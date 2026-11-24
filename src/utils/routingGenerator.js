@@ -42,7 +42,7 @@
 import yaml from 'js-yaml'
 import { ROUTING } from './outputs.js'
 import { KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
-import { routingSchema, configSchema, configNameProblem, schemaProblems, sharedConfigsSchema, isSharedRef, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
+import { routingSchema, configSchema, configNameProblem, schemaProblems, sharedConfigsSchema, isSharedRef, isEmptyGroupList, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
 
 // The page marks a timing field with the same check the save makes (#93).
 export { timingProblem } from './routingSchema.js'
@@ -112,6 +112,50 @@ function credentialProblems(where, config) {
   if (config.url === undefined) return []
   const why = urlCredential(config.url)
   return why ? [`${where}: url is refused because ${why}; put it in a Secret and use urlSecret`] : []
+}
+
+/**
+ * What a config that passes the checks will do that is worth saying — never
+ * a reason to refuse it: the dialog, the save, the Routing and Shared
+ * configs pages and the commit checks show these and go ahead.
+ */
+export function configWarnings(name, config) {
+  const where = `configs.${name}`
+  const out = []
+  if (config?.type === 'email' && isEmptyGroupList(config.to)) {
+    out.push(`${where}: to "${config.to}" is a group with no members — this config notifies nobody`)
+  }
+  // Alertmanager fills each missing SMTP login field — user name, password,
+  // identity, secret — from its global settings, whatever the server
+  // (measured with Alertmanager 0.27 and 0.28 against a test SMTP server).
+  if (config?.type === 'email' && typeof config.smarthost === 'string') {
+    const anyone = config.tlsConfig?.insecureSkipVerify === true ? ' — and with insecureSkipVerify, to anyone who answers there' : ''
+    if (config.authUsername === undefined && config.authPassword === undefined) {
+      out.push(`${where}: smarthost ${config.smarthost} has no login of its own — Alertmanager fills in the platform's global SMTP user name and password (and its identity and secret, where set), so they are used with this server${anyone}`)
+    } else if (config.authUsername !== undefined && config.authPassword !== undefined) {
+      out.push(`${where}: smarthost ${config.smarthost} has its own login, but Alertmanager still uses the platform's SMTP identity (AUTH PLAIN) and secret (CRAM-MD5), where set, with this server${anyone}`)
+    }
+    if (config.requireTLS === false) {
+      out.push(`${where}: smarthost ${config.smarthost} with requireTLS: false — no STARTTLS, so a password may cross the network in clear`)
+    }
+  }
+  return out
+}
+
+/** The warnings of a routing's configs, a shared one's under its name too. */
+export function routingWarnings(routing, { shared = null } = {}) {
+  const configs = routing && typeof routing === 'object' && routing.configs && typeof routing.configs === 'object' ? routing.configs : {}
+  return Object.entries(configs).flatMap(([name, c]) => {
+    if (!isSharedRef(c)) return configWarnings(name, c)
+    const used = shared?.configs?.[name]
+    return used ? configWarnings(name, used).map(w => w.replace(`configs.${name}:`, `configs.${name} (shared):`)) : []
+  })
+}
+
+/** The warnings of the shared notification configs. */
+export function sharedConfigWarnings(doc) {
+  const configs = doc && typeof doc === 'object' && doc.configs && typeof doc.configs === 'object' ? doc.configs : {}
+  return Object.entries(configs).flatMap(([name, c]) => configWarnings(name, c))
 }
 
 /** One config's problems — what the Routing page checks before adding it. */
@@ -392,6 +436,7 @@ export const escapeBraces = text => text.replace(/[{}]{2,}/g, m => (/\{\{|\}\}/.
 export function generateRouting(routing, { meta = {}, shared = null } = {}) {
   const errors = checkRouting(routing, { shared })
   if (errors.length) return { errors }
+  const original = routing
   routing = resolveShared(routing, shared)
   const name = '__ALERTFORGE_NAME__'
   const doc = {
@@ -405,5 +450,5 @@ export function generateRouting(routing, { meta = {}, shared = null } = {}) {
     spec: routingSpec(routing),
   }
   const body = escapeBraces(yaml.dump(doc, { lineWidth: -1, noRefs: true, schema: KUBERNETES_DUMP_SCHEMA }))
-  return { text: GENERATED_HEADER + body.replace(name, () => '{{ .Release.Name }}-routing') }
+  return { text: GENERATED_HEADER + body.replace(name, () => '{{ .Release.Name }}-routing'), warnings: routingWarnings(original, { shared }) }
 }

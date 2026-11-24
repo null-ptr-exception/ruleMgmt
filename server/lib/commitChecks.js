@@ -191,6 +191,8 @@ export async function deploymentCommitBlockers(gitopsDir) {
   const sync = await syncRegistryFindings(gitopsDir)
   const findings = [...sync.findings]
   const routingProblems = []
+  // Never blocking: what a routing's configs will do that is worth saying.
+  const routingWarnings = []
   const registry = sync.readable ? await readSyncRegistry(gitopsDir) : { syncs: [] }
   const walked = await walkDeployments(gitopsDir)
   const deployments = walked.filter(d => d.kind === 'deployment').map(d => d.path)
@@ -242,6 +244,10 @@ export async function deploymentCommitBlockers(gitopsDir) {
       brokenSources.add(dep)
       continue
     }
+    // A synced target is its source's copy: it says the same.
+    if (built.warnings.length) {
+      for (const d of [dep, ...getTargetsForSource(registry, dep).filter(t => t !== dep)]) routingWarnings.push({ deployment: d, warnings: built.warnings })
+    }
     if (built.cr !== cr) {
       findings.push({ severity: 'commit', kind: 'routing-stale', deployment: dep, regenerable: true,
         description: `${dep}: its AlertmanagerConfig is behind its routing.yaml, the shared notification configs it uses or the site's object labels — use Regenerate` })
@@ -251,6 +257,7 @@ export async function deploymentCommitBlockers(gitopsDir) {
   }
 
   // The shared file itself: blocks while it is used, else only listed.
+  if (shared?.warnings?.length) routingWarnings.push({ deployment: SHARED_FILE, warnings: shared.warnings })
   if (shared?.errors.length) {
     if (unresolved.length) {
       findings.push({ severity: 'commit', kind: 'routing-shared-broken', deployment: SHARED_FILE, regenerable: false,
@@ -274,7 +281,7 @@ export async function deploymentCommitBlockers(gitopsDir) {
       fixes.add(dep)
     }
   }
-  return { findings, routingProblems, unreadable, regenerable: fixes.size, readable: sync.readable }
+  return { findings, routingProblems, routingWarnings, unreadable, regenerable: fixes.size, readable: sync.readable }
 }
 
 /**

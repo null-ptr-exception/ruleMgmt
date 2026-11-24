@@ -908,7 +908,7 @@ What is refused when it is saved, and reported when it is read back:
 | A cell's `configs` entry that is not a name — a number, `~`, a list | It would name a receiver that is not there |
 | A webhook `url` that is not an `http://` or `https://` address as written, or has spaces around it — `relay:8080` without a scheme, `http:relay`, `http:/relay`, a tab, a line break, `"` or `\` anywhere, a space or `%` in the host, a `%` not followed by two hex digits | Alertmanager or the operator refuses it, and the operator then drops the whole AlertmanagerConfig: every notification of the deployment stops, with only a Warning event. The credential check below cannot read it either |
 | A `urlSecret` whose `name` is not a Kubernetes name (lower-case letters, digits, `-` and `.`, at most 253), or whose `key` has anything but letters, digits, `-`, `_` and `.`, is `.`, or starts with `..` | The operator cannot read the Secret, and drops the whole AlertmanagerConfig |
-| An e-mail `to` with no address in it (`@`, `db-team`), or with a line break. A `to` written as an Alertmanager template (`{{ .CommonLabels.owner }}`) needs no `@` | Nothing can tell whether an address exists, so only what cannot be one is refused; a line break would add mail headers (`Bcc:`) |
+| An e-mail `to` with no address in it (`@`, `db-team`, `:;`), or with a line break. A `to` written as an Alertmanager template (`{{ .CommonLabels.owner }}`) needs no `@`, and a group with no members (`undisclosed-recipients:;`) is taken, with a warning — see below | Nothing can tell whether an address exists, so only what cannot be one is refused; a line break would add mail headers (`Bcc:`) |
 | A webhook `url` with a user name or password, a credential-like query parameter (`token=`, `key=` …) or a token-like path segment | Credentials belong in a Secret: use `urlSecret`. An in-cluster address such as `http://alert-relay.monitoring.svc:8080` is fine |
 | An e-mail or webhook setting written wrong — see [E-mail settings](#e-mail-settings) and [Webhook settings](#webhook-settings) | |
 | Any other key — under `urlSecret` too, which takes only `name` and `key` | Probably a typo; it would be left out of the AlertmanagerConfig |
@@ -949,8 +949,9 @@ cells:
   checked the same way: the same keys and the same refusals as in the tables
   above and below.
 - **It cannot read a Secret** — `urlSecret`, `authorization`, `basicAuth`, a
-  CA from a Secret, an e-mail `authPassword` (so no `smarthost` either, which
-  needs one). A Secret is read from the namespace of each deployment the
+  CA from a Secret, an e-mail `authPassword`. A shared e-mail config may set
+  its own `smarthost`, with the warning below: with no password of its own,
+  it is handed the platform's login. A Secret is read from the namespace of each deployment the
   resource is in, which AlertForge cannot see, so one change would not reach
   them all. A config that needs a Secret stays in the `routing.yaml` of each
   deployment, with the Secret in that deployment's namespace.
@@ -1024,12 +1025,15 @@ configs:
 - `from`, `to`, `headers`, `text` and `html` may be Alertmanager templates
   (`{{ .CommonLabels.alertname }}`); they reach the cluster as written. A YAML
   value that starts with `{{` must be quoted.
-- **A `smarthost` of the config's own needs its own `authUsername` and
-  `authPassword`.** Alertmanager fills a missing user name and password from
-  its global settings whatever the server is, so without them the platform's
-  SMTP login would be sent to this server — with `insecureSkipVerify`, to
-  anyone answering. A relay that needs no login cannot be written as a
-  config's own `smarthost`; leave `smarthost` out to use the platform's.
+- **A `smarthost` of the config's own is saved with a warning** (see the
+  table of warnings above). Alertmanager fills each login field the config
+  leaves out — user name, password, identity, secret — from its global
+  settings, whatever the server is; with `insecureSkipVerify`, to anyone
+  answering there. A certificate that fails verification sends nothing. Leave
+  `smarthost` out to use the platform's server.
+- **Half a login with its own `smarthost` is refused**: only `authUsername`,
+  or only `authPassword`. Alertmanager (and amtool) take it, but the other
+  half is the platform's, mixed in without a word.
 - With only `to`, the platform's Alertmanager must have `smtp_smarthost` and
   `smtp_from` set (kube-prometheus-stack sets neither by default). Without them
   Alertmanager cannot build its configuration (`no global SMTP smarthost set`),
@@ -1040,6 +1044,21 @@ configs:
 - A `routing.yaml` with these fields is refused by an AlertForge from before
   them, as an unknown key.
 
+What is saved, but said — a warning never refuses a save or a commit:
+
+| Warned | Why |
+|---|---|
+| An e-mail `to` that is only groups with no members — `undisclosed-recipients:;`, `Ops team: ;`, `a:;, b:;` | Alertmanager takes it and sends to nobody: the config notifies no one. A group with members (`oncall: a@x.com, b@y.com;`), or one beside an address, is an ordinary list |
+| A `smarthost` of the config's own with no `authUsername` and no `authPassword` (a shared config has no password) | Alertmanager fills each missing login field from its global settings, whatever the server: the platform's SMTP user name and password — and its identity and secret, where set — are used with this server (AUTH PLAIN sends identity, user name and password; LOGIN user name and password; CRAM-MD5 the user name and an HMAC made with the secret). With `tlsConfig.insecureSkipVerify: true`, to anyone who answers there |
+| A `smarthost` of the config's own with its own `authUsername` and `authPassword` | Its user name and password are its own, but the platform's identity (PLAIN) and secret (CRAM-MD5), where set, are still used with this server |
+| A `smarthost` of the config's own with `requireTLS: false` | No STARTTLS: LOGIN sends the password in clear, CRAM-MD5 runs in clear (PLAIN is refused by Alertmanager's mail client) |
+
+A warning is shown in the config dialog (where Add stays on), on the Routing
+page and in the answer to its Save, on the Shared configs page for a shared
+config (and on the Routing page of each deployment that uses it, marked
+`(shared)`), for a synced target as for its source, in the dialog after a
+commit, and by `check-deployment` (`warning:` under `Routing: passed`).
+
 | Refused | Why |
 |---|---|
 | `from`, `smarthost`, `authUsername` or `text` that is not text, or is empty; `html` that is not text; `requireTLS` or `sendResolved` that is not `true` / `false` | The AlertmanagerConfig needs them non-empty, of that type |
@@ -1048,8 +1067,7 @@ configs:
 | A header named `Authorization` or `Proxy-Authorization` (any case), or a header other than `Subject` with a word that looks like a token (20 characters or more, letters and digits, no `.`; a hyphenated word is judged part by part) | A credential does not belong in `routing.yaml`, which is in git, and a mail header cannot be read from a Secret. The subject is not judged: long names with digits are common there |
 | A `smarthost` that is not `host:port` — no port (`smtp.example.com`), an empty port (`smtp.example.com:`), more than one `:` outside `[ ]` (`smtp://x:25`, `::1:25`) | Alertmanager refuses it, and with it its whole configuration. As in Alertmanager, the port is not read as a number |
 | `authPassword` written as text, or with keys besides `name` and `key` | Only a Secret reference; another key would be dropped without a word |
-| `authPassword` without `authUsername` | They are a pair |
-| `smarthost` without both `authUsername` and `authPassword` | The platform's SMTP user name and password would be sent to this server |
+| `authPassword` without `authUsername`; with a `smarthost` of its own, `authUsername` without `authPassword` too | They are a pair: Alertmanager would fill the missing half from the platform's settings |
 | A `tlsConfig` that is not a map, is empty, or has keys besides `insecureSkipVerify` and `ca`; `insecureSkipVerify` not `true` / `false`; a `ca` other than `{ secret: { name, key } }` | Only these two for now; an empty one would still replace the platform's |
 | `headers` that is not a map; a header name that is empty or has a space, `:` or a character that is not printable; a value that is not text; a `Subject` with a line break | Alertmanager writes the name into the mail as it is |
 | Two header names that differ only in case (`Subject`, `subject`) | The operator and Alertmanager count them as one, and refuse the whole resource |

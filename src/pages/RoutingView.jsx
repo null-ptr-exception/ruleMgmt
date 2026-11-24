@@ -244,6 +244,7 @@ export default function RoutingView() {
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
     setAddedLabels([])
     warnSyncFailed(result)
+    if (result.warnings?.length) message.warning({ content: `Saved. ${result.warnings.join(' ')}`, duration: 10 })
     setReloadKey(k => k + 1)
     return true
   }
@@ -320,6 +321,10 @@ export default function RoutingView() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100 }}>
         {loaded.stale && !dirty && staleAlert}
+        {loaded.warnings?.length > 0 && (
+          <Alert type="warning" showIcon data-testid="routing-warnings" message="Saved — worth knowing about these configs"
+            description={<ul style={{ paddingLeft: 18, margin: 0 }}>{loaded.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>} />
+        )}
         <section>
           <Title level={5} style={{ marginTop: 0 }}>Notify</Title>
           <NotificationConfigs routing={routing} onChange={edit} readOnly={readOnly} describeMatch={describeMatch} shared={shared} />

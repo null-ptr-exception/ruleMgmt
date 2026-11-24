@@ -190,6 +190,20 @@ describe('Regenerate', () => {
   })
 })
 
+// Never blocking: a config that notifies nobody is said, for the source and
+// the target that copies it.
+describe('a routing whose config notifies nobody', () => {
+  it('does not stop a commit, and the commit says it', async () => {
+    const said = ['configs.ops: to "undisclosed-recipients:;" is a group with no members — this config notifies nobody']
+    const save = await api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: ROUTING.replace('to: ops@example.com', 'to: "undisclosed-recipients:;"') })
+    expect(save.status).toBe(200)
+    expect(save.data.warnings).toEqual(said)
+    const { status, data } = await commit()
+    expect(status).toBe(200)
+    expect(data.routingWarnings).toEqual([{ deployment: SRC, warnings: said }, { deployment: TGT, warnings: said }])
+  })
+})
+
 describe('a routing.yaml with errors', () => {
   it('does not stop a commit, and the commit lists it', async () => {
     expect((await api('DELETE', '/api/v2/sync', { target: TGT })).status).toBe(200)

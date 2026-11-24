@@ -51,8 +51,8 @@ export function buildRouting(input, shared = null) {
     text = yaml.dump(input, { lineWidth: -1 })
   }
   const meta = metaForProfile(objectMetaFromEnv(), ROUTING_KIND)
-  const { text: cr, errors } = generateRouting(routing, { meta, shared })
-  return errors ? { errors } : { text, cr }
+  const { text: cr, errors, warnings } = generateRouting(routing, { meta, shared })
+  return errors ? { errors } : { text, cr, warnings }
 }
 
 /** Both files, or — when either write fails — both as they were. */
@@ -161,6 +161,6 @@ export async function routingState(dir, shared = null) {
   const built = buildRouting(text, shared)
   // A routing.yaml with errors makes no resource: one that is there was
   // made from an older text, so it is behind too (#179).
-  if (built.errors) return { text, errors: built.errors, stale: cr !== null }
-  return { text, errors: [], stale: built.cr !== cr }
+  if (built.errors) return { text, errors: built.errors, warnings: [], stale: cr !== null }
+  return { text, errors: [], warnings: built.warnings, stale: built.cr !== cr }
 }

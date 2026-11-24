@@ -156,7 +156,8 @@ async function checkRouting(dir, repo) {
       ],
     }
   }
-  return { ok: true, lines: [`Routing: passed`] }
+  // Passed all the same: what its configs will do that is worth saying.
+  return { ok: true, lines: [`Routing: passed`, ...(state.warnings || []).map(w => `  warning: ${w}`)] }
 }
 
 async function main() {

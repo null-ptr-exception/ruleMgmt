@@ -210,6 +210,44 @@ test('a config Alertmanager would refuse cannot be added, and says why', async (
   await expect(page.getByTestId('notification-configs')).toContainText('db-team@example.com')
 })
 
+// Alertmanager takes a group with no members and sends to nobody: added,
+// saved, and said — in the dialog, on the save and on the page.
+test('a config that notifies nobody is added and saved, with a warning', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'nobody', async dialog => {
+    await dialog.getByLabel('Config type').click()
+    await page.locator('.ant-select-item-option').filter({ hasText: /^email$/ }).click()
+    await dialog.getByLabel('Email address').fill('undisclosed-recipients:;')
+    await expect(dialog.getByTestId('config-warnings')).toContainText('is a group with no members — this config notifies nobody')
+    await expect(dialog.getByTestId('config-problems')).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await expect(page.getByTestId('notification-configs')).toContainText('undisclosed-recipients:;')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByTestId('routing-warnings')).toContainText('configs.nobody: to "undisclosed-recipients:;" is a group with no members — this config notifies nobody', { timeout: 8000 })
+  const saved = await (await request.get(routingUrl(FOLDER))).json()
+  expect(saved.text).toContain('undisclosed-recipients:;')
+})
+
+// Alertmanager hands a server of the config's own the platform's login:
+// taken, and said.
+test('an SMTP server of its own without its own login is added, with a warning whose login it gets', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'relay-mail', async dialog => {
+    await dialog.getByLabel('Config type').click()
+    await page.locator('.ant-select-item-option').filter({ hasText: /^email$/ }).click()
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByText('More settings').click()
+    await dialog.getByLabel('SMTP server').fill('relay.example.com:25')
+    await expect(dialog.getByTestId('config-warnings')).toContainText('smarthost relay.example.com:25 has no login of its own — Alertmanager fills in the platform\'s global SMTP user name and password (and its identity and secret, where set), so they are used with this server')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByTestId('routing-warnings')).toContainText('smarthost relay.example.com:25 has no login of its own', { timeout: 8000 })
+})
+
 test('unsaved changes are confirmed before switching deployments', async ({ page }) => {
   await openRouting(page)
   await setUp(page)
@@ -322,7 +360,6 @@ const failing = [
   ['an SMTP server with no port', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, smarthost: smtp.example.com, authUsername: u, authPassword: {name: s, key: p}}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'smarthost must be host:port'],
   ['a mail header carrying a credential', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, headers: {Authorization: Bearer abcdef1234567890abcdef12}}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'a credential does not belong in routing.yaml'],
   ['a sender with a space before it', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, from: " af@example.com"}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'from must have no spaces around it'],
-  ['an SMTP server of its own without its own login', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, smarthost: other.example.com:587}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'the platform\'s SMTP user name and password would be sent to this server'],
   // #160: a webhook with two kinds of authentication, by hand.
   ['a webhook with both authorization and basicAuth', 'labels:\n  severity: [critical]\nconfigs:\n  hook:\n    type: webhook\n    url: https://hooks.example.com/a\n    authorization: {credentials: {name: s, key: t}}\n    basicAuth: {username: {name: s, key: u}, password: {name: s, key: p}}\ncells:\n  - {match: {severity: critical}, configs: [hook]}\n', 'either authorization or basicAuth, not both'],
   ['a cell that names a label the table does not have', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com}\ncells:\n  - {match: {severity: critical, extra: z}, configs: [mail]}\n'],
@@ -619,12 +656,14 @@ test('an e-mail config takes its sender, server, password and CA from the dialog
     await expect(dialog.getByTestId('config-problems')).toContainText('smarthost must be host:port')
     await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
     await dialog.getByLabel('SMTP server').fill('smtp.example.com:587')
-    // A server of its own, without its own login, would get the platform's.
-    await expect(dialog.getByTestId('config-problems')).toContainText('the platform\'s SMTP user name and password would be sent to this server')
-    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    // A server of its own, without its own login, gets the platform's: said, not refused.
+    await expect(dialog.getByTestId('config-warnings')).toContainText('so they are used with this server')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeEnabled()
     await dialog.getByLabel('SMTP user').fill('alertforge')
     await dialog.getByLabel('Password Secret name').fill('smtp-auth')
     await dialog.getByLabel('Password Secret key').fill('password')
+    // With its own login, only the platform's identity and secret are said.
+    await expect(dialog.getByTestId('config-warnings')).toContainText('has its own login, but Alertmanager still uses the platform\'s SMTP identity')
     await chooseOption(page, dialog, 'Require TLS', 'yes')
     await dialog.getByLabel('CA Secret name').fill('smtp-ca')
     await dialog.getByLabel('CA Secret key').fill('ca.crt')

@@ -222,6 +222,7 @@ export default function gitRouter() {
         const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
         return { status: 200, body: { sha, message, unconverted: charts.unconverted,
           ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}),
+          ...(deployments.routingWarnings?.length ? { routingWarnings: deployments.routingWarnings } : {}),
           ...(deployments.unreadable.length ? { unreadable: deployments.unreadable } : {}) } }
       })
       res.status(outcome.status).json(outcome.body)

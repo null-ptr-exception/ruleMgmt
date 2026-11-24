@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Collapse, Input, Modal, Radio, Select, Table, Tag, Typography, Alert } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, MinusCircleOutlined } from '@ant-design/icons'
-import { configProblems } from '../utils/routingGenerator'
+import { configProblems, configWarnings } from '../utils/routingGenerator'
 import { putConfig, removeConfig, sameConfig } from '../utils/routingModel'
 import { blankForm as blank, toForm, fromForm, formProblems, dialogProblem } from '../utils/configForm'
 
@@ -12,7 +12,7 @@ const CHOICES = [{ value: 'default', label: PLATFORM }, { value: 'yes', label: '
 
 // What a shared config (#123) cannot have, since each needs a Secret, which
 // is read from each deployment's own namespace.
-const NO_SECRETS_EMAIL = 'A shared e-mail config sends through the platform\'s SMTP server: its own server needs a login from a Secret, which a shared config cannot read.'
+const NO_SECRETS_EMAIL = 'A shared e-mail config has no SMTP password: it would come from a Secret, which a shared config cannot read. A server of its own is handed the platform\'s login.'
 const NO_SECRETS_WEBHOOK = 'A shared webhook cannot authenticate or read a CA: both come from a Secret, which a shared config cannot read. Keep such a webhook in each deployment\'s own routing.'
 
 const SECRET_REMINDER = 'Make sure the Secret exists in this deployment\'s namespace — AlertForge cannot see the cluster.'
@@ -109,13 +109,13 @@ function EmailSettings({ email, set, noSecrets }) {
       <Field label="From">
         <Input aria-label="From" placeholder={PLATFORM} value={email.from} onChange={e => set({ from: e.target.value })} />
       </Field>
+      <Field label="SMTP server (host:port)">
+        <Input aria-label="SMTP server" placeholder={PLATFORM} value={email.smarthost} onChange={e => set({ smarthost: e.target.value })} />
+      </Field>
       {noSecrets ? (
         <Text type="secondary" style={{ fontSize: 12 }} data-testid="no-secrets-email">{NO_SECRETS_EMAIL}</Text>
       ) : (
         <>
-          <Field label="SMTP server (host:port)">
-            <Input aria-label="SMTP server" placeholder={PLATFORM} value={email.smarthost} onChange={e => set({ smarthost: e.target.value })} />
-          </Field>
           <Field label="SMTP user">
             <Input aria-label="SMTP user" placeholder={PLATFORM} value={email.authUsername} onChange={e => set({ authUsername: e.target.value })} />
           </Field>
@@ -190,7 +190,7 @@ export function configTarget(config) {
  * `nameLocked` keeps the name of one being edited;
  * `problemsOf(name, config)` is the save's own check of the config.
  */
-export function ConfigDialog({ editing, onOk, onCancel, taken, problemsOf = configProblems, note, nameLocked = false, noSecrets = false }) {
+export function ConfigDialog({ editing, onOk, onCancel, taken, problemsOf = configProblems, warningsOf = configWarnings, note, nameLocked = false, noSecrets = false }) {
   const [form, setFormState] = useState(editing.form)
   const setForm = patch => setFormState(f => ({ ...f, ...patch }))
   const setEmail = patch => setFormState(f => ({ ...f, email: { ...f.email, ...patch } }))
@@ -203,6 +203,8 @@ export function ConfigDialog({ editing, onOk, onCancel, taken, problemsOf = conf
     ...formProblems(form),
     ...problemsOf(name, fromForm(form)).map(dialogProblem),
   ]
+  // Worth saying, never in the way: Add stays on.
+  const warnings = problems.length ? [] : warningsOf(name, fromForm(form)).map(dialogProblem)
   // Every field filled before the problems are shown: an empty form is not wrong yet.
   const filled = name && (form.type === 'email' ? form.to.trim()
     : form.where === 'url' ? form.url.trim() : form.secretName.trim() && form.secretKey.trim())
@@ -243,6 +245,10 @@ export function ConfigDialog({ editing, onOk, onCancel, taken, problemsOf = conf
         {filled && problems.length > 0 && (
           <Alert type="error" showIcon data-testid="config-problems"
             message={problems.map((p, i) => <div key={i}>{p}</div>)} />
+        )}
+        {filled && warnings.length > 0 && (
+          <Alert type="warning" showIcon data-testid="config-warnings"
+            message={warnings.map((p, i) => <div key={i}>{p}</div>)} />
         )}
       </div>
     </Modal>

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import yaml from 'js-yaml'
 import { z } from 'zod'
-import { checkRouting, generateRouting, configProblems } from '../routingGenerator'
+import { checkRouting, generateRouting, configProblems, configWarnings } from '../routingGenerator'
 import { routingSchema } from '../routingSchema'
 
 // Every key of routing.yaml, filled.
@@ -190,23 +190,42 @@ describe('routing.schema.json', () => {
 describe('e-mail fields', () => {
   const said = extra => configProblems('c', { type: 'email', to: 'db@example.com', ...extra })
   const LOGIN = { authUsername: 'u', authPassword: { name: 'smtp-auth', key: 'password' } }
-  const OWN_LOGIN = 'configs.c: smarthost needs authUsername and authPassword: without them the platform\'s SMTP user name and password would be sent to this server'
+  const OWN_LOGIN = 'configs.c: smarthost other.example.com:587 has no login of its own — Alertmanager fills in the platform\'s global SMTP user name and password (and its identity and secret, where set), so they are used with this server'
+  const HALF = 'configs.c: smarthost with only half a login: Alertmanager would fill in the other half from the platform\'s SMTP settings — write both authUsername and authPassword, or neither'
+  const warned = extra => configWarnings('c', { type: 'email', to: 'db@example.com', ...extra })
 
   // Alertmanager fills a missing login from its global settings whatever
-  // the server (config.go, v0.27): a server of the config's own would get
-  // the platform's.
-  it.each([
-    { smarthost: 'other.example.com:587' },
-    { smarthost: 'other.example.com:587', authUsername: 'u' },
-    { smarthost: 'other.example.com:587', authPassword: LOGIN.authPassword },
-    { smarthost: 'other.example.com:587', tlsConfig: { insecureSkipVerify: true } },
-  ])('refuses a server of its own without its own login: %j', extra => {
-    expect(said(extra)).toContain(OWN_LOGIN)
+  // the server (config.go, v0.27): a server of the config's own gets the
+  // platform's. Taken (amtool loads it), and said.
+  it('accepts a server of its own without its own login, warning whose login it gets', () => {
+    expect(said({ smarthost: 'other.example.com:587' })).toEqual([])
+    expect(warned({ smarthost: 'other.example.com:587' })).toEqual([OWN_LOGIN])
   })
 
-  it('accepts a server of its own with its own login, and a login for the platform\'s server', () => {
+  // The missing half comes from the platform (measured).
+  it.each([{ authUsername: 'u' }, { authPassword: LOGIN.authPassword }])('refuses a server of its own with half a login: %j', extra => {
+    expect(said({ smarthost: 'other.example.com:587', ...extra })).toContain(HALF)
+  })
+
+  it('says a server without STARTTLS may get a password in clear', () => {
+    expect(warned({ smarthost: 'other.example.com:587', ...LOGIN, requireTLS: false })).toContain('configs.c: smarthost other.example.com:587 with requireTLS: false — no STARTTLS, so a password may cross the network in clear')
+  })
+
+  it('says a skipped certificate check sends that login to anyone who answers', () => {
+    expect(warned({ smarthost: 'other.example.com:587', tlsConfig: { insecureSkipVerify: true } })).toEqual([`${OWN_LOGIN} — and with insecureSkipVerify, to anyone who answers there`])
+  })
+
+  it('still refuses a password without its user name', () => {
+    expect(said({ smarthost: 'other.example.com:587', authPassword: LOGIN.authPassword })).toContain('configs.c: authPassword needs authUsername: they are a pair')
+  })
+
+  // Its own user name and password are its own; the platform's identity
+  // and secret are still used (measured): said, more softly.
+  it('accepts a server of its own with its own login, saying the platform\'s identity and secret are still used', () => {
     expect(said({ smarthost: 'other.example.com:587', ...LOGIN })).toEqual([])
+    expect(warned({ smarthost: 'other.example.com:587', ...LOGIN })).toEqual(['configs.c: smarthost other.example.com:587 has its own login, but Alertmanager still uses the platform\'s SMTP identity (AUTH PLAIN) and secret (CRAM-MD5), where set, with this server'])
     expect(said(LOGIN)).toEqual([])
+    expect(warned(LOGIN)).toEqual([])
   })
 
   it.each([

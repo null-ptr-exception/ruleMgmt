@@ -9,7 +9,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import yaml from 'js-yaml'
-import { configProblems, routingSpec } from '../../src/utils/routingGenerator.js'
+import { configProblems, configWarnings, routingSpec } from '../../src/utils/routingGenerator.js'
 import { toAlertmanagerConfig, amtoolRoutes, hasBinary } from '../blind/harness.js'
 
 const HAS_AMTOOL = hasBinary('amtool')
@@ -111,9 +111,45 @@ describe('e-mail to', () => {
   })
 
   it.skipIf(!HAS_AMTOOL)('amtool loads the accepted ones', () => {
-    for (const to of ACCEPTED) {
+    for (const to of [...ACCEPTED, ...EMPTY_GROUPS]) {
       expect(amtoolAccepts({ emailConfigs: [{ to }] }), to).toBe(true)
     }
+  })
+
+  // An RFC 5322 group with no members: Alertmanager takes it and sends to
+  // nobody. Accepted, and said; a group with members is an address list.
+  const EMPTY_GROUPS = ['undisclosed-recipients:;', 'undisclosed-recipients: ;', 'Undisclosed recipients:;', '"Ops team":;', 'a:;, b:;']
+  it.each(EMPTY_GROUPS)('accepts %j, warning it notifies nobody', to => {
+    expect(problems(email(to))).toEqual([])
+    expect(configWarnings('c', email(to))).toEqual([`configs.c: to "${to}" is a group with no members — this config notifies nobody`])
+  })
+  it.each(['oncall: a@x.com, b@y.com;', 'a:;, ops@example.com', 'db@example.com'])('accepts %j with no warning: someone is sent to', to => {
+    expect(problems(email(to))).toEqual([])
+    expect(configWarnings('c', email(to))).toEqual([])
+  })
+  it.each([[':;', 'be an e-mail address'], ['a:; extra', 'be an e-mail address'], ['a:;\nBcc: x@y', 'not contain a line break']])('still refuses %j', (to, why) => {
+    expect(problems(email(to)).join()).toContain(`to must ${why}`)
+  })
+  it('keeps from an address: a group is no sender', () => {
+    expect(problems({ type: 'email', to: 'db@example.com', from: 'undisclosed-recipients:;' }).join()).toContain('from must be an e-mail address')
+  })
+})
+
+// A server of the config's own without its own login: Alertmanager hands it
+// the platform's global SMTP login. Taken, and said.
+describe('e-mail smarthost without its own login', () => {
+  const mail = extra => ({ type: 'email', to: 'db@example.com', smarthost: 'relay.example.com:25', ...extra })
+  it.each([{}, { tlsConfig: { insecureSkipVerify: true } }])('accepts %j, with a warning', extra => {
+    expect(problems(mail(extra))).toEqual([])
+    expect(configWarnings('c', mail(extra)).join()).toContain('smarthost relay.example.com:25 has no login of its own')
+  })
+  it.skipIf(!HAS_AMTOOL)('amtool loads it', () => {
+    expect(amtoolAccepts({ emailConfigs: [{ to: 'db@example.com', smarthost: 'relay.example.com:25' }] })).toBe(true)
+    expect(amtoolAccepts({ emailConfigs: [{ to: 'db@example.com', smarthost: 'relay.example.com:25', tlsConfig: { insecureSkipVerify: true } }] })).toBe(true)
+  })
+  it('still refuses half a login: the other half would be the platform\'s', () => {
+    expect(problems(mail({ authPassword: { name: 's', key: 'p' } })).join()).toContain('authPassword needs authUsername')
+    expect(problems(mail({ authUsername: 'u' })).join()).toContain('smarthost with only half a login')
   })
 })
 

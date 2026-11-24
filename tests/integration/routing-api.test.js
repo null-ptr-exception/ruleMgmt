@@ -90,6 +90,23 @@ describe('PUT routing', () => {
     expect(cr).toContain('app.kubernetes.io/managed-by: Helm')
   })
 
+  // Alertmanager takes a group with no members and sends to nobody: saved,
+  // generated, and said on the save, the GET and a synced target's GET.
+  it('saves a config that notifies nobody, and says so', async () => {
+    const dir = makeDeployment('asia/prod')
+    makeDeployment('eu/prod')
+    await writeSyncRegistry(tmpDir, { syncs: [{ source: 'asia/prod', targets: ['eu/prod'] }] })
+    const text = ROUTING.replace('to: db@example.com', 'to: "undisclosed-recipients:;"')
+    const res = await putRouting('asia/prod', text)
+    expect(res.status).toBe(200)
+    const said = ['configs.db-email: to "undisclosed-recipients:;" is a group with no members — this config notifies nobody']
+    expect(res.body.warnings).toEqual(said)
+    expect(read(dir, CR)).toContain('undisclosed-recipients:;')
+    const get = folder => request(app).get(routingUrl(folder))
+    expect((await get('asia/prod')).body).toMatchObject({ errors: [], warnings: said, stale: false })
+    expect((await get('eu/prod')).body).toMatchObject({ errors: [], warnings: said })
+  })
+
   it('takes the table too, written out as YAML', async () => {
     const dir = makeDeployment('asia/prod')
     const res = await putRouting('asia/prod', yaml.load(ROUTING))
@@ -220,7 +237,7 @@ describe('GET routing', () => {
     await putRouting('asia/prod', ROUTING)
     const res = await getRouting('asia/prod')
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ text: ROUTING, errors: [], stale: false })
+    expect(res.body).toEqual({ text: ROUTING, errors: [], warnings: [], stale: false })
   })
 
   it('reports the AlertmanagerConfig out of date after routing.yaml is edited by hand, until it is saved again', async () => {
@@ -257,7 +274,7 @@ describe('GET routing', () => {
     makeDeployment('eu/prod')
     await writeSyncRegistry(tmpDir, { syncs: [{ source: 'asia/prod', targets: ['eu/prod'] }] })
     await putRouting('asia/prod', ROUTING)
-    expect((await getRouting('eu/prod')).body).toEqual({ text: ROUTING, errors: [], stale: false })
+    expect((await getRouting('eu/prod')).body).toEqual({ text: ROUTING, errors: [], warnings: [], stale: false })
   })
 })
 

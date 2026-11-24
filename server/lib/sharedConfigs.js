@@ -18,7 +18,7 @@ import yaml from 'js-yaml'
 import { parseDocument, Document, isMap, isScalar, isSeq } from 'yaml'
 import { readsAsNonString } from '../../src/utils/yamlScalar.js'
 import { sameConfig } from '../../src/utils/routingModel.js'
-import { checkSharedConfigs, sharedNamesIn, SHARED_DIR, SHARED_FILE } from '../../src/utils/routingGenerator.js'
+import { checkSharedConfigs, sharedConfigWarnings, sharedNamesIn, SHARED_DIR, SHARED_FILE } from '../../src/utils/routingGenerator.js'
 import { configNameProblem } from '../../src/utils/routingSchema.js'
 import { readRouting, buildRouting, writeWhole, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
 import { listFolderDeployments } from './commitChecks.js'
@@ -29,16 +29,16 @@ export { SHARED_DIR, SHARED_FILE }
 
 const sharedPath = gitopsDir => path.join(gitopsDir, SHARED_FILE)
 
-/** The file's configs from its text: `{ text, configs, errors }`. */
+/** The file's configs from its text: `{ text, configs, errors, warnings }`. */
 export function parseSharedConfigs(text) {
   let doc
   try {
     doc = yaml.load(text)
   } catch (err) {
-    return { text, configs: {}, errors: [`${SHARED_FILE} is not valid YAML: ${err.reason || err.message}`] }
+    return { text, configs: {}, errors: [`${SHARED_FILE} is not valid YAML: ${err.reason || err.message}`], warnings: [] }
   }
   const errors = checkSharedConfigs(doc)
-  return { text, configs: errors.length ? {} : doc.configs, errors }
+  return { text, configs: errors.length ? {} : doc.configs, errors, warnings: errors.length ? [] : sharedConfigWarnings(doc) }
 }
 
 /** The shared configs as they are on disk, or null when the repo has none. */
@@ -50,7 +50,7 @@ export async function readSharedConfigs(gitopsDir) {
     if (err.code === 'ENOENT') return null
     // A file there that cannot be read is the shared configs' problem, as a
     // syntax error is: a deployment using none of them goes on as before.
-    return { text: null, configs: {}, errors: [`${SHARED_FILE} cannot be read (${err.code || 'error'})`] }
+    return { text: null, configs: {}, errors: [`${SHARED_FILE} cannot be read (${err.code || 'error'})`], warnings: [] }
   }
   return parseSharedConfigs(text)
 }
@@ -286,7 +286,7 @@ export async function writeShared(gitopsDir, text) {
   const notWritten = await writeAll([{ abs: sharedPath(gitopsDir), content: text, rel: SHARED_FILE }, ...files])
   if (notWritten) return notWritten
   const syncFailed = await copyToSyncTargets(gitopsDir, sources)
-  return { status: 200, body: { ok: true, written: [SHARED_FILE, ...files.map(f => f.rel)], ...(syncFailed.length ? { syncFailed } : {}) } }
+  return { status: 200, body: { ok: true, written: [SHARED_FILE, ...files.map(f => f.rel)], ...(shared.warnings.length ? { warnings: shared.warnings } : {}), ...(syncFailed.length ? { syncFailed } : {}) } }
 }
 
 /**

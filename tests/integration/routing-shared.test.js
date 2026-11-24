@@ -335,6 +335,30 @@ describe('the shared file edited with git', () => {
     expect(file.description).toMatch(new RegExp(`used by ${A}, ${B}, ${C}: configs\\.relay-webhook: a webhook has either url or urlSecret`))
   })
 
+  // A shared config that notifies nobody: saved, and said on the shared
+  // page, on each routing that uses it, and in the commit.
+  it('says a shared config notifies nobody, everywhere it is used, never refusing', async () => {
+    const text = sharedText(RELAY).replace('ops-email: { type: email, to: ops@example.com }', 'ops-email: { type: email, to: "undisclosed-recipients:;" }')
+    const save = await api('PUT', '/api/v2/routing/shared', { shared: text })
+    expect(save.status).toBe(200)
+    const said = 'configs.ops-email: to "undisclosed-recipients:;" is a group with no members — this config notifies nobody'
+    expect(save.data.warnings).toEqual([said])
+    expect((await api('GET', '/api/v2/routing/shared')).data.warnings).toEqual([said])
+    expect((await putRouting(A, routing('  ops-email: { shared: true }\n'))).data.warnings).toEqual([said.replace('configs.ops-email:', 'configs.ops-email (shared):')])
+    const { status, data } = await commit()
+    expect(status).toBe(200)
+    expect(data.routingWarnings.map(w => w.deployment)).toEqual([A, SHARED])
+  })
+
+  // A shared config has no password (it would be a Secret): a server of its
+  // own is taken, saying it is handed the platform's login.
+  it('takes a shared e-mail config with its own SMTP server, warning whose login it gets', async () => {
+    const text = sharedText(RELAY).replace('ops-email: { type: email, to: ops@example.com }', 'ops-email: { type: email, to: ops@example.com, smarthost: relay.example.com:25 }')
+    const save = await api('PUT', '/api/v2/routing/shared', { shared: text })
+    expect(save.status).toBe(200)
+    expect(save.data.warnings).toEqual([expect.stringContaining('configs.ops-email: smarthost relay.example.com:25 has no login of its own')])
+  })
+
   it('lists a shared file with problems that nobody uses, and lets the commit through', async () => {
     for (const dep of [A, B, C]) expect((await api('DELETE', `/api/v2/deployments/demo/${path.basename(dep)}/routing${q(dep)}`)).status).toBe(200)
     await write(SHARED, 'configs:\n  relay-webhook: { type: webhook }\n')

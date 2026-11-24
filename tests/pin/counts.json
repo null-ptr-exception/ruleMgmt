@@ -1,13 +1,13 @@
 {
   "lint": {
-    "total": 168,
+    "total": 131,
     "byKind": {
       "childProcess": 1,
-      "fs": 28,
-      "fsUse": 111,
-      "helper": 4,
-      "yaml": 12,
-      "yamlParse": 12
+      "fs": 23,
+      "fsUse": 82,
+      "helper": 3,
+      "yaml": 11,
+      "yamlParse": 11
     },
     "byFile": {
       "scripts/gen-chart.mjs": 3,
@@ -19,32 +19,28 @@
       "server/lib/chartFiles.js": 3,
       "server/lib/chartUsage.js": 2,
       "server/lib/commit/template.js": 4,
-      "server/lib/commonEdit.js": 28,
+      "server/lib/commonEdit.js": 13,
       "server/lib/deploymentCheck.js": 10,
       "server/lib/deploymentWrite.js": 10,
       "server/lib/helmCheck.js": 2,
-      "server/lib/migrate.js": 2,
       "server/lib/reservedNames.js": 2,
       "server/lib/routingFiles.js": 7,
       "server/lib/ruleCheck.js": 6,
       "server/lib/sharedConfigs.js": 9,
       "server/lib/stack.js": 8,
       "server/lib/subchart.js": 4,
-      "server/lib/sync.js": 4,
+      "server/lib/sync.js": 1,
       "server/routes/charts.js": 9,
-      "server/routes/deployments/lifecycle.js": 4,
       "server/routes/deployments/resolve.js": 4,
-      "server/routes/folders/create.js": 7,
       "server/routes/git.js": 6,
-      "server/routes/sync.js": 6,
       "server/routes/templates.js": 2
     }
   },
   "yamlParseSites": {
-    "serverAndScripts": 12,
+    "serverAndScripts": 11,
     "src": 6,
     "byFileKind": {
-      "Chart.yaml": 6,
+      "Chart.yaml": 5,
       "Template values.yaml": 0,
       "deployment values": 0,
       "routing.yaml": 0,
@@ -55,19 +51,17 @@
     }
   },
   "swallowingCatches": {
-    "total": 27,
+    "total": 20,
     "byFile": {
       "server.js": 1,
       "server/lib/answerPaths.js": 1,
       "server/lib/chartDiscovery.js": 3,
-      "server/lib/commonEdit.js": 7,
+      "server/lib/commonEdit.js": 4,
       "server/lib/deploymentCheck.js": 3,
-      "server/lib/migrate.js": 1,
       "server/lib/stack.js": 3,
       "server/lib/subchart.js": 1,
       "server/routes/charts.js": 2,
       "server/routes/deployments/resolve.js": 1,
-      "server/routes/sync.js": 3,
       "src/utils/schemaCompat.js": 1
     }
   },

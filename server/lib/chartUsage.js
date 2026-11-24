@@ -50,16 +50,16 @@ async function fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv) {
  * that cannot be read, and deployments whose Chart.yaml cannot be (which
  * Template they use is not known), are returned apart.
  */
-async function fromFolders(gitopsDir, chart) {
+async function fromFolders(gitopsDir, chart, repo) {
   const found = []
   const unreadable = []
-  for (const e of await walk(openRepo(gitopsDir), { hidden: true })) {
+  for (const e of await walk(repo, { hidden: true })) {
     // A link out of the repo holds none of its deployments: not followed.
     if (e.kind === 'unreadable' && e.cause !== 'link') { unreadable.push({ path: e.rel || '.', error: e.why }); continue }
     if (e.kind !== 'deployment' && e.kind !== 'common' && !e.chartOnly) continue
     const d = { path: e.rel, kind: e.chartOnly ? 'chart-only' : e.kind }
     const dir = path.join(gitopsDir, d.path)
-    const stack = await resolveStack(gitopsDir, dir)
+    const stack = await resolveStack(gitopsDir, dir, { repo })
     // A stack that does not reach its Template (a _common missing, a link
     // gone) still uses the one it is for: counted, and named as broken.
     const uses = stack.chart ?? stack.claims
@@ -75,12 +75,13 @@ async function fromFolders(gitopsDir, chart) {
 
 /**
  * Who uses `chart`: `{ deployments, unreadable }`, `unreadable` the folders
- * that could not be read (who is in them is not known).
+ * that could not be read (who is in them is not known). `repo` the snapshot
+ * a writer's plan reads the folders through.
  */
-export async function findChartUsage(gitopsDir, chart, deploymentsDirEnv) {
+export async function findChartUsage(gitopsDir, chart, deploymentsDirEnv, { repo = openRepo(gitopsDir) } = {}) {
   const [byPath, byDependency] = await Promise.all([
     fromDefaultLayout(gitopsDir, chart, deploymentsDirEnv),
-    fromFolders(gitopsDir, chart)
+    fromFolders(gitopsDir, chart, repo)
   ])
   const seen = new Set()
   const deployments = [...byPath, ...byDependency.found].filter(d => {
@@ -91,6 +92,6 @@ export async function findChartUsage(gitopsDir, chart, deploymentsDirEnv) {
   return { deployments, unreadable: byDependency.unreadable }
 }
 
-export async function findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv) {
-  return (await findChartUsage(gitopsDir, chart, deploymentsDirEnv)).deployments
+export async function findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv, opts) {
+  return (await findChartUsage(gitopsDir, chart, deploymentsDirEnv, opts)).deployments
 }

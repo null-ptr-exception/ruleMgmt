@@ -9,7 +9,10 @@ import deploymentsRouter from '../../server/routes/deployments.js'
 import syncRouter from '../../server/routes/sync.js'
 import renderRouter from '../../server/routes/render.js'
 import foldersRouter from '../../server/routes/folders.js'
-import { writeSyncRegistry } from '../../server/lib/sync.js'
+import { registryText } from '../../server/lib/sync.js'
+
+// sync.yaml written as the writer writes it.
+const writeSyncRegistry = (dir, registry) => fs.promises.writeFile(path.join(dir, 'sync.yaml'), registryText(registry))
 
 /**
  * A deployment's notification routing (#92): routing.yaml and the

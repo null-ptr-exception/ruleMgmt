@@ -281,7 +281,7 @@ values-link-outside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found
 values-link-outside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
 values-link-outside	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
 values-link-outside	W	check-deployment	refused	exit 1	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
-values-link-outside	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments/w/d/templates/alertmanagerconfig.yaml,deployments/w/d/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+values-link-outside	W	sync-to	unreadable	409	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 values-link-outside	W	sync-from	unreadable	409	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
 values-link-outside	W	commit	refused	409	deployments/w/d	no	-	folder	renders	0	1	-	values-unreadable	refuses-what-helm-renders
 values-link-outside	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	refuse:values.unreadable	refuses-what-helm-renders

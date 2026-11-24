@@ -287,7 +287,7 @@ describe('sync API', () => {
     // root bypasses file permissions, so the read-only directory below
     // wouldn't actually make the persist step fail. Same on Windows, where
     // chmod on a directory is a no-op and the write succeeds anyway.
-    it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('a registry write failure leaves the target untouched and returns a generic error', async () => {
+    it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('a registry write failure leaves the target untouched and names sync.yaml', async () => {
       makeDeployment('cpu/prod', { alerts: [{ warn: 99 }] })
       makeDeployment('cpu/staging', { alerts: [{ warn: 1 }] })
       // Valid registry in a read-only directory: reads succeed, but the
@@ -304,15 +304,15 @@ describe('sync API', () => {
         fs.chmodSync(tmpDir, 0o755)
       }
 
-      expect(res.status).toBe(500)
-      // Registry-first ordering: the failed persist must mean the target's
-      // content was never overwritten...
+      // All or none: the copy written before sync.yaml is put back.
+      expect(res.status).toBe(409)
+      expect(res.body).toEqual({ error: 'sync.yaml cannot be written: permission denied', file: 'sync.yaml' })
+      // The target's content as it was...
       const target = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(target).toEqual({ alerts: [{ warn: 1 }] })
       // ...and no half-created link is visible afterwards.
       const registry = await request(app).get('/api/v2/sync')
       expect(registry.body).toEqual({ syncs: [] })
-      // Generic message only — fs errors embed absolute server paths.
       expect(res.body.error).not.toContain(tmpDir)
     })
 

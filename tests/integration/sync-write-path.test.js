@@ -477,11 +477,12 @@ describe('deleting a sync source', () => {
     const parent = path.join(tmpDir, 'deployments/team')
     await fs.chmod(parent, 0o555)
     try {
+      const before = await read(`${SRC}/values.yaml`)
       const { status, data } = await del(SRC)
-      expect(status).toBe(500)
-      // The reason reaches the user, without where the repo is.
-      expect(data.error).toMatch(/EACCES/)
-      expect(data.error).not.toContain(tmpDir)
+      // Named, in the repo; every file removed before it put back.
+      expect(status).toBe(409)
+      expect(data).toEqual({ error: `${SRC} cannot be written: permission denied`, file: SRC })
+      expect(await read(`${SRC}/values.yaml`)).toBe(before)
     } finally {
       await fs.chmod(parent, 0o755)
     }
@@ -586,43 +587,34 @@ describe.skipIf(IS_ROOT)('a target whose values cannot be written keeps its own 
   })
 })
 
-// Two syncs to the same new target: the second waits for the first, which
-// makes the target. Whether it is there is read once the second has the
-// lock — read before, a failed copy took it for new and deleted the
-// deployment the first one made.
+// Two syncs to the same new target: the second, planned while the target
+// was not there, waits for the first, which makes it. Under the lock the
+// second is planned again from the repo as it is: it copies over the
+// deployment the first made — or, when that cannot be written, refuses
+// naming the file and leaves it as it is, never taking it for its own new
+// one and deleting it.
 describe.skipIf(IS_ROOT)('a sync to a new target that waited for the lock', () => {
   it('does not delete the target made meanwhile when its copy fails', async () => {
     await setup([])
     const NEW = 'deployments/team/new'
-    const { withSyncRegistryLock } = await import('../../server/lib/sync.js')
-    // Hold the lock, as the first sync does while it makes the target.
-    let release
-    const held = withSyncRegistryLock(tmpDir, () => new Promise(r => { release = r }))
-    // Known once the request has looked for the target, before the lock.
-    const access = fs.access.bind(fs)
-    let looked
-    const lookedAt = new Promise(r => { looked = r })
-    const spy = vi.spyOn(fs, 'access').mockImplementation(async (p, ...rest) => {
-      if (String(p) === path.join(tmpDir, NEW)) looked()
-      return access(p, ...rest)
-    })
-    try {
-      const sync = api('POST', '/api/v2/sync', { source: SRC, target: NEW })
-      await Promise.race([lookedAt, new Promise(r => setTimeout(r, 2000))])
+    const { hooks } = await import('../../server/repo/write.js')
+    hooks.planned = async () => {
+      hooks.planned = null
       // Meanwhile the first sync made the target, with values of its own
       // that this copy cannot write over.
       await fs.mkdir(path.join(tmpDir, NEW), { recursive: true })
       await fs.copyFile(path.join(tmpDir, SRC, 'Chart.yaml'), path.join(tmpDir, NEW, 'Chart.yaml'))
       await fs.writeFile(path.join(tmpDir, NEW, 'values.yaml'), 'demo:\n  cpu:\n    - {namespace: mine, warn: 1}\n')
       await fs.chmod(path.join(tmpDir, NEW, 'values.yaml'), 0o444)
-      release()
-      await held
-
-      expect((await sync).status).toBe(500)
+    }
+    try {
+      const res = await api('POST', '/api/v2/sync', { source: SRC, target: NEW })
+      expect(res.status).toBe(409)
+      expect(res.data.file).toBe(`${NEW}/values.yaml`)
       expect(await read(`${NEW}/values.yaml`)).toContain('namespace: mine')
+      expect(await read(`${NEW}/Chart.yaml`)).toBe(await read(`${SRC}/Chart.yaml`))
     } finally {
-      release?.()
-      spy.mockRestore()
+      hooks.planned = null
       await fs.chmod(path.join(tmpDir, NEW, 'values.yaml'), 0o644).catch(() => {})
     }
   })

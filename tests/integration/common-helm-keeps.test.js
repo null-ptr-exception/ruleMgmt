@@ -195,19 +195,19 @@ describe.skipIf(!HAS_HELM)('what Helm deploys, as Helm reads it', { timeout: 120
     expect(await files(rels)).toEqual(was)
   })
 
-  it('what Helm renders differently after the change is put back, naming the deployment', async () => {
+  it('what Helm would render differently after the change refuses it, naming the deployment, and nothing is written', async () => {
     // A deployment with a template of its own that reads its top-level keys:
     // moving its values under common: changes what it renders.
     await byHand('shop/prod', `${C}:\n${groups.map(g => `  ${g}: []`).join('\n')}\n`)
     await byHand('shop/own', `${C}:\n${groups.map(g => `  ${g}: []`).join('\n')}\n`)
     await write('shop/own/templates/keys.yaml', 'apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: keys\ndata:\n  keys: {{ keys .Values | sortAlpha | join "," | quote }}\n')
     const was = await snapshot()
-    const shown = await plan({ action: 'create', folder: 'shop', chart: C })
-    expect(shown.status).toBe(200)
-    const done = await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'shop', chart: C, expected: shown.data.expected })
-    expect(done.status).toBe(500)
-    expect(done.data.error).toBe('Not changed: shop/own would no longer deploy what it does, so everything was put back')
-    expect(done.data.differs).toEqual([{ path: 'shop/own', why: 'Helm renders other objects' }])
+    // Said by the plan the dialog shows, before anything is written, and by the write.
+    const refused = { error: 'Not made: shop/own would no longer deploy what it does', differs: [{ path: 'shop/own', why: 'Helm renders other objects' }] }
+    expect(await plan({ action: 'create', folder: 'shop', chart: C })).toMatchObject({ status: 409, data: refused })
+    expect(await snapshot()).toEqual(was)
+    const done = await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'shop', chart: C })
+    expect(done).toEqual({ status: 409, data: refused })
     expect(await snapshot()).toEqual(was)
   })
 

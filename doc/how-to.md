@@ -345,7 +345,11 @@ or the rule checker (a group written as a map, a Common Value of `0` a
 derived window reads as `[0m]`), **Create** says so, naming the file, and
 nothing is written. Required cells left empty, and a required Common Value
 nothing gives yet, are fine: they are filled in the editor, and its Save
-and Commit ask for them.
+and Commit ask for them. Its `Chart.yaml` and `values.yaml` are written
+together or not at all: when one cannot be written (a read-only file or
+folder), **Create** names it (409) and leaves no folder or file behind.
+One made in the same folder meanwhile is not written over: it is the
+deployment there.
 
 Its `Chart.yaml` asks for any version of the chart (`">=0.0.0-0"`): there
 is one copy of each chart, and a new version of one is a clone of it under
@@ -445,9 +449,11 @@ passes none of them on), a key written twice, a `null` (once on the
 `values.yaml` cannot be read. The dialog names each, with why.
 
 Before anything is written, Helm renders every deployment it would touch,
-with the same steps as Preview; once written, Helm renders them again, and
-if one renders anything else, everything is put back and that deployment
-named. It stops before writing, naming each deployment, when:
+with the same steps as Preview, as it is and as it will be — in a copy of
+the repo, so nothing is written into the repo, not even Helm's
+`Chart.lock` or `charts/*.tgz`. One that would render anything else stops
+it, named, already in the dialog's list. It stops before writing, naming
+each deployment, when:
 
 | | |
 |---|---|
@@ -461,13 +467,17 @@ compared, and the dialog says so.
 The dialog lists everything under the folder once: what changes, what is
 left as it is and why (another Template, a deployment on two Templates, a
 sync target of a deployment elsewhere), what stops it, and folders that
-cannot be read. **Create** (or **Remove**) writes what was listed: a file
-changed since, by anyone, refuses it and shows the list again. Nothing is
-made or removed through a folder that is a link. A `_common` is not deleted,
-cloned or given routing as a deployment: **Remove this _common...** is the
-way, so the deployments on it keep what they inherited. While it renders and
-writes, it holds the commit lock: measured with 300 deployments, 33–41
-seconds (Helm 3.15, 3.19), commits and saves waiting meanwhile.
+cannot be read. **Create** (or **Remove**) writes what was listed, all of it
+or none: a file that cannot be written (read-only, a folder that cannot be
+removed) puts back everything written before it and is named (409). A file
+changed since, by anyone — a save in the folder while it waits included —
+refuses it and shows the list again. Sent without the list's `expected` (a
+script), the plan made then is written. Nothing is made or removed through
+a folder that is a link. A `_common` is not deleted, cloned or given routing
+as a deployment: **Remove this _common...** is the way, so the deployments
+on it keep what they inherited. It renders before it takes the commit lock,
+and holds the lock only while it writes (and, when a file changed while it
+waited, while it plans once more).
 
 **Edit it:** click `_common/<chart>` in the tree. It opens in the same editor
 as a deployment, with the same checks — except that a required Common Value
@@ -926,6 +936,10 @@ copied to it.
   along with the source instead. Those marked to be deleted go
   first: when the source then cannot be deleted, the message says why and
   names the ones already gone; the source keeps the rest.
+- A deployment is deleted whole or not at all: its folder, every file in it
+  and its line in `sync.yaml` together. When one cannot be removed (a
+  read-only folder, a `sync.yaml` that cannot be written) or a folder in it
+  cannot be read, nothing is removed and the message names the file (409).
 - A `sync.yaml` that cannot be read (no permission, a folder in its place)
   or is no registry (not YAML, not a map, `syncs:` not a list) is named, with 409 and `unreadable: true`, by everything that
   needs to know who syncs from whom: the sync list, sync and unlink, a
@@ -938,6 +952,14 @@ copied to it.
   naming the file; one whose `Chart.yaml` is a folder (or cannot be read)
   is no deployment, and is refused (400, "exists but is not a valid
   deployment"). Nothing is written.
+- **Sync to...** writes the target's files and `sync.yaml` together, or
+  none of them: when one cannot be written (a permission error, a
+  read-only `sync.yaml`, a folder in its place), nothing changes — a new
+  target is not left behind — and the page names that file (409). A target
+  file the copy replaces that cannot be read is named the same way. A
+  source saved, or another sync made, while it waits for the one before it
+  is copied as it is by then. Unlinking writes `sync.yaml` alone, and names
+  it when it cannot be written.
 - A target is its source's copy, and Commit holds it to that: a target
   whose `values.yaml`, or the Template its `Chart.yaml` depends on, is not
   what a sync of the source writes (edited with git, or in the Gitea web

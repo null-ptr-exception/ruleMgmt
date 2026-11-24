@@ -1,24 +1,14 @@
-import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
 import { pathProblem } from '../repo/paths.js'
 import { normalizeSyncPath } from '../repo/sync.js'
 
-const SYNC_FILE = 'sync.yaml'
-
 // The commit lock lives with the writer (repo/lock.js); its names stay here
 // for the callers that take it from this module.
 export { withSyncRegistryLock, holdSyncRegistryLock, lockWaiters, HOLD_LIMIT_MS } from '../repo/lock.js'
 
-export async function writeSyncRegistry(gitopsDir, registry) {
-  // Temp file + rename so a crash mid-write can't leave sync.yaml
-  // truncated — the reader (repo/sync.js) treats a corrupt registry as a hard
-  // error (deliberately), which would take the whole sync API down.
-  const file = path.join(gitopsDir, SYNC_FILE)
-  const tmp = `${file}.tmp`
-  await fs.writeFile(tmp, yaml.dump(registry, { lineWidth: -1 }), 'utf-8')
-  await fs.rename(tmp, file)
-}
+/** sync.yaml's text for `registry` ({ syncs }), as the writer writes it. */
+export const registryText = registry => yaml.dump(registry, { lineWidth: -1 })
 
 export function findSourceEntry(registry, source) {
   return registry.syncs.find(s => s.source === source) || null

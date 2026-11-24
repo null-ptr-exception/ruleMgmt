@@ -7,5 +7,9 @@
  * set-values.js), and its import below.
  */
 import './set-values.js'
+import './sync.js'
+import './delete-deployment.js'
+import './create-deployment.js'
+import './common.js'
 
 export { planChange, applyChange, changeKinds } from '../write.js'

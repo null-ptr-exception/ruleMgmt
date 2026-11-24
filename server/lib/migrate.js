@@ -9,14 +9,13 @@
  * values save makes, so the two stay identical (#175).
  */
 
-import fs from 'fs/promises'
 import path from 'path'
 import { migrateValues, migrationLosses } from '../../src/utils/migration.js'
-import { getDepName } from './subchart.js'
 import { unwrapPath, wrapPath, replaceAtPath } from './stack.js'
 import { isTarget, getSourceForTarget } from './sync.js'
 import { readRegistry } from '../repo/sync.js'
 import { findDeploymentsUsing } from './chartUsage.js'
+import { syncTargets } from './deploymentWrite.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
 import { openRepo } from '../repo/openRepo.js'
 import { loadDeployment, isFlatFile } from '../repo/deployment.js'
@@ -68,16 +67,18 @@ function rowsReplaced(before, after) {
   return n
 }
 
-/** Where a deployment's values live, and whether it is a subchart wrap. */
-async function locate(gitopsDir, relPath, keys) {
-  const abs = path.join(gitopsDir, relPath)
-  let isFolder = false
-  try { isFolder = (await fs.stat(abs)).isDirectory() } catch { /* a file */ }
+/** Where a deployment's values live (repo-relative), and the keys they are wrapped under. */
+async function locate(repo, relPath, keys) {
+  const isFolder = (await repo.dir(relPath)).state === 'ok'
+  const depName = async () => {
+    const chart = await repo.helmYaml(`${relPath}/Chart.yaml`)
+    return chart.state === 'ok' ? chart.value?.dependencies?.[0]?.name || null : null
+  }
   return {
-    valuesFile: isFolder ? path.join(abs, 'values.yaml') : abs,
+    valuesFile: isFolder ? `${relPath}/values.yaml` : relPath,
     // Every key of its `_common` stack (#100): the chart's rows are under
     // all of them, in a `_common` chart's values as in a deployment's.
-    keys: isFolder ? keys ?? [await getDepName(abs)].filter(Boolean) : [],
+    keys: isFolder ? keys ?? [await depName()].filter(Boolean) : [],
   }
 }
 
@@ -101,8 +102,31 @@ async function locate(gitopsDir, relPath, keys) {
  *          its `losses` and `orphaned` are the source's.
  */
 export async function planDeploymentMigration(gitopsDir, chart, targetSchema, migration, { deploymentsDirEnv, model, beforeModel, checkOnly = false } = {}) {
-  const repo = openRepo(gitopsDir)
-  const found = await findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv)
+  const m = await planMigration(openRepo(gitopsDir), { chart, targetSchema, migration, deploymentsDirEnv, model, beforeModel, checkOnly })
+  return { deployments: m.deployments, writes: m.writes.map(([rel, text, readonly, dep]) => [path.join(gitopsDir, rel), text, readonly, dep]) }
+}
+
+/**
+ * The migration of every deployment of `chart`, planned on the snapshot
+ * `repo` for a writer's change (the Template's save writes these with its
+ * own files, all or none). Every file is read through `repo`.
+ *   { deployments, files, strict, syncSkipped, refusal, writes }
+ *   deployments  as planDeploymentMigration's
+ *   files        [{ rel, text }]: each values file whose text changes,
+ *                sources first, then the sync followers (their source's text)
+ *   strict       the values files it rewrites: a save of one meanwhile is
+ *                someone else's change, never migrated over
+ *   syncSkipped  [{ target, error }]: sync.yaml entries of a migrated source
+ *                that are no deployment folder (gone): listed, not written
+ *   refusal      null, or the 409 of a sync target of a migrated source that
+ *                cannot be used: its values.yaml or Chart.yaml cannot be
+ *                read, or it is reached through a link (never when only
+ *                checking)
+ *   writes       [[rel, text, readonly, deployment]] every file, changed or not
+ */
+export async function planMigration(repo, { chart, targetSchema, migration, deploymentsDirEnv, model, beforeModel, checkOnly = false }) {
+  const gitopsDir = repo.root
+  const found = await findDeploymentsUsing(gitopsDir, chart, deploymentsDirEnv, { repo })
   const registry = await readRegistry(repo)
 
   const deployments = []
@@ -130,13 +154,13 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
       deployments.push({ deployment: dep.deployment, path: dep.path, readonly, rowsChanged: 0, losses: [], orphaned: [], problems: [], noValues: true })
       continue
     }
-    const { valuesFile, keys } = await locate(gitopsDir, dep.path, dep.keys)
+    const { valuesFile, keys } = await locate(repo, dep.path, dep.keys)
 
     // Read as Helm reads it (010 is 8, and is written back as 8). Only a
     // missing file is empty. One that cannot be read or is not values is not
     // migrated, and named: migrating `{}` would write an empty file over it.
     let parsed = {}
-    const read = await repo.helmYaml(path.relative(gitopsDir, valuesFile).replace(/\\/g, '/'))
+    const read = await repo.helmYaml(valuesFile)
     if (read.state === 'absent') missing.add(dep.path)
     else if (read.state !== 'ok') {
       const why = read.state === 'unreadable' ? read.why : read.findings.map(f => f.message.replace(/^\S+ (line \d+: )?/, '')).join('; ')
@@ -182,8 +206,7 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
   // (policy.js). What a _common gives is the _common's; a _common need not
   // give a required Common Value, its deployments may (repo/deployment.js).
   if (model) {
-    const rel = file => path.relative(gitopsDir, file).replace(/\\/g, '/')
-    const after = repo.with([...texts.keys()].map(p => [rel(files.get(p)), texts.get(p)]))
+    const after = repo.with([...texts.keys()].map(p => [files.get(p), texts.get(p)]))
     const problem = targetSchema && typeof targetSchema === 'object' ? schemaProblem(targetSchema) : 'no schema'
     const next = { model, every: true, ...(problem ? {} : { validate: schemaValidator(targetSchema, `${chart}/values.schema.json`) }) }
     for (const entry of deployments) {
@@ -218,5 +241,24 @@ export async function planDeploymentMigration(gitopsDir, chart, targetSchema, mi
     writes.push([files.get(entry.path), texts.get(entry.copiedFrom ?? entry.path), entry.readonly, entry.path])
   }
 
-  return { deployments, writes }
+  // What the writer writes: what changes, sources before their followers.
+  // A sync target of a source it migrates that cannot be used — a file
+  // that cannot be read, a folder reached through a link — fails it all,
+  // naming the file; one that is gone is listed and left.
+  const out = []
+  const syncSkipped = []
+  let refusal = null
+  if (!checkOnly) {
+    for (const source of new Set(writes.filter(w => !w[2]).map(w => w[3]))) {
+      const t = await syncTargets(repo, registry, source)
+      if (t.refusal) { refusal = t.refusal; break }
+      syncSkipped.push(...t.failed)
+    }
+    for (const [rel, text] of [...writes].sort((a, b) => Number(a[2]) - Number(b[2]))) {
+      const now = await repo.file(rel)
+      if (now.state === 'unreadable') { refusal ??= { status: 409, body: { error: `${rel} cannot be read: ${now.why}`, file: rel, unreadable: true } }; continue }
+      if (now.state !== 'ok' || now.value.text !== text) out.push({ rel, text })
+    }
+  }
+  return { deployments, writes, files: out, strict: new Set(out.map(f => f.rel)), syncSkipped, refusal }
 }

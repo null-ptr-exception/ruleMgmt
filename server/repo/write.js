@@ -13,7 +13,10 @@
  *   refusal   null, or the { status, body } answered without writing (a file
  *             that cannot be read, a read-only sync target)
  *   files     [{ rel, text }]: every file to write, whole, in the order
- *             written (text a string or a Buffer; null removes the file)
+ *             written (text a string or a Buffer; null removes the file);
+ *             also { rel, link } (a link, made new, leading to `link`)
+ *             and { rel, removeFolder: true } (a folder removed: empty by
+ *             then, its files removed before it in the same list)
  *   after     the snapshot as it will be after the write (repo.with(files)):
  *             the facts after the write, read without the disk
  *   findings  what the loaders found in `after`; applyChange's policy decides
@@ -152,18 +155,24 @@ async function expectedFolder(root, dirRel) {
   return null
 }
 
+// One entry of a plan's files: a file's text (null: removed), a link, or
+// a folder removed.
+const entryOf = f => (f.removeFolder ? { rel: repoRel(f.rel), removeFolder: true }
+  : f.link !== undefined ? { rel: repoRel(f.rel), link: String(f.link) }
+  : { rel: repoRel(f.rel), text: f.text })
+
 async function makePlan(repo, change) {
   const spec = CHANGES.get(change?.kind)
   if (!spec) throw new TypeError(`no such change: ${change?.kind}`)
   const made = await spec.plan(repo, change)
-  const files = (made.files ?? []).map(f => ({ rel: repoRel(f.rel), text: f.text }))
+  const files = (made.files ?? []).map(entryOf)
   const facts = made.facts ?? {}
   const version = !made.refusal && spec.version ? await spec.version(repo, change, facts) : undefined
   // Everything its snapshot read, as it read it: what is compared again
   // under the lock.
   const log = repo.readLog()
   const reads = new Map()
-  for (const rel of new Set([...log.files, ...(made.reads ?? []).map(repoRel), ...files.map(f => f.rel)])) {
+  for (const rel of new Set([...log.files, ...(made.reads ?? []).map(repoRel), ...files.filter(f => !f.removeFolder).map(f => f.rel)])) {
     reads.set(rel, stateOf(await repo.file(rel)))
   }
   const dirs = new Map()
@@ -174,7 +183,7 @@ async function makePlan(repo, change) {
     kind: change.kind, change, root: repo.root,
     refusal: made.refusal ?? null,
     files: Object.freeze(files),
-    after: repo.with(files.map(f => [f.rel, f.text])),
+    after: repo.with(files.filter(f => f.text !== undefined).map(f => [f.rel, f.text])),
     findings: made.findings ?? [],
     version, reads, dirs, places, facts,
   })
@@ -241,6 +250,7 @@ const WRITE_WHY = {
   ENAMETOOLONG: 'its path is too long',
   ELOOP: 'a link on the way leads round in a circle',
   EEXIST: 'something was made in its place while it was written',
+  ENOTEMPTY: 'something was added to it while it was removed',
   MOVED: 'a folder on the way changed while it was written',
 }
 const whyOf = err => err?.why ?? WRITE_WHY[err?.code] ?? 'it could not be written'
@@ -308,13 +318,14 @@ export const TEMP_PATHSPEC_EXCLUDE = `:(exclude,glob)**/_*.${'[0-9a-f]'.repeat(8
 const tempName = (dir, base) => path.join(dir, `_${base}.${randomBytes(4).toString('hex')}.tmp`)
 
 // One file; `step` records what it did, for writeFiles to take back.
-async function writeOne(root, { rel, text }, made, step, expected) {
+async function writeOne(root, { rel, text, link, removeFolder }, made, step, expected) {
   const dirRel = path.posix.dirname(rel)
   const base = path.posix.basename(rel)
   const dir = await realFolder(root, dirRel, made, expected)
   step.dir = dir
   step.dirRel = dirRel
   step.abs = path.join(dir, base)
+  if (removeFolder) return removeOneFolder(root, step)
   step.before = await before(step.abs)
   // A file that is there and read-only stays a refusal, as a plain write
   // would be: a rename alone would quietly replace it.
@@ -329,9 +340,10 @@ async function writeOne(root, { rel, text }, made, step, expected) {
   }
   step.tmp = tempName(dir, base)
   // 'wx': made new, never written through a file or link already there.
-  await fs.writeFile(step.tmp, text, { flag: 'wx' })
+  if (link !== undefined) await fs.symlink(link, step.tmp)
+  else await fs.writeFile(step.tmp, text, { flag: 'wx' })
   // The file keeps its mode; a new one gets the default.
-  if (step.before.kind === 'file') await fs.chmod(step.tmp, step.before.mode)
+  if (step.before.kind === 'file' && link === undefined) await fs.chmod(step.tmp, step.before.mode)
   await samePlace(root, dirRel, dir)
   await hooks.beforeRename?.(rel)
   await samePlace(root, dirRel, dir)
@@ -339,6 +351,20 @@ async function writeOne(root, { rel, text }, made, step, expected) {
   step.changed = true
   step.tmp = null
   await samePlace(root, dirRel, dir)
+}
+
+// A folder removed: one that is there as a folder of its own (not a
+// link), and empty — what was in it removed by the steps before. One not
+// there is nothing to do.
+async function removeOneFolder(root, step) {
+  const st = await fs.lstat(step.abs).catch(err => { if (err.code === 'ENOENT') return null; throw err })
+  if (!st) return
+  if (!st.isDirectory()) throw Object.assign(new Error('not a folder'), { code: 'ENOTDIR', why: 'it is not a folder' })
+  step.before = { kind: 'folder', mode: st.mode & 0o7777 }
+  await samePlace(root, step.dirRel, step.dir)
+  await fs.rmdir(step.abs)
+  step.changed = true
+  await samePlace(root, step.dirRel, step.dir)
 }
 
 // Remove a step's temp file, if it has one; false when it cannot be.
@@ -360,6 +386,7 @@ async function putBack(root, step) {
   await samePlace(root, step.dirRel, step.dir)
   const b = step.before
   if (b.kind === 'absent') return fs.rm(step.abs, { force: true })
+  if (b.kind === 'folder') { await fs.mkdir(step.abs); return fs.chmod(step.abs, b.mode) }
   const tmp = tempName(step.dir, path.basename(step.abs))
   try {
     if (b.kind === 'link') await fs.symlink(b.to, tmp)
@@ -372,7 +399,8 @@ async function putBack(root, step) {
 }
 
 /**
- * Write `files` ([{ rel, text }], text null to remove) into the repo at
+ * Write `files` ([{ rel, text }], text null to remove; { rel, link } a
+ * link; { rel, removeFolder: true } an emptied folder) into the repo at
  * `root`, all or none; `places` (rel → real folder) the folders they must
  * be written in. The caller holds the commit lock.
  *   → { ok: true, written: [rel] }

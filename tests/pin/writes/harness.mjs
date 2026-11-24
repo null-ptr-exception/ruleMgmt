@@ -167,6 +167,11 @@ export async function baseFiles(ws) {
 //   said(res)          the files the answer names (default: `files`)
 //   files              what the request is about: a file, or a folder ending in /
 //   writesRegistry     it writes sync.yaml
+//   failAt             { first, middle, last }: a file the write changes, in
+//                      the order it is written, made read-only (`dir:<folder>`:
+//                      that folder made read-only)
+//   chartFile          the Chart.yaml of a deployment it rewrites, not asked for
+//   depFolder          a deployment folder it writes in
 //   unnamed            the file its answer names is not pinned
 //   cli                a process: args(ws) → [script, ...args]
 const read = (ws, rel) => fs.readFile(path.join(ws.root, rel), 'utf-8')
@@ -206,6 +211,8 @@ export const PATHS = [
     alt: () => ({ method: 'POST', url: '/api/v2/sync', body: { source: D.c, target: D.d } }),
     newFolder: kind => ({ method: 'POST', url: '/api/v2/sync', body: { source: D.a, target: kind === 'reserved' ? 'deployments/t/_new' : '../escape' } }),
     bad: async ws => { await fs.writeFile(path.join(ws.root, D.a, 'values.yaml'), 'demo:\n  cpu:\n    - {}\n'); return { method: 'POST', url: '/api/v2/sync', body: { source: D.a, target: D.d } } },
+    newRefused: async ws => { await fs.writeFile(path.join(ws.root, D.a, 'values.yaml'), 'demo:\n  cpu:\n    - {}\n'); return { method: 'POST', url: '/api/v2/sync', body: { source: D.a, target: 'deployments/t/new' } } },
+    failAt: { first: `${D.d}/values.yaml`, middle: `${D.d}/routing.yaml`, last: 'sync.yaml' }, chartFile: `${D.d}/Chart.yaml`, depFolder: D.d,
     files: ['sync.yaml', `${D.d}/`] },
   { name: 'sync-unlink', primary: 'sync.yaml', writesRegistry: true, noStale: true,
     req: () => ({ method: 'DELETE', url: '/api/v2/sync', body: { target: D.b } }),
@@ -214,11 +221,13 @@ export const PATHS = [
     version: async ws => (await commonPlan(ws, `folder=${D.u}&chart=demo`)).expected,
     req: (ws, ctx) => ({ method: 'POST', url: '/api/v2/folders/common', body: { action: 'create', folder: D.u, chart: 'demo', ...(ctx.version ? { expected: ctx.version } : {}) } }),
     said: res => [...(res.data?.files || []), `${D.u}/_common/demo/`],
+    failAt: { first: `${D.p}/Chart.yaml`, middle: `${D.p}/values.yaml`, last: `${D.q}/values.yaml` }, chartFile: `${D.q}/Chart.yaml`, depFolder: D.p,
     files: [`${D.u}/`] },
   { name: 'common-remove', primary: `${D.x}/values.yaml`, second: `${D.x}/Chart.yaml`,
     version: async ws => (await commonPlan(ws, `action=delete&path=${D.layer}`)).expected,
     req: (ws, ctx) => ({ method: 'POST', url: '/api/v2/folders/common', body: { action: 'delete', path: D.layer, ...(ctx.version ? { expected: ctx.version } : {}) } }),
     said: res => [...(res.data?.files || []), `${D.s}/_common/`],
+    failAt: { first: `${D.x}/Chart.yaml`, middle: `${D.x}/values.yaml`, last: `dir:${D.layer}` }, chartFile: `${D.x}/Chart.yaml`, depFolder: D.x,
     files: [`${D.s}/`] },
   { name: 'init', primary: 'deployments/t/n/Chart.yaml', second: 'deployments/t/n/values.yaml', secondNew: true, absent: 'deployments/t',
     req: () => ({ method: 'POST', url: '/api/v2/folders/init', body: { folder: 'deployments/t/n', chart: 'demo' } }),
@@ -230,11 +239,13 @@ export const PATHS = [
       await fs.writeFile(path.join(ws.root, D.layer, 'values.yaml'), 'demo:\n  cpu:\n    - job: 5\n')
       return { method: 'POST', url: '/api/v2/folders/init', body: { folder: 'deployments/s/n', chart: 'demo' } }
     },
+    failAt: { first: 'deployments/t/n/Chart.yaml' }, depFolder: 'deployments/t/n',
     files: ['deployments/t/n/'] },
   { name: 'migration-apply', primary: `${T}/rules/cpu.yaml`, second: `${D.c}/values.yaml`,
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: { job: 'name' } } } } }),
     bad: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(1, 'name') }, confirmBreaking: true, migration: { columns: { cpu: {} } } } }),
     said: res => [...rel(T, res.data?.written), ...(res.data?.migrated || []).map(m => `${m.path}/values.yaml`)],
+    failAt: { first: `${T}/rules/cpu.yaml`, middle: `${D.c}/values.yaml`, last: `${D.b}/values.yaml` }, chartFile: `${D.b}/Chart.yaml`, depFolder: D.c,
     files: [`${T}/`, 'deployments/'] },
   { name: 'rules-save', primary: `${T}/rules/cpu.yaml`, second: `${T}/templates/cpu.yaml`,
     req: () => ({ method: 'POST', url: '/api/v2/templates/demo/rules', body: { files: { 'cpu.yaml': CPU(2) } } }),
@@ -260,6 +271,7 @@ export const PATHS = [
     files: ['charts/spare/'] },
   { name: 'deployment-delete', primary: `${D.a}/values.yaml`, second: 'sync.yaml', writesRegistry: true, noStale: true,
     req: () => ({ method: 'DELETE', url: `/api/v2/deployments/demo/a${q(D.a)}` }),
+    failAt: { first: `dir:${D.a}`, middle: `dir:${D.a}/templates`, last: 'sync.yaml' }, chartFile: `${D.a}/Chart.yaml`, depFolder: D.a,
     files: [`${D.a}/`, 'sync.yaml'] },
   { name: 'routing-save', primary: `${D.a}/routing.yaml`, second: `${D.b}/routing.yaml`, absent: `${D.a}/templates`,
     req: () => ({ method: 'PUT', url: route(D.a), body: { routing: ROUTING('a2') } }),
@@ -340,7 +352,9 @@ const sameMap = (a, b) => diff(a, b).length === 0
 
 // A temp file's random part is not pinned.
 const firstPath = s => ((/((?:deployments|charts|_shared|notes)\/[\w./-]*[\w-]|sync\.yaml)/.exec(s || '') || [])[1] || '')
-  .replace(/\.[0-9a-f]{8}\.tmp$/, '.<random>.tmp').replace(/\.removing-\d+-\d+$/, '.removing-<pid>-<time>')
+  .replace(/\.[0-9a-f]{8}\.tmp$/, '.<random>.tmp').replace(/\.removing-\d+-\d+/g, '.removing-<pid>-<time>')
+// A folder moved aside to be removed is named by the process and the time: not pinned.
+const unstamped = s => s.replace(/\.removing-\d+-\d+/g, '.removing-<pid>-<time>')
 const message = d => oneLine([d?.error, ...(d?.problems || []).map(p => p.message || p), ...(d?.findings || []).map(f => f.description), ...(d?.failed || []).map(f => `${f.deployment}: ${f.error}`), ...(d?.syncFailed || []).map(f => `${f.target}: ${f.error}`)].filter(Boolean).join(' / '))
 
 function classOf(res) {
@@ -423,6 +437,22 @@ async function setUp(ws, c, p) {
     case 'is-folder': await fs.rm(prim, { recursive: true, force: true }); await fs.mkdir(prim); await fs.writeFile(path.join(prim, 'keep'), 'x\n'); break
     case 'primary-unreadable': await fs.chmod(prim, 0); break
     case 'readonly-repo': await chmodTree(root, 'a-w'); break
+    case 'first-readonly':
+    case 'middle-readonly':
+    case 'last-readonly': {
+      const at = p.failAt[c.id.split('-')[0]]
+      if (at.startsWith('dir:')) await fs.chmod(abs(at.slice(4)), 0o555)
+      else await fs.chmod(abs(at), 0o444)
+      break
+    }
+    case 'chart-unreadable': await fs.chmod(abs(p.chartFile), 0); break
+    case 'dir-link-inside': {
+      const dir = abs(p.depFolder)
+      const there = abs(`notes/dir-${path.basename(dir)}`)
+      await copyOut(dir, there)
+      await fs.rm(dir, { recursive: true, force: true }); await fs.symlink(path.relative(path.dirname(dir), there), dir)
+      break
+    }
     case 'registry-tmp-blocked': await fs.mkdir(abs('sync.yaml.tmp')); await fs.writeFile(abs('sync.yaml.tmp/keep'), 'x\n'); break
   }
 }
@@ -650,12 +680,12 @@ async function runCell(ws, c, p) {
     cls: answers.map(a => a.cls).sort().join('+'), status: answers.map(a => a.status).sort().join('+'),
     file: set('file') || '-', leak: p.cli ? '-' : leaks ? 'yes' : 'no',
     said: [...new Set(answers.filter(a => a.cls === 'ok' || a.cls === 'listed').flatMap(a => [...a.said, ...(c.id === 'link-inside' ? [linkedOf(p)] : [])]))].sort().join(',') || '-',
-    written: diff(pre, post).join(',') || '-',
+    written: unstamped(diff(pre, post).join(',')) || '-',
     outside: diff(preOut, postOut).join(',') || '-',
     // Beside a Commit, what is left uncommitted depends on which of the two
     // came first: both are right, so it is not recorded (`extra` says whether
     // what was committed is whole).
-    git: c.id === 'race-commit' ? '~' : oneLine(status.split('\n').filter(Boolean).map(l => l.trim().replace(/\s+/, ' ')).join(',')) || '-',
+    git: c.id === 'race-commit' ? '~' : unstamped(oneLine(status.split('\n').filter(Boolean).map(l => l.trim().replace(/\s+/, ' ')).join(','))) || '-',
     lock, again, extra,
     note: answers.map(a => a.note).filter(Boolean).join(' | ').slice(0, 500),
   }

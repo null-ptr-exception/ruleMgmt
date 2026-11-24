@@ -6,7 +6,10 @@ import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
 import deploymentsRouter from '../../server/routes/deployments.js'
-import { writeSyncRegistry } from '../../server/lib/sync.js'
+import { registryText } from '../../server/lib/sync.js'
+
+// sync.yaml written as the writer writes it.
+const writeSyncRegistry = (dir, registry) => fs.promises.writeFile(path.join(dir, 'sync.yaml'), registryText(registry))
 import { syncAnswer } from '../../server/repo/sync.js'
 import { openRepo } from '../../server/repo/openRepo.js'
 

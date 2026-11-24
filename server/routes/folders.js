@@ -1,7 +1,6 @@
 import express from 'express'
-import { holdSyncRegistryLock } from '../lib/sync.js'
 import { answersWithoutPaths } from '../lib/answerPaths.js'
-import { declaredRoutes, passesOn } from '../http/route.js'
+import { declaredRoutes } from '../http/route.js'
 
 import { treeRoutes } from './folders/tree.js'
 import { initRoutes } from './folders/create.js'
@@ -12,10 +11,9 @@ export { ANY_TEMPLATE_VERSION } from './folders/create.js'
 export default function foldersRouter() {
   const router = express.Router()
   router.use(answersWithoutPaths)
-  // A _common's make or remove holds the commit lock itself, for as long
-  // as it takes: it renders every deployment it touches twice, which in a
-  // large repo outlasts the time limit the other writes are held to.
-  router.use(passesOn((req, res, next) => (req.method === 'POST' && req.path === '/common' ? next() : holdSyncRegistryLock(req, res, next))))
+  // No request holds the commit lock: a new deployment and a _common's
+  // make or remove are written through the writer, which takes it for the
+  // write alone.
 
   treeRoutes(router)
   commonRoutes(router)

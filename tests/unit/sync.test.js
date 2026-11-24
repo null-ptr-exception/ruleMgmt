@@ -6,7 +6,7 @@ import yaml from 'js-yaml'
 import { syncAnswer } from '../../server/repo/sync.js'
 import { openRepo } from '../../server/repo/openRepo.js'
 import {
-  writeSyncRegistry,
+  registryText,
   getTargetsForSource,
   getSourceForTarget,
   isSource,
@@ -29,9 +29,9 @@ describe('sync registry file I/O', () => {
     expect(await readSyncRegistry(tmpDir)).toEqual({ syncs: [] })
   })
 
-  it('round-trips a registry through write then read', async () => {
+  it('round-trips a registry through its text then read', async () => {
     const registry = { syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] }
-    await writeSyncRegistry(tmpDir, registry)
+    fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), registryText(registry))
     expect(await readSyncRegistry(tmpDir)).toEqual(registry)
   })
 

@@ -8,14 +8,17 @@
  *   valuesVersion   what a deployment's page was loaded from
  *   chartCopyText   a target's Chart.yaml with its source's dependencies
  *   copyChartDependencies  the target's Chart.yaml depends on what the source's does
- *   copyToTarget    make one target a copy of its source's files
+ *   targetCopy      what making one target a copy of its source writes,
+ *                   planned on a snapshot (a writer's change writes it)
+ *   copyToTarget    make one target a copy of its source's files, by itself
  *   copyToTargets   every target of a source; returns the ones that failed
+ *                   (for the routing save and the shared configs, until
+ *                   they plan with targetCopy too)
  *   syncTargets     the targets a source's values save writes to
  *
- * A values save is a change of the writer (repo/changes/set-values.js).
- * None of these take the registry lock: the routes that copy hold it around
- * the whole read-registry → write → copy sequence, so a sync link made at
- * the same moment either is copied to or copies the new file.
+ * A values save and a sync link are changes of the writer
+ * (repo/changes/set-values.js, sync.js). copyToTargets takes no lock: its
+ * routes hold it around the whole read-registry → write → copy sequence.
  */
 
 import fs from 'fs/promises'
@@ -23,7 +26,8 @@ import { createHash } from 'crypto'
 import path from 'path'
 import yaml from 'js-yaml'
 import { resolveStack, wrapPath, linkedStackRefusal } from './stack.js'
-import { copyRouting, readRouting, restoreRouting, writeWhole } from './routingFiles.js'
+import { copyRouting, readRouting, restoreRouting, writeWhole, routingToCopy, unreadableAnswer, ROUTING_FILE, ROUTING_CR_FILE } from './routingFiles.js'
+import { writeRefusal } from '../repo/writePath.js'
 import { getTargetsForSource, isSafeSyncPath } from './sync.js'
 import { isDeployment } from '../repo/walk.js'
 import { dumpForHelm } from '../../src/utils/yamlScalar.js'
@@ -238,6 +242,75 @@ export async function copyToTarget(srcDir, dstDir, { values = true, chart = valu
     }
     throw err
   }
+}
+
+/**
+ * What making `target` a copy of `source` writes (copyToTarget, planned on
+ * the snapshot `repo`, nothing written): `{ files: [{ rel, text } |
+ * { rel, removeFolder }] }` in the order to write them — Chart.yaml (when
+ * its Template is not the source's), values.yaml, routing.yaml, its
+ * AlertmanagerConfig, the templates/ folder those leave empty — each only
+ * when it changes; or `{ refusal }`. A target file the copy replaces that
+ * cannot be read is refused naming it (it could not be put back), one that
+ * is a folder as a file that cannot be written; so is a source whose
+ * Chart.yaml names no Template or cannot be read. `chart`, `values` and
+ * `routing` pick the files as copyToTarget's do; `valuesContent` and
+ * `routingContent` ({ text, cr }) are what to write, already checked.
+ */
+export async function targetCopy(repo, source, target, { values = true, chart = values, routing = true, valuesContent, routingContent } = {}) {
+  const root = repo.root
+  const cannotRead = (file, why) => ({ refusal: { status: 409, body: { error: `${file} cannot be read: ${why}`, file, unreadable: true } } })
+  const dst = {}
+  for (const [f, wanted] of [['Chart.yaml', chart], ['values.yaml', values], [ROUTING_FILE, routing], [ROUTING_CR_FILE, routing]]) {
+    if (!wanted) continue
+    dst[f] = await repo.file(`${target}/${f}`)
+    if (dst[f].state !== 'unreadable') continue
+    if (dst[f].kind === 'folder') return { refusal: writeRefusal({ file: dst[f].file, why: dst[f].why }) }
+    return cannotRead(`${target}/${f}`, dst[f].why)
+  }
+  const now = f => (dst[f].state === 'ok' ? dst[f].value.text : null)
+  const files = []
+  const put = (f, text) => { if (now(f) !== text) files.push({ rel: `${target}/${f}`, text }) }
+  if (chart) {
+    const src = await repo.file(`${source}/Chart.yaml`)
+    if (src.state === 'unreadable') return cannotRead(`${source}/Chart.yaml`, src.why)
+    let text
+    try {
+      text = chartCopyText(sourceChart(src.state === 'ok' ? src.value.text : ''), path.join(root, source), now('Chart.yaml'), path.join(root, target))
+    } catch (err) {
+      return { refusal: { status: 409, body: { error: `${source} cannot be copied: ${err.code === 'SOURCE_HAS_NO_TEMPLATE' ? err.message : `its Chart.yaml or ${target}/Chart.yaml is not valid YAML (${err.reason || err.message})`}`, file: `${source}/Chart.yaml` } } }
+    }
+    if (text !== null) files.push({ rel: `${target}/Chart.yaml`, text })
+  }
+  if (values) {
+    let text = valuesContent
+    if (text === undefined) {
+      const src = await repo.file(`${source}/values.yaml`)
+      if (src.state === 'unreadable') return cannotRead(`${source}/values.yaml`, src.why)
+      text = src.state === 'ok' ? src.value.text : ''
+    }
+    put('values.yaml', text)
+  }
+  if (routing) {
+    // Notification routing (#92) follows values.yaml: the target gets the
+    // source's, or loses its own when the source has none.
+    let r = routingContent
+    if (r === undefined) {
+      const read = await routingToCopy(repo, source)
+      if (read.unreadable) return { refusal: unreadableAnswer(read.unreadable) }
+      if (read.errors) return { refusal: { status: 400, body: { error: `${source} cannot be copied: its routing.yaml has problems`, problems: read.errors.map(message => ({ message })) } } }
+      r = read
+    }
+    put(ROUTING_FILE, r.text)
+    put(ROUTING_CR_FILE, r.cr)
+    if (r.text === null && r.cr === null) {
+      // templates/ was made for the resource; one holding anything else stays.
+      const tpl = await repo.dir(`${target}/templates`)
+      const cr = path.posix.basename(ROUTING_CR_FILE)
+      if (tpl.state === 'ok' && !tpl.value.links.size && [...tpl.value.entries.keys()].every(n => n === cr)) files.push({ rel: `${target}/templates`, removeFolder: true })
+    }
+  }
+  return { files }
 }
 
 // null when not there; there and unreadable is an error naming it.

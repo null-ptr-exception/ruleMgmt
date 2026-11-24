@@ -112,7 +112,9 @@ describe('sync to a deployment on another Template', () => {
     const errors = console.error
     console.error = () => {}
     try {
-      expect((await api('POST', '/api/v2/sync', { source: SRC, target: OTHER_TGT })).status).toBe(500)
+      const res = await api('POST', '/api/v2/sync', { source: SRC, target: OTHER_TGT })
+      expect(res.status).toBe(409)
+      expect(res.data).toEqual({ error: `${OTHER_TGT}/values.yaml cannot be written: permission denied`, file: `${OTHER_TGT}/values.yaml` })
     } finally {
       console.error = errors
     }

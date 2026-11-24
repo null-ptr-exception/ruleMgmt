@@ -155,9 +155,8 @@ describe.skipIf(!HAS_HELM)('the plan', { timeout: 60000 }, () => {
 })
 
 describe.skipIf(!HAS_HELM)('writing a plan', { timeout: 60000 }, () => {
-  it('needs the plan\'s expected, and refuses one a file changed since, though the list of files is the same', async () => {
+  it('refuses an expected a file changed since, though the list of files is the same', async () => {
     await init('shop/a')
-    expect((await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'shop', chart: C })).status).toBe(400)
     expect((await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'shop', chart: C, expected: ['shop/a/values.yaml'] })).status).toBe(400)
     const shown = await plan({ action: 'create', folder: 'shop', chart: C })
     await write('shop/a/values.yaml', { [C]: { [CPU]: [{ warn_pct: 1, critical_pct: 2 }] } })
@@ -166,6 +165,15 @@ describe.skipIf(!HAS_HELM)('writing a plan', { timeout: 60000 }, () => {
     expect(stale.data.plan.files).toEqual(shown.data.files)
     await expect(fs.access(abs(SHOP))).rejects.toThrow()
     expect((await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'shop', chart: C, expected: stale.data.plan.expected })).status).toBe(200)
+  })
+
+  // A script that sends no expected: the plan made now is written.
+  it('without an expected, writes the plan made now', async () => {
+    await init('shop/a')
+    const done = await api('POST', '/api/v2/folders/common', { action: 'create', folder: 'shop', chart: C })
+    expect(done.status).toBe(200)
+    expect(done.data.common).toBe(SHOP)
+    await fs.access(abs(`${SHOP}/Chart.yaml`))
   })
 })
 

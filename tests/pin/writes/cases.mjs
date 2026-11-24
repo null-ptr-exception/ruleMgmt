@@ -75,4 +75,15 @@ export const CASES = [
   // sync.yaml's temp file (sync.yaml.tmp) is a folder: the registry's
   // write fails.
   { id: 'registry-tmp-blocked', applies: p => !!p.writesRegistry },
+  // A write of several files that fails part-way: the first, a middle or
+  // the last file it changes cannot be written (harness.mjs `failAt`: a
+  // read-only file, or a read-only folder for `dir:<folder>`).
+  { id: 'first-readonly', applies: p => !!p.failAt?.first, nonRoot: true },
+  { id: 'middle-readonly', applies: p => !!p.failAt?.middle, nonRoot: true },
+  { id: 'last-readonly', applies: p => !!p.failAt?.last, nonRoot: true },
+  // The Chart.yaml of a deployment the write rewrites (not the one asked
+  // for) cannot be read.
+  { id: 'chart-unreadable', applies: p => !!p.chartFile, nonRoot: true },
+  // The deployment's folder is a link to a folder elsewhere in the repo.
+  { id: 'dir-link-inside', applies: p => !!p.depFolder },
 ]

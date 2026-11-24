@@ -19,7 +19,8 @@ import { resolveStack } from '../../server/lib/stack.js'
 import { openRepo } from '../../server/repo/openRepo.js'
 import { loadDeployment } from '../../server/repo/deployment.js'
 import { findingsOf } from '../../server/repo/loaded.js'
-import { planCreate, planDelete, applyPlan, deploymentOnCommon } from '../../server/lib/commonEdit.js'
+import { deploymentOnCommon } from '../../server/lib/commonEdit.js'
+import { planChange, applyChange } from '../../server/repo/changes/index.js'
 
 const HELM = process.env.HELM_BIN || 'helm'
 const HAS_HELM = (() => { try { execFileSync(HELM, ['version'], { stdio: 'ignore' }); return true } catch { return false } })()
@@ -75,13 +76,12 @@ function repo(name) {
   // A stack AlertForge makes or takes apart (#101): what it writes, all of it.
   const template = () => fs.cp(SAMPLE, abs(`charts/${C}`), { recursive: true })
   const direct = (rel, values) => deployment(rel, [fileDep(rel, `charts/${C}`, C)], { [C]: values })
-  const apply = async planned => {
-    if (!planned.plan) throw new Error(JSON.stringify(planned.body))
-    const out = await applyPlan(root, planned)
+  const apply = async change => {
+    const out = await applyChange(await planChange(openRepo(root), { kind: 'common', ...change }))
     if (out.status !== 200) throw new Error(JSON.stringify(out.body))
   }
-  const make = folder => planCreate(root, folder, C).then(apply)
-  const drop = rel => planDelete(root, rel).then(apply)
+  const make = folder => apply({ action: 'create', folder, chart: C })
+  const drop = rel => apply({ action: 'delete', path: rel })
   const born = async rel => {
     const made = await deploymentOnCommon(root, rel, C)
     await write(`${rel}/Chart.yaml`, made.chartYaml)

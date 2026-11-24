@@ -95,6 +95,9 @@ const migrating = !chart?.fromRules
 // (#190): gen-rules converts it first.
 if (chart) {
   const { refuse, warn } = decide(chart.findings, TEMPLATE_POLICIES.cli)
+  // A file of the Template that cannot be read: one ERROR line, exit 2.
+  const unreadableOne = refuse.find(f => /-unreadable$/.test(f.code))
+  if (unreadableOne) cannot(unreadableOne.message)
   // A missing Chart.yaml is said at the end, with what to do.
   for (const f of warn.filter(w => w.code !== 'template.chart-absent')) console.log(`warn   ${f.message}`)
   if (chart.drift.state === 'legacy' && chart.templateNames.length) {

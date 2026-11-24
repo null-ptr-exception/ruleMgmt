@@ -125,7 +125,7 @@ describe('a Template folder', () => {
     fs.chmodSync(path.join(repo, `${D}/rules`), 0)
     const t = await load()
     fs.chmodSync(path.join(repo, `${D}/rules`), 0o755)
-    expect(t.value.unreadable).toEqual({ state: 'unreadable', file: `${D}/rules`, why: 'permission denied' })
+    expect(t.value.unreadable).toEqual({ state: 'unreadable', file: `${D}/rules`, why: 'permission denied', kind: 'permission' })
     expect(t.value.drift).toBe(null)
     expect(decide(t.findings, 'commit').refuse.map(f => f.code)).toEqual(['template.rules-unreadable'])
   })
@@ -133,5 +133,30 @@ describe('a Template folder', () => {
   it('a file of the overlay is what the Template is read as', async () => {
     const t = await openRepo(repo).with(new Map([[`${D}/values.yaml`, 'a: b: c\n']])).templateFiles(D)
     expect(codes(t)).toEqual(['template.values-not-yaml'])
+  })
+
+  it('a file linked to one outside the repo, or a schema that is a folder: Helm reads through them, AlertForge refuses them with a row saying why', async () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'repo-tfiles-out-'))
+    fs.writeFileSync(path.join(out, 'values.yaml'), '{}\n')
+    fs.rmSync(path.join(repo, `${D}/values.yaml`))
+    fs.symlinkSync(path.join(out, 'values.yaml'), path.join(repo, `${D}/values.yaml`))
+    fs.rmSync(path.join(repo, `${D}/values.schema.json`))
+    fs.mkdirSync(path.join(repo, `${D}/values.schema.json`))
+    const t = await load()
+    const byCode = Object.fromEntries(t.findings.map(f => [f.code, f]))
+    expect(byCode['template.values-unreadable']).toMatchObject({ helm: 'renders', detail: { why: 'it is a link that leads outside the repo' } })
+    expect(byCode['template.schema-unreadable']).toMatchObject({ helm: 'renders' })
+    for (const table of ['commit', 'checkRepo', TEMPLATE_POLICIES.saveRules, TEMPLATE_POLICIES.init, TEMPLATE_POLICIES.cli]) {
+      expect(decide([byCode['template.schema-unreadable']], table).refuse, String(table.name ?? table)).toHaveLength(1)
+    }
+    fs.rmSync(out, { recursive: true })
+  })
+
+  it('a schema whose group is not an object (a 1.x chart): a finding, not an exception', async () => {
+    fs.rmSync(path.join(repo, `${D}/rules`), { recursive: true })
+    write(`${D}/values.schema.json`, '{"properties":{"g":null}}')
+    const t = await load()
+    expect(t.state).toBe('ok')
+    expect(codes(t)).toContain('template.schema-not-object')
   })
 })

@@ -905,7 +905,11 @@ A commit is refused while any chart:
   would be emitted identically on every row. Save allows that, because a chart
   being turned into a template passes through it
 - has generated files that are behind its rules files, or one of them
-  missing — open the chart and save, or run `gen-rules`
+  missing — open the chart and save, or run `gen-rules`. Only the
+  `values.schema.json` missing does not stop it (Helm renders the same,
+  without checking the values): the commit goes through and lists it under
+  **Templates to look at**, with a schema keyword AlertForge does not check.
+  Opening the Template or regenerating writes it back
 - has a file Helm stops on or renders other than written: a
   `values.schema.json` that is not JSON, a `values.yaml` that is not YAML (or
   written in a way AlertForge cannot tell how Helm reads — a tag, an anchor,
@@ -915,6 +919,10 @@ A commit is refused while any chart:
   holds a rule object (Helm takes it for a partial and renders none of it)
 - is a link that leads outside the repo, or has a file that does (named as
   one that cannot be read)
+
+Only AlertForge's Templates are checked: a folder under `charts/` whose
+`Chart.yaml` is not annotated `app: alertforge` and that has no `rules/` (a
+backup, an empty folder, someone else's chart) is not.
 
 A chart that is not migrated yet does not stop a commit: it renders as it
 always has, so the commit goes through and names it as a reminder — see
@@ -1199,8 +1207,8 @@ different.
 
 `check-deployment.mjs` checks one deployment the way the editor does: it
 renders it with Helm and runs `promtool` (or `vmalert`) on each rule object,
-as **Preview** does, checks its Template's files as a commit does (a
-generated template missing, a partial `templates/_x.yaml` holding a rule
+as **Preview** does, checks its Template's files as a commit does — through a `_common` too —
+(a generated template missing, a partial `templates/_x.yaml` holding a rule
 object, a rule object repeating the generated alerts, a Template folder name
 with a dot: Helm renders the rest without a word, so the render alone does
 not show them), and checks its `routing.yaml` as the **Routing** page

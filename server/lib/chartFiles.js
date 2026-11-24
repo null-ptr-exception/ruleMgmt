@@ -58,27 +58,14 @@ export async function readTemplate(gitopsDir, name, repo = openRepo(gitopsDir)) 
 }
 
 /**
- * The chart's rule model: parsed from rules/ when the chart has one, else
- * adapted from a legacy schema. `fromRules` says which; `model` is null
- * when there is neither, or no folder. (Kept for deploymentWrite.js until
- * it reads the Template through the repo loader itself.)
- */
-export async function readChartModel(chartDir) {
-  // Only what the model is built from has to be read: a templates/ file
-  // that cannot be is Commit's to name.
-  const t = await readTemplateAt(chartDir, { model: true })
-  return { model: t?.model ?? null, fromRules: !!t?.fromRules, schema: t?.schema ?? null }
-}
-
-/**
  * readTemplate of a Template folder given by its path (a command line
  * tool's argument), in the repo it is in (server/repo/locate.js).
  */
-export async function readTemplateAt(chartDir, { model = false } = {}) {
+export async function readTemplateAt(chartDir) {
   const { repo, root, rel } = openRepoAt(chartDir)
   const t = await repo.templateFiles(rel)
   if (t.state === 'absent') return null
-  const bad = t.state === 'unreadable' ? t : model ? t.value.sourceUnreadable : t.value.unreadable
+  const bad = t.state === 'unreadable' ? t : t.value.unreadable
   if (bad) throw new UnreadableError(path.join(root, bad.file), { reason: bad.why })
   return { ...t.value, findings: t.findings, repo, root }
 }

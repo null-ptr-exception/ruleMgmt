@@ -228,7 +228,8 @@ function onceGroupsOf(schema) {
  * @returns { state, files?, errors? }
  *   empty   no rules/, schema has no alert groups
  *   legacy  no rules/, schema still has content (read through the upgrade adapter)
- *   missing rules/ present but a product file is absent
+ *   missing rules/ present but a product file is absent (`outOfDate`: the
+ *           ones there that differ)
  *   stale   rules/ present, a product differs from what it would regenerate to
  *   ok      rules/ present, products match
  */
@@ -250,21 +251,24 @@ export function computeDrift({ rulesFiles, schema, templateFiles = {}, objectMet
   for (const name of Object.keys(want.templates)) {
     if (!(name in templateFiles)) missing.push(`templates/${name}`)
   }
-  if (missing.length) return { state: 'missing', files: missing }
 
   // A schema saved before #122 has no x-once-groups. That alone is not drift:
   // the user changed nothing, and the next save or gen-rules writes the key.
   let wantSchemaText = want.schemaText
-  if (!('x-once-groups' in schema)) {
+  if (schema != null && !('x-once-groups' in schema)) {
     const { 'x-once-groups': _added, ...rest } = JSON.parse(want.schemaText)
     wantSchemaText = JSON.stringify(rest, null, 2) + '\n'
   }
 
   const differing = []
-  if (JSON.stringify(schema, null, 2) + '\n' !== wantSchemaText) differing.push('values.schema.json')
+  if (schema != null && JSON.stringify(schema, null, 2) + '\n' !== wantSchemaText) differing.push('values.schema.json')
   for (const [name, content] of Object.entries(want.templates)) {
-    if (templateFiles[name] !== content) differing.push(`templates/${name}`)
+    if (name in templateFiles && templateFiles[name] !== content) differing.push(`templates/${name}`)
   }
+  // Missing ones first; what is there and differs is said with them, so a
+  // missing file does not hide a hand-changed one.
+  if (missing.length) return { state: 'missing', files: missing, ...(differing.length && { outOfDate: differing }) }
+
   // A generated template whose group has gone is also drift: Helm still
   // renders it. A hand-written file is not (#114).
   for (const name of staleTemplates(Object.keys(templateFiles), want.templates, { schemas: [schema], models: [model] })) {

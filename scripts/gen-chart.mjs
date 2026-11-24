@@ -63,6 +63,9 @@ async function main() {
   // What Helm fails on, or renders other than written, in the rest of the
   // Template: said before anything is written.
   const { refuse, warn } = decide(t.findings, TEMPLATE_POLICIES.cli)
+  // A file of the Template that cannot be read: one ERROR line, exit 2.
+  const cannot = refuse.find(f => /-unreadable$/.test(f.code))
+  if (cannot) throw new Error(cannot.message)
   for (const f of warn) console.log(`warn   ${f.message}`)
   if (refuse.length) {
     for (const f of refuse) console.log(`ERROR  ${f.message}`)
@@ -81,7 +84,8 @@ async function main() {
     if (!findingsByGroup.has(finding.group)) findingsByGroup.set(finding.group, [])
     findingsByGroup.get(finding.group).push(finding)
   }
-  const behind = new Set(t.drift.state === 'ok' ? [] : (t.drift.outOfDate ?? t.drift.files ?? []))
+  // What is missing and what is there but differs (computeDrift).
+  const behind = new Set(t.drift.state === 'ok' ? [] : [...(t.drift.files ?? []), ...(t.drift.outOfDate ?? [])])
 
   for (const [group, entry] of Object.entries(t.model.groups)) {
     const name = `${group.replace(/_/g, '-')}.yaml`
@@ -121,7 +125,7 @@ async function main() {
   // the generated alerts.
   if (check) {
     for (const f of behind) {
-      if (f === 'values.schema.json') { results.push([t.drift.state === 'missing' ? 'MISSING' : 'DIFFERS', f, 'behind rules/ — run gen-rules.mjs']); failed++ }
+      if (f === 'values.schema.json') { results.push([t.schemaText === null ? 'MISSING' : 'DIFFERS', f, 'behind rules/ — run gen-rules.mjs']); failed++ }
       else if (f.endsWith(' (orphaned)')) { results.push(['ORPHANED', f.slice(0, -' (orphaned)'.length), 'its group is gone — run gen-rules.mjs']); failed++ }
     }
     for (const r of t.drift.repeats ?? []) { results.push(['REPEATS', r.file, `${repeatsText(r)} — ${REPEATS_FIX}`]); failed++ }

@@ -37,16 +37,17 @@ export async function findAlertTemplateCharts(chartsDir) {
   const results = []
   for (const [name, kind] of [...listed.value.entries].sort(([a], [b]) => a.localeCompare(b))) {
     if (kind !== 'dir') continue
-    const t = await repo.templateFiles(`${base}/${name}`)
-    // A file in it that cannot be read is said where it is opened or
-    // committed; the Template is listed all the same.
-    if (t.state !== 'ok') continue
-    const meta = t.value.chart
+    // Its Chart.yaml as Helm reads it decides whether it is a Template;
+    // nothing else of it is read for the list. A file in it that cannot be
+    // read is said where it is opened or committed: listed all the same.
+    const chart = await repo.helmYaml(`${base}/${name}/Chart.yaml`)
+    const meta = chart.state === 'ok' ? chart.value : null
     if (!meta?.annotations || meta.annotations.app !== 'alertforge') continue
+    const templates = await repo.dir(`${base}/${name}/templates`)
     results.push({
       name: meta.name || name,
       version: meta.version || '0.0.0',
-      templateCount: t.value.templateNames.length,
+      templateCount: templates.state === 'ok' ? [...templates.value.entries.keys()].filter(f => f.endsWith('.yaml')).length : 0,
     })
   }
   return results
@@ -59,7 +60,7 @@ export async function findAlertTemplateCharts(chartsDir) {
  * or what Helm fails on or renders other than written (409, naming it). A
  * file that cannot be read is an UnreadableError naming it.
  */
-export async function templateForNewDeployment(gitopsDir, chart) {
+export async function templateForNewDeployment(gitopsDir, chart, folder) {
   const base = chartsDirRel()
   const loaded = base === null ? null : await openRepo(gitopsDir).templateFiles(`${base}/${chart}`)
   if (loaded?.state === 'unreadable') throw new UnreadableError(path.join(gitopsDir, loaded.file), { reason: loaded.why })
@@ -69,9 +70,11 @@ export async function templateForNewDeployment(gitopsDir, chart) {
   // finding says so); one of templates/ is.
   // Its values.yaml is the new deployment's caller's to read and say (init).
   const refuse = decide(loaded.findings, TEMPLATE_POLICIES.init).refuse.filter(f => !/^template\.values-/.test(f.code))
-  const unread = refuse.find(f => /-(unreadable|not-yaml|cannot-tell)$/.test(f.code))
-  if (unread) throw new UnreadableError(path.join(gitopsDir, unread.file), { reason: unread.message.replace(/^.*? cannot be read: /, '') })
-  if (refuse.length) return { status: 409, error: `No deployment of ${chart} would render as written: ${refuse.map(f => f.message).join('; ')}` }
+  // Said as the new deployment's own check says it (folders/create.js).
+  if (refuse.length) {
+    const problems = refuse.map(f => f.message)
+    return { status: 409, error: `Not made: ${folder} would not deploy (${problems.join('; ')})`, problems }
+  }
   return { defaults: t.values }
 }
 

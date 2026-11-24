@@ -40,8 +40,6 @@ import { chartsDir } from './template.js'
 import { isName } from '../lib/safePath.js'
 import { valueFindings } from './findings/values.js'
 import { resolveStack, stackValues } from '../lib/stack.js'
-import { readChartModel } from '../lib/chartFiles.js'
-import { UnreadableError } from '../lib/readIfThere.js'
 import { isCommonChartPath } from '../../src/utils/reservedNames.js'
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -58,14 +56,16 @@ export function loadDeployment(repo, rel, { chart, next } = {}) {
 // schema): once per snapshot.
 // A Template whose rules/ cannot be read has no columns to check against:
 // `{ model: null, why }`, said once by whoever reads it.
+// Read through the same snapshot (template.js loadTemplateFiles): only what
+// the model is built from has to be read — a templates/ file that cannot be
+// is Commit's to name, and the values are checked all the same.
 function modelOf(repo, template) {
   return repo.memo('templateModel', template.name, async () => {
-    try {
-      return { model: (await readChartModel(path.join(repo.root, template.dir))).model }
-    } catch (err) {
-      if (!(err instanceof UnreadableError)) throw err
-      return { model: null, why: err.why }
-    }
+    const t = await repo.templateFiles(template.dir)
+    if (t.state === 'unreadable') return { model: null, why: t.why }
+    if (t.state !== 'ok') return { model: null }
+    if (t.value.sourceUnreadable) return { model: null, why: t.value.sourceUnreadable.why }
+    return { model: t.value.model }
   })
 }
 

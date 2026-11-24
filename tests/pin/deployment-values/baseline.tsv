@@ -1094,7 +1094,7 @@ tpl-not-yaml	T	common-plan	refused	409	charts/demo/values.yaml	no	-	fails	1	-	-	
 tpl-not-yaml	T	common-apply	refused-other	plan 409	-	no	-	fails	1	-	-	-	-	-	
 tpl-not-yaml	T	init	refused	409	charts/demo/values.yaml	no	-	-	-	-	-	-	-	-	
 tpl-not-yaml	T	migration-preview	listed	200	-	no	-	fails	1	-	-	-	-	-	
-tpl-not-yaml	T	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	fails	1	-	-	-	-	after: fails -	accepts-what-helm-fails
+tpl-not-yaml	T	migration-apply	refused	409	charts/demo/values.yaml	no	-	fails	1	-	-	-	-	-	
 tpl-not-yaml	T	commit	refused-other	409	-	no	-	fails	1	-	-	-	-	-	
 tpl-not-yaml	T	preview	refused	200	values.yaml	no	-	fails	1	-	-	-	-	-	
 tpl-not-yaml	T	check-deployment	refused	exit 1	values.yaml	no	-	fails	1	-	-	-	-	-	
@@ -1107,7 +1107,7 @@ tpl-unreadable	T	common-plan	refused	409	charts/demo/values.yaml	no	-	fails	1	-	
 tpl-unreadable	T	common-apply	refused-other	plan 409	-	no	-	fails	1	-	-	-	-	-	
 tpl-unreadable	T	init	refused	409	charts/demo/values.yaml	no	-	-	-	-	-	-	-	-	
 tpl-unreadable	T	migration-preview	listed	200	-	no	-	fails	1	-	-	-	-	-	
-tpl-unreadable	T	migration-apply	ok	200	-	no	charts/demo/rules/cpu.yaml,charts/demo/templates/cpu.yaml,charts/demo/values.schema.json,deployments/t/a/values.yaml,deployments/t/b/values.yaml	fails	1	-	-	-	-	after: fails -	accepts-what-helm-fails
+tpl-unreadable	T	migration-apply	unreadable	409	charts/demo/values.yaml	no	-	fails	1	-	-	-	-	-	
 tpl-unreadable	T	commit	refused-other	409	-	no	-	fails	1	-	-	-	-	-	
 tpl-unreadable	T	preview	refused	200	values.yaml	no	-	fails	1	-	-	-	-	-	
 tpl-unreadable	T	check-deployment	refused	exit 1	values.yaml	yes	-	fails	1	-	-	-	-	-	

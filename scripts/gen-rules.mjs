@@ -91,12 +91,14 @@ async function main() {
   // What Helm fails on, or renders other than written, in the rest of the
   // Template: said before anything is written, as Commit says it.
   const { refuse, warn } = decide(t.findings, TEMPLATE_POLICIES.cli)
-  // A values.yaml that cannot be read is one ERROR line and exit 2, as any
-  // file this cannot read.
-  const valuesUnreadable = refuse.find(f => f.code === 'template.values-unreadable')
-  if (valuesUnreadable) throw new Error(valuesUnreadable.message)
+  // A file of the Template that cannot be read is one ERROR line and exit 2,
+  // as any file this cannot read.
+  const cannot = refuse.find(f => /-unreadable$/.test(f.code))
+  if (cannot) throw new Error(cannot.message)
   const valuesProblems = refuse.filter(f => /^template\.values-/.test(f.code))
-  const stops = refuse.filter(f => !valuesProblems.includes(f))
+  // A file repeating the generated alerts is reported with the files below
+  // (REPEATS), as --check reports it.
+  const stops = refuse.filter(f => !valuesProblems.includes(f) && f.code !== 'template.drift-repeats')
   for (const f of warn) console.log(`warn   ${f.message}`)
   if (stops.length) {
     for (const f of stops) console.log(`ERROR  ${f.message}`)
@@ -213,7 +215,7 @@ async function main() {
   if (check && !migrating) {
     // Whether the generated files are current: the one comparison Commit and
     // the editor make (computeDrift), each file named as it says.
-    const behind = new Set(t.drift.state === 'ok' ? [] : (t.drift.outOfDate ?? t.drift.files ?? []).filter(f => !f.endsWith(' (orphaned)')))
+    const behind = new Set(t.drift.state === 'ok' ? [] : [...(t.drift.files ?? []), ...(t.drift.outOfDate ?? [])].filter(f => !f.endsWith(' (orphaned)')))
     const missing = t.drift.state === 'missing'
     for (const rel of ['values.schema.json', ...Object.keys(products.templates).map(n => path.join('templates', n))]) {
       const key = rel.split(path.sep).join('/')
@@ -233,8 +235,9 @@ async function main() {
 
   if (init) {
     const chartYamlFile = path.join(chartDir, 'Chart.yaml')
-    const absent = t.findings.some(f => f.code === 'template.chart-absent')
-    const { text, created } = ensureChartYaml(absent ? null : '', path.basename(chartDir))
+    // Made only when it is not there, or holds nothing: its text as read.
+    const read = await t.repo.file(`${t.dir}/Chart.yaml`)
+    const { text, created } = ensureChartYaml(read.state === 'ok' ? read.value.text : null, path.basename(chartDir))
     if (created && !check) { await fs.writeFile(chartYamlFile, text, 'utf-8'); results.push(['created', 'Chart.yaml']) }
     else if (created && check) { results.push(['MISSING', 'Chart.yaml']); failed++ }
   }
@@ -244,7 +247,7 @@ async function main() {
   // reads it, for every deployment of the chart: one that is not YAML fails
   // them all, so it is an error, not a warning.
   for (const f of valuesProblems) {
-    console.log(`ERROR  values.yaml ${f.code === 'template.values-not-yaml' ? 'is not valid YAML' : 'cannot be read'}: ${f.message.replace(/^.*? cannot be read: /, '')}`)
+    console.log(`ERROR  values.yaml ${f.code === 'template.values-not-yaml' ? `is not valid YAML: ${f.detail.why.replace(/^not valid YAML \((.*)\)$/, '$1')}` : `cannot be read: ${f.detail.why}`}`)
     failed++
   }
   if (!valuesProblems.length && t.valuesText) {

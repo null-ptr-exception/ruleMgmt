@@ -366,13 +366,27 @@ its line, with a request to write it plainly: saving refuses it, and so do a
 commit, a new deployment of the Template and Preview.
 
 Saving the Template's rules or its values checks the Template as the save
-leaves it, without running Helm: a `Chart.yaml` or `values.yaml` that keeps
-every deployment from rendering, a folder name with a dot, a partial
-(`templates/_x.yaml`) holding a rule object, or a 1.x rule file repeating
-the generated alerts is named and nothing is written. A new deployment is
-not made from a Template none of whose deployments would render. Preview
+leaves it, without running Helm. What the save itself writes is refused
+when Helm would fail on it (values that are not YAML, or that AlertForge
+cannot tell Helm's reading of). What Helm fails on in a file the save does
+not write — a broken `Chart.yaml`, a folder name with a dot, a partial
+(`templates/_x.yaml`) holding a rule object, a 1.x rule file repeating the
+generated alerts, a file of the Template that cannot be read (Helm reads
+every file of the folder, `rules/` included), a generated template that is
+missing — does not stop the save: it goes through and names that file, and a
+commit refuses it until it is fixed. A save that migrates deployments (a
+breaking change with its mapping) is refused, before anything is written,
+while the Template's `values.yaml` cannot be read or is not YAML Helm reads
+the way AlertForge can tell: it would rewrite many deployments against
+values it cannot read — save the Template values first (the migration
+preview lists it). A Template whose `rules/` is gone or
+empty next to a schema the generator wrote is not converted by a save of
+that schema (every group with no rules): restore `rules/`. A new deployment
+is not made from a Template none of whose deployments would render. Preview
 shows Helm's output and says the same with its check, as does a generated
-template that is missing.
+template that is missing. A file linked to one outside the repo (Helm
+follows it) and a folder where a file is expected are named as files that
+cannot be read.
 
 ### Files of your own in templates/
 
@@ -699,11 +713,15 @@ run `gen-rules`, which converts it. `import-rules` stops there for the same
 reason.
 
 The three tools read the chart as the server does, the whole Template:
-besides `rules/` and the schema, a `Chart.yaml` that cannot be read or is
-not YAML, a folder name with a dot, a partial (`templates/_x.yaml`) holding a
-rule object, and a `values.yaml` AlertForge cannot tell Helm's reading of
-stop them with an `ERROR` line (exit 1) before anything is written. A file
-that cannot be read is one `ERROR` line naming it and exit 2, in all three. A
+besides `rules/` and the schema, a `Chart.yaml` that is not YAML, a folder
+name with a dot, a partial (`templates/_x.yaml`) holding a rule object, and a
+`values.yaml` AlertForge cannot tell Helm's reading of stop them with an
+`ERROR` line (exit 1) before anything is written. A file of the Template that
+cannot be read — `Chart.yaml` and `values.yaml` included — is one `ERROR` line
+naming it and exit 2, in all three. A chart folder given as a link outside
+any git repo is worked on where the link leads; inside a repo it is read as
+the repo's content (a link out of the repo cannot be read). `--init` writes a
+`Chart.yaml` only when there is none, or an empty one. A
 missing `Chart.yaml` (a chart started from `rules/` alone: `--init` writes
 it) and a `Chart.yaml` whose `name` is not the folder's are only warned of.
 A chart whose `rules/` is gone or empty next to a schema the generator wrote

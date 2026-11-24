@@ -123,3 +123,75 @@ describe.skipIf(!HAS_HELM)('check-deployment, its Template\'s part', () => {
     expect(r.out).toMatch(/Template: failed[\s\S]*templates\/cpu\.yaml/)
   })
 })
+
+describe('the tools on files already there, shared values and names in use', () => {
+  it('gen-rules --init leaves a Chart.yaml that is there as it is; --init --check passes it', async () => {
+    const before = await fs.readFile(abs('charts/demo/Chart.yaml'), 'utf-8')
+    expect(tool('gen-rules', chart, '--init', '--check').code).toBe(0)
+    expect(tool('gen-rules', chart, '--init').code).toBe(0)
+    expect(await fs.readFile(abs('charts/demo/Chart.yaml'), 'utf-8')).toBe(before)
+  })
+
+  it.skipIf(IS_ROOT)('a Chart.yaml or values.yaml that cannot be read is exit 2 in all three', async () => {
+    await write('rules.yaml', 'groups:\n  - name: g\n    rules:\n      - alert: A\n        expr: up == 0\n')
+    for (const file of ['Chart.yaml', 'values.yaml']) {
+      await fs.chmod(abs(`charts/demo/${file}`), 0)
+      try {
+        for (const [name, ...args] of [['gen-rules', chart], ['gen-rules', chart, '--check'], ['gen-chart', chart, '--check'], ['import-rules', abs('rules.yaml'), chart, '--dry-run']]) {
+          const r = tool(name, ...args)
+          expect(r.code, `${file} ${name} ${args.join(' ')}: ${r.out}`).toBe(2)
+          expect(r.out).toMatch(new RegExp(`^ERROR {2}.*charts/demo/${file.replace('.', '\\.')} cannot be read: permission denied$`, 'm'))
+        }
+      } finally {
+        await fs.chmod(abs(`charts/demo/${file}`), 0o644)
+      }
+    }
+  })
+
+  it('a chart given as a link outside any repo is worked on where it leads', async () => {
+    const copy = await fs.mkdtemp(path.join(os.tmpdir(), 'template-cli-copy-'))
+    try {
+      await fs.cp(chart, path.join(copy, 'demo'), { recursive: true })
+      // the link somewhere else than the folder it leads to
+      await fs.mkdir(path.join(copy, 'elsewhere'))
+      await fs.symlink(path.join(copy, 'demo'), path.join(copy, 'elsewhere', 'link'))
+      const r = tool('gen-rules', path.join(copy, 'elsewhere', 'link'), '--check')
+      expect(r.code, r.out).toBe(0)
+    } finally {
+      await fs.rm(copy, { recursive: true, force: true })
+    }
+  })
+
+  it('--check names a missing file and a hand-changed one together', async () => {
+    await fs.rm(abs('charts/demo/templates/cpu.yaml'))
+    await write('charts/demo/values.schema.json', '{\n  "type": "object",\n  "properties": {}\n}\n')
+    const r = tool('gen-rules', chart, '--check')
+    expect(r.code).toBe(1)
+    expect(r.out).toMatch(/MISSING\s+templates\/cpu\.yaml/)
+    expect(r.out).toMatch(/DIFFERS\s+values\.schema\.json/)
+  })
+
+  it('a values.yaml that is not YAML is said once, without the reader\'s own words repeated', async () => {
+    await write('charts/demo/values.yaml', 'cpu: x: y\n')
+    const r = tool('gen-rules', chart, '--check')
+    expect(r.out).toMatch(/^ERROR {2}values\.yaml is not valid YAML: line 1: /m)
+    expect(r.out).not.toMatch(/not valid YAML.*not valid YAML/)
+  })
+})
+
+describe.skipIf(!HAS_HELM)('check-deployment, on a _common', () => {
+  it('its Template is checked through the _common: a generated template missing fails it', async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: 'deployments/team/d', chart: 'demo' })).status).toBe(200)
+    await write('deployments/team/d/values.yaml', 'demo:\n  cpu:\n    - { job: api }\n')
+    const plan = await api('GET', `/api/v2/folders/common/plan?${new URLSearchParams({ action: 'create', folder: 'deployments/team', chart: 'demo' })}`)
+    expect(plan.status, JSON.stringify(plan.data)).toBe(200)
+    const made = await fetch(`${baseURL}/api/v2/folders/common`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create', folder: 'deployments/team', chart: 'demo', expected: plan.data.plan?.expected ?? plan.data.expected }) })
+    expect(made.status, await made.text()).toBe(200)
+    const dep = abs('deployments/team/d')
+    expect(tool('check-deployment', '--repo', tmpDir, dep).code).toBe(0)
+    await fs.rm(abs('charts/demo/templates/cpu.yaml'))
+    const r = tool('check-deployment', '--repo', tmpDir, dep)
+    expect(r.code, r.out).toBe(1)
+    expect(r.out).toMatch(/Template: failed[\s\S]*templates\/cpu\.yaml/)
+  })
+})

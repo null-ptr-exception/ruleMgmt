@@ -28,6 +28,7 @@ const WHY = {
   EIO: 'the disk could not read it',
 }
 const reason = err => WHY[err?.code] ?? 'it could not be read'
+const KIND = { EACCES: 'permission', EPERM: 'permission', ENOTDIR: 'not-a-folder' }
 
 function overlaid(key, overlay, entries) {
   let touched = false
@@ -50,24 +51,24 @@ export async function readRepoDir(root, rel, { overlay } = {}) {
   try {
     st = await fs.stat(abs)
   } catch (err) {
-    if (err.code !== 'ENOENT') return unreadable(key, reason(err))
+    if (err.code !== 'ENOENT') return unreadable(key, reason(err), KIND[err.code] ?? 'other')
     const link = await fs.lstat(abs).catch(() => null)
-    if (link) return unreadable(key, 'a link to a folder that is not there')
+    if (link) return unreadable(key, 'a link to a folder that is not there', 'dangling-link')
     return overlaid(key, overlay, entries) ? ok({ entries }) : absent(key)
   }
-  if (!st.isDirectory()) return unreadable(key, 'a file is where a folder should be')
+  if (!st.isDirectory()) return unreadable(key, 'a file is where a folder should be', 'not-a-folder')
   let real
   try {
     real = await insideReal(root, key)
   } catch (err) {
-    return unreadable(key, reason(err))
+    return unreadable(key, reason(err), KIND[err.code] ?? 'other')
   }
-  if (!real) return unreadable(key, 'it is a link that leads outside the repo')
+  if (!real) return unreadable(key, 'it is a link that leads outside the repo', 'outside-link')
   let list
   try {
     list = await fs.readdir(abs, { withFileTypes: true })
   } catch (err) {
-    return err.code === 'ENOENT' ? absent(key) : unreadable(key, reason(err))
+    return err.code === 'ENOENT' ? absent(key) : unreadable(key, reason(err), KIND[err.code] ?? 'other')
   }
   for (const e of list) {
     let kind = e.isDirectory() ? 'dir' : e.isFile() ? 'file' : 'other'

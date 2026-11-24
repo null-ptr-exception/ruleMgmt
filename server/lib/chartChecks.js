@@ -26,6 +26,21 @@ const KIND = {
 const kindOf = code => KIND[code] ?? code.replace(/^template\./, 'template-')
 const UNCONVERTED = new Set(['template.legacy', 'template.rules-gone'])
 
+// Whether a folder under charts/ is one of AlertForge's Templates, as the
+// Template list tells one: its Chart.yaml annotated app: alertforge, or a
+// rules/ (a Template started from rules/ alone), or, with no Chart.yaml, a
+// values.schema.json (a 1.x chart). A Chart.yaml that cannot be
+// read or parsed cannot tell: checked. An empty folder, a backup, a chart of
+// someone else's is not AlertForge's to judge.
+async function isTemplate(repo, dir) {
+  if ((await repo.dir(`${dir}/rules`)).state !== 'absent') return true
+  const chart = await repo.helmYaml(`${dir}/Chart.yaml`)
+  // No Chart.yaml: a 1.x chart's schema is AlertForge's; nothing is not.
+  if (chart.state === 'absent') return (await repo.file(`${dir}/values.schema.json`)).state !== 'absent'
+  if (chart.state !== 'ok' || !chart.value || typeof chart.value !== 'object') return true
+  return chart.value.annotations?.app === 'alertforge'
+}
+
 /**
  * Reasons a commit should be refused, across every chart in the gitops repo —
  * see issue #57. Into git means it is for someone else now.
@@ -53,6 +68,7 @@ export async function chartCommitBlockers(gitopsDir) {
   const warnings = []
   for (const [name, kind] of [...listed.value.entries].sort(([a], [b]) => a.localeCompare(b))) {
     if (kind !== 'dir') continue
+    if (!(await isTemplate(repo, `${base}/${name}`))) continue
     const loaded = await repo.templateFiles(`${base}/${name}`)
     // A chart deleted while it was being checked is not there to commit.
     if (loaded.state === 'absent') continue
@@ -75,7 +91,7 @@ export async function chartCommitBlockers(gitopsDir) {
       const description = f.code === 'template.rules-invalid'
         ? `${name}: rules/ cannot be read (${t.drift.errors.slice(0, 3).join('; ')}${t.drift.errors.length > 3 ? `; and ${t.drift.errors.length - 3} more` : ''}) — fix it before committing`
         : f.code === 'template.values-unreadable' || f.code === 'template.values-not-yaml' || f.code === 'template.values-cannot-tell'
-          ? `${name}: ${f.message.replace(/ cannot be read: (.*)$/, ' cannot be read ($1)')} — fix it before committing`
+          ? `${name}: ${f.file} cannot be read (${f.detail.why}) — fix it before committing`
           : f.message.startsWith(`${name}:`) ? f.message : `${name}: ${f.message}`
       findings.push({ severity: 'commit', kind: kindOf(f.code), chart: name, description })
     }

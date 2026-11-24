@@ -9,7 +9,16 @@
 export const RULES_SOURCE = 'rules/ is the source (#57): rules that cannot be read or fail the rule checks are not passed on, though what is on disk renders'
 export const PRODUCTS = 'the generated files follow rules/ (#57): behind, missing or repeated is refused until regenerated'
 export const CANNOT_TELL_LIST = 'AlertForge cannot tell what Helm makes of it: listed, for the person to write it plainly'
-export const FOLDER = 'a folder where a file is expected is named as unreadable, not taken for none'
+export const FOLDER = 'a folder where a file is expected, or a link out of the repo, is named as unreadable, not taken for none or followed (Helm skips the one and follows the other)'
+// A file the repo loader does not read (a link out of the repo, a folder
+// where a file is expected), though Helm reads through it: refused as one
+// that cannot be read, in every table that does not say otherwise.
+export const READ_THROUGH = Object.freeze({
+  'template.chart-unreadable': { action: 'refuse', why: FOLDER },
+  'template.values-unreadable': { action: 'refuse', why: FOLDER },
+  'template.schema-unreadable': { action: 'refuse', why: FOLDER },
+  'template.rules-unreadable': { action: 'refuse', why: FOLDER },
+})
 export const LEGACY = 'a 1.x chart renders as it did; it is named until it is converted (#79)'
 
 export const TEMPLATE_ROWS = Object.freeze({
@@ -21,7 +30,8 @@ export const TEMPLATE_ROWS = Object.freeze({
     // default); a Template's file Helm stops on, or renders other than
     // written, fails every deployment of it: refused, as drift was.
     'template.*': { action: 'refuse', why: 'a Template file Helm fails on, or renders other than written, fails every deployment of the Template' },
-    'template.schema-absent': { action: 'ignore', why: 'only the generated schema missing: Helm renders the same, without checking the values' },
+    'template.schema-absent': { action: 'list', why: 'only the generated schema missing: Helm renders the same, without checking the values; opening the Template or regenerating writes it back' },
+    ...READ_THROUGH,
     'template.rules-unreadable': { action: 'refuse', why: 'a file that cannot be read is not committed as if fine' },
     'template.rules-invalid': { action: 'refuse', why: RULES_SOURCE },
     'template.rule-check': { action: 'refuse', why: RULES_SOURCE },
@@ -42,6 +52,7 @@ export const TEMPLATE_ROWS = Object.freeze({
     'template.chart-version': { action: 'ignore', why: 'named with each deployment of the Template' },
   },
   checkRepo: {
+    ...READ_THROUGH,
     'template.rules-unreadable': { action: 'refuse', why: 'a file that cannot be read is not passed as if fine' },
     'template.rules-invalid': { action: 'refuse', why: RULES_SOURCE },
     'template.rule-check': { action: 'refuse', why: RULES_SOURCE },

@@ -153,6 +153,7 @@ export default function gitRouter() {
           ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}),
           ...(deployments.routingWarnings?.length ? { routingWarnings: deployments.routingWarnings } : {}),
           ...(deployments.valueWarnings?.length ? { valueWarnings: deployments.valueWarnings } : {}),
+          ...(charts.warnings?.length ? { templateWarnings: charts.warnings } : {}),
           ...(deployments.unreadable.length ? { unreadable: deployments.unreadable } : {}) } }
       })
       res.status(outcome.status).json(outcome.body)

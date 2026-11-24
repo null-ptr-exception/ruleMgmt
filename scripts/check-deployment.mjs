@@ -36,7 +36,8 @@ import path from 'path'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
 import { CannotCheck, notADeployment, helmHome, checkRuleObjects, checkRouting } from '../server/lib/deploymentCheck.js'
 import { valuesLimitNote } from '../server/repo/limits.js'
-import { openRepoAt } from '../server/repo/locate.js'
+import { openRepoAt, realFolder } from '../server/repo/locate.js'
+import { isCommonChartPath } from '../src/utils/reservedNames.js'
 import { decide } from '../server/repo/policy.js'
 import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 
@@ -46,21 +47,36 @@ import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 // name with a dot) is said, as Commit says it. The deployment's own render
 // (checkRuleObjects) does not show it: Helm renders the rest without a word.
 async function checkTemplate(dir) {
-  const { repo, rel } = openRepoAt(path.join(dir, 'Chart.yaml'))
-  const chart = await repo.helmYaml(rel)
-  if (chart.state !== 'ok') return { ok: true, lines: [] }
   const lines = []
-  for (const d of Array.isArray(chart.value.dependencies) ? chart.value.dependencies : []) {
-    const repository = typeof d?.repository === 'string' ? d.repository : ''
-    if (!repository.startsWith('file://')) continue
-    // A file of its rules/ that cannot be read is gen-rules --check's to
-    // name: Helm does not read rules/. The folder itself has to be.
-    const at = openRepoAt(path.resolve(dir, repository.slice('file://'.length)))
-    const t = await at.repo.templateFiles(at.rel)
-    if (t.state === 'unreadable') { lines.push(`  ${at.rel} cannot be read: ${t.why}`); continue }
-    if (t.state !== 'ok' || t.value.chart?.annotations?.app !== 'alertforge') continue
-    for (const f of decide(t.findings, TEMPLATE_POLICIES.checkDeployment).refuse) lines.push(`  ${f.message}`)
+  // Through a `_common` (#100): its Chart.yaml takes the Template, and so on
+  // down the stack; each chart folder once.
+  const seen = new Set()
+  const walk = async chartDir => {
+    if (seen.has(chartDir) || seen.size > 20) return
+    seen.add(chartDir)
+    const { repo, rel } = openRepoAt(path.join(chartDir, 'Chart.yaml'))
+    const chart = await repo.helmYaml(rel)
+    if (chart.state !== 'ok') return
+    for (const d of Array.isArray(chart.value.dependencies) ? chart.value.dependencies : []) {
+      const repository = typeof d?.repository === 'string' ? d.repository : ''
+      // file://, or (a `_common` chart) a link in its own charts/, the
+      // only place Helm looks below a dependency.
+      let to = repository.startsWith('file://') ? path.resolve(chartDir, repository.slice('file://'.length)) : null
+      if (!to && !repository && typeof d?.name === 'string') {
+        to = realFolder(path.join(chartDir, 'charts', d.name))
+      }
+      if (!to) continue
+      if (isCommonChartPath(to)) { await walk(to); continue }
+      // A file of its rules/ that cannot be read is gen-rules --check's to
+      // name: Helm does not read rules/. The folder itself has to be.
+      const at = openRepoAt(to)
+      const t = await at.repo.templateFiles(at.rel)
+      if (t.state === 'unreadable') { lines.push(`  ${at.rel} cannot be read: ${t.why}`); continue }
+      if (t.state !== 'ok' || t.value.chart?.annotations?.app !== 'alertforge') continue
+      for (const f of decide(t.findings, TEMPLATE_POLICIES.checkDeployment).refuse) lines.push(`  ${f.message}`)
+    }
   }
+  await walk(dir)
   return lines.length ? { ok: false, lines: ['Template: failed — Helm would not render it as written:', ...lines] } : { ok: true, lines: [] }
 }
 

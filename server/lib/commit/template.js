@@ -60,8 +60,9 @@ async function fileDependencyProblem(gitopsDir, dir, dep, loader) {
     // Read as Helm reads it, through the repo loader. There and not
     // readable: its real reason, not "not YAML".
     const rel = path.relative(gitopsDir, path.join(at, 'Chart.yaml')).split(path.sep).join('/')
-    // A chart outside the repo is not the repo's to check.
-    if (rel.startsWith('../')) continue
+    // Outside the repo: not in it, for whoever renders the commit (Helm's
+    // `dependency build` there fails), as before.
+    if (rel.startsWith('../')) return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
     const read = await loader.helmYaml(rel)
     if (read.state === 'absent') return { kind: 'template-missing', description: `${dep}: its ${noun} is not in the repo` }
     if (read.state === 'unreadable') return problem(`its ${noun}'s Chart.yaml cannot be read (${read.why})`)

@@ -158,11 +158,11 @@ describe('a folder named templates/<name>.yaml', () => {
 })
 
 describe('saving a Template', () => {
-  it.skipIf(IS_ROOT)('a Chart.yaml without permission is not made again over it', async () => {
+  it.skipIf(IS_ROOT)('a Chart.yaml without permission is not made again over it: the save goes through and names it', async () => {
     const before = await read('charts/demo/Chart.yaml')
     await lock('charts/demo/Chart.yaml')
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU.replace('> 1', '> 2') } })
-    expect(status).toBe(409)
+    expect(status).toBe(200)
     names(data, 'charts/demo/Chart.yaml cannot be read: permission denied')
     await unlock('charts/demo/Chart.yaml')
     expect(await read('charts/demo/Chart.yaml')).toBe(before)

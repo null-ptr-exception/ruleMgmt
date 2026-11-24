@@ -57,8 +57,6 @@ tpl-common-zero	common-apply	accepts-what-helm-fails	policy	making a _common mov
 tpl-common-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 tpl-null-merge	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
 tpl-null-merge	gen-rules	accepts-what-helm-fails	out-of-scope	gen-rules checks the Template's own values; the null that fails is the deployment's
-tpl-not-yaml	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
-tpl-unreadable	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not see that the Template's own values.yaml cannot be read
 stack-x-null	migration-preview	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 stack-x-null	migration-apply	accepts-what-helm-fails	bug	#176: the migration does not check the values it lists or writes the way a save does
 layer-common-zero	save-text	accepts-what-helm-fails	bug	no issue yet: the save's derived-value check does not count the Template's or the _common's values

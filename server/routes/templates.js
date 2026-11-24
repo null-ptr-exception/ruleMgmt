@@ -23,6 +23,12 @@ import { openRepo } from '../repo/openRepo.js'
 import { decide } from '../repo/policy.js'
 import { TEMPLATE_POLICIES } from '../repo/findings/template.js'
 
+// What a save refuses: what it writes. What another file of the Template
+// keeps Helm from rendering is said with the save, not a reason to lose it.
+function splitBySave({ refuse, warn = [] }, writes) {
+  return { refuse: refuse.filter(writes), elsewhere: [...refuse.filter(f => !writes(f)), ...warn] }
+}
+
 const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
 
 // A rules/ filename: a group file, or _common.yaml. Guards path traversal in
@@ -137,6 +143,8 @@ export default function templatesRouter() {
       if (chartYamlMissing || t.drift.state === 'missing') {
         t = await withSyncRegistryLock(req.gitopsDir, async () => {
           let now = await readTemplate(req.gitopsDir, chart)
+          // Deleted meanwhile: not there to open.
+          if (!now) return null
           if (now.findings.some(f => f.code === 'template.chart-absent')) {
             const { text } = ensureChartYaml(null, chart)
             await writeWhole(chartYamlFile, text)
@@ -145,6 +153,7 @@ export default function templatesRouter() {
           now = await readTemplate(req.gitopsDir, chart)
           return now
         })
+        if (!t) return res.status(404).json({ error: 'Chart not found' })
       }
 
       const templateFiles = t.templateNames.map(f => f.replace(/\.yaml$/, ''))
@@ -153,7 +162,7 @@ export default function templatesRouter() {
       // cannot be read or parsed is said, not shown as empty for a Save to
       // write over.
       const stop = t.findings.find(f => /^template\.(values|chart)-(unreadable|not-yaml|cannot-tell|not-map)$/.test(f.code))
-      if (stop) throw new UnreadableError(path.join(req.gitopsDir, stop.file), { reason: stop.message.replace(/^.*? cannot be read: /, '') })
+      if (stop) throw new UnreadableError(path.join(req.gitopsDir, stop.file), { reason: stop.detail?.why ?? stop.message })
 
       // The editor loads from `rulesFiles`; null when the chart has not been
       // migrated to the rules/ format yet (it falls back to reading `schema`).
@@ -207,6 +216,13 @@ export default function templatesRouter() {
 
       const onDisk = await readTemplate(req.gitopsDir, req.params.chart)
       const before = schemaBefore(req, onDisk)
+      // rules/ gone (or empty) beside a schema the generator wrote: what the
+      // editor sends is that schema converted, every group with no rules.
+      // Written, the Template deploys no alert.
+      const gone = onDisk?.findings.find(f => f.code === 'template.rules-gone')
+      if (gone && Object.values(model.groups).every(g => !g.rules?.length)) {
+        return res.status(409).json({ error: gone.message })
+      }
 
       // An x-custom-template group has no rules file — carry it over from the
       // schema so its hand-written template is neither regenerated nor deleted.
@@ -233,7 +249,7 @@ export default function templatesRouter() {
       // A group changing output profile replaces its objects (#65): a notice,
       // shown with a breaking change or on its own after the save.
       notices.push(...groupTypeChanges(beforeModel, model, objectMetaFromEnv()), ...groupNameChanges(beforeModel, model), ...groupOnceChanges(beforeModel, model), ...groupSelectorChanges(beforeModel, model), ...groupSelectorLabelChanges(beforeModel, model))
-      const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
+      const withDesc = list => list.map(c => ({ ...c, description: c.description ?? describeChange(c) }))
       if (!confirmBreaking && isBreaking) {
         const { deployments, unreadable } = await findChartUsage(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
         // A folder that cannot be read may hold one: said, so the change is
@@ -336,19 +352,28 @@ export default function templatesRouter() {
           .map(f => path.join(tmplDir, f)),
       ]
 
-      // The Template as this save leaves it: what Helm fails on, or renders
-      // other than written, in the files it does not write (Chart.yaml, the
-      // Template's values.yaml, a hand-written template) is said before
-      // anything is written.
-      const after = await openRepo(req.gitopsDir).with(new Map([
+      // The Template as this save leaves it. What Helm fails on, or renders
+      // other than written, in what this save writes is refused; in a file
+      // it does not write (Chart.yaml, the Template's values.yaml, a
+      // hand-written template) the save goes through and says it, naming the
+      // file — Commit still refuses it.
+      const overlay = new Map([
         ...entries.map(([abs, text]) => [path.relative(req.gitopsDir, abs).replace(/\\/g, '/'), text]),
         ...removed.map(abs => [path.relative(req.gitopsDir, abs).replace(/\\/g, '/'), null]),
-      ])).templateFiles(path.relative(req.gitopsDir, chartDir).replace(/\\/g, '/'))
-      const { refuse } = after.state === 'ok' ? decide(after.findings, TEMPLATE_POLICIES.saveRules) : { refuse: [] }
+      ])
+      const after = await openRepo(req.gitopsDir).with(overlay).templateFiles(path.relative(req.gitopsDir, chartDir).replace(/\\/g, '/'))
+      const decided = after.state === 'ok' ? decide(after.findings, TEMPLATE_POLICIES.saveRules) : { refuse: [], warn: [] }
+      const split = splitBySave(decided, f => overlay.has(f.file) || f.file.endsWith('/rules') || f.file.includes('/rules/'))
+      // A migration also refuses what its own table names (migrationApply).
+      const hard = confirmBreaking && migration && isBreaking && after.state === 'ok' ? decide(after.findings, TEMPLATE_POLICIES.migrationApply).refuse : []
+      const refuse = [...hard, ...split.refuse.filter(f => !hard.includes(f))]
+      const elsewhere = split.elsewhere.filter(f => !hard.includes(f))
       // A file that cannot be read is answered as one (409, unreadable).
       const unread = refuse.find(f => /-unreadable$/.test(f.code))
-      if (unread) throw new UnreadableError(path.join(req.gitopsDir, unread.file), { reason: unread.message.replace(/^.*? cannot be read: /, '') })
+      if (unread) throw new UnreadableError(path.join(req.gitopsDir, unread.file), { reason: unread.detail.why })
       if (refuse.length) return res.status(409).json({ error: `The Template would not render as written: ${refuse.map(f => f.message).join('; ')}`, findings: refuse.map(f => ({ code: f.code, file: f.file, description: f.message })) })
+      const warnings = elsewhere.map(f => ({ kind: 'template-file', code: f.code, file: f.file, description: `${f.message} — Commit refuses it until it is fixed` }))
+      notices.push(...warnings)
 
       const wrote = await writeChanged(entries)
       for (const abs of removed) await fs.rm(abs, { force: true })
@@ -371,6 +396,7 @@ export default function templatesRouter() {
           ...removed.map(p => `- ${path.relative(chartDir, p)}`),
         ],
         notices: withDesc(notices),
+        ...(warnings.length ? { warnings } : {}),
         migrated: migratedDeployments.map(d => ({ deployment: d.deployment, path: d.path, readonly: d.readonly, copiedFrom: d.copiedFrom, rowsChanged: d.rowsChanged })),
         ...(syncFailed.length ? { syncFailed } : {}),
       })
@@ -420,12 +446,15 @@ export default function templatesRouter() {
       const dir = path.relative(req.gitopsDir, path.dirname(valuesFile)).replace(/\\/g, '/')
       const after = await openRepo(req.gitopsDir).with(new Map([[`${dir}/values.yaml`, content]])).templateFiles(dir)
       if (after.state === 'unreadable') throw new UnreadableError(path.join(req.gitopsDir, after.file), { reason: after.why })
-      const { refuse } = after.state === 'ok' ? decide(after.findings, TEMPLATE_POLICIES.saveValues) : { refuse: [] }
+      const decided = after.state === 'ok' ? decide(after.findings, TEMPLATE_POLICIES.saveValues) : { refuse: [], warn: [] }
+      // The text sent is refused; a file this save does not write goes
+      // through, said (Commit refuses it).
+      const { refuse, elsewhere } = splitBySave(decided, f => f.file === `${dir}/values.yaml`)
       const unread = refuse.find(f => /-unreadable$/.test(f.code))
-      if (unread) throw new UnreadableError(path.join(req.gitopsDir, unread.file), { reason: unread.message.replace(/^.*? cannot be read: /, '') })
+      if (unread) throw new UnreadableError(path.join(req.gitopsDir, unread.file), { reason: unread.detail.why })
       if (refuse.length) return res.status(400).json({ error: refuse.map(f => f.message).join('; '), findings: refuse.map(f => ({ code: f.code, file: f.file, description: f.message, ...(f.at ? { at: f.at } : {}) })) })
       await writeWhole(valuesFile, content)
-      res.json({ ok: true })
+      res.json({ ok: true, ...(elsewhere.length ? { warnings: elsewhere.map(f => ({ code: f.code, file: f.file, description: `${f.message} — Commit refuses it until it is fixed` })) } : {}) })
     } catch (err) {
       const { status, body } = errorAnswer(err)
       res.status(status).json(body)

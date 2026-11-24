@@ -151,3 +151,27 @@ describe('clone', () => {
     expect(schema.properties.cpu).toBeDefined()
   })
 })
+
+describe('a Template whose rules/ is gone', () => {
+  it('a save of its generated schema converted (every group with no rules) is refused; rules written anew are saved', async () => {
+    await fs.rm(abs('charts/demo/rules'), { recursive: true })
+    const empty = 'columns:\n  job: {type: string, required: true}\nrules: []\n'
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': empty } })
+    expect(status).toBe(409)
+    expect(data.error).toMatch(/restore rules\//)
+    expect((await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })).status).toBe(200)
+  })
+})
+
+describe('saving the Template\'s values, when a file Helm reads cannot be read', () => {
+  it.skipIf(process.getuid?.() === 0)('a rules/ file without permission (Helm cannot read the chart): saved, and named', async () => {
+    await fs.chmod(abs('charts/demo/rules/cpu.yaml'), 0)
+    try {
+      const { status, data } = await api('POST', '/api/v2/templates/demo/values', { values: '{}\n' })
+      expect(status).toBe(200)
+      expect(data.warnings.map(w => w.description)).toEqual([expect.stringMatching(/charts\/demo\/rules\/cpu\.yaml cannot be read: permission denied/)])
+    } finally {
+      await fs.chmod(abs('charts/demo/rules/cpu.yaml'), 0o644)
+    }
+  })
+})

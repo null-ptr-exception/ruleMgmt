@@ -535,3 +535,28 @@ test.describe('New → From rules…', () => {
     expect(charts.map(c => c.name)).not.toContain(FRESH)
   })
 })
+
+// A commit lists what of a Template it lets through but is worth fixing:
+// a schema missing (opening the Template writes it back), a schema keyword
+// AlertForge does not check. Stubbed: nothing is committed.
+test.describe('A commit that lists Templates to look at', () => {
+  test('names each, as committed', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({
+      json: { branch: 'main', changes: { modified: ['charts/demo/rules/cpu.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false },
+    }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ json: {
+      sha: 'abc1234', message: 'e2e', unconverted: [],
+      templateWarnings: [{ kind: 'template-schema-absent', chart: 'demo', description: 'charts/demo/values.schema.json is not there: Helm does not check the values — open the Template or regenerate to write it' }],
+    } }))
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: Templates to look at')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Changes committed' })
+    await expect(dialog).toContainText('Templates to look at', { timeout: 8000 })
+    await expect(dialog.getByTestId('commit-template-warnings')).toContainText('charts/demo/values.schema.json is not there')
+  })
+})
+

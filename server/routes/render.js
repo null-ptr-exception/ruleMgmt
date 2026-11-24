@@ -133,8 +133,11 @@ export default function renderRouter() {
       try {
         tmpl = await readTemplate(req.gitopsDir, template)
       } catch (err) {
-        if (!(err instanceof UnreadableError)) throw err
-        logger.warn({ err, chart: template, deployment }, 'the Template cannot be read, rendering without its model')
+        // Optional, like the summary and drift below: Helm rendered, so a
+        // Template AlertForge cannot read (or a fault reading it) does not
+        // turn the render into { ok: false }.
+        if (err instanceof UnreadableError) logger.warn({ err, chart: template, deployment }, 'the Template cannot be read, rendering without its model')
+        else logger.error({ err, chart: template, deployment }, 'reading the Template failed, rendering without its model')
       }
       const chartModel = { model: tmpl?.model ?? null, fromRules: !!tmpl?.fromRules, schema: tmpl?.schema ?? null }
       const { refuse: templateProblems } = tmpl ? decide(tmpl.findings, TEMPLATE_POLICIES.preview) : { refuse: [] }

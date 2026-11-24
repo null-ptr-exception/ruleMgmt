@@ -112,8 +112,8 @@ export function initRoutes(router) {
 
       // The Template has to be there, readable, and render (chartDiscovery.js);
       // its version is not copied (below). Its values.yaml is read below.
-      const template = await templateForNewDeployment(req.gitopsDir, chart)
-      if (template.error) return res.status(template.status).json({ error: template.error })
+      const template = await templateForNewDeployment(req.gitopsDir, chart, folder)
+      if (template.error) return res.status(template.status).json({ error: template.error, ...(template.problems ? { problems: template.problems } : {}) })
 
       // The Template's groups, from its values.yaml: none when it has none;
       // one that cannot be read or parsed is said, not taken for none.

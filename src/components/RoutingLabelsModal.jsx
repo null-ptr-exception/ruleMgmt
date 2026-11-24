@@ -7,13 +7,16 @@ const { Text } = Typography
 
 /**
  * The table's dimensions (#93): the alert labels it routes by, and each one's
- * values. Opening routing sets them for the first time; changing them later
- * may leave cells outside the table, which the page confirms before
- * dropping.
+ * values. Opening routing sets them for the first time. Changing them later
+ * keeps the cells (#94): a label added copies them, one taken away merges
+ * them, a renamed one keeps them; a value taken away drops its cells, which
+ * the page confirms first.
  */
 export default function RoutingLabelsModal({ open, labels, onOk, onCancel, title = 'Route by labels' }) {
+  // `was`: the name a row had when the dialog opened, so a renamed label
+  // keeps its cells (#94). A row added here has none.
   const initial = Object.keys(labels || {}).length
-    ? Object.entries(labels).map(([name, values]) => ({ name, values: [...values] }))
+    ? Object.entries(labels).map(([name, values]) => ({ name, values: [...values], was: name }))
     : [{ name: 'severity', values: [] }]
   const [rows, setRows] = useState(initial)
   const set = (i, patch) => setRows(r => r.map((row, j) => (j === i ? { ...row, ...patch } : row)))
@@ -26,7 +29,8 @@ export default function RoutingLabelsModal({ open, labels, onOk, onCancel, title
   ]
 
   return (
-    <Modal open={open} title={title} okText="Apply" onOk={() => onOk(next)} onCancel={onCancel}
+    <Modal open={open} title={title} okText="Apply" onCancel={onCancel}
+      onOk={() => onOk(rows.filter(r => r.name.trim()).map(r => ({ name: r.name.trim(), values: r.values, was: r.was })))}
       okButtonProps={{ disabled: problems.length > 0 }} width={560}>
       <Text type="secondary" style={{ fontSize: 12 }}>
         The alert labels the table routes by, and the values each one takes. Every combination is a cell.
@@ -47,7 +51,7 @@ export default function RoutingLabelsModal({ open, labels, onOk, onCancel, title
           onClick={() => setRows(r => [...r, { name: '', values: [] }])}>
           Add label
         </Button>
-        {problems.length > 0 && names.length > 0 && rows.some(r => r.values.length) && (
+        {problems.length > 0 && (names.length > 0 ? rows.some(r => r.values.length) : rows.some(r => r.was !== undefined)) && (
           <Alert type="warning" showIcon message={problems.map((p, i) => <div key={i}>{p}</div>)} />
         )}
       </div>

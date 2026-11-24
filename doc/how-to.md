@@ -344,10 +344,19 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    the deployment's `templates/`. **Preview** shows that resource as Helm
    renders it. Commit both files.
 
-A config a cell still uses cannot be deleted — the cells are listed. Changing
-the labels asks before it drops the cells no longer in the table. A synced
-target shows its source's routing, read-only; edit the source. **Remove
-routing** deletes both files.
+A config a cell still uses cannot be deleted — the cells are listed. A
+synced target shows its source's routing, read-only; edit the source.
+**Remove routing** deletes both files.
+
+**Labels** changes the labels after set-up, and keeps what the cells say:
+
+| Change | The cells |
+|---|---|
+| Add a label, e.g. `env: [prod, dev]` | Each cell is copied to every value, configs and timing alike: `critical · db` becomes `critical · db · prod` and `critical · db · dev`. An alert with a listed `env` goes where it did. **An alert without `env`, or with a value not listed, now matches no cell**, and nobody here is notified of it — the page says so until you save |
+| Take a label away | The cells that differ only in it become one. Where they do not say the same — other configs, other timing, or one of them empty — the page asks which to keep; the same configs in another order count as the same. Alerts that were dropped for lacking the label now match a cell |
+| Rename a label | The cells are kept under the new name. Rename it in its row: a row deleted and added again is a label taken away and a new one added, so its cells are merged, then copied |
+| Add a value | Its cells are empty |
+| Take a value away | Its cells go; the page lists them and asks first |
 
 The page only edits a `routing.yaml` that passes the checks below. One that
 does not — after a hand edit, a merge, or checks that have become stricter

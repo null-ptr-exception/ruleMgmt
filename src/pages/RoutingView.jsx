@@ -8,8 +8,9 @@ import RoutesMatrix, { describeMatch } from '../components/RoutesMatrix'
 import RoutesList from '../components/RoutesList'
 import { TimingFields } from '../components/RoutingTiming'
 import RoutingLabelsModal from '../components/RoutingLabelsModal'
+import RoutingMergeConflicts from '../components/RoutingMergeConflicts'
 import PreviewModal from '../components/PreviewModal'
-import { parseRouting, emptyRouting, setLabels, setDefaultTiming, toSave } from '../utils/routingModel'
+import { parseRouting, emptyRouting, reshapeLabels, setDefaultTiming, toSave } from '../utils/routingModel'
 import { getRouting, saveRouting, removeRouting, renderDeployment, getSyncSource } from '../utils/chartApi'
 import { ROUTING } from '../utils/outputs'
 import { syncFailedNotice } from '../utils/syncNotice'
@@ -40,6 +41,11 @@ export default function RoutingView() {
   const [reloadKey, setReloadKey] = useState(0)
   const [saveStatus, setSaveStatus] = useState('')
   const [labelsOpen, setLabelsOpen] = useState(false)
+  // Taking a label away where cells differ: the dialog's rows, and what to
+  // ask (#94).
+  const [merge, setMerge] = useState(null)
+  // Labels added since the last save: alerts without them now match no cell.
+  const [addedLabels, setAddedLabels] = useState([])
   const [frozenSource, setFrozenSource] = useState(null)
   const [preview, setPreview] = useState(null)
   // Grid or list; unset follows the labels — a list from three on.
@@ -57,11 +63,13 @@ export default function RoutingView() {
         setLoaded({ none: true })
         setRouting(null)
         setDirty(false)
+        setAddedLabels([])
       } else if (state.error) {
         setLoaded({ error: state.error })
       } else {
         setLoaded(state)
         setDirty(false)
+        setAddedLabels([])
         // Only a file that passes the server's checks is edited here (#158):
         // the page never writes one that fails, so a failing file came from
         // elsewhere (a hand edit, a merge, a sync) and is fixed by hand.
@@ -131,6 +139,7 @@ export default function RoutingView() {
       return
     }
     if (dirty && !readOnly && !(await confirmDiscardEdits())) return
+    setAddedLabels([])
     if (selection.path !== selectedFolder) {
       setLoaded(null)
       setRouting(null)
@@ -149,8 +158,17 @@ export default function RoutingView() {
     setDirty(true)
   }
 
-  async function applyLabels(labels) {
-    const { routing: next, dropped } = setLabels(routing || emptyRouting(), labels)
+  async function applyLabels(rows, keep = {}) {
+    const current = routing || emptyRouting()
+    const result = reshapeLabels(current, rows, { keep })
+    if (result.conflicts) {
+      const names = Object.keys(current.labels).filter(n => !rows.some(r => r.was === n))
+      setMerge({ rows, conflicts: result.conflicts, labels: names })
+      return
+    }
+    const { routing: next, dropped, added, renamed, removed } = result
+    // The merge dialog stays open behind this question: Cancel goes back to
+    // it with the choices still made.
     if (dropped.length) {
       const ok = await confirm({
         title: `${dropped.length} filled cell${dropped.length > 1 ? 's are' : ' is'} no longer in the table`,
@@ -163,7 +181,16 @@ export default function RoutingView() {
       })
       if (!ok) return
     }
+    setMerge(null)
     setLabelsOpen(false)
+    // The labels added since the last save, as they are named now: one taken
+    // away again is no longer added, one renamed is under its new name. A
+    // routing never saved, or a table with no cell filled, has routed
+    // nothing yet.
+    if (!loaded?.none) {
+      setAddedLabels(a => [...new Set([...a.filter(n => !removed.includes(n)).map(n => renamed[n] ?? n),
+        ...(current.cells.length ? added : [])])])
+    }
     edit(next)
   }
 
@@ -195,6 +222,7 @@ export default function RoutingView() {
       return false
     }
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
+    setAddedLabels([])
     warnSyncFailed(result)
     setReloadKey(k => k + 1)
     return true
@@ -289,6 +317,12 @@ export default function RoutingView() {
                 ]} />
             )}
           </div>
+          {addedLabels.length > 0 && (
+            <Alert type="warning" showIcon closable data-testid="routing-labels-added" style={{ marginBottom: 8 }}
+              onClose={() => setAddedLabels([])}
+              message={`Alerts without ${addedLabels.join(' or ')} — or with a value not listed — now match no cell, and nobody here is notified of them.`}
+              description="Every cell was copied to each new value, so alerts that carry one of them still go where they did." />
+          )}
           {!hasTable
             ? <Text type="secondary">Name the labels to route by first.</Text>
             : shownView === 'list'
@@ -357,6 +391,10 @@ export default function RoutingView() {
       {labelsOpen && (
         <RoutingLabelsModal open labels={routing?.labels} onCancel={() => setLabelsOpen(false)} onOk={applyLabels}
           title={routing ? 'Route by labels' : 'Set up routing'} />
+      )}
+      {merge && (
+        <RoutingMergeConflicts conflicts={merge.conflicts} labels={merge.labels}
+          onCancel={() => setMerge(null)} onOk={keep => applyLabels(merge.rows, keep)} />
       )}
       <PreviewModal
         open={!!preview}

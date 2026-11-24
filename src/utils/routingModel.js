@@ -152,6 +152,95 @@ export function setLabels(routing, labels) {
   }
 }
 
+// What a cell says, for comparing two (#94): who it notifies, in any order
+// (the same people, only the order differs), and its own timing. An
+// empty cell says null.
+// Timing is what takes effect: a cell's own value, or the default — a cell
+// that writes the default says the same as one that leaves it out.
+const contentKey = (cell, defaults = {}) => (cell
+  ? JSON.stringify([[...cell.configs].sort(), ...TIMING_KEYS.map(k => cell[k] ?? defaults[k] ?? null)])
+  : null)
+
+const renamed = (obj, names) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [names.get(k) ?? k, v]))
+
+/**
+ * The Labels dialog's answer applied to the table (#94): `rows` is the
+ * labels in their new order, each `{ name, values, was }` — `was` its name
+ * when the dialog opened, none for a label added there. In this order:
+ *
+ *   1. values: a value taken away drops its cells (`dropped`, to confirm);
+ *      one added has empty cells
+ *   2. a label taken away: the cells that differ only in it become one.
+ *      Where they do not say the same — other people, other timing, or one
+ *      empty — they come back as `conflicts`, and nothing changes until
+ *      `keep[conflict.key]` names the option to keep
+ *   3. a label renamed keeps its cells
+ *   4. a label added: every cell becomes one per value, the same in each.
+ *      Alerts without the label (or with a value not listed) match no cell
+ *      now: `added` names the labels, for the page to say so
+ *
+ * Returns { routing, dropped, added, renamed: { was: name }, removed } or
+ * { conflicts }.
+ */
+export function reshapeLabels(routing, rows, { keep = {} } = {}) {
+  const before = routing.labels
+  const kept = rows.filter(r => r.was !== undefined && Object.hasOwn(before, r.was))
+  const keptNames = new Set(kept.map(r => r.was))
+
+  // 1. Values, on the names as they were.
+  const valued = Object.fromEntries(Object.keys(before).map(name => {
+    const row = kept.find(r => r.was === name)
+    return [name, row ? row.values : before[name]]
+  }))
+  const { routing: r1, dropped } = setLabels(routing, valued)
+
+  // 2. Labels taken away, all at once: one round of choices.
+  const removed = Object.keys(before).filter(name => !keptNames.has(name))
+  const names = new Map(kept.filter(r => r.name !== r.was).map(r => [r.was, r.name]))
+  let r2 = r1
+  if (removed.length) {
+    const rest = Object.fromEntries(Object.entries(r1.labels).filter(([n]) => !removed.includes(n)))
+    const gone = Object.fromEntries(removed.map(n => [n, r1.labels[n]]))
+    const parts = combinations(gone)
+    const conflicts = []
+    const cells = []
+    for (const match of combinations(rest)) {
+      const options = parts.map(part => ({ key: JSON.stringify(part), part, cell: cellAt(r1, { ...match, ...part }) }))
+      const key = JSON.stringify(match)
+      const answer = Object.hasOwn(keep, key) ? options.find(o => o.key === keep[key]) : undefined
+      let chosen
+      if (new Set(options.map(o => contentKey(o.cell, r1.defaults))).size === 1) chosen = options[0].cell
+      else if (answer) chosen = answer.cell
+      else {
+        // Shown under the names the labels will have.
+        conflicts.push({ key, match: renamed(match, names), options })
+        continue
+      }
+      if (chosen) {
+        const m = Object.fromEntries(Object.entries(chosen.match).filter(([n]) => !removed.includes(n)))
+        cells.push({ ...structuredClone(chosen), match: m })
+      }
+    }
+    if (conflicts.length) return { conflicts }
+    r2 = { ...r1, labels: rest, cells: [...cells, ...r1.cells.filter(c => !isCell(c))] }
+  }
+
+  // 3. Renames: every name at once, so swapping two works.
+  const r3 = names.size
+    ? { ...r2, labels: renamed(r2.labels, names), cells: r2.cells.map(c => (isCell(c) ? { ...c, match: renamed(c.match, names) } : c)) }
+    : r2
+
+  // 4. Labels added: each cell copied once per value.
+  const added = rows.filter(r => r.was === undefined || !Object.hasOwn(before, r.was))
+  let cells = r3.cells
+  for (const { name, values } of added) {
+    cells = cells.flatMap(cell => (!isCell(cell) ? [cell]
+      : values.map(value => ({ ...structuredClone(cell), match: { ...cell.match, [name]: value } }))))
+  }
+  const labels = Object.fromEntries(rows.map(r => [r.name, [...r.values]]))
+  return { routing: { ...r3, labels, cells }, dropped, added: added.map(r => r.name), renamed: Object.fromEntries(names), removed }
+}
+
 /** The combinations whose cell notifies `name`. */
 export const configUsage = (routing, name) =>
   routing.cells.filter(cell => isCell(cell) && cell.configs.includes(name)).map(cell => cell.match)

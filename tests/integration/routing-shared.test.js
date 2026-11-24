@@ -171,6 +171,22 @@ describe('changing a shared config', () => {
     r = await api('PUT', '/api/v2/routing/shared', { shared: { configs: { 'relay-webhook': { type: 'webhook', url: RELAY } } } })
     expect(r.status).toBe(200)
   })
+
+  // An empty map is a map: the last config goes as any other, once nobody
+  // uses it, and the file's comment stays.
+  it('removes the last one from the page once nobody uses it', async () => {
+    let r = await api('PUT', '/api/v2/routing/shared', { shared: { configs: {} } })
+    expect(r.status).toBe(409)
+    expect(Object.keys(r.data.usedBy)).toEqual(['relay-webhook'])
+    const own = `labels:\n  severity: [critical]\nconfigs:\n  relay-webhook: { type: webhook, url: ${RELAY} }\ncells:\n  - match: { severity: critical }\n    configs: [relay-webhook]\n`
+    for (const dep of [A, B, C]) expect((await putRouting(dep, own)).status).toBe(200)
+    r = await api('PUT', '/api/v2/routing/shared', { shared: { configs: {} } })
+    expect(r.status, JSON.stringify(r.data)).toBe(200)
+    const text = await read(SHARED)
+    expect(yaml.load(text)).toEqual({ configs: {} })
+    expect(text).toContain("# the repo's shared configs")
+    expect((await api('GET', '/api/v2/routing/shared')).data.configs).toEqual({})
+  })
 })
 
 // A routing.yaml that cannot be read may use any shared config: a change

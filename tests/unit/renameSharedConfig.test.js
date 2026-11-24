@@ -89,6 +89,15 @@ describe('updateConfigsInText', () => {
     expect(yaml.load(updateConfigsInText(text, configs)).configs).toEqual(configs)
   })
 
+  // The last one taken out leaves an empty map, which the file may hold, not
+  // a bare "configs:" (null), which it may not.
+  it('takes every config out, leaving an empty map and the lines outside it', () => {
+    const out = updateConfigsInText(text, {})
+    expect(yaml.load(out)).toEqual({ configs: {} })
+    expect(out).toContain("# the repo's shared configs")
+    expect(out).toContain('# end')
+  })
+
   it('gives up on a file with no block configs map to follow', () => {
     expect(updateConfigsInText('configs: {}\n', { a: { type: 'email', to: 'a@b.c' } })).toBeNull()
     expect(updateConfigsInText('configs: { a: { type: email, to: a@b.c } }\n', {})).toBeNull()

@@ -414,7 +414,9 @@ export default function AlertUserView() {
       clearSaveStatus()
       return
     }
-    if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
+    const waited = await afterSaveInFlight()
+    if (waited === false) return
+    if (!waited && dirty && !frozenSource && !(await confirmDiscardEdits())) return
     const { path, chart } = selection
     setViewedPaths(viewing || [path])
     setSelectedFolder(path)
@@ -437,7 +439,9 @@ export default function AlertUserView() {
   async function handleViewedChange(keys) {
     const next = [...viewed.filter(p => keys.includes(p)), ...keys.filter(k => !viewed.includes(k))]
     if (next.length === 0) return
-    if (!multi && next.length > 1 && dirty && !frozenSource) {
+    const waited = await afterSaveInFlight()
+    if (waited === false) return
+    if (!waited && !multi && next.length > 1 && dirty && !frozenSource) {
       if (!(await confirmDiscardEdits())) return
       setDirty(false)
       setReloadKey(k => k + 1)
@@ -560,17 +564,37 @@ export default function AlertUserView() {
   // changed since. A ref, so a double click sees the first.
   const savingRef = useRef(false)
   const [saving, setSaving] = useState(false)
+  const saveInFlight = useRef(null)
   async function oneSaveAtATime(save) {
     if (savingRef.current) return false
     savingRef.current = true
     setSaving(true)
+    const sent = save()
+    saveInFlight.current = sent
     try {
-      return await save()
+      return await sent
     } finally {
       savingRef.current = false
+      saveInFlight.current = null
       setSaving(false)
     }
   }
+  // Another deployment opened while a save is on its way waits for it: the
+  // edits are being saved, not discarded, and its answer is about this one.
+  // null when no save was on its way; else whether it went through.
+  async function afterSaveInFlight() {
+    const sent = saveInFlight.current
+    if (!sent) return null
+    try {
+      return !!(await sent)
+    } catch {
+      return false
+    }
+  }
+  // The deployment on screen now: a save's answer for one left since is
+  // not put on the page.
+  const shownFolder = useRef(selectedFolder)
+  shownFolder.current = selectedFolder
 
   const handleSave = () => oneSaveAtATime(saveSingle)
   async function saveSingle() {
@@ -582,7 +606,9 @@ export default function AlertUserView() {
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...merged }
       : merged
-    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder, loadedVersion)
+    const folder = selectedFolder
+    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), folder, loadedVersion)
+    if (shownFolder.current !== folder) return savedElsewhere(folder, result)
     if (!result.ok) {
       clearSaveStatus()
       reportSaveFailure(result)
@@ -597,13 +623,26 @@ export default function AlertUserView() {
     return true
   }
 
+  // The answer of a save for a deployment no longer open: said, and nothing
+  // of it put on the page, which is another deployment's now.
+  function savedElsewhere(folder, result) {
+    if (!result.ok) reportSaveFailure({ ...result, error: `${folder}: ${result.error || 'Save failed'}` })
+    else {
+      message.success(`${folder} saved`)
+      warnSyncFailed(result)
+    }
+    return result.ok
+  }
+
   const handleOverviewSave = () => oneSaveAtATime(saveOverview)
   async function saveOverview() {
     if (!selectedChart || !selectedFolder) return false
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...allValues }
       : allValues
-    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder, loadedVersion)
+    const folder = selectedFolder
+    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), folder, loadedVersion)
+    if (shownFolder.current !== folder) return savedElsewhere(folder, result)
     if (!result.ok) {
       clearSaveStatus()
       reportSaveFailure(result)

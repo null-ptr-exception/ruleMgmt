@@ -490,8 +490,13 @@ export default function TemplateDevEditor() {
 
   useEffect(() => { loadCharts() }, [loadCharts])
 
+  // Only the latest read lands: one for a chart picked before, answered
+  // later, would put that chart's rules under the one picked since.
+  const loadSeq = useRef(0)
   const loadChart = useCallback(async (chart) => {
+    const seq = ++loadSeq.current
     const info = await getChartInfo(chart)
+    if (seq !== loadSeq.current) return
     setLoadError(info.failed ? info.error || 'The chart cannot be opened' : null)
     if (info.failed) {
       // Nothing of the chart before stays: not its model, its problems, its

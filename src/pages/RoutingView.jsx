@@ -160,7 +160,9 @@ export default function RoutingView() {
   })
 
   async function openShared() {
-    if (dirty && !readOnly && !(await confirmDiscardEdits())) return
+    const waited = await afterSaveInFlight()
+    if (waited === false) return
+    if (!waited && dirty && !readOnly && !(await confirmDiscardEdits())) return
     setDirty(false)
     setShowShared(true)
   }
@@ -175,7 +177,9 @@ export default function RoutingView() {
       setDirty(false)
       return
     }
-    if (dirty && !readOnly && !(await confirmDiscardEdits())) return
+    const waited = await afterSaveInFlight()
+    if (waited === false) return
+    if (!waited && dirty && !readOnly && !(await confirmDiscardEdits())) return
     setAddedLabels([])
     if (selection.path !== selectedFolder) {
       setLoaded(null)
@@ -256,15 +260,31 @@ export default function RoutingView() {
   // click sees the first.
   const savingRef = useRef(false)
   const [saving, setSaving] = useState(false)
+  const saveInFlight = useRef(null)
   async function oneSaveAtATime(save) {
     if (savingRef.current) return false
     savingRef.current = true
     setSaving(true)
+    const sent = save()
+    saveInFlight.current = sent
     try {
-      return await save()
+      return await sent
     } finally {
       savingRef.current = false
+      saveInFlight.current = null
       setSaving(false)
+    }
+  }
+  // Leaving while a save is on its way waits for it: the edits are being
+  // saved, not discarded, so there is nothing to ask. null when no save was
+  // on its way; else whether it went through (a failed one keeps the page).
+  async function afterSaveInFlight() {
+    const sent = saveInFlight.current
+    if (!sent) return null
+    try {
+      return !!(await sent)
+    } catch {
+      return false
     }
   }
 
@@ -306,12 +326,13 @@ export default function RoutingView() {
       const result = await removeRouting(selectedChart, deployment, folder)
       if (!result.ok) {
         reportSaveFailure(result)
-        return
+        return false
       }
       if (!warnSyncFailed(result, 'Routing removed')) message.success('Routing removed')
-      if (shownFolder.current !== folder) return
+      if (shownFolder.current !== folder) return true
       setReloadKey(k => k + 1)
       await loadRouting()
+      return true
     })
   }
 

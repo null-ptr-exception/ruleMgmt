@@ -192,9 +192,10 @@ test('an edit made right after Saved at is kept: the page is locked until routin
   await expect(configs.getByTestId('shared-tag-relay-webhook')).toHaveCount(0)
 })
 
-// Another deployment opened while a save is on its way: the page shows that
+// Another deployment opened while a save is on its way: the page waits for
+// the save, without asking to discard what is being saved, then shows that
 // deployment's own routing, and no "Saved at" — it was not the one saved.
-test('another deployment opened during a save shows its own routing, not the saved one\'s', async ({ page, request }) => {
+test('another deployment opened during a save waits for it, then shows its own routing', async ({ page, request }) => {
   expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY } })).ok()).toBeTruthy()
   expect((await request.put(routingUrl(A), { data: { routing: 'labels:\n  severity: [critical]\nconfigs:\n  relay-webhook: { shared: true }\n' } })).ok()).toBeTruthy()
   expect((await request.put(routingUrl(B), { data: { routing: 'labels:\n  severity: [critical]\nconfigs:\n  b-mail: { type: email, to: b@example.com }\n' } })).ok()).toBeTruthy()
@@ -218,17 +219,19 @@ test('another deployment opened during a save shows its own routing, not the sav
   await expect.poll(() => putHeld).toBe(true)
   await expect(page.getByText('Saving…')).toBeVisible()
 
-  // B, while A's save is held. The page asks first, as for any unsaved edit.
+  // B, while A's save is held: the page waits for the save, and does not
+  // ask to discard edits that are being saved.
   await page.locator('.ant-tree .ant-tree-treenode').filter({ has: page.locator('.ant-tag') })
     .filter({ hasText: B.split('/').pop() }).first().locator('.ant-tree-node-content-wrapper').click()
-  await page.getByRole('button', { name: 'Discard' }).click()
+  await expect(page.getByRole('heading', { name: `${A} / Routing` })).toBeVisible()
+  await expect(page.getByText('Saving…')).toBeVisible()
+
+  release()
   await expect(page.getByRole('heading', { name: `${B} / Routing` })).toBeVisible()
   await expect(configs).toContainText('b-mail')
-
-  const readsOfA = page.waitForResponse(r => r.url().includes('/a/routing') && r.request().method() === 'GET', { timeout: 3000 }).catch(() => null)
-  release()
-  await expect.poll(async () => (yaml.load(await onDisk(A, 'routing.yaml')).cells || []).length).toBe(1)
-  await readsOfA
+  await expect(page.getByText('Discard unsaved changes?')).toHaveCount(0)
+  expect((yaml.load(await onDisk(A, 'routing.yaml')).cells || []).length).toBe(1)
+  await page.waitForLoadState('networkidle')
   await expect(page.getByText('Saving…')).toHaveCount(0)
   await expect(page.getByRole('heading', { name: `${B} / Routing` })).toBeVisible()
   await expect(configs).toContainText('b-mail')
@@ -316,6 +319,18 @@ for (const when of ['while the first is on its way', 'before the file is read ag
     expect(yaml.load(await fs.readFile(SHARED, 'utf-8'))).toEqual({ configs: { z: { type: 'email', to: 'z@example.com' } } })
   })
 }
+
+test('the last shared config can be deleted', async ({ page }) => {
+  await fs.mkdir(path.dirname(SHARED), { recursive: true })
+  await fs.writeFile(SHARED, '# kept\nconfigs:\n  x: { type: email, to: x@example.com }\n')
+  await openShared(page)
+  await page.getByRole('button', { name: 'Delete x' }).click()
+  await expect(page.getByText('No shared configs yet')).toBeVisible()
+  await expect(page.locator('.ant-modal-confirm-error')).toHaveCount(0)
+  const text = await fs.readFile(SHARED, 'utf-8')
+  expect(yaml.load(text)).toEqual({ configs: {} })
+  expect(text).toContain('# kept')
+})
 
 test('a deployment\'s own config of the same name: replaced at once when the same, asked when not', async ({ page, request }) => {
   expect((await putShared(request, { 'relay-webhook': { type: 'webhook', url: RELAY }, 'ops-email': { type: 'email', to: 'ops@example.com' } })).ok()).toBeTruthy()

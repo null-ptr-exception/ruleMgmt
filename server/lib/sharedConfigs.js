@@ -336,8 +336,9 @@ function pairText(name, config, flow, indent) {
  * out removed, the changed ones written again, new ones added after the
  * last — and every other byte as it was: comments, layout, the configs not
  * changed. A changed or added config is written in the style of the one it
- * replaces, or of the last one. Null when the text has no configs map with
- * a config in it to follow: the caller writes the file anew.
+ * replaces, or of the last one; with none left, `configs: {}`. Null when
+ * the text has no configs map with a config in it to follow: the caller
+ * writes the file anew.
  */
 export function updateConfigsInText(text, configs) {
   const doc = parseDocument(text)
@@ -363,6 +364,13 @@ export function updateConfigsInText(text, configs) {
     const at = spanOf(last)[1]
     const insert = added.map(n => pairText(n, configs[n], flowOf(last), indentOf(last))).join('')
     edits.push({ from: at, to: at, insert: (text.slice(0, at).endsWith('\n') ? '' : '\n') + insert })
+  }
+  // Every config taken out: the map is written empty, `configs: {}`. Left
+  // as a bare `configs:` it would read as null, which the file may not hold.
+  if (!Object.keys(configs).length) {
+    const key = doc.contents.items.find(p => isScalar(p.key) && p.key.value === 'configs').key
+    const colon = text.indexOf(':', key.range[1])
+    edits.push({ from: colon + 1, to: colon + 1, insert: ' {}' })
   }
   let out = text
   for (const e of edits.sort((a, b) => b.from - a.from)) out = out.slice(0, e.from) + e.insert + out.slice(e.to)

@@ -1,0 +1,44 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # /data warns over 80 and is critical over 95
+      - series: 'disk_used_pct{mount="/data", instance="i1"}'
+        values: '80x20'
+      - series: 'disk_used_pct{mount="/data", instance="i2"}'
+        values: '95x20'
+      - series: 'disk_used_pct{mount="/data", instance="i3"}'
+        values: '96x20'
+      # /logs warns over 70 and has no critical threshold
+      - series: 'disk_used_pct{mount="/logs", instance="i1"}'
+        values: '70x20'
+      - series: 'disk_used_pct{mount="/logs", instance="i2"}'
+        values: '99x20'
+      # /boot warns over 0
+      - series: 'disk_used_pct{mount="/boot", instance="i1"}'
+        values: '0x20'
+      - series: 'disk_used_pct{mount="/boot", instance="i2"}'
+        values: '1x20'
+      # no thresholds: no rule
+      - series: 'disk_used_pct{mount="/tmp", instance="i1"}'
+        values: '100x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: DiskFull
+        exp_alerts: []
+      # only /data's row has a team
+      - eval_time: 5m
+        alertname: DiskFull
+        exp_alerts:
+          - exp_labels: { severity: warning, team: storage, mount: /data, instance: i2 }
+            exp_annotations: { summary: "/data is 95% full" }
+          - exp_labels: { severity: warning, team: storage, mount: /data, instance: i3 }
+            exp_annotations: { summary: "/data is 96% full" }
+          - exp_labels: { severity: critical, team: storage, mount: /data, instance: i3 }
+            exp_annotations: { summary: "/data is 96% full" }
+          - exp_labels: { severity: warning, mount: /logs, instance: i2 }
+            exp_annotations: { summary: "/logs is 99% full" }
+          - exp_labels: { severity: warning, mount: /boot, instance: i2 }
+            exp_annotations: { summary: "/boot is 1% full" }

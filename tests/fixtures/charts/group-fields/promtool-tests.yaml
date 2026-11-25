@@ -1,0 +1,75 @@
+# rule_files is filled in by the harness: one file per rendered object.
+# promtool evaluates every group at this interval, so it is the group's own.
+evaluation_interval: 30s
+
+tests:
+  - interval: 1m
+    input_series:
+      # no sample until 10m
+      - series: 'up{job="api"}'
+        values: '_x10 1x30'
+      # there throughout: never absent
+      - series: 'up{job="worker"}'
+        values: '1x40'
+    alert_rule_test:
+      # for: 2m
+      - eval_time: 90s
+        alertname: JobAbsent
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: JobAbsent
+        exp_alerts:
+          - exp_labels: { severity: warning, job: api }
+      # back at 10m, kept firing for 5m
+      - eval_time: 14m30s
+        alertname: JobAbsent
+        exp_alerts:
+          - exp_labels: { severity: warning, job: api }
+      - eval_time: 15m
+        alertname: JobAbsent
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: JobFlapping
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      # The 4th change at 4m, the 5th and last at 5m. The last 10m hold more
+      # than 3 until 11m.
+      - series: 'up{job="api", instance="api-1"}'
+        values: '0 1 0 1 0 1x40'
+      - series: 'up{job="worker", instance="worker-1"}'
+        values: '0 1 0 1 0 1x40'
+      # 3 changes are not more than 3
+      - series: 'up{job="worker", instance="worker-2"}'
+        values: '0 1 0 1x40'
+    alert_rule_test:
+      # for: 1m
+      - eval_time: 4m30s
+        alertname: JobFlapping
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: JobFlapping
+        exp_alerts:
+          - exp_labels: { severity: info, job: api, instance: api-1 }
+          - exp_labels: { severity: info, job: worker, instance: worker-1 }
+      - eval_time: 11m
+        alertname: JobFlapping
+        exp_alerts:
+          - exp_labels: { severity: info, job: api, instance: api-1 }
+          - exp_labels: { severity: info, job: worker, instance: worker-1 }
+      # Over at 11m30s: worker has no linger and resolves at once, api's is 15m.
+      - eval_time: 11m30s
+        alertname: JobFlapping
+        exp_alerts:
+          - exp_labels: { severity: info, job: api, instance: api-1 }
+      - eval_time: 26m
+        alertname: JobFlapping
+        exp_alerts:
+          - exp_labels: { severity: info, job: api, instance: api-1 }
+      - eval_time: 26m30s
+        alertname: JobFlapping
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: JobAbsent
+        exp_alerts: []

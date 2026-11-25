@@ -17,10 +17,13 @@
  *                                and annotations
  *   object-meta.json         optional input — the site's RULE_OBJECT_* for
  *                                this case, as {labels, labelsByProfile, …}
- *   promtool-tests.yaml      (3) optional — `promtool test rules` against the
- *                                rendered rules, with the promtool the case's
- *                                groups are checked by: Prometheus 2.x's, or
- *                                3.x's (PROMTOOL3_BIN) for prometheus3 groups
+ *   promtool-tests.yaml      (3) `promtool test rules` against the rendered
+ *                                rules, with the promtool the case's groups
+ *                                are checked by: Prometheus 2.x's, or 3.x's
+ *                                (PROMTOOL3_BIN) for prometheus3 groups.
+ *                                Required of every case promtool reads a
+ *                                group of; another is listed with its reason
+ *                                in tests/integration/generator-blind.test.js
  *
  * Layer (3) also runs `vmalert -dryRun` on every rendered object whose
  * profile says `validate: vmalert` (LogsQL and MetricsQL) — no file needed: the case's

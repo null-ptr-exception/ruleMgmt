@@ -1,0 +1,31 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # The first and last rows of the first object, and the second object's
+      # only row: all down.
+      - series: 'up{instance="host-001"}'
+        values: '0x10'
+      - series: 'up{instance="host-100"}'
+        values: '0x10'
+      - series: 'up{instance="host-101"}'
+        values: '0x10'
+      # up: never fires
+      - series: 'up{instance="host-050"}'
+        values: '1x10'
+      # down, but no row
+      - series: 'up{instance="host-102"}'
+        values: '0x10'
+    alert_rule_test:
+      # for: 1m
+      - eval_time: 0m
+        alertname: InstanceDown
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: InstanceDown
+        exp_alerts:
+          - exp_labels: { severity: critical, instance: host-001 }
+          - exp_labels: { severity: critical, instance: host-100 }
+          - exp_labels: { severity: critical, instance: host-101 }

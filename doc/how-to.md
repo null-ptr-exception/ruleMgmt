@@ -1410,7 +1410,8 @@ to block scalars was one such change, and writing number columns through
 `toJson`, so `1000000` no longer renders as `1e+06`, another), every migrated
 chart turns `stale` and
 commits are refused until its products are regenerated. Coming from 1.x, see
-[upgrade-2.0.md](upgrade-2.0.md) instead. A change to the routing resource's
+[upgrade-2.0.md](upgrade-2.0.md) instead; from 2.x to 3.0, follow
+[upgrade-3.0.md](upgrade-3.0.md). A change to the routing resource's
 format, or to the object labels, turns every deployment's routing behind the
 same way: commit, and use **Regenerate** in the refusal (see
 [Commit](#commit)).

@@ -37,7 +37,7 @@ async function startServer() {
   const port = await freePort()
   base = `http://127.0.0.1:${port}`
   output = ''
-  child = spawn(process.execPath, ['--import', path.join(ROOT, 'tests/coverage/on-sigterm.mjs'), '--preserve-symlinks', '--preserve-symlinks-main', path.join(app, 'server.js')], {
+  child = spawn(process.execPath, ['--import', path.join(ROOT, 'tests/coverage/preload.mjs'), '--preserve-symlinks', '--preserve-symlinks-main', path.join(app, 'server.js')], {
     env: { ...process.env, PORT: String(port), GITOPS_DIR: gitops, LOG_LEVEL: 'warn', JUPYTERHUB_SERVICE_PREFIX: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })

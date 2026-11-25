@@ -28,7 +28,7 @@ describe('the schema writers', () => {
     await fs.mkdir(path.join(tmp, 'schema'))
     await fs.cp(path.join(ROOT, 'scripts'), path.join(tmp, 'scripts'), { recursive: true })
     for (const n of ['src', 'config', 'node_modules', 'package.json']) await fs.symlink(path.join(ROOT, n), path.join(tmp, n))
-    const r = spawnSync('node', [path.join(tmp, 'scripts', `${name}.mjs`)], { encoding: 'utf-8' })
+    const r = spawnSync('node', ['--import', path.join(ROOT, 'tests/coverage/preload.mjs'), path.join(tmp, 'scripts', `${name}.mjs`)], { encoding: 'utf-8' })
     expect(r.status, r.stderr).toBe(0)
     expect((await fs.readdir(path.join(tmp, 'schema'))).sort()).toEqual(files)
     for (const f of files) {
@@ -44,7 +44,7 @@ describe('dev-api', () => {
   it('listens on API_PORT, whatever PORT is', async () => {
     const app = await appFolder(tmp)
     const [port, api] = [await freePort(), await freePort()]
-    const child = spawn(process.execPath, ['--import', path.join(ROOT, 'tests/coverage/on-sigterm.mjs'), '--preserve-symlinks', '--preserve-symlinks-main', path.join(app, 'scripts/dev-api.mjs')], {
+    const child = spawn(process.execPath, ['--import', path.join(ROOT, 'tests/coverage/preload.mjs'), '--preserve-symlinks', '--preserve-symlinks-main', path.join(app, 'scripts/dev-api.mjs')], {
       env: { ...process.env, PORT: String(port), API_PORT: String(api), GITOPS_DIR: path.join(tmp, 'repo'), JUPYTERHUB_SERVICE_PREFIX: '' }, stdio: ['ignore', 'pipe', 'pipe'],
     })
     let output = ''

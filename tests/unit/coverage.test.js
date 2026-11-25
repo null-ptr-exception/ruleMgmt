@@ -8,9 +8,11 @@ import path from 'path'
 import { pathToFileURL } from 'url'
 import { build, resolveConfig } from 'vite'
 import { V8CoverageProvider } from '@vitest/coverage-v8/dist/provider.js'
-import { ROOT, addNode, addPage, assertSameSources, builtPlaces, counter, fromVitest, linesOf, listProblems, parseList, pctText, summary, table } from '../coverage/lib.mjs'
+import { INCLUDE, EXCLUDE, ROOT, addNode, addPage, assertSameSources, builtChunks, builtPlaces, counter, fromVitest, linesOf, listProblems, parseList, pctText, summary, table } from '../coverage/lib.mjs'
 import { printAll, printUnit } from '../coverage/report.mjs'
 import { startServer } from '../helpers/startServer.js'
+
+const PRELOAD = path.join(ROOT, 'tests/coverage/preload.mjs')
 
 let tmp
 beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage-')) })
@@ -71,15 +73,32 @@ describe('a Node process', () => {
     expect(linesOf(files[rel])).toEqual({ total: 6, covered: 5, missing: [8] })
   })
 
-  it('that ran another text under the same name is not counted, and said', async () => {
+  // V8's data holds no text. A process that runs a copy or a link tells what
+  // it read (preload.mjs); a copy that does not tell is not counted.
+  it.each([
+    ['of the same length', 'console.log(2)\n', true],
+    ['of another length', 'console.log(1) // longer\n', true],
+    ['that is the same, but not told', 'console.log(1)\n', false],
+  ])('that ran a text elsewhere %s is not counted, and said', async (_, text, told) => {
     fs.writeFileSync(path.join(tmp, 'a.mjs'), 'console.log(1)\n')
     const files = await byVitest(path.join(tmp, 'a.mjs'), [], tmp)
     fs.mkdirSync(path.join(tmp, 'old'))
-    fs.writeFileSync(path.join(tmp, 'old/a.mjs'), 'console.log(1) // longer\n')
+    fs.writeFileSync(path.join(tmp, 'old/a.mjs'), text)
     const dir = path.join(tmp, 'v8')
-    ran([path.join(tmp, 'old/a.mjs')], dir)
+    ran([...(told ? ['--import', PRELOAD] : []), path.join(tmp, 'old/a.mjs')], dir)
     expect(addNode(files, dir, tmp)).toMatchObject({ scripts: 0, otherText: [expect.stringContaining('/old/a.mjs')] })
     expect(linesOf(files['a.mjs']).covered).toBe(0)
+  })
+
+  it('that ran the same text elsewhere, and told, is counted', async () => {
+    fs.writeFileSync(path.join(tmp, 'a.mjs'), 'console.log(1)\n')
+    const files = await byVitest(path.join(tmp, 'a.mjs'), [], tmp)
+    fs.mkdirSync(path.join(tmp, 'copy'))
+    fs.copyFileSync(path.join(tmp, 'a.mjs'), path.join(tmp, 'copy/a.mjs'))
+    const dir = path.join(tmp, 'v8')
+    ran(['--import', PRELOAD, path.join(tmp, 'copy/a.mjs')], dir)
+    expect(addNode(files, dir, tmp)).toMatchObject({ scripts: 1, otherText: [] })
+    expect(linesOf(files['a.mjs']).covered).toBe(1)
   })
 
   it('killed while it wrote is said, and does not stop the rest', () => {
@@ -89,7 +108,7 @@ describe('a Node process', () => {
 
   it('stopped by SIGTERM writes its coverage, and still ends by that signal', async () => {
     const dir = path.join(tmp, 'v8')
-    const child = spawn(process.execPath, ['--import', path.join(ROOT, 'tests/coverage/on-sigterm.mjs'), '-e', 'setInterval(() => {}, 1000); console.log("up")'], { env: { ...process.env, NODE_V8_COVERAGE: dir }, stdio: ['ignore', 'pipe', 'inherit'] })
+    const child = spawn(process.execPath, ['--import', PRELOAD, '-e', 'setInterval(() => {}, 1000); console.log("up")'], { env: { ...process.env, NODE_V8_COVERAGE: dir }, stdio: ['ignore', 'pipe', 'inherit'] })
     await new Promise(r => child.stdout.once('data', r))
     const ended = new Promise(r => child.once('exit', (code, signal) => r({ code, signal })))
     child.kill()
@@ -168,6 +187,58 @@ describe('the page', () => {
     expect(linesOf(files['src/a.jsx'])).toEqual({ total: 14, covered: 10, missing: [6, 7, 12, 18] })
   })
 
+  // Through vitest's own conversion (fromVitest), not statements written here:
+  // where a statement ends decides what it may be read from.
+  it('a function the build left out is not counted, whatever runs after it', async () => {
+    const source = [
+      'export function leftOut(a) {', // 1
+      '  const x = a', // 2
+      '    ? { ...a, b: 1 }', // 3
+      '    : { c: 2 }', // 4
+      '  for (const k of Object.keys(x)) {', // 5
+      '    x[k] = 1', // 6
+      '  }', // 7
+      '  return x', // 8
+      '}', // 9
+      'export function runs() {', // 10
+      '  globalThis.ran = true', // 11
+      '}', // 12
+      '',
+    ].join('\n')
+    fs.mkdirSync(path.join(tmp, 'src'))
+    const at = path.join(tmp, 'src/a.js')
+    fs.writeFileSync(at, source)
+    fs.writeFileSync(path.join(tmp, 'src/main.js'), "import { runs } from './a.js'\nruns()\n")
+    await build({ configFile: false, root: tmp, logLevel: 'silent', build: { minify: true, sourcemap: 'hidden', outDir: path.join(tmp, 'dist'), rolldownOptions: { input: path.join(tmp, 'src/main.js'), output: { entryFileNames: 'assets/a.js' } } } })
+    const chunks = builtChunks(path.join(tmp, 'dist'), tmp)
+    fs.copyFileSync(path.join(tmp, 'dist/assets/a.js'), path.join(tmp, 'a.mjs'))
+    const count = counter(ran([path.join(tmp, 'a.mjs')]).find(s => s.url.endsWith('/a.mjs')).functions)
+    const page = path.join(tmp, 'page')
+    fs.mkdirSync(page)
+    fs.writeFileSync(path.join(page, '1.json'), JSON.stringify({ 'a.js': chunks['a.js'].map(p => count(p.at)) }))
+    // As vitest gives them for a file it transformed: the end of a statement
+    // that ends its line has no column.
+    const provider = new V8CoverageProvider()
+    provider.options = {}
+    const json = await provider.remapCoverage(pathToFileURL(at).href, 0, { code: source }, [])
+    for (const s of Object.values(json[at].statementMap)) {
+      if (s.end.column >= source.split('\n')[s.end.line - 1].length) s.end.column = null
+    }
+    const files = fromVitest(json, tmp)
+    addPage(files, page, chunks, tmp)
+    expect(linesOf(files['src/a.js'])).toEqual({ total: 5, covered: 1, missing: [2, 5, 6, 8] })
+  })
+
+  it('a build made from other sources than these is refused, naming them', async () => {
+    const { code } = await builtAndRun()
+    expect(code).not.toBe('')
+    expect(() => builtChunks(path.join(tmp, 'dist'), tmp)).not.toThrow()
+    fs.appendFileSync(path.join(tmp, 'src/a.jsx'), '// changed since\n')
+    expect(() => builtChunks(path.join(tmp, 'dist'), tmp)).toThrow(/dist.* other sources.*src\/a\.jsx/)
+    fs.rmSync(path.join(tmp, 'src/a.jsx'))
+    expect(() => builtChunks(path.join(tmp, 'dist'), tmp)).toThrow('src/a.jsx')
+  })
+
   it('that ran another build is refused, not miscounted', async () => {
     const { places, page } = await builtAndRun()
     expect(() => addPage({}, page, { 'a.js': places.slice(1) }, tmp)).toThrow('another build')
@@ -207,6 +278,12 @@ describe('the thresholds', () => {
     expect(at(80).said).toContain('| .jsx | 1 | 400 | 0.0% |')
     expect(at(79).exit).toBe(1)
     expect(at(79).said).toContain('79.0% of the lines outside .jsx')
+  })
+
+  it.each([['no process', { processes: 0, scripts: 0 }], ['processes, but none of this repo\'s scripts', { processes: 3, scripts: 0 }]])('unit: %s read fails, however high the rest', (_, read) => {
+    const r = silent(() => printUnit({ 'server/a.js': fileWith(100, 100) }, { ...NONE, ...read }))
+    expect(r.exit).toBe(1)
+    expect(r.said).toContain('the processes the tests start')
   })
 
   it('with E2E: under 80% of all lines fails', () => {
@@ -250,6 +327,27 @@ describe('what is counted', () => {
     expect(() => assertSameSources(files, tmp)).not.toThrow()
     fs.writeFileSync(path.join(tmp, 'a.js'), 'y()\n')
     expect(() => assertSameSources(files, tmp)).toThrow('another version of: a.js')
+  })
+
+  it('a file that should be counted and is not in the unit coverage stops the merge', () => {
+    fs.mkdirSync(path.join(tmp, 'server/__tests__'), { recursive: true })
+    fs.writeFileSync(path.join(tmp, 'server/a.js'), 'x()\n')
+    fs.writeFileSync(path.join(tmp, 'server/__tests__/a.test.js'), 'x()\n')
+    const files = fromVitest({ [path.join(tmp, 'server/a.js')]: { statementMap: {}, s: {} } }, tmp)
+    expect(() => assertSameSources(files, tmp)).not.toThrow()
+    fs.writeFileSync(path.join(tmp, 'server/added.js'), 'x()\n')
+    expect(() => assertSameSources(files, tmp)).toThrow('no coverage of: server/added.js')
+  })
+
+  it('takes every source, and no test or fixture', () => {
+    const now = fs.globSync(INCLUDE, { cwd: ROOT, exclude: EXCLUDE })
+    expect(now).toEqual(expect.arrayContaining(['server.js', 'src/App.jsx', 'scripts/gen-rules.mjs', 'server/repo/write.js']))
+    expect(now.filter(f => /__tests__|__fixtures__|node_modules/.test(f))).toEqual([])
+  })
+
+  it('test:coverage starts with none of the last run\'s files', () => {
+    const unit = fs.readFileSync(path.join(ROOT, 'tests/coverage/unit.mjs'), 'utf-8')
+    expect(unit).toMatch(/for \(const name of \['children', 'vitest', 'unit\.json'\]\) fs\.rmSync/)
   })
 
   it('no source asks to be left out of it', () => {

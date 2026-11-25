@@ -168,20 +168,28 @@ test.describe('Git Panel', () => {
     await expect(page.locator('text=Select a file to view diff')).toBeVisible()
   })
 
-  test('clicking a file in History shows diff viewer', async ({ page }) => {
+  test('clicking a file in History shows its diff in that commit', async ({ page }) => {
+    const [file, sha] = ['deployments/t/a/values.yaml', '1234567'.padEnd(40, '0')]
+    await page.route('**/api/v2/git/log?*', route => route.fulfill({ json: [
+      { sha, shortSha: '1234567', message: 'e2e one commit', author: 'alice', date: new Date().toISOString(), files: [{ file, status: 'M' }] },
+    ] }))
+    let asked
+    await page.route('**/api/v2/git/diff?*', route => {
+      asked = Object.fromEntries(new URL(route.request().url()).searchParams)
+      return route.fulfill({ json: { file, original: 'warn: 80\n', modified: 'warn: 90\n' } })
+    })
     await page.goto('/')
     await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
     await page.locator('text=History').click()
-
-    const commitRow = page.locator('[style*="cursor: pointer"]').filter({ hasText: /[a-f0-9]{7}/ }).first()
-    await commitRow.click()
-
-    const fileItem = page.locator('[style*="cursor: pointer"]').filter({ hasText: /\.yaml/ }).first()
-    if (await fileItem.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await fileItem.click()
-      await expect(page.locator('text=Select a file to view diff')).not.toBeVisible()
-    }
+    await page.getByText('e2e one commit', { exact: true }).click()
+    await page.getByText(file, { exact: true }).click()
+    const diff = page.locator('.cm-mergeView')
+    await expect(diff).toContainText('warn: 80')
+    await expect(diff).toContainText('warn: 90')
+    await expect(page.getByText('Select a file to view diff')).toHaveCount(0)
+    expect(asked).toEqual({ file, ref: sha })
   })
+
   // Regenerate lists what it could not make. A reason that starts with the
   // deployment (one on a _common reached through a link made by hand) is
   // shown as it is: the path once. The answers are stubbed: nothing of the

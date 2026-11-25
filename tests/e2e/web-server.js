@@ -10,7 +10,7 @@
 // connection open longer than that.
 import http from 'node:http'
 // For npm run test:e2e:coverage; nothing without it.
-import '../coverage/on-sigterm.mjs'
+import '../coverage/preload.mjs'
 
 const listen = http.Server.prototype.listen
 http.Server.prototype.listen = function (...args) {

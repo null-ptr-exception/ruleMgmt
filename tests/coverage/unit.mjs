@@ -10,7 +10,7 @@ import { printUnit } from './report.mjs'
 
 const OUT = path.join(ROOT, 'coverage')
 const CHILDREN = path.join(OUT, 'children')
-for (const name of ['children', 'unit.json']) fs.rmSync(path.join(OUT, name), { recursive: true, force: true })
+for (const name of ['children', 'vitest', 'unit.json']) fs.rmSync(path.join(OUT, name), { recursive: true, force: true })
 
 const run = spawnSync(process.execPath, [path.join(ROOT, 'node_modules/vitest/vitest.mjs'), 'run', '--coverage', ...process.argv.slice(2)], {
   cwd: ROOT, stdio: 'inherit', env: { ...process.env, COVERAGE_CHILDREN: CHILDREN },

@@ -23,8 +23,12 @@ export function printUnit(files, read) {
   const s = summary(files)
   nodeSaid(read)
   say('Coverage (lines), unit and integration', table(s))
-  return verdict(pct(s.rest) < THRESHOLD
-    ? [`${pctText(s.rest)} of the lines outside .jsx are covered by unit and integration tests: ${THRESHOLD}% is needed`] : [])
+  const problems = []
+  // Never empty when every test ran: data that was not written must not look
+  // like code that was not run.
+  if (!read.processes || !read.scripts) problems.push('nothing was read of the processes the tests start (coverage/children)')
+  if (pct(s.rest) < THRESHOLD) problems.push(`${pctText(s.rest)} of the lines outside .jsx are covered by unit and integration tests: ${THRESHOLD}% is needed`)
+  return verdict(problems)
 }
 
 export function printAll(before, files, list, server, page) {

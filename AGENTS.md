@@ -92,8 +92,9 @@ Lines of `src/`, `server/`, `scripts/` and `server.js`: every file, imported by 
 - **`npm run test:coverage`** (the `lint-and-test` job) counts unit and integration tests, and the Node processes they start (the command-line tools, `server.js`; `NODE_V8_COVERAGE`). It fails under 80% of the lines outside `.jsx`, which only a browser runs.
 - **`npm run test:e2e:coverage`** (the `e2e` job) adds what the E2E server and its pages ran to `coverage/unit.json`. It fails under 80% of all lines, and when `tests/coverage/under-80.tsv` is not true: each file under 80% is listed there with its reason, and no other is. Coverage fails it only when every test passed. `node tests/coverage/e2e.mjs --report` judges the last run again.
 - `build:coverage` is the build that ships with source maps beside it (the same files byte for byte); `npm run build` writes no maps.
+- A line counts as covered when any statement that starts on it ran; only `.js`, `.jsx` and `.mjs` are counted (`scripts/*.py` and `*.sh` are not).
 - The lines are vitest's (`fromVitest`): the other sources only say which of them ran, so they never change how many there are.
-- A server a test starts and stops with a signal is preloaded with `tests/coverage/on-sigterm.mjs`, or what it ran is lost; a process killed with SIGKILL always loses it. A spec imports `test` from `tests/e2e/test.js`, or what its page ran is not counted.
+- A process a test stops with a signal, or runs from a copy or a folder of links, is preloaded with `tests/coverage/preload.mjs`, or what it ran is lost (it tells the text it read: V8's data holds none); a process killed with SIGKILL always loses it. A spec imports `test` from `tests/e2e/test.js`, or what its page ran is not counted.
 - A file is not brought over 80% by a test that asserts nothing: write what the code must do, or list the file with its reason.
 
 ## Disk boundary

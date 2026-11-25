@@ -14,6 +14,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
+import { pathToFileURL } from 'node:url'
 import { parseSync, Visitor } from 'vite'
 
 export const ROOT = path.resolve(import.meta.dirname, '../..')
@@ -41,7 +42,9 @@ export function fromVitest(json, root = ROOT) {
     const rel = path.relative(root, file).split(path.sep).join('/')
     const source = fs.readFileSync(path.join(root, rel), 'utf-8')
     const starts = lineStarts(source)
-    const offset = p => Math.min(starts[p.line - 1] + (Number.isFinite(p.column) ? p.column : Infinity), source.length)
+    // No column (null, or Infinity before it was JSON): the end of that line.
+    const lineEnd = line => line < starts.length ? starts[line] - 1 : source.length
+    const offset = p => Number.isFinite(p.column) ? Math.min(starts[p.line - 1] + p.column, lineEnd(p.line)) : lineEnd(p.line)
     const keys = Object.keys(cov.statementMap)
     out[rel] = {
       sha: sha(source),
@@ -52,12 +55,14 @@ export function fromVitest(json, root = ROOT) {
   return out
 }
 
-/** Throws when `files` (fromVitest) was made from other sources than these. */
+/** Throws when `files` (fromVitest) was made from other sources than these, or lacks one that counts. */
 export function assertSameSources(files, root = ROOT) {
   const other = Object.entries(files).filter(([rel, f]) => {
     try { return sha(fs.readFileSync(path.join(root, rel), 'utf-8')) !== f.sha } catch { return true }
   }).map(([rel]) => rel)
   if (other.length) throw new Error(`the unit coverage was made from another version of: ${other.join(', ')} — run npm run test:coverage again`)
+  const lacking = fs.globSync(INCLUDE, { cwd: root, exclude: EXCLUDE }).map(f => f.split(path.sep).join('/')).filter(f => !files[f])
+  if (lacking.length) throw new Error(`no coverage of: ${lacking.join(', ')} — run npm run test:coverage again`)
 }
 
 /**
@@ -95,8 +100,9 @@ const lengthOf = functions => functions.reduce((m, f) => f.ranges.reduce((n, r) 
 
 /**
  * Adds what Node processes ran: `dir` holds the files NODE_V8_COVERAGE wrote.
- * A server started from a folder of links has that folder's URLs: a script is
- * known by the end of its URL, and only when its text is as long as ours.
+ * A script at its place in `root` is this repo's. One run from a copy or a
+ * folder of links is known by the end of its URL, and counted only when the
+ * process told the text it read (preload.mjs), and it is ours.
  * Returns how much was read: `{ processes, scripts, otherText: [url] }`.
  */
 export function addNode(files, dir, root = ROOT) {
@@ -107,13 +113,18 @@ export function addNode(files, dir, root = ROOT) {
     if (!known.has(rel)) {
       const source = fs.readFileSync(path.join(root, rel), 'utf-8')
       const place = readingPlaces(rel, source)
-      known.set(rel, { length: source.length, places: files[rel].statements.map(s => place(s.at)) })
+      known.set(rel, { length: source.length, sha: sha(source), places: files[rel].statements.map(s => place(s.at)) })
     }
     return known.get(rel)
   }
   const relOf = new Map()
-  for (const name of fs.existsSync(dir) ? fs.readdirSync(dir) : []) {
-    if (!name.endsWith('.json')) continue
+  const names = fs.existsSync(dir) ? fs.readdirSync(dir).filter(n => n.endsWith('.json')) : []
+  const told = new Map()
+  for (const name of names.filter(n => n.startsWith('texts-'))) {
+    try { told.set(name.slice('texts-'.length, -'.json'.length), JSON.parse(fs.readFileSync(path.join(dir, name), 'utf-8'))) } catch { read.unreadable.push(name) }
+  }
+  for (const name of names.filter(n => !n.startsWith('texts-'))) {
+    const texts = told.get(/^coverage-(\d+)-/.exec(name)?.[1]) ?? {}
     let scripts
     // A process killed while it wrote: nothing to read, and said.
     try { scripts = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf-8')).result } catch { read.unreadable.push(name); continue }
@@ -123,8 +134,9 @@ export function addNode(files, dir, root = ROOT) {
       if (!relOf.has(url)) relOf.set(url, rels.filter(r => url.endsWith(`/${r}`)).sort((a, b) => b.length - a.length)[0] ?? null)
       const rel = relOf.get(url)
       if (!rel) continue
-      const { length, places } = about(rel)
-      if (lengthOf(functions) !== length) { read.otherText.push(url); continue }
+      const { length, sha: ours, places } = about(rel)
+      const inPlace = url === pathToFileURL(path.join(root, rel)).href
+      if (lengthOf(functions) !== length || !(inPlace || texts[url] === ours)) { read.otherText.push(url); continue }
       read.scripts++
       const count = counter(functions)
       places.forEach((at, i) => { files[rel].hits[i] += count(at) })
@@ -165,16 +177,19 @@ export function segments(map) {
   return out
 }
 
+/** Each source of a map: its path in this repo's src/, or null. */
+const sourcesOf = (map, mapDir, root) => map.sources.map(s => {
+  const rel = path.relative(root, path.resolve(mapDir, map.sourceRoot || '', s)).split(path.sep).join('/')
+  return rel.startsWith('src/') ? rel : null
+})
+
 /**
  * The places of `code` (a built chunk with its source map) that come from this
  * repo's src/: `[{ rel, srcLine, srcColumn, at }]`, `at` the offset in `code`.
  */
 export function builtPlaces(code, map, mapDir, root = ROOT) {
   const starts = lineStarts(code)
-  const rels = map.sources.map(s => {
-    const rel = path.relative(root, path.resolve(mapDir, map.sourceRoot || '', s)).split(path.sep).join('/')
-    return rel.startsWith('src/') ? rel : null
-  })
+  const rels = sourcesOf(map, mapDir, root)
   return segments(map).filter(s => rels[s.source]).map(s => ({ rel: rels[s.source], srcLine: s.srcLine, srcColumn: s.srcColumn, at: starts[s.line] + s.column }))
 }
 
@@ -182,11 +197,20 @@ export function builtPlaces(code, map, mapDir, root = ROOT) {
 export function builtChunks(dist = path.join(ROOT, 'dist'), root = ROOT) {
   const dir = path.join(dist, 'assets')
   const chunks = {}
+  const other = new Set()
   for (const name of fs.readdirSync(dir).filter(n => n.endsWith('.js'))) {
     const at = path.join(dir, name)
     if (!fs.existsSync(`${at}.map`)) throw new Error(`${at} has no source map — build with npm run build:coverage`)
-    chunks[name] = builtPlaces(fs.readFileSync(at, 'utf-8'), JSON.parse(fs.readFileSync(`${at}.map`, 'utf-8')), dir, root)
+    const map = JSON.parse(fs.readFileSync(`${at}.map`, 'utf-8'))
+    sourcesOf(map, dir, root).forEach((rel, i) => {
+      if (!rel) return
+      let now = null
+      try { now = fs.readFileSync(path.join(root, rel), 'utf-8') } catch { /* gone: other */ }
+      if (map.sourcesContent?.[i] !== now) other.add(rel)
+    })
+    chunks[name] = builtPlaces(fs.readFileSync(at, 'utf-8'), map, dir, root)
   }
+  if (other.size) throw new Error(`${dist} was built from other sources than these: ${[...other].join(', ')} — build it again with npm run build:coverage`)
   return chunks
 }
 

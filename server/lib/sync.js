@@ -1,67 +1,10 @@
-import fs from 'fs/promises'
 import path from 'path'
 import yaml from 'js-yaml'
+import { pathProblem } from '../repo/paths.js'
+import { normalizeSyncPath } from '../repo/sync.js'
 
-const SYNC_FILE = 'sync.yaml'
-
-// Serializes registry read-modify-write sequences. Concurrent POST/DELETE
-// /api/v2/sync (or an eager-sync save racing either) would otherwise both
-// read the same registry state and the second write would silently drop the
-// first one's change. A per-directory promise chain is sufficient here: the
-// app runs as a per-user JupyterHub singleuser server, so there is exactly
-// one Node process per repo — no cross-process locking needed.
-const registryLocks = new Map()
-
-export function withSyncRegistryLock(gitopsDir, fn) {
-  const prev = registryLocks.get(gitopsDir) || Promise.resolve()
-  const next = prev.then(fn, fn)
-  registryLocks.set(gitopsDir, next.catch(() => {}))
-  return next
-}
-
-export async function readSyncRegistry(gitopsDir) {
-  let raw
-  try {
-    raw = await fs.readFile(path.join(gitopsDir, SYNC_FILE), 'utf-8')
-  } catch (err) {
-    // Only a missing registry means "no syncs yet". Parse, permission, and
-    // I/O errors must surface — treating a malformed sync.yaml as empty
-    // would let the next write silently discard every existing sync link.
-    if (err?.code === 'ENOENT') return { syncs: [] }
-    throw err
-  }
-  const data = yaml.load(raw) || {}
-  // An entry without a source or a targets list (a hand edit) is skipped
-  // with a warning, or every deployment save fails on it (#180). The next
-  // change to sync.yaml writes the registry without it.
-  // Only the source and its string targets are kept: the rest of a hand
-  // edit (a target that is not a path, an extra key, a YAML alias that
-  // refers to itself) would otherwise break whatever logs, copies or
-  // returns the entry. The entry itself is logged as is, never serialized.
-  const syncs = []
-  for (const s of Array.isArray(data.syncs) ? data.syncs : []) {
-    if (!(s && typeof s.source === 'string' && Array.isArray(s.targets))) {
-      console.warn(`${SYNC_FILE}: skipping an entry that is not { source, targets: [...] } (the next sync change drops it):`, s)
-      continue
-    }
-    const targets = s.targets.filter(t => typeof t === 'string')
-    if (targets.length < s.targets.length) {
-      console.warn(`${SYNC_FILE}: ${s.source}: skipping ${s.targets.length - targets.length} target(s) that are not a path (the next sync change drops them)`)
-    }
-    syncs.push({ source: s.source, targets })
-  }
-  return { syncs }
-}
-
-export async function writeSyncRegistry(gitopsDir, registry) {
-  // Temp file + rename so a crash mid-write can't leave sync.yaml
-  // truncated — readSyncRegistry treats a corrupt registry as a hard
-  // error (deliberately), which would take the whole sync API down.
-  const file = path.join(gitopsDir, SYNC_FILE)
-  const tmp = `${file}.tmp`
-  await fs.writeFile(tmp, yaml.dump(registry, { lineWidth: -1 }), 'utf-8')
-  await fs.rename(tmp, file)
-}
+/** sync.yaml's text for `registry` ({ syncs }), as the writer writes it. */
+export const registryText = registry => yaml.dump(registry, { lineWidth: -1 })
 
 export function findSourceEntry(registry, source) {
   return registry.syncs.find(s => s.source === source) || null
@@ -93,19 +36,8 @@ export function isTarget(registry, candidate) {
 // Canonical form used for both validation and registry storage/comparison —
 // callers must normalize a candidate with this *before* comparing it against
 // existing registry entries (applySync/applyUnlink do strict string
-// equality), otherwise 'cpu/prod' and 'cpu/./prod' would be treated as two
-// different deployments and slip past role-exclusivity checks.
-// Always POSIX semantics, regardless of host OS. On win32, path.normalize
-// rewrites '/' to '\', which (a) stores non-portable '\'-separated paths in
-// sync.yaml — a file that gets committed to the gitops repo and read on
-// Linux — and (b) lets 'charts\evil' pass the charts-dir check below
-// (split('/') can't see the '\' separator) while path.join still resolves
-// it into the charts directory. Backslashes are folded into '/' first so
-// both spellings canonicalize identically.
-export function normalizeSyncPath(candidate) {
-  if (typeof candidate !== 'string') return candidate
-  return path.posix.normalize(candidate.replaceAll('\\', '/')).replace(/\/+$/, '')
-}
+// equality): sync.yaml's reader (repo/sync.js) stores every path in it.
+export { normalizeSyncPath } from '../repo/sync.js'
 
 // Reject traversal above the root, absolute paths, and anything rooted at
 // the charts directory — sync must only ever point at deployment folders.
@@ -116,8 +48,10 @@ export function normalizeSyncPath(candidate) {
 export function isSafeSyncPath(candidate, chartsDirName) {
   if (!candidate || typeof candidate !== 'string') return false
   if (path.isAbsolute(candidate)) return false
+  // As sync.yaml may spell it (`apps\\prod`, `a/./b`), then checked: no
+  // `..`, no folder starting with a dot, no NUL (paths.js).
   const normalized = normalizeSyncPath(candidate)
-  if (normalized === '.' || normalized === '' || normalized === '..' || normalized.startsWith('../')) return false
+  if (pathProblem(normalized, 'create')) return false
   const firstSegment = normalized.split('/')[0]
   if (firstSegment === chartsDirName) return false
   return true
@@ -158,36 +92,14 @@ export function applySync(registry, source, target) {
 
 // Remove `target` from whichever source it's under. If that source is left
 // with zero targets, drop the entry entirely — this is what lets a former
-// source be folded into a different tree later (see "Merging two trees").
+// source become a target of another source later.
 export function applyUnlink(registry, target) {
-  const entry = findEntryForTarget(registry, target)
-  if (!entry) {
+  if (!findEntryForTarget(registry, target)) {
     return { ok: false, error: `${target} is not currently synced` }
   }
-  entry.targets = entry.targets.filter(t => t !== target)
-  if (entry.targets.length === 0) {
-    registry.syncs = registry.syncs.filter(s => s !== entry)
-  }
+  // Every entry that lists it: a hand edit can list a target twice, and the
+  // second one would point at a deployment that is gone.
+  for (const entry of registry.syncs) entry.targets = entry.targets.filter(t => t !== target)
+  registry.syncs = registry.syncs.filter(s => s.targets.length > 0)
   return { ok: true }
-}
-
-// Same recognition rule used by the folder tree (Chart.yaml with a
-// dependency + values.yaml) — a sync source/target must resolve to an
-// actual deployment, not an arbitrary directory.
-export async function isDeploymentDir(absDir) {
-  let chartData
-  try {
-    const raw = await fs.readFile(path.join(absDir, 'Chart.yaml'), 'utf-8')
-    chartData = yaml.load(raw) || {}
-  } catch {
-    return false
-  }
-  const hasDeps = Array.isArray(chartData.dependencies) && chartData.dependencies.length > 0
-  if (!hasDeps) return false
-  try {
-    await fs.access(path.join(absDir, 'values.yaml'))
-    return true
-  } catch {
-    return false
-  }
 }

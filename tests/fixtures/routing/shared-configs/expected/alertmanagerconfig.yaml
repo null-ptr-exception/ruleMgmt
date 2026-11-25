@@ -1,0 +1,36 @@
+# Hand-written (#123): a shared config is written into the resource in full,
+# exactly as if the deployment's routing.yaml held it. One no cell of this
+# deployment uses is not in it.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    receiver: _drop
+    continue: true
+    routes:
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+        routes:
+          - { receiver: relay-webhook, continue: true }
+          - { receiver: db-email }
+      - matchers:
+          - { name: severity, value: warning, matchType: "=" }
+        receiver: ops-email
+  receivers:
+    - name: _drop
+    - name: relay-webhook
+      webhookConfigs:
+        - url: http://alert-relay.monitoring.svc:8080
+          sendResolved: false
+    - name: ops-email
+      emailConfigs:
+        - to: ops@example.com
+          headers:
+            - { key: Subject, value: "[{{ .CommonLabels.severity }}] ops" }
+    - name: db-email
+      emailConfigs:
+        - to: db@example.com

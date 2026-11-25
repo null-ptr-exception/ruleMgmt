@@ -9,8 +9,9 @@ import os from 'os'
 import path from 'path'
 import { execFile } from 'child_process'
 import yaml from 'js-yaml'
-import { profileOfObject } from '../../src/utils/outputs.js'
+import { profileOfObject, unknownProfileMark } from '../../src/utils/outputs.js'
 import { createLimit } from './limit.js'
+import { track } from './running.js'
 
 // execFile's default maxBuffer is 1MiB; large chart renders or rule sets
 // can exceed that and fail with ERR_CHILD_PROCESS_STDIO_MAXBUFFER instead
@@ -19,7 +20,7 @@ export const MAX_BUFFER = 10 * 1024 * 1024
 
 export function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, options, (err, stdout, stderr) => {
+    track(execFile(command, args, options, (err, stdout, stderr) => {
       if (err) {
         err.stdout = stdout
         err.stderr = stderr
@@ -27,24 +28,60 @@ export function runCommand(command, args, options = {}) {
       } else {
         resolve({ stdout, stderr })
       }
-    })
+    }))
   })
 }
 
+// Helm writes `# Source: <chart>/templates/<file>` above each document of
+// `helm template`: which template rendered it. A template that emits several
+// documents gets one Source line, above the first: the ones after it are its too.
+const SOURCE_RE = /^# Source: (.+)$/m
+
+/**
+ * Helm's output, read once: `{ text, docs: [{ doc, source }] }`, every
+ * document (null ones left out) with the template that rendered it (null
+ * without a Source line). As text, never a date: Kubernetes keeps
+ * `2026-11-22` as the text it is (js-yaml's default schema would make it a
+ * Date). Throws on text that is not YAML.
+ */
+export function renderedDocuments(text) {
+  const all = String(text ?? '')
+  let last = null
+  const parts = all.split(/^---[ \t]*$/m).map(chunk => {
+    const own = SOURCE_RE.exec(chunk)?.[1]?.trim()
+    if (own) last = own
+    return { chunk, source: last }
+  })
+  // Without a Source line anywhere (not helm template's output), the whole
+  // text as one: a parse error then is reported as for any YAML.
+  const chunks = parts.some(p => p.source) ? parts : [{ chunk: all, source: null }]
+  const docs = []
+  for (const { chunk, source } of chunks) {
+    yaml.loadAll(chunk, doc => { if (doc !== null && doc !== undefined) docs.push({ doc, source }) }, { schema: yaml.CORE_SCHEMA })
+  }
+  return { text: all, docs }
+}
+
 // Which checker reads an object is the output profile's call (#65, #76), not
-// a literal kind here: `validate: promtool` (PromQL) and `validate: vmalert`
-// (LogsQL, which promtool cannot read) are checked; one marked `none` is
+// a literal kind here: `validate: promtool` (Prometheus 2.x), `promtool3`
+// (Prometheus 3.x) and `vmalert` (MetricsQL and LogsQL) are checked; one marked `none` is
 // counted and reported as not syntax-checked.
 export function objectsByValidator(renderedYaml, profileOf = profileOfObject) {
   const objects = []
+  const notes = []
   let unchecked = 0
-  yaml.loadAll(renderedYaml, doc => {
+  // As text, never a date: a name `2026-11-22` reaches the checker as it is.
+  for (const { doc } of renderedDocuments(renderedYaml).docs) {
     const profile = profileOf(doc)
-    if (!profile || !Array.isArray(doc?.spec?.groups)) return
+    if (!profile || !Array.isArray(doc?.spec?.groups)) continue
+    // A mark no profile writes (by hand, or a newer AlertForge's): said,
+    // with what the object was checked as.
+    const mark = unknownProfileMark(doc)
+    if (mark) notes.push(`${doc.metadata?.name || 'an object'}: annotation ${mark.key} is "${mark.value}", which names no output profile — checked as ${profile.name}${VALIDATORS[profile.validate] ? `, with ${VALIDATORS[profile.validate].label}` : ''}`)
     if (VALIDATORS[profile.validate]) objects.push({ doc, validator: profile.validate })
     else unchecked++
-  })
-  return { objects, unchecked }
+  }
+  return { objects, unchecked, notes }
 }
 
 // promtool reports lint problems (duplicate rules, for one) under "FAILED:"
@@ -104,6 +141,14 @@ const VALIDATORS = {
     args: file => ['check', 'rules', file],
     clean: cleanPromtoolOutput,
   },
+  // Prometheus 3.x's promtool, for the prometheus3 profile: it reads group
+  // labels, UTF-8 names and `offset 0s`, which 2.x refuses.
+  promtool3: {
+    label: 'Promtool 3',
+    bin: () => process.env.PROMTOOL3_BIN || 'promtool3',
+    args: file => ['check', 'rules', file],
+    clean: cleanPromtoolOutput,
+  },
   vmalert: {
     label: 'vmalert',
     bin: () => process.env.VMALERT_BIN || 'vmalert',
@@ -125,9 +170,9 @@ const checkerLimit = createLimit(CHECKER_CONCURRENCY)
 // groups into one file made promtool report "groupname ... is repeated in the
 // same file", a false positive that fires for any sufficiently large deployment.
 export async function checkRules(renderedYaml) {
-  let objects, unchecked
+  let objects, unchecked, notes
   try {
-    ;({ objects, unchecked } = objectsByValidator(renderedYaml))
+    ;({ objects, unchecked, notes } = objectsByValidator(renderedYaml))
   } catch (err) {
     return {
       passed: false,
@@ -140,7 +185,7 @@ export async function checkRules(renderedYaml) {
   const uncheckedNote = unchecked
     ? `${unchecked} object(s) not syntax-checked — their output profile has "validate": "none".`
     : ''
-  const withNote = text => [text, uncheckedNote].filter(Boolean).join('\n')
+  const withNote = text => [text, uncheckedNote, ...notes].filter(Boolean).join('\n')
   // Which checkers ran, in a fixed order — Preview names them in its title.
   const tools = Object.keys(VALIDATORS).filter(v => objects.some(o => o.validator === v))
 
@@ -171,8 +216,9 @@ export async function checkRules(renderedYaml) {
       try {
         const { stdout, stderr } = await checkerLimit(() => runCommand(v.bin(), v.args(file), { timeout: 120000, maxBuffer: MAX_BUFFER }))
         const output = v.clean(`${stdout || ''}${stderr || ''}`, file)
-        return { objName, passed: true, warned: validator === 'promtool' && LINT_FAILED.test(output), output }
+        return { objName, passed: true, warned: v.clean === cleanPromtoolOutput && LINT_FAILED.test(output), output }
       } catch (err) {
+        // ENOENT of the child process, not of a file: the checker's binary is not there.
         if (err.code === 'ENOENT') return { objName, missing: `${v.label} is not available: ${v.bin()}` }
         const output = v.clean(`${err.stdout || ''}${err.stderr || ''}${err.message || ''}`, file)
         // Nothing said, e.g. killed at the timeout: say how it ended.
@@ -201,7 +247,9 @@ export async function checkRules(renderedYaml) {
             ...warned.map(r => `${r.objName}:\n${r.output}`),
             rest.map(r => `${r.objName}: ${r.output || 'SUCCESS'}`).join('\n'),
           ].filter(Boolean).join('\n\n')
-      return { passed: true, warned: warned.length > 0, tools, unchecked, errors: [], output: withNote(output) }
+      // `lint`: each object with a lint finding and what the checker said of
+      // it, for a caller that names only those.
+      return { passed: true, warned: warned.length > 0, lint: warned.map(r => ({ object: r.objName, output: r.output })), tools, unchecked, errors: [], output: withNote(output) }
     }
     const output = failed.map(r => `${r.objName}:\n${r.output}`).join('\n\n')
     return { passed: false, tools, unchecked, errors: [output], output: withNote(output) }

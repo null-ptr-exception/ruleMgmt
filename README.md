@@ -32,7 +32,7 @@ Users edit their own branch independently. Changes are pushed to GitLab and can 
 
 ## Quick Start (Local Development)
 
-Run locally without Kubernetes — the app auto-initializes a local git repo and scaffolds sample chart templates on first run:
+Run locally without Kubernetes — the app auto-initializes a local git repo and scaffolds sample chart templates on first run (only while the repo has no commit of its own content):
 
 ```bash
 npm install
@@ -138,17 +138,24 @@ Create an OAuth application in GitLab (**Admin > Applications** or group-level):
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|---|---|---|
-| `GITLAB_HOST` | GitLab hostname (e.g. `gitlab.example.com`) | Yes |
-| `GITLAB_PROJECT` | Git repo path (e.g. `group/alertforge-configs`) | Yes |
-| `GITLAB_TOKEN` | OAuth token (injected automatically by pre-spawn hook) | Auto |
-| `JUPYTERHUB_USER` | Username (injected automatically by JupyterHub) | Auto |
-| `GITOPS_DIR` | Workspace path inside the container | No (default: `/data/gitops`) |
-| `CHARTS_DIR` | Subdirectory for chart templates | No (default: `charts/`) |
-| `DEPLOYMENTS_DIR` | Subdirectory for deployments | No (default: `deployments/`) |
-| `PORT` | Server listen port | No (default: `3001`) |
-| `LOG_LEVEL` | Pino log level (`debug`, `info`, `warn`, `error`) | No (default: `info`) |
+"JupyterHub" is the deployment above; "standalone" is the image run directly, `docker compose`, or a source checkout.
+
+| Variable | Description | Applies to | Required / default |
+|---|---|---|---|
+| `GITLAB_HOST` | GitLab hostname (e.g. `gitlab.example.com`). Read by the git-clone init container, not by the server | JupyterHub | Required there; not used standalone |
+| `GITLAB_PROJECT` | Git repo path (e.g. `group/alertforge-configs`). Read by the git-clone init container | JupyterHub | Required there; not used standalone |
+| `GITLAB_TOKEN` | OAuth token the server pushes and pulls with. Without it there is no remote: Commit works, Push and Pull do not | JupyterHub | Injected by the pre-spawn hook |
+| `JUPYTERHUB_USER` | Username shown in the UI | JupyterHub | Injected by JupyterHub |
+| `GITOPS_DIR` | The gitops repo the server works on | Both | No. Default: `gitops` beside `server.js` — `/app/gitops` in the image, `./gitops` in a source checkout. The reference JupyterHub values set `/data/gitops`. In the image, set it to where the repo is mounted, or the mount is not read. The server's first log line says which folder it serves, and when that is the default |
+| `CHARTS_DIR` | Subdirectory for chart templates | Both | No (default: `charts/`) |
+| `DEPLOYMENTS_DIR` | Subdirectory for deployments | Both | No (default: `deployments/`) |
+| `PORT` | Server listen port | Both | No. The image sets `8080`; a source checkout defaults to `3001` |
+| `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL` | Who git records as the author of the server's commits (git's own variables) | Standalone | Required in the image: without them the first start in a folder with no git repo stops with one line naming them, making nothing in the folder, and every Commit fails. Not needed where git already has an identity (`user.name` and `user.email` in the repo's or the user's git config, as the JupyterHub init container sets) |
+| `RULE_OBJECT_LABELS`, `RULE_OBJECT_ANNOTATIONS` | Labels and annotations put on every generated resource, as JSON (`{"release":"kube-prometheus-stack"}`). A value that is not JSON, or not an object of pairs, stops the server at start and the command-line tools, naming the variable and what it must look like; so does content Kubernetes would refuse — a value that is not text, a key that is not a label or annotation name, a label value that is not one — one line per fault. An empty or whitespace-only value is not set. See [how-to](doc/how-to.md#put-your-own-labels-on-every-generated-resource) | Both, and the command-line tools | No (default: none) |
+| `RULE_OBJECT_LABELS_BY_PROFILE`, `RULE_OBJECT_ANNOTATIONS_BY_PROFILE` | The same for one output profile (`{"vlogs":{"release":"vm-logs"}}`). See [alert-rules](doc/alert-rules.md#different-values-per-output-profile) | Both, and the command-line tools | No (default: none) |
+| `MAX_VALUES_BYTES` | The largest values file or `Chart.yaml` AlertForge reads, in bytes. A larger one is named and refused as one AlertForge cannot check. At most 5 MiB (Helm's own limit for a chart file; a larger setting is used as 5 MiB); a setting that is not a positive whole number is the default. The server, `check-deployment`, `check-repo` and `gen-rules` read it alike, and say at start when it is not used as written | Both, and the command-line tools | No (default: `1048576`, 1 MiB) |
+| `PROMTOOL_BIN`, `PROMTOOL3_BIN`, `VMALERT_BIN`, `HELM_BIN` | Where the rule checkers and Helm are, when they are not on `PATH` as `promtool`, `promtool3`, `vmalert` and `helm` | Source checkout (the image has all four on `PATH`) | No |
+| `LOG_LEVEL` | Pino log level (`debug`, `info`, `warn`, `error`) | Both | No (default: `info`) |
 
 ---
 
@@ -187,6 +194,20 @@ docker compose up --build
 ```
 
 The app listens on `http://localhost:3001`. No JupyterHub, no GitLab integration — just a local git repo with sample data.
+
+### Run the image directly
+
+No source checkout is needed. Mount a folder for the gitops repo and tell the server where it is:
+
+```bash
+docker run -d -p 127.0.0.1:3001:8080 \
+  -v "$PWD/gitops:/data/gitops" -e GITOPS_DIR=/data/gitops \
+  -e GIT_AUTHOR_NAME=AlertForge -e GIT_AUTHOR_EMAIL=alertforge@localhost \
+  -e GIT_COMMITTER_NAME=AlertForge -e GIT_COMMITTER_EMAIL=alertforge@localhost \
+  ghcr.io/null-ptr-exception/rulemgmt:<version>
+```
+
+The server listens on port 8080 in the container. An empty folder gets a new git repo whose first commit holds the sample data and the `.gitignore` a gitops repo should have ([gitops-repo-setup](doc/gitops-repo-setup.md)): the working tree starts clean. A folder with files of its own that is no repo becomes one with those files as its first commit, and no sample. In a repo that was there already, the sample data is only copied in when it has no commit of its own content (nothing but empty commits), is left there for the first Commit, and is never written over a file that is there: a repo with commits of its own gets none, and the log says so when it finds no Template in it. A first start that cannot finish — the folder, `git init`, the sample data or its `.gitignore`, the first commit (a folder or file that cannot be written, a hook that refuses the commit) — stops with one log line saying what could not be done and why, and leaves the folder as it found it: nothing it put in stays, so the next start begins again. Sample data that cannot be put into a repo that was there is taken out again the same way. The sample data is never written through a link: when the Templates or deployments folder (or a folder above either) is a link, none of it is put in, and the log says which link. Without `GITOPS_DIR` the server works in `/app/gitops` inside the container and the mount is not read. The first line of the log says which: `Serving the gitops repo in /data/gitops (GITOPS_DIR)`, or `… in /app/gitops — the default, as GITOPS_DIR is not set`. The server runs as uid 1000: the mounted repo must be owned by uid 1000 and writable by it, or git refuses it ("dubious ownership").
 
 ### Pre-built Images
 

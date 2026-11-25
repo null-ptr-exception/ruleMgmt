@@ -1,6 +1,7 @@
-import fs from 'fs/promises'
 import path from 'path'
 import { isReservedName, RESERVED_HINT } from '../../src/utils/reservedNames.js'
+import { inSharedDir, SHARED_DIR } from './sharedConfigs.js'
+import { exists as existsAt } from '../repo/locate.js'
 
 /**
  * The first segment of `relPath` that does not exist under `gitopsDir` yet
@@ -10,9 +11,13 @@ import { isReservedName, RESERVED_HINT } from '../../src/utils/reservedNames.js'
  */
 export async function newReservedSegment(gitopsDir, relPath) {
   let dir = gitopsDir
-  for (const segment of relPath.split(/[\\/]/).filter(s => s && s !== '.')) {
+  const segments = relPath.split(/[\\/]/).filter(s => s && s !== '.')
+  // The shared notification configs' folder (#123) holds nothing else, even
+  // once it is there.
+  if (await inSharedDir(gitopsDir, relPath)) return SHARED_DIR
+  for (const segment of segments) {
     dir = path.join(dir, segment)
-    const exists = await fs.access(dir).then(() => true, () => false)
+    const exists = await existsAt(dir)
     if (!exists && isReservedName(segment)) return segment
   }
   return null

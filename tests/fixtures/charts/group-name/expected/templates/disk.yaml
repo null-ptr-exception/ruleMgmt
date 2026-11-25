@@ -1,0 +1,20 @@
+{{- $chunks := chunk 100 ($.Values.disk | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: {{ $.Release.Name }}-disk-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: "Disk {{ `{{` }} .x {{ `}}` }} usage: high"
+      type: prometheus
+      rules:
+        {{- range $rows }}
+        - alert: DiskFull
+          expr: |-
+            disk{db="{{ .db }}"} > 90
+        {{- end }}
+{{- end }}

@@ -76,6 +76,14 @@ describe('runtime Docker image', () => {
     expect(missing, 'add these to the final stage of the Dockerfile').toEqual([])
   })
 
+  // The image installs only `dependencies`: a package the server imports
+  // from devDependencies is not there, and the server does not start.
+  it('installs every package server.js loads', () => {
+    const { packages } = importGraph('server.js')
+    expect(packages).toContain('yaml')
+    expect(packages.filter(p => !RUNTIME_PACKAGES.has(p)), 'a devDependency is not in the image').toEqual([])
+  })
+
   it('every file server.js loads exists, extension included (Node ESM does not guess)', () => {
     expect(files.filter(f => !fs.existsSync(path.join(ROOT, f)))).toEqual([])
   })
@@ -87,9 +95,9 @@ describe('runtime Docker image', () => {
     expect(stage).toMatch(/^RUN apk add [^\n]*\btini\b/m)
     expect(stage).toMatch(/^ENTRYPOINT \["\/sbin\/tini", "--"\]$/m)
   })
-  // #119, #127: the command-line tools run from the image too, with no checkout
+  // #119, #127, check-repo: the command-line tools run from the image too, with no checkout
   // mounted next to it.
-  for (const script of ['scripts/gen-rules.mjs', 'scripts/import-rules.mjs', 'scripts/check-deployment.mjs']) {
+  for (const script of ['scripts/gen-rules.mjs', 'scripts/import-rules.mjs', 'scripts/check-deployment.mjs', 'scripts/check-repo.mjs']) {
     it(`copies ${script} and every file it loads, and installs the packages it needs`, () => {
       const graph = importGraph(script)
       const missing = graph.files.filter(f => !copied.some(c => f === c || f.startsWith(c + '/')))

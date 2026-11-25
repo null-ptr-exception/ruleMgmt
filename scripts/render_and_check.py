@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-"""Render Helm alert charts and validate extracted rules with promtool."""
+"""Render Helm alert charts and check their rule objects as Preview does.
+
+Each object goes to its output profile's checker: promtool (Prometheus 2.x),
+promtool 3 (prometheus3 groups) or vmalert -dryRun (vm and vlogs). Exit code:
+0 when every object passed, 1 when one failed or the render did, 2 when a
+checker needed is not installed — not checked is not passed, as in
+scripts/check-deployment.mjs.
+"""
 
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -14,7 +22,7 @@ from pathlib import Path
 
 import yaml
 
-from extract_rules import RuleExtractionError, skipped_note, split_rule_groups
+from extract_rules import RuleExtractionError, split_by_validator
 
 
 @dataclass(frozen=True)
@@ -41,42 +49,87 @@ def discover_chart_targets(root: Path) -> list[RenderTarget]:
     return targets
 
 
-def is_relative_to(path: Path, parent: Path) -> bool:
+# The same rules as AlertForge's own walk (server/repo/walk.js), so
+# what this renders is what AlertForge lists and checks:
+# - a deployment is a folder with a Chart.yaml naming a dependency and a
+#   values.yaml; a folder right inside a _common/ is a _common chart, which
+#   renders as part of the deployments under it, never on its own;
+# - hidden folders and node_modules are not looked into, nor the Templates
+#   folder at the root, nor the shared notification configs' folder;
+# - right inside a deployment or a _common chart, its templates/ and
+#   charts/ are its own, not folders of the tree; deeper they are.
+CHART_OWN_DIRS = {"templates", "charts"}
+SHARED_DIR = "_shared"
+SHARED_FILE = "notification-configs.yaml"
+
+
+def chart_dependencies(folder: Path) -> list:
+    chart_yaml = folder / "Chart.yaml"
+    if not chart_yaml.is_file():
+        return []
     try:
-        path.relative_to(parent)
-    except ValueError:
+        chart = yaml.safe_load(chart_yaml.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return []
+    deps = chart.get("dependencies") if isinstance(chart, dict) else None
+    return deps if isinstance(deps, list) else []
+
+
+def is_common_chart(folder: Path) -> bool:
+    return folder.parent.name == "_common" and (folder / "Chart.yaml").is_file()
+
+
+def is_deployment(folder: Path) -> bool:
+    if folder.parent.name == "_common":
         return False
-    return True
+    return bool(chart_dependencies(folder)) and (folder / "values.yaml").is_file()
 
 
-def should_skip_deployment_chart(chart_yaml: Path, root: Path) -> bool:
-    parts = set(chart_yaml.relative_to(root).parts[:-1])
-    if parts.intersection({".git", "node_modules", "__pycache__"}):
-        return True
-
-    chart_dir = chart_yaml.parent
-    charts_root = root / "charts"
-    if is_relative_to(chart_dir, charts_root):
-        return True
-
-    dependency_parent = chart_yaml.parent.parent
-    if dependency_parent.name != "charts":
+def is_shared_dir(folder: Path) -> bool:
+    try:
+        names = [p.name for p in folder.iterdir()]
+    except OSError:
         return False
+    return all(n == SHARED_FILE or n.startswith(f"_{SHARED_FILE}.") for n in names)
 
-    deployment_chart_dir = dependency_parent.parent
-    return (deployment_chart_dir / "Chart.yaml").exists()
+
+def skipped(entry: Path, root: Path, in_chart: bool) -> bool:
+    name = entry.name
+    if name.startswith(".") or name == "node_modules":
+        return True
+    if in_chart and name in CHART_OWN_DIRS:
+        return True
+    charts_dir = root / os.environ.get("CHARTS_DIR", "charts")
+    if entry.resolve() == charts_dir.resolve():
+        return True
+    if entry.parent == root and name == SHARED_DIR and is_shared_dir(entry):
+        return True
+    return False
 
 
 def discover_deployment_targets(root: Path) -> list[RenderTarget]:
     targets: list[RenderTarget] = []
-    for chart_yaml in sorted(root.glob("**/Chart.yaml")):
-        if should_skip_deployment_chart(chart_yaml, root):
-            continue
-        chart_dir = chart_yaml.parent
-        values_file = chart_dir / "values.yaml"
-        if values_file.exists():
-            targets.append(RenderTarget(release_name(chart_dir), root, chart_dir, values_file))
-    return targets
+
+    def walk(folder: Path, in_chart: bool) -> None:
+        try:
+            entries = sorted(folder.iterdir())
+        except OSError as exc:
+            print(f"{folder.relative_to(root)}: cannot be read ({exc.strerror}); not checked", file=sys.stderr)
+            return
+        for entry in entries:
+            # A link is not followed, as AlertForge does not.
+            if entry.is_symlink() or not entry.is_dir() or skipped(entry, root, in_chart):
+                continue
+            if is_common_chart(entry):
+                walk(entry, True)
+                continue
+            deployment = is_deployment(entry)
+            if deployment:
+                targets.append(RenderTarget(release_name(entry), root, entry, entry / "values.yaml"))
+            walk(entry, deployment)
+
+    walk(root, False)
+    return sorted(targets, key=lambda t: t.chart_dir)
 
 
 def run_command(command: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
@@ -153,41 +206,73 @@ def render_target(target: RenderTarget) -> tuple[int, str]:
     return 0, result.stdout
 
 
-def check_rules(target: RenderTarget, rendered_yaml: str, promtool: str) -> int:
+# The checkers, as the server runs them (server/lib/ruleCheck.js).
+LABELS = {"promtool": "promtool", "promtool3": "promtool 3", "vmalert": "vmalert"}
+MISSING = 2
+
+
+def default_checkers(promtool: str = "promtool") -> dict[str, str]:
+    return {
+        "promtool": promtool,
+        "promtool3": os.environ.get("PROMTOOL3_BIN") or "promtool3",
+        "vmalert": os.environ.get("VMALERT_BIN") or "vmalert",
+    }
+
+
+def run_checker(validator: str, binary: str, groups: list[dict], tmp: Path, name: str) -> subprocess.CompletedProcess:
+    path = tmp / f"{re.sub(r'[^a-zA-Z0-9_.-]', '_', name)}.yaml"
+    path.write_text(yaml.safe_dump({"groups": groups}, default_flow_style=False, sort_keys=False), encoding="utf-8")
+    args = [binary, "-dryRun", f"-rule={path}"] if validator == "vmalert" else [binary, "check", "rules", str(path)]
+    return run_command(args)
+
+
+def check_rules(target: RenderTarget, rendered_yaml: str, promtool: str = "promtool", checkers: dict[str, str] | None = None) -> int:
+    checkers = checkers or default_checkers(promtool)
     try:
-        groups, skipped = split_rule_groups(rendered_yaml)
+        by_validator, unchecked = split_by_validator(rendered_yaml)
     except RuleExtractionError as exc:
         print(f"{target.name}: {exc}", file=sys.stderr)
         return 1
-    if skipped:
-        print(f"{target.name}: {skipped_note(skipped)}", file=sys.stderr)
+    if unchecked:
+        parts = ", ".join(f"{n} {name}" for name, n in sorted(unchecked.items()))
+        print(f"{target.name}: {sum(unchecked.values())} object(s) not syntax-checked ({parts}): their output profile has validate: none", file=sys.stderr)
 
-    if not groups:
-        # Rules that all opt out of promtool (validate: none, e.g. vlogs) are
-        # fine — the note above says so. Rendering no rules at all is not.
-        if skipped:
+    if not by_validator:
+        if unchecked:
             return 0
-        print(f"{target.name}: no PrometheusRule spec.groups found", file=sys.stderr)
+        print(f"{target.name}: no rule objects found", file=sys.stderr)
         return 1
 
+    failed = missing = False
     with tempfile.TemporaryDirectory(prefix="alertforge-rules-") as tmp:
-        rules_path = Path(tmp) / "rules.yaml"
-        rules_path.write_text(
-            yaml.safe_dump({"groups": groups}, default_flow_style=False, sort_keys=False),
-            encoding="utf-8",
-        )
-        result = run_command([promtool, "check", "rules", str(rules_path)])
+        for validator, objects in sorted(by_validator.items()):
+            label, binary = LABELS[validator], checkers[validator]
+            if validator == "promtool":
+                # One file for every object, as before: promtool 2 reads them together.
+                results = [("", run_checker(validator, binary, [g for _, gs in objects for g in gs], Path(tmp), "promtool"))]
+            else:
+                # One file per object, as Preview: a group's name repeats across its objects.
+                results = [(name, run_checker(validator, binary, groups, Path(tmp), f"{validator}-{i}-{name}")) for i, (name, groups) in enumerate(objects)]
+            for name, result in results:
+                if result.returncode == 127 and result.stderr.startswith("failed to execute"):
+                    print(f"{target.name}: {label} is not available: {binary} — {len(objects)} object(s) not checked", file=sys.stderr)
+                    missing = True
+                    break
+                if result.stdout:
+                    print(result.stdout, end="")
+                if result.stderr:
+                    print(result.stderr, file=sys.stderr, end="")
+                if result.returncode != 0:
+                    how = "-dryRun" if validator == "vmalert" else "check rules"
+                    print(f"{target.name}: {label} {how} failed{f' for {name}' if name else ''}", file=sys.stderr)
+                    failed = True
+            else:
+                how = "-dryRun" if validator == "vmalert" else "check rules"
+                print(f"{target.name}: {label} {how} passed ({len(objects)} object(s))")
 
-    if result.stdout:
-        print(result.stdout, end="")
-    if result.stderr:
-        print(result.stderr, file=sys.stderr, end="")
-    if result.returncode != 0:
-        print(f"{target.name}: promtool check rules failed", file=sys.stderr)
-        return result.returncode
-
-    print(f"{target.name}: promtool check rules passed")
-    return 0
+    if failed:
+        return 1
+    return MISSING if missing else 0
 
 
 def run_target(target: RenderTarget, promtool: str, build_deps: bool) -> int:
@@ -203,24 +288,24 @@ def run_target(target: RenderTarget, promtool: str, build_deps: bool) -> int:
                 temp_target = copy_target_root_to_temp(target, Path(tmp))
                 dependency_code = build_dependencies(temp_target)
                 if dependency_code != 0:
-                    return dependency_code
+                    return 1
 
                 render_code, rendered_yaml = render_target(temp_target)
                 if render_code != 0:
-                    return render_code
+                    return 1
 
                 return check_rules(target, rendered_yaml, promtool)
 
     render_code, rendered_yaml = render_target(target)
     if render_code != 0:
-        return render_code
+        return 1
 
     return check_rules(target, rendered_yaml, promtool)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Render alert charts and run promtool check rules.",
+        description="Render alert charts and check their rule objects with promtool, promtool 3 or vmalert, by output profile.",
     )
     parser.add_argument(
         "mode",
@@ -235,7 +320,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--promtool",
         default="promtool",
-        help="promtool binary path. Defaults to PATH lookup.",
+        help="promtool (Prometheus 2.x) binary path. Defaults to PATH lookup. promtool 3 is PROMTOOL3_BIN or promtool3, vmalert VMALERT_BIN or vmalert.",
     )
     parser.add_argument(
         "--build-dependencies",
@@ -258,12 +343,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"render_and_check.py: no {args.mode} targets found under {root}", file=sys.stderr)
         return 1
 
-    failures = 0
-    for target in targets:
-        if run_target(target, args.promtool, args.build_dependencies) != 0:
-            failures += 1
-
-    return 1 if failures else 0
+    codes = [run_target(target, args.promtool, args.build_dependencies) for target in targets]
+    # A failure is 1; with none, a checker that was not there is 2.
+    if any(code not in (0, MISSING) for code in codes):
+        return 1
+    return MISSING if MISSING in codes else 0
 
 
 if __name__ == "__main__":

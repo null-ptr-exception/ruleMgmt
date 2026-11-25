@@ -1,0 +1,63 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="api", instance="api-1"}'
+        values: '0x5'
+      - series: 'up{job="api", instance="api-2"}'
+        values: '1x5'
+      # another metric of the job, and another job
+      - series: 'ready{job="api", instance="api-2"}'
+        values: '0x5'
+      - series: 'up{job="web", instance="web-1"}'
+        values: '0x5'
+      # two versions before the ": "
+      - series: 'build_info{job="api", instance="api-1", version="1.4: abc"}'
+        values: '1x5'
+      - series: 'build_info{job="api", instance="api-2", version="1.5: abc"}'
+        values: '1x5'
+    alert_rule_test:
+      # no for: at the first evaluation
+      - eval_time: 0m
+        alertname: TargetDown
+        exp_alerts:
+          - exp_labels: { severity: critical, job: api, instance: api-1 }
+      - eval_time: 0m
+        alertname: VersionSkew
+        exp_alerts:
+          - exp_labels: { severity: warning }
+
+  - interval: 1m
+    input_series:
+      # two builds of one version, and another job's version
+      - series: 'build_info{job="api", instance="api-1", version="1.4: abc"}'
+        values: '1x5'
+      - series: 'build_info{job="api", instance="api-2", version="1.4: def"}'
+        values: '1x5'
+      - series: 'build_info{job="web", instance="web-1", version="1.5: abc"}'
+        values: '1x5'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: VersionSkew
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      # the 5th change at 5m
+      - series: 'up{job="api", instance="api-1"}'
+        values: '0 1 0 1 0 1x20'
+      # 4 changes are not more than 4
+      - series: 'up{job="api", instance="api-2"}'
+        values: '0 1 0 1 0x20'
+      - series: 'up{job="web", instance="web-1"}'
+        values: '0 1 0 1 0 1x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: Flapping
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: Flapping
+        exp_alerts:
+          - exp_labels: { severity: info, job: api, instance: api-1 }

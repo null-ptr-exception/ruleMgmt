@@ -1,0 +1,14 @@
+# A run of braces in a name: escaping only its {{ or }} would leave a lone
+# brace next to the action and break helm template.
+columns:
+  host: { type: string, required: true }
+
+rules:
+  - alert: "{}}"
+    expr: up{host="${host}"} == 0
+  - alert: 'a{"b":{}}'
+    expr: up{host="${host}"} == 0
+  - alert: "{{{ .x }}}"
+    expr: up{host="${host}"} == 0
+  - alert: "x{ {}}} {"
+    expr: up{host="${host}"} == 0

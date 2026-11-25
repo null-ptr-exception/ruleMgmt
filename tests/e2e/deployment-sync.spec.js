@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
+import { openMenu } from './menu.js'
 
 const CHART = 'mariadb-alerts'
 const ROOT = 'e2e-sync-test'
@@ -29,7 +30,7 @@ function deploymentNode(page, name) {
 }
 
 async function rightClickMenuItem(page, node, itemLabel) {
-  await node.locator('.ant-tree-node-content-wrapper').click({ button: 'right' })
+  await openMenu(page, node)
   const menuItem = page.locator('.ant-dropdown-menu-item', { hasText: itemLabel })
   await expect(menuItem).toBeVisible({ timeout: 3000 })
   await menuItem.click()
@@ -300,7 +301,14 @@ test.describe.serial('deployment sync', () => {
     const removeRow = modal.locator('div').filter({ hasText: `${ROOT}/del-remove` }).last()
     await removeRow.locator('.ant-radio-button-wrapper', { hasText: 'Delete' }).click()
 
+    // What the server answered for the source, so a failure below says
+    // whether the message or the server's count is off.
+    const answered = page.waitForResponse(r => r.request().method() === 'DELETE' && r.url().includes('/del-source?'))
     await modal.getByRole('button', { name: `Delete del-source` }).click()
+    expect(await (await answered).json()).toEqual({ ok: true, unlinked: [`${ROOT}/del-keep`] })
+    // Deleting the source let go of the target kept (#180). The message is
+    // shown as the dialog closes, for 3 s: looked for before the dialog is.
+    await expect(page.locator('.ant-message')).toContainText('Deleted del-source; 1 kept, no longer synced', { timeout: 5000 })
     await expect(modal).not.toBeVisible({ timeout: 5000 })
 
     // Source and the "Delete"-marked target are gone from the tree.
@@ -401,5 +409,42 @@ test.describe.serial('tree refresh preserves expanded children', () => {
 
     // The unrelated expanded branch must survive the selection refresh.
     await expect(otherNode).toBeVisible({ timeout: 5000 })
+  })
+})
+
+// A source that cannot be deleted after the targets marked Delete were: the
+// message says why, and which targets are gone already. The source's
+// removal is refused by a stub; the target's is real.
+test.describe.serial('deleting a sync source that fails', () => {
+  const FAIL = 'e2e-del-fail'
+  test.beforeAll(async ({ request }) => {
+    for (const name of ['dfsrc', 'dfrm', 'dfkeep']) await initDeployment(request, `${FAIL}/${name}`)
+    for (const name of ['dfrm', 'dfkeep']) {
+      expect((await request.post('/api/v2/sync', { data: { source: `${FAIL}/dfsrc`, target: `${FAIL}/${name}` } })).status()).toBe(200)
+    }
+  })
+  test.afterAll(async ({ request }) => {
+    for (const name of ['dfrm', 'dfkeep', 'dfsrc']) {
+      await request.delete('/api/v2/sync', { data: { target: `${FAIL}/${name}` } })
+      await request.delete(`/api/v2/deployments/${CHART}/${name}?folder=${encodeURIComponent(`${FAIL}/${name}`)}`)
+    }
+  })
+
+  test('says why, and which targets were deleted already', async ({ page, request }) => {
+    await page.route(`**/api/v2/deployments/${CHART}/dfsrc?folder=${encodeURIComponent(`${FAIL}/dfsrc`)}`, route => (route.request().method() === 'DELETE'
+      ? route.fulfill({ status: 409, json: { error: `${FAIL}/dfsrc cannot be removed: permission denied`, file: `${FAIL}/dfsrc` } })
+      : route.continue()))
+    await page.goto('/#/alerts')
+    await expect(page.getByText('Deployments', { exact: true })).toBeVisible({ timeout: 10000 })
+    await expandFolder(page, FAIL)
+    await rightClickMenuItem(page, deploymentNode(page, 'dfsrc'), 'Delete')
+    const modal = page.getByRole('dialog')
+    await expect(modal.getByText('2 deployments synced to')).toBeVisible({ timeout: 3000 })
+    await modal.locator('div').filter({ hasText: `${FAIL}/dfrm` }).last().locator('.ant-radio-button-wrapper', { hasText: 'Delete' }).click()
+    await modal.getByRole('button', { name: 'Delete dfsrc' }).click()
+
+    await expect(page.getByText(`Failed to delete dfsrc: ${FAIL}/dfsrc cannot be removed: permission denied; ${FAIL}/dfrm was deleted already`)).toBeVisible({ timeout: 5000 })
+    expect((await request.get(`/api/v2/deployments/${CHART}/dfrm?folder=${encodeURIComponent(`${FAIL}/dfrm`)}`)).status()).toBe(404)
+    expect((await request.get(`/api/v2/deployments/${CHART}/dfsrc?folder=${encodeURIComponent(`${FAIL}/dfsrc`)}`)).status()).toBe(200)
   })
 })

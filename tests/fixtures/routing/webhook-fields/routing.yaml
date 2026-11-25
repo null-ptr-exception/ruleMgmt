@@ -1,0 +1,34 @@
+# Every webhook field (#160). Authentication and TLS sit beside the address
+# here and move under httpConfig in the resource.
+labels:
+  severity: [critical, warning]
+configs:
+  ops-webhook:
+    type: webhook
+    urlSecret: { name: ops, key: url }
+    sendResolved: false
+    maxAlerts: 20
+    timeout: 10s
+    authorization:
+      type: Bearer
+      credentials: { name: ops, key: token }
+    tlsConfig:
+      insecureSkipVerify: false
+      ca: { secret: { name: ops-ca, key: ca.crt } }
+  # The type left out is Bearer, as the operator reads it.
+  token-relay:
+    type: webhook
+    url: https://token-relay.example.com/alert
+    authorization: { credentials: { name: relay, key: token } }
+  relay:
+    type: webhook
+    url: https://relay.example.com/alert
+    maxAlerts: 0
+    basicAuth:
+      username: { name: relay, key: user }
+      password: { name: relay, key: password }
+cells:
+  - match: { severity: critical }
+    configs: [ops-webhook, token-relay]
+  - match: { severity: warning }
+    configs: [relay]

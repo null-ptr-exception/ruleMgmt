@@ -1,0 +1,23 @@
+# vmalert's own group fields on a vm group: written as they are, in a fixed
+# order after interval and limit. An eval_offset as long as the interval is
+# allowed (vmalert compares with "more than"); a header and a param list are
+# text, quoted where YAML would read them as something else; a param with
+# no values is not written.
+type: vm
+interval: 1m
+limit: 5
+labels: { team: shop, "on": "yes" }
+eval_offset: 1m
+concurrency: 2
+eval_alignment: false
+headers: ["X-Scope-OrgID: 1"]
+notifier_headers: ["X-Team: shop"]
+params: { nocache: ["1"], extra_label: ["env=prod", "tier=1_000", "a,b"], debug: [] }
+
+columns:
+  job: { type: string, required: true }
+
+rules:
+  - alert: HTTPErrors
+    expr: 'rate(http_errors_total{job="${job}"}[5m]) > 1'
+    labels: { severity: warning }

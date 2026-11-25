@@ -1,0 +1,13 @@
+_common:
+  env: prod-eu
+cpu:
+  - namespace: prod
+    workload: api
+    team: db&ops
+  - namespace: dev
+    workload: web
+    page: true
+    threshold: 90
+    window: 10m
+mem:
+  - threshold: 0.9

@@ -1,0 +1,40 @@
+{{- $chunks := chunk 100 ($.Values.yes | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-yes-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    "y": "1_000"
+    false: x
+spec:
+  groups:
+    - name: "yes"
+      rules:
+        {{- range $rows }}
+        - alert: "yes"
+          expr: |-
+            up{db="{{ .db }}"} == 0
+          labels:
+            "on": "{{ .db }}"
+            true: t
+            severity: warning
+          annotations:
+            "n": |-
+              down
+        - alert: "0_7"
+          expr: |-
+            up{db="{{ .db }}"} == 0
+        - alert: "CPU: high #1"
+          expr: |-
+            up{db="{{ .db }}"} == 0
+        - alert: "del\u007fchar"
+          expr: |-
+            up{db="{{ .db }}"} == 0
+        - record: "true"
+          expr: |-
+            up{db="{{ .db }}"}
+        {{- end }}
+{{- end }}

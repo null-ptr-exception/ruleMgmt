@@ -1,0 +1,6 @@
+# Once: no rows, no label.
+once: true
+
+rules:
+  - alert: TargetDown
+    expr: up{env="${env}"} == 0

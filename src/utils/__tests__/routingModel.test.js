@@ -4,6 +4,7 @@ import yaml from 'js-yaml'
 import {
   emptyRouting, parseRouting, combinations, cellAt, setCellConfigs, fillConfig, setCellTiming, cellTiming,
   setDefaultTiming, setLabels, configUsage, putConfig, removeConfig, gridOf, gridMatch, toSave,
+  sameConfig,
 } from '../routingModel.js'
 import { checkRouting } from '../routingGenerator.js'
 
@@ -209,4 +210,19 @@ describe('the grid', () => {
     expect(grid.rows).toEqual([{}])
     expect(grid.columns).toEqual(['critical', 'warning'])
   })
+})
+
+// A deployment's own config and a shared one of its name say the same (#123)
+// whatever order their keys are written in.
+describe('sameConfig', () => {
+  it.each([
+    [{ to: 'a@b.c', type: 'email' }, { type: 'email', to: 'a@b.c' }, true],
+    [{ type: 'email', to: 'a@b.c', headers: { A: '1', B: '2' } }, { headers: { B: '2', A: '1' }, to: 'a@b.c', type: 'email' }, true],
+    [{ type: 'email', to: 'a@b.c' }, { type: 'email', to: 'x@b.c' }, false],
+    [{ type: 'email', to: 'a@b.c' }, { type: 'email', to: 'a@b.c', sendResolved: true }, false],
+    [{ type: 'email', to: 'a@b.c', sendResolved: undefined }, { type: 'email', to: 'a@b.c', html: undefined }, false],
+    [{ l: [1, 2] }, { l: [2, 1] }, false],
+    [{ shared: true }, { shared: true }, true],
+    [{ a: 1 }, null, false],
+  ])('%j and %j: %s', (a, b, out) => expect(sameConfig(a, b)).toBe(out))
 })

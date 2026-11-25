@@ -1,0 +1,14 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{db="db1"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: "2026-11-22 10:00:00"
+        exp_alerts:
+          - exp_labels: { db: db1, since: "1:30", op: "=", day: "2026-11-22" }
+            exp_annotations: { at: "2026-11-22T10:00:00Z" }

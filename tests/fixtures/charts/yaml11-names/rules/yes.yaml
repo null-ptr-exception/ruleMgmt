@@ -1,0 +1,22 @@
+# Names Kubernetes reads as something else when they are written bare: it
+# reads YAML 1.1, where yes, on, n are booleans and 0_7 is the number 7.
+# The group key is one of them; so are an alert name, a recording rule's
+# name, a label key and an annotation key. "CPU: high #1" would not even
+# parse bare, and helm fails on a DEL (U+007F) left raw. The key
+# true reads back as itself, and stays bare.
+columns:
+  db: { type: string, required: true }
+
+rules:
+  - alert: "yes"
+    expr: up{db="${db}"} == 0
+    labels: { "on": "${db}", "true": t, severity: warning }
+    annotations: { "n": "down" }
+  - alert: "0_7"
+    expr: up{db="${db}"} == 0
+  - alert: "CPU: high #1"
+    expr: up{db="${db}"} == 0
+  - alert: "del\u007fchar"
+    expr: up{db="${db}"} == 0
+  - record: "true"
+    expr: up{db="${db}"}

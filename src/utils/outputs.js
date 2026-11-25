@@ -3,8 +3,14 @@
  *
  * A group's `type` names a profile in config/outputs.json, and the profile
  * decides the resource around the group's rules: its apiVersion and kind,
- * fields added to every `spec.groups[]` entry, and how the rendered rules can
- * be checked. `prometheus` is the profile of a group that names no type.
+ * fields added to every `spec.groups[]` entry, how the rendered rules can be
+ * checked, and the query language of its rules' expr (`query`).
+ * `prometheus2` is the profile of a group that names no type; `prometheus`,
+ * the name it had before Prometheus 3 got a profile of its own, is its alias
+ * (`aliases`), so a rules file or a site setting that says it keeps its
+ * meaning. Two profiles of one kind are told apart by the fields they put on
+ * every group (`groupFields`) or the annotations they put on every object
+ * (`annotations`).
  *
  * The file is this repository's, shipped with the image, and the same for
  * every site; a site's own values (object labels, namespaces) stay in the
@@ -21,22 +27,34 @@
  */
 
 import raw from '../../config/outputs.json' with { type: 'json' }
+import { GROUP_FIELD_NAMES, BASE_GROUP_FIELDS } from './groupFields.js'
 
-export const DEFAULT_TYPE = 'prometheus'
+export const DEFAULT_TYPE = 'prometheus2'
 
-const TOP_KEYS = ['outputs', 'routing']
-const PROFILE_KEYS = ['apiVersion', 'kind', 'groupFields', 'validate']
-const ROUTING_KEYS = ['apiVersion', 'kind']
+// Exported for schema/outputs.schema.json (rulesFileSchema.js).
+export const TOP_KEYS = ['outputs', 'routing']
+export const PROFILE_KEYS = ['apiVersion', 'kind', 'groupFields', 'annotations', 'aliases', 'validate', 'query', 'groupKeys']
+// The language a group's expr is written in. It decides the checks that read
+// the expr itself — ranges, offsets, label matchers (#117, #118, selectors) —
+// which PromQL and MetricsQL share and LogsQL has none of. Which checker runs
+// is `validate`'s, a separate question.
+export const QUERY = ['promql', 'metricsql', 'logsql']
+const PROMQL_LIKE = ['promql', 'metricsql']
+export const ROUTING_KEYS = ['apiVersion', 'kind']
 // The name objectMeta.js's _BY_PROFILE variables give the routing resource; a
 // profile of that name would make them ambiguous.
 export const ROUTING_KIND = 'routing'
-const VALIDATE = ['promtool', 'vmalert', 'none']
-const NAME_RE = /^[a-z][a-z0-9_-]*$/
+// promtool is Prometheus 2.x's (PROMTOOL_BIN), promtool3 Prometheus 3.x's
+// (PROMTOOL3_BIN).
+export const VALIDATE = ['promtool', 'promtool3', 'vmalert', 'none']
+// An annotation key: an optional DNS-subdomain prefix and a name.
+export const ANNOTATION_KEY_RE = /^([a-z0-9]([-a-z0-9.]*[a-z0-9])?\/)?[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$/
+export const NAME_RE = /^[a-z][a-z0-9_-]*$/
 // Written by the generator (name, rules) or by the template owner (interval,
-// limit) — a profile cannot set them too. A rules file's `type` is not one of
+// limit and the rest of groupFields.js) — a profile cannot set them too. A rules file's `type` is not one of
 // them: it only picks the profile and is never written out as it is; the
 // `type: vlogs` a VMRule group carries comes from the profile's groupFields.
-const RESERVED_GROUP_FIELDS = ['name', 'rules', 'interval', 'limit']
+export const RESERVED_GROUP_FIELDS = ['name', 'rules', ...GROUP_FIELD_NAMES]
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 
@@ -51,6 +69,7 @@ export function parseOutputs(doc, source = 'config/outputs.json') {
   checkRouting(doc.routing, errors)
 
   const outputs = doc.outputs
+  const aliasOf = {}
   if (!isMap(outputs)) {
     errors.push('"outputs" must be an object of profiles')
   } else {
@@ -65,6 +84,35 @@ export function parseOutputs(doc, source = 'config/outputs.json') {
         if (typeof profile[key] !== 'string' || !profile[key]) errors.push(`"${at}.${key}" is required and must be a string`)
       }
       if (!VALIDATE.includes(profile.validate)) errors.push(`"${at}.validate" must be one of ${VALIDATE.join(', ')} — it has no default`)
+      if (!QUERY.includes(profile.query)) errors.push(`"${at}.query" must be one of ${QUERY.join(', ')} — it has no default`)
+      // The group fields a template owner may set on this profile's groups
+      // (#182); interval and limit when it says nothing.
+      if (profile.groupKeys !== undefined && !(Array.isArray(profile.groupKeys) && profile.groupKeys.every(k => GROUP_FIELD_NAMES.includes(k)))) {
+        errors.push(`"${at}.groupKeys" must list group fields AlertForge writes: ${GROUP_FIELD_NAMES.join(', ')}`)
+      }
+      if (profile.aliases !== undefined) {
+        if (!Array.isArray(profile.aliases)) {
+          errors.push(`"${at}.aliases" must be a list of names`)
+        } else {
+          for (const alias of profile.aliases) {
+            if (typeof alias !== 'string' || !NAME_RE.test(alias)) { errors.push(`"${at}.aliases": ${JSON.stringify(alias)} is not a profile name`); continue }
+            if (alias === ROUTING_KIND) errors.push(`"${at}.aliases": "${ROUTING_KIND}" is the name of the routing resource`)
+            if (Object.hasOwn(outputs, alias)) errors.push(`"${at}.aliases": "${alias}" is a profile of its own`)
+            if (Object.hasOwn(aliasOf, alias)) errors.push(`"${at}.aliases": "${alias}" is already an alias of ${aliasOf[alias]}`)
+            aliasOf[alias] = name
+          }
+        }
+      }
+      if (profile.annotations !== undefined) {
+        if (!isMap(profile.annotations)) {
+          errors.push(`"${at}.annotations" must be an object`)
+        } else {
+          for (const [key, value] of Object.entries(profile.annotations)) {
+            if (!ANNOTATION_KEY_RE.test(key)) errors.push(`"${at}.annotations": "${key}" is not an annotation key`)
+            if (typeof value !== 'string' || !value) errors.push(`"${at}.annotations.${key}" must be a non-empty string`)
+          }
+        }
+      }
       if (profile.groupFields !== undefined) {
         if (!isMap(profile.groupFields)) {
           errors.push(`"${at}.groupFields" must be an object`)
@@ -84,7 +132,12 @@ export function parseOutputs(doc, source = 'config/outputs.json') {
     apiVersion: p.apiVersion,
     kind: p.kind,
     groupFields: p.groupFields || {},
+    annotations: p.annotations || {},
+    aliases: p.aliases || [],
     validate: p.validate,
+    query: p.query,
+    // In the order they are written, whatever order the file lists them in.
+    groupKeys: GROUP_FIELD_NAMES.filter(k => (p.groupKeys || BASE_GROUP_FIELDS).includes(k)),
   }]))
 }
 
@@ -101,29 +154,98 @@ export const PROFILES = parseOutputs(raw)
 /** apiVersion and kind of the routing resource, checked with the profiles. */
 export const ROUTING = { apiVersion: raw.routing.apiVersion, kind: raw.routing.kind }
 
-/** Every group `type` a rules file may name. */
+const ALIASES = Object.fromEntries(Object.values(PROFILES).flatMap(p => p.aliases.map(a => [a, p.name])))
+
+/** Every profile, by its own name — what the editor offers. */
 export function profileNames() {
   return Object.keys(PROFILES)
 }
 
+/** Every group `type` a rules file may name: the profiles, then their aliases. */
+export function typeNames() {
+  return [...Object.keys(PROFILES), ...Object.keys(ALIASES)]
+}
+
+/**
+ * The profile name a group's type stands for: itself, the profile an alias
+ * names, or the default for no type. Null for a type that is no profile.
+ */
+export function canonicalType(type) {
+  const t = type ?? DEFAULT_TYPE
+  if (typeof t !== 'string') return null
+  return Object.hasOwn(PROFILES, t) ? t : (Object.hasOwn(ALIASES, t) ? ALIASES[t] : null)
+}
+
 /** The profile of a group's type; an absent type is the default profile. */
 export function profileFor(type) {
-  return PROFILES[type ?? DEFAULT_TYPE] || null
+  const name = canonicalType(type)
+  return name ? PROFILES[name] : null
+}
+
+/** Every annotation key a profile writes on its objects — no site may set one. */
+export const PROFILE_ANNOTATION_KEYS = [...new Set(Object.values(PROFILES).flatMap(p => Object.keys(p.annotations)))]
+
+/**
+ * Whether a group's expr has PromQL's ranges, offsets and label matchers —
+ * PromQL itself or MetricsQL, which reads them the same way.
+ */
+export function isPromQLType(type) {
+  return PROMQL_LIKE.includes(profileFor(type)?.query)
+}
+
+/**
+ * Whether the group's checker refuses `offset 0s`. promtool 2.x does (and so
+ * Prometheus 2.x): a column or derived value that comes to 0 in an offset is
+ * refused at save. Measured: promtool 3.x and vmalert take it.
+ */
+export function refusesZeroOffset(type) {
+  const profile = profileFor(type)
+  return PROMQL_LIKE.includes(profile?.query) && profile?.validate === 'promtool'
 }
 
 /**
  * The profile a rendered resource came from: its apiVersion and kind, and —
  * to tell apart two profiles that share a kind — the fields the profile puts
- * on every group. Null for a resource no profile produces.
+ * on every group and the annotations it puts on the object. Null for a
+ * resource no profile produces.
  */
+// vmalert reads a group with no `type` as `type: prometheus`: a VMRule from
+// a hand-written template that leaves it out holds metric rules.
+const EVALUATOR_DEFAULT_TYPE = 'prometheus'
+
+/** The profiles whose objects have this apiVersion and kind. */
+const profilesOfKind = doc => Object.values(PROFILES).filter(p => doc?.apiVersion === p.apiVersion && doc?.kind === p.kind)
+
 export function profileOfObject(doc) {
   if (!doc || typeof doc !== 'object') return null
   const group = Array.isArray(doc.spec?.groups) ? doc.spec.groups[0] : undefined
-  const matches = Object.values(PROFILES).filter(p =>
-    doc.apiVersion === p.apiVersion && doc.kind === p.kind &&
-    Object.entries(p.groupFields).every(([k, v]) => group?.[k] === v))
+  const annotations = isMap(doc.metadata?.annotations) ? doc.metadata.annotations : {}
+  const ofKind = profilesOfKind(doc)
+  // The evaluator's own default for a field a profile of this kind writes.
+  const readsType = ofKind.some(p => 'type' in p.groupFields)
+  const groupValue = k => (group?.[k] === undefined && k === 'type' && readsType ? EVALUATOR_DEFAULT_TYPE : group?.[k])
+  const matches = ofKind.filter(p =>
+    Object.entries(p.groupFields).every(([k, v]) => groupValue(k) === v) &&
+    Object.entries(p.annotations).every(([k, v]) => annotations[k] === v))
   // The most specific match wins: a VMRule group with `type: vlogs` is the
-  // vlogs profile even if a profile with no groupFields also emits VMRule.
-  matches.sort((a, b) => Object.keys(b.groupFields).length - Object.keys(a.groupFields).length)
+  // vlogs profile even if a profile with no groupFields also emits VMRule,
+  // and a PrometheusRule marked prometheus3 is not prometheus2.
+  const weight = p => Object.keys(p.groupFields).length + Object.keys(p.annotations).length
+  matches.sort((a, b) => weight(b) - weight(a))
   return matches[0] || null
+}
+
+/**
+ * A profile's mark on an object that names no profile of its kind — an
+ * `alertforge.io/profile: prometheus4` written by hand: the object is read
+ * as the unmarked profile, which is said. Null when there is none.
+ */
+export function unknownProfileMark(doc) {
+  const annotations = isMap(doc?.metadata?.annotations) ? doc.metadata.annotations : {}
+  const ofKind = profilesOfKind(doc)
+  for (const key of PROFILE_ANNOTATION_KEYS) {
+    if (!Object.hasOwn(annotations, key)) continue
+    if (!ofKind.some(p => p.annotations[key] === annotations[key])) return { key, value: annotations[key] }
+  }
+  return null
 }

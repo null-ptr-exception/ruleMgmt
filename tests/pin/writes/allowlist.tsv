@@ -1,0 +1,21 @@
+# Cells where a write breaks a rule of writing today (compare.mjs), each with why.
+# category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
+# Edited by hand: a fix removes its line; a new disagreement needs one.
+id	entry	kind	category	reason
+dir-absent	save-json	changed-unsaid	bug	no issue yet: saving a deployment whose folder is gone (deleted in another tab) makes the folder again and writes <name>-values.yaml in it, a file nothing reads, and answers 200
+dir-absent	save-text	changed-unsaid	bug	no issue yet: saving a deployment whose folder is gone (deleted in another tab) makes the folder again and writes <name>-values.yaml in it, a file nothing reads, and answers 200
+new-refused	save-text	changed-unsaid	bug	no issue yet: a text save to a new deployment folder makes the folder, finds no values.yaml and writes <name>-values.yaml there under the flat-file checks, which take values a folder save refuses; answers 200
+link-outside	regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+dangling-link	regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+dir-link-outside	regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+primary-unreadable	regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+undeployable	save-legacy	accepted-undeployable	out-of-scope	a legacy <name>-values.yaml beside a folder deployment: flat deployments are not supported (no checks of a folder deployment, no link rule; its save is written by the writer, under the lock); kept to show what it does
+readonly-repo	discard	5xx	policy	a file the server cannot write (no permission, a folder or a dangling link in its place) is answered 500 naming the file; nothing is changed
+dir-link-git	regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+changed-while-waiting	common-create	not-locked	policy	a _common move sent without its plan's expected is refused (400) before it takes the lock; nothing is read for writing or written
+changed-while-waiting	common-remove	not-locked	policy	a _common move sent without its plan's expected is refused (400) before it takes the lock; nothing is read for writing or written
+link-outside	shared-regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+dangling-link	shared-regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+dir-link-outside	shared-regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+primary-unreadable	shared-regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none
+dir-link-git	shared-regenerate	partial	policy	Regenerate lists a deployment it cannot make again (its resource or routing.yaml cannot be read, or leads out of the repo) and makes the others: it is not a write that failed; what it writes is all or none

@@ -1,6 +1,6 @@
 {
   "name": "alertforge",
-  "version": "2.3.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"node scripts/dev-api.mjs\" \"vite\"",
@@ -8,9 +8,12 @@
     "preview": "vite preview",
     "server": "node server.js",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:pin": "vitest run --config tests/pin/vitest.config.mjs",
+    "test:coverage": "node tests/coverage/unit.mjs",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:coverage": "node tests/coverage/e2e.mjs",
+    "build:coverage": "vite build --config tests/coverage/vite.config.mjs",
     "lint": "eslint 'src/**/*.{js,jsx}' 'server.js' 'server/**/*.js' 'scripts/**/*.mjs' --no-error-on-unmatched-pattern"
   },
   "dependencies": {
@@ -19,11 +22,13 @@
     "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
     "@codemirror/legacy-modes": "^6.5.3",
+    "@codemirror/lint": "^6.9.6",
     "@codemirror/merge": "^6.12.1",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.42.1",
     "@lezer/highlight": "^1.2.3",
     "@prometheus-io/codemirror-promql": "^0.311.3",
+    "ajv": "^6.15.0",
     "antd": "^6.4.2",
     "codemirror": "^6.0.2",
     "express": "^4.18.2",
@@ -32,6 +37,7 @@
     "pino-http": "^11.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "yaml": "^2.9.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
@@ -43,7 +49,6 @@
     "eslint": "^10.3.0",
     "supertest": "^7.2.2",
     "vite": "^8.3.1",
-    "vitest": "^5.0.3",
-    "yaml": "^2.9.0"
+    "vitest": "^5.0.3"
   }
 }

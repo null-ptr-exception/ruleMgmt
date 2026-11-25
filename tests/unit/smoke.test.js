@@ -7,7 +7,7 @@ describe('sample data integrity', () => {
   const sampleDir = path.resolve('sample')
   const chartDir = path.join(sampleDir, 'charts/mariadb-alerts')
 
-  // The sample chart is migrated (#57 P8): rules/*.yaml is the source,
+  // The sample chart is migrated (#57): rules/*.yaml is the source,
   // values.schema.json and templates/ are products regenerated from it.
   const rulesDir = path.join(chartDir, 'rules')
   const ruleFiles = fs.existsSync(rulesDir)

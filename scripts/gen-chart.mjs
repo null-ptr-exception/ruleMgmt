@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generate a chart's templates from its values.schema.json, without the UI.
+ * Generate a chart's templates from its rules/, without the UI.
  *
  *   node scripts/gen-chart.mjs <chart-dir>            write templates/
  *   node scripts/gen-chart.mjs <chart-dir> --check    compare only, never write
@@ -8,135 +8,150 @@
  * --check is the round-trip equivalence tool: it regenerates every group and
  * reports any byte difference against what is already on disk. Run it against
  * an existing chart to confirm the generator still produces exactly the same
- * output before adopting a change.
+ * output before adopting a change. It answers as gen-rules --check, Commit and
+ * the editor do (one comparison, computeDrift): a schema behind rules/, a
+ * template left by a removed group and a file repeating the alerts are named
+ * too.
+ *
+ * The templates are generated from rules/, as a save and gen-rules generate
+ * them. A chart not converted to rules/ yet is refused: its 1.x rule file
+ * would render every alert a second time beside them (#190); gen-rules
+ * converts it. The chart is read as the server reads it (the repo loader).
  */
 
-import fs from 'fs/promises'
 import path from 'path'
-import { generateGroupTemplate } from '../src/utils/templateGenerator.js'
-import { checkRules } from '../src/utils/ruleChecks.js'
-import { isAlertGroup } from '../src/utils/schemaUtils.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
-import { parseRulesDir, genSchema, groupGenDef } from '../src/utils/rulesFile.js'
+import { repeatsText, REPEATS_FIX } from '../src/utils/drift.js'
+import { readTemplateAt, writeToolFiles } from '../server/lib/chartFiles.js'
+import { decide } from '../server/repo/policy.js'
+import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 
 const args = process.argv.slice(2)
+const USAGE = 'usage: node scripts/gen-chart.mjs <chart-dir> [--check]'
+// Asked for, the usage is an answer: stdout, exit 0.
+if (args.includes('-h') || args.includes('--help')) {
+  console.log(USAGE)
+  process.exit(0)
+}
 const check = args.includes('--check')
 const chartDir = args.find(a => !a.startsWith('--'))
 
 if (!chartDir) {
-  console.error('usage: node scripts/gen-chart.mjs <chart-dir> [--check]')
+  console.error(USAGE)
   process.exit(2)
 }
 
-async function readIfExists(file) {
-  try {
-    return await fs.readFile(file, 'utf-8')
-  } catch {
-    return null
-  }
-}
-
-// The same site policy the server hands the browser, so both paths emit the
-// same file and --check does not report a difference that is only the source
-// of the labels.
-const objectMeta = objectMetaFromEnv()
-for (const warning of objectMeta.warnings) console.log(`warn   ${warning}`)
-if (objectMeta.errors.length) {
-  for (const error of objectMeta.errors) console.log(`error  ${error}`)
-  process.exit(1)
-}
-
-const schemaFile = path.join(chartDir, 'values.schema.json')
-const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
-const tmplDir = path.join(chartDir, 'templates')
-if (!check) await fs.mkdir(tmplDir, { recursive: true })
-
-// A migrated chart's rules live in rules/*.yaml, not the schema — see
-// modelToSchema in rulesFile.js: the persisted schema carries no rule data
-// any more. Read rules/ when present and generate/check from the model via
-// the same groupGenDef/genSchema shim the server uses. A chart with no
-// rules/ dir yet is still schema-only (legacy x-promql) and generates
-// exactly as it always has.
-// Only a missing rules/ means schema-only; any other failure stops here.
-let model = null
-let ruleFiles = []
-try {
-  ruleFiles = (await fs.readdir(path.join(chartDir, 'rules'))).filter(f => f.endsWith('.yaml'))
-} catch (err) {
-  if (err.code !== 'ENOENT') throw err
-}
-if (ruleFiles.length) {
-  const files = {}
-  for (const name of ruleFiles) files[name] = await fs.readFile(path.join(chartDir, 'rules', name), 'utf-8')
-  const parsed = parseRulesDir(files)
-  if (parsed.errors.length) {
-    for (const e of parsed.errors) console.error(`ERROR  ${e}`)
-    process.exit(1)
-  }
-  model = parsed.model
-}
-
-const results = []
-let failed = 0
-
-// The CLI is a commit-time gate (it is the round-trip / CI tool), so it holds
-// rules to every check, not just the ones that block a save.
-const findingsByGroup = new Map()
-for (const finding of checkRules(model ? genSchema(model, schema) : schema)) {
-  if (!findingsByGroup.has(finding.group)) findingsByGroup.set(finding.group, [])
-  findingsByGroup.get(finding.group).push(finding)
-}
-
-// A once group (#70) has no entry in the schema — it takes no rows — so the
-// model's groups are walked as well as the schema's.
-const groupNames = [...new Set([
-  ...Object.keys(schema.properties || {}).filter(isAlertGroup),
-  ...Object.keys(model?.groups || {}),
-])]
-for (const group of groupNames) {
-  const alertDef = schema.properties?.[group] || {}
-  const file = path.join(tmplDir, `${group.replace(/_/g, '-')}.yaml`)
-
-  if (alertDef['x-custom-template']) {
-    results.push(['skip', group, 'x-custom-template — file-level escape hatch, migrate to a raw x-rules entry'])
-    continue
+async function main() {
+  const objectMeta = objectMetaFromEnv()
+  for (const warning of objectMeta.warnings) console.log(`warn   ${warning}`)
+  if (objectMeta.errors.length) {
+    for (const error of objectMeta.errors) console.log(`error  ${error}`)
+    return 1
   }
 
-  const problems = findingsByGroup.get(group) || []
-  if (problems.length) {
-    results.push(['ERROR', group, problems.map(p => p.message).join('; ')])
-    failed++
-    continue
+  // The whole chart, read once: a file that cannot be read is an
+  // UnreadableError (exit 2), never a template taken for different.
+  const t = await readTemplateAt(chartDir)
+  if (!t) throw new Error(`${chartDir} is not there`)
+  if (t.schemaNotJson != null) throw new Error(`${path.join(chartDir, 'values.schema.json')} is not valid JSON (${t.schemaNotJson})`)
+  if (!t.fromRules) {
+    const legacy = t.drift.state === 'legacy'
+    console.error(legacy
+      ? `ERROR  ${chartDir} is not converted to rules/ yet: templates generated beside its 1.x rule file would render each alert twice — run gen-rules.mjs, which converts it and writes its templates`
+      : `ERROR  ${chartDir} has no rules/ to generate from${t.findings.some(f => f.code === 'template.rules-gone') ? ' (its values.schema.json was generated from one: restore rules/)' : ''}`)
+    return 1
+  }
+  if (t.ruleErrors.length) {
+    for (const e of t.ruleErrors) console.error(`ERROR  ${e}`)
+    return 1
+  }
+  // What Helm fails on, or renders other than written, in the rest of the
+  // Template: said before anything is written.
+  const { refuse, warn } = decide(t.findings, TEMPLATE_POLICIES.cli)
+  // A file of the Template that cannot be read: one ERROR line, exit 2.
+  const cannot = refuse.find(f => /-unreadable$/.test(f.code))
+  if (cannot) throw new Error(cannot.message)
+  for (const f of warn) console.log(`warn   ${f.message}`)
+  if (refuse.length) {
+    for (const f of refuse) console.log(`ERROR  ${f.message}`)
+    console.log('\nRefusing to write: Helm would not render this Template as written.')
+    return 1
   }
 
-  const genDef = model?.groups?.[group] ? groupGenDef(model.groups[group]) : alertDef
-  const content = generateGroupTemplate(group, genDef, '{{ .Release.Name }}', schema, { objectMeta })
-  if (!content) {
-    results.push(['skip', group, 'no rules to generate'])
-    continue
-  }
+  const results = []
+  let failed = 0
+  // Every template this run writes, written together at the end, each
+  // whole: a run stopped part-way leaves no file cut off.
+  const pending = []
 
-  const existing = await readIfExists(file)
-  if (check) {
-    if (existing === null) {
-      results.push(['MISSING', group, 'no template file on disk'])
-      failed++
-    } else if (existing === content) {
-      results.push(['same', group, ''])
-    } else {
-      results.push(['DIFFERS', group, `${existing.split('\n').length} lines on disk vs ${content.split('\n').length} generated`])
-      failed++
+  const findingsByGroup = new Map()
+  for (const finding of t.ruleChecks) {
+    if (!findingsByGroup.has(finding.group)) findingsByGroup.set(finding.group, [])
+    findingsByGroup.get(finding.group).push(finding)
+  }
+  // What is missing and what is there but differs (computeDrift).
+  const behind = new Set(t.drift.state === 'ok' ? [] : [...(t.drift.files ?? []), ...(t.drift.outOfDate ?? [])])
+
+  for (const [group, entry] of Object.entries(t.model.groups)) {
+    const name = `${group.replace(/_/g, '-')}.yaml`
+    if (entry.custom) {
+      results.push(['skip', group, 'x-custom-template — file-level escape hatch, migrate to a raw x-rules entry'])
+      continue
     }
-    continue
+    const problems = findingsByGroup.get(group) || []
+    if (problems.length) {
+      results.push(['ERROR', group, problems.map(p => p.message).join('; ')])
+      failed++
+      continue
+    }
+    const content = t.products.templates[name]
+    if (!content) {
+      results.push(['skip', group, 'no rules to generate'])
+      continue
+    }
+    const existing = t.templateFiles[name] ?? null
+    if (check) {
+      if (existing === null) {
+        results.push(['MISSING', group, 'no template file on disk'])
+        failed++
+      } else if (!behind.has(`templates/${name}`)) {
+        results.push(['same', group, ''])
+      } else {
+        results.push(['DIFFERS', group, `${existing.split('\n').length} lines on disk vs ${content.split('\n').length} generated`])
+        failed++
+      }
+      continue
+    }
+    pending.push({ rel: `${t.dir}/templates/${name}`, text: content })
+    results.push([existing === content ? 'unchanged' : existing === null ? 'created' : 'updated', group, ''])
+  }
+  // The rest of what the comparison names: a schema behind rules/ (a save or
+  // gen-rules writes it), a template of a removed group, a file repeating
+  // the generated alerts.
+  if (check) {
+    for (const f of behind) {
+      if (f === 'values.schema.json') { results.push([t.schemaText === null ? 'MISSING' : 'DIFFERS', f, 'behind rules/ — run gen-rules.mjs']); failed++ }
+      else if (f.endsWith(' (orphaned)')) { results.push(['ORPHANED', f.slice(0, -' (orphaned)'.length), 'its group is gone — run gen-rules.mjs']); failed++ }
+    }
+    for (const r of t.drift.repeats ?? []) { results.push(['REPEATS', r.file, `${repeatsText(r)} — ${REPEATS_FIX}`]); failed++ }
   }
 
-  await fs.writeFile(file, content, 'utf-8')
-  results.push([existing === content ? 'unchanged' : existing === null ? 'created' : 'updated', group, ''])
+  if (pending.length) await writeToolFiles(t.root, pending)
+
+  const width = Math.max(...results.map(r => r[1].length), 0)
+  for (const [status, group, note] of results) {
+    console.log(`${status.padEnd(9)} ${group.padEnd(width)}  ${note}`)
+  }
+  console.log(`\n${results.length} groups, ${failed} problem(s)`)
+  return failed ? 1 : 0
 }
 
-const width = Math.max(...results.map(r => r[1].length), 0)
-for (const [status, group, note] of results) {
-  console.log(`${status.padEnd(9)} ${group.padEnd(width)}  ${note}`)
+// Anything main() did not expect (a file it cannot read) is one ERROR line
+// and exit 2, as in gen-rules — not a stack, and not the 1 that means a
+// template differs.
+try {
+  process.exitCode = await main()
+} catch (err) {
+  console.log(`ERROR  ${err.message}`)
+  process.exitCode = 2
 }
-console.log(`\n${results.length} groups, ${failed} problem(s)`)
-process.exit(failed ? 1 : 0)

@@ -134,8 +134,9 @@ describe('breaking change + migration', () => {
     await fs.rm(flat, { recursive: true, force: true })
     await fs.writeFile(flat, 'not a directory')
 
-    const { status } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': withThreshold } })
-    expect(status).toBe(500)
+    const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': withThreshold } })
+    expect(status).toBe(409)
+    expect(data.unreadable).toBe(true)
     expect(await fs.readFile(path.join(chartDir, 'rules', 'cpu.yaml'), 'utf-8')).toBe(withWarn)
   })
 

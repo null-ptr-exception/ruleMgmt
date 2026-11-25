@@ -106,6 +106,8 @@ describe('POST /:chart/rules', () => {
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': bad } })
     expect(status).toBe(400)
     expect(data.findings.some(f => f.kind === 'undefined-var')).toBe(true)
+    // What the editor lists (#131): the rule, by name.
+    expect(data.findings.find(f => f.kind === 'undefined-var').message).toMatch(/^rule "\w+" references \$\{ghost\}, which is not a column$/)
     expect(await exists('rules/cpu.yaml')).toBe(false)
   })
 
@@ -185,9 +187,24 @@ describe('POST /:chart/rules — a group changing type', () => {
     await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
     const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': 'type: vlogs\n' + CPU } })
     expect(status).toBe(200)
-    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-type-changed', group: 'cpu', from: 'prometheus', to: 'vlogs' })])
+    expect(data.notices).toEqual([expect.objectContaining({ kind: 'group-type-changed', group: 'cpu', from: 'prometheus2', to: 'vlogs' })])
     expect(data.notices[0].description).toMatch(/VMRule instead of PrometheusRule/)
     expect(await read('templates/cpu.yaml')).toContain('kind: VMRule')
+  })
+
+  // The site's prometheus labels are not prometheus3's: the save says what
+  // the objects lose, and still saves.
+  it('says which site labels a move to prometheus3 takes off the objects', async () => {
+    process.env.RULE_OBJECT_LABELS_BY_PROFILE = '{"prometheus":{"release":"kps"}}'
+    try {
+      await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': CPU } })
+      const { status, data } = await api('POST', '/api/v2/templates/demo/rules', { files: { 'cpu.yaml': 'type: prometheus3\n' + CPU } })
+      expect(status).toBe(200)
+      expect(data.notices[0].description).toMatch(/Its objects lose the site's labels release=kps, set under "prometheus" and not under "prometheus3"/)
+      expect(await read('templates/cpu.yaml')).not.toContain('release: kps')
+    } finally {
+      delete process.env.RULE_OBJECT_LABELS_BY_PROFILE
+    }
   })
 })
 

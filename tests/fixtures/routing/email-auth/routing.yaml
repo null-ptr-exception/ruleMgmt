@@ -1,0 +1,26 @@
+# An e-mail config's own SMTP identity (AUTH PLAIN) and secret (CRAM-MD5),
+# each beside a login of its own, so the platform's are not sent.
+labels:
+  severity: [critical, warning]
+configs:
+  team-email:
+    type: email
+    to: team@example.com
+    smarthost: smtp.team.example.com:587
+    authUsername: team-user
+    authPassword: { name: team-smtp, key: password }
+    authIdentity: team-user
+    authSecret: { name: team-smtp, key: cram-secret }
+  # A word YAML 1.1 reads as true stays the text "yes"; no smarthost: the
+  # platform's server, with this login.
+  yes-email:
+    type: email
+    to: yes@example.com
+    authUsername: "yes"
+    authPassword: { name: yes-smtp, key: password }
+    authIdentity: "yes"
+cells:
+  - match: { severity: critical }
+    configs: [team-email]
+  - match: { severity: warning }
+    configs: [yes-email]

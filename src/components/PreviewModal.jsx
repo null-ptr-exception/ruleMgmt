@@ -8,7 +8,7 @@ const { Text } = Typography
 // with promtool alone.
 function checkLabel(check) {
   const tools = check.tools?.length ? check.tools : ['promtool']
-  const names = tools.map(t => (t === 'promtool' ? 'Promtool' : t))
+  const names = tools.map(t => ({ promtool: 'Promtool', promtool3: 'Promtool 3' }[t] || t))
   return `${names.join(' + ')} check`
 }
 
@@ -17,7 +17,7 @@ function checkLabel(check) {
 // — the cell that matters most — which of a group's alerts produced nothing,
 // because the rendered YAML never contains an alert that wasn't produced. Raw
 // YAML is one toggle away for when the summary isn't enough.
-export default function PreviewModal({ open, onClose, yaml, check, selfCheck, summary, heading = 'Rendered rules' }) {
+export default function PreviewModal({ open, onClose, yaml, check, selfCheck, summary, valueWarnings, heading = 'Rendered rules' }) {
   const [raw, setRaw] = useState(false)
 
   const failed = yaml && yaml.startsWith('Error:')
@@ -45,6 +45,20 @@ export default function PreviewModal({ open, onClose, yaml, check, selfCheck, su
           showIcon
           message="Rendered output has problems the syntax check can't see"
           description={<ul style={{ margin: 0, paddingLeft: 18 }}>{selfCheck.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>}
+        />
+      )}
+
+      {valueWarnings?.length > 0 && (
+        // Values Helm renders, though maybe not as meant: a hand-written
+        // null on a _common stack (Helm versions read it differently), a
+        // value Helm reads otherwise than written (010 is 8), a key a
+        // _common writes twice. Each line says which, and where.
+        <Alert
+          style={{ marginBottom: 12 }}
+          type="warning"
+          showIcon
+          message="Values to look at — what deploys may not be what was meant"
+          description={<ul style={{ margin: 0, paddingLeft: 18 }}>{valueWarnings.map((p, i) => <li key={i}>{p}</li>)}</ul>}
         />
       )}
 
@@ -159,10 +173,50 @@ function GroupRow({ group }) {
           </tbody>
         </table>
       )}
+
+      {group.derived && group.derived.rows.length > 0 && <DerivedTable group={group} />}
     </div>
   )
 }
 
+// Each row's derived values (#118), as Helm renders them: what a range or a
+// `for` in this group will be, row by row. A row that leaves a column it
+// reads empty has no rule using it ("omitted"); one whose value cannot be
+// deployed says why.
+function DerivedTable({ group }) {
+  const { names, rows } = group.derived
+  return (
+    <table data-testid={`derived-${group.name}`} style={{ marginTop: 8, fontSize: 13, borderCollapse: 'collapse' }}>
+      <thead>
+        <tr>
+          <th style={head}>Row</th>
+          {names.map(n => <th key={n} style={head}><Text style={{ fontFamily: 'monospace' }}>{n}</Text></th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(r => (
+          <tr key={r.row} data-testid={`derived-${group.name}-row-${r.row}`}>
+            <td style={cell}><Text type="secondary">{r.row}{r.label ? ` · ${r.label}` : ''}</Text></td>
+            {names.map(n => {
+              const v = r.values[n] || {}
+              return (
+                <td key={n} style={cell} data-testid={`derived-${group.name}-${r.row}-${n}`}>
+                  {v.value !== undefined
+                    ? <Text style={{ fontFamily: 'monospace' }}>{v.value}{v.unit}</Text>
+                    : v.omitted
+                      ? <Text type="secondary">omitted</Text>
+                      : <Text type="danger">{v.problem}</Text>}
+                </td>
+              )
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+const head = { padding: '2px 16px 2px 0', textAlign: 'left', fontWeight: 600, color: '#555' }
 const cell = { padding: '2px 16px 2px 0' }
 const preStyle = {
   background: '#0f172a', color: '#7dd3fc', padding: 16, borderRadius: 8,

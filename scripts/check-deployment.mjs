@@ -16,99 +16,78 @@
  * and charts/ into the deployment folder; the gitops repo's .gitignore keeps
  * them out (doc/gitops-repo-setup.md).
  *
+ * A routing.yaml using shared notification configs (#123) is checked with
+ * the repo's _shared/notification-configs.yaml, and a deployment on a
+ * _common chart with the repo's Templates: the repo is the git checkout the
+ * deployment is in, or the root given with --repo. When neither tells it,
+ * the check stops and says so (exit 2); a deployment that needs neither does
+ * not need git.
+ *
  * Whether the AlertmanagerConfig is current depends on the site's object
  * labels (RULE_OBJECT_LABELS and friends): pass them with -e, as for
  * `gen-rules --check`.
  *
- * Exit 0: both pass. 1: a problem in the deployment. 2: it could not be
- * checked — wrong arguments, not a folder deployment, site settings it cannot
- * read, helm or a checker missing, a file it cannot read.
+ * Exit 0: both pass. 1: a problem in the deployment — Helm or a rule check
+ * fails, or a file of its own cannot be read (its values.yaml, routing.yaml
+ * or routing resource). 2: it could not be checked — wrong arguments, not a
+ * folder deployment, a Chart.yaml that cannot be read or used (whether it is
+ * a deployment cannot be told), site settings it cannot read, helm or a
+ * checker missing, a repo root it cannot tell.
  */
 
-import fs from 'fs/promises'
-import os from 'os'
 import path from 'path'
-import yaml from 'js-yaml'
-import { checkRules, renderChart } from '../server/lib/ruleCheck.js'
-import { routingState, ROUTING_FILE, ROUTING_CR_FILE } from '../server/lib/routingFiles.js'
 import { objectMetaFromEnv } from '../src/utils/objectMeta.js'
+import { CannotCheck, notADeployment, locateDeployment, helmHome, checkRuleObjects, checkRouting } from '../server/lib/deploymentCheck.js'
+import { valuesLimitNote } from '../server/repo/limits.js'
+import { openRepoAt, realFolder } from '../server/repo/locate.js'
+import { isCommonChartPath } from '../src/utils/reservedNames.js'
+import { decide } from '../server/repo/policy.js'
+import { TEMPLATE_POLICIES } from '../server/repo/findings/template.js'
 
-const USAGE = 'usage: node scripts/check-deployment.mjs <deployment folder>'
-
-/** A reason the deployment could not be checked at all: exit 2. */
-class CannotCheck extends Error {}
-
-const exists = file => fs.access(file).then(() => true, () => false)
-
-/** Why this folder cannot be checked, or null for a folder deployment. */
-async function notADeployment(dir) {
-  const stat = await fs.stat(dir).catch(() => null)
-  if (!stat) return `${dir} does not exist`
-  if (!stat.isDirectory()) return `${dir} is not a folder: give the deployment's folder`
-  if (await exists(path.join(dir, 'Chart.yaml')) && await exists(path.join(dir, 'values.yaml'))) return null
-  const legacy = (await fs.readdir(dir)).filter(f => f.endsWith('-values.yaml'))
-  if (legacy.length) {
-    return `${dir} keeps several deployments as <name>-values.yaml files (${legacy.join(', ')}). ` +
-      'Only a folder deployment — its own Chart.yaml and values.yaml — can be checked.'
-  }
-  return `${dir} is not a deployment: it has no Chart.yaml and values.yaml`
-}
-
-/**
- * Helm's cache, config and data in a temp folder unless they are set: run as
- * any uid in a container, the home folder may not exist or not be writable.
- */
-async function helmHome() {
-  const keys = ['HELM_CACHE_HOME', 'HELM_CONFIG_HOME', 'HELM_DATA_HOME'].filter(k => !process.env[k])
-  if (!keys.length) return async () => {}
-  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'check-deployment-helm-'))
-  for (const key of keys) process.env[key] = path.join(tmp, key.toLowerCase())
-  return () => fs.rm(tmp, { recursive: true, force: true })
-}
-
-/** The release name Preview renders under: <chart>-<deployment>. */
-async function releaseName(dir) {
-  const chartYaml = yaml.load(await fs.readFile(path.join(dir, 'Chart.yaml'), 'utf-8')) || {}
-  const chart = chartYaml.dependencies?.[0]?.name || chartYaml.name || 'deployment'
-  return `${chart}-${path.basename(dir)}`.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-}
-
-async function checkRuleObjects(dir) {
-  let rendered
-  try {
-    rendered = await renderChart(dir, ['template', await releaseName(dir), dir])
-  } catch (err) {
-    if (err.code === 'ENOENT') throw new CannotCheck(`helm is not available: ${process.env.HELM_BIN || 'helm'}`)
-    // A template error, or helm unable to write Chart.lock and charts/ into
-    // the folder: the mount must be writable by the uid it runs as.
-    return { ok: false, lines: ['helm could not render the deployment:', (err.stderr || err.message).trim()] }
-  }
-  const check = await checkRules(rendered)
-  if (check.missing) throw new CannotCheck(check.output)
-  const tools = check.tools?.length ? ` (${check.tools.join(', ')})` : ''
-  // A lint finding passes, as in Preview, but is not a clean pass.
-  const title = !check.passed ? `failed${tools}` : check.warned ? `passed with warnings${tools}` : `passed${tools}`
-  return { ok: check.passed, lines: [`Rules: ${title}`, check.output].filter(Boolean) }
-}
-
-async function checkRouting(dir) {
-  const state = await routingState(dir)
-  if (!state) return { ok: true, lines: [`Routing: no ${ROUTING_FILE} — not checked`] }
-  if (state.errors.length) {
-    return { ok: false, lines: [`Routing: ${ROUTING_FILE} has problems`, ...state.errors.map(e => `  ${e}`)] }
-  }
-  if (state.stale) {
-    return {
-      ok: false,
-      lines: [
-        `Routing: ${ROUTING_CR_FILE} is not what ${ROUTING_FILE} generates now.`,
-        `  ${ROUTING_FILE} was edited by hand, or the site's object labels changed: save it again in AlertForge.`,
-        '  If the labels are set by the site (RULE_OBJECT_LABELS …), pass them with -e.',
-      ],
+// The Templates the deployment's Chart.yaml takes from the repo (file://),
+// read as the server reads them: what Helm renders other than written (a
+// generated file missing, a partial holding rules, the alerts repeated, a
+// name with a dot) is said, as Commit says it. The deployment's own render
+// (checkRuleObjects) does not show it: Helm renders the rest without a word.
+async function checkTemplate(dir) {
+  const lines = []
+  // Through a `_common` (#100): its Chart.yaml takes the Template, and so on
+  // down the stack; each chart folder once.
+  const seen = new Set()
+  const walk = async chartDir => {
+    if (seen.has(chartDir) || seen.size > 20) return
+    seen.add(chartDir)
+    const { repo, rel } = openRepoAt(path.join(chartDir, 'Chart.yaml'))
+    const chart = await repo.helmYaml(rel)
+    if (chart.state !== 'ok') return
+    for (const d of Array.isArray(chart.value.dependencies) ? chart.value.dependencies : []) {
+      const repository = typeof d?.repository === 'string' ? d.repository : ''
+      // file://, or (a `_common` chart) a link in its own charts/, the
+      // only place Helm looks below a dependency.
+      let to = repository.startsWith('file://') ? path.resolve(chartDir, repository.slice('file://'.length)) : null
+      if (!to && !repository && typeof d?.name === 'string') {
+        to = realFolder(path.join(chartDir, 'charts', d.name))
+      }
+      if (!to) continue
+      if (isCommonChartPath(to)) { await walk(to); continue }
+      // A file of its rules/ that cannot be read is gen-rules --check's to
+      // name: Helm does not read rules/. The folder itself has to be.
+      const at = openRepoAt(to)
+      const t = await at.repo.templateFiles(at.rel)
+      if (t.state === 'unreadable') { lines.push(`  ${at.rel} cannot be read: ${t.why}`); continue }
+      if (t.state !== 'ok' || t.value.chart?.annotations?.app !== 'alertforge') continue
+      for (const f of decide(t.findings, TEMPLATE_POLICIES.checkDeployment).refuse) lines.push(`  ${f.message}`)
     }
   }
-  return { ok: true, lines: [`Routing: passed`] }
+  await walk(dir)
+  return lines.length ? { ok: false, lines: ['Template: failed — Helm would not render it as written:', ...lines] } : { ok: true, lines: [] }
 }
+
+// The same values size limit as the server's (MAX_VALUES_BYTES): a setting
+// not used as written is said, as the server says it.
+if (valuesLimitNote()) console.error(`warn: ${valuesLimitNote()}`)
+
+const USAGE = 'usage: node scripts/check-deployment.mjs [--repo <gitops repo root>] <deployment folder>'
 
 async function main() {
   const args = process.argv.slice(2)
@@ -116,12 +95,22 @@ async function main() {
     console.log(USAGE)
     return 0
   }
-  if (args.length !== 1) {
+  let repo = null
+  if (args[0] === '--repo') {
+    repo = args[1]
+    args.splice(0, 2)
+  }
+  if (args.length !== 1 || repo === undefined) {
     console.error(USAGE)
     return 2
   }
-  const dir = path.resolve(args[0])
-  const why = await notADeployment(dir)
+  // A repo reached through a linked path is the repo it leads to: both are
+  // taken as they really are, so the one is found inside the other.
+  const located = await locateDeployment(args[0], repo)
+  if (located.outside) throw new CannotCheck(located.outside)
+  const dir = located.dir
+  if (repo) repo = located.root
+  const why = await notADeployment(dir, repo)
   if (why) throw new CannotCheck(why)
   // The site's labels decide whether the AlertmanagerConfig is current: a
   // setting that cannot be read would give the wrong answer, so stop, as
@@ -134,9 +123,9 @@ async function main() {
     // Each said as soon as it is known: a later one that cannot be made
     // (an unreadable routing.yaml) does not hide what was checked before it.
     let ok = true
-    for (const step of [checkRuleObjects, checkRouting]) {
-      const result = await step(dir)
-      console.log(result.lines.join('\n'))
+    for (const step of [checkRuleObjects, checkTemplate, checkRouting]) {
+      const result = await step(dir, repo)
+      if (step !== checkTemplate || result.lines.length) console.log(result.lines.join('\n'))
       ok &&= result.ok
     }
     return ok ? 0 : 1

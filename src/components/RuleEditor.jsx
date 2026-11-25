@@ -36,7 +36,7 @@ const label = text => (
  * it replaces the literal with ${name} here and opens a column for it in the
  * rule owner's table. Anything left un-marked stays fixed and they never see it.
  */
-export default function RuleEditor({ rule, columns = [], columnDefs = {}, collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn, exprLanguage = 'promql' }) {
+export default function RuleEditor({ rule, columns = [], columnDefs = {}, derived, collapsed = false, onToggleCollapse, onChange, onRemove, onAddColumn, exprLanguage = 'promql' }) {
   const exprApi = useRef(null)
   const [naming, setNaming] = useState(null)
   const [varName, setVarName] = useState('')
@@ -120,6 +120,12 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
   }
 
 
+  // What each reference holds, for the expr lint: a number column, an
+  // integer, a duration or a derived value is a number or a duration there.
+  const columnKinds = Object.create(null)
+  for (const [n, c] of Object.entries(columnDefs)) if (['number', 'integer', 'duration'].includes(c?.type) && !c.enum) columnKinds[n] = 'number'
+  for (const n of Object.keys(derived || {})) columnKinds[n] = 'number'
+
   const used = [...ruleVars(rule)]
   // A reference with no column renders as an empty value at deploy time, so it
   // is called out here rather than discovered in the rendered resource. A
@@ -129,8 +135,9 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
   // A column with no default that the expression reads: a row that leaves it
   // blank produces no alert at all for this rule.
   const exprVars = new Set([...varsIn(rule.expr || ''), ...varsIn(rule.for || '')])
-  const dropsRule = used.filter(name =>
-    exprVars.has(name) && columnDefs[name] && columnDefs[name].default === undefined && !columnDefs[name].required)
+  // A derived value (#118) stands for the columns it reads.
+  const dropsRule = [...new Set(used.filter(name => exprVars.has(name)).flatMap(name => derived?.[name]?.columns ?? [name]))]
+    .filter(name => columnDefs[name] && columnDefs[name].default === undefined && !columnDefs[name].required)
 
   const severity = (rule.labels || {}).severity
   const summary = (rule.raw || rule.expr || '').split('\n')[0]
@@ -236,6 +243,7 @@ export default function RuleEditor({ rule, columns = [], columnDefs = {}, collap
               value={rule.expr || ''}
               onChange={expr => update({ expr })}
               minHeight={64}
+              columnKinds={columnKinds}
             />
             <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
               Select a literal and press Set as variable to turn it into a column.

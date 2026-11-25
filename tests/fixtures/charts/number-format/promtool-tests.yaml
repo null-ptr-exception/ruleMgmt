@@ -1,0 +1,21 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'req{port="1000000", code="1234567"}'
+        values: '2000000x10'
+      - series: 'req{port="1234567", code="12345678901"}'
+        values: '1x10'
+      # what the old rendering matched instead: nothing should
+      - series: 'req{port="1e+06", code="1.234567e+06"}'
+        values: '2000000x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SvcHigh
+        exp_alerts:
+          - exp_labels: { port: '1000000', code: '1234567', warn: '1000000', cluster: '1000000' }
+            exp_annotations: { summary: 'port 1000000 over 1000000' }
+          - exp_labels: { port: '1234567', code: '12345678901', warn: '1e-7', cluster: '1000000' }
+            exp_annotations: { summary: 'port 1234567 over 1e-7' }

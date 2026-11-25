@@ -1,18 +1,26 @@
 import express from 'express'
-import fs from 'fs/promises'
 import { readFileSync } from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import chartsRouter from './server/routes/charts.js'
+import { valuesLimitNote } from './server/repo/limits.js'
 import templatesV2Router from './server/routes/templates.js'
 import deploymentsRouter from './server/routes/deployments.js'
 import renderRouter from './server/routes/render.js'
 import gitRouter from './server/routes/git.js'
-import git from './server/lib/git.js'
 import foldersRouter from './server/routes/folders.js'
 import syncRouter from './server/routes/sync.js'
-import { getChartsDir, getDeploymentsDir, scaffoldSamplesIfNeeded } from './server/lib/chartDiscovery.js'
+import routingSharedRouter from './server/routes/routingShared.js'
+import { getChartsDir, getDeploymentsDir, findAlertTemplateCharts } from './server/lib/chartDiscovery.js'
+import { initGitIfNone, placeSample, placeSampleOrUndo, hasCommittedContent, StartRefused } from './server/repo/setup.js'
 import { logger, httpLogger } from './server/lib/logger.js'
+import { jsonBody } from './server/http/body.js'
+import { answerUncaught } from './server/http/route.js'
+import { userRoute, unknownApiRoute } from './server/routes/own.js'
+import { sweepTempFiles, parkedSearch } from './server/repo/write.js'
+import { parkedSaid, unlistedSaid } from './server/lib/parkedSaid.js'
+import { chartsDir as templatesDirRel } from './server/repo/template.js'
+import { sweepTempCopies } from './server/repo/copyRepo.js'
 import { objectMetaFromEnv } from './src/utils/objectMeta.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -29,7 +37,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
   }
 }
 const app = express()
-app.use(express.json())
+// A body that is not JSON, or too big, is answered as JSON (server/http/body.js).
+app.use(jsonBody())
 app.use(httpLogger)
 app.use((req, res, next) => {
   const origJson = res.json.bind(res)
@@ -44,27 +53,68 @@ app.use((req, res, next) => {
 
 const BASE_PATH = process.env.JUPYTERHUB_SERVICE_PREFIX || '/'
 const GITOPS_DIR_V2 = process.env.GITOPS_DIR || path.join(__dirname, 'gitops')
+// Said first: without GITOPS_DIR the repo is the folder beside this file
+// (/app/gitops in the image), whatever is mounted elsewhere.
+logger.info(process.env.GITOPS_DIR
+  ? `Serving the gitops repo in ${GITOPS_DIR_V2} (GITOPS_DIR)`
+  : `Serving the gitops repo in ${GITOPS_DIR_V2} — the default, as GITOPS_DIR is not set: a repo mounted or kept anywhere else is not read`)
 
-// Auto-init git in local dev mode (no JupyterHub)
+const CHARTS_DIR_V2 = getChartsDir(GITOPS_DIR_V2, process.env.CHARTS_DIR)
+const DEPLOYMENTS_DIR_V2 = getDeploymentsDir(GITOPS_DIR_V2, process.env.DEPLOYMENTS_DIR)
+
+const SAMPLE_AT = { root: GITOPS_DIR_V2, chartsDir: CHARTS_DIR_V2, deploymentsDir: DEPLOYMENTS_DIR_V2, sampleDir: path.join(__dirname, 'sample') }
+const sayInfo = (line, level = 'info') => logger[level](line)
+// A start that cannot finish is said in one line (StartRefused), and stops.
+const refusedAtStart = err => {
+  if (!(err instanceof StartRefused)) throw err
+  logger.error(err.message)
+  process.exit(1)
+}
+
+// Auto-init git in local dev mode (no JupyterHub): a folder that is no repo
+// becomes one, its first commit holding the sample when it was empty.
 if (!process.env.JUPYTERHUB_SERVICE_PREFIX) {
   try {
-    await fs.access(path.join(GITOPS_DIR_V2, '.git'))
-  } catch {
-    await fs.mkdir(GITOPS_DIR_V2, { recursive: true })
-    await git(GITOPS_DIR_V2, 'init')
-    await git(GITOPS_DIR_V2, 'add', '-A')
-    await git(GITOPS_DIR_V2, 'commit', '--allow-empty', '-m', 'initial')
-    logger.info(`Git initialized in ${GITOPS_DIR_V2}`)
+    const made = await initGitIfNone(GITOPS_DIR_V2, { fill: made => placeSample(SAMPLE_AT, made, sayInfo) })
+    if (made) logger.info(`Git initialized in ${GITOPS_DIR_V2}${made.filled ? ', with the sample data in its first commit' : ''}`)
+  } catch (err) {
+    refusedAtStart(err)
   }
 }
 
-// Scaffold sample chart templates if none exist
+// A MAX_VALUES_BYTES that is not used as written is said once.
 {
-  const chartsDir = getChartsDir(GITOPS_DIR_V2, process.env.CHARTS_DIR)
-  const deploymentsDir = getDeploymentsDir(GITOPS_DIR_V2, process.env.DEPLOYMENTS_DIR)
-  const sampleDir = path.join(__dirname, 'sample')
-  const scaffolded = await scaffoldSamplesIfNeeded(chartsDir, sampleDir, deploymentsDir)
-  if (scaffolded) logger.info(`Scaffolded sample data into ${chartsDir}`)
+  const note = valuesLimitNote()
+  if (note) logger.warn(note)
+}
+
+// A repo that was there already, with no Template: the sample is put in
+// only when it has no commit of its own content, and left for the first
+// Commit — the repo is not the server's to commit into. One that has such
+// commits is somebody's: a Templates folder that is empty, or looked for
+// under another name (CHARTS_DIR), is said, and nothing is copied in.
+if (await hasCommittedContent(GITOPS_DIR_V2)) {
+  if ((await findAlertTemplateCharts(CHARTS_DIR_V2)).length === 0) {
+    logger.info(`No Template in ${CHARTS_DIR_V2}: the sample data is only copied into a repo with no commit of its own content, and this one has some. If the Templates are in another folder, set CHARTS_DIR (and DEPLOYMENTS_DIR)`)
+  }
+} else {
+  await placeSampleOrUndo(SAMPLE_AT, sayInfo).catch(refusedAtStart)
+}
+
+// A write killed between its temp file and its rename leaves the temp file:
+// old ones are removed (Commit never adds them either).
+{
+  const swept = await sweepTempFiles(GITOPS_DIR_V2)
+  if (swept.length) logger.info(`Removed ${swept.length} temp file(s) a write left: ${swept.join(', ')}`)
+  // Content a write moved aside and did not put back or remove is never
+  // removed: said, and Commit refuses while it is there.
+  // A folder that could not be listed may hold some: said too.
+  const { parked, unlisted } = await parkedSearch(GITOPS_DIR_V2)
+  for (const said of parkedSaid(parked, templatesDirRel())) logger.warn(said)
+  for (const u of unlisted) logger.warn(unlistedSaid(u))
+  // And the copies of the repo a plan checks in, left by a server killed meanwhile.
+  const copies = await sweepTempCopies()
+  if (copies.length) logger.info(`Removed ${copies.length} temp cop${copies.length > 1 ? 'ies' : 'y'} of the repo left by a stopped server`)
 }
 
 // ─── V2 API (base path router) ──────────────────────────────────────────────
@@ -82,12 +132,11 @@ baseRouter.use('/api/v2/render', setGitopsDir, renderRouter())
 baseRouter.use('/api/v2/git', setGitopsDir, gitRouter())
 baseRouter.use('/api/v2/folders', setGitopsDir, foldersRouter())
 baseRouter.use('/api/v2/sync', setGitopsDir, syncRouter())
+baseRouter.use('/api/v2/routing/shared', setGitopsDir, routingSharedRouter())
 
-baseRouter.get('/api/v2/user', (req, res) => {
-  const user = process.env.JUPYTERHUB_USER || null
-  const logoutUrl = process.env.JUPYTERHUB_BASE_URL ? `${process.env.JUPYTERHUB_BASE_URL}hub/logout` : null
-  res.json({ user, logoutUrl })
-})
+baseRouter.get('/api/v2/user', userRoute)
+// Any other /api path is no page: a JSON 404.
+baseRouter.use('/api', unknownApiRoute)
 
 // Static assets + SPA fallback with base path injection
 const indexHtml = readFileSync(path.join(__dirname, 'dist', 'index.html'), 'utf-8')
@@ -100,6 +149,8 @@ baseRouter.get('*', (req, res) => {
 })
 
 app.use(BASE_PATH, baseRouter)
+// An error no route answered: JSON, no stack trace, no path of the machine.
+app.use(answerUncaught)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => logger.info(`API server listening on port ${PORT}`))

@@ -1,0 +1,42 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # every request between 0.5s and 1.5s: p99 is 0.5 + 0.99 = 1.49s
+      - series: 'http_request_duration_seconds_bucket{namespace="shop", pod="web-1", le="0.5"}'
+        values: '0x20'
+      - series: 'http_request_duration_seconds_bucket{namespace="shop", pod="web-1", le="1.5"}'
+        values: '0+60x20'
+      - series: 'http_request_duration_seconds_bucket{namespace="shop", pod="web-1", le="+Inf"}'
+        values: '0+60x20'
+      # every request under 0.5s: p99 is 0.495s
+      - series: 'http_request_duration_seconds_bucket{namespace="shop", pod="web-2", le="0.5"}'
+        values: '0+60x20'
+      - series: 'http_request_duration_seconds_bucket{namespace="shop", pod="web-2", le="1.5"}'
+        values: '0+60x20'
+      - series: 'http_request_duration_seconds_bucket{namespace="shop", pod="web-2", le="+Inf"}'
+        values: '0+60x20'
+      # slow, but no row
+      - series: 'http_request_duration_seconds_bucket{namespace="blog", pod="web-3", le="0.5"}'
+        values: '0x20'
+      - series: 'http_request_duration_seconds_bucket{namespace="blog", pod="web-3", le="1.5"}'
+        values: '0+60x20'
+      - series: 'http_request_duration_seconds_bucket{namespace="blog", pod="web-3", le="+Inf"}'
+        values: '0+60x20'
+    alert_rule_test:
+      # The first rate is at 1m; for: 10m.
+      - eval_time: 10m
+        alertname: LatencyHigh
+        exp_alerts: []
+      # The namespace label is the rule's. In the annotations, $labels is what
+      # the expr returns, and the sum is by (le, pod): no namespace there.
+      - eval_time: 11m
+        alertname: LatencyHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, namespace: shop, pod: web-1 }
+            exp_annotations:
+              summary: "p99 is 1.49s on web-1"
+              description: "1.49s over 0.5s in shop"
+              pods: 'pods matching web-\d+ in '

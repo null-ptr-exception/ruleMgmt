@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Tree, Tag, Dropdown, Modal, Tooltip, message } from 'antd'
-import { FolderOutlined, MoreOutlined, WarningOutlined } from '@ant-design/icons'
-import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
+import { Tree, Tag, Dropdown, Modal, Tooltip, Alert, message } from 'antd'
+import { FolderOutlined, MoreOutlined, ToolOutlined, WarningOutlined } from '@ant-design/icons'
+import { isReservedName, RESERVED_HINT, COMMON_DIR } from '../utils/reservedNames'
 import { getFolderTree, getSyncRegistry, unlinkSync, deleteDeployment } from '../utils/chartApi'
 import SyncToModal from './SyncToModal'
 import SyncFromModal from './SyncFromModal'
 import DeleteSourceModal from './DeleteSourceModal'
+import CommonModal from './CommonModal'
+import { stackNote } from '../utils/stackNote'
 
 function getSyncStatus(registry, nodePath) {
   const sourceEntry = registry.syncs.find(s => s.source === nodePath)
@@ -19,6 +21,46 @@ function getSyncStatus(registry, nodePath) {
   return { role: null }
 }
 
+// A node's actions: a visible "..." button and the right-click menu, the
+// same items. Right-click alone would leave keyboard and touch users out.
+// `label` names the button: a deployment's by its name; a folder's by what
+// it is, inside its tree item — a folder named like a page's button
+// ("…-save-test") must not be found as that button.
+function withMenu(titleInner, label, items, onPick) {
+  const onClick = ({ key, domEvent }) => { domEvent?.stopPropagation(); onPick(key) }
+  return (
+    <Dropdown menu={{ items, onClick }} trigger={['contextMenu']}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {titleInner}
+        <Dropdown menu={{ items, onClick }} trigger={['click']}>
+          <button
+            type="button"
+            aria-label={label}
+            onClick={e => e.stopPropagation()}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              padding: '0 2px',
+              cursor: 'pointer',
+              color: '#9ca3af',
+              lineHeight: 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
+          >
+            <MoreOutlined />
+          </button>
+        </Dropdown>
+      </span>
+    </Dropdown>
+  )
+}
+
+// The Templates folder (the server says which it is): greyed, with the
+// Templates page's icon, so that it is not taken for a place for deployments.
+const TEMPLATES_GREY = '#9ca3af'
+const TEMPLATES_HINT = `The Templates folder. Templates are edited on the Templates page: this is no place for a deployment or a ${COMMON_DIR}`
+
 function toTreeNode(node, registry, handlers) {
   const status = node.isDeployment ? getSyncStatus(registry, node.path) : { role: null }
 
@@ -28,9 +70,20 @@ function toTreeNode(node, registry, handlers) {
       ? <Tag color="orange" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>synced</Tag>
       : null
 
+  // A deployment on another _common than its folder's (#103): a sync target
+  // follows its source's; one unlinked, or moved, keeps what it has.
+  const follows = node.isDeployment && !node.unreadable ? stackNote(node.inheritsFrom, node.folderCommon, status.role === 'target' ? 'source' : null) : null
+
   const titleInner = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span>{node.name}</span>
+      {node.isTemplates ? (
+        <Tooltip title={TEMPLATES_HINT}>
+          <span data-testid="templates-folder" style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, color: TEMPLATES_GREY, cursor: 'default' }}>
+            <span>{node.name}</span>
+            <span style={{ fontSize: 11 }}>Templates</span>
+          </span>
+        </Tooltip>
+      ) : <span>{node.name}</span>}
       {node.isDeployment && (
         <Tag
           color="blue"
@@ -39,8 +92,46 @@ function toTreeNode(node, registry, handlers) {
           {node.chart}
         </Tag>
       )}
+      {node.isCommon && (
+        <Tooltip title={`What the deployments of ${node.chart} under this folder inherit`}>
+          <Tag color="geekblue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>inherited by the folder</Tag>
+        </Tooltip>
+      )}
+      {node.isCommon && node.problems?.length > 0 && (
+        <Tooltip title={node.problems.join('\n')}>
+          <WarningOutlined aria-label="broken _common" style={{ color: '#dc2626' }} />
+        </Tooltip>
+      )}
       {badge}
-      {isReservedName(node.name) && (
+      {follows && (
+        <Tooltip title={status.role === 'target'
+          ? `A sync target renders its source's files, the ${COMMON_DIR} it inherits from included`
+          : `Its Chart.yaml depends on another ${COMMON_DIR} than its folder's (left from a sync, or moved): it inherits that one`}>
+          <Tag data-testid="follows-source-common" color="geekblue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', margin: 0 }}>{follows}</Tag>
+        </Tooltip>
+      )}
+      {node.isDeployment && (node.nestedIn || node.inCommon) && (
+        // An existing deployment where no new one can be made: flagged,
+        // still usable. Every list and the migration still find it.
+        <Tooltip title={node.nestedIn
+          ? `Inside the deployment ${node.nestedIn}: a deployment cannot hold another — move it to a folder of its own`
+          : `Inside a ${COMMON_DIR} folder, which holds what the deployments beside it inherit — move it out`}>
+          <WarningOutlined aria-label="misplaced deployment" style={{ color: '#d97706' }} />
+        </Tooltip>
+      )}
+      {node.noValues && (
+        <Tooltip title={`A Chart.yaml for ${node.chart} with no values.yaml: Helm deploys the Template's example rows. Add a values.yaml, or remove the folder`}>
+          <WarningOutlined aria-label="no values of its own" style={{ color: '#d97706' }} />
+        </Tooltip>
+      )}
+      {node.unreadable && (
+        <Tooltip title={node.isDeployment
+          ? `This deployment cannot be read as it is (${node.unreadable}) — fix it in git`
+          : `This folder cannot be read (${node.unreadable}): the deployments in it are not listed, checked or migrated`}>
+          <WarningOutlined aria-label="cannot be read" style={{ color: '#dc2626' }} />
+        </Tooltip>
+      )}
+      {isReservedName(node.name) && node.name !== COMMON_DIR && (
         // An existing folder with a reserved name (#99): flagged, still
         // usable. An icon, not a Tag: a Tag in a node marks a deployment.
         <Tooltip title={`${RESERVED_HINT} — rename this folder`}>
@@ -66,50 +157,31 @@ function toTreeNode(node, registry, handlers) {
     menuItems.push({ key: 'delete', label: 'Delete', danger: true })
 
     const treeNode = { key: node.path, name: node.name, path: node.path, chart: node.chart }
-    const onMenuClick = ({ key, domEvent }) => {
-      domEvent?.stopPropagation()
+    titleContent = withMenu(titleInner, `Actions for ${node.name}`, menuItems, key => {
       if (key === 'sync-to') handlers.onSyncTo(treeNode)
       else if (key === 'sync-from') handlers.onSyncFrom(treeNode)
       else if (key === 'unlink') handlers.onUnlink(treeNode)
       else if (key === 'delete') handlers.onDelete(treeNode, status)
-    }
-
-    // Right-click still works, but it can't be the only entry point —
-    // keyboard and touch users need a visible trigger for the same menu.
-    titleContent = (
-      <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['contextMenu']}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          {titleInner}
-          <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']}>
-            <button
-              type="button"
-              aria-label={`Actions for ${node.name}`}
-              onClick={e => e.stopPropagation()}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                padding: '0 2px',
-                cursor: 'pointer',
-                color: '#9ca3af',
-                lineHeight: 1,
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
-            >
-              <MoreOutlined />
-            </button>
-          </Dropdown>
-        </span>
-      </Dropdown>
-    )
+    })
+  } else if (node.isCommon) {
+    // A folder's _common (#101): opened like a deployment, removed from here.
+    titleContent = withMenu(titleInner, `${COMMON_DIR} actions`, [{ key: 'delete-common', label: `Remove this ${COMMON_DIR}...`, danger: true }],
+      () => handlers.onDeleteCommon(node.path))
+  } else if (node.name !== COMMON_DIR && !node.isTemplates) {
+    // The Templates folder has no menu: a _common there is refused.
+    titleContent = withMenu(titleInner, 'Folder actions', [{ key: 'add-common', label: `Add ${COMMON_DIR}...` }],
+      () => handlers.onAddCommon(node.path))
   }
 
   return {
     key: node.path,
     title: titleContent,
-    icon: <FolderOutlined />,
+    icon: node.isTemplates ? <ToolOutlined aria-label="Templates folder" style={{ color: TEMPLATES_GREY }} /> : <FolderOutlined />,
     isLeaf: node.isLeaf,
+    // A click on the Templates folder selects nothing: nothing opens for it.
+    ...(node.isTemplates ? { selectable: false } : {}),
     isDeployment: node.isDeployment,
+    isCommon: node.isCommon,
     chart: node.chart,
     name: node.name,
     path: node.path,
@@ -134,7 +206,7 @@ function withChecks(nodes, chart) {
   })
 }
 
-export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, onSyncChange, checkable = false, checkedKeys = [], checkChart = null, onCheck, onRemoved }) {
+export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, onSyncChange, checkable = false, checkedKeys = [], checkChart = null, onCheck, onRemoved, onCommonChange, confirmLeave }) {
   const [treeData, setTreeData] = useState([])
   const [expandedKeys, setExpandedKeys] = useState([])
   // Tree node titles embed handlers (e.g. handleUnlink -> refreshAll) that get
@@ -152,14 +224,23 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // leaves the checked set.
   const onRemovedRef = useRef(onRemoved)
   onRemovedRef.current = onRemoved
+  // Asked before a _common is made or removed: it reloads the page open.
+  const confirmLeaveRef = useRef(confirmLeave)
+  confirmLeaveRef.current = confirmLeave
   const [syncRegistry, setSyncRegistry] = useState({ syncs: [] })
+  // Why sync.yaml cannot be read, when it cannot: no node is marked, and
+  // the tree says why rather than look like nothing is synced.
+  const [syncError, setSyncError] = useState(null)
   const [syncToNode, setSyncToNode] = useState(null)
   const [syncFromNode, setSyncFromNode] = useState(null)
   const [deleteSourceInfo, setDeleteSourceInfo] = useState(null)
+  const [commonAction, setCommonAction] = useState(null)
 
   const loadChildren = useCallback(async (parentPath = '') => {
     return getFolderTree(parentPath)
   }, [])
+
+  const leaveOk = async () => (confirmLeaveRef.current ? (await confirmLeaveRef.current()) !== false : true)
 
   function buildTreeNodes(rawChildren, registry) {
     return rawChildren.map(n => toTreeNode(n, registry, {
@@ -167,6 +248,8 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
       onSyncFrom: setSyncFromNode,
       onUnlink: handleUnlink,
       onDelete: handleDeleteClick,
+      onAddCommon: async folder => { if (await leaveOk()) setCommonAction({ mode: 'create', folder }) },
+      onDeleteCommon: async commonPath => { if (await leaveOk()) setCommonAction({ mode: 'delete', commonPath }) },
     }))
   }
 
@@ -190,7 +273,9 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // expanded (a selected folder's ancestors) on top of — never instead of —
   // what the user already has open.
   async function refreshAll(ensureKeys = []) {
-    const [registry, rootChildren] = await Promise.all([getSyncRegistry(), loadChildren('')])
+    const [read, rootChildren] = await Promise.all([getSyncRegistry(), loadChildren('')])
+    const registry = read.failed ? { syncs: [] } : read
+    setSyncError(read.failed ? read.error : null)
     setSyncRegistry(registry)
 
     let newTreeData = buildTreeNodes(rootChildren, registry)
@@ -215,6 +300,9 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
     setExpandedKeys(keys)
   }
 
+  // The refreshKey the tree was last fetched for (#145).
+  const handledRefreshKey = useRef(refreshKey)
+
   // Load root on mount and when refreshKey changes. When a folder is
   // selected, the effect below already does a full refresh that also
   // expands its ancestors — skip the duplicate here so two concurrent
@@ -222,8 +310,8 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // staler expansion set).
   useEffect(() => {
     if (selectedFolder) return
+    handledRefreshKey.current = refreshKey
     refreshAll()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey, selectedFolder])
 
   // When selectedFolder is set (session restore, tree click, or a freshly
@@ -232,11 +320,23 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
   // loaded children of every other expanded branch on each selection — and
   // antd's internal loadedKeys then blocked loadData from refetching them,
   // so those branches re-expanded empty until a full reload.
+  //
+  // A click on the tree (#145) changes only selectedFolder, and its node is
+  // already there under expanded, loaded parents: nothing to fetch. The tree
+  // is fetched again when refreshKey changes (a deployment created; sync and
+  // delete refresh the tree themselves), or when
+  // the node or a parent is not in the tree yet (a session restored on an
+  // empty tree, a deployment just created in a new folder).
   useEffect(() => {
     if (!selectedFolder) return
     const parts = selectedFolder.split('/')
-    refreshAll(parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join('/')))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const ancestors = parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join('/'))
+    const refreshed = handledRefreshKey.current !== refreshKey
+    handledRefreshKey.current = refreshKey
+    const shown = !!findNode(treeData, selectedFolder) && ancestors.every(key =>
+      expandedKeysRef.current.includes(key) && Array.isArray(findNode(treeData, key)?.children))
+    if (!refreshed && shown) return
+    refreshAll(ancestors)
   }, [selectedFolder, refreshKey])
 
   async function onLoadData(node) {
@@ -247,10 +347,15 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
 
   function handleSelect(selectedKeys) {
     if (selectedKeys.length === 0) return
+    // sync.yaml could not be read: read again, so the marks and menus come
+    // back once it can.
+    if (syncError) refreshAll()
     const key = selectedKeys[0]
     const node = findNode(treeData, key)
     if (node?.isDeployment) {
       onSelect({ path: node.key, chart: node.chart })
+    } else if (node?.isCommon) {
+      onSelect({ path: node.key, chart: node.chart, isCommon: true })
     }
   }
 
@@ -310,7 +415,7 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
           removeDeleted([node.path])
           refreshAll()
         } else {
-          message.error('Delete failed')
+          message.error(`Failed to delete ${node.name}: ${result.error}`)
         }
       },
     })
@@ -320,6 +425,10 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
 
   return (
     <div style={{ padding: '4px 8px' }}>
+      {syncError && (
+        <Alert data-testid="sync-read-error" type="error" showIcon style={{ marginBottom: 6, fontSize: 12 }}
+          message={`${syncError}: which deployments are synced is not shown.`} />
+      )}
       <Tree
         showIcon
         treeData={shownTree}
@@ -346,6 +455,20 @@ export default function DeploymentTree({ selectedFolder, onSelect, refreshKey, o
         target={syncFromNode}
         onClose={() => setSyncFromNode(null)}
         onSuccess={refreshAll}
+      />
+      <CommonModal
+        open={!!commonAction}
+        mode={commonAction?.mode}
+        folder={commonAction?.folder}
+        commonPath={commonAction?.commonPath}
+        onClose={() => setCommonAction(null)}
+        onDone={result => {
+          const parent = result.common.split('/').slice(0, -1).join('/')
+          setCommonAction(null)
+          if (result.action === 'delete') removeDeleted([result.common])
+          refreshAll(result.action === 'create' ? [result.folder, parent] : [])
+          onCommonChange?.(result)
+        }}
       />
       <DeleteSourceModal
         open={!!deleteSourceInfo}

@@ -9,6 +9,8 @@ import path from 'path'
 import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
+import { loadSync } from '../../server/repo/sync.js'
+import { openRepo as openRepoForSync } from '../../server/repo/openRepo.js'
 
 // chmod does not stop root from writing.
 const IS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0
@@ -143,6 +145,121 @@ describe('POST /sync refuses a source a values save would refuse', () => {
   })
 })
 
+describe('POST /sync checks the source\'s routing (#166)', () => {
+  const CR = 'templates/alertmanagerconfig.yaml'
+  const putRouting = async text => expect((await api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: text })).status).toBe(200)
+  const fresh = async () => {
+    expect((await api('POST', '/api/v2/folders/init', { folder: TGT, chart: 'demo' })).status).toBe(200)
+    return { values: await read(`${TGT}/values.yaml`), routing: await exists(`${TGT}/routing.yaml`) }
+  }
+
+  it.each([
+    ['not YAML', 'labels: [\n'],
+    ['empty', ''],
+    ['failing a save check', 'labels:\n  env: [prod, prod]\n'],
+  ])('a routing.yaml that is %s refuses the whole sync, and the target is left as it was', async (_, broken) => {
+    await setup([])
+    await putRouting(await routingFixture())
+    await fs.writeFile(path.join(tmpDir, SRC, 'routing.yaml'), broken)
+    const before = await fresh()
+
+    const { status, data } = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+
+    expect(status).toBe(400)
+    expect(data.error).toBe(`${SRC} cannot be synced: its routing.yaml has problems`)
+    expect(data.problems.length).toBeGreaterThan(0)
+    expect({ values: await read(`${TGT}/values.yaml`), routing: await exists(`${TGT}/routing.yaml`) }).toEqual(before)
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
+  })
+
+  it('a resource behind its routing.yaml is made again, not copied', async () => {
+    await setup([])
+    const routing = await routingFixture()
+    await putRouting(routing)
+    const made = await read(`${SRC}/${CR}`)
+    // routing.yaml edited by hand, the resource not regenerated.
+    const edited = routing.replace('4h', '6h')
+    expect(edited).not.toBe(routing)
+    await fs.writeFile(path.join(tmpDir, SRC, 'routing.yaml'), edited)
+
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+
+    expect(await read(`${TGT}/routing.yaml`)).toBe(edited)
+    const copied = await read(`${TGT}/${CR}`)
+    expect(copied).not.toBe(made)
+    // What a save of that routing.yaml makes (read before the save, which
+    // copies to the target too).
+    await putRouting(edited)
+    expect(copied).toBe(await read(`${SRC}/${CR}`))
+  })
+
+  it('a resource edited by hand is made again from routing.yaml, not copied', async () => {
+    await setup([])
+    await putRouting(await routingFixture())
+    const made = await read(`${SRC}/${CR}`)
+    await fs.writeFile(path.join(tmpDir, SRC, CR), `# edited by hand\n${made}`)
+
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+    expect(await read(`${TGT}/${CR}`)).toBe(made)
+  })
+
+  it('a resource without a routing.yaml refuses the sync', async () => {
+    await setup([])
+    await putRouting(await routingFixture())
+    await fs.rm(path.join(tmpDir, SRC, 'routing.yaml'))
+    const before = await fresh()
+
+    const { status, data } = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+
+    expect(status).toBe(400)
+    expect(data.problems).toEqual([{ message: expect.stringContaining('without a routing.yaml') }])
+    expect({ values: await read(`${TGT}/values.yaml`), routing: await exists(`${TGT}/routing.yaml`) }).toEqual(before)
+    expect(await exists(`${TGT}/${CR}`)).toBe(false)
+  })
+
+  it('broken values and broken routing are both listed', async () => {
+    await setup([])
+    await putRouting(await routingFixture())
+    await fs.writeFile(path.join(tmpDir, SRC, 'values.yaml'), 'demo:\n  cpu: [\n')
+    await fs.writeFile(path.join(tmpDir, SRC, 'routing.yaml'), 'labels: [\n')
+
+    const { status, data } = await api('POST', '/api/v2/sync', { source: SRC, target: TGT })
+
+    expect(status).toBe(400)
+    expect(data.error).toBe(`${SRC} cannot be synced: values.yaml is not valid YAML; its routing.yaml has problems`)
+    expect(data.problems.map(p => p.message)).toEqual([expect.any(String), expect.stringContaining('routing.yaml is not valid YAML')])
+  })
+
+  it('a target that has routing of its own keeps it, byte for byte, when the sync is refused', async () => {
+    await setup([])
+    const routing = await routingFixture()
+    await putRouting(routing)
+    expect((await api('POST', '/api/v2/folders/init', { folder: TGT, chart: 'demo' })).status).toBe(200)
+    expect((await api('PUT', `/api/v2/deployments/demo/tgt/routing${q(TGT)}`, { routing: routing.replace('4h', '8h') })).status).toBe(200)
+    const before = { routing: await read(`${TGT}/routing.yaml`), cr: await read(`${TGT}/${CR}`), values: await read(`${TGT}/values.yaml`) }
+    await fs.writeFile(path.join(tmpDir, SRC, 'routing.yaml'), 'labels: [\n')
+
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(400)
+    expect({ routing: await read(`${TGT}/routing.yaml`), cr: await read(`${TGT}/${CR}`), values: await read(`${TGT}/values.yaml`) }).toEqual(before)
+  })
+
+  it('a resource that is missing is made', async () => {
+    await setup([])
+    await putRouting(await routingFixture())
+    const made = await read(`${SRC}/${CR}`)
+    await fs.rm(path.join(tmpDir, SRC, CR))
+
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+    expect(await read(`${TGT}/${CR}`)).toBe(made)
+  })
+
+  it('a source without routing syncs as before', async () => {
+    await setup([])
+    expect((await api('POST', '/api/v2/sync', { source: SRC, target: TGT })).status).toBe(200)
+    expect(await exists(`${TGT}/routing.yaml`)).toBe(false)
+  })
+})
+
 describe('POST /sync checks a source whose Chart.yaml dependency has no name', () => {
   it('refuses its values.yaml when it is not YAML', async () => {
     await setup([])
@@ -169,19 +286,22 @@ describe('a values save refuses text that is not YAML', () => {
   })
 })
 
-describe.skipIf(IS_ROOT)('a target that cannot be written is reported, and the source is saved', () => {
-  it('saving the values', async () => {
+describe.skipIf(IS_ROOT)('a target that cannot be written', () => {
+  // A values save writes the source and its copies together, or none.
+  it('fails the values save, naming the file, and nothing is written', async () => {
     await setup([TGT, T2])
     await fs.chmod(path.join(tmpDir, TGT, 'values.yaml'), 0o444)
+    const before = await Promise.all([SRC, TGT, T2].map(d => read(`${d}/values.yaml`)))
 
     const { status, data } = await saveSrc(50)
 
-    expect(status).toBe(200)
-    expect(data).toEqual({ ok: true, syncFailed: [{ target: TGT, error: 'EACCES' }] })
-    expect(await read(`${SRC}/values.yaml`)).toContain('warn: 50')
-    expect(await read(`${T2}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
-    expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not be copied to ${TGT}`), expect.anything())
+    expect(status).toBe(409)
+    expect(data).toEqual({ error: `${TGT}/values.yaml cannot be written: permission denied`, file: `${TGT}/values.yaml` })
+    expect(await Promise.all([SRC, TGT, T2].map(d => read(`${d}/values.yaml`)))).toEqual(before)
   })
+
+  // A routing save or removal, too: the source and its targets' copies,
+  // all or none.
 
   it.each([
     ['saving the routing', async () => api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: await routingFixture() })],
@@ -190,16 +310,17 @@ describe.skipIf(IS_ROOT)('a target that cannot be written is reported, and the s
     await setup()
     expect((await api('PUT', `/api/v2/deployments/demo/src/routing${q(SRC)}`, { routing: (await routingFixture()).replace('4h', '3h') })).status).toBe(200)
     const before = await read(`${TGT}/routing.yaml`)
+    const srcBefore = await read(`${SRC}/routing.yaml`)
     await fs.chmod(path.join(tmpDir, TGT, 'templates'), 0o555)
     await fs.chmod(path.join(tmpDir, TGT), 0o555)
 
     const { status, data } = await act()
 
-    expect(status).toBe(200)
-    expect(data).toEqual({ ok: true, syncFailed: [{ target: TGT, error: 'EACCES' }] })
-    expect(await read(`${SRC}/routing.yaml`).catch(() => null)).not.toBe(before)
+    expect(status).toBe(409)
+    expect(data.file).toMatch(new RegExp(`^${TGT}/`))
+    expect(data.error).toBe(`${data.file} cannot be ${_.startsWith('deleting') ? 'removed' : 'written'}: permission denied`)
+    expect(await read(`${SRC}/routing.yaml`)).toBe(srcBefore)
     expect(await read(`${TGT}/routing.yaml`)).toBe(before)
-    expect(errors).toHaveBeenCalledWith(expect.stringContaining(`could not be copied to ${TGT}`), expect.anything())
   })
 })
 
@@ -209,8 +330,9 @@ describe('a hand-edited sync.yaml', () => {
     await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [{ source: 'deployments/team/other' }] }))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping an entry'), expect.anything())
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true, version: expect.any(String) } })
+      // Left out by every reader, and said: Commit names the row.
+      expect((await loadSync(openRepoForSync(tmpDir))).findings.map(f => f.code)).toEqual(['sync.row'])
     } finally {
       warn.mockRestore()
     }
@@ -224,7 +346,7 @@ describe('a hand-edited sync.yaml', () => {
     await fs.writeFile(path.join(tmpDir, 'sync.yaml'), `${registry}  - &bad {unexpected: *bad}\n`)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true, version: expect.any(String) } })
       expect(await read(`${TGT}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
       expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT] }] })
     } finally {
@@ -244,10 +366,11 @@ describe('a hand-edited sync.yaml', () => {
 `)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
-      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true } })
+      expect(await saveSrc(60)).toEqual({ status: 200, data: { ok: true, version: expect.any(String) } })
       for (const t of [TGT, T2]) expect(await read(`${t}/values.yaml`)).toBe(await read(`${SRC}/values.yaml`))
       expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT, T2] }] })
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('skipping 2 target(s) that are not a path'))
+      expect((await loadSync(openRepoForSync(tmpDir))).findings.filter(f => f.code === 'sync.target-not-path').map(f => f.message)).toEqual([
+        'sync.yaml syncs[0]: a target is not a path (a map)', 'sync.yaml syncs[0]: a target is not a path (a map)'])
     } finally {
       warn.mockRestore()
     }
@@ -294,6 +417,86 @@ describe('a hand-edited sync.yaml', () => {
   })
 })
 
+describe('deleting a sync source', () => {
+  const del = f => api('DELETE', `/api/v2/deployments/demo/${f.split('/').pop()}${q(f)}`)
+
+  it('lets go of its targets: they keep what they have and can be saved again', async () => {
+    await setup([TGT, T2])
+    const copied = await read(`${TGT}/values.yaml`)
+
+    expect(await del(SRC)).toEqual({ status: 200, data: { ok: true, unlinked: [TGT, T2] } })
+
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
+    expect(await read(`${TGT}/values.yaml`)).toBe(copied)
+    expect((await api('POST', `/api/v2/deployments/demo/tgt${q(TGT)}`, { values: { cpu: [{ namespace: 'own', warn: 1 }] } })).status).toBe(200)
+    expect((await api('PUT', `/api/v2/deployments/demo/tgt/routing${q(TGT)}`, { routing: await routingFixture() })).status).toBe(200)
+  })
+
+  it('a hand-edited sync.yaml listing it twice, or also as a target, is cleared of it', async () => {
+    await setup([TGT, T2])
+    const other = 'deployments/team/other'
+    expect((await api('POST', '/api/v2/folders/init', { folder: other, chart: 'demo' })).status).toBe(200)
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [
+      { source: SRC, targets: [TGT] },
+      { source: SRC, targets: [T2, TGT] },
+      { source: other, targets: [SRC] },
+    ] }))
+
+    expect(await del(SRC)).toEqual({ status: 200, data: { ok: true, unlinked: [TGT, T2] } })
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
+  })
+
+  // The folder query is not always spelled as sync.yaml spells it.
+  it.each([`${SRC}/`, SRC.replace('team/', 'team/./'), SRC.replace('team/', 'team//')])('the folder spelled %s still lets go of its targets', async folder => {
+    await setup()
+    expect(await api('DELETE', `/api/v2/deployments/demo/src${q(folder)}`)).toEqual({ status: 200, data: { ok: true, unlinked: [TGT] } })
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [] })
+  })
+
+  it.each([`${TGT}/`, TGT.replace('team/', 'team/./')])('a target spelled %s is still read-only', async folder => {
+    await setup()
+    expect((await api('POST', `/api/v2/deployments/demo/tgt${q(folder)}`, { values: { cpu: [{ namespace: 'x', warn: 1 }] } })).status).toBe(409)
+    expect((await api('PUT', `/api/v2/deployments/demo/tgt/routing${q(folder)}`, { routing: await routingFixture() })).status).toBe(409)
+  })
+
+  it('only targets that are let go are listed, and other sync links stay', async () => {
+    await setup([TGT, T2])
+    const other = 'deployments/team/other'
+    const ghost = 'deployments/team/ghost'
+    expect((await api('POST', '/api/v2/folders/init', { folder: other, chart: 'demo' })).status).toBe(200)
+    // A hand edit: T2 also listed under another source, and a target not on disk.
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [
+      { source: SRC, targets: [TGT, T2, ghost] },
+      { source: other, targets: [T2] },
+    ] }))
+    expect(await del(SRC)).toEqual({ status: 200, data: { ok: true, unlinked: [TGT] } })
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: other, targets: [T2] }] })
+  })
+
+  // The folder cannot be removed: nothing is let go, as nothing was deleted.
+  it.skipIf(IS_ROOT)('a source that cannot be removed keeps its sync links', async () => {
+    await setup()
+    const parent = path.join(tmpDir, 'deployments/team')
+    await fs.chmod(parent, 0o555)
+    try {
+      const before = await read(`${SRC}/values.yaml`)
+      const { status, data } = await del(SRC)
+      // Named, in the repo; every file removed before it put back.
+      expect(status).toBe(409)
+      expect(data).toEqual({ error: `${SRC} cannot be removed: permission denied`, file: SRC })
+      expect(await read(`${SRC}/values.yaml`)).toBe(before)
+    } finally {
+      await fs.chmod(parent, 0o755)
+    }
+    expect((await api('GET', '/api/v2/sync')).data).toEqual({ syncs: [{ source: SRC, targets: [TGT] }] })
+  })
+
+  it('a deployment that is no source says nothing was let go', async () => {
+    await setup([])
+    expect(await del(SRC)).toEqual({ status: 200, data: { ok: true } })
+  })
+})
+
 describe('saves racing sync changes leave the target a copy of its source', () => {
   it('a values save at the same time as a new sync link', async () => {
     await setup([])
@@ -302,6 +505,8 @@ describe('saves racing sync changes leave the target a copy of its source', () =
       const t = `deployments/team/r${i}`
       expect((await api('POST', '/api/v2/folders/init', { folder: t, chart: 'demo' })).status).toBe(200)
       const [s, y] = await Promise.all([saveSrc(100 + i), api('POST', '/api/v2/sync', { source: SRC, target: t })])
+      // A save planned before the link was made is planned again under the
+      // lock, and writes the new target too.
       expect([s.status, y.status]).toEqual([200, 200])
       if ((await read(`${t}/values.yaml`)) !== (await read(`${SRC}/values.yaml`))) behind++
     }
@@ -354,6 +559,65 @@ describe('saves racing sync changes leave the target a copy of its source', () =
     expect(state.stale).toBe(false)
     for (const rel of ['routing.yaml', 'templates/alertmanagerconfig.yaml']) {
       expect(await read(`${TGT}/${rel}`)).toBe(await read(`${SRC}/${rel}`))
+    }
+  })
+})
+
+// A target on another Template (a hand edit, a pull, a sync made before the
+// Template was copied): a save of its source gives it the source's Template
+// and values together. When its values.yaml cannot be written, its Template
+// is put back — the source's Template over values under the old Template's
+// name renders none of its alerts.
+describe.skipIf(IS_ROOT)('a target whose values cannot be written keeps its own Template', () => {
+  it('and the save is refused, the source as it was', async () => {
+    await setup([])
+    expect((await api('POST', '/api/v2/templates/other/rules', { files: { 'cpu.yaml': CPU } })).status).toBe(200)
+    expect((await api('POST', '/api/v2/folders/init', { folder: TGT, chart: 'other' })).status).toBe(200)
+    await fs.writeFile(path.join(tmpDir, 'sync.yaml'), yaml.dump({ syncs: [{ source: SRC, targets: [TGT] }] }))
+    const chartBefore = await read(`${TGT}/Chart.yaml`)
+    const valuesBefore = await read(`${TGT}/values.yaml`)
+    await fs.chmod(path.join(tmpDir, TGT, 'values.yaml'), 0o444)
+    const srcBefore = await read(`${SRC}/values.yaml`)
+
+    const { status, data } = await saveSrc(70)
+
+    expect(status).toBe(409)
+    expect(data.file).toBe(`${TGT}/values.yaml`)
+    expect(await read(`${SRC}/values.yaml`)).toBe(srcBefore)
+    expect(await read(`${TGT}/Chart.yaml`)).toBe(chartBefore)
+    expect(await read(`${TGT}/values.yaml`)).toBe(valuesBefore)
+  })
+})
+
+// Two syncs to the same new target: the second, planned while the target
+// was not there, waits for the first, which makes it. Under the lock the
+// second is planned again from the repo as it is: it copies over the
+// deployment the first made — or, when that cannot be written, refuses
+// naming the file and leaves it as it is, never taking it for its own new
+// one and deleting it.
+describe.skipIf(IS_ROOT)('a sync to a new target that waited for the lock', () => {
+  it('does not delete the target made meanwhile when its copy fails', async () => {
+    await setup([])
+    const NEW = 'deployments/team/new'
+    const { hooks } = await import('../../server/repo/write.js')
+    hooks.planned = async () => {
+      hooks.planned = null
+      // Meanwhile the first sync made the target, with values of its own
+      // that this copy cannot write over.
+      await fs.mkdir(path.join(tmpDir, NEW), { recursive: true })
+      await fs.copyFile(path.join(tmpDir, SRC, 'Chart.yaml'), path.join(tmpDir, NEW, 'Chart.yaml'))
+      await fs.writeFile(path.join(tmpDir, NEW, 'values.yaml'), 'demo:\n  cpu:\n    - {namespace: mine, warn: 1}\n')
+      await fs.chmod(path.join(tmpDir, NEW, 'values.yaml'), 0o444)
+    }
+    try {
+      const res = await api('POST', '/api/v2/sync', { source: SRC, target: NEW })
+      expect(res.status).toBe(409)
+      expect(res.data.file).toBe(`${NEW}/values.yaml`)
+      expect(await read(`${NEW}/values.yaml`)).toContain('namespace: mine')
+      expect(await read(`${NEW}/Chart.yaml`)).toBe(await read(`${SRC}/Chart.yaml`))
+    } finally {
+      hooks.planned = null
+      await fs.chmod(path.join(tmpDir, NEW, 'values.yaml'), 0o644).catch(() => {})
     }
   })
 })

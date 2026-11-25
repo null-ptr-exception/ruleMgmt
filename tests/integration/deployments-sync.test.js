@@ -6,7 +6,14 @@ import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
 import deploymentsRouter from '../../server/routes/deployments.js'
-import { writeSyncRegistry, readSyncRegistry } from '../../server/lib/sync.js'
+import { registryText } from '../../server/lib/sync.js'
+
+// sync.yaml written as the writer writes it.
+const writeSyncRegistry = (dir, registry) => fs.promises.writeFile(path.join(dir, 'sync.yaml'), registryText(registry))
+import { syncAnswer } from '../../server/repo/sync.js'
+import { openRepo } from '../../server/repo/openRepo.js'
+
+const readSyncRegistry = async dir => (await syncAnswer(openRepo(dir))).registry
 
 describe('deployments API — eager sync integration', () => {
   let tmpDir, app
@@ -137,7 +144,11 @@ describe('deployments API — eager sync integration', () => {
     expect(registry).toEqual({ syncs: [] })
   })
 
-  it('deleting an unsynced deployment leaves the registry untouched', async () => {
+  // The folder has its own values.yaml, so `prod` is the folder deployment
+  // itself, not the legacy prod-values.yaml beside it: the source goes, and
+  // its target is let go rather than left read-only with no source (#180).
+  // (This test used to expect the registry untouched.)
+  it('deleting a sync source lets go of its targets', async () => {
     makeDeploymentDir('cpu/prod')
     makeDeploymentDir('cpu/staging')
     await writeSyncRegistry(tmpDir, { syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] })
@@ -147,8 +158,9 @@ describe('deployments API — eager sync integration', () => {
       .delete(`/api/deployments/my-chart/prod${folderQuery('cpu/prod')}`)
 
     expect(res.status).toBe(200)
-    const registry = await readSyncRegistry(tmpDir)
-    expect(registry).toEqual({ syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] })
+    expect(res.body).toEqual({ ok: true, unlinked: ['cpu/staging'] })
+    expect(await readSyncRegistry(tmpDir)).toEqual({ syncs: [] })
+    expect(fs.existsSync(path.join(tmpDir, 'cpu/staging', 'values.yaml'))).toBe(true)
   })
 
   // #90: a legacy `<name>-values.yaml` beside a folder's values.yaml is its

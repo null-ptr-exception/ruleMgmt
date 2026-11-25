@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection, Decoration, MatchDecorator, ViewPlugin } from '@codemirror/view'
-import { EditorState } from '@codemirror/state'
+import { EditorState, StateEffect } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { bracketMatching, syntaxHighlighting, HighlightStyle } from '@codemirror/language'
+import { bracketMatching, syntaxHighlighting, HighlightStyle, ensureSyntaxTree } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
+import { forceLinting, linter } from '@codemirror/lint'
 import { PromQLExtension } from '@prometheus-io/codemirror-promql'
+import { withColumnRefs, parsed } from '../utils/promqlLint'
 
 const MONO = "'Fira Code', 'Cascadia Code', 'Consolas', 'DejaVu Sans Mono', monospace"
 
@@ -62,12 +64,46 @@ const columnRefs = ViewPlugin.fromClass(class {
   update(update) { this.decorations = columnRefMatcher.updateDeco(update, this.decorations) }
 }, { decorations: v => v.decorations })
 
+// What each ${column} holds is read by the lint, and can change with no
+// change to the text: a column's type is edited on the same page. CodeMirror
+// lints again after a change to the text only, so the marks stayed those of
+// the type before — a mistake not marked, or one marked that is none — until
+// the next key in the editor. The editor is told with this effect, and the
+// lint is asked to run for it.
+const kindsChanged = StateEffect.define()
+const lintAgain = update => update.docChanged || update.transactions.some(tr => tr.effects.some(e => e.is(kindsChanged)))
+const lintOnKinds = linter(null, { needsRefresh: lintAgain })
+
+// CodeMirror lints 750 ms after the last change and counts that wait on the
+// computer's clock. When the clock is set back meanwhile (a time sync, a
+// laptop waking up) it waits that much longer, and until then the marks are
+// those of the text before the change: none on a new mistake, one on a
+// mistake already corrected. This counts the same wait in elapsed time and
+// then asks for the lint; where CodeMirror has run it already, asking does
+// nothing.
+const LINT_WAIT = 750
+const lintOnTime = ViewPlugin.fromClass(class {
+  constructor(view) {
+    this.view = view
+    this.wait()
+  }
+  update(update) { if (lintAgain(update)) this.wait() }
+  wait() {
+    clearTimeout(this.timer)
+    this.timer = setTimeout(() => forceLinting(this.view), LINT_WAIT)
+  }
+  destroy() { clearTimeout(this.timer) }
+})
+
 // `language` other than 'promql' (a vlogs group's LogsQL, #65) drops the PromQL
 // highlighting, completion and linting — they would flag every line of it —
 // and keeps the rest: the ${column} marks, and the selection API variables
 // are marked with.
 // It is read once, when the editor mounts: remount (a `key`) to change it.
-export default function PromQLEditor({ value = '', onChange, metrics = [], minHeight = 56, apiRef, language = 'promql' }) {
+export default function PromQLEditor({ value = '', onChange, metrics = [], minHeight = 56, apiRef, language = 'promql', columnKinds }) {
+  // What each ${column} holds ('number' or not), read by the lint at each run.
+  const kindsRef = useRef(columnKinds)
+  kindsRef.current = columnKinds
   const containerRef = useRef(null)
   const viewRef      = useRef(null)
   const onChangeRef  = useRef(onChange)
@@ -103,6 +139,21 @@ export default function PromQLEditor({ value = '', onChange, metrics = [], minHe
     if (!containerRef.current) return
 
     const promql = new PromQLExtension()
+    // The PromQL lint, with each ${column} read as a value of its length
+    // (promqlLint.js): as written, PromQL calls every reference outside a
+    // string an error, and the whole query was underlined a moment after
+    // the editor opened.
+    const plain = promql.getLinter()
+    promql.setLinter({
+      promQL() {
+        const lint = plain.promQL()
+        return view => withColumnRefs(view.state.doc.toString(), text => {
+          const state = text === view.state.doc.toString() ? view.state
+            : view.state.update({ changes: { from: 0, to: view.state.doc.length, insert: text } }).state
+          return lint({ state: parsed(state, ensureSyntaxTree) })
+        }, name => kindsRef.current?.[name])
+      },
+    })
 
     // If we have a metrics dict, wire up a static completion provider
     if (metrics.length) {
@@ -148,7 +199,7 @@ export default function PromQLEditor({ value = '', onChange, metrics = [], minHe
           ...historyKeymap,
           indentWithTab,
         ]),
-        ...(language === 'promql' ? [promql.asExtension()] : []),
+        ...(language === 'promql' ? [promql.asExtension(), lintOnKinds, lintOnTime] : []),
         promqlTheme,
         updateListener,
         EditorView.lineWrapping,
@@ -158,7 +209,16 @@ export default function PromQLEditor({ value = '', onChange, metrics = [], minHe
     const view = new EditorView({ state, parent: containerRef.current })
     viewRef.current = view
     return () => { view.destroy(); viewRef.current = null }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The lint runs again when what a ${column} holds changes.
+  const kinds = Object.keys(columnKinds || {}).sort().map(n => `${n}:${columnKinds[n]}`).join(' ')
+  const lintedKinds = useRef(kinds)
+  useEffect(() => {
+    if (lintedKinds.current === kinds) return
+    lintedKinds.current = kinds
+    viewRef.current?.dispatch({ effects: kindsChanged.of(null) })
+  }, [kinds])
 
   // Sync external value changes (e.g. import replacing the expr)
   useEffect(() => {

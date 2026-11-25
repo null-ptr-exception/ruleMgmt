@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test'
-import { removeChart } from './charts.js'
+import { test, expect } from './test.js'
+import { removeChart, openTemplateChart } from './charts.js'
 
 // Selector contract (#60): the template owner arranges the hierarchy in the
 // group settings row; the rule owner sees which row gives up what, adds an
@@ -37,11 +37,7 @@ test.describe('Template editor', () => {
   test.afterAll(async ({ request }) => { await removeChart(request, CHART) })
 
   test('a selector column used only through ${selector} is shown as used', async ({ page }) => {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-    await page.locator('.ant-select').first().click()
-    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
-    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await openTemplateChart(page, CHART)
     await page.getByText('cpu', { exact: true }).first().click()
 
     // namespace (the selector) and threshold; workload and pod are in no rule.
@@ -63,11 +59,7 @@ rules:
     labels: {severity: warning}
 ` })
     try {
-      await page.goto('/')
-      await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-      await page.locator('.ant-select').first().click()
-      await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
-      await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+      await openTemplateChart(page, chart)
       await page.getByText('cpu', { exact: true }).first().click()
 
       await expect(page.getByText('Used by CpuHigh')).toHaveCount(1, { timeout: 5000 })
@@ -78,11 +70,7 @@ rules:
   })
 
   test('selectors are picked and ordered in the group settings row, and saved in that order', async ({ page, request }) => {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-    await page.locator('.ant-select').first().click()
-    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
-    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await openTemplateChart(page, CHART)
     await page.getByText('cpu', { exact: true }).first().click()
 
     const editor = page.getByTestId('selectors-editor')
@@ -105,11 +93,7 @@ rules:
   test('renaming a selector column keeps its place and the label it matches', async ({ page, request }) => {
     const MAPPED = CPU.replace('selectors: [namespace]', 'selectors: [namespace]\nselectorLabels: {namespace: kube_ns}')
     await createChart(request, CHART, { 'cpu.yaml': MAPPED })
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-    await page.locator('.ant-select').first().click()
-    await page.locator('.ant-select-item-option').filter({ hasText: CHART }).click()
-    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await openTemplateChart(page, CHART)
     await page.getByText('cpu', { exact: true }).first().click()
 
     const name = page.locator('input[value="namespace"]')
@@ -263,11 +247,7 @@ rules:
   }
 
   async function openEditor(page, chart) {
-    await page.goto('/')
-    await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-    await page.locator('.ant-select').first().click()
-    await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
-    await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+    await openTemplateChart(page, chart)
   }
 
   test('the Alerts table shows each rule\'s label beside a renamed column, and nothing beside the others', async ({ page }) => {

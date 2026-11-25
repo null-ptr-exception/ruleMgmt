@@ -1,0 +1,15 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# Every alert name exactly as the rules file has it.
+blind-svc-1-1:
+  - name: svc
+    rules:
+      - alert: "x: {{ .host }}"
+        expr: up{host="h1"} == 0
+      - alert: "{{ .Release.Name }}-down"
+        expr: up{host="h1"} == 0
+      - alert: '{{ "y" }}'
+        expr: up{host="h1"} == 0
+      - alert: "a}}b{{c"
+        expr: up{host="h1"} == 0
+      - alert: "Down ${host}"
+        expr: up{host="h1"} == 0

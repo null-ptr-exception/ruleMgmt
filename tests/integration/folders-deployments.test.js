@@ -77,7 +77,9 @@ describe('GET /api/v2/folders/deployments', () => {
     makeDeployment('cpu/prod', { 'mariadb-alerts': { latency: [{ warn: 1 }, { warn: 2 }] } })
 
     const res = await request(app).get('/api/v2/folders/deployments')
-    expect(res.body[0]).toMatchObject({ name: 'prod', path: 'cpu/prod', chart: 'mariadb-alerts', alertCount: 2 })
+    expect(res.body[0]).toMatchObject({ path: 'cpu/prod', chart: 'mariadb-alerts', alertCount: 2 })
+    // The dialogs name a deployment by its path: no name of its own.
+    expect(res.body[0]).not.toHaveProperty('name')
   })
 
   it('returns an empty array when there are no deployments', async () => {

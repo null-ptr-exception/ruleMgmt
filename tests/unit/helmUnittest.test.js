@@ -102,9 +102,12 @@ describe('helm-unittest via generated tests', () => {
 // annotations (block scalars, trimmed), and output profiles other than
 // PrometheusRule (#65) — a vlogs group is a VMRule with `type: vlogs`, and a
 // mixed chart has both; once groups and recording rules (#70); a rule with no
-// `for`, asserted absent rather than equal. The suite generated for each has
-// to pass.
-describe.each(['multiline', 'vlogs', 'mixed', 'recording-once', 'threshold-as-metric', 'once-zero-rows', 'vlogs-once', 'selector-basic', 'selector-common', 'selector-labels', 'for-omitted'])('helm-unittest for the %s blind case', name => {
+// `for`, asserted absent rather than equal; names Kubernetes would read as
+// booleans or numbers when bare, one of which (0_7) helm-unittest reads as a
+// number too; a group too large for one object, split into two
+// shards; alert names holding {{ }}, which Helm must not run; a group with
+// `rules: []`, which has no template to test. The suite generated for each has to pass.
+describe.each(['multiline', 'vlogs', 'vm', 'prometheus3', 'group-labels-p3', 'group-fields-vm', 'group-fields', 'mixed', 'recording-once', 'threshold-as-metric', 'once-zero-rows', 'vlogs-once', 'selector-basic', 'selector-common', 'selector-labels', 'for-omitted', 'derived', 'yaml11-names', 'sharding', 'literal-braces-names', 'empty-rules', 'row-identity', 'number-format', 'group-name', 'yaml11-dates'])('helm-unittest for the %s blind case', name => {
   let dir
 
   beforeAll(async () => {
@@ -129,5 +132,17 @@ describe.each(['multiline', 'vlogs', 'mixed', 'recording-once', 'threshold-as-me
     const { ok, output } = helmUnittest(dir)
     if (!ok) throw new Error(`helm unittest failed:\n${output}`)
     expect(output).not.toContain('FAIL')
+  })
+})
+
+// A group with `rules: []` generates no template; the suite leaves it out
+// rather than expect a document from a file that is not there.
+describe('a group with no rules', () => {
+  it('is not in the suite', () => {
+    const { model, errors } = parseRulesDir({
+      'later.yaml': 'columns:\n  host: { type: string, required: true }\n\nrules: []\n',
+    })
+    expect(errors).toEqual([])
+    expect(generateHelmUnittestSuite(model)).toBe('')
   })
 })

@@ -30,7 +30,8 @@
  */
 
 import { varsIn, expandVars } from './ruleModel.js'
-import { profileFor } from './outputs.js'
+import { isPromQLType } from './outputs.js'
+import { helmMerge } from './helmMerge.js'
 
 export const ANY = '.*'
 
@@ -172,14 +173,16 @@ export function selectorPath(sel, levels) {
 // ── rows ────────────────────────────────────────────────────────────────────
 
 /**
- * A row's selector cells as Helm sees them: a row's own value, else
- * _common's, else the column's default. The generated helper reads rows the
- * same way (dig with the default, after merging _common).
+ * A row's selector cells as Helm sees them: the row merged with _common as
+ * the generated helper merges it (helmMerge: a row's own value, unless Go
+ * counts it empty — 0, false, "" — and _common gives one), else the
+ * column's default (dig with the default).
  */
 export function selectorCells(row, common, defaults, levels) {
-  const merged = { ...(common || {}), ...(row || {}) }
+  const merged = helmMerge(row, common)
   return Object.fromEntries(levels.map(l => {
-    const v = merged[l] !== undefined ? merged[l] : defaults[l]
+    // Own keys only: a selector column may be called constructor.
+    const v = Object.hasOwn(merged, l) && merged[l] !== undefined ? merged[l] : (Object.hasOwn(defaults || {}, l) ? defaults[l] : undefined)
     return [l, v === undefined ? undefined : String(v)]
   }))
 }
@@ -370,7 +373,7 @@ export function selectorTemplateProblems(group, commonCols = {}) {
     return [{ kind: 'selectors-shape', message: 'selectors must be a list of column names' }]
   }
   if (group.once) out.push({ kind: 'selectors-once', message: 'a once group has no rows, so it has no selectors to arrange them by' })
-  if (profileFor(group.type)?.validate !== 'promtool') {
+  if (!isPromQLType(group.type)) {
     out.push({ kind: 'selectors-type', message: `selectors work through PromQL label matchers — a ${group.type} group cannot have them` })
   }
   const dup = levels.filter((l, i) => levels.indexOf(l) !== i)

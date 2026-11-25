@@ -1,0 +1,323 @@
+# Hand-written expectation — the 101 rows expanded by a shell loop over the
+# row numbers, never by the generator. See tests/blind/harness.js.
+# Both objects of mariadb_cpu carry its name; the group yes is "yes".
+blind-mariadb-cpu-1-1:
+  - name: MariaDB CPU 使用率
+    rules:
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db001"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db002"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db003"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db004"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db005"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db006"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db007"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db008"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db009"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db010"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db011"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db012"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db013"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db014"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db015"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db016"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db017"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db018"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db019"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db020"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db021"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db022"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db023"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db024"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db025"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db026"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db027"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db028"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db029"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db030"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db031"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db032"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db033"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db034"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db035"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db036"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db037"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db038"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db039"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db040"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db041"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db042"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db043"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db044"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db045"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db046"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db047"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db048"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db049"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db050"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db051"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db052"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db053"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db054"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db055"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db056"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db057"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db058"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db059"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db060"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db061"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db062"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db063"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db064"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db065"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db066"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db067"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db068"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db069"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db070"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db071"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db072"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db073"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db074"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db075"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db076"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db077"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db078"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db079"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db080"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db081"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db082"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db083"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db084"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db085"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db086"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db087"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db088"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db089"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db090"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db091"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db092"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db093"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db094"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db095"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db096"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db097"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db098"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db099"} > 90
+        labels: { severity: warning }
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db100"} > 90
+        labels: { severity: warning }
+blind-mariadb-cpu-1-2:
+  - name: MariaDB CPU 使用率
+    rules:
+      - alert: MariaDBCpuHigh
+        expr: cpu{db="db101"} > 90
+        labels: { severity: warning }
+blind-flag-1:
+  - name: "yes"
+    rules:
+      - alert: FlagDown
+        expr: up{job="flag"} == 0
+VMRule blind-disk-1-1:
+  - name: 'Disk {{ .x }} usage: high'
+    type: prometheus
+    rules:
+      - alert: DiskFull
+        expr: disk{db="db1"} > 90

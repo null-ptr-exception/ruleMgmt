@@ -1,0 +1,773 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AlertForge rules file (rules/<group>.yaml)",
+  "type": "object",
+  "properties": {
+    "group": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "The group's key: the same as the file name, without .yaml. Optional."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\s\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029](?:[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*[^\\s\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029])?$",
+      "description": "The rule group's name in the rendered resource (spec.groups[].name), e.g. \"MariaDB CPU\". Left out, it is the file name with _ as -. Values key, template and object names stay the file name's. One line, no space at either end, at most 200 characters, not another group's name. Changing it starts the group anew in the evaluator."
+    },
+    "once": {
+      "type": "boolean",
+      "description": "true: the rules render once per deployment, outside the row loop. A once group has no columns and takes no rows."
+    },
+    "type": {
+      "enum": [
+        "prometheus2",
+        "prometheus3",
+        "vm",
+        "vlogs",
+        "prometheus"
+      ],
+      "description": "The output profile (config/outputs.json) the group is written as. No type is prometheus2."
+    },
+    "interval": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+      "description": "A rule-group field of prometheus2, prometheus3, vm, vlogs groups."
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "A rule-group field of prometheus2, prometheus3, vm, vlogs groups."
+    },
+    "query_offset": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+      "description": "A rule-group field of prometheus2, prometheus3 groups."
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "A rule-group field of prometheus3, vm, vlogs groups."
+    },
+    "eval_offset": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+      "description": "A rule-group field of vm, vlogs groups."
+    },
+    "eval_delay": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$",
+      "description": "A rule-group field of vm, vlogs groups."
+    },
+    "concurrency": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991,
+      "description": "A rule-group field of vm, vlogs groups."
+    },
+    "eval_alignment": {
+      "type": "boolean",
+      "description": "A rule-group field of vm, vlogs groups."
+    },
+    "headers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "A rule-group field of vm, vlogs groups."
+    },
+    "notifier_headers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "A rule-group field of vm, vlogs groups."
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "A rule-group field of vm, vlogs groups."
+    },
+    "selectors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The columns that pick the series a row is about, coarsest first, e.g. [namespace, workload]."
+    },
+    "selectorLabels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Selector column → the label name it matches, when they differ, e.g. { workload: deployment }."
+    },
+    "vars": {
+      "description": "Texts the rules read as ${name}, written once for the group.",
+      "if": {
+        "type": "object"
+      },
+      "then": {
+        "propertyNames": {
+          "not": {
+            "enum": [
+              "selector",
+              "__proto__"
+            ]
+          }
+        }
+      }
+    },
+    "columns": {
+      "anyOf": [
+        {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "selector",
+                "__proto__"
+              ]
+            }
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "string",
+                      "number",
+                      "integer",
+                      "boolean",
+                      "duration",
+                      null
+                    ],
+                    "description": "One of string, number, integer, boolean, duration. No type is string."
+                  },
+                  "required": {
+                    "description": "true: every row has to fill it in."
+                  },
+                  "default": {
+                    "description": "The value of a row that leaves it out. A duration column's default is a duration with a unit, e.g. 5m."
+                  },
+                  "enum": {
+                    "description": "The values a row may choose from. Not for a duration column — use type: string with the enum."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Shown to whoever fills in the column."
+                  }
+                },
+                "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "duration"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "default": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?$"
+                    }
+                  },
+                  "not": {
+                    "required": [
+                      "enum"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": [
+                  "null",
+                  "number",
+                  "boolean"
+                ]
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              },
+              {
+                "type": "array",
+                "items": {
+                  "not": {}
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": [
+            "null",
+            "number",
+            "boolean"
+          ]
+        },
+        {
+          "type": "string",
+          "maxLength": 0
+        },
+        {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "string",
+                      "number",
+                      "integer",
+                      "boolean",
+                      "duration",
+                      null
+                    ],
+                    "description": "One of string, number, integer, boolean, duration. No type is string."
+                  },
+                  "required": {
+                    "description": "true: every row has to fill it in."
+                  },
+                  "default": {
+                    "description": "The value of a row that leaves it out. A duration column's default is a duration with a unit, e.g. 5m."
+                  },
+                  "enum": {
+                    "description": "The values a row may choose from. Not for a duration column — use type: string with the enum."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Shown to whoever fills in the column."
+                  }
+                },
+                "additionalProperties": false,
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "duration"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "default": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?$"
+                    }
+                  },
+                  "not": {
+                    "required": [
+                      "enum"
+                    ]
+                  }
+                }
+              },
+              {
+                "type": [
+                  "null",
+                  "number",
+                  "boolean"
+                ]
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              },
+              {
+                "type": "array",
+                "items": {
+                  "not": {}
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "description": "The values a deployment fills in, one row each: name → { type, required, default, enum, description }."
+    },
+    "derived": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Durations computed per row from integer columns: name → { expr, unit }, e.g. { expr: \"w * 2\", unit: m }.",
+      "propertyNames": {
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+        "not": {
+          "enum": [
+            "selector",
+            "__proto__"
+          ]
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "expr": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "Integer columns with + - * and parentheses, e.g. \"w * 2 + 1\"."
+          },
+          "unit": {
+            "enum": [
+              "ms",
+              "s",
+              "m",
+              "h",
+              "d",
+              "w",
+              "y"
+            ],
+            "description": "The unit of the result: one of ms, s, m, h, d, w, y."
+          }
+        },
+        "required": [
+          "expr",
+          "unit"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "alert": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "The alert's name. A rule has exactly one of alert or record, or is raw."
+          },
+          "record": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "The recording rule's name. A recording rule has only record, expr, labels, selectorLabels and note."
+          },
+          "selectorLabels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Selector column → label name for this rule, over the group's."
+          },
+          "expr": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "The query. ${column} reads a row's value."
+          },
+          "for": {
+            "description": "How long the condition holds before the alert fires, e.g. 5m, or ${column}."
+          },
+          "keep_firing_for": {
+            "description": "How long the alert keeps firing after the condition clears, e.g. 5m, or ${column}."
+          },
+          "labels": {
+            "anyOf": [
+              {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ],
+            "description": "Labels on the alert or series: name → text."
+          },
+          "annotations": {
+            "anyOf": [
+              {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "value"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ],
+            "description": "Annotations on the alert: name → text."
+          },
+          "raw": {
+            "type": [
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "A rule written out as it goes into the template, for what the other keys cannot say."
+          },
+          "note": {
+            "description": "A note for the template owner. Not written into the rule."
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "raw"
+              ]
+            },
+            "else": {
+              "oneOf": [
+                {
+                  "required": [
+                    "alert"
+                  ]
+                },
+                {
+                  "required": [
+                    "record"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "record"
+              ],
+              "not": {
+                "required": [
+                  "raw"
+                ]
+              }
+            },
+            "then": {
+              "propertyNames": {
+                "enum": [
+                  "record",
+                  "selectorLabels",
+                  "expr",
+                  "labels",
+                  "note"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "raw"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "record"
+                    ]
+                  }
+                ]
+              }
+            },
+            "then": {
+              "properties": {
+                "for": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "const": ""
+                    },
+                    {
+                      "const": 0
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "\\$\\{"
+                    }
+                  ]
+                },
+                "keep_firing_for": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "const": ""
+                    },
+                    {
+                      "const": 0
+                    },
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^(0|([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?)$"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "\\$\\{"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "description": "The group's rules: alerts (alert, expr …), recording rules (record, expr, labels) or raw entries (raw)."
+    }
+  },
+  "required": [
+    "rules"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "not": {
+          "required": [
+            "type"
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "labels": false,
+          "eval_offset": false,
+          "eval_delay": false,
+          "concurrency": false,
+          "eval_alignment": false,
+          "headers": false,
+          "notifier_headers": false,
+          "params": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "prometheus2"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "labels": false,
+          "eval_offset": false,
+          "eval_delay": false,
+          "concurrency": false,
+          "eval_alignment": false,
+          "headers": false,
+          "notifier_headers": false,
+          "params": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "prometheus3"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "eval_offset": false,
+          "eval_delay": false,
+          "concurrency": false,
+          "eval_alignment": false,
+          "headers": false,
+          "notifier_headers": false,
+          "params": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "vm"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "query_offset": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "vlogs"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "query_offset": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "prometheus"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "labels": false,
+          "eval_offset": false,
+          "eval_delay": false,
+          "concurrency": false,
+          "eval_alignment": false,
+          "headers": false,
+          "notifier_headers": false,
+          "params": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "once": {
+            "const": true
+          }
+        },
+        "required": [
+          "once"
+        ]
+      },
+      "then": {
+        "properties": {
+          "columns": {
+            "not": {
+              "type": "object",
+              "minProperties": 1
+            }
+          },
+          "derived": {
+            "not": {
+              "type": "object",
+              "minProperties": 1
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# The profile's mark is added to the site's annotations. A prometheus3 object
+# takes the prometheus3 key of RULE_OBJECT_LABELS_BY_PROFILE; the prometheus
+# key (prometheus2's alias) is not its own.
+blind-api-errors-1-1:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    release: kps3
+  annotations:
+    example.com/team: shop
+    alertforge.io/profile: prometheus3

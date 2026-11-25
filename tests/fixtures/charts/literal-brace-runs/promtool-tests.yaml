@@ -1,0 +1,25 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{host="h1"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: "{}}"
+        exp_alerts:
+          - exp_labels: { host: h1 }
+      - eval_time: 5m
+        alertname: 'a{"b":{}}'
+        exp_alerts:
+          - exp_labels: { host: h1 }
+      - eval_time: 5m
+        alertname: "{{{ .x }}}"
+        exp_alerts:
+          - exp_labels: { host: h1 }
+      - eval_time: 5m
+        alertname: "x{ {}}} {"
+        exp_alerts:
+          - exp_labels: { host: h1 }

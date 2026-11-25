@@ -60,7 +60,10 @@ rules:
 ```
 
 The filename is the group: `network_traffic.yaml` is read from
-`.Values.network_traffic`. Everything under `rules` borrows its field names
+`.Values.network_traffic`, and the rule group is named `network-traffic` —
+unless the file says another name (`name: Network traffic`), which only
+changes `spec.groups[].name`; see
+[names, one source](rules-format.md#names-one-source). Everything under `rules` borrows its field names
 from a Prometheus rule group's `rules[]`, so what you already know about
 writing rules carries over. It is not a loadable rules file, though — the
 values carry placeholders, and it is a template.
@@ -113,12 +116,35 @@ summary: "receive is {{ $value }} B/s in prod"
 
 You never write the escaping yourself.
 
+## Windows computed per row: `derived`
+
+A window that depends on a row's numbers — `freq_num` samples of
+`spc_point + 2` minutes — is a [`derived`](rules-format.md#derived) value of
+the group: `short_w: { expr: "freq_num * (spc_point + 2)", unit: m }`, used as
+`${short_w}`. The generator compiles it to Sprig, so Helm computes it per row;
+AlertForge computes the same thing the same way — the row, then its Common
+Values (a `_common` folder's included), then the default — to refuse at save a
+row whose value cannot be deployed (`[0m]`, a negative `for`, an overflow), and
+to show the rule owner each row's value in Preview, beside the alerts it
+produced. What Preview shows is what Helm renders.
+
 ## Log alerts: groups of another type
 
 A group's `type` says what kind of rules it holds. Left out it is
-`prometheus`: `expr` is PromQL, and the group is emitted as a
-`PrometheusRule`. `type: vlogs` makes `expr` LogsQL, evaluated against
-VictoriaLogs, and the group is emitted as a `VMRule` with `type: vlogs` on it:
+`prometheus2` (`type: prometheus` is the same): `expr` is PromQL for
+Prometheus 2.x, and the group is emitted as a `PrometheusRule`.
+`type: prometheus3` is PromQL for Prometheus 3.13 or later: a `PrometheusRule`
+too, marked with the annotation `alertforge.io/profile: prometheus3`, and
+checked with Prometheus 3's promtool, which takes UTF-8 label names such as
+`service.name` and `offset 0s`. Prometheus 3's experimental functions
+(`double_exponential_smoothing`, `limitk`, `limit_ratio` …) are refused by
+that check: Preview runs promtool without
+`--enable-feature=promql-experimental-functions`, as a Prometheus not started
+with the flag would refuse them too. `type: vm` makes `expr` MetricsQL, evaluated by VMAlert
+against VictoriaMetrics, and the group is emitted as a `VMRule` with
+`type: prometheus` on it (vmalert's name for its metrics source). `type: vlogs`
+makes `expr` LogsQL, evaluated against VictoriaLogs, and the group is emitted
+as a `VMRule` with `type: vlogs` on it:
 
 ```yaml
 # rules/app_errors.yaml
@@ -140,16 +166,41 @@ log alerts share its Common Values.
 
 What each type is wrapped in lives in `config/outputs.json`
 ([rules-format.md](rules-format.md#output-profiles)), part of the release.
-Two things differ for a `vlogs` group:
+What differs for a `vm` or `vlogs` group:
 
 - **vmalert checks its syntax, not promtool.** promtool reads PromQL only, so
-  Preview runs `vmalert -dryRun` on this group's objects instead: a LogsQL
-  typo is a failed check naming the group and rule. vmalert reports the first
-  bad rule of each group, so fix and check again. The editor drops PromQL's
-  highlighting for its `expr`.
-- **Changing a group's type replaces its objects.** A `PrometheusRule`
-  becomes a `VMRule` (or back): the old object is deleted, a new one
-  created, and the alerts reload. Saving says so.
+  Preview runs `vmalert -dryRun` on these groups' objects instead: a
+  MetricsQL or LogsQL typo is a failed check naming the group and rule.
+  vmalert reports the first bad rule of each group, so fix and check again.
+  The editor drops PromQL's highlighting for a `vlogs` group's `expr`.
+- **A `vm` group is MetricsQL.** `WITH` templates and `rollup_*` functions
+  are fine; selectors, duration columns and derived values work as in a
+  `prometheus2` group. A range of 0 is refused (VictoriaMetrics would read it
+  as no range at all, a window of vmalert's `-datasource.queryStep`); an
+  `offset` of 0 is not, since vmalert takes it.
+- **Changing a group's type between kinds replaces its objects.** A
+  `PrometheusRule` becomes a `VMRule` (or back): the old object is deleted, a
+  new one created, and the alerts reload. Between `vm` and `vlogs` the
+  objects stay `VMRule` with the same names and are updated in place. Saving
+  says which.
+- **Group fields follow the type.** Prometheus 3 and vmalert read group
+  `labels`; vmalert has `eval_offset`, `concurrency` and more; Prometheus has
+  `query_offset`. A group sets only those its type has — see
+  [group fields by type](rules-format.md#group-fields-by-type). Importing a
+  group brings the ones its type has along and says which it left out.
+- **Importing a `VMRule`** reads its groups' `type` as vmalert does:
+  `type: prometheus`, or none, is a `vm` group; `type: vlogs` a `vlogs` one.
+  Preview and `check-deployment` read a `VMRule` from a hand-written template
+  the same way: a group with no `type` is checked with vmalert as MetricsQL.
+- **Importing a `PrometheusRule`**: one marked `alertforge.io/profile:
+  prometheus3` is a `prometheus3` group. One with no mark but group `labels`
+  (written for Prometheus 3 elsewhere) is taken in as `prometheus3` too, and
+  the import says so — as `prometheus2` its alerts would lose the labels. A
+  mark that names no profile is said, and the object is read, imported and
+  checked as `prometheus2`.
+- **A plain rules file** (`groups:` at the top) is read as AlertForge's: its
+  `type: prometheus` is `prometheus2`, and the import says so — a vmalert
+  rules file means VictoriaMetrics by it; make those groups `vm`.
 
 ## Recording rules and once groups
 
@@ -284,6 +335,64 @@ Preview tells the rule owner the output may be behind. And a commit is refused
 while any chart is stale; a legacy chart is only named after the commit, as a
 reminder.
 
+Only a file or folder that is not there counts as absent. One that is there
+but cannot be read — no permission, `rules` as a file, a folder named
+`rules/<group>.yaml`, a `values.yaml` or `Chart.yaml` that is not YAML — is
+named by its place in the repo (`charts/demo/rules cannot be read:
+permission denied`), and stops what would take it for absent: opening the
+chart, Save, making a deployment, a commit, and `gen-rules`, `gen-chart` and
+`import-rules`. A chart whose `rules/` cannot be read is not legacy. A
+`values.schema.json` that is not JSON still opens a chart with `rules/` (it
+is shown as a product to regenerate), but Save refuses it until it is fixed
+or removed: it may hold `x-custom-template` groups. On a chart without
+`rules/` it is the source, with nothing to regenerate it from: opening the
+chart says it cannot be read. A deployment's
+`values.yaml` that cannot be read refuses the commit too, and the folder
+tree marks the deployment with why, as it marks a folder it cannot read. A folder on the
+way that cannot be looked into is named the same way: with `templates/` at
+no permission, opening, saving, renaming or deleting one of its files says
+`charts/demo/templates cannot be read: permission denied`, and with
+`deployments/w` at no permission, so does opening, previewing or syncing to
+`deployments/w/d`. Whatever fails, a request is answered and the server goes
+on serving the next one.
+
+A Template folder that is a link leading outside the repo, or a file in it
+that does, is read as one that cannot be read, everywhere; a link to a
+folder of the repo is read as that folder (the Template list shows it, a
+commit checks it). A deployment on a `_common` says so of the Template's
+`Chart.yaml` too — a link leading outside the repo or into git's own
+folder, a file larger than Helm reads: the file is named with why
+(`charts/demo/Chart.yaml cannot be read (it is a link that leads outside
+the repo)`), where the `_common`'s link to the Template is in place. The Template's `values.yaml` is read as Helm reads it
+(`010` is 8, `yes` is true), and opening the Template shows it so. A text
+AlertForge cannot tell Helm's reading of — a tag such as `!custom`, a block
+text with an indentation digit (`|2`), a `[` list not closed — is named by
+its line, with a request to write it plainly: saving refuses it, and so do a
+commit, a new deployment of the Template and Preview.
+
+Saving the Template's rules or its values checks the Template as the save
+leaves it, without running Helm. What the save itself writes is refused
+when Helm would fail on it (values that are not YAML, or that AlertForge
+cannot tell Helm's reading of). What Helm fails on in a file the save does
+not write — a broken `Chart.yaml`, a folder name with a dot, a partial
+(`templates/_x.yaml`) holding a rule object, a 1.x rule file repeating the
+generated alerts, a file of the Template that cannot be read (Helm reads
+every file of the folder, `rules/` included), a generated template that is
+missing — does not stop the save: it goes through and names that file, and a
+commit refuses it until it is fixed. A save that migrates deployments (a
+breaking change with its mapping) is refused, before anything is written,
+while the Template's `values.yaml` cannot be read or is not YAML Helm reads
+the way AlertForge can tell: it would rewrite many deployments against
+values it cannot read — fix the Template's `values.yaml` by hand first (the
+migration preview lists it). A Template whose `rules/` is gone or
+empty next to a schema the generator wrote is not converted by a save of
+that schema (every group with no rules): restore `rules/`. A new deployment
+is not made from a Template none of whose deployments would render. Preview
+shows Helm's output and says the same with its check, as does a generated
+template that is missing. A file linked to one outside the repo (Helm
+follows it) and a folder where a file is expected are named as files that
+cannot be read.
+
 ### Files of your own in templates/
 
 Regenerating removes a template only when it is the generator's own
@@ -293,6 +402,24 @@ left with no rules. Any other file in `templates/` — a ConfigMap, a resource
 written by hand — is kept, is not drift, and `gen-rules` lists it as
 `kept templates/<file> (not generated)`. A file named exactly like a group's
 template is that group's, and is overwritten.
+
+Two exceptions concern rule objects (`PrometheusRule`, `VMRule`):
+
+- **Migrating a chart from before `rules/` removes its old rule file**, such
+  as 1.x's `templates/prometheus-rule.yaml`, when it holds nothing but rule
+  objects and every group in it is one the chart now generates. That file held
+  every group under a name no group has; kept, it would render each alert a
+  second time. A file with any other document, a group of its own, or a group
+  name built with Helm (`{{ .Values.group }}`) is kept.
+- **A rule object in `templates/` that repeats a rule the chart generates is
+  reported**, naming the file: the editor shows it, `gen-rules` (and
+  `--check`) lists it as `REPEATS` and exits 1, and a commit is refused.
+  A repeat is a rule with the same name and the same labels; a label value
+  written with `{{ }}` counts as possibly the same. So an alert with the same
+  name and another `severity` is a different alert, and is not reported.
+  Names in comments (`#`, `{{/* */}}`) or in an annotation's text are not
+  rules. Saving or regenerating does not remove the file: delete it, or rename
+  the rules in it if they are meant to be different ones.
 
 A whole group can be hand-written too. Define it in `values.schema.json` only,
 with `"x-custom-template": true`, and write its template yourself:
@@ -341,7 +468,18 @@ RULE_OBJECT_ANNOTATIONS='{"alertforge.io/source":"generated"}'
 Both are JSON objects of string pairs, both optional. Values are literal: one
 containing `{{ }}` is dropped with a warning rather than escaped, since a label
 that silently reads `{{ $.Release.Name }}` in the cluster is worse than one
-that never appears. An empty value omits its key.
+that never appears. An empty value omits its key. Every key must be a label
+(or annotation) name Kubernetes takes, every value text, and a label's value a
+label value: anything else stops the server and the tools, one line per fault
+(see [how-to](how-to.md#put-your-own-labels-on-every-generated-resource)).
+
+A variable that is not JSON, or not a JSON object of pairs, stops the server
+at startup, and the scripts that generate or check with it: ignored, every
+object would go out without the labels, with nothing to say so. The message
+names the variable and what it must look like:
+`RULE_OBJECT_LABELS is not valid JSON (…): it must be a JSON object of
+key/value pairs, such as {"release":"kps"}`. A variable that is unset,
+empty or only whitespace is not set.
 
 > If your Prometheus has a `ruleSelector`, rules without the labels it matches
 > are **silently ignored** — no error, nothing in `/rules`. Check with:
@@ -353,7 +491,8 @@ that never appears. An empty value omits its key.
 ### Different values per output profile
 
 A chart's objects are not all loaded by the same evaluator: a group with no
-`type` becomes a PrometheusRule, loaded by Prometheus; a `type: vlogs` group a
+`type` (or `type: prometheus3`) becomes a PrometheusRule, loaded by Prometheus; a `type: vm` group a
+VMRule, loaded by the VMAlert that reads VictoriaMetrics; a `type: vlogs` group a
 VMRule, loaded by the VMAlert that reads VictoriaLogs. Each selects on its own
 `ruleSelector`:
 
@@ -373,7 +512,15 @@ RULE_OBJECT_ANNOTATIONS_BY_PROFILE='{"vlogs":{"alertforge.io/source":"logs"}}'
 ```
 
 The keys are profile names — what a group's `type` says (see
-[output profiles](rules-format.md#output-profiles)), not a resource kind. A
+[output profiles](rules-format.md#output-profiles)), not a resource kind.
+`prometheus` is `prometheus2`; naming one profile under both is an error.
+`prometheus3` is a profile of its own: a group moved to it takes its
+`prometheus3` key, not `prometheus`'s — set both when the two Prometheus
+select their rules alike. Saving a group moved to `prometheus3` while the site sets
+labels or annotations for `prometheus` and none for `prometheus3` says which
+ones its objects lose. The annotation `alertforge.io/profile` is
+AlertForge's own, and a site setting it in `RULE_OBJECT_ANNOTATIONS` or
+`RULE_OBJECT_ANNOTATIONS_BY_PROFILE` stops the server at startup. A
 profile's value replaces the site-wide one for the same key, an empty value
 removes the site-wide key from that profile's objects, and its other keys are
 added. They also take `routing`, for a deployment's
@@ -392,7 +539,10 @@ so.
 
 Changing the configuration does not rewrite templates that already exist. They
 are a product and turn stale; regenerate them, and `gen-rules --check` reports
-the drift until you do.
+the drift until you do. A deployment's routing resource is one too: until it
+is made again it keeps the old labels, and an Alertmanager selecting on the
+new ones stops loading it. A commit through AlertForge is refused until both
+are regenerated — see [Commit](how-to.md#commit).
 
 ## Importing existing rules
 
@@ -422,6 +572,18 @@ arrives hand-written rather than losing it.
 A placeholder naming a column the chart already has in `_common` reads it
 from there; it does not become a second column of the group.
 
+A group keeps the name it had: `- name: MariaDB traffic` becomes
+`rules/mariadb_traffic.yaml` with `name: MariaDB traffic`, so it renders under
+that name again. A name that renders the same from the file name
+(`mariadb-traffic`) is not written; one the rules format refuses (a line
+break, a space at either end) is left to the file name's.
+
+Groups whose names make one file name — `a-b`, `a b` and `A_B` are all
+`a_b` — each get one of their own: `a_b.yaml`, `a_b_2.yaml`, `a_b_3.yaml`,
+each keeping its name, and the import says so. Two groups with the very same
+name (from two source files) are taken in the same way; the second renders
+under its file's name (`cpu-2`), since a chart's groups need two names.
+
 Multi-line expressions and descriptions arrive as they are, and render as
 they are. To check an imported chart against the file it came from, compare
 the rendered rules as YAML (`dyff`, or parse both), not as text: the generator
@@ -439,7 +601,9 @@ that drops a column is a warning there rather than the breaking-change dialog.
 The products are regenerated from `rules/`, so a release that changes how the
 generator writes them makes every migrated chart `stale` at once — the editor
 shows the banner, and a commit is refused — even though no rule changed
-(moving `expr` and annotations to block scalars was one such change).
+(moving `expr` and annotations to block scalars was one such change). The
+same holds for each deployment's routing resource: a commit is refused until
+it is regenerated, which the refusal offers (**Regenerate**).
 
 Coming from 1.x is a different, one-time upgrade — charts are converted, not
 regenerated: see [upgrade-2.0.md](upgrade-2.0.md).
@@ -455,7 +619,75 @@ The one thing not kept is trailing whitespace at the end of a value — a
 summary ending in a column that was empty used to render with a trailing
 space. It means nothing to PromQL or an annotation.
 
+### Upgrading to number columns written as JSON
+
+A reference to a `number` or `integer` column now renders through Helm's
+`toJson`: `1000000` renders as `1000000`, not `1e+06`, so a matcher
+`port="${port}"` on a large port matches again. This changes the template
+text of every chart with such a column, so each of those charts turns
+`stale` once, and commits are refused until it is regenerated — regenerate
+every chart as in
+[how-to](how-to.md#regenerate-every-chart-after-an-upgrade). An ordinary
+number (`3`, `0.5`, `90`) renders as before; only one Helm used to print
+with an exponent changes in the cluster.
+
+### Upgrading to site labels that must be readable
+
+`RULE_OBJECT_LABELS` or `RULE_OBJECT_ANNOTATIONS` that is not JSON
+(`release=kps`), or not a JSON object of pairs, used to be ignored with a
+note in the log. It now stops the server at startup and the command-line
+tools, naming the variable, as the `_BY_PROFILE` variables always did. A
+site with such a value notices at the first start after the upgrade: its
+objects were being generated without those labels. Correct the value and
+regenerate every chart as in
+[how-to](how-to.md#regenerate-every-chart-after-an-upgrade). A site whose
+variables are valid JSON, or unset, sees no change.
+
+The same now holds for their content, and for a profile's map in the
+`_BY_PROFILE` variables: a value that is not text (`{"release":1}`), which
+was dropped with a note, and a key that is not a label or annotation name
+(`{"bad key!":"x"}`) or a label value Kubernetes refuses (`{"team":"a b"}`),
+which were written into the generated files as they were. A set-up running
+with such a value today does not start after the upgrade until the value is
+fixed; the message names the variable and the key, one line per fault.
+
+### Upgrading to the four group types
+
+Group `type` now has four values — `prometheus2`, `prometheus3`, `vm`,
+`vlogs` — each with its own group fields. Nothing has to change on upgrade:
+
+- **`type: prometheus`, or no type, keeps working.** It is `prometheus2`,
+  the profile's new name. A rules file that says `prometheus` is left as it
+  is, and its chart generates byte for byte what it did — no chart turns
+  `stale`, and nothing in the cluster changes.
+- **A site's `prometheus` key keeps working.** `RULE_OBJECT_LABELS_BY_PROFILE`
+  and `RULE_OBJECT_ANNOTATIONS_BY_PROFILE` read it as `prometheus2`. Writing
+  both `prometheus` and `prometheus2` is an error the server stops on. Before
+  moving a group to `prometheus3`, give `prometheus3` its own key if the
+  Prometheus that loads it selects by one: it does not take `prometheus`'s.
+- **The image carries a second promtool**, Prometheus 3's, as
+  `/usr/local/bin/promtool3` (`PROMTOOL3_BIN` points elsewhere). Without it a
+  `prometheus3` group's Preview says promtool 3 is not available, and
+  `check-deployment` exits 2. A machine running the tests installs it with
+  `scripts/install-checkers.sh`.
+- **`scripts/render_and_check.py`**, a development script in a source
+  checkout (not in the image), checks every rule object with its
+  type's checker, as Preview does — promtool 3 (`PROMTOOL3_BIN` or `promtool3`)
+  for `prometheus3`, vmalert (`VMALERT_BIN` or `vmalert`) for `vm` and
+  `vlogs` — instead of skipping all but `prometheus2`. It exits 1 when one
+  fails, and 2 when a checker it needs is not installed: not checked is not
+  passed, as with `check-deployment`.
+- **A limit past 2^53** (`limit: 99999999999999999999`), which promtool
+  refused anyway, is now refused at save.
+- **An import** of a `VMRule` whose groups say `type: prometheus`, or no
+  type, now gives `vm` groups instead of `prometheus2` ones, and an imported
+  group brings the group fields its type has, saying which it left out.
+
 ## Changing a chart that people are already using
+
+Changing a group's `name:` only renames the rule group: no `values.yaml`
+changes, so the save goes through and says what the evaluator does with it
+(pending alerts start over; vmalert's `alertgroup` label changes).
 
 Removing a column or a group or a rule, renaming a group, narrowing a type,
 making a column required, or removing or changing a default all affect
@@ -478,10 +710,16 @@ Nothing is guessed: `warn_pct → warn_ratio` could be a rename or a delete plus
 an add, and only the person making the change knows which, so every mapping
 starts as delete. When the change should not reach existing deployments yet,
 **Clone to a new chart** instead: the copy carries the edits and the declared
-mapping as `x-migrated-from`, the original is untouched, and each rule owner
-moves over when they are ready.
+mapping as `x-migrated-from`, the original is untouched, and no deployment
+moves to the copy by itself. Each rule owner moves theirs by hand, two files,
+when they are ready: see
+[Move a deployment to a cloned chart](how-to.md#move-a-deployment-to-a-cloned-chart).
 
 ## Command line
+
+The scripts ship in the AlertForge image; from a gitops repo, run them with
+`docker run` as in [how-to](how-to.md#run-them-from-the-image). As written
+here, they run from an AlertForge source checkout.
 
 ```bash
 # migrate a chart to rules/, or regenerate the schema and templates from rules/
@@ -499,9 +737,32 @@ rewrites it: comments and formatting added by hand survive, the same as a save
 in the editor. Only a migration writes rules files.
 
 `gen-rules --check` is worth wiring into CI or a pre-commit hook. It is what
-enforces "`rules/` is the source" when files are committed by hand.
-(`gen-chart.mjs` is the older, templates-only tool; it reads groups from the
-generated schema, so it misses a group added to `rules/` by hand.)
+enforces "`rules/` is the source" when files are committed by hand, and it
+answers as a commit and the editor do: the same comparison says whether the
+generated files are current (a schema saved before `x-once-groups` existed is
+not behind). `gen-chart.mjs` is the older, templates-only tool: it generates
+the templates from `rules/` as `gen-rules` does, and its `--check` names a
+schema behind `rules/`, a template left by a removed group and a file
+repeating the alerts too. On a chart not converted to `rules/` yet it stops:
+templates generated beside the 1.x rule file would render every alert twice —
+run `gen-rules`, which converts it. `import-rules` stops there for the same
+reason.
+
+The three tools read the chart as the server does, the whole Template:
+besides `rules/` and the schema, a `Chart.yaml` that is not YAML, a folder
+name with a dot, a partial (`templates/_x.yaml`) holding a rule object, and a
+`values.yaml` AlertForge cannot tell Helm's reading of stop them with an
+`ERROR` line (exit 1) before anything is written. A file of the Template that
+cannot be read — `Chart.yaml` and `values.yaml` included — is one `ERROR` line
+naming it and exit 2, in all three. A chart folder given as a link outside
+any git repo is worked on where the link leads; inside a repo it is read as
+the repo's content (a link out of the repo cannot be read). `--init` writes a
+`Chart.yaml` only when there is none, or an empty one. A
+missing `Chart.yaml` (a chart started from `rules/` alone: `--init` writes
+it) and a `Chart.yaml` whose `name` is not the folder's are only warned of.
+A chart whose `rules/` is gone or empty next to a schema the generator wrote
+is not taken for a 1.x chart: `gen-rules` and Save refuse to convert it, as
+the conversion would write every group with no rules — restore `rules/`.
 
 ## What holds it together
 

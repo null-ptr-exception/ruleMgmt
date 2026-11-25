@@ -1,55 +1,33 @@
 import express from 'express'
-import fs from 'fs/promises'
-import path from 'path'
-import yaml from 'js-yaml'
+import { z } from 'zod'
 import { getChartsDir, findAlertTemplateCharts } from '../lib/chartDiscovery.js'
-import { findDeploymentsUsing } from '../lib/chartUsage.js'
+import { openRepo } from '../repo/openRepo.js'
+import { ensureFolder } from '../repo/setup.js'
+import { answersWithoutPaths } from '../lib/answerPaths.js'
+import { route, repoName, declaredRoutes } from '../http/route.js'
+import { migrationMapping } from '../http/templateShapes.js'
+import { planChange, applyChange } from '../repo/changes/index.js'
 
-const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
+// A Template's name, as paths.js takes a name.
+const CHART_NAME = (what = 'chart name') => repoName('name', { what })
 
 export default function chartsRouter() {
   const router = express.Router()
+  router.use(answersWithoutPaths)
+  // Every write goes through the writer (changes/chart.js), which takes the
+  // commit lock only to write.
 
-  router.get('/', async (req, res) => {
-    const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
-    try {
-      await fs.mkdir(chartsDir, { recursive: true })
-      const charts = await findAlertTemplateCharts(chartsDir)
-      res.json(charts)
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+  router.get('/', route('charts.list', {}, async (input, { gitopsDir }) => {
+    const chartsDir = getChartsDir(gitopsDir, process.env.CHARTS_DIR)
+    await ensureFolder(chartsDir)
+    return { status: 200, body: await findAlertTemplateCharts(chartsDir) }
+  }))
 
-  router.post('/', async (req, res) => {
-    const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
-    const { name } = req.body
-    if (!name || !NAME_RE.test(name)) {
-      return res.status(400).json({ error: 'Invalid chart name. Must match ^[a-z0-9][a-z0-9_-]*$' })
-    }
-    const chartDir = path.join(chartsDir, name)
-    // Creating over an existing chart reset its Chart.yaml, values.yaml and
-    // schema — and New → From rules… then replaced its rules/ outright.
-    try {
-      await fs.access(path.join(chartDir, 'Chart.yaml'))
-      return res.status(409).json({ error: `A chart named "${name}" already exists` })
-    } catch { /* free */ }
-    try {
-      await fs.mkdir(path.join(chartDir, 'templates'), { recursive: true })
-      const chartYaml = yaml.dump({ apiVersion: 'v2', name, version: '0.1.0', type: 'application', annotations: { app: 'alertforge' } })
-      await fs.writeFile(path.join(chartDir, 'Chart.yaml'), chartYaml, 'utf-8')
-      await fs.writeFile(path.join(chartDir, 'values.yaml'), yaml.dump({}), 'utf-8')
-      const emptySchema = {
-        $schema: 'https://json-schema.org/draft-07/schema#',
-        type: 'object',
-        properties: {}
-      }
-      await fs.writeFile(path.join(chartDir, 'values.schema.json'), JSON.stringify(emptySchema, null, 2), 'utf-8')
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+  router.post('/', route('charts.create', {
+    body: z.object({ name: CHART_NAME() }),
+  }, async ({ body: { name } }, { gitopsDir }) => (
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'chart-create', name }))
+  )))
 
   // Clone a chart.
   //
@@ -58,71 +36,18 @@ export default function chartsRouter() {
   // they are ready. The mapping their rows need is declared here, by the person
   // making the change — nobody else knows whether a column was renamed or
   // dropped — and is stored on the clone as x-migrated-from.
-  router.post('/:name/clone', async (req, res) => {
-    const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
-    const { newName, migration } = req.body
-    if (!NAME_RE.test(req.params.name) || !NAME_RE.test(newName || '')) {
-      return res.status(400).json({ error: 'Invalid chart name' })
-    }
+  router.post('/:name/clone', route('charts.clone', {
+    params: z.object({ name: CHART_NAME() }),
+    body: z.object({ newName: CHART_NAME('chart name (newName)'), migration: migrationMapping.optional() }),
+  }, async ({ params: { name }, body: { newName, migration } }, { gitopsDir }) => (
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'chart-clone', name, newName, migration }))
+  )))
 
-    const source = path.join(chartsDir, req.params.name)
-    const target = path.join(chartsDir, newName)
-    try {
-      try {
-        await fs.access(target)
-        return res.status(409).json({ error: `Chart ${newName} already exists` })
-      } catch {
-        // Not there yet, which is what we want.
-      }
+  router.delete('/:name', route('charts.delete', {
+    params: z.object({ name: CHART_NAME() }),
+  }, async ({ params: { name } }, { gitopsDir }) => (
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'chart-delete', name }))
+  )))
 
-      // The recorded source is always the chart cloned from; a mapping in
-      // the body cannot replace it, and anything but an object is ignored.
-      const mapping = migration && typeof migration === 'object' && !Array.isArray(migration) ? migration : {}
-      await fs.cp(source, target, { recursive: true })
-      try {
-        const chartYamlFile = path.join(target, 'Chart.yaml')
-        const chartYaml = yaml.load(await fs.readFile(chartYamlFile, 'utf-8')) || {}
-        chartYaml.name = newName
-        await fs.writeFile(chartYamlFile, yaml.dump(chartYaml), 'utf-8')
-
-        const schemaFile = path.join(target, 'values.schema.json')
-        const schema = JSON.parse(await fs.readFile(schemaFile, 'utf-8'))
-        schema['x-migrated-from'] = { ...mapping, chart: req.params.name }
-        await fs.writeFile(schemaFile, JSON.stringify(schema, null, 2), 'utf-8')
-      } catch (err) {
-        // A half-made copy would block a retry with "already exists".
-        await fs.rm(target, { recursive: true, force: true })
-        throw err
-      }
-
-      res.json({ ok: true, chart: newName })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  router.delete('/:name', async (req, res) => {
-    const chartsDir = getChartsDir(req.gitopsDir, process.env.CHARTS_DIR)
-    if (!NAME_RE.test(req.params.name)) {
-      return res.status(400).json({ error: 'Invalid chart name' })
-    }
-    const chartDir = path.join(chartsDir, req.params.name)
-    try {
-      // A deployment still bound to the chart would fail to render the moment
-      // it is gone (#177), so the delete is refused and names them.
-      const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.name, process.env.DEPLOYMENTS_DIR)
-      if (deployments.length) {
-        return res.status(409).json({
-          error: `${req.params.name} is still used by ${deployments.length} deployment${deployments.length === 1 ? '' : 's'}`,
-          deployments: deployments.map(d => ({ deployment: d.deployment, path: d.path })),
-        })
-      }
-      await fs.rm(chartDir, { recursive: true, force: true })
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  return router
+  return declaredRoutes(router)
 }

@@ -9,27 +9,63 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-24.04
+    # Where scripts/install-checkers.sh puts it, said rather than found on PATH.
+    env:
+      PROMTOOL3_BIN: /usr/local/bin/promtool3
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
           cache: npm
-      - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
-      - run: helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest
       - run: git config --global user.email "ci@test.com"
       - run: git config --global user.name "CI"
+      # promtool, vmalert, amtool, and helm at the image's version.
       - run: sudo scripts/install-checkers.sh
+      # Here, not only in install-checkers.sh: that checks the binary it
+      # installed; this, the helm this job's PATH finds first.
+      - name: helm is the image's version
+        run: |
+          command -v helm && helm version
+          test "$(helm version --template '{{.Version}}')" = "v$(sed -n 's/^ARG HELM_VERSION=//p' Dockerfile)"
+      # prometheus3 groups are checked with it; without it their tests only skip.
+      - name: promtool3 is the image's version
+        run: |
+          "$PROMTOOL3_BIN" --version | head -1
+          "$PROMTOOL3_BIN" --version | grep -q "version $(sed -n 's/^ARG PROMETHEUS3_VERSION=v//p' Dockerfile) "
+      # The routing tests check what the save accepts against it: an older one
+      # does not read a webhook's timeout.
+      - name: amtool is the pinned version
+        run: |
+          amtool --version 2>&1 | head -1
+          amtool --version 2>&1 | grep -q "version $(sed -n 's/^ALERTMANAGER_VERSION=//p' scripts/install-checkers.sh) "
+      - run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.8.2
       - run: npm ci
       # Runtime dependencies only: these ship in the image. Dev-tool advisories
       # still reach Dependabot but do not block a PR.
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
-      - run: npm test
+      # npm test with coverage: 80% of the lines outside .jsx, or it fails.
+      - run: npm run test:coverage
+      # For the e2e job, which adds what E2E ran.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-unit
+          path: coverage/unit.json
+          overwrite: true
+          retention-days: 7
+      # Every entry point against real Helm (tests/pin): apart from npm test, which stays short.
+      - run: npm run test:pin
 
   e2e:
     runs-on: ubuntu-24.04
     needs: lint-and-test
+    permissions:
+      contents: read
+      # to read lint-and-test's coverage artifact
+      actions: read
+    env:
+      PROMTOOL3_BIN: /usr/local/bin/promtool3
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -39,10 +75,28 @@ jobs:
       - run: git config --global user.email "ci@test.com"
       - run: git config --global user.name "CI"
       - run: sudo scripts/install-checkers.sh
+      # Here, not only in install-checkers.sh: that checks the binary it
+      # installed; this, the helm this job's PATH finds first.
+      - name: helm is the image's version
+        run: |
+          command -v helm && helm version
+          test "$(helm version --template '{{.Version}}')" = "v$(sed -n 's/^ARG HELM_VERSION=//p' Dockerfile)"
+      # prometheus3 groups are checked with it; without it their tests only skip.
+      - name: promtool3 is the image's version
+        run: |
+          "$PROMTOOL3_BIN" --version | head -1
+          "$PROMTOOL3_BIN" --version | grep -q "version $(sed -n 's/^ARG PROMETHEUS3_VERSION=v//p' Dockerfile) "
       - run: npm ci
-      - run: npm run build
+      # The image's build with source maps beside it: the same files otherwise.
+      - run: npm run build:coverage
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Unit coverage of lint-and-test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name coverage-unit --dir coverage
+      # 80% of all lines with what E2E ran added, or it fails; so does a file
+      # under 80% that tests/coverage/under-80.tsv does not list.
+      - run: npm run test:e2e:coverage
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:

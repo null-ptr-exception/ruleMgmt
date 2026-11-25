@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbErrorsAbortedClients_WarnRate
           expr: |-
-            rate(mysql_global_status_aborted_clients{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_rate" 3 $row }}
+            rate(mysql_global_status_aborted_clients{namespace="{{ dig "namespace" `default` $row }}"}[5m]) > {{ dig "warn_rate" 3 $row | toJson }}
           for: 5m
           labels:
             severity: warning

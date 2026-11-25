@@ -24,11 +24,61 @@ const chart = (rules, columns, extra = {}) => ({
 
 const kinds = findings => findings.map(f => f.kind)
 
+// A bare 0 as a range passes promtool check rules but fails every evaluation
+// (promtool 2.54.1, test rules: "duration must be greater than 0").
+describe('a range of 0', () => {
+  it.each(['rate(cpu[0]) > ${warn}', 'max_over_time(cpu[0:1m]) > ${warn}', 'rate(cpu[ 00 ]) > ${warn}'])('%s is refused at save', expr => {
+    const found = checkRules(chart([{ alert: 'A', expr }])).filter(f => f.kind === 'zero-range')
+    expect(found).toEqual([expect.objectContaining({ severity: 'save', message: expect.stringContaining('a range of 0') })])
+  })
+
+  // VictoriaMetrics reads [0] as no range: the window becomes vmalert's
+  // -datasource.queryStep, another query than the one written.
+  it('is refused in a vm group too, saying what VictoriaMetrics makes of it', () => {
+    const schema = chart([{ alert: 'A', expr: 'rate(cpu[0]) > ${warn}' }])
+    schema.properties.cpu.groupType = 'vm'
+    const found = checkRules(schema).filter(f => f.kind === 'zero-range')
+    expect(found.map(f => f.message)).toEqual(['rule "A": a range of 0 ([0]…) is read by VictoriaMetrics as no range at all: the window becomes vmalert\'s -datasource.queryStep (5m by default) — give it a length, e.g. [5m]'])
+  })
+
+  it.each(['rate(cpu[5m]) > ${warn}', 'max_over_time(cpu[5m:0]) > ${warn}', 'cpu offset 0 > ${warn}', 'cpu{le="[0]"} > ${warn}'])('%s is not', expr => {
+    expect(checkRules(chart([{ alert: 'A', expr }])).filter(f => f.kind === 'zero-range')).toEqual([])
+  })
+})
+
 describe('reference integrity', () => {
   it('flags a ${var} that is not a column', () => {
     const findings = checkRules(chart([{ alert: 'A', expr: 'cpu > ${threshold}' }]))
     expect(kinds(findings)).toContain('undefined-var')
     expect(findings[0].severity).toBe('save')
+  })
+
+  // #131: a group has several rules; the finding names the one.
+  it('names the rule that references it, and only that one', () => {
+    const findings = checkRules(chart([
+      { alert: 'CpuOk', expr: 'cpu > ${warn}' },
+      { alert: 'CpuGhost', expr: 'cpu > ${ghost}' },
+    ])).filter(f => f.kind === 'undefined-var')
+    expect(findings).toEqual([expect.objectContaining({ group: 'cpu', alert: 'CpuGhost', message: 'rule "CpuGhost" references ${ghost}, which is not a column' })])
+  })
+
+  it('names a recording rule and a raw rule the way the other checks do', () => {
+    const messages = checkRules(chart([
+      { record: 'job:cpu:ghost', expr: 'cpu > ${ghost}' },
+      { raw: 'alert: Raw\nexpr: cpu > ${ghost}\n' },
+    ])).filter(f => f.kind === 'undefined-var').map(f => f.message)
+    expect(messages).toEqual([
+      'recording rule "job:cpu:ghost" references ${ghost}, which is not a column',
+      'a raw rule references ${ghost}, which is not a column',
+    ])
+  })
+
+  it('one name in two rules is reported for each', () => {
+    const findings = checkRules(chart([
+      { alert: 'A', expr: 'cpu > ${ghost}' },
+      { alert: 'B', expr: 'cpu < ${ghost}' },
+    ])).filter(f => f.kind === 'undefined-var')
+    expect(findings.map(f => f.alert)).toEqual(['A', 'B'])
   })
 
   it('accepts a reference resolved by a _common column', () => {
@@ -93,6 +143,53 @@ describe('${} nested inside {{ }}', () => {
       { vars: { frac: '${warn} / ${total}' } }
     )
     expect(kinds(checkRules(schema))).toContain('nested-placeholder')
+  })
+})
+
+// promtool check rules refuses an alert whose label or annotation has a {{
+// that no }} follows ("template: __alert_A:1: unexpected ..."), and takes
+// one in a recording rule's label, which is no template.
+describe('a {{ with no }} after it', () => {
+  const found = rule => checkRules(chart([rule])).filter(f => f.kind === 'unclosed-template')
+
+  it.each(['a {{', 'x{{{', '}}{{', '{{ $value }} then {{', '{{${warn}'])('%s in an annotation or a label is refused at save', text => {
+    for (const where of ['annotations', 'labels']) {
+      expect(found({ alert: 'A', expr: 'cpu > ${warn}', [where]: { s: text } }), `${where}: ${text}`)
+        .toEqual([expect.objectContaining({ severity: 'save', message: 'rule "A": "s" has a {{ with no }} after it — Prometheus cannot read it as a template' })])
+    }
+  })
+
+  it.each(['{{ $value }}', 'a }}', '{}}', '{{ "}}" }}', '{{ `raw` }}'])('%s is not', text => {
+    expect(found({ alert: 'A', expr: 'cpu > ${warn}', annotations: { s: text }, labels: { s: text } })).toEqual([])
+  })
+
+  it('is not refused in a recording rule\'s label, or in an expression', () => {
+    expect(found({ record: 'r:x', expr: 'cpu > ${warn}', labels: { s: 'a {{' } })).toEqual([])
+    expect(found({ alert: 'A', expr: 'cpu{x="{{"} > ${warn}' })).toEqual([])
+  })
+
+  it('is caught when a vars entry brings it', () => {
+    const schema = chart([{ alert: 'A', expr: 'cpu > ${warn}', annotations: { s: '${open}' } }], undefined, { vars: { open: 'a {{' } })
+    expect(kinds(checkRules(schema))).toContain('unclosed-template')
+  })
+})
+
+// promtool takes a carriage return in a label or annotation; the generated
+// chart cannot: in a block scalar YAML reads it as a line break (the file no
+// longer parses), in a quoted label as a space.
+describe('a carriage return', () => {
+  const found = rule => checkRules(chart([rule])).filter(f => f.kind === 'carriage-return')
+  it.each([
+    [{ alert: 'A', expr: 'cpu > ${warn}', annotations: { s: 'a\rb' } }, 's'],
+    [{ alert: 'A', expr: 'cpu > ${warn}', labels: { l: 'a\rb' } }, 'l'],
+    [{ alert: 'A', expr: 'cpu\r > ${warn}' }, 'expr'],
+    [{ record: 'r:x', expr: 'cpu > ${warn}', labels: { l: 'a\r' } }, 'l'],
+  ])('is refused at save: %j', (rule, key) => {
+    expect(found(rule)).toEqual([expect.objectContaining({ severity: 'save', message: expect.stringContaining(`"${key}" has a carriage return`) })])
+  })
+
+  it('a line break is not', () => {
+    expect(found({ alert: 'A', expr: 'cpu > ${warn}', annotations: { s: 'a\nb' } })).toEqual([])
   })
 })
 

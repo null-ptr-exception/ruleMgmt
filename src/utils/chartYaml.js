@@ -6,11 +6,15 @@
  * that already has content.
  */
 
+import { yamlName } from './yamlScalar.js'
+
 export function ensureChartYaml(existingText, name) {
   if (existingText && existingText.trim()) return { text: existingText, created: false }
   const text =
     `apiVersion: v2\n` +
-    `name: ${name}\n` +
+    // Helm reads Chart.yaml as YAML 1.1: a chart `yes` or `1_000` written
+    // bare is named true or 1000.
+    `name: ${yamlName(name)}\n` +
     `description: Alert rules for ${name}\n` +
     `version: 0.1.0\n` +
     `type: application\n` +

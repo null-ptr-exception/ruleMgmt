@@ -1,5 +1,5 @@
 /**
- * Generator blind tests — see issue #57 §15 (P8b).
+ * Generator blind tests (issue #57).
  *
  * The golden sample chart and the helm-unittest suites both have the same
  * weakness: their expected output comes from the generator (or from the model
@@ -17,11 +17,16 @@
  *                                and annotations
  *   object-meta.json         optional input — the site's RULE_OBJECT_* for
  *                                this case, as {labels, labelsByProfile, …}
- *   promtool-tests.yaml      (3) optional — `promtool test rules` against the
- *                                rendered rules
+ *   promtool-tests.yaml      (3) `promtool test rules` against the rendered
+ *                                rules, with the promtool the case's groups
+ *                                are checked by: Prometheus 2.x's, or 3.x's
+ *                                (PROMTOOL3_BIN) for prometheus3 groups.
+ *                                Required of every case promtool reads a
+ *                                group of; another is listed with its reason
+ *                                in tests/integration/generator-blind.test.js
  *
  * Layer (3) also runs `vmalert -dryRun` on every rendered object whose
- * profile says `validate: vmalert` (LogsQL, #76) — no file needed: the case's
+ * profile says `validate: vmalert` (LogsQL and MetricsQL) — no file needed: the case's
  * rules must parse.
  *
  * Layer (1) may be (re)written with `node tests/blind/update.mjs`, and then
@@ -37,18 +42,58 @@
  *   amtool-tests.yaml               (3) optional — alert labels → the
  *                                       receivers `amtool config routes test`
  *                                       must route them to
+ *   shared.yaml                     optional input — the repo's shared
+ *                                       notification configs (#123)
  */
 
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { execFileSync } from 'child_process'
+import { execFileSync, spawnSync } from 'child_process'
 import yaml from 'js-yaml'
 import { parseRulesDir } from '../../src/utils/rulesFile.js'
 import { generateProducts } from '../../src/utils/drift.js'
 import { parseObjectMeta, metaForProfile } from '../../src/utils/objectMeta.js'
-import { generateRouting } from '../../src/utils/routingGenerator.js'
+import { generateRouting, checkSharedConfigs } from '../../src/utils/routingGenerator.js'
 import { profileOfObject, profileFor } from '../../src/utils/outputs.js'
+
+/**
+ * Helm's output read the way the cluster reads it. Kubernetes reads YAML 1.1
+ * (go-yaml v2, through sigs.k8s.io/yaml), where a bare `yes` or `on` is true,
+ * `n` is false and `1_000` is 1000 — js-yaml's YAML 1.2 would read all of
+ * them as text and hide a name the API server receives as a boolean. Checked
+ * against kubectl's YAML-to-JSON conversion. Written here rather than taken
+ * from the generator, which is what it checks.
+ */
+const YAML11_VALUES = {
+  y: true, Y: true, yes: true, Yes: true, YES: true, on: true, On: true, ON: true,
+  n: false, N: false, no: false, No: false, NO: false, off: false, Off: false, OFF: false,
+}
+// A number once go-yaml v2 has dropped its `_`s.
+const YAML11_NUMBER = /^[-+]?(0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+|(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?)$/
+// What js-yaml's own types leave as text.
+const isYaml11NonString = text => Object.hasOwn(YAML11_VALUES, text) ||
+  (/^[-+.0-9]/.test(text) && YAML11_NUMBER.test(text.replace(/_/g, '')))
+function yaml11Value(text) {
+  if (Object.hasOwn(YAML11_VALUES, text)) return YAML11_VALUES[text]
+  const plain = text.replace(/_/g, '')
+  const sign = plain.startsWith('-') ? -1 : 1
+  const digits = plain.replace(/^[-+]/, '')
+  const prefixed = /^0([xXoObB])(.+)$/.exec(digits)
+  if (prefixed) return sign * parseInt(prefixed[2], { x: 16, o: 8, b: 2 }[prefixed[1].toLowerCase()])
+  if (/^0[0-7]+$/.test(digits)) return sign * parseInt(digits, 8)
+  return Number(plain)
+}
+// Core, not js-yaml's default: go-yaml v2 hands Kubernetes a timestamp
+// (`2026-11-22`) as the text it is, not a date.
+const KUBERNETES_SCHEMA = yaml.CORE_SCHEMA.extend({
+  implicit: [new yaml.Type('tag:yaml.org,2002:yaml11', {
+    kind: 'scalar',
+    resolve: data => data !== null && isYaml11NonString(data),
+    construct: yaml11Value,
+  })]
+})
+const loadRendered = text => yaml.loadAll(text, null, { schema: KUBERNETES_SCHEMA })
 
 export const CASES_DIR = path.resolve('tests/fixtures/charts')
 
@@ -128,6 +173,32 @@ export function hasBinary(bin, args = ['--version']) {
 }
 
 /**
+ * Whether the amtool on PATH can check what is generated: 0.28 or later, the
+ * first to read a webhook's timeout (scripts/install-checkers.sh pins it).
+ * An older one would refuse every config with a timeout: its tests are
+ * skipped with a reason, not failed — CI installs the pinned one and checks
+ * its version, so they run there.
+ */
+export const AMTOOL_MIN = [0, 28]
+export function amtoolStatus() {
+  // Older ones print the version on stderr.
+  const run = spawnSync('amtool', ['--version'], { encoding: 'utf-8' })
+  if (run.error) return { ok: false, why: 'amtool not found' }
+  const out = `${run.stdout || ''}${run.stderr || ''}`
+  const m = /version (\d+)\.(\d+)\.(\d+)/.exec(out)
+  if (!m) return { ok: false, why: `amtool's version cannot be read: ${out.split('\n')[0]}` }
+  const [major, minor] = [Number(m[1]), Number(m[2])]
+  const ok = major > AMTOOL_MIN[0] || (major === AMTOOL_MIN[0] && minor >= AMTOOL_MIN[1])
+  return ok ? { ok: true, version: `${m[1]}.${m[2]}.${m[3]}` }
+    : { ok: false, why: `amtool ${m[1]}.${m[2]}.${m[3]} is older than ${AMTOOL_MIN.join('.')}, which the tests need (it reads a webhook's timeout) — install the version in scripts/install-checkers.sh` }
+}
+const AMTOOL = amtoolStatus()
+export const HAS_AMTOOL = AMTOOL.ok
+export const AMTOOL_SKIP_REASON = AMTOOL.why ?? null
+/** A test's title, saying why it is skipped when amtool cannot run it (the reporter shows titles, not logs). */
+export const amtoolTitle = title => (HAS_AMTOOL ? title : `${title} [skipped: ${AMTOOL_SKIP_REASON}]`)
+
+/**
  * Render a case the way a deployment is rendered: the generated schema and
  * templates in a throwaway chart, with the case's values.yaml. The schema is
  * included so Helm validates the rows exactly as it would in a cluster.
@@ -159,7 +230,7 @@ export function renderCase(name, products) {
 export function renderedGroups(renderedYaml) {
   const out = {}
   const defaultKind = profileFor(undefined).kind
-  for (const doc of yaml.loadAll(renderedYaml)) {
+  for (const doc of loadRendered(renderedYaml)) {
     if (!profileOfObject(doc)) continue
     const key = doc.kind === defaultKind ? doc.metadata.name : `${doc.kind} ${doc.metadata.name}`
     out[key] = doc.spec.groups
@@ -171,7 +242,7 @@ export function renderedGroups(renderedYaml) {
 export function renderedMeta(renderedYaml) {
   const out = {}
   const defaultKind = profileFor(undefined).kind
-  for (const doc of yaml.loadAll(renderedYaml)) {
+  for (const doc of loadRendered(renderedYaml)) {
     if (!profileOfObject(doc)) continue
     const key = doc.kind === defaultKind ? doc.metadata.name : `${doc.kind} ${doc.metadata.name}`
     out[key] = { labels: doc.metadata.labels || {}, annotations: doc.metadata.annotations || {} }
@@ -179,13 +250,34 @@ export function renderedMeta(renderedYaml) {
   return out
 }
 
-/** Object name → spec.groups, for the objects whose profile promtool can check. */
-export function promtoolGroups(renderedYaml) {
+/**
+ * Object name → spec.groups, for the objects whose profile is checked by
+ * `validator`: promtool (Prometheus 2.x) or promtool3 (Prometheus 3.x).
+ */
+export function promtoolGroups(renderedYaml, validator = 'promtool') {
   const out = {}
-  for (const doc of yaml.loadAll(renderedYaml)) {
-    if (profileOfObject(doc)?.validate === 'promtool') out[doc.metadata.name] = doc.spec.groups
+  for (const doc of loadRendered(renderedYaml)) {
+    if (profileOfObject(doc)?.validate === validator) out[doc.metadata.name] = doc.spec.groups
   }
   return out
+}
+
+/** The binary each promtool checker runs, found as the server finds it. */
+export const PROMTOOL_BINS = {
+  promtool: process.env.PROMTOOL_BIN || 'promtool',
+  promtool3: process.env.PROMTOOL3_BIN || 'promtool3',
+}
+
+/**
+ * Which promtool a case's promtool-tests.yaml runs with: the one its groups'
+ * profile is checked by. A case with groups of both is refused — one test
+ * file cannot be read by two Prometheus versions' rules at once; split it.
+ */
+export function casePromtool(name) {
+  const { model } = parseRulesDir(readDir(path.join(CASES_DIR, name, 'rules')))
+  const used = new Set(Object.values(model.groups).map(g => profileFor(g.type)?.validate).filter(v => Object.hasOwn(PROMTOOL_BINS, v)))
+  if (used.size > 1) throw new Error(`${name}: has groups checked by both ${[...used].join(' and ')} — give each its own case`)
+  return used.size ? [...used][0] : 'promtool'
 }
 
 /** Whether any of the case's groups has an output profile checked by `validator`. */
@@ -197,7 +289,7 @@ export function caseChecksWith(name, validator) {
 /** Object name → spec.groups, for the objects whose profile vmalert checks (#76). */
 export function vmalertGroups(renderedYaml) {
   const out = {}
-  for (const doc of yaml.loadAll(renderedYaml)) {
+  for (const doc of loadRendered(renderedYaml)) {
     if (profileOfObject(doc)?.validate === 'vmalert') out[doc.metadata.name] = doc.spec.groups
   }
   return out
@@ -228,7 +320,7 @@ export function vmalertDryRun(name, groupsByObject) {
  * gets its own rule file — the operator loads one object per file, and the
  * same group name legitimately repeats across a group's objects.
  */
-export function promtoolTest(name, groupsByObject) {
+export function promtoolTest(name, groupsByObject, bin = 'promtool') {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), `blind-promtool-${name}-`))
   try {
     const ruleFiles = Object.entries(groupsByObject).map(([obj, groups]) => {
@@ -240,7 +332,7 @@ export function promtoolTest(name, groupsByObject) {
     const testFile = path.join(tmp, 'tests.yaml')
     fs.writeFileSync(testFile, yaml.dump({ ...tests, rule_files: ruleFiles }))
     try {
-      execFileSync('promtool', ['test', 'rules', testFile], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], cwd: tmp })
+      execFileSync(bin, ['test', 'rules', testFile], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], cwd: tmp })
       return { passed: true, output: '' }
     } catch (err) {
       return { passed: false, output: `${err.stdout || ''}${err.stderr || ''}` }
@@ -261,11 +353,24 @@ export function listRoutingCases() {
     .sort()
 }
 
+/**
+ * A routing case's shared configs (#123): its optional shared.yaml, as the
+ * repo's _shared/notification-configs.yaml is read, or null.
+ */
+export function routingCaseShared(name) {
+  const file = path.join(ROUTING_CASES_DIR, name, 'shared.yaml')
+  if (!fs.existsSync(file)) return null
+  const doc = yaml.load(fs.readFileSync(file, 'utf-8'))
+  const errors = checkSharedConfigs(doc)
+  if (errors.length) throw new Error(`${name}: shared.yaml does not pass the checks:\n  ${errors.join('\n  ')}`)
+  return { configs: doc.configs, errors }
+}
+
 /** The generated templates/alertmanagerconfig.yaml for a routing case. */
 export function generateRoutingCase(name) {
   const dir = path.join(ROUTING_CASES_DIR, name)
   const routing = yaml.load(fs.readFileSync(path.join(dir, 'routing.yaml'), 'utf-8'))
-  const { text, errors } = generateRouting(routing, { meta: metaForProfile(caseObjectMeta(dir), 'routing') })
+  const { text, errors } = generateRouting(routing, { meta: metaForProfile(caseObjectMeta(dir), 'routing'), shared: routingCaseShared(name) })
   if (errors) throw new Error(`${name}: routing.yaml does not pass the checks:\n  ${errors.join('\n  ')}`)
   return text
 }
@@ -278,7 +383,7 @@ export function renderRoutingCase(name, text) {
     fs.mkdirSync(path.join(tmp, 'templates'))
     fs.writeFileSync(path.join(tmp, 'templates', 'alertmanagerconfig.yaml'), text)
     const out = execFileSync('helm', ['template', RELEASE, tmp], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] })
-    return yaml.loadAll(out).find(doc => doc?.kind === 'AlertmanagerConfig')
+    return loadRendered(out).find(doc => doc?.kind === 'AlertmanagerConfig')
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
@@ -301,10 +406,86 @@ export function readAmtoolTests(name) {
  * this one never keeps an alert from the rest. Alertmanager's root itself may
  * not say `continue`.
  *
- * Matcher objects become strings and the field names snake case; receivers
- * keep only their names, which is all a route test needs. The operator's
- * prefixing of receiver names is left out: it renames, it does not reroute.
+ * Matcher objects become strings and the field names snake case. Receivers
+ * keep their e-mail and webhook configs with every field, so amtool checks
+ * them (#171, #159); what the resource reads from a Secret becomes a
+ * stand-in, since the Secret is not here: a fixed address for urlSecret, a
+ * fixed password or token, a CA file path (amtool does not open it). E-mail gets a
+ * placeholder global server, which the cluster's Alertmanager has. The
+ * operator's prefixing of receiver names is left out: it renames, it does
+ * not reroute.
  */
+const SECRET_URL_STAND_IN = 'http://from-a-secret.example.invalid/'
+export const SECRET_STAND_IN = 'from-a-secret'
+export const SECRET_FILE_STAND_IN = '/from-a-secret/file'
+
+const tls = t => ({
+  ...(t.insecureSkipVerify !== undefined ? { insecure_skip_verify: t.insecureSkipVerify } : {}),
+  ...(t.ca ? { ca_file: SECRET_FILE_STAND_IN } : {}),
+})
+
+const email = c => ({
+  to: c.to,
+  ...(c.from !== undefined ? { from: c.from } : {}),
+  ...(c.smarthost !== undefined ? { smarthost: c.smarthost } : {}),
+  ...(c.authUsername !== undefined ? { auth_username: c.authUsername } : {}),
+  ...(c.authPassword ? { auth_password: SECRET_STAND_IN } : {}),
+  ...(c.authIdentity !== undefined ? { auth_identity: c.authIdentity } : {}),
+  ...(c.authSecret ? { auth_secret: SECRET_STAND_IN } : {}),
+  ...(c.requireTLS !== undefined ? { require_tls: c.requireTLS } : {}),
+  ...(c.tlsConfig ? { tls_config: tls(c.tlsConfig) } : {}),
+  ...(c.sendResolved !== undefined ? { send_resolved: c.sendResolved } : {}),
+  // A list of key and value in the resource, a map in Alertmanager.
+  ...(c.headers ? { headers: Object.fromEntries(c.headers.map(h => [h.key, h.value])) } : {}),
+  ...(c.text !== undefined ? { text: c.text } : {}),
+  ...(c.html !== undefined ? { html: c.html } : {}),
+})
+
+/**
+ * A webhook timeout as the operator hands it to Alertmanager: parsed with
+ * Prometheus' duration reader and written back with its String() (prometheus
+ * common model.Duration) — largest unit first, whole days as `d`, years and
+ * weeks only when exact: 90s is 1m30s, 24h is 1d. Alertmanager reads a Go
+ * duration, which has no d, w or y. What does not parse is passed on as
+ * written (the operator would refuse it).
+ */
+const MS = { y: 31536000000, w: 604800000, d: 86400000, h: 3600000, m: 60000, s: 1000, ms: 1 }
+export function operatorDuration(text) {
+  const m = /^(?:0|(?:(\d+)y)?(?:(\d+)w)?(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?(?:(\d+)ms)?)$/.exec(String(text))
+  if (!m || text === '') return text
+  let ms = ['y', 'w', 'd', 'h', 'm', 's', 'ms'].reduce((sum, unit, i) => sum + Number(m[i + 1] || 0) * MS[unit], 0)
+  if (ms === 0) return '0s'
+  let out = ''
+  for (const [unit, exact] of [['y', true], ['w', true], ['d', false], ['h', false], ['m', false], ['s', false], ['ms', false]]) {
+    if (exact && ms % MS[unit] !== 0) continue
+    const v = Math.floor(ms / MS[unit])
+    if (v > 0) { out += `${v}${unit}`; ms -= v * MS[unit] }
+  }
+  return out
+}
+
+const webhook = c => {
+  const h = c.httpConfig || {}
+  const http = {
+    ...(h.authorization ? { authorization: { ...(h.authorization.type !== undefined ? { type: h.authorization.type } : {}), credentials: SECRET_STAND_IN } } : {}),
+    ...(h.basicAuth ? { basic_auth: { username: SECRET_STAND_IN, password: SECRET_STAND_IN } } : {}),
+    ...(h.tlsConfig ? { tls_config: tls(h.tlsConfig) } : {}),
+  }
+  return {
+    url: c.url ?? SECRET_URL_STAND_IN,
+    ...(c.sendResolved !== undefined ? { send_resolved: c.sendResolved } : {}),
+    ...(c.maxAlerts !== undefined ? { max_alerts: c.maxAlerts } : {}),
+    ...(c.timeout !== undefined ? { timeout: operatorDuration(c.timeout) } : {}),
+    ...(Object.keys(http).length ? { http_config: http } : {}),
+  }
+}
+
+const receiver = r => ({
+  name: r.name,
+  ...(r.emailConfigs ? { email_configs: r.emailConfigs.map(email) } : {}),
+  ...(r.webhookConfigs ? { webhook_configs: r.webhookConfigs.map(webhook) } : {}),
+})
+
 export function toAlertmanagerConfig(spec) {
   const route = r => ({
     ...(r.receiver ? { receiver: r.receiver } : {}),
@@ -320,7 +501,8 @@ export function toAlertmanagerConfig(spec) {
       receiver: 'platform-default',
       routes: [route(spec.route), { receiver: 'other-team', matchers: ['severity="critical"'] }],
     },
-    receivers: [{ name: 'platform-default' }, { name: 'other-team' }, ...spec.receivers.map(r => ({ name: r.name }))],
+    global: { smtp_smarthost: 'smtp.example.invalid:25', smtp_from: 'alertforge@example.invalid' },
+    receivers: [{ name: 'platform-default' }, { name: 'other-team' }, ...spec.receivers.map(receiver)],
   }
 }
 

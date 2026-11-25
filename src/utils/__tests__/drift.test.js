@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'fs'
-import { computeDrift, generateProducts, blocksCommit, staleTemplates } from '../drift.js'
+import { computeDrift, generateProducts, staleTemplates, repeatingTemplates, replacedByConversion } from '../drift.js'
 import { schemaToModel, modelToSchema, modelToFiles, parseRulesDir } from '../rulesFile.js'
 import { objectMetaFromEnv } from '../objectMeta.js'
 
@@ -98,11 +98,110 @@ describe('staleTemplates', () => {
   })
 })
 
-describe('blocksCommit', () => {
-  it('blocks stale, allows the rest', () => {
-    expect(blocksCommit('stale')).toBe(true)
-    // A legacy chart renders as it did in 1.x, so it is a reminder, not a
-    // blocker (#79): charts can be converted one at a time.
-    expect(['legacy', 'ok', 'empty', 'missing'].map(blocksCommit)).toEqual([false, false, false, false])
+// #190: a rule object next to the generated ones, repeating their alerts.
+describe('repeatingTemplates / replacedByConversion', () => {
+  const generated = {
+    'cpu.yaml': 'kind: PrometheusRule\nspec:\n  groups:\n    - name: cpu\n      rules:\n        - alert: CpuHigh\n          labels:\n            severity: warning\n            ns: "{{ $row.ns }}"\n        - alert: CpuLow\n          labels:\n            severity: info\n',
+    'rec.yaml': 'kind: PrometheusRule\nspec:\n  groups:\n    - name: rec\n      rules:\n        - record: cpu:rate5m\n',
+  }
+  const LABELS = { CpuHigh: { severity: 'warning', ns: '"{{ .ns }}"' }, CpuLow: { severity: 'info' } }
+  const ruleText = (n, labels = LABELS[n]) => `        - alert: ${n}\n          expr: vector(1)\n${labels ? `          labels:\n${Object.entries(labels).map(([k, v]) => `            ${k}: ${v}\n`).join('')}` : ''}`
+  const rule = (kind, names, group = 'cpu') => `apiVersion: x\nkind: ${kind}\nspec:\n  groups:\n    - name: ${group}\n      rules:\n${names.map(n => ruleText(n)).join('')}`
+
+  it('finds a rule object that repeats generated alerts, PrometheusRule or VMRule', () => {
+    const files = { ...generated, 'old.yaml': rule('PrometheusRule', ['CpuHigh', 'CpuLow']), 'vm.yaml': rule('VMRule', ['CpuHigh']) }
+    expect(repeatingTemplates(files, generated)).toEqual({ 'old.yaml': ['CpuHigh', 'CpuLow'], 'vm.yaml': ['CpuHigh'] })
+  })
+
+  it('counts recording rules and quoted names', () => {
+    const files = { 'old.yaml': 'kind: "PrometheusRule"\nspec:\n  groups:\n    - name: x\n      rules:\n        - record: "cpu:rate5m"\n          expr: x\n' }
+    expect(repeatingTemplates(files, generated)).toEqual({ 'old.yaml': ['cpu:rate5m'] })
+  })
+
+  it('leaves alone what is not a rule object, or repeats nothing', () => {
+    const files = {
+      'cm.yaml': 'kind: ConfigMap\ndata:\n  note: "- alert: CpuHigh"\n',
+      'own.yaml': rule('PrometheusRule', ['SomethingElse']),
+    }
+    expect(repeatingTemplates(files, generated)).toEqual({})
+  })
+
+  // An alert is its name and its labels, so the same name
+  // with other labels is another alert, not a repeat.
+  it('an alert with the same name but other labels is not a repeat', () => {
+    const files = {
+      'page.yaml': `kind: PrometheusRule\nspec:\n  groups:\n    - name: mine\n      rules:\n${ruleText('CpuHigh', { severity: 'page', ns: 'x' })}`,
+      'fewer.yaml': `kind: PrometheusRule\nspec:\n  groups:\n    - name: mine\n      rules:\n${ruleText('CpuLow', {})}`,
+      'templated.yaml': `kind: PrometheusRule\nspec:\n  groups:\n    - name: mine\n      rules:\n${ruleText('CpuLow', { severity: '"{{ .Values.sev }}"' })}`,
+    }
+    expect(repeatingTemplates(files, generated)).toEqual({ 'templated.yaml': ['CpuLow'] })
+  })
+
+  // Names in an annotation's text, a {{/* */}} comment or a
+  // # comment are not rules.
+  it('does not read rules out of text, comments, or Helm comments', () => {
+    const block = 'kind: PrometheusRule\nspec:\n  groups:\n    - name: mine\n      rules:\n        - alert: Mine\n          annotations:\n            description: |\n              see also\n              - alert: CpuLow\n'
+    const helm = `kind: PrometheusRule\nspec:\n  groups:\n    - name: mine\n      rules:\n{{/*\n${ruleText('CpuLow')}*/}}\n#        - alert: CpuLow\n        - alert: Mine\n`
+    expect(repeatingTemplates({ 'block.yaml': block, 'helm.yaml': helm }, generated)).toEqual({})
+  })
+
+  // Each of these must be kept on conversion (#114).
+  it('keeps what only looks like a rule object, or has a group of its own', () => {
+    const files = {
+      'cm.yaml': 'kind: ConfigMap\ndata:\n  rules.yaml: |\n    kind: PrometheusRule\n    groups:\n      - name: cpu\n        rules:\n          - alert: CpuHigh\n',
+      'own-group.yaml': rule('PrometheusRule', ['CpuHigh'], 'mine'),
+      'helm-group.yaml': rule('PrometheusRule', ['CpuHigh'], '{{ .Values.group }}'),
+      'multi.yaml': `kind: ConfigMap\ndata: {}\n---\n${rule('PrometheusRule', ['CpuHigh'])}`,
+      'comment.yaml': rule('PrometheusRule', ['CpuHigh']).replace('- alert: CpuHigh', '- alert: CpuHigh   # the old one'),
+      'sep-comment.yaml': `kind: ConfigMap\ndata: {}\n--- # rules\n${rule('PrometheusRule', ['CpuHigh'])}`,
+    }
+    expect(replacedByConversion(files, generated)).toEqual(['comment.yaml'])
+    // The commit check still sees the rules they repeat.
+    expect(Object.keys(repeatingTemplates(files, generated)).sort()).toEqual(['comment.yaml', 'helm-group.yaml', 'multi.yaml', 'own-group.yaml', 'sep-comment.yaml'])
+  })
+
+  // A `kind:` line with a comment after it, a leading
+  // comment-only document, and CRLF line ends are still a 1.x rule file.
+  it('on conversion, removes the old rule file however its lines end', () => {
+    const plain = rule('PrometheusRule', ['CpuHigh', 'CpuLow'])
+    const files = {
+      'kind-comment.yaml': plain.replace('kind: PrometheusRule', 'kind: PrometheusRule  # 1.x'),
+      'lead-comment.yaml': `# generated by 1.x\n---\n${plain}`,
+      'crlf.yaml': plain.replace(/\n/g, '\r\n'),
+    }
+    expect(replacedByConversion(files, generated).sort()).toEqual(['crlf.yaml', 'kind-comment.yaml', 'lead-comment.yaml'])
+  })
+
+  it('a generated file is never reported against itself', () => {
+    expect(repeatingTemplates(generated, generated)).toEqual({})
+  })
+
+  it('on conversion, removes only a rule object whose groups are all generated', () => {
+    const files = {
+      'old.yaml': rule('PrometheusRule', ['CpuHigh', 'CpuLow']),
+      'mixed.yaml': `${rule('PrometheusRule', ['CpuHigh'])}    - name: mine\n      rules:\n${ruleText('Mine')}`,
+      'renamed-alert.yaml': rule('PrometheusRule', ['CpuHigh', 'SomethingElse']),
+      'empty.yaml': 'kind: PrometheusRule\nspec: {}\n',
+    }
+    expect(replacedByConversion(files, generated).sort()).toEqual(['old.yaml', 'renamed-alert.yaml'])
+  })
+
+  it('computeDrift reports a converted chart that kept such a file, and which alerts', () => {
+    const [name, text] = Object.entries(templates).find(([, t]) => /- alert: /.test(t))
+    const alerts = [...text.matchAll(/- alert: (\S+)/g)].map(m => m[1])
+    const result = drift({ templateFiles: { ...templates, 'prometheus-rule.yaml': text } })
+    expect(result.state).toBe('stale')
+    expect(result.repeats).toEqual([{ file: 'templates/prometheus-rule.yaml', rules: [...new Set(alerts)] }])
+    expect(result.outOfDate).toBeUndefined()
+    expect(name in templates).toBe(true)
+  })
+
+  // Repeats are reported whatever else is stale, not only once nothing is.
+  it('computeDrift reports repeats together with products that are out of date', () => {
+    const [name, text] = Object.entries(templates).find(([, t]) => /- alert: /.test(t))
+    const result = drift({ templateFiles: { ...templates, [name]: `${text}# edited\n`, 'prometheus-rule.yaml': text } })
+    expect(result.state).toBe('stale')
+    expect(result.repeats.map(r => r.file)).toEqual(['templates/prometheus-rule.yaml'])
+    expect(result.outOfDate).toEqual([`templates/${name}`])
   })
 })

@@ -1,0 +1,904 @@
+# Written by PIN_UPDATE=1 (the same under every Helm version this was run with); see tests/pin/walk-sync/walk-sync.pin.test.js.
+# The base repo every row starts from:
+# == sync.yaml
+# syncs:
+#   - source: deployments/t/a
+#     targets:
+#       - deployments/t/b
+# 
+# == deployments/t/a/Chart.yaml
+# apiVersion: v2
+# name: a
+# version: 0.1.0
+# dependencies:
+#   - name: demo
+#     version: '>=0.0.0-0'
+#     repository: file://../../../charts/demo
+# 
+# == deployments/t/a/values.yaml
+# demo:
+#   cpu:
+#     - job: a
+# 
+# == deployments/s/x/Chart.yaml
+# apiVersion: v2
+# name: x
+# version: 0.1.0
+# dependencies:
+#   - name: common
+#     version: '>=0.0.0-0'
+#     repository: file://../_common/demo
+# 
+# == deployments/demo/f-values.yaml
+# _common:
+#   team: shop
+# cpu:
+#   - job: f
+id	kind	entry	cls	status	file	leak	written	fs	helm	helmExit	alerts	copy	appValue	vsHelm
+plain	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+plain	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+plain	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+plain	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+plain	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+plain	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+plain	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments/w/d/templates/alertmanagerconfig.yaml,deployments/w/d/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+plain	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+plain	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+plain	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+deep	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+deep	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+deep	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+deep	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+deep	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+deep	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+deep	W	sync-to	ok	200	-	no	deployments/w/n1/n2/n3/d/routing.yaml,deployments/w/n1/n2/n3/d/templates/alertmanagerconfig.yaml,deployments/w/n1/n2/n3/d/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+deep	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+deep	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+deep	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+top-level	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+top-level	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+top-level	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+top-level	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+top-level	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+top-level	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+top-level	W	sync-to	ok	200	-	no	sync.yaml,w/routing.yaml,w/templates/alertmanagerconfig.yaml,w/values.yaml	folder	renders	0	1	copy	-	
+top-level	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+top-level	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+top-level	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+inside-deployment	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	nestedIn=deployments/t/a	
+inside-deployment	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+inside-deployment	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+inside-deployment	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+inside-deployment	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+inside-deployment	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+inside-deployment	W	sync-to	ok	200	-	no	deployments/t/a/inner/routing.yaml,deployments/t/a/inner/templates/alertmanagerconfig.yaml,deployments/t/a/inner/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+inside-deployment	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+inside-deployment	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+inside-deployment	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+inside-deployment-templates	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	nestedIn=deployments/t/a	
+inside-deployment-templates	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
+inside-deployment-templates	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
+inside-deployment-templates	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+inside-deployment-templates	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+inside-deployment-templates	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+inside-deployment-templates	W	sync-to	ok	200	-	no	deployments/t/a/templates/inner/routing.yaml,deployments/t/a/templates/inner/templates/alertmanagerconfig.yaml,deployments/t/a/templates/inner/values.yaml,sync.yaml	folder	renders	0	1	source-fails	-	not-a-copy-after
+inside-deployment-templates	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+inside-deployment-templates	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+inside-deployment-templates	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+in-common-folder	W	tree	common	200	-	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
+in-common-folder	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
+in-common-folder	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
+in-common-folder	W	routing-get	absent	400	deployments/s/_common/d	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
+in-common-folder	W	preview	refused	200	deployments/s/_common/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+in-common-folder	W	check-deployment	cannot-check	exit 2	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+in-common-folder	W	sync-to	refused	400	deployments/s/_common/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+in-common-folder	W	sync-from	refused	400	deployments/s/_common/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+in-common-folder	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+in-common-folder	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+under-common-stack	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+under-common-stack	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+under-common-stack	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+under-common-stack	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+under-common-stack	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+under-common-stack	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+under-common-stack	W	sync-to	ok	200	-	no	deployments/s/y/Chart.yaml,deployments/s/y/routing.yaml,deployments/s/y/templates/alertmanagerconfig.yaml,deployments/s/y/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+under-common-stack	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+under-common-stack	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+under-common-stack	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+common-two-levels	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+common-two-levels	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+common-two-levels	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+common-two-levels	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+common-two-levels	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+common-two-levels	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+common-two-levels	W	sync-to	ok	200	-	no	deployments/s/deeper/z/routing.yaml,deployments/s/deeper/z/templates/alertmanagerconfig.yaml,deployments/s/deeper/z/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+common-two-levels	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+common-two-levels	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+common-two-levels	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+common-only-folder	W	tree	common	200	-	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
+common-only-folder	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found	
+common-only-folder	W	routing-get	absent	400	deployments/n/_common/demo	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
+common-only-folder	W	check-deployment	cannot-check	exit 2	-	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	sync-to	refused	400	deployments/n/_common/demo	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	sync-from	refused	400	deployments/n/_common/demo	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	commit	ok	200	-	no	-	folder	renders-empty	0	0	-	-	
+common-only-folder	W	check-repo	ok	exit 0	-	no	-	folder	renders-empty	0	0	-	-	
+common-chart-link-gone	W	tree	deployment	200	-	no	-	folder	renders-empty	0	0	-	-	
+common-chart-link-gone	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=null	
+common-chart-link-gone	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found problems=1	
+common-chart-link-gone	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
+common-chart-link-gone	W	preview	refused	200	deployments/s/x	no	-	folder	renders-empty	0	0	-	-	
+common-chart-link-gone	W	check-deployment	refused	exit 1	-	no	-	folder	renders-empty	0	0	-	-	
+common-chart-link-gone	W	sync-to	ok	200	-	no	deployments/s/x/Chart.yaml,deployments/s/x/routing.yaml,deployments/s/x/templates/alertmanagerconfig.yaml,deployments/s/x/values.yaml,sync.yaml	folder	renders-empty	0	0	copy	-	
+common-chart-link-gone	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders-empty	0	0	copy	-	
+common-chart-link-gone	W	commit	refused	409	deployments/s/x	no	-	folder	renders-empty	0	0	-	template-missing	
+common-chart-link-gone	W	check-repo	refused	exit 1	deployments/s/x/Chart.yaml	no	-	folder	renders-empty	0	0	-	refuse:stack.template-missing	
+name-dots	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+name-dots	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+name-dots	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+name-dots	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+name-dots	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+name-dots	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+name-dots	W	sync-to	ok	200	-	no	deployments/w/d.v1/routing.yaml,deployments/w/d.v1/templates/alertmanagerconfig.yaml,deployments/w/d.v1/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-dots	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-dots	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+name-dots	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+name-dash-underscore	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+name-dash-underscore	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+name-dash-underscore	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+name-dash-underscore	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+name-dash-underscore	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+name-dash-underscore	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+name-dash-underscore	W	sync-to	ok	200	-	no	deployments/w/my_dep-2/routing.yaml,deployments/w/my_dep-2/templates/alertmanagerconfig.yaml,deployments/w/my_dep-2/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-dash-underscore	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-dash-underscore	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+name-dash-underscore	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+name-space	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+name-space	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+name-space	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+name-space	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+name-space	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+name-space	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+name-space	W	sync-to	ok	200	-	no	deployments/w/my dep/routing.yaml,deployments/w/my dep/templates/alertmanagerconfig.yaml,deployments/w/my dep/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-space	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-space	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+name-space	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+name-non-ascii	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+name-non-ascii	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+name-non-ascii	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+name-non-ascii	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+name-non-ascii	W	preview	refused	200	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+name-non-ascii	W	check-deployment	refused	exit 1	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+name-non-ascii	W	sync-to	ok	200	-	no	deployments/w/部署/routing.yaml,deployments/w/部署/templates/alertmanagerconfig.yaml,deployments/w/部署/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-non-ascii	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-non-ascii	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+name-non-ascii	W	check-repo	refused	exit 1	deployments/w/部署	no	-	folder	renders	0	1	-	refuse:deployment.render	refuses-what-helm-renders
+name-uppercase	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+name-uppercase	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+name-uppercase	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+name-uppercase	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+name-uppercase	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+name-uppercase	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+name-uppercase	W	sync-to	ok	200	-	no	deployments/w/Prod/routing.yaml,deployments/w/Prod/templates/alertmanagerconfig.yaml,deployments/w/Prod/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-uppercase	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+name-uppercase	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+name-uppercase	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+hidden-folder	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+hidden-folder	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
+hidden-folder	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+hidden-folder	W	routing-get	absent	400	deployments/.w	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
+hidden-folder	W	preview	refused	400	deployments/.w	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-folder	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+hidden-folder	W	sync-to	refused	400	deployments/.w	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-folder	W	sync-from	refused	400	deployments/.w/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-folder	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+hidden-folder	W	check-repo	listed	exit 0	deployments/.w/d	no	-	folder	renders	0	1	-	warn:walk.hidden	
+hidden-deployment	W	tree	absent	200	-	no	-	folder	renders	0	1	-	not shown	misses-what-helm-renders
+hidden-deployment	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
+hidden-deployment	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+hidden-deployment	W	routing-get	absent	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	misses-what-helm-renders
+hidden-deployment	W	preview	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-deployment	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+hidden-deployment	W	sync-to	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-deployment	W	sync-from	refused	400	deployments/w/.d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+hidden-deployment	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+hidden-deployment	W	check-repo	listed	exit 0	deployments/w/.d	no	-	folder	renders	0	1	-	warn:walk.hidden	
+node-modules	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+node-modules	W	list	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
+node-modules	W	migration	absent	200	-	no	-	folder	renders	0	1	-	not found	misses-what-helm-renders
+node-modules	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+node-modules	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+node-modules	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+node-modules	W	sync-to	ok	200	-	no	deployments/node_modules/d/routing.yaml,deployments/node_modules/d/templates/alertmanagerconfig.yaml,deployments/node_modules/d/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+node-modules	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+node-modules	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+node-modules	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+link-inside	W	tree	absent	200	-	no	-	link	renders	0	1	-	not shown	misses-what-helm-renders
+link-inside	W	list	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
+link-inside	W	migration	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
+link-inside	W	routing-get	absent	400	deployments/w/ln	no	-	link	renders	0	1	-	-	misses-what-helm-renders
+link-inside	W	preview	refused	400	deployments/w/ln	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
+link-inside	W	check-deployment	cannot-check	exit 2	-	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
+link-inside	W	sync-to	refused	400	deployments/w/ln	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
+link-inside	W	sync-from	refused	400	deployments/w/ln	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
+link-inside	W	commit	ok	200	-	no	-	link	renders	0	1	-	-	
+link-inside	W	check-repo	ok	exit 0	-	no	-	link	renders	0	1	-	-	
+link-outside	W	tree	unreadable	200	-	no	-	link	renders	0	1	-	unreadable=it is a link that leads outside the repo	
+link-outside	W	list	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
+link-outside	W	migration	absent	200	-	no	-	link	renders	0	1	-	not found	misses-what-helm-renders
+link-outside	W	routing-get	absent	400	deployments/w/out	no	-	link	renders	0	1	-	-	misses-what-helm-renders
+link-outside	W	preview	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
+link-outside	W	check-deployment	cannot-check	exit 2	-	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
+link-outside	W	sync-to	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
+link-outside	W	sync-from	refused	400	deployments/w/out	no	-	link	renders	0	1	-	-	refuses-what-helm-renders
+link-outside	W	commit	listed	200	deployments/w/out	no	-	link	renders	0	1	-	listed	
+link-outside	W	check-repo	cannot-check	exit 2	deployments/w/out	no	-	link	renders	0	1	-	refuse:walk.link-outside	refuses-what-helm-renders
+link-loop	W	tree	absent	200	-	no	-	link	no-chart	-	-	-	not shown	
+link-loop	W	list	absent	200	-	no	-	link	no-chart	-	-	-	not found	
+link-loop	W	migration	absent	200	-	no	-	link	no-chart	-	-	-	not found	
+link-loop	W	routing-get	absent	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
+link-loop	W	preview	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
+link-loop	W	check-deployment	cannot-check	exit 2	-	no	-	link	no-chart	-	-	-	-	
+link-loop	W	sync-to	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
+link-loop	W	sync-from	refused	400	deployments/w/loop	no	-	link	no-chart	-	-	-	-	
+link-loop	W	commit	ok	200	-	no	-	link	no-chart	-	-	-	-	
+link-loop	W	check-repo	ok	exit 0	-	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	tree	absent	200	-	no	-	link	no-chart	-	-	-	not shown	
+link-dangling	W	list	absent	200	-	no	-	link	no-chart	-	-	-	not found	
+link-dangling	W	migration	absent	200	-	no	-	link	no-chart	-	-	-	not found	
+link-dangling	W	routing-get	absent	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	preview	refused	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	check-deployment	cannot-check	exit 2	-	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	sync-to	refused	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	sync-from	refused	400	deployments/w/gone	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	commit	ok	200	-	no	-	link	no-chart	-	-	-	-	
+link-dangling	W	check-repo	ok	exit 0	-	no	-	link	no-chart	-	-	-	-	
+link-self-loop	W	tree	absent	200	-	no	-	link	fails	1	-	-	not shown	
+link-self-loop	W	list	absent	200	-	no	-	link	fails	1	-	-	not found	
+link-self-loop	W	migration	absent	200	-	no	-	link	fails	1	-	-	not found	
+link-self-loop	W	routing-get	absent	400	deployments/w/self	no	-	link	fails	1	-	-	-	
+link-self-loop	W	preview	refused	400	deployments/w/self	no	-	link	fails	1	-	-	-	
+link-self-loop	W	check-deployment	cannot-check	exit 2	-	no	-	link	fails	1	-	-	-	
+link-self-loop	W	sync-to	unreadable	409	deployments/w	no	-	link	fails	1	-	-	-	
+link-self-loop	W	sync-from	refused	400	deployments/w/self	no	-	link	fails	1	-	-	-	
+link-self-loop	W	commit	listed	200	deployments/w/self	no	-	link	fails	1	-	-	listed	
+link-self-loop	W	check-repo	cannot-check	exit 2	deployments/w/self	no	-	link	fails	1	-	-	refuse:walk.link-circle	
+charts-link-inside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+charts-link-inside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+charts-link-inside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+charts-link-inside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+charts-link-inside	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+charts-link-inside	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+charts-link-inside	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments/w/d/templates/alertmanagerconfig.yaml,deployments/w/d/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+charts-link-inside	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+charts-link-inside	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+charts-link-inside	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+chart-link-inside	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+chart-link-inside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+chart-link-inside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+chart-link-inside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+chart-link-inside	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+chart-link-inside	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+chart-link-inside	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments/w/d/templates/alertmanagerconfig.yaml,deployments/w/d/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+chart-link-inside	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+chart-link-inside	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+chart-link-inside	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+values-link-outside	W	tree	unreadable	200	-	no	-	folder	renders	0	1	-	unreadable=its values.yaml cannot be read (it is a link that leads outside the repo)	
+values-link-outside	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=null	count-differs
+values-link-outside	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found problems=1	
+values-link-outside	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+values-link-outside	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+values-link-outside	W	check-deployment	refused	exit 1	-	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+values-link-outside	W	sync-to	unreadable	409	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+values-link-outside	W	sync-from	unreadable	409	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+values-link-outside	W	commit	refused	409	deployments/w/d	no	-	folder	renders	0	1	-	values-unreadable	refuses-what-helm-renders
+values-link-outside	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders	0	1	-	refuse:values.unreadable	refuses-what-helm-renders
+nested-two-deep	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	nestedIn=deployments/t/a	
+nested-two-deep	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=1	
+nested-two-deep	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+nested-two-deep	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+nested-two-deep	W	preview	ok	200	-	no	-	folder	renders	0	1	-	alerts=1	
+nested-two-deep	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+nested-two-deep	W	sync-to	ok	200	-	no	deployments/t/a/n/inner/routing.yaml,deployments/t/a/n/inner/templates/alertmanagerconfig.yaml,deployments/t/a/n/inner/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+nested-two-deep	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+nested-two-deep	W	commit	ok	200	-	no	-	folder	renders	0	1	-	-	
+nested-two-deep	W	check-repo	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+layer-chart-null	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	-	
+layer-chart-null	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=null	
+layer-chart-null	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found	
+layer-chart-null	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+layer-chart-null	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
+layer-chart-null	W	check-deployment	refused	exit 1	-	no	-	folder	fails	1	-	-	-	
+layer-chart-null	W	sync-to	ok	200	-	no	deployments/s/x/Chart.yaml,deployments/s/x/routing.yaml,deployments/s/x/templates/alertmanagerconfig.yaml,deployments/s/x/values.yaml,sync.yaml	folder	fails	1	-	copy	-	
+layer-chart-null	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	fails	1	-	source-fails	-	accepts-what-helm-fails
+layer-chart-null	W	commit	refused	409	deployments/s/x	no	-	folder	fails	1	-	-	values-chart-key	
+layer-chart-null	W	check-repo	refused	exit 1	deployments/s/_common/demo/values.yaml	no	-	folder	fails	1	-	-	refuse:stack.chart-key,refuse:deployment.render	
+unreadable-folder	W	tree	absent	200	-	no	-	absent	fails	1	-	-	not shown	
+unreadable-folder	W	list	absent	200	-	no	-	absent	fails	1	-	-	not found	
+unreadable-folder	W	migration	absent	200	-	no	-	absent	fails	1	-	-	not found	
+unreadable-folder	W	routing-get	unreadable	409	deployments/w	no	-	absent	fails	1	-	-	-	
+unreadable-folder	W	preview	refused	409	deployments/w	no	-	absent	fails	1	-	-	-	
+unreadable-folder	W	check-deployment	cannot-check	exit 2	-	no	-	absent	fails	1	-	-	-	
+unreadable-folder	W	sync-to	unreadable	409	deployments/w	no	-	absent	fails	1	-	-	-	
+unreadable-folder	W	sync-from	refused	400	deployments/w/d	no	-	absent	fails	1	-	-	-	
+unreadable-folder	W	commit	listed	200	deployments/w	no	-	absent	fails	1	-	-	listed	
+unreadable-folder	W	check-repo	cannot-check	exit 2	deployments/w	no	-	absent	fails	1	-	-	refuse:walk.folder-unreadable	
+unreadable-chart	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (permission denied)	
+unreadable-chart	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
+unreadable-chart	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
+unreadable-chart	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+unreadable-chart	W	preview	refused	200	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	-	
+unreadable-chart	W	check-deployment	cannot-check	exit 2	-	no	-	folder	fails	1	-	-	-	
+unreadable-chart	W	sync-to	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+unreadable-chart	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+unreadable-chart	W	commit	refused	409	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	file-unreadable	
+unreadable-chart	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable,refuse:repo.not-copied	
+chart-not-yaml	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be used (deployments/w/d/Chart.yaml line 1: AlertForge cannot tell how Helm reads this: a [ list that is not closed in the firs	
+chart-not-yaml	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-not-yaml	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-not-yaml	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+chart-not-yaml	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
+chart-not-yaml	W	check-deployment	cannot-check	exit 2	-	no	-	folder	fails	1	-	-	-	
+chart-not-yaml	W	sync-to	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-not-yaml	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-not-yaml	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
+chart-not-yaml	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
+chart-no-dependencies	W	tree	folder	200	-	no	-	folder	renders-empty	0	0	-	-	
+chart-no-dependencies	W	list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
+chart-no-dependencies	W	migration	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
+chart-no-dependencies	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
+chart-no-dependencies	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
+chart-no-dependencies	W	check-deployment	cannot-check	exit 2	-	no	-	folder	renders-empty	0	0	-	-	
+chart-no-dependencies	W	sync-to	refused	400	deployments/w/d	no	-	folder	renders-empty	0	0	-	-	
+chart-no-dependencies	W	sync-from	refused	400	deployments/w/d	no	-	folder	renders-empty	0	0	-	-	
+chart-no-dependencies	W	commit	listed	200	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	listed	
+chart-no-dependencies	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	refuse:walk.values-no-template	
+chart-template-gone	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	-	
+chart-template-gone	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=1	
+chart-template-gone	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-template-gone	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+chart-template-gone	W	preview	refused	200	charts/gone	no	-	folder	fails	1	-	-	-	
+chart-template-gone	W	check-deployment	refused	exit 1	-	no	-	folder	fails	1	-	-	-	
+chart-template-gone	W	sync-to	ok	200	-	no	deployments/w/d/Chart.yaml,deployments/w/d/routing.yaml,deployments/w/d/templates/alertmanagerconfig.yaml,deployments/w/d/values.yaml,sync.yaml	folder	fails	1	-	copy	-	
+chart-template-gone	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	fails	1	-	source-fails	-	accepts-what-helm-fails
+chart-template-gone	W	commit	refused	409	deployments/w/d	no	-	folder	fails	1	-	-	template-missing	
+chart-template-gone	W	check-repo	refused	exit 1	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	refuse:deployment.template-missing	
+chart-two-templates	W	tree	deployment	200	-	no	-	folder	renders	0	1	-	-	
+chart-two-templates	W	list	deployment	200	-	no	-	folder	renders	0	1	-	found alertCount=null	count-differs
+chart-two-templates	W	migration	deployment	200	-	no	-	folder	renders	0	1	-	found	
+chart-two-templates	W	routing-get	deployment	404	-	no	-	folder	renders	0	1	-	-	
+chart-two-templates	W	preview	refused	200	deployments/w/d	no	-	folder	renders	0	1	-	-	refuses-what-helm-renders
+chart-two-templates	W	check-deployment	ok	exit 0	-	no	-	folder	renders	0	1	-	-	
+chart-two-templates	W	sync-to	ok	200	-	no	deployments/w/d/Chart.yaml,deployments/w/d/routing.yaml,deployments/w/d/templates/alertmanagerconfig.yaml,deployments/w/d/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+chart-two-templates	W	sync-from	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/values.yaml,sync.yaml	folder	renders	0	1	copy	-	
+chart-two-templates	W	commit	refused	409	deployments/w/d	no	-	folder	renders	0	1	-	stack-unsupported	refuses-what-helm-renders
+chart-two-templates	W	check-repo	refused	exit 1	deployments/w/d/Chart.yaml	no	-	folder	renders	0	1	-	refuse:stack.stack-unsupported	refuses-what-helm-renders
+chart-is-folder	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (it is a folder, not a file)	
+chart-is-folder	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-is-folder	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-is-folder	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+chart-is-folder	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
+chart-is-folder	W	check-deployment	cannot-check	exit 2	-	no	-	folder	fails	1	-	-	-	
+chart-is-folder	W	sync-to	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-is-folder	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-is-folder	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
+chart-is-folder	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
+chart-empty	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be used (it is empty)	
+chart-empty	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-empty	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-empty	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+chart-empty	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
+chart-empty	W	check-deployment	cannot-check	exit 2	-	no	-	folder	fails	1	-	-	-	
+chart-empty	W	sync-to	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-empty	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-empty	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
+chart-empty	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
+chart-deps-not-list	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be used (its dependencies are not a list)	
+chart-deps-not-list	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-deps-not-list	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-deps-not-list	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+chart-deps-not-list	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
+chart-deps-not-list	W	check-deployment	cannot-check	exit 2	-	no	-	folder	fails	1	-	-	-	
+chart-deps-not-list	W	sync-to	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-deps-not-list	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-deps-not-list	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
+chart-deps-not-list	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
+chart-dangling-link	W	tree	unreadable	200	-	no	-	folder	fails	1	-	-	unreadable=its Chart.yaml cannot be read (a link to a file that is not there)	
+chart-dangling-link	W	list	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-dangling-link	W	migration	absent	200	-	no	-	folder	fails	1	-	-	not found	
+chart-dangling-link	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+chart-dangling-link	W	preview	refused	200	deployments/w/d/Chart.yaml	no	-	folder	fails	1	-	-	-	
+chart-dangling-link	W	check-deployment	cannot-check	exit 2	-	no	-	folder	fails	1	-	-	-	
+chart-dangling-link	W	sync-to	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-dangling-link	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+chart-dangling-link	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
+chart-dangling-link	W	check-repo	cannot-check	exit 2	deployments/w/d	no	-	folder	fails	1	-	-	refuse:walk.chart-unreadable	
+no-values	W	tree	chart-only	200	-	no	-	folder	renders-empty	0	0	-	-	
+no-values	W	list	absent	200	-	no	-	folder	renders-empty	0	0	-	not found	
+no-values	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found	
+no-values	W	routing-get	absent	400	-	no	-	folder	renders-empty	0	0	-	-	
+no-values	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
+no-values	W	check-deployment	cannot-check	exit 2	-	no	-	folder	renders-empty	0	0	-	-	
+no-values	W	sync-to	refused	400	deployments/w/d	no	-	folder	renders-empty	0	0	-	-	
+no-values	W	sync-from	refused	400	deployments/w/d	no	-	folder	renders-empty	0	0	-	-	
+no-values	W	commit	ok	200	-	no	-	folder	renders-empty	0	0	-	-	
+no-values	W	check-repo	ok	exit 0	-	no	-	folder	renders-empty	0	0	-	-	
+values-only	W	tree	folder	200	-	no	-	folder	no-chart	-	-	-	-	
+values-only	W	list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
+values-only	W	migration	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
+values-only	W	routing-get	deployment	404	-	no	-	folder	no-chart	-	-	-	-	
+values-only	W	preview	refused	200	-	no	-	folder	no-chart	-	-	-	-	
+values-only	W	check-deployment	cannot-check	exit 2	-	no	-	folder	no-chart	-	-	-	-	
+values-only	W	sync-to	refused	400	deployments/w/d	no	-	folder	no-chart	-	-	-	-	
+values-only	W	sync-from	refused	400	deployments/w/d	no	-	folder	no-chart	-	-	-	-	
+values-only	W	commit	ok	200	-	no	-	folder	no-chart	-	-	-	-	
+values-only	W	check-repo	ok	exit 0	-	no	-	folder	no-chart	-	-	-	-	
+values-yaml11	W	tree	deployment	200	-	no	-	folder	fails	1	-	-	-	
+values-yaml11	W	list	deployment	200	-	no	-	folder	fails	1	-	-	found alertCount=null	
+values-yaml11	W	migration	deployment	200	-	no	-	folder	fails	1	-	-	found problems=2	
+values-yaml11	W	routing-get	deployment	404	-	no	-	folder	fails	1	-	-	-	
+values-yaml11	W	preview	refused	200	-	no	-	folder	fails	1	-	-	-	
+values-yaml11	W	check-deployment	refused	exit 1	-	no	-	folder	fails	1	-	-	-	
+values-yaml11	W	sync-to	ok	200	-	no	deployments/w/d/routing.yaml,deployments/w/d/templates/alertmanagerconfig.yaml,deployments/w/d/values.yaml,sync.yaml	folder	fails	1	-	copy	-	
+values-yaml11	W	sync-from	refused	400	deployments/w/d	no	-	folder	fails	1	-	-	-	
+values-yaml11	W	commit	listed	200	deployments/w/d	no	-	folder	fails	1	-	-	listed	
+values-yaml11	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	fails	1	-	-	refuse:yaml.read-differently,refuse:values.schema,refuse:deployment.render	
+values-is-folder	W	tree	unreadable	200	-	no	-	folder	renders-empty	0	0	-	unreadable=its values.yaml cannot be read (it is a folder, not a file)	
+values-is-folder	W	list	deployment	200	-	no	-	folder	renders-empty	0	0	-	found alertCount=null	
+values-is-folder	W	migration	deployment	200	-	no	-	folder	renders-empty	0	0	-	found problems=1	
+values-is-folder	W	routing-get	deployment	404	-	no	-	folder	renders-empty	0	0	-	-	
+values-is-folder	W	preview	ok	200	-	no	-	folder	renders-empty	0	0	-	alerts=0	
+values-is-folder	W	check-deployment	refused	exit 1	-	no	-	folder	renders-empty	0	0	-	-	
+values-is-folder	W	sync-to	refused	409	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	-	
+values-is-folder	W	sync-from	unreadable	409	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	-	
+values-is-folder	W	commit	refused	409	deployments/w/d	no	-	folder	renders-empty	0	0	-	values-unreadable	
+values-is-folder	W	check-repo	refused	exit 1	deployments/w/d/values.yaml	no	-	folder	renders-empty	0	0	-	refuse:values.unreadable	
+empty-folder	W	tree	folder	200	-	no	-	folder	no-chart	-	-	-	-	
+empty-folder	W	list	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
+empty-folder	W	migration	absent	200	-	no	-	folder	no-chart	-	-	-	not found	
+empty-folder	W	routing-get	absent	400	-	no	-	folder	no-chart	-	-	-	-	
+empty-folder	W	preview	refused	200	-	no	-	folder	no-chart	-	-	-	-	
+empty-folder	W	check-deployment	cannot-check	exit 2	-	no	-	folder	no-chart	-	-	-	-	
+empty-folder	W	sync-to	refused	400	deployments/w/d	no	-	folder	no-chart	-	-	-	-	
+empty-folder	W	sync-from	refused	400	deployments/w/d	no	-	folder	no-chart	-	-	-	-	
+empty-folder	W	commit	ok	200	-	no	-	folder	no-chart	-	-	-	-	
+empty-folder	W	check-repo	ok	exit 0	-	no	-	folder	no-chart	-	-	-	-	
+file-not-folder	W	tree	absent	200	-	no	-	file	no-chart	-	-	-	not shown	
+file-not-folder	W	list	absent	200	-	no	-	file	no-chart	-	-	-	not found	
+file-not-folder	W	migration	absent	200	-	no	-	file	no-chart	-	-	-	not found	
+file-not-folder	W	routing-get	absent	400	-	no	-	file	no-chart	-	-	-	-	
+file-not-folder	W	preview	refused	200	-	no	-	file	no-chart	-	-	-	-	
+file-not-folder	W	check-deployment	cannot-check	exit 2	-	no	-	file	no-chart	-	-	-	-	
+file-not-folder	W	sync-to	refused	400	deployments/w/d	no	-	file	no-chart	-	-	-	-	
+file-not-folder	W	sync-from	refused	400	deployments/w/d	no	-	file	no-chart	-	-	-	-	
+file-not-folder	W	commit	ok	200	-	no	-	file	no-chart	-	-	-	-	
+file-not-folder	W	check-repo	ok	exit 0	-	no	-	file	no-chart	-	-	-	-	
+legacy-flat	W	tree	absent	200	-	no	-	file	renders	0	1	-	not shown	misses-what-helm-renders
+legacy-flat	W	list	absent	200	-	no	-	file	renders	0	1	-	not found	misses-what-helm-renders
+legacy-flat	W	migration	deployment	200	-	no	-	file	renders	0	1	-	found	
+legacy-flat	W	routing-get	absent	400	-	no	-	file	renders	0	1	-	-	misses-what-helm-renders
+legacy-flat	W	preview	ok	200	-	no	-	file	renders	0	1	-	alerts=1	
+legacy-flat	W	check-deployment	cannot-check	exit 2	-	no	-	file	renders	0	1	-	-	refuses-what-helm-renders
+legacy-flat	W	sync-to	refused	400	deployments/demo/f-values.yaml	no	-	file	renders	0	1	-	-	refuses-what-helm-renders
+legacy-flat	W	sync-from	refused	400	deployments/demo/f-values.yaml	no	-	file	renders	0	1	-	-	refuses-what-helm-renders
+legacy-flat	W	commit	ok	200	-	no	-	file	renders	0	1	-	-	
+legacy-flat	W	check-repo	listed	exit 0	deployments/demo/f-values.yaml	no	-	file	renders	0	1	-	warn:walk.flat	
+legacy-flat-second	W	tree	absent	200	-	no	-	file	renders	0	1	-	not shown	misses-what-helm-renders
+legacy-flat-second	W	list	absent	200	-	no	-	file	renders	0	1	-	not found	misses-what-helm-renders
+legacy-flat-second	W	migration	deployment	200	-	no	-	file	renders	0	1	-	found	
+legacy-flat-second	W	routing-get	absent	400	-	no	-	file	renders	0	1	-	-	misses-what-helm-renders
+legacy-flat-second	W	preview	ok	200	-	no	-	file	renders	0	1	-	alerts=1	
+legacy-flat-second	W	check-deployment	cannot-check	exit 2	-	no	-	file	renders	0	1	-	-	refuses-what-helm-renders
+legacy-flat-second	W	sync-to	refused	400	deployments/demo/g-values.yaml	no	-	file	renders	0	1	-	-	refuses-what-helm-renders
+legacy-flat-second	W	sync-from	refused	400	deployments/demo/g-values.yaml	no	-	file	renders	0	1	-	-	refuses-what-helm-renders
+legacy-flat-second	W	commit	ok	200	-	no	-	file	renders	0	1	-	-	
+legacy-flat-second	W	check-repo	listed	exit 0	deployments/demo/g-values.yaml	no	-	file	renders	0	1	-	warn:walk.flat	
+sync-ok	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/t/b	
+sync-ok	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/t/b | commit: readable, 0 findings	
+sync-ok	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+sync-ok	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	copy	-	
+sync-ok	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+sync-ok	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	copy	-	
+sync-ok	Y	regenerate	ok	200	-	no	-	-	-	-	-	copy	regenerated=- failed=-	
+sync-ok	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=deployments/t/b left=none	
+sync-ok	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	copy	-	
+sync-ok	Y	commit	ok	200	-	no	-	-	-	-	-	copy	-	
+sync-ok	Y	check-repo	ok	exit 0	-	no	-	-	-	-	-	copy	-	
+sync-absent	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
+sync-absent	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 0 findings	
+sync-absent	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+sync-absent	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+sync-absent	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+sync-absent	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+sync-absent	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+sync-absent	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
+sync-absent	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+sync-absent	Y	commit	ok	200	-	no	-	-	-	-	-	-	-	
+sync-absent	Y	check-repo	ok	exit 0	-	no	-	-	-	-	-	-	-	
+sync-empty	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
+sync-empty	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 0 findings	
+sync-empty	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+sync-empty	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+sync-empty	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+sync-empty	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+sync-empty	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+sync-empty	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
+sync-empty	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+sync-empty	Y	commit	ok	200	-	no	-	-	-	-	-	-	-	
+sync-empty	Y	check-repo	ok	exit 0	-	no	-	-	-	-	-	-	-	
+sync-not-yaml	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-not-yaml	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+sync-not-yaml	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-not-yaml	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-not-yaml	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-not-yaml	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-not-yaml	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml is not valid YAML (unexpected end of the stream within a flow collection)	
+sync-not-yaml	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+sync-not-yaml	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-not-yaml	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+sync-not-yaml	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.not-yaml	
+sync-top-list	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+sync-top-list	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml is not a map (it is a list): write syncs: [{ source, targets: [...] }]	
+sync-top-list	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+sync-top-list	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-top-list	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+sync-top-list	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.not-map	
+syncs-not-list	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+syncs-not-list	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml syncs: is not a list	
+syncs-not-list	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+syncs-not-list	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-not-list	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+syncs-not-list	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.syncs-not-list	
+sync-scalar	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+sync-scalar	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml is not a map (it is a single value): write syncs: [{ source, targets: [...] }]	
+sync-scalar	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+sync-scalar	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-scalar	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+sync-scalar	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.not-map	
+sync-comments-only	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
+sync-comments-only	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 0 findings	
+sync-comments-only	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+sync-comments-only	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+sync-comments-only	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+sync-comments-only	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+sync-comments-only	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+sync-comments-only	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
+sync-comments-only	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+sync-comments-only	Y	commit	ok	200	-	no	-	-	-	-	-	-	-	
+sync-comments-only	Y	check-repo	ok	exit 0	-	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+syncs-scalar	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml syncs: is not a list	
+syncs-scalar	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+syncs-scalar	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+syncs-scalar	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+syncs-scalar	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.syncs-not-list	
+syncs-null	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
+syncs-null	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 0 findings	
+syncs-null	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+syncs-null	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+syncs-null	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+syncs-null	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+syncs-null	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+syncs-null	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
+syncs-null	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+syncs-null	Y	commit	ok	200	-	no	-	-	-	-	-	-	-	
+syncs-null	Y	check-repo	ok	exit 0	-	no	-	-	-	-	-	-	-	
+entry-no-targets	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
+entry-no-targets	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 1 findings	
+entry-no-targets	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+entry-no-targets	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+entry-no-targets	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+entry-no-targets	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+entry-no-targets	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+entry-no-targets	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
+entry-no-targets	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+entry-no-targets	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+entry-no-targets	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.row	
+entry-targets-string	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
+entry-targets-string	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 1 findings	
+entry-targets-string	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+entry-targets-string	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+entry-targets-string	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+entry-targets-string	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+entry-targets-string	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+entry-targets-string	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
+entry-targets-string	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+entry-targets-string	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+entry-targets-string	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.row	
+entry-target-number	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/t/b	
+entry-target-number	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/t/b | commit: readable, 1 findings	
+entry-target-number	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+entry-target-number	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	copy	-	
+entry-target-number	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+entry-target-number	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	copy	-	
+entry-target-number	Y	regenerate	ok	200	-	no	-	-	-	-	-	copy	regenerated=- failed=-	
+entry-target-number	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=deployments/t/b left=none	
+entry-target-number	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	copy	-	
+entry-target-number	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	copy	sync-registry	
+entry-target-number	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	copy	refuse:sync.target-not-path	
+entry-not-map	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	none	
+entry-not-map	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: none | commit: readable, 1 findings	
+entry-not-map	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+entry-not-map	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+entry-not-map	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+entry-not-map	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+entry-not-map	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+entry-not-map	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=none	
+entry-not-map	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+entry-not-map	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+entry-not-map	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.row	
+target-backslash	Y	sync-get	ok	200	-	no	-	-	-	-	-	no-target	deployments/t/a>deployments/t/b	
+target-backslash	Y	parsers	agree	-	-	no	-	-	-	-	-	no-target	routes read: deployments/t/a>deployments/t/b | commit: readable, 0 findings	
+target-backslash	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-backslash	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	no-target	-	
+target-backslash	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	no-target	-	
+target-backslash	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	no-target	-	
+target-backslash	Y	regenerate	ok	200	-	no	-	-	-	-	-	no-target	regenerated=- failed=-	
+target-backslash	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	no-target	unlinked=deployments/t/b left=none	
+target-backslash	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	no-target	-	
+target-backslash	Y	commit	ok	200	-	no	-	-	-	-	-	no-target	-	
+target-backslash	Y	check-repo	listed	exit 0	sync.yaml	no	-	-	-	-	-	no-target	warn:sync.backslash	
+target-dot-slash	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/t/b	
+target-dot-slash	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/t/b | commit: readable, 0 findings	
+target-dot-slash	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-dot-slash	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	copy	-	
+target-dot-slash	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+target-dot-slash	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	copy	-	
+target-dot-slash	Y	regenerate	ok	200	-	no	-	-	-	-	-	copy	regenerated=- failed=-	
+target-dot-slash	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=deployments/t/b left=none	
+target-dot-slash	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	copy	-	
+target-dot-slash	Y	commit	ok	200	-	no	-	-	-	-	-	copy	-	
+target-dot-slash	Y	check-repo	ok	exit 0	-	no	-	-	-	-	-	copy	-	
+target-is-source	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	deployments/t/a>deployments/t/a	
+target-is-source	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: deployments/t/a>deployments/t/a | commit: readable, 1 findings	
+target-is-source	Y	sync-post	refused	400	deployments/t/a	no	-	-	-	-	-	-	-	
+target-is-source	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	-	-	
+target-is-source	Y	save-copy	refused	409	deployments/t/a	no	-	-	-	-	-	-	-	
+target-is-source	Y	routing-copy	refused	409	deployments/t/a	no	-	-	-	-	-	-	-	
+target-is-source	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+target-is-source	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	-	unlinked=- left=none	
+target-is-source	Y	target-readonly	ok	200	-	no	-	-	-	-	-	-	-	
+target-is-source	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+target-is-source	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.self-target	
+chain	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/t/b deployments/t/b>deployments/s/x	
+chain	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/t/b deployments/t/b>deployments/s/x | commit: readable, 1 findings	
+chain	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+chain	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	copy	-	
+chain	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+chain	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	copy	-	
+chain	Y	regenerate	ok	200	-	no	deployments/s/x/routing.yaml,deployments/s/x/templates/alertmanagerconfig.yaml	-	-	-	-	copy	regenerated=deployments/s/x failed=-	
+chain	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=deployments/t/b left=deployments/t/b>deployments/s/x	
+chain	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	copy	-	
+chain	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	copy	sync-registry,sync-target-differs,sync-target-differs,routing-target-differs	
+chain	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	copy	refuse:sync.chain	
+two-sources	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/t/b deployments/s/x>deployments/t/b	
+two-sources	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/t/b deployments/s/x>deployments/t/b | commit: readable, 1 findings	
+two-sources	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+two-sources	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	copy	-	
+two-sources	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+two-sources	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	copy	-	
+two-sources	Y	regenerate	ok	200	-	no	-	-	-	-	-	copy	regenerated=- failed=-	
+two-sources	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=- left=deployments/s/x>deployments/t/b	
+two-sources	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	copy	-	
+two-sources	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	copy	sync-registry	
+two-sources	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	copy	refuse:sync.two-sources	
+duplicate-entries	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/t/b deployments/t/a>deployments/t/b	
+duplicate-entries	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/t/b deployments/t/a>deployments/t/b | commit: readable, 1 findings	
+duplicate-entries	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+duplicate-entries	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	copy	-	
+duplicate-entries	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+duplicate-entries	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	copy	-	
+duplicate-entries	Y	regenerate	ok	200	-	no	-	-	-	-	-	copy	regenerated=- failed=-	
+duplicate-entries	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=deployments/t/b left=none	
+duplicate-entries	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	copy	-	
+duplicate-entries	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	copy	sync-registry	
+duplicate-entries	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	copy	refuse:sync.duplicate-source	
+target-hidden	Y	sync-get	ok	200	-	no	-	-	-	-	-	differs	deployments/t/a>deployments/.h/b	
+target-hidden	Y	parsers	agree	-	-	no	-	-	-	-	-	differs	routes read: deployments/t/a>deployments/.h/b | commit: readable, 0 findings	
+target-hidden	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-hidden	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	differs	-	
+target-hidden	Y	save-copy	listed	200	-	no	deployments/t/a/values.yaml	-	-	-	-	differs	syncFailed=deployments/.h/b:not a path sync may write to	
+target-hidden	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	differs	syncFailed=deployments/.h/b:not a path sync may write to	
+target-hidden	Y	regenerate	ok	200	-	no	-	-	-	-	-	differs	regenerated=- failed=-	not-a-copy-after
+target-hidden	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	differs	unlinked=deployments/.h/b left=none	
+target-hidden	Y	target-readonly	ok	200	-	no	-	-	-	-	-	differs	-	
+target-hidden	Y	commit	ok	200	-	no	-	-	-	-	-	differs	-	accepts-a-target-not-its-copy
+target-hidden	Y	check-repo	ok	exit 0	-	no	-	-	-	-	-	differs	-	accepts-a-target-not-its-copy
+target-link-outside	Y	sync-get	ok	200	-	no	-	-	-	-	-	differs	deployments/t/a>deployments/w/out	
+target-link-outside	Y	parsers	agree	-	-	no	-	-	-	-	-	differs	routes read: deployments/t/a>deployments/w/out | commit: readable, 1 findings	
+target-link-outside	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-link-outside	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	differs	-	
+target-link-outside	Y	save-copy	refused	409	deployments/w/out	no	-	-	-	-	-	differs	-	
+target-link-outside	Y	routing-copy	refused	409	deployments/w/out	no	-	-	-	-	-	differs	-	
+target-link-outside	Y	regenerate	ok	200	-	no	-	-	-	-	-	differs	regenerated=- failed=-	not-a-copy-after
+target-link-outside	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	differs	unlinked=- left=none	
+target-link-outside	Y	target-readonly	ok	200	-	no	-	-	-	-	-	differs	-	
+target-link-outside	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	differs	sync-registry	
+target-link-outside	Y	check-repo	refused	exit 2	sync.yaml	no	-	-	-	-	-	differs	refuse:sync.not-deployment	
+target-dotdot	Y	sync-get	ok	200	-	no	-	-	-	-	-	no-target	deployments/t/a>../outside	
+target-dotdot	Y	parsers	agree	-	-	no	-	-	-	-	-	no-target	routes read: deployments/t/a>../outside | commit: readable, 1 findings	
+target-dotdot	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-dotdot	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	no-target	-	
+target-dotdot	Y	save-copy	listed	200	-	no	deployments/t/a/values.yaml	-	-	-	-	no-target	syncFailed=../outside:not a path sync may write to	
+target-dotdot	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	no-target	syncFailed=../outside:not a path sync may write to	
+target-dotdot	Y	regenerate	ok	200	-	no	-	-	-	-	-	no-target	regenerated=- failed=-	
+target-dotdot	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	no-target	unlinked=- left=none	
+target-dotdot	Y	target-readonly	ok	200	-	no	-	-	-	-	-	no-target	-	
+target-dotdot	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	no-target	sync-registry	
+target-dotdot	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	no-target	refuse:sync.not-deployment	
+target-charts	Y	sync-get	ok	200	-	no	-	-	-	-	-	differs	deployments/t/a>charts/demo	
+target-charts	Y	parsers	agree	-	-	no	-	-	-	-	-	differs	routes read: deployments/t/a>charts/demo | commit: readable, 1 findings	
+target-charts	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-charts	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	differs	-	
+target-charts	Y	save-copy	listed	200	-	no	deployments/t/a/values.yaml	-	-	-	-	differs	syncFailed=charts/demo:not a path sync may write to	
+target-charts	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	differs	syncFailed=charts/demo:not a path sync may write to	
+target-charts	Y	regenerate	ok	200	-	no	-	-	-	-	-	differs	regenerated=- failed=-	not-a-copy-after
+target-charts	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	differs	unlinked=- left=none	
+target-charts	Y	target-readonly	ok	200	-	no	-	-	-	-	-	differs	-	
+target-charts	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	differs	sync-registry	
+target-charts	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	differs	refuse:sync.not-deployment	
+target-gone	Y	sync-get	ok	200	-	no	-	-	-	-	-	no-target	deployments/t/a>deployments/t/gone	
+target-gone	Y	parsers	agree	-	-	no	-	-	-	-	-	no-target	routes read: deployments/t/a>deployments/t/gone | commit: readable, 1 findings	
+target-gone	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-gone	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	no-target	-	
+target-gone	Y	save-copy	listed	200	-	no	deployments/t/a/values.yaml	-	-	-	-	no-target	syncFailed=deployments/t/gone:not a deployment on disk	
+target-gone	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	no-target	syncFailed=deployments/t/gone:not a deployment on disk	
+target-gone	Y	regenerate	ok	200	-	no	-	-	-	-	-	no-target	regenerated=- failed=-	
+target-gone	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	no-target	unlinked=- left=none	
+target-gone	Y	target-readonly	ok	200	-	no	-	-	-	-	-	no-target	-	
+target-gone	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	no-target	sync-registry	
+target-gone	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	no-target	refuse:sync.not-deployment	
+source-gone	Y	sync-get	ok	200	-	no	-	-	-	-	-	source-fails	deployments/t/a>deployments/t/b	
+source-gone	Y	parsers	agree	-	-	no	-	-	-	-	-	source-fails	routes read: deployments/t/a>deployments/t/b | commit: readable, 1 findings	
+source-gone	Y	sync-post	refused	400	deployments/t/a	no	-	-	-	-	-	source-fails	-	
+source-gone	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	source-fails	-	
+source-gone	Y	save-copy	ok	200	-	no	deployments/t/a/a-values.yaml	-	-	-	-	source-fails	-	
+source-gone	Y	routing-copy	refused	400	-	no	-	-	-	-	-	source-fails	-	
+source-gone	Y	regenerate	ok	200	-	no	-	-	-	-	-	source-fails	regenerated=- failed=-	
+source-gone	Y	delete-source	ok	200	-	no	-	-	-	-	-	source-fails	unlinked=- left=deployments/t/a>deployments/t/b	
+source-gone	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	source-fails	-	
+source-gone	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	source-fails	sync-registry	
+source-gone	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	source-fails	refuse:sync.not-deployment	
+target-hand-edited	Y	sync-get	ok	200	-	no	-	-	-	-	-	differs-values	deployments/t/a>deployments/t/b	
+target-hand-edited	Y	parsers	agree	-	-	no	-	-	-	-	-	differs-values	routes read: deployments/t/a>deployments/t/b | commit: readable, 0 findings	
+target-hand-edited	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-hand-edited	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	differs-values	-	
+target-hand-edited	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+target-hand-edited	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	differs-values	-	
+target-hand-edited	Y	regenerate	ok	200	-	no	-	-	-	-	-	differs-values	regenerated=- failed=-	
+target-hand-edited	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	differs-values	unlinked=deployments/t/b left=none	
+target-hand-edited	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	differs-values	-	
+target-hand-edited	Y	commit	refused	409	deployments/t/b	no	-	-	-	-	-	differs-values	sync-target-differs	
+target-hand-edited	Y	check-repo	refused	exit 1	deployments/t/b/values.yaml	no	-	-	-	-	-	differs-values	refuse:sync.target-differs	
+target-routing-hand-edited	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/t/b	
+target-routing-hand-edited	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/t/b | commit: readable, 0 findings	
+target-routing-hand-edited	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-routing-hand-edited	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	copy	-	
+target-routing-hand-edited	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+target-routing-hand-edited	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	copy	-	
+target-routing-hand-edited	Y	regenerate	ok	200	-	no	deployments/t/b/routing.yaml	-	-	-	-	copy	regenerated=deployments/t/b failed=-	
+target-routing-hand-edited	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=deployments/t/b left=none	
+target-routing-hand-edited	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	copy	-	
+target-routing-hand-edited	Y	commit	refused	409	deployments/t/b	no	-	-	-	-	-	copy	routing-target-differs	
+target-routing-hand-edited	Y	check-repo	refused	exit 1	deployments/t/b/routing.yaml	no	-	-	-	-	-	copy	refuse:routing.target-differs	
+target-other-template	Y	sync-get	ok	200	-	no	-	-	-	-	-	differs-values	deployments/t/a>deployments/t/b	
+target-other-template	Y	parsers	agree	-	-	no	-	-	-	-	-	differs-values	routes read: deployments/t/a>deployments/t/b | commit: readable, 0 findings	
+target-other-template	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-other-template	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	differs-values	-	
+target-other-template	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/Chart.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+target-other-template	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	differs-values	-	
+target-other-template	Y	regenerate	ok	200	-	no	-	-	-	-	-	differs-values	regenerated=- failed=-	
+target-other-template	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	differs-values	unlinked=deployments/t/b left=none	
+target-other-template	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	differs-values	-	
+target-other-template	Y	commit	refused	409	deployments/t/b	no	-	-	-	-	-	differs-values	sync-target-differs,sync-target-differs	
+target-other-template	Y	check-repo	refused	exit 1	deployments/t/b/values.yaml	no	-	-	-	-	-	differs-values	refuse:sync.target-differs	
+target-twice	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/t/b+deployments/t/b	
+target-twice	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/t/b+deployments/t/b | commit: readable, 0 findings	
+target-twice	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-twice	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	copy	-	
+target-twice	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml,deployments/t/b/values.yaml	-	-	-	-	copy	-	
+target-twice	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	-	-	-	-	copy	-	
+target-twice	Y	regenerate	ok	200	-	no	-	-	-	-	-	copy	regenerated=- failed=-	
+target-twice	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=deployments/t/b left=none	
+target-twice	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	copy	-	
+target-twice	Y	commit	ok	200	-	no	-	-	-	-	-	copy	-	
+target-twice	Y	check-repo	listed	exit 0	sync.yaml	no	-	-	-	-	-	copy	warn:sync.duplicate-target	
+target-is-common	Y	sync-get	ok	200	-	no	-	-	-	-	-	differs	deployments/t/a>deployments/s/_common/demo	
+target-is-common	Y	parsers	agree	-	-	no	-	-	-	-	-	differs	routes read: deployments/t/a>deployments/s/_common/demo | commit: readable, 1 findings	
+target-is-common	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-is-common	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	differs	-	
+target-is-common	Y	save-copy	listed	200	-	no	deployments/t/a/values.yaml	-	-	-	-	differs	syncFailed=deployments/s/_common/demo:not a deployment on disk	
+target-is-common	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	differs	syncFailed=deployments/s/_common/demo:not a deployment on disk	
+target-is-common	Y	regenerate	ok	200	-	no	-	-	-	-	-	differs	regenerated=- failed=-	not-a-copy-after
+target-is-common	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	differs	unlinked=- left=none	
+target-is-common	Y	target-readonly	ok	200	-	no	-	-	-	-	-	differs	-	
+target-is-common	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	differs	sync-registry	
+target-is-common	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	differs	refuse:sync.not-deployment	
+source-is-common	Y	sync-get	ok	200	-	no	-	-	-	-	-	-	deployments/s/_common/demo>deployments/t/b	
+source-is-common	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: deployments/s/_common/demo>deployments/t/b | commit: readable, 1 findings	
+source-is-common	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+source-is-common	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	-	-	
+source-is-common	Y	save-copy	ok	200	-	no	deployments/t/a/values.yaml	-	-	-	-	-	-	
+source-is-common	Y	routing-copy	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	-	-	
+source-is-common	Y	regenerate	ok	200	-	no	-	-	-	-	-	-	regenerated=- failed=-	
+source-is-common	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml	-	-	-	-	-	unlinked=- left=deployments/s/_common/demo>deployments/t/b	
+source-is-common	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	-	-	
+source-is-common	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+source-is-common	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	-	refuse:sync.not-deployment	
+target-link-inside	Y	sync-get	ok	200	-	no	-	-	-	-	-	copy	deployments/t/a>deployments/w/ln	
+target-link-inside	Y	parsers	agree	-	-	no	-	-	-	-	-	copy	routes read: deployments/t/a>deployments/w/ln | commit: readable, 1 findings	
+target-link-inside	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-link-inside	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	copy	-	
+target-link-inside	Y	save-copy	refused	409	deployments/w/ln	no	-	-	-	-	-	copy	-	
+target-link-inside	Y	routing-copy	refused	409	deployments/w/ln	no	-	-	-	-	-	copy	-	
+target-link-inside	Y	regenerate	ok	200	-	no	-	-	-	-	-	copy	regenerated=- failed=-	
+target-link-inside	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	copy	unlinked=- left=none	
+target-link-inside	Y	target-readonly	ok	200	-	no	-	-	-	-	-	copy	-	
+target-link-inside	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	copy	sync-registry	
+target-link-inside	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	copy	refuse:sync.not-deployment	
+target-not-deployment	Y	sync-get	ok	200	-	no	-	-	-	-	-	no-target	deployments/t/a>deployments/w/plain	
+target-not-deployment	Y	parsers	agree	-	-	no	-	-	-	-	-	no-target	routes read: deployments/t/a>deployments/w/plain | commit: readable, 1 findings	
+target-not-deployment	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-not-deployment	Y	sync-unlink	refused	400	deployments/t/b	no	-	-	-	-	-	no-target	-	
+target-not-deployment	Y	save-copy	listed	200	-	no	deployments/t/a/values.yaml	-	-	-	-	no-target	syncFailed=deployments/w/plain:not a deployment on disk	
+target-not-deployment	Y	routing-copy	listed	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml	-	-	-	-	no-target	syncFailed=deployments/w/plain:not a deployment on disk	
+target-not-deployment	Y	regenerate	ok	200	-	no	-	-	-	-	-	no-target	regenerated=- failed=-	
+target-not-deployment	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	no-target	unlinked=- left=none	
+target-not-deployment	Y	target-readonly	ok	200	-	no	-	-	-	-	-	no-target	-	
+target-not-deployment	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	no-target	sync-registry	
+target-not-deployment	Y	check-repo	refused	exit 1	sync.yaml	no	-	-	-	-	-	no-target	refuse:sync.not-deployment	
+target-chart-unreadable	Y	sync-get	ok	200	-	no	-	-	-	-	-	target-fails	deployments/t/a>deployments/t/b	
+target-chart-unreadable	Y	parsers	agree	-	-	no	-	-	-	-	-	target-fails	routes read: deployments/t/a>deployments/t/b | commit: readable, 1 findings	
+target-chart-unreadable	Y	sync-post	ok	200	-	no	deployments/t/c/Chart.yaml,deployments/t/c/routing.yaml,deployments/t/c/templates/alertmanagerconfig.yaml,deployments/t/c/values.yaml,sync.yaml	-	-	-	-	copy	-	
+target-chart-unreadable	Y	sync-unlink	ok	200	-	no	sync.yaml	-	-	-	-	target-fails	-	
+target-chart-unreadable	Y	save-copy	unreadable	409	deployments/t/b/Chart.yaml	no	-	-	-	-	-	target-fails	-	
+target-chart-unreadable	Y	routing-copy	unreadable	409	deployments/t/b/Chart.yaml	no	-	-	-	-	-	target-fails	-	
+target-chart-unreadable	Y	regenerate	ok	200	-	no	-	-	-	-	-	target-fails	regenerated=- failed=-	not-a-copy-after
+target-chart-unreadable	Y	delete-source	ok	200	-	no	deployments/t/a/Chart.yaml,deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/a/values.yaml,sync.yaml	-	-	-	-	target-fails	unlinked=- left=none	
+target-chart-unreadable	Y	target-readonly	read-only	409	deployments/t/b	no	-	-	-	-	-	target-fails	-	
+target-chart-unreadable	Y	commit	refused	409	deployments/t/b/Chart.yaml	no	-	-	-	-	-	target-fails	file-unreadable	
+target-chart-unreadable	Y	check-repo	cannot-check	exit 2	sync.yaml	no	-	-	-	-	-	target-fails	refuse:sync.not-deployment,refuse:walk.chart-unreadable,refuse:repo.not-copied	
+sync-unreadable	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-unreadable	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+sync-unreadable	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-unreadable	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-unreadable	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-unreadable	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-unreadable	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml cannot be read (permission denied)	
+sync-unreadable	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+sync-unreadable	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-unreadable	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	file-unreadable	
+sync-unreadable	Y	check-repo	cannot-check	exit 2	sync.yaml	no	-	-	-	-	-	-	refuse:sync.unreadable	
+sync-is-folder	Y	sync-get	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-is-folder	Y	parsers	agree	-	-	no	-	-	-	-	-	-	routes read: throws unreadable | commit: not readable, 1 findings	
+sync-is-folder	Y	sync-post	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-is-folder	Y	sync-unlink	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-is-folder	Y	save-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-is-folder	Y	routing-copy	unreadable	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-is-folder	Y	regenerate	refused	200	-	no	-	-	-	-	-	-	regenerated=- failed=sync.yaml:sync.yaml cannot be read (it is a folder, not a file)	
+sync-is-folder	Y	delete-source	unreadable	409	sync.yaml	no	-	-	-	-	-	-	unlinked=- left=unreadable	
+sync-is-folder	Y	target-readonly	read-only	409	sync.yaml	no	-	-	-	-	-	-	-	
+sync-is-folder	Y	commit	refused	409	sync.yaml	no	-	-	-	-	-	-	sync-registry	
+sync-is-folder	Y	check-repo	cannot-check	exit 2	sync.yaml	no	-	-	-	-	-	-	refuse:sync.unreadable	

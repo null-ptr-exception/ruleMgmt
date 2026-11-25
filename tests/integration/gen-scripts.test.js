@@ -128,8 +128,8 @@ describe('gen-rules.mjs after a once group is removed from rules/', () => {
     await expect(fs.access(path.join(chartDir, 'templates', 'up.yaml'))).rejects.toThrow()
     const after = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
     expect(after).not.toHaveProperty('x-once-groups')
-    const { chartDrift } = await import('../../server/lib/chartFiles.js')
-    expect((await chartDrift(chartDir)).state).toBe('ok')
+    const { readTemplateAt } = await import('../../server/lib/chartFiles.js')
+    expect((await readTemplateAt(chartDir)).drift.state).toBe('ok')
   })
 })
 
@@ -149,8 +149,8 @@ describe('an x-custom-template group across gen-rules runs', () => {
     const check = run(GEN_RULES, [chartDir, '--check'])
     expect(check.status, check.stdout).toBe(0)
 
-    const { chartDrift } = await import('../../server/lib/chartFiles.js')
-    expect((await chartDrift(chartDir)).state).toBe('ok')
+    const { readTemplateAt } = await import('../../server/lib/chartFiles.js')
+    expect((await readTemplateAt(chartDir)).drift.state).toBe('ok')
   })
 })
 
@@ -228,8 +228,8 @@ describe('gen-rules.mjs on hand-written files in templates/', () => {
 
     const check = run(GEN_RULES, [chartDir, '--check'])
     expect(check.status, check.stdout).toBe(0)
-    const { chartDrift } = await import('../../server/lib/chartFiles.js')
-    expect((await chartDrift(chartDir)).state).toBe('ok')
+    const { readTemplateAt } = await import('../../server/lib/chartFiles.js')
+    expect((await readTemplateAt(chartDir)).drift.state).toBe('ok')
   })
 })
 
@@ -315,6 +315,78 @@ describe('gen-rules.mjs on rules a save would refuse', () => {
   }
 })
 
+// #131: which rule references a column that is not there.
+describe('gen-rules.mjs on a reference to no column', () => {
+  it('names the group and the rule, and fails', async () => {
+    run(GEN_RULES, [chartDir])
+    const file = path.join(chartDir, 'rules', 'cpu.yaml')
+    const text = await fs.readFile(file, 'utf-8')
+    // The first expr only: the other rules stay as they were.
+    await fs.writeFile(file, text.replace(/^(\s+expr: .*?)$/m, '$1 > ${ghost}'))
+    const result = run(GEN_RULES, [chartDir, '--check'])
+    expect(result.status, result.stdout).toBe(1)
+    expect(result.stdout).toMatch(/ERROR\s+cpu: rule "\w+" references \$\{ghost\}, which is not a column/)
+    expect(result.stdout.match(/references \$\{ghost\}/g)).toHaveLength(1)
+  })
+})
+
+// #132: on an error gen-rules sets the exit code and ends, rather than
+// process.exit(), which does not wait for output going to a pipe (macOS:
+// `gen-rules … | tee log` could lose the error). Linux writes pipes at once,
+// so what is checked is that process.exit is not called.
+describe('gen-rules.mjs ending on an error', () => {
+  const PRELOAD = path.resolve('tests/fixtures/scripts/report-exit.cjs')
+  const runPiped = args => {
+    const r = spawnSync('node', ['--require', PRELOAD, GEN_RULES, ...args], { encoding: 'utf-8' })
+    return { status: r.status, stdout: r.stdout, stderr: r.stderr }
+  }
+  const breakRules = async (change) => {
+    run(GEN_RULES, [chartDir])
+    const file = path.join(chartDir, 'rules', 'cpu.yaml')
+    await fs.writeFile(file, change(await fs.readFile(file, 'utf-8')))
+  }
+
+  it.each([
+    ['rules/ that does not parse', () => breakRules(t => `${t}\nintervel: 1m\n`), [], /ERROR {2}cpu\.yaml.*unknown key "intervel"/],
+    ['a check a save makes', () => breakRules(t => t.replace(/^(\s+expr: .*?)$/m, '$1 > ${ghost}')), [], /Refusing to write: the rules would not pass the checks a save makes/],
+    ['RULE_OBJECT_LABELS_BY_PROFILE that is not JSON', async () => run(GEN_RULES, [chartDir]), ['env'], /error {2}RULE_OBJECT_LABELS_BY_PROFILE is not valid JSON/],
+  ])('on %s: exit code 1, the whole message, no process.exit', async (_, setUp, env, message) => {
+    await setUp()
+    const r = env.length
+      ? spawnSync('node', ['--require', PRELOAD, GEN_RULES, chartDir], { encoding: 'utf-8', env: { ...process.env, RULE_OBJECT_LABELS_BY_PROFILE: '{not json' } })
+      : runPiped([chartDir])
+    expect(r.status, r.stdout).toBe(1)
+    expect(r.stdout).toMatch(message)
+    expect(r.stderr).not.toContain('process.exit(')
+  })
+
+  // The same class in gen-chart.
+  it('gen-chart on rules/ that does not parse: exit code 1, the message, no process.exit', async () => {
+    await breakRules(t => `${t}\nintervel: 1m\n`)
+    const r = spawnSync('node', ['--require', PRELOAD, GEN_CHART, chartDir], { encoding: 'utf-8' })
+    expect(r.status, r.stdout + r.stderr).toBe(1)
+    expect(r.stderr).toMatch(/ERROR {2}cpu\.yaml.*unknown key "intervel"/)
+    expect(r.stderr).not.toContain('process.exit(')
+  })
+
+  it('a values.schema.json that is not JSON: one ERROR line and exit 2, not a stack', async () => {
+    run(GEN_RULES, [chartDir])
+    await fs.rm(path.join(chartDir, 'rules'), { recursive: true })
+    await fs.writeFile(path.join(chartDir, 'values.schema.json'), '{ not json')
+    const r = runPiped([chartDir])
+    expect(r.status).toBe(2)
+    expect(r.stdout).toMatch(/^ERROR {2}/m)
+    expect(r.stderr).not.toMatch(/\n\s+at /)
+  })
+
+  it('a clean run still exits 0, and --check too', () => {
+    expect(runPiped([chartDir]).status).toBe(0)
+    const r = runPiped([chartDir, '--check'])
+    expect(r.status).toBe(0)
+    expect(r.stderr).not.toContain('process.exit(')
+  })
+})
+
 describe('import-rules.mjs', () => {
   const RULES = `groups:
   - name: disk
@@ -346,6 +418,29 @@ describe('import-rules.mjs', () => {
     // dropped the next time the chart was regenerated.
     const check = run(GEN_RULES, [chartDir, '--check'])
     expect(check.status, check.stdout).toBe(0)
+  })
+
+  // Rules exported from a cluster where the chart had the row identity
+  // label on carry alertforge_row, a name a rule may not have.
+  it('takes rules carrying alertforge_row without it, and says so', async () => {
+    run(GEN_RULES, [chartDir])
+    await fs.writeFile(rulesFile, `groups:
+  - name: disk
+    rules:
+      - alert: DiskFull
+        expr: disk_used{namespace="prod"} > 90
+        labels: {severity: warning, alertforge_row: 9bcd584eefe5c529}
+      - alert: DiskGone
+        expr: absent(disk_used{namespace="prod"})
+        labels: {alertforge_row: 9bcd584eefe5c529}
+`)
+    const imported = run(IMPORT_RULES, [rulesFile, chartDir])
+    expect(imported.status, imported.stdout).toBe(0)
+    expect(imported.stdout).toContain("disk: label alertforge_row left out of 2 rules — it is AlertForge's row identity label")
+    expect(imported.stdout).not.toContain('ERROR')
+    const written = await fs.readFile(path.join(chartDir, 'rules', 'disk.yaml'), 'utf-8')
+    expect(written).not.toContain('alertforge_row')
+    expect(written).toContain('severity: warning')
   })
 
   it('migrates a chart that has no rules/ yet, in the same step', async () => {
@@ -387,7 +482,7 @@ describe('import-rules.mjs', () => {
   })
 })
 
-// The sample chart is the golden fixture for the rules/ format (#57 P8): it is
+// The sample chart is the golden fixture for the rules/ format (#57): it is
 // committed fully migrated, so any generator change that alters its products
 // shows up here as drift, and has to be regenerated and reviewed on purpose.
 describe('sample chart golden (sample/charts/mariadb-alerts)', () => {
@@ -489,5 +584,74 @@ describe('a value the rules format refuses', () => {
     expect(await fs.readdir(path.join(chartDir, 'rules'))).toEqual(before)
     // The chart is still clean.
     expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
+  })
+})
+
+// Imported groups whose names make one key are each written, none dropped.
+describe('import-rules with groups whose names make one key', () => {
+  it('writes a file for each, with every rule, and the chart reads back', async () => {
+    const file = path.join(tmpDir, 'collide.yaml')
+    await fs.writeFile(file, 'groups:\n  - name: a-b\n    rules:\n      - alert: AlertX\n        expr: up\n  - name: a b\n    rules:\n      - alert: AlertY\n        expr: up\n  - name: A_B\n    rules:\n      - alert: AlertZ\n        expr: up\n')
+    const imported = run(IMPORT_RULES, [file, chartDir])
+    expect(imported.status, imported.stdout).toBe(0)
+    expect(imported.stdout).toContain('taken in as a_b_2')
+    const rules = Object.fromEntries(await Promise.all(['a_b', 'a_b_2', 'a_b_3'].map(async k => [k, await fs.readFile(path.join(chartDir, 'rules', `${k}.yaml`), 'utf-8')])))
+    expect(rules.a_b).toContain('alert: AlertX')
+    expect(rules.a_b_2).toContain('alert: AlertY')
+    expect(rules.a_b_2).toContain('name: a b')
+    expect(rules.a_b_3).toContain('alert: AlertZ')
+    expect(run(GEN_RULES, [chartDir, '--check']).status).toBe(0)
+  })
+})
+
+// Asking for the usage is not a mistake: it is printed where a pipe reads
+// it and the tool exits 0, as check-deployment and check-repo do. Run with
+// no argument it is still a wrong call: stderr, exit 2.
+describe('--help of the generator scripts', () => {
+  const SCRIPTS = { 'gen-rules': GEN_RULES, 'gen-chart': GEN_CHART, 'import-rules': IMPORT_RULES }
+  const cases = Object.keys(SCRIPTS).flatMap(name => [[name, '--help'], [name, '-h']])
+  it.each(cases)('%s %s: the usage on stdout, exit 0, nothing written', async (name, flag) => {
+    const r = spawnSync('node', [SCRIPTS[name], flag], { encoding: 'utf-8', cwd: tmpDir })
+    expect(r.status, r.stdout + r.stderr).toBe(0)
+    expect(r.stdout).toMatch(new RegExp(`^usage: node scripts/${name}\\.mjs `))
+    expect(r.stderr).toBe('')
+    expect(await fs.readdir(tmpDir)).toEqual(['chart'])
+  })
+  it.each(Object.keys(SCRIPTS))('%s with no argument: the usage on stderr, exit 2', name => {
+    const r = spawnSync('node', [SCRIPTS[name]], { encoding: 'utf-8', cwd: tmpDir })
+    expect(r.status).toBe(2)
+    expect(r.stderr).toMatch(/^usage: /)
+    expect(r.stdout).toBe('')
+  })
+})
+
+// The site's labels and annotations decide what is generated: a variable
+// that cannot be read stops each generator before it writes, with the exit
+// code its _BY_PROFILE variant gives.
+describe('RULE_OBJECT_LABELS or RULE_OBJECT_ANNOTATIONS that cannot be read', () => {
+  const tree = async dir => (await fs.readdir(dir, { recursive: true })).sort()
+  it.each([
+    ['gen-rules', 'RULE_OBJECT_LABELS', 'release=kps', /is not valid JSON/],
+    ['gen-rules', 'RULE_OBJECT_ANNOTATIONS', '["a"]', /must be a JSON object of key\/value pairs/],
+    ['gen-rules --check', 'RULE_OBJECT_LABELS', 'release=kps', /is not valid JSON/],
+    ['gen-chart', 'RULE_OBJECT_LABELS', 'release=kps', /is not valid JSON/],
+    ['import-rules', 'RULE_OBJECT_LABELS', 'release=kps', /is not valid JSON/],
+    ['import-rules --dry-run', 'RULE_OBJECT_ANNOTATIONS', 'release=kps', /is not valid JSON/],
+    ['gen-rules', 'RULE_OBJECT_LABELS', '{"release":1}', /RULE_OBJECT_LABELS: the value of "release" must be text, like "1"/],
+    ['gen-rules', 'RULE_OBJECT_LABELS', '{"bad key!":"x"}', /RULE_OBJECT_LABELS: "bad key!" is not a label name/],
+    ['gen-rules', 'RULE_OBJECT_ANNOTATIONS', '{"bad key!":"x"}', /RULE_OBJECT_ANNOTATIONS: "bad key!" is not an annotation name/],
+  ])('%s with %s=%s: exit 1 naming the variable, nothing written', async (tool, variable, value, why) => {
+    expect(run(GEN_RULES, [chartDir]).status).toBe(0)
+    const rulesFile = path.join(tmpDir, 'in.yaml')
+    await fs.writeFile(rulesFile, 'groups:\n  - name: disk\n    rules:\n      - alert: DiskFull\n        expr: disk_free < 1\n')
+    const before = await tree(tmpDir)
+    const [name, flag] = tool.split(' ')
+    const args = name === 'import-rules' ? [rulesFile, chartDir] : [chartDir]
+    const script = { 'gen-rules': GEN_RULES, 'gen-chart': GEN_CHART, 'import-rules': IMPORT_RULES }[name]
+    const r = run(script, flag ? [...args, flag] : args, { [variable]: value })
+    expect(r.status, r.stdout).toBe(1)
+    expect(r.stdout).toMatch(new RegExp(`error {2}${variable}[ :]`))
+    expect(r.stdout).toMatch(why)
+    expect(await tree(tmpDir)).toEqual(before)
   })
 })

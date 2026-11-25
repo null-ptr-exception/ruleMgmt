@@ -1,0 +1,2 @@
+columns:
+  cluster_id: { type: integer, required: true }

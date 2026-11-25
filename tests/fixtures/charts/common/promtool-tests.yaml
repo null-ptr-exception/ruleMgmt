@@ -1,0 +1,47 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # a's limit is 90: 91 is over it, 90 is not
+      - series: 'mem_used_pct{cluster="east-1", namespace="a", pod="a-1"}'
+        values: '91x20'
+      - series: 'mem_used_pct{cluster="east-1", namespace="a", pod="a-2"}'
+        values: '90x20'
+      # b's is 75
+      - series: 'mem_used_pct{cluster="east-1", namespace="b", pod="b-1"}'
+        values: '76x20'
+      - series: 'mem_used_pct{cluster="east-1", namespace="b", pod="b-2"}'
+        values: '75x20'
+      # another cluster than _common's
+      - series: 'mem_used_pct{cluster="west-1", namespace="a", pod="a-1"}'
+        values: '99x20'
+      - series: 'throttle_ratio{cluster="east-1", namespace="a"}'
+        values: '0.6x20'
+      - series: 'throttle_ratio{cluster="east-1", namespace="a", pod="a-2"}'
+        values: '0.5x20'
+      - series: 'throttle_ratio{cluster="west-1", namespace="a"}'
+        values: '0.9x20'
+      # no row in cpu_throttle
+      - series: 'throttle_ratio{cluster="east-1", namespace="b"}'
+        values: '0.9x20'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: MemoryHigh
+        exp_alerts: []
+      # env is its default; oncall is left out, so there is no such label
+      - eval_time: 5m
+        alertname: MemoryHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, env: prod, cluster: east-1, namespace: a, pod: a-1 }
+            exp_annotations: { summary: "memory in east-1/a is 91%" }
+          - exp_labels: { severity: warning, env: prod, cluster: east-1, namespace: b, pod: b-1 }
+            exp_annotations: { summary: "memory in east-1/b is 76%" }
+      - eval_time: 14m
+        alertname: CPUThrottled
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: CPUThrottled
+        exp_alerts:
+          - exp_labels: { severity: info, cluster: east-1, namespace: a }

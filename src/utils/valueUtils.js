@@ -1,11 +1,13 @@
-import { schemaToVars } from './schemaUtils'
+import { schemaToVars } from './schemaUtils.js'
+import { requiredValueMissing } from './rulesFile.js'
 
 /**
  * A required cell with nothing in it (#67) — what the server refuses on save
- * (valueProblems). A checkbox always holds a value.
+ * (valueProblems), by its own rule. A key the row leaves out reaches here as
+ * undefined: a required boolean left out of a hand-edited row is missing too.
  */
 export function isMissingRequired(v, value) {
-  return !!v?.required && v.type !== 'boolean' && (value === undefined || value === null || value === '')
+  return !!v?.required && requiredValueMissing(value !== undefined, value)
 }
 
 /**

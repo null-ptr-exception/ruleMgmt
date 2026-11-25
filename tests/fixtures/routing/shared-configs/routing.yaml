@@ -1,0 +1,13 @@
+# Two configs from the repo's shared configs (shared.yaml here, the repo's
+# _shared/notification-configs.yaml in a deployment), one of its own.
+labels:
+  severity: [critical, warning]
+configs:
+  relay-webhook: { shared: true }
+  ops-email:     { shared: true }
+  db-email:      { type: email, to: db@example.com }
+cells:
+  - match: { severity: critical }
+    configs: [relay-webhook, db-email]
+  - match: { severity: warning }
+    configs: [ops-email]

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 test.describe('Folder creation', () => {
   test('new deployment modal pre-fills path from selected folder', async ({ page }) => {
@@ -8,16 +8,17 @@ test.describe('Folder creation', () => {
     const tree = page.locator('.ant-tree')
     await expect(tree).toBeVisible()
 
-    // Expand all collapsed switchers until we find a deployment node (has .ant-tag)
-    for (let i = 0; i < 5; i++) {
+    // Expand collapsed folders until a deployment node (one with a Tag showing
+    // its chart) shows. Not a fixed count: charts/ comes first in the tree, and
+    // each chart another test adds takes one more.
+    const deploymentNode = tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).first()
+    for (let i = 0; i < 50 && await deploymentNode.count() === 0; i++) {
       const collapsed = tree.locator('.ant-tree-switcher_close').first()
       if (await collapsed.count() === 0) break
       await collapsed.click()
       await page.waitForTimeout(300)
     }
 
-    // Click a deployment node (one with a Tag showing chart name)
-    const deploymentNode = tree.locator('.ant-tree-treenode').filter({ has: page.locator('.ant-tag') }).first()
     await expect(deploymentNode).toBeVisible({ timeout: 5000 })
     await deploymentNode.locator('.ant-tree-node-content-wrapper').click()
 

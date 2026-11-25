@@ -5,6 +5,12 @@ import os from 'os'
 import express from 'express'
 import yaml from 'js-yaml'
 import { execFileSync } from 'child_process'
+import { planChange, applyChange } from '../../server/repo/changes/index.js'
+import { openRepo } from '../../server/repo/openRepo.js'
+
+// The products rules/ makes that are not there, written as opening the
+// Template writes them.
+const regenerateProducts = async (dir, chart) => applyChange(await planChange(openRepo(dir), { kind: 'template-open', chart }))
 
 let server, baseURL, tmpDir, helmOutputFile, helmArgsFile, promtoolCaptureFile, promtoolCaptureDir, fakePromtool
 let vmalertCaptureDir, fakeVmalert
@@ -156,6 +162,8 @@ describe('POST /api/v2/render/:chart/:deployment', () => {
     expect(data.ok).toBe(true)
     expect(data.output).toContain('rendered')
     expect(data.check).toMatchObject({ passed: true, skipped: true, errors: [] })
+    // What Preview shows, and no more: the Template's drift is the Template page's.
+    expect(Object.keys(data).sort()).toEqual(['check', 'ok', 'output', 'selfCheck', 'summary'])
   })
 
   it('runs promtool check rules for rendered PrometheusRule groups', async () => {
@@ -253,6 +261,8 @@ spec:
     await fs.writeFile(path.join(rulesDir, 'latency.yaml'), 'columns: {}\nrules:\n  - alert: SlowRequests\n    expr: up == 0\n    labels: {severity: warning}\n')
     await fs.writeFile(path.join(rulesDir, 'panics.yaml'), 'type: vlogs\ncolumns: {}\nrules:\n  - alert: Panics\n    expr: \'"panic:" | stats count() as n | filter n:>0\'\n    labels: {severity: critical}\n')
     await fs.writeFile(path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml'), 'latency: [{}]\npanics: [{}]\n')
+    // the generated files rules/ makes, as a save writes them: none missing
+    await regenerateProducts(tmpDir, 'test-chart')
     try {
       await fs.writeFile(helmOutputFile, `---
 apiVersion: monitoring.coreos.com/v1
@@ -305,6 +315,56 @@ spec:
     }
   })
 
+  // A PrometheusRule marked prometheus3 goes to promtool 3, an unmarked one
+  // to promtool 2; a missing promtool 3 is said, never a pass.
+  it('checks a prometheus3 object with promtool 3 and a prometheus2 one with promtool', async () => {
+    const p3Dir = path.join(tmpDir, 'promtool3-invocations')
+    await fs.rm(p3Dir, { recursive: true, force: true })
+    await fs.mkdir(p3Dir, { recursive: true })
+    const fakePromtool3 = path.join(tmpDir, 'fake-promtool3')
+    await fs.writeFile(fakePromtool3, `#!/bin/sh\nPROMTOOL_CAPTURE_DIR="${p3Dir}" exec "${fakePromtool}" "$@"\n`, { mode: 0o755 })
+    process.env.PROMTOOL3_BIN = fakePromtool3
+    try {
+      await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-two-1-1
+spec:
+  groups:
+    - name: two
+      rules:
+        - alert: Two
+          expr: up == 0
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-three-1-1
+  annotations:
+    alertforge.io/profile: prometheus3
+spec:
+  groups:
+    - name: three
+      rules:
+        - alert: Three
+          expr: up offset 0s == 0
+`)
+      const { status, data } = await api('POST', '/api/v2/render/test-chart/staging')
+      expect(status).toBe(200)
+      expect((await readPromtoolInvocations()).map(inv => inv.groups[0].name)).toEqual(['two'])
+      expect((await readInvocations(p3Dir)).map(inv => inv.groups[0].name)).toEqual(['three'])
+      expect(data.check).toMatchObject({ passed: true, tools: ['promtool', 'promtool3'] })
+
+      process.env.PROMTOOL3_BIN = path.join(tmpDir, 'missing-promtool3')
+      const missing = (await api('POST', '/api/v2/render/test-chart/staging')).data
+      expect(missing.check.passed).toBe(false)
+      expect(missing.check.output).toContain(`Promtool 3 is not available: ${path.join(tmpDir, 'missing-promtool3')}`)
+    } finally {
+      delete process.env.PROMTOOL3_BIN
+    }
+  })
+
   // #70: a once group with zero rows still renders, is checked like any
   // other object, and the summary marks it once — not empty — with its
   // recording rules counted apart from the alerts.
@@ -314,6 +374,8 @@ spec:
     await fs.writeFile(path.join(rulesDir, 'api_recording.yaml'), 'once: true\nrules:\n  - record: job:errors:rate5m\n    expr: sum by (job) (rate(errors_total[5m]))\n')
     await fs.writeFile(path.join(rulesDir, 'api.yaml'), 'columns:\n  job: {type: string, required: true}\nrules:\n  - alert: ApiErrors\n    expr: job:errors:rate5m{job="${job}"} > 5\n    labels: {severity: warning}\n')
     await fs.writeFile(path.join(tmpDir, 'deployments', 'test-chart', 'staging-values.yaml'), 'api: [{job: checkout}]\n')
+    await fs.rm(path.join(tmpDir, 'charts', 'test-chart', 'values.schema.json'), { force: true })
+    await regenerateProducts(tmpDir, 'test-chart')
     try {
       await fs.writeFile(helmOutputFile, `---
 apiVersion: monitoring.coreos.com/v1
@@ -629,6 +691,42 @@ spec:
     // summary and the self-check have to read them from there. Reading the
     // schema instead left every group with no possible alerts: `missing` never
     // fired, and no `{{ }}` was ever checked.
+    // #182: severity written on the group, not the rule.
+    it('counts a severity its group\'s labels give, and does not call that alert missing', async () => {
+      const rulesDir = path.join(tmpDir, 'charts', 'test-chart', 'rules')
+      await fs.mkdir(rulesDir, { recursive: true })
+      try {
+        await fs.writeFile(path.join(rulesDir, 'svc.yaml'), 'group: svc\ntype: prometheus3\nlabels: {severity: critical}\ncolumns:\n  job: {type: string}\nrules:\n  - alert: SvcDown\n    expr: up{job="${job}"} == 0\n')
+        await fs.writeFile(schemaFile(), JSON.stringify({
+          type: 'object',
+          properties: { svc: { type: 'array', items: { type: 'object', properties: { job: { type: 'string' } } } } },
+        }))
+        await fs.writeFile(valuesFile(), yaml.dump({ svc: [{ job: 'api' }] }))
+        await fs.writeFile(helmOutputFile, `---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rel-svc-1-1
+  annotations: { alertforge.io/profile: prometheus3 }
+spec:
+  groups:
+    - name: svc
+      labels: { severity: critical }
+      rules:
+        - alert: SvcDown
+          expr: up{job="api"} == 0
+`)
+        process.env.PROMTOOL3_BIN = fakePromtool
+        const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+        const svc = data.summary.groups.find(g => g.name === 'svc')
+        expect(svc.alerts).toEqual([{ alert: 'SvcDown', severity: 'critical', count: 1 }])
+        expect(svc.missing).toEqual([])
+      } finally {
+        delete process.env.PROMTOOL3_BIN
+        await fs.rm(rulesDir, { recursive: true, force: true })
+      }
+    })
+
     it('reads a migrated chart\'s rules/ for missing alerts and preserved {{ }}', async () => {
       const rulesDir = path.join(tmpDir, 'charts', 'test-chart', 'rules')
       await fs.mkdir(rulesDir, { recursive: true })
@@ -894,6 +992,38 @@ spec:
     await fs.writeFile(helmOutputFile, VLOGS_ONLY.replace('count( as n', 'count() as n'))
     const ok = (await api('POST', '/api/v2/render/test-chart/staging')).data
     expect(ok.check).toMatchObject({ passed: true, output: 'SUCCESS' })
+  })
+
+  // A vm group is MetricsQL: WITH and rollup_* are fine (promtool refuses
+  // both), and a broken expression still fails, naming the rule.
+  const VM_ONLY = `---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: rel-http-1-1
+spec:
+  groups:
+    - name: http
+      type: prometheus
+      rules:
+        - alert: Errors
+          expr: 'WITH (e = rate(http_errors_total[5m])) e > 1'
+        - alert: Shifted
+          expr: 'rollup_rate(http_errors_total[1h] offset 0s) > 1'
+`
+
+  it.skipIf(!HAS_VMALERT)('with the real vmalert: a vm group\'s MetricsQL passes, and a broken one fails naming the rule', async () => {
+    await fs.writeFile(helmOutputFile, VM_ONLY)
+    process.env.VMALERT_BIN = 'vmalert'
+
+    const ok = (await api('POST', '/api/v2/render/test-chart/staging')).data
+    expect(ok.check).toMatchObject({ passed: true, output: 'SUCCESS', tools: ['vmalert'] })
+    expect(await readPromtoolInvocations()).toEqual([])
+
+    await fs.writeFile(helmOutputFile, VM_ONLY.replace('[5m]))', '[5m])'))
+    const { data } = await api('POST', '/api/v2/render/test-chart/staging')
+    expect(data.check.passed).toBe(false)
+    expect(data.check.output).toMatch(/^rel-http-1-1:\ninvalid group "http": invalid expression for rule "Errors": bad MetricsQL expr/)
   })
 
   it('returns 400 for invalid chart name', async () => {

@@ -1,19 +1,24 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, Tooltip, Tag, message } from 'antd'
+import { Button, Input, InputNumber, Select, Empty, Typography, Modal, Dropdown, Alert, Tooltip, Tag, Switch, message } from 'antd'
 import { SaveOutlined, DeleteOutlined, PlusOutlined, ImportOutlined, EditOutlined } from '@ant-design/icons'
 import TemplateTree from '../components/TemplateTree'
 import RuleEditor from '../components/RuleEditor'
 import KVEditor from '../components/KVEditor'
 import ImportRulesModal from '../components/ImportRulesModal'
 import BreakingChangeDialog from '../components/BreakingChangeDialog'
-import { parseRulesDir, schemaToModel, groupFileText, commonFileText, GROUP_KEY_RE } from '../utils/rulesFile'
-import { importRules, modelGroupFromImport } from '../utils/ruleImport'
-import { columnUsage, commonColumnUsage } from '../utils/ruleModel'
+import { syncFailedNotice } from '../utils/syncNotice'
+import { parseRulesDir, schemaToModel, groupFileText, commonFileText, hasCommonFile, GROUP_KEY_RE, RESERVED_NAMES, groupName, groupNameProblem } from '../utils/rulesFile'
+import { modelGroupFromImport } from '../utils/ruleImport'
+import { columnUsage, commonColumnUsage, ruleVars, varsIn } from '../utils/ruleModel'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import SelectorLabelsList, { SelectorLabelsHint } from '../components/SelectorLabelsList'
-import { profileNames, profileFor, DEFAULT_TYPE } from '../utils/outputs'
+import { profileNames, profileFor, isPromQLType, canonicalType, DEFAULT_TYPE } from '../utils/outputs'
+import { GROUP_FIELDS, GROUP_FIELD_NAMES, BASE_GROUP_FIELDS } from '../utils/groupFields'
+import yaml from 'js-yaml'
 import { renameSelectorColumn } from '../utils/selectorContract'
+import { repeatsText, REPEATS_FIX } from '../utils/drift'
+import { DERIVED_UNITS, parseDerived, derivedColumns, renameInDerived } from '../utils/derived'
 import {
   listCharts, createChart, deleteChart, cloneChart,
   getChartInfo, saveChartRules, saveChartMeta,
@@ -28,6 +33,7 @@ const TYPE_OPTIONS = [
   { value: 'number', label: 'number' },
   { value: 'integer', label: 'integer' },
   { value: 'boolean', label: 'boolean' },
+  { value: 'duration', label: 'duration' },
   { value: 'enum', label: 'enum' },
 ]
 
@@ -99,10 +105,95 @@ function SelectorsEditor({ group, commonColumns, onChange }) {
   )
 }
 
-function GroupSettings({ group, commonColumns = {}, onChange }) {
+// A map or a list is typed as flow YAML: {team: shop}, ["X-Scope-OrgID: 1"].
+const asFieldText = v => (v === undefined ? '' : (typeof v === 'object' ? yaml.dump(v, { flowLevel: 0, lineWidth: -1 }).trim() : String(v)))
+const FIELD_PLACEHOLDER = { labels: '{team: shop}', list: '["X-Scope-OrgID: 1"]', params: '{nocache: ["1"]}', duration: 'default', integer: 'default' }
+
+// One input per group field the group's type has (#182), by what its value
+// is. What a value may be is the save's to say. A duration takes effect as
+// it is typed; a map or a list once it is YAML.
+function GroupFieldInput({ name, value, onSet, onUnreadable }) {
+  const { kind, label: shown = name, placeholder, width = 80 } = GROUP_FIELDS[name]
+  const [draft, setDraft] = useState(asFieldText(value))
+  const [unreadable, setUnreadable] = useState(false)
+  useEffect(() => { setDraft(asFieldText(value)); setUnreadable(false) }, [value])
+  // Text that is not YAML never reaches the group, so Save would save the
+  // value from before: the editor is told, and Save waits for it. Gone with
+  // the field (another type, another group), it shows the group's value again.
+  useEffect(() => { onUnreadable?.(unreadable ? draft : null) }, [unreadable])
+  useEffect(() => () => onUnreadable?.(null), [])
+  const label = <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>{shown}</Text>
+  if (kind === 'integer') {
+    return <span>{label}<InputNumber size="small" aria-label={`Group ${name}`} style={{ width }} placeholder={placeholder ?? 'default'} min={0} precision={0}
+      value={value ?? null} onChange={v => onSet(v)} /></span>
+  }
+  if (kind === 'duration') {
+    return <span>{label}<Input size="small" aria-label={`Group ${name}`} style={{ width }} placeholder={placeholder ?? FIELD_PLACEHOLDER[kind]}
+      value={value ?? ''} onChange={e => onSet(e.target.value.trim() || undefined)} /></span>
+  }
+  if (kind === 'boolean') {
+    return <span>{label}<Select size="small" aria-label={`Group ${name}`} style={{ width: 90 }} allowClear placeholder="default"
+      value={value === undefined ? undefined : String(value)} options={[{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }]}
+      onChange={v => onSet(v === undefined ? undefined : v === 'true')} /></span>
+  }
+  const commit = () => {
+    const text = draft.trim()
+    if (text === '') { setUnreadable(false); onSet(undefined); return }
+    try { onSet(yaml.load(text)); setUnreadable(false) } catch { setUnreadable(true) }
+  }
+  return <span>{label}<Input size="small" aria-label={`Group ${name}`} style={{ width: 200 }} status={unreadable ? 'error' : undefined}
+    title={unreadable ? 'Not YAML — e.g. {team: shop}' : undefined}
+    placeholder={FIELD_PLACEHOLDER[kind]} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit} onPressEnter={commit} /></span>
+}
+
+// Display names for a non-PromQL group's checker and language.
+const CHECKER_NAMES = { promtool: 'promtool', promtool3: 'promtool 3', vmalert: 'vmalert' }
+const QUERY_NAMES = { promql: 'PromQL', metricsql: 'MetricsQL', logsql: 'LogsQL' }
+
+/**
+ * The rule group's own name (`name:`). Empty is no name: the key's default,
+ * shown as the placeholder. What is typed is taken on Enter or when the field
+ * is left, its ends trimmed; a field only looked at, or left as it was once
+ * trimmed, changes nothing. A name
+ * the save refuses — another group's, a line break — is said here too.
+ */
+function GroupNameInput({ groupKey, value, groups, onSet }) {
+  const [draft, setDraft] = useState(value ?? '')
+  useEffect(() => { setDraft(value ?? '') }, [value, groupKey])
+  const commit = () => {
+    const text = draft.trim()
+    // What it was (a space typed and left, or the same name again): the
+    // group, and so its file, is not touched.
+    if (draft === (value ?? '') || text === (value ?? '')) { setDraft(value ?? ''); return }
+    onSet(text === '' ? undefined : text)
+    if (text !== draft) setDraft(text)
+  }
+  const shown = draft !== (value ?? '') ? draft.trim() || undefined : value
+  let problem = shown === undefined ? null : groupNameProblem(shown)
+  if (!problem) {
+    const mine = groupName(groupKey, { name: shown })
+    const other = Object.entries(groups || {}).find(([k, g]) => k !== groupKey && !g.custom && groupName(k, g) === mine)
+    if (other) problem = `"${mine}" is already the rule-group name of ${other[0]} — Save refuses it`
+  }
+  return (
+    <span>
+      <Tooltip title="The rule group's name in Prometheus / vmalert (spec.groups[].name). Values keys, template and object names stay the key's. Changing it starts the group anew: pending alerts wait their for again.">
+        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Name</Text>
+      </Tooltip>
+      <Input size="small" aria-label="Group name" style={{ width: 200 }} placeholder={groupKey.replace(/_/g, '-')}
+        status={problem ? 'error' : undefined} value={draft}
+        onChange={e => setDraft(e.target.value)} onBlur={commit} onPressEnter={commit} />
+      {problem && <Text type="danger" data-testid="group-name-problem" style={{ fontSize: 12, marginLeft: 6 }}>{problem}</Text>}
+    </span>
+  )
+}
+
+function GroupSettings({ groupKey, groups, group, commonColumns = {}, onChange, onUnreadable }) {
   // once (#70): the group renders once per deployment and has no rows, so it
   // cannot have columns — turned on only once they are gone.
   const hasColumns = Object.keys(group.columns || {}).length > 0
+  // The type's fields; a type that is none has the ones every group has.
+  const fieldsOfType = profileFor(group.type)?.groupKeys || BASE_GROUP_FIELDS
   const set = (field, value) => onChange(g => {
     const next = { ...g }
     if (value === undefined || value === null || value === '') delete next[field]
@@ -111,10 +202,12 @@ function GroupSettings({ group, commonColumns = {}, onChange }) {
   })
   return (
     <div data-testid="group-settings" style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+      <GroupNameInput key={groupKey} groupKey={groupKey} value={group.name} groups={groups} onSet={v => set('name', v)} />
       <span>
         <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Type</Text>
         <Select size="small" aria-label="Group type" style={{ width: 130 }}
-          value={group.type ?? DEFAULT_TYPE}
+          // `type: prometheus` is prometheus2's alias: shown as what it is.
+          value={canonicalType(group.type) ?? group.type}
           options={profileNames().map(name => ({ value: name, label: name }))}
           onChange={v => set('type', v === DEFAULT_TYPE ? undefined : v)} />
       </span>
@@ -126,22 +219,24 @@ function GroupSettings({ group, commonColumns = {}, onChange }) {
           <Text type="secondary" style={{ fontSize: 12 }}>Once per deployment</Text>
         </label>
       </Tooltip>
-      <span>
-        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Interval</Text>
-        <Input size="small" aria-label="Group interval" style={{ width: 90 }} placeholder="default"
-          value={group.interval ?? ''} onChange={e => set('interval', e.target.value.trim())} />
-      </span>
-      <span>
-        <Text type="secondary" style={{ fontSize: 12, marginRight: 6 }}>Limit</Text>
-        <InputNumber size="small" aria-label="Group limit" style={{ width: 90 }} placeholder="none" min={0} precision={0}
-          value={group.limit ?? null} onChange={v => set('limit', v)} />
-      </span>
-      {!group.once && profileFor(group.type)?.validate === 'promtool' && (
+      {fieldsOfType.map(key => (
+        <GroupFieldInput key={key} name={key} value={group[key]} onSet={v => set(key, v)} onUnreadable={text => onUnreadable?.(key, text)} />
+      ))}
+      {/* Left from another type: shown, never dropped unseen — the save refuses it until it is taken off. */}
+      {GROUP_FIELD_NAMES.filter(k => group[k] !== undefined && !fieldsOfType.includes(k)).map(key => (
+        <Tag key={key} color="red" closable data-testid={`group-field-not-of-type-${key}`} closeIcon={<span aria-label={`Remove ${key}`}>×</span>}
+          onClose={e => { e.preventDefault(); set(key, undefined) }}>
+          {key}: not a {profileFor(group.type)?.name} field — Save refuses it
+        </Tag>
+      ))}
+      {!group.once && isPromQLType(group.type) && (
         <SelectorsEditor group={group} commonColumns={commonColumns} onChange={onChange} />
       )}
-      {profileFor(group.type)?.validate !== 'promtool' && (
+      {!isPromQLType(group.type) && (
         <Text type="secondary" style={{ fontSize: 12 }}>
-          expr is not PromQL here — Preview cannot syntax-check it
+          expr is not PromQL here — {CHECKER_NAMES[profileFor(group.type)?.validate]
+            ? `Preview checks it as ${QUERY_NAMES[profileFor(group.type).query]} with ${CHECKER_NAMES[profileFor(group.type).validate]}`
+            : 'Preview cannot syntax-check it'}
         </Text>
       )}
     </div>
@@ -226,18 +321,130 @@ function VarsEditor({ vars, onChange }) {
   )
 }
 
+// A group's derived values (#118): a value computed per row from its integer
+// columns, with a unit, used as ${name} in a range or a `for`. Rows are kept
+// here, so a half-typed name or expression stays as typed; the model gets
+// the named ones. `taken` says whether a name is another's (a column, a
+// common column, a vars entry, another derived value).
+function DerivedEditor({ derived, usage, taken, onChange }) {
+  const [rows, setRows] = useState(() => Object.entries(derived || {}).map(([name, d]) => ({ name, expr: d.expr ?? '', unit: d.unit })))
+  // Which row each name was sent from, and the expression sent: a row two
+  // share a name with (half-typed, or a clash) is never the one sent, and
+  // never takes the other's expression.
+  const sent = useRef(null)
+  if (sent.current === null) sent.current = Object.fromEntries(Object.entries(derived || {}).map(([name, d], row) => [name, { row, expr: d.expr ?? '' }]))
+  // A column renamed elsewhere rewrites an expression (renameColumn): the
+  // row it was sent from follows, the others are left as typed.
+  useEffect(() => {
+    setRows(prev => {
+      let next = prev
+      for (const [name, d] of Object.entries(derived || {})) {
+        const at = sent.current[name]
+        if (!at || d.expr === at.expr || prev[at.row]?.name !== name) continue
+        next = next === prev ? [...prev] : next
+        next[at.row] = { ...next[at.row], expr: d.expr }
+        sent.current[name] = { row: at.row, expr: d.expr }
+      }
+      return next
+    })
+  }, [derived])
+  const send = next => {
+    setRows(next)
+    const out = {}
+    const from = {}
+    next.forEach((r, i) => {
+      // A name another row has already is that row's (the one being typed
+      // waits). One taken by a column, a vars entry or reserved is kept as
+      // written and marked: the save refuses it and says why — a row is
+      // never dropped from the file because of it.
+      if (!r.name || Object.hasOwn(out, r.name)) return
+      let columns = []
+      try { columns = derivedColumns(parseDerived(r.expr)) } catch { /* the save says what is wrong */ }
+      Object.defineProperty(out, r.name, { value: { expr: r.expr, ...(r.unit ? { unit: r.unit } : {}), columns }, enumerable: true, writable: true, configurable: true })
+      from[r.name] = { row: i, expr: r.expr }
+    })
+    sent.current = from
+    onChange(Object.keys(out).length ? out : undefined)
+  }
+  const set = (i, patch) => send(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)))
+  return (
+    <div data-testid="derived-editor">
+      {rows.map((r, i) => {
+        const clash = r.name && (taken(r.name) || (rows.some((o, j) => j !== i && o.name === r.name) && `another derived value`))
+        let exprError = null
+        if (r.expr) { try { parseDerived(r.expr) } catch (e) { exprError = e.message } }
+        return (
+          <div key={i} style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Input size="small" aria-label={`Derived ${i + 1} name`} value={r.name} placeholder="name"
+                status={clash ? 'error' : undefined}
+                onChange={e => set(i, { name: e.target.value.trim() })} style={{ width: 150, fontWeight: 600 }} />
+              <Input size="small" aria-label={`Derived ${i + 1} expression`} value={r.expr} placeholder="freq_num * (spc_point + 2)"
+                status={exprError ? 'error' : undefined}
+                onChange={e => set(i, { expr: e.target.value })} style={{ flex: 1, fontFamily: 'monospace' }} />
+              <Select size="small" aria-label={`Derived ${i + 1} unit`} value={r.unit} placeholder="unit" style={{ width: 80 }}
+                options={DERIVED_UNITS.map(u => ({ value: u, label: u }))}
+                onChange={unit => set(i, { unit })} />
+              <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={`Remove derived ${i + 1}`}
+                onClick={() => send(rows.filter((_, j) => j !== i))} />
+            </div>
+            {clash && <Text type="danger" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>{clash === 'reserved' ? `"${r.name}" is a reserved name` : `"${r.name}" is already ${clash}'s name in this group`}</Text>}
+            {exprError && <Text type="danger" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>{exprError}</Text>}
+            {!r.unit && <Text type="warning" style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>⚠ a unit is needed: the value is a duration</Text>}
+            {r.name && !clash && (
+              <Text type={usage[r.name] ? 'secondary' : 'warning'} style={{ fontSize: 11, marginLeft: 158, display: 'block' }}>
+                {usage[r.name] ? `Used by ${usage[r.name].join(', ')}` : '⚠ Not used by any rule'}
+              </Text>
+            )}
+          </div>
+        )
+      })}
+      <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setRows([...rows, { name: '', expr: '', unit: 'm' }])}>Add derived</Button>
+    </div>
+  )
+}
+
 export default function TemplateDevEditor() {
   const [charts, setCharts] = useState([])
   const [activeChart, setActiveChart] = useSessionState('templates:chart', null)
   const [chartMeta, setChartMeta] = useState({})
+  // The description as loaded: a Save sends it only when it was edited here,
+  // so a tab left open does not write back an old one over a newer (pulled).
+  const loadedDescription = useRef(undefined)
+  const saveDescriptionIfChanged = () => ((chartMeta.description || '') === (loadedDescription.current || '')
+    ? Promise.resolve()
+    : saveChartMeta(activeChart, { description: chartMeta.description || '' }))
+  // After the rules were saved: the description, then the chart again. A
+  // description that was not saved is said, and what was typed stays in
+  // the box, to be saved again.
+  async function saveDescriptionAndReload() {
+    const typed = chartMeta.description || ''
+    const meta = await saveDescriptionIfChanged()
+    await loadChart(activeChart)
+    if (meta && !meta.ok) {
+      setChartMeta(m => ({ ...m, description: typed }))
+      setDirty(true)
+      Modal.error({
+        title: 'The rules were saved, but the description was not',
+        content: meta.error || 'The server did not save the description.',
+      })
+    }
+  }
   // The chart as { common: { columns }, groups: { <key>: { group, columns, rules, vars?, custom? } } }
   const [model, setModel] = useState({ common: { columns: {} }, groups: {} })
   const [order, setOrder] = useState([])
   const [activeGroup, setActiveGroup] = useSessionState('templates:alert', null)
   const [dirty, setDirty] = useState(false)
+  // Group fields whose text is not YAML, by group.field (GroupFieldInput).
+  const unreadableFields = useRef({})
   const [dirtyFiles, setDirtyFiles] = useState(() => new Set())
   const [parseErrors, setParseErrors] = useState([])
   const [drift, setDrift] = useState(null)
+  // Why the chart cannot be opened, when it cannot: nothing of it is shown to edit.
+  const [loadError, setLoadError] = useState(null)
+  // The chart and the time the model was loaded from disk: the Derived and
+  // Vars sections start again from the model each time.
+  const [loadedAs, setLoadedAs] = useState('')
   const [collapsedRules, setCollapsedRules] = useState({})
   const [importTarget, setImportTarget] = useState(null)
   const [breaking, setBreaking] = useState(null)   // the 409 payload while the dialog is open
@@ -283,9 +490,30 @@ export default function TemplateDevEditor() {
 
   useEffect(() => { loadCharts() }, [loadCharts])
 
+  // Only the latest read lands: one for a chart picked before, answered
+  // later, would put that chart's rules under the one picked since.
+  const loadSeq = useRef(0)
   const loadChart = useCallback(async (chart) => {
+    const seq = ++loadSeq.current
     const info = await getChartInfo(chart)
+    if (seq !== loadSeq.current) return
+    setLoadError(info.failed ? info.error || 'The chart cannot be opened' : null)
+    if (info.failed) {
+      // Nothing of the chart before stays: not its model, its problems, its
+      // description or its unsaved changes.
+      setModel({ common: { columns: {} }, groups: {} })
+      setOrder([])
+      setDrift(null)
+      setParseErrors([])
+      setChartMeta({})
+      setDirty(false)
+      setDirtyFiles(new Set())
+      loadedDescription.current = undefined
+      originalRef.current = {}
+      return
+    }
     setChartMeta(info.chartMeta || {})
+    loadedDescription.current = info.chartMeta?.description
     setDrift(info.drift || null)
 
     let m, ord, errors = []
@@ -302,14 +530,22 @@ export default function TemplateDevEditor() {
     }
     setModel(m)
     setOrder(ord)
+    setLoadedAs(`${chart}@${Date.now()}`)
     setParseErrors(errors)
     setDirtyFiles(new Set())
     setDirty(false)
     setActiveGroup(prev => (prev === COMMON || ord.includes(prev)) ? prev : (ord[0] || null))
   }, [setActiveGroup])
 
+  // A chart a save has just read itself (a clone) is not read again.
+  const loadedBySave = useRef(null)
   useEffect(() => {
-    if (activeChart) loadChart(activeChart)
+    if (!activeChart) return
+    if (loadedBySave.current === activeChart) {
+      loadedBySave.current = null
+      return
+    }
+    loadChart(activeChart)
   }, [activeChart, loadChart])
 
   // ── model mutation ────────────────────────────────────────────────────────
@@ -318,7 +554,7 @@ export default function TemplateDevEditor() {
     touch(`${key}.yaml`)
   }
   const updateCommonColumns = fn => {
-    setModel(m => ({ ...m, common: { columns: fn(m.common.columns) } }))
+    setModel(m => ({ ...m, common: { ...m.common, columns: fn(m.common.columns) } }))
     touch('_common.yaml')
   }
 
@@ -364,15 +600,15 @@ export default function TemplateDevEditor() {
   // ── save ──────────────────────────────────────────────────────────────────
   // The banner for a legacy or stale chart says Save fixes it, so Save has to
   // be available before anything has been edited.
-  // rules/ that cannot be read has nothing a save would regenerate.
-  const needsSave = (drift?.state === 'legacy' || drift?.state === 'stale') && !drift?.errors?.length
+  // rules/ that cannot be read has nothing a save would regenerate, and a
+  // template repeating generated alerts has to be removed by hand (#190).
+  const needsSave = (drift?.state === 'legacy' || drift?.state === 'stale') && !drift?.errors?.length && (!drift?.repeats?.length || !!drift?.outOfDate)
 
   function buildFiles() {
     const files = {}
-    const common = model.common.columns
-    if (Object.keys(common).length) {
+    if (hasCommonFile(model.common)) {
       files['_common.yaml'] = dirtyFiles.has('_common.yaml') || !originalRef.current['_common.yaml']
-        ? commonFileText(common) : originalRef.current['_common.yaml']
+        ? commonFileText(model.common.columns, model.common) : originalRef.current['_common.yaml']
     }
     for (const key of order) {
       const g = model.groups[key]
@@ -387,11 +623,46 @@ export default function TemplateDevEditor() {
   // `overwrite` is the answer to "the files changed on disk": it lets the
   // save go ahead over them and nothing more. A breaking change still gets
   // its own dialog — the server is never told it was confirmed here (#185).
-  async function handleSave(overwrite = false) {
+  // While a save is on its way the editor takes no edits (inert) and no
+  // second save: the reload after it would throw an edit made meanwhile
+  // away. The breaking dialog's Change in place and Clone are saves too,
+  // held the same way until their reload has landed. A ref, so a double
+  // click sees the first.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+  async function oneSaveAtATime(save) {
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      await save()
+    } finally {
+      savingRef.current = false
+      setSaving(false)
+    }
+  }
+  const handleSave = (overwrite = false) => oneSaveAtATime(() => saveNow(overwrite))
+
+  async function saveNow(overwrite) {
     if (!activeChart) return
+
+    // A group field whose text could not be read: saving now would save the
+    // value from before it, silently.
+    const unread = Object.entries(unreadableFields.current)
+    if (unread.length) {
+      Modal.error({
+        title: 'Save was refused',
+        content: unread.map(([at, text]) => `${at}: ${JSON.stringify(text)} is not YAML — correct it, or empty the field`).join('\n'),
+      })
+      return
+    }
 
     if (!overwrite && Object.keys(originalRef.current).length) {
       const fresh = await getChartInfo(activeChart)
+      if (fresh.failed) {
+        Modal.error({ title: 'The chart cannot be read now', content: fresh.error })
+        return
+      }
       if (JSON.stringify(fresh.rulesFiles || {}) !== JSON.stringify(originalRef.current)) {
         Modal.confirm({
           title: 'The rules files changed on disk since you opened this chart',
@@ -435,8 +706,7 @@ export default function TemplateDevEditor() {
     }
     reportNotices(result.notices)
 
-    await saveChartMeta(activeChart, chartMeta)
-    await loadChart(activeChart)
+    await saveDescriptionAndReload()
   }
 
   // Changes that break nothing but are worth knowing — a group changing type
@@ -457,25 +727,31 @@ export default function TemplateDevEditor() {
   // A save that did not happen says why, and leaves the editor as it is —
   // reloading the chart after a failure would throw the edits away.
   function reportFailedSave(result, title = 'Save failed') {
-    const lines = result?.errors || (result?.findings || []).map(f => f.description || f.message)
+    const lines = result?.errors ||
+      result?.migrationProblems?.flatMap(d => d.problems.map(p =>
+        `${d.path}${d.source ? ` (synced from ${d.source} and read-only: unlink it to change it)` : ''}: ${p.message}`)) ||
+      (result?.findings || []).map(f => f.description || f.message)
     Modal.error({
       title: result?.error || title,
       content: lines?.length ? lines.join('; ') : 'The server did not save the chart.',
     })
   }
 
-  async function applyInPlace(migration) {
+  const applyInPlace = migration => oneSaveAtATime(() => changeInPlace(migration))
+  async function changeInPlace(migration) {
     const result = await saveChartRules(activeChart, buildFiles(), true, migration)
     if (!result?.ok) {
       reportFailedSave(result)
       return
     }
     setBreaking(null)
-    await saveChartMeta(activeChart, chartMeta)
-    await loadChart(activeChart)
+    const notice = syncFailedNotice(result.syncFailed, 'Changed')
+    if (notice) message.warning(notice, 10)
+    await saveDescriptionAndReload()
   }
 
-  async function cloneWithEdits(newName, migration) {
+  const cloneWithEdits = (newName, migration) => oneSaveAtATime(() => cloneNow(newName, migration))
+  async function cloneNow(newName, migration) {
     const res = await cloneChart(activeChart, newName, migration)
     if (res?.error) { Modal.error({ title: 'Clone failed', content: res.error }); return }
     const saved = await saveChartRules(newName, buildFiles(), true)   // the clone gets the edited rules
@@ -487,7 +763,11 @@ export default function TemplateDevEditor() {
     }
     setBreaking(null)
     await loadCharts()
+    // The clone is read here, inside the save, not by the chart change:
+    // that read would land after "Saving…" is gone, over what was typed.
+    loadedBySave.current = newName
     setActiveChart(newName)
+    await loadChart(newName)
   }
 
   // ── chart-level actions ───────────────────────────────────────────────────
@@ -585,8 +865,9 @@ export default function TemplateDevEditor() {
   // A column some rule matches under another label (#133) — common ones too.
   const renamedLabels = renamedSelectorLabels(group)
   const groupColumns = group && !group.custom
-    // ${selector} is the group's selector matchers when it has selectors (#60)
-    ? [...Object.keys(group.columns), ...commonNames, ...(group.selectors?.length ? ['selector'] : [])]
+    // ${selector} is the group's selector matchers when it has selectors (#60);
+    // a vars entry and a derived value (#118) are referenced as ${name} too.
+    ? [...Object.keys(group.columns), ...commonNames, ...Object.keys(group.derived || {}), ...Object.keys(group.vars || {}), ...(group.selectors?.length ? ['selector'] : [])]
     : []
   // Merged column definitions the rule cards need to say "blank leaves this rule out".
   const columnDefs = group && !group.custom
@@ -596,24 +877,43 @@ export default function TemplateDevEditor() {
   // Which rules reference each column — the "Used by" annotation, and the flag
   // for a column no rule uses.
   const usedByColumn = columnUsage(group && !group.custom ? group : {})
+  // Which rules use each derived value (#118), by its own name.
+  const derivedUsage = Object.create(null)
+  for (const r of (group && !group.custom ? group.rules : [])) {
+    // Through a vars entry too, as the generator reads it.
+    const names = [...ruleVars(r)].flatMap(n => (Object.hasOwn(group.vars || {}, n) ? varsIn(String(group.vars[n])) : [n]))
+    for (const n of new Set(names)) if (Object.hasOwn(group.derived || {}, n)) (derivedUsage[n] ||= []).push(r.alert || r.record || '(unnamed)')
+  }
   // A common column's usage spans every group.
   const commonUsage = commonColumnUsage(model.groups, model.common.columns)
 
   const missingDescriptions = cols => Object.values(cols).filter(c => !c.description).length
 
+  // What a name is already in `target`'s namespace (a group, or COMMON for
+  // every group's), or false: ${name} could not tell them apart. `derived`
+  // false leaves the group's derived values out (their own editor asks).
+  function nameTaken(target, name, { derived = true } = {}) {
+    if (RESERVED_NAMES.includes(name)) return 'reserved'
+    const groups = target === COMMON ? Object.values(model.groups) : [model.groups[target]].filter(Boolean)
+    if (target !== COMMON && Object.hasOwn(model.groups[target]?.columns || {}, name)) return 'a column'
+    if (Object.hasOwn(model.common.columns || {}, name)) return 'a common column'
+    if (target === COMMON && groups.some(g => Object.hasOwn(g.columns || {}, name))) return 'a column'
+    if (groups.some(g => Object.hasOwn(g.vars || {}, name))) return 'a vars entry'
+    if (derived && groups.some(g => Object.hasOwn(g.derived || {}, name))) return 'a derived value'
+    return false
+  }
+
   // Returns whether it renamed. A name has to be valid and free — among this
-  // group's columns and _common's, which share one namespace.
+  // group's columns, _common's, its vars and its derived values, which share
+  // one namespace.
   function renameColumn(target, oldName, newName) {
-    const own = target === COMMON ? model.common.columns : model.groups[target]?.columns || {}
-    const taken = target === COMMON
-      ? Object.keys(own)
-      : [...Object.keys(own), ...Object.keys(model.common.columns || {})]
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
       message.warning(`"${newName}" is not a valid column name`)
       return false
     }
-    if (taken.includes(newName)) {
-      message.warning(`There is already a column named "${newName}"`)
+    const taken = nameTaken(target, newName)
+    if (taken) {
+      message.warning(taken === 'reserved' ? `"${newName}" is a reserved name` : `"${newName}" is already ${taken}'s name`)
       return false
     }
     patchColumn(target, oldName, newName, {})
@@ -632,6 +932,13 @@ export default function TemplateDevEditor() {
     // A selector keeps its place, and the label it matches (#121).
     for (const key of target === COMMON ? Object.keys(model.groups) : [target]) {
       if (model.groups[key].selectors?.includes(oldName)) updateGroup(key, g => renameSelectorColumn(g, oldName, newName))
+      // A derived expression reading it reads it by its new name (#118).
+      if (Object.values(model.groups[key].derived || {}).some(d => d.columns?.includes(oldName))) {
+        updateGroup(key, g => ({ ...g, derived: Object.fromEntries(Object.entries(g.derived).map(([n, d]) => {
+          const expr = renameInDerived(d.expr, oldName, newName)
+          return [n, { ...d, expr, columns: (d.columns || []).map(c => (c === oldName ? newName : c)) }]
+        })) }))
+      }
     }
   }
   function removeColumn(target, name) {
@@ -659,7 +966,7 @@ export default function TemplateDevEditor() {
   const setRules = rules => updateGroup(activeGroup, g => ({ ...g, rules }))
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div inert={saving ? '' : undefined} style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <ImportRulesModal
         open={importTarget !== null}
         needsName={importTarget === 'new'}
@@ -713,7 +1020,7 @@ export default function TemplateDevEditor() {
               style={{ flex: 1, maxWidth: 400 }} />
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
               <Button icon={<ImportOutlined />} onClick={() => setImportTarget('existing')}>Import</Button>
-              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={!dirty && !needsSave}>Save</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={saving || (!dirty && !needsSave)}>{saving ? 'Saving…' : 'Save'}</Button>
               <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>Delete</Button>
             </div>
           </>
@@ -721,12 +1028,18 @@ export default function TemplateDevEditor() {
       </div>
 
       {/* rules/ that cannot be read is listed below; saving regenerates nothing. */}
-      {activeChart && drift && (drift.state === 'legacy' || drift.state === 'stale') && !drift.errors?.length && (
+      {activeChart && drift?.repeats?.length > 0 && !drift.errors?.length && (
+        <Alert
+          type="error" banner showIcon data-testid="repeats-banner"
+          message={`${drift.repeats.map(repeatsText).join('; ')}: each alert would fire twice. To fix it, ${REPEATS_FIX}; saving does not.`}
+        />
+      )}
+      {activeChart && drift && (drift.state === 'legacy' || drift.state === 'stale') && !drift.errors?.length && (!drift.repeats?.length || drift.outOfDate) && (
         <Alert
           type="warning" banner showIcon
           message={drift.state === 'legacy'
             ? 'This chart still uses the old schema-only format. Saving migrates it to rules/*.yaml.'
-            : `Generated files are behind the source (${(drift.files || []).join(', ')}). Saving regenerates them.`}
+            : `Generated files are behind the source (${(drift.outOfDate || drift.files || []).join(', ')}). Saving regenerates them.`}
         />
       )}
       {parseErrors.length > 0 && (
@@ -734,7 +1047,12 @@ export default function TemplateDevEditor() {
           message={<span>rules/*.yaml has problems: {parseErrors.join('; ')}</span>} />
       )}
 
-      {activeChart ? (
+      {activeChart && loadError && (
+        <Alert type="error" showIcon data-testid="chart-load-error" style={{ margin: '8px 20px 0' }}
+          message="This chart cannot be opened" description={loadError} />
+      )}
+
+      {activeChart && !loadError ? (
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <div style={{ width: sidebarWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', background: '#fafafa', position: 'relative' }}>
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -762,6 +1080,34 @@ export default function TemplateDevEditor() {
                 <Text type="secondary" style={{ fontSize: 12, display: 'block', margin: '12px 0 16px' }}>
                   Filled in once per deployment, read by every row of every group.
                 </Text>
+                <div data-testid="row-identity" style={{ marginBottom: 20, padding: 12, border: '1px solid #f0f0f0', borderRadius: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Switch size="small" aria-label="Row identity label" checked={model.common.rowIdentity === true}
+                      onChange={on => {
+                        setModel(m => {
+                          const { rowIdentity: _was, ...rest } = m.common
+                          return { ...m, common: on ? { ...rest, rowIdentity: true } : rest }
+                        })
+                        touch('_common.yaml')
+                      }} />
+                    <Text strong style={{ fontSize: 13 }}>Row identity label</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{model.common.rowIdentity === true ? 'on' : 'off'}</Text>
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                    Gives every alerting rule of a group with text, true/false or selector columns a label <Text code>alertforge_row</Text>,
+                    a hash of those cells. Prometheus then keeps each alert&apos;s state when rows are inserted, removed or reordered;
+                    without it, every alert after the change in the same object starts its <Text code>for</Text> again.
+                    Not on recording rules, raw rules or once groups.
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 6 }} data-testid="row-identity-once">
+                    Turning it on or off, once: Alertmanager sees every alert as a new one — one or two more notifications per group,
+                    the same alert listed twice for about 4 minutes until the old one resolves, and each alert starts its <Text code>for</Text> again.
+                    Existing silences and inhibit rules keep working.
+                  </Text>
+                  <Text type="warning" style={{ fontSize: 12, display: 'block', marginTop: 6 }} data-testid="row-identity-silences">
+                    Do not match a silence, or an inhibit rule&apos;s equal, on alertforge_row: its value changes whenever a row&apos;s identifying cells change.
+                  </Text>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>
                     Columns{missingDescriptions(model.common.columns) > 0 && (
@@ -788,7 +1134,8 @@ export default function TemplateDevEditor() {
                   <Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeGroup(activeGroup)}>Remove</Button>
                 </div>
 
-                {!group.custom && <GroupSettings group={group} commonColumns={model.common.columns} onChange={fn => updateGroup(activeGroup, fn)} />}
+                {!group.custom && <GroupSettings groupKey={activeGroup} groups={model.groups} group={group} commonColumns={model.common.columns} onChange={fn => updateGroup(activeGroup, fn)}
+                  onUnreadable={(key, text) => { const at = `${activeGroup}.${key}`; if (text === null) delete unreadableFields.current[at]; else unreadableFields.current[at] = text }} />}
 
                 {group.custom ? (
                   <Alert type="info" showIcon
@@ -814,13 +1161,14 @@ export default function TemplateDevEditor() {
                           rule={rule}
                           columns={groupColumns}
                           columnDefs={columnDefs}
+                          derived={group.derived}
                           collapsed={!!collapsedRules[`${activeGroup}:${i}`]}
                           onToggleCollapse={() => setCollapsedRules(p => ({ ...p, [`${activeGroup}:${i}`]: !p[`${activeGroup}:${i}`] }))}
                           onChange={next => setRules(group.rules.map((r, idx) => idx === i ? next : r))}
                           onRemove={() => setRules(group.rules.filter((_, idx) => idx !== i))}
                           onAddColumn={(name, sample) => addColumnTo(activeGroup, name, sample)}
                           // PromQL editing help only where expr is PromQL (#65)
-                          exprLanguage={profileFor(group.type)?.validate === 'promtool' ? 'promql' : 'text'}
+                          exprLanguage={isPromQLType(group.type) ? 'promql' : 'text'}
                         />
                       ))}
                       {group.rules.length === 0 && <Empty description="No rules yet" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
@@ -871,13 +1219,36 @@ export default function TemplateDevEditor() {
                     </div>
                     )}
 
+                    {!group.once && (
+                      <div style={{ marginBottom: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                          <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Derived</Text>
+                          <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
+                        </div>
+                        <DerivedEditor
+                          key={`${loadedAs}:${activeGroup}`}
+                          derived={group.derived}
+                          usage={derivedUsage}
+                          taken={name => nameTaken(activeGroup, name, { derived: false })}
+                          onChange={d => updateGroup(activeGroup, g => {
+                            const { derived: _, ...rest } = g
+                            return d ? { ...rest, derived: d } : rest
+                          })}
+                        />
+                        <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                          A value computed for each row from its integer columns (+ - * and brackets), with a unit:
+                          {' ${name}'} in a range or a for. Preview shows each row&apos;s value.
+                        </Text>
+                      </div>
+                    )}
+
                     <div style={{ marginBottom: 20 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                         <Text style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>Vars</Text>
                         <div style={{ flex: 1, height: 1, background: '#e8e8e8' }} />
                       </div>
                       <VarsEditor
-                        key={activeGroup}
+                        key={`${loadedAs}:${activeGroup}`}
                         vars={group.vars}
                         onChange={v => updateGroup(activeGroup, g => ({ ...g, vars: v }))}
                       />
@@ -901,7 +1272,7 @@ export default function TemplateDevEditor() {
       {activeChart && dirty && (
         <div style={{ padding: '8px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fffbe6' }}>
           <Text type="warning" style={{ fontSize: 12 }}>Unsaved changes</Text>
-          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => handleSave()}>Save</Button>
+          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={() => handleSave()} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
         </div>
       )}
     </div>

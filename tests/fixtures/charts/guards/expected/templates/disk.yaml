@@ -15,7 +15,7 @@ spec:
         {{- if hasKey . "warn_pct" }}
         - alert: DiskFull
           expr: |-
-            disk_used_pct{mount="{{ .mount }}"} > {{ .warn_pct }}
+            disk_used_pct{mount="{{ .mount }}"} > {{ .warn_pct | toJson }}
           for: 5m
           labels:
             severity: warning
@@ -29,7 +29,7 @@ spec:
         {{- if hasKey . "crit_pct" }}
         - alert: DiskFull
           expr: |-
-            disk_used_pct{mount="{{ .mount }}"} > {{ .crit_pct }}
+            disk_used_pct{mount="{{ .mount }}"} > {{ .crit_pct | toJson }}
           for: 5m
           labels:
             severity: critical

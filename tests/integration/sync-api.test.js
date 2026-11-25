@@ -36,7 +36,8 @@ describe('sync API', () => {
     const dir = path.join(tmpDir, relPath)
     fs.mkdirSync(dir, { recursive: true })
     fs.writeFileSync(path.join(dir, 'Chart.yaml'), CHART_WITH_DEP)
-    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump(values))
+    // Under the Template's name, as Helm passes them to it.
+    fs.writeFileSync(path.join(dir, 'values.yaml'), yaml.dump({ 'mariadb-alerts': values }))
     return dir
   }
 
@@ -82,7 +83,7 @@ describe('sync API', () => {
       expect(res.status).toBe(200)
       expect(res.body).toEqual({ ok: true })
 
-      const written = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/dev/values.yaml'), 'utf-8'))
+      const written = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/dev/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(written).toEqual({ alerts: [{ warn: 99 }] })
     })
 
@@ -94,7 +95,7 @@ describe('sync API', () => {
 
       expect(fs.existsSync(path.join(tmpDir, 'cpu/canary/values.yaml'))).toBe(true)
       expect(fs.existsSync(path.join(tmpDir, 'cpu/canary/Chart.yaml'))).toBe(true)
-      const written = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/canary/values.yaml'), 'utf-8'))
+      const written = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/canary/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(written).toEqual({ alerts: [{ warn: 99 }] })
     })
 
@@ -196,7 +197,7 @@ describe('sync API', () => {
       const registry = await request(app).get('/api/v2/sync')
       expect(registry.body).toEqual({ syncs: [] })
 
-      const content = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))
+      const content = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(content).toEqual({ alerts: [{ warn: 99 }] })
     })
 
@@ -218,11 +219,28 @@ describe('sync API', () => {
       expect(res.body).toEqual({ syncs: [] })
     })
 
-    it('a corrupt sync.yaml surfaces as 500, not as an empty registry', async () => {
+    it('a corrupt sync.yaml is named (409), not taken for an empty registry', async () => {
       fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), 'syncs: [unclosed')
 
       const res = await request(app).get('/api/v2/sync')
-      expect(res.status).toBe(500)
+      expect(res.status).toBe(409)
+      expect(res.body).toMatchObject({ file: 'sync.yaml', unreadable: true })
+      expect(res.body.error).toMatch(/^sync\.yaml is not valid YAML \(/)
+    })
+
+    it('a sync.yaml that cannot be read is named by every sync route (409), and left as it is', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('cpu/staging')
+      fs.mkdirSync(path.join(tmpDir, 'sync.yaml'))
+      for (const res of [
+        await request(app).get('/api/v2/sync'),
+        await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' }),
+        await request(app).delete('/api/v2/sync').send({ target: 'cpu/staging' }),
+      ]) {
+        expect(res.status).toBe(409)
+        expect(res.body).toEqual({ error: 'sync.yaml cannot be read (it is a folder, not a file)', file: 'sync.yaml', unreadable: true })
+      }
+      expect(fs.statSync(path.join(tmpDir, 'sync.yaml')).isDirectory()).toBe(true)
     })
 
     it('a corrupt sync.yaml fails POST without clobbering the file', async () => {
@@ -232,10 +250,21 @@ describe('sync API', () => {
       fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), corrupt)
 
       const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
-      expect(res.status).toBe(500)
+      expect(res.status).toBe(409)
       // The unparseable registry must survive untouched — treating it as
       // empty and rewriting it would silently drop every existing link.
       expect(fs.readFileSync(path.join(tmpDir, 'sync.yaml'), 'utf-8')).toBe(corrupt)
+    })
+
+    it('a target whose values.yaml is a folder is named (409), and nothing is written', async () => {
+      makeDeployment('cpu/prod')
+      makeDeployment('cpu/staging')
+      fs.rmSync(path.join(tmpDir, 'cpu/staging/values.yaml'))
+      fs.mkdirSync(path.join(tmpDir, 'cpu/staging/values.yaml'))
+      const res = await request(app).post('/api/v2/sync').send({ source: 'cpu/prod', target: 'cpu/staging' })
+      expect(res.status).toBe(409)
+      expect(res.body).toEqual({ error: 'cpu/staging/values.yaml cannot be written: it is a folder, not a file', file: 'cpu/staging/values.yaml' })
+      expect(fs.existsSync(path.join(tmpDir, 'sync.yaml'))).toBe(false)
     })
 
     it('concurrent POSTs are serialized — neither sync link is lost', async () => {
@@ -258,7 +287,7 @@ describe('sync API', () => {
     // root bypasses file permissions, so the read-only directory below
     // wouldn't actually make the persist step fail. Same on Windows, where
     // chmod on a directory is a no-op and the write succeeds anyway.
-    it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('a registry write failure leaves the target untouched and returns a generic error', async () => {
+    it.skipIf(process.getuid?.() === 0 || process.platform === 'win32')('a registry write failure leaves the target untouched and names sync.yaml', async () => {
       makeDeployment('cpu/prod', { alerts: [{ warn: 99 }] })
       makeDeployment('cpu/staging', { alerts: [{ warn: 1 }] })
       // Valid registry in a read-only directory: reads succeed, but the
@@ -275,22 +304,22 @@ describe('sync API', () => {
         fs.chmodSync(tmpDir, 0o755)
       }
 
-      expect(res.status).toBe(500)
-      // Registry-first ordering: the failed persist must mean the target's
-      // content was never overwritten...
-      const target = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))
+      // All or none: the copy written before sync.yaml is put back.
+      expect(res.status).toBe(409)
+      expect(res.body).toEqual({ error: 'sync.yaml cannot be written: permission denied', file: 'sync.yaml' })
+      // The target's content as it was...
+      const target = yaml.load(fs.readFileSync(path.join(tmpDir, 'cpu/staging/values.yaml'), 'utf-8'))['mariadb-alerts']
       expect(target).toEqual({ alerts: [{ warn: 1 }] })
       // ...and no half-created link is visible afterwards.
       const registry = await request(app).get('/api/v2/sync')
       expect(registry.body).toEqual({ syncs: [] })
-      // Generic message only — fs errors embed absolute server paths.
       expect(res.body.error).not.toContain(tmpDir)
     })
 
-    it('500 responses do not leak filesystem paths', async () => {
+    it('a sync.yaml it cannot read is named without the filesystem path', async () => {
       fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), 'syncs: [unclosed')
       const res = await request(app).get('/api/v2/sync')
-      expect(res.status).toBe(500)
+      expect(res.status).toBe(409)
       expect(JSON.stringify(res.body)).not.toContain(tmpDir)
     })
   })

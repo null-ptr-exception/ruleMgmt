@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Steps, Typography, Select, Table, Tag, Input, Button, Alert, Space } from 'antd'
+import { Modal, Steps, Typography, Select, Table, Tag, Input, Button, Alert, Space, message } from 'antd'
 import { migrationPreview } from '../utils/chartApi'
 
 const { Text, Paragraph } = Typography
@@ -8,7 +8,7 @@ const DELETE = '__delete__'
 const NEEDS_DECISION = new Set(['column-removed', 'group-removed'])
 
 /**
- * The breaking-change flow (issue #57, 收斂四 §六): a change that would orphan
+ * The breaking-change flow (issue #57): a change that would orphan
  * a rule owner's rows is made in place, with the template owner declaring how
  * each disappearing column maps; the server then rewrites every deployment's
  * values.yaml. Cloning is the escape hatch.
@@ -45,10 +45,17 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
     return m
   }, [decisions, colMap, groupMap])
 
+  // A preview that cannot be worked out (an answer cut off) goes back a step
+  // and says so: it used to stay on "Working it out…", Change in place off.
   async function goToPreview() {
     setPreview(null)
     setStep(2)
-    setPreview(await migrationPreview(chart, files, migration))
+    try {
+      setPreview(await migrationPreview(chart, files, migration))
+    } catch (err) {
+      setStep(hasDecisions ? 1 : 0)
+      message.error(`The preview could not be worked out (${err.message}). Try Continue again.`)
+    }
   }
 
   const hasDecisions = decisions.length > 0
@@ -134,17 +141,43 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
               ? (d.losses.map(l => `${l.group}: ${l.columns.join(', ')}`).join('; '))
               : <Text type="secondary">none</Text>,
           },
+          // What a values save would refuse in the migrated file (#176).
+          {
+            title: 'Problems', render: (_, d) => (d.problems || []).length
+              ? (
+                <ul data-testid="migration-problems" style={{ paddingLeft: 18, margin: 0 }}>
+                  {d.problems.map((p, i) => (
+                    <li key={i}>{p.message}{p.before && <Tag color="orange" style={{ marginLeft: 6 }}>already there before</Tag>}</li>
+                  ))}
+                </ul>
+              )
+              : <Text type="secondary">none</Text>,
+          },
         ]}
       />
     )
+  // Problems this change would cause stop it; ones a deployment already had
+  // are shown, but are no reason to hold the change up.
+  const refused = (preview?.deployments || []).filter(d => d.problems?.some(p => !p.before))
+  // One on a _common reached through a link made by hand is held by the
+  // link, which its row says in full: no mapping changes that, so it is
+  // not named among those that "would get values a save refuses".
+  const valuesRefused = refused.filter(d => !d.linked)
 
+  // No deployment moves to the clone by itself (#57, #178): it is said here,
+  // where the choice is made.
   const cloneControl = (
-    <Space.Compact>
-      <Input size="small" placeholder="new-chart-name" value={cloneName} onChange={e => setCloneName(e.target.value)} style={{ width: 200 }} />
-      <Button size="small" disabled={!/^[a-z0-9][a-z0-9_-]*$/.test(cloneName)} onClick={() => onClone(cloneName, migration)}>
-        Clone to a new chart
-      </Button>
-    </Space.Compact>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <Space.Compact>
+        <Input size="small" placeholder="new-chart-name" value={cloneName} onChange={e => setCloneName(e.target.value)} style={{ width: 200 }} />
+        <Button size="small" disabled={!/^[a-z0-9][a-z0-9_-]*$/.test(cloneName)} onClick={() => onClone(cloneName, migration)}>
+          Clone to a new chart
+        </Button>
+      </Space.Compact>
+      <Text type="secondary" data-testid="clone-by-hand" style={{ fontSize: 12 }}>
+        This chart and its deployments stay as they are. A deployment moves to the clone by hand: its Chart.yaml and values.yaml (see the how-to, “Move a deployment to a cloned chart”).
+      </Text>
+    </div>
   )
 
   return (
@@ -165,6 +198,10 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
         </>
       )}
       {step === 2 && previewView}
+      {step === 2 && valuesRefused.length > 0 && (
+        <Alert style={{ marginTop: 12 }} type="error" data-testid="migration-refused"
+          message={`${valuesRefused.map(d => d.path).join(', ')} would get values a save refuses. Change the mapping, or fix ${valuesRefused.length === 1 ? 'that deployment' : 'those deployments'} first${valuesRefused.some(d => d.readonly) ? ' (one synced from another deployment is read-only: unlink it first)' : ''}.`} />
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', marginTop: 20 }}>
         <div>{cloneControl}</div>
@@ -176,7 +213,7 @@ export default function BreakingChangeDialog({ open, payload, chart, files, onCa
           )}
           {step === 1 && <Button type="primary" onClick={goToPreview}>Continue</Button>}
           {step === 2 && (
-            <Button type="primary" danger onClick={() => onApplyInPlace(migration)}>Change in place</Button>
+            <Button type="primary" danger disabled={preview == null || refused.length > 0} onClick={() => onApplyInPlace(migration)}>Change in place</Button>
           )}
         </div>
       </div>

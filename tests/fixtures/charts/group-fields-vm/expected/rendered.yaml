@@ -1,0 +1,18 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# A key "<kind> <name>" is an object of that kind; a bare name is a PrometheusRule.
+VMRule blind-http-1-1:
+  - name: http
+    type: prometheus
+    interval: 1m
+    limit: 5
+    labels: { team: shop, "on": "yes" }
+    eval_offset: 1m
+    concurrency: 2
+    eval_alignment: false
+    headers: ["X-Scope-OrgID: 1"]
+    notifier_headers: ["X-Team: shop"]
+    params: { nocache: ["1"], extra_label: ["env=prod", "tier=1_000", "a,b"] }
+    rules:
+      - alert: HTTPErrors
+        expr: 'rate(http_errors_total{job="api"}[5m]) > 1'
+        labels: { severity: warning }

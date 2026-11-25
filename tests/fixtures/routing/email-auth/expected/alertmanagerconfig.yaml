@@ -1,0 +1,35 @@
+# Written by hand before the generator was run — not produced by it.
+# authSecret is a Secret's name and key, as authPassword is.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    receiver: _drop
+    continue: true
+    routes:
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+        receiver: team-email
+      - matchers:
+          - { name: severity, value: warning, matchType: "=" }
+        receiver: yes-email
+  receivers:
+    - name: _drop
+    - name: team-email
+      emailConfigs:
+        - to: team@example.com
+          smarthost: smtp.team.example.com:587
+          authUsername: team-user
+          authPassword: { name: team-smtp, key: password }
+          authIdentity: team-user
+          authSecret: { name: team-smtp, key: cram-secret }
+    - name: yes-email
+      emailConfigs:
+        - to: yes@example.com
+          authUsername: "yes"
+          authPassword: { name: yes-smtp, key: password }
+          authIdentity: "yes"

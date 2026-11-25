@@ -31,7 +31,8 @@ export const MAX_ROWS_PER_OBJECT = 100
 // Anything inspecting the output reads the same profiles (outputs.js), so it
 // cannot drift from what is emitted.
 import { profileFor } from './outputs.js'
-import { durationScalar } from './yamlScalar.js'
+import { nameScalar } from './yamlScalar.js'
+import { GROUP_FIELD_NAMES, renderGroupField } from './groupFields.js'
 
 // The generator runs in the browser as well as in scripts, so size is measured
 // with TextEncoder rather than Buffer.
@@ -90,19 +91,18 @@ export function rowLoopHeader(hasCommon) {
 }
 
 /**
- * The Prometheus rule-group fields the template owner sets — how often the
- * group is evaluated and how many series it may produce. They belong to the
- * group, so every object the group is split into carries them.
+ * The rule-group fields the template owner sets — how often the group is
+ * evaluated, how many series it may produce, and the rest its profile has
+ * (groupFields.js). They belong to the group, so every object the group is
+ * split into carries them.
  */
-function renderGroupFields({ interval, limit } = {}, profile) {
+function renderGroupFields(fields = {}, profile) {
   let out = ''
   // The profile's own group fields first (e.g. `type: vlogs`), then the
-  // template owner's.
+  // template owner's (#182), in a fixed order. A 1.x schema's empty
+  // interval or limit is none.
   for (const [key, value] of Object.entries(profile?.groupFields || {})) out += `      ${key}: ${value}\n`
-  // '0' is a duration; written bare YAML reads it as a number, and the
-  // resource's field is text (#172).
-  if (interval !== undefined && interval !== '') out += `      interval: ${durationScalar(interval)}\n`
-  if (limit !== undefined && limit !== '') out += `      limit: ${limit}\n`
+  for (const key of GROUP_FIELD_NAMES) if (fields[key] !== undefined && fields[key] !== '') out += renderGroupField(key, fields[key])
   return out
 }
 
@@ -115,10 +115,13 @@ function objectHead({ profile, name, objectMeta, groupName, groupFields }) {
     `metadata:\n` +
     `  name: ${name}\n` +
     renderMetaMap('labels', meta.labels) +
-    renderMetaMap('annotations', meta.annotations) +
+    // The profile's own annotations last (prometheus3's mark), so nothing a
+    // site sets can change them.
+    renderMetaMap('annotations', { ...meta.annotations, ...profile.annotations }) +
     `spec:\n` +
     `  groups:\n` +
-    `    - name: ${groupName}\n` +
+    // A group key such as `yes` or `on` is a boolean to Kubernetes written bare.
+    `    - name: ${nameScalar(groupName)}\n` +
     renderGroupFields(groupFields, profile) +
     `      rules:\n`
   )
@@ -159,13 +162,19 @@ function buildObject({ releaseName, baseName, groupName, groupFields, profile, v
 }
 
 /**
+ * The rules of each object a group is packed into, in order. A once group's
+ * rules are not multiplied by rows, so its whole budget is one object's.
+ */
+export function groupShards(ruleTexts, once, options) {
+  return shardRules(ruleTexts, once ? { ...options, rowsPerObject: 1 } : options)
+}
+
+/**
  * Render one alert group as a template that emits one or more custom
  * resources: one per rule shard, times one per row chunk.
  */
 export function emitRuleObjects({ releaseName, group, groupName, groupFields, profile = profileFor(undefined), valuesKey, hasCommon, once = false, preamble = '', ruleTexts }, options) {
-  // A once group's rules are not multiplied by rows, so its whole budget is
-  // one object's.
-  const shards = shardRules(ruleTexts, once ? { ...options, rowsPerObject: 1 } : options)
+  const shards = groupShards(ruleTexts, once, options)
   const base = group.replace(/_/g, '-')
 
   // Both indices are always present, for the same reason the chunk index is:

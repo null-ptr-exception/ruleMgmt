@@ -1,0 +1,25 @@
+# rule_files is filled in by the harness: one file per rendered object.
+# promtool reads both objects of the named group and the group "yes".
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'cpu{db="db001"}'
+        values: '95x10'
+      - series: 'cpu{db="db101"}'
+        values: '95x10'
+      - series: 'cpu{db="db050"}'
+        values: '10x10'
+      - series: 'up{job="flag"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: MariaDBCpuHigh
+        exp_alerts:
+          - exp_labels: { severity: warning, db: db001 }
+          - exp_labels: { severity: warning, db: db101 }
+      - eval_time: 5m
+        alertname: FlagDown
+        exp_alerts:
+          - exp_labels: { job: flag }

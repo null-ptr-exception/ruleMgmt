@@ -3,6 +3,8 @@ import { Button, Input, Select, Tag, Typography } from 'antd'
 import { SaveOutlined, EyeOutlined, CloseOutlined, RightOutlined } from '@ant-design/icons'
 import AlertTable from './AlertTable'
 import { matchesFilter, getFilterOperators, mergeFilters } from '../utils/filterUtils'
+import { rowsOf } from '../utils/valuesInEffect'
+import CommonRowNotes, { OverrideNote } from './CommonRowNotes'
 
 const { Text } = Typography
 
@@ -108,30 +110,52 @@ function WorkspaceFilterBar({ wsFilters, onWsFiltersChange, vars }) {
 }
 
 // One part of a group's card per deployment, when several are viewed (#91):
-// each is that deployment's own rows, as its own Overview shows them.
+// each is that deployment's rows in effect, as its own Overview shows them —
+// a group it inherits from a _common (#102) said as such.
 function DeploymentPart({ deployment, alertName, vars, sectionFilters, effectiveFilters, onFiltersChange, onOpen, scrollContainer, stickyOffsetHeader }) {
+  const from = deployment.from?.[alertName]
+  const count = rowsOf(deployment.values, alertName).length
+  // What it writes itself against its _common (groupMark), when it is under one.
+  const mark = deployment.marks && Object.hasOwn(deployment.marks, alertName) ? deployment.marks[alertName] : null
   return (
     <div data-testid="deployment-part" style={{ marginBottom: 12 }}>
       <Button type="link" size="small" onClick={() => onOpen(deployment.path)} style={{ padding: 0, fontSize: 12, fontWeight: 500 }}>
         {deployment.path}
       </Button>
-      <AlertTable
-        vars={vars}
-        rows={deployment.values[alertName] || []}
-        commonValues={deployment.commonValues}
-        filters={sectionFilters}
-        effectiveFilters={effectiveFilters}
-        onFiltersChange={onFiltersChange}
-        readOnly
-        plain
-        scrollContainer={scrollContainer}
-        stickyOffsetHeader={stickyOffsetHeader}
-      />
+      {deployment.stackProblems?.length > 0 && (
+        <div data-testid="part-stack-problems" style={{ padding: '2px 0 6px', fontSize: 12, color: '#a8071a' }}>
+          Helm cannot render this as shown: {deployment.stackProblems.join('; ')}
+        </div>
+      )}
+      {from && (
+        <div data-testid={`part-inherited-${alertName}`} style={{ padding: '2px 0 6px', fontSize: 12, color: '#1d39c4' }}>
+          Inherited from <b>{from}</b>: {count} row{count === 1 ? '' : 's'}
+        </div>
+      )}
+      <OverrideNote mark={mark} group={alertName} testid="part" />
+      <div data-testid={from ? `part-dimmed-${alertName}` : undefined} style={from ? { opacity: 0.55 } : undefined}>
+        <AlertTable
+          vars={vars}
+          rows={rowsOf(deployment.values, alertName)}
+          commonValues={deployment.commonValues}
+          filters={sectionFilters}
+          effectiveFilters={effectiveFilters}
+          onFiltersChange={onFiltersChange}
+          readOnly
+          plain
+          scrollContainer={scrollContainer}
+          stickyOffsetHeader={stickyOffsetHeader}
+          rowMarks={mark?.state === 'overrides' && mark.aligned ? mark.rows : null}
+          marksFrom={mark?.from}
+          commonMarks={deployment.commonMarks}
+        />
+      </div>
+      <CommonRowNotes mark={mark} group={alertName} />
     </div>
   )
 }
 
-function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer, deployments, onOpenDeployment }) {
+function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onFiltersChange, effectiveFilters, onUpdate, onDelete, onAdd, wsFilters, onWsFiltersClear, readOnly, scrollContainer, deployments, onOpenDeployment, note = null, mark = null, commonMarks = null }) {
   const [collapsed, setCollapsed] = useState(false)
   const [headerHeight, setHeaderHeight] = useState(0)
 
@@ -145,12 +169,11 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
 
   // Counted over every viewed deployment, each against its own common values.
   const parts = deployments || [{ values: { [alertName]: rows }, commonValues }]
-  const totalRows = parts.reduce((n, d) => n + (d.values[alertName] || []).length, 0)
+  const totalRows = parts.reduce((n, d) => n + rowsOf(d.values, alertName).length, 0)
   const matchCount = useMemo(() => {
     const hasFilters = Object.values(effectiveFilters).some(f => f && f.value !== '' && f.value != null)
     if (!hasFilters) return totalRows
-    return parts.reduce((n, d) => n + (d.values[alertName] || []).filter(row => matchesFilter(row, effectiveFilters, vars, d.commonValues)).length, 0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return parts.reduce((n, d) => n + rowsOf(d.values, alertName).filter(row => matchesFilter(row, effectiveFilters, vars, d.commonValues)).length, 0)
   }, [rows, deployments, effectiveFilters, vars, commonValues])
 
   const activeSectionFilters = Object.values(sectionFilters).filter(f => f && f.value !== '' && f.value != null)
@@ -189,6 +212,7 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
           </Button>
         )}
       </div>
+      {!collapsed && note}
       {!collapsed && deployments && (
         <div style={{ padding: '10px 12px' }}>
           {deployments.map(d => (
@@ -209,20 +233,27 @@ function SectionPanel({ alertName, vars, rows, commonValues, sectionFilters, onF
       )}
       {!collapsed && !deployments && (
         <div style={{ padding: '10px 12px' }}>
-          <AlertTable
-            vars={vars}
-            rows={rows}
-            commonValues={commonValues}
-            filters={sectionFilters}
-            effectiveFilters={effectiveFilters}
-            onFiltersChange={onFiltersChange}
-            onUpdate={onUpdate}
-            onDelete={onDelete}
-            onAdd={onAdd}
-            readOnly={readOnly}
-            scrollContainer={scrollContainer}
-            stickyOffsetHeader={headerHeight}
-          />
+          <OverrideNote mark={mark} group={alertName} testid="overview" />
+          <div data-testid={mark?.state === 'inherited' ? `overview-dimmed-${alertName}` : undefined} style={mark?.state === 'inherited' ? { opacity: 0.55 } : undefined}>
+            <AlertTable
+              vars={vars}
+              rows={rows}
+              commonValues={commonValues}
+              filters={sectionFilters}
+              effectiveFilters={effectiveFilters}
+              onFiltersChange={onFiltersChange}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+              onAdd={onAdd}
+              readOnly={readOnly}
+              scrollContainer={scrollContainer}
+              stickyOffsetHeader={headerHeight}
+              rowMarks={mark?.state === 'overrides' && mark.aligned ? mark.rows : null}
+              marksFrom={mark?.from}
+              commonMarks={commonMarks}
+            />
+          </div>
+          <CommonRowNotes mark={mark} group={alertName} />
         </div>
       )}
     </div>
@@ -233,7 +264,6 @@ export default function AlertOverviewWorkspace({
   checkedAlerts,
   allValues,
   commonValues,
-  schema,
   onAllValuesChange,
   onSave,
   onPreview,
@@ -242,9 +272,21 @@ export default function AlertOverviewWorkspace({
   getVars,
   readOnly = false,
   // Two or more deployments of the chart, viewed read-only (#91):
-  // [{ path, values, commonValues }] in the order they were checked.
+  // [{ path, values, commonValues, from, stackProblems?, marks?, commonMarks? }]
+  // in the order they were checked, each its values in effect
+  // (valuesInEffect) and, under a _common, what it writes itself against it
+  // (`marks`: groupMark per group; `commonMarks`: commonValueMarks).
   deployments = null,
   onOpenDeployment,
+  // A group the deployment inherits from a _common (#102): its rows shown,
+  // read-only here — overriding one is done in Single, where its rows are
+  // copied first. `inheritedFrom(group)` is the _common, or null.
+  inheritedFrom = null,
+  inheritedRows = () => [],
+  // The one deployment against its _common: groupMark per group, and
+  // commonValueMarks. Left out for a deployment under none.
+  groupMarks = null,
+  commonMarks = null,
 }) {
   const multi = deployments && deployments.length > 1
   const [wsFilters, setWsFilters] = useState({})
@@ -268,12 +310,12 @@ export default function AlertOverviewWorkspace({
   }
 
   function handleDelete(alertName, realIndex) {
-    const updated = (allValues[alertName] || []).filter((_, i) => i !== realIndex)
+    const updated = rowsOf(allValues, alertName).filter((_, i) => i !== realIndex)
     onAllValuesChange({ ...allValues, [alertName]: updated })
   }
 
   function handleAdd(alertName, newRow) {
-    const updated = [...(allValues[alertName] || []), newRow]
+    const updated = [...rowsOf(allValues, alertName), newRow]
     onAllValuesChange({ ...allValues, [alertName]: updated })
   }
 
@@ -300,12 +342,20 @@ export default function AlertOverviewWorkspace({
         vars={allVars}
       />
       <div ref={setScrollContainer} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {checkedAlerts.map(alertName => (
+        {checkedAlerts.map(alertName => {
+          const from = inheritedFrom && !Object.hasOwn(allValues, alertName) ? inheritedFrom(alertName) : null
+          const shown = from ? inheritedRows(alertName) : rowsOf(allValues, alertName)
+          return (
           <SectionPanel
             key={alertName}
             alertName={alertName}
             vars={getVars(alertName)}
-            rows={allValues[alertName] || []}
+            rows={shown}
+            note={from && (
+              <div data-testid={`overview-inherited-${alertName}`} style={{ padding: '6px 12px', fontSize: 12, color: '#1d39c4', background: '#f0f5ff' }}>
+                Inherited from <b>{from}</b>: {shown.length} row{shown.length === 1 ? '' : 's'}, read-only here. To change them, open this group in Single and override it there.
+              </div>
+            )}
             commonValues={commonValues}
             sectionFilters={sectionFilters[alertName] || {}}
             effectiveFilters={mergedFilters(alertName)}
@@ -315,12 +365,15 @@ export default function AlertOverviewWorkspace({
             onUpdate={updated => handleUpdate(alertName, updated)}
             onDelete={realIndex => handleDelete(alertName, realIndex)}
             onAdd={newRow => handleAdd(alertName, newRow)}
-            readOnly={readOnly || multi}
+            readOnly={readOnly || multi || !!from}
             scrollContainer={scrollContainer}
             deployments={multi ? deployments : null}
             onOpenDeployment={onOpenDeployment}
+            mark={!multi && groupMarks && Object.hasOwn(groupMarks, alertName) ? groupMarks[alertName] : null}
+            commonMarks={multi ? null : commonMarks}
           />
-        ))}
+          )
+        })}
       </div>
       <div style={{ padding: '10px 16px', borderTop: '1px solid #f0f0f0', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
         <Button type="primary" icon={<SaveOutlined />} onClick={onSave} disabled={!dirty || readOnly || multi}>Save all</Button>

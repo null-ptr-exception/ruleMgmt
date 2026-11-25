@@ -3,9 +3,10 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
+import { syncAnswer } from '../../server/repo/sync.js'
+import { openRepo } from '../../server/repo/openRepo.js'
 import {
-  readSyncRegistry,
-  writeSyncRegistry,
+  registryText,
   getTargetsForSource,
   getSourceForTarget,
   isSource,
@@ -16,6 +17,9 @@ import {
   applyUnlink,
 } from '../../server/lib/sync.js'
 
+// sync.yaml as every route reads it (repo/sync.js).
+const readSyncRegistry = async dir => (await syncAnswer(openRepo(dir))).registry
+
 describe('sync registry file I/O', () => {
   let tmpDir
   beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-')) })
@@ -25,9 +29,9 @@ describe('sync registry file I/O', () => {
     expect(await readSyncRegistry(tmpDir)).toEqual({ syncs: [] })
   })
 
-  it('round-trips a registry through write then read', async () => {
+  it('round-trips a registry through its text then read', async () => {
     const registry = { syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] }
-    await writeSyncRegistry(tmpDir, registry)
+    fs.writeFileSync(path.join(tmpDir, 'sync.yaml'), registryText(registry))
     expect(await readSyncRegistry(tmpDir)).toEqual(registry)
   })
 
@@ -113,6 +117,11 @@ describe('isSafeSyncPath', () => {
 
   it('catches a charts-dir-rooted path spelled with a leading ./', () => {
     expect(isSafeSyncPath('./charts/mychart', 'charts')).toBe(false)
+  })
+
+  it('takes a path written with backslashes, as sync.yaml may spell it, once normalised', () => {
+    expect(isSafeSyncPath('apps\\prod', 'charts')).toBe(true)
+    expect(isSafeSyncPath('apps\\.hidden\\prod', 'charts')).toBe(false)
   })
 
   it('catches a charts-dir-rooted path spelled with backslashes', () => {
@@ -215,6 +224,13 @@ describe('applySync', () => {
 })
 
 describe('applyUnlink', () => {
+  // A hand edit can list a target twice.
+  it('takes the target out of every entry that lists it', () => {
+    const registry = { syncs: [{ source: 'a/src', targets: ['a/tgt', 'a/t2'] }, { source: 'b/src', targets: ['a/tgt'] }] }
+    expect(applyUnlink(registry, 'a/tgt')).toEqual({ ok: true })
+    expect(registry.syncs).toEqual([{ source: 'a/src', targets: ['a/t2'] }])
+  })
+
   it('removes a target and prunes the source entry when it hits zero targets', () => {
     const registry = { syncs: [{ source: 'cpu/prod', targets: ['cpu/staging'] }] }
     const result = applyUnlink(registry, 'cpu/staging')

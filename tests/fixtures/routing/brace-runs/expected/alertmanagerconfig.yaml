@@ -1,0 +1,26 @@
+# Expected output: written by hand — not produced by the generator. Every
+# value exactly as routing.yaml has it.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    receiver: _drop
+    continue: true
+    routes:
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+        receiver: oncall
+  receivers:
+    - name: _drop
+    - name: oncall
+      emailConfigs:
+        - to: oncall@example.com
+          headers:
+            - { key: X-Json, value: '{"a":{}}' }
+            - { key: X-Edge, value: "}{{ .CommonLabels.x }}{" }
+          text: "{{{ .CommonLabels.alertname }}} a}}} {}} {"
+          html: '<p style="a{color:red}}">{{- .CommonLabels.x -}}{{/* c */}}</p>'

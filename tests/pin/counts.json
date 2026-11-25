@@ -1,0 +1,38 @@
+{
+  "lint": {
+    "total": 0,
+    "byKind": {},
+    "byFile": {}
+  },
+  "yamlParseSites": {
+    "serverAndScripts": 2,
+    "src": 6,
+    "byFileKind": {
+      "Chart.yaml": 0,
+      "Template values.yaml": 0,
+      "deployment values": 0,
+      "routing.yaml": 0,
+      "rules files": 0,
+      "shared configs": 0,
+      "sync.yaml": 0,
+      "unknown": 2
+    }
+  },
+  "swallowingCatches": {
+    "total": 1,
+    "byFile": {
+      "src/utils/schemaCompat.js": 1
+    }
+  },
+  "ownEnoentChecks": {
+    "total": 3,
+    "byFile": {
+      "server/lib/deploymentCheck.js": 2,
+      "server/lib/ruleCheck.js": 1
+    }
+  },
+  "requestReads": {
+    "total": 0,
+    "byFile": {}
+  }
+}

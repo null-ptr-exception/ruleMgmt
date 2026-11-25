@@ -206,7 +206,7 @@ describe('rule-level escape hatch (#57 section 6)', () => {
 
   it('resolves placeholders in hand-written entries like anywhere else', () => {
     const out = generateGroupTemplate('demo', withRaw(handWritten), 'rel')
-    expect(out).toContain('expr: rate(x{ns="{{ .namespace }}"}[5m]) > {{ .warn }}')
+    expect(out).toContain('expr: rate(x{ns="{{ .namespace }}"}[5m]) > {{ .warn | toJson }}')
     expect(out).toContain('summary: "is {{ `{{ $value }}` }}"')
   })
 

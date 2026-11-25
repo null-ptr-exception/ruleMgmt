@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Modal, Select, Checkbox, Alert, message } from 'antd'
 import { listAllDeployments, getSyncRegistry, createSync } from '../utils/chartApi'
 import SyncProblems from './SyncProblems'
+import { templateChange } from '../utils/templateChange'
 
 function classifySource(registry, candidatePath) {
   const isTargetOfOther = registry.syncs.some(s => s.targets.includes(candidatePath))
@@ -13,21 +14,32 @@ function classifySource(registry, candidatePath) {
 
 export default function SyncFromModal({ open, target, onClose, onSuccess }) {
   const [candidates, setCandidates] = useState([])
+  const [self, setSelf] = useState(null)
   const [registry, setRegistry] = useState({ syncs: [] })
   const [selectedSource, setSelectedSource] = useState(null)
   const [acked, setAcked] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   // A refused sync: the source has values a save would refuse (#180).
   const [refusal, setRefusal] = useState(null)
+  // Why sync.yaml cannot be read: nothing is offered to overwrite.
+  const [readError, setReadError] = useState(null)
 
   useEffect(() => {
     if (!open || !target) return
     setSelectedSource(null)
     setAcked(false)
     setRefusal(null)
+    setReadError(null)
     ;(async () => {
       const [all, reg] = await Promise.all([listAllDeployments(), getSyncRegistry()])
+      if (reg.failed) {
+        setReadError(reg.error)
+        setCandidates([])
+        setRegistry({ syncs: [] })
+        return
+      }
       setCandidates(all.filter(d => d.path !== target.path))
+      setSelf(all.find(d => d.path === target.path) || null)
       setRegistry(reg)
     })()
   }, [open, target])
@@ -46,8 +58,11 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
     return { status: 'red' }
   }, [registry, target])
 
+  // Following a source on another Template moves this target onto it (#180).
+  const change = templateChange(candidates.find(c => c.path === selectedSource)?.chart, self)
+
   const needsAck = targetState.status === 'red' || targetState.status === 'orange'
-  const canConfirm = !!selectedSource && (!needsAck || acked) && !submitting
+  const canConfirm = !readError && !!selectedSource && (!needsAck || acked) && !submitting
 
   async function handleConfirm() {
     setSubmitting(true)
@@ -75,6 +90,10 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
       okButtonProps={{ disabled: !canConfirm, loading: submitting }}
       destroyOnClose
     >
+      {readError ? (
+        <Alert type="error" showIcon data-testid="sync-read-error" message={readError}
+          description="Which deployments are synced is not known, so none is offered to sync from until it can be read." />
+      ) : (<>
       <Select
         style={{ width: '100%' }}
         placeholder="Follow source"
@@ -102,9 +121,13 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
         />
       )}
 
+      {change && (
+        <Alert style={{ marginTop: 12 }} type="error" data-testid="template-change" message={`${target?.name} ${change}.`} />
+      )}
+
       {needsAck && (
         <Checkbox style={{ marginTop: 12 }} checked={acked} onChange={e => setAcked(e.target.checked)}>
-          I understand, overwrite {target?.name}
+          I understand, overwrite {target?.name}{change ? ` — it ${change}` : ''}
         </Checkbox>
       )}
 
@@ -116,6 +139,7 @@ export default function SyncFromModal({ open, target, onClose, onSuccess }) {
           description={<SyncProblems problems={refusal.problems} />}
         />
       )}
+      </>)}
     </Modal>
   )
 }

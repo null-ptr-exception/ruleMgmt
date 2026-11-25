@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ruleColumns, columnUsage, commonColumnUsage } from '../ruleModel'
+import { ruleColumns, columnUsage, commonColumnUsage, escapePrometheusTemplates, hasUnclosedTemplate, substituteVars, NUMERIC } from '../ruleModel'
 
 describe('ruleColumns', () => {
   const selectors = ['namespace', 'workload']
@@ -58,5 +58,48 @@ describe('column usage', () => {
     const g = { group: 'cpu', selectors: ['namespace'], vars: { query: 'cpu{${selector}}' }, rules: [{ alert: 'A', expr: '${query} > 1' }] }
     expect(columnUsage(g).namespace).toEqual(['A'])
     expect([...commonColumnUsage({ cpu: g }, { namespace: {} }).namespace]).toEqual(['cpu'])
+  })
+})
+
+// Whether Helm gives these back is tests/integration/helm-brace-escape.test.js.
+describe('escapePrometheusTemplates', () => {
+  it.each([
+    // A template as it has always been written: in a raw string.
+    ['{{ $value }}', '{{ `{{ $value }}` }}'],
+    ['{{ "}}" }}', '{{ `{{ "}}` }}" }}'],
+    // A raw string cannot hold a backtick.
+    ['{{ `raw` }}', '{{ "{{ `raw` }}" }}'],
+    // A {{ that no }} follows, as a whole run.
+    ['a {{', 'a {{ `{{` }}'],
+    ['x{{{', 'x{{ `{{{` }}'],
+    ['}{{', '}{{ `{{` }}'],
+    // A { right before a reference would join the action it becomes.
+    ['{${host}}', '{{ `{` }}${host}}'],
+    ['{{${host}', '{{ `{{` }}${host}'],
+    // No {{: nothing for Helm.
+    ['a }}', 'a }}'],
+    ['{}}', '{}}'],
+    ['{ ${host}', '{ ${host}'],
+  ])('%j', (text, out) => expect(escapePrometheusTemplates(text)).toBe(out))
+})
+
+describe('hasUnclosedTemplate', () => {
+  it.each([['a {{', true], ['{{ a }} {{', true], ['}}{{', true], ['{{ a }}', false], ['a }}', false], ['{{ "}}" }}', false]])('%j', (text, out) => {
+    expect(hasUnclosedTemplate(text)).toBe(out)
+  })
+})
+
+// Helm prints a float64 from values.yaml with %v (1000000 as 1e+06): a
+// number column goes through toJson, as JSON writes it.
+describe('a number column in substituteVars', () => {
+  it('is printed through toJson, with or without a default', () => {
+    const defaults = { warn: 80, [NUMERIC]: new Set(['warn', 'port']) }
+    expect(substituteVars('x{port="${port}"} > ${warn}', '$row.', defaults))
+      .toBe('x{port="{{ $row.port | toJson }}"} > {{ dig "warn" 80 $row | toJson }}')
+  })
+
+  it('leaves every other column as it was', () => {
+    expect(substituteVars('${ns} ${warn}', '.', { warn: 80, [NUMERIC]: new Set(['other']) })).toBe('{{ .ns }} {{ dig "warn" 80 . }}')
+    expect(substituteVars('${ns} ${warn}', '.', { warn: 80 })).toBe('{{ .ns }} {{ dig "warn" 80 . }}')
   })
 })

@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Modal, Radio, Space, Typography, message } from 'antd'
-import { unlinkSync, deleteDeployment } from '../utils/chartApi'
+import { deleteDeployment } from '../utils/chartApi'
 
 const { Text } = Typography
+
+// What a failure leaves said: the targets marked Delete that are gone already.
+const alreadyGone = paths => (paths.length ? `; ${paths.join(', ')} ${paths.length === 1 ? 'was' : 'were'} deleted already` : '')
 
 export default function DeleteSourceModal({ open, source, targets, onClose, onSuccess }) {
   const [decisions, setDecisions] = useState({})
@@ -18,15 +21,12 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
     const initial = {}
     for (const t of targets) initial[t] = 'keep'
     setDecisions(initial)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, targetsKey])
 
   async function handleConfirm() {
     setSubmitting(true)
     // Stop on the first failure rather than pressing on to delete the
-    // source — if a target's unlink/delete didn't actually happen, deleting
-    // the source out from under it leaves that target's sync.yaml entry
-    // pointing at a deployment that no longer exists.
+    // source, so a target marked Delete is not left behind unlinked.
     let anyChange = false
     let succeeded = false
     // Paths actually removed from disk (deleted targets + the source) —
@@ -34,31 +34,34 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
     // Unlinked targets keep their content, so they don't belong here.
     const deletedPaths = []
     try {
+      // Only the targets marked Delete need a call: deleting the source lets
+      // go of the rest, which keep their content (#180).
       for (const targetPath of targets) {
-        const action = decisions[targetPath] === 'delete' ? 'delete' : 'unlink'
-        const result = action === 'delete'
-          ? await deleteDeployment(source.chart, targetPath.split('/').pop(), targetPath)
-          : await unlinkSync(targetPath)
+        if (decisions[targetPath] !== 'delete') continue
+        const result = await deleteDeployment(source.chart, targetPath.split('/').pop(), targetPath)
         if (!result.ok) {
-          message.error(`Failed to ${action} ${targetPath}${result.error ? `: ${result.error}` : ''}`)
+          message.error(`Failed to delete ${targetPath}: ${result.error}${alreadyGone(deletedPaths)}`)
           return
         }
         anyChange = true
-        if (action === 'delete') deletedPaths.push(targetPath)
+        deletedPaths.push(targetPath)
       }
 
       const result = await deleteDeployment(source.chart, source.name, source.path)
       if (!result.ok) {
-        message.error(`Failed to delete ${source.name}${result.error ? `: ${result.error}` : ''}`)
+        // The targets marked Delete are gone already: said, so the tree
+        // without them is no surprise. The source keeps its other targets.
+        message.error(`Failed to delete ${source.name}: ${result.error}${alreadyGone(deletedPaths)}`)
         return
       }
-      message.success(`Deleted ${source.name}`)
+      const kept = result.unlinked?.length || 0
+      message.success(`Deleted ${source.name}${kept ? `; ${kept} kept, no longer synced` : ''}`)
       succeeded = true
       deletedPaths.push(source.path)
       onSuccess?.(deletedPaths)
       onClose()
     } catch (err) {
-      // deleteDeployment/unlinkSync can reject outright (e.g. a network
+      // deleteDeployment can reject outright (e.g. a network
       // failure), not just resolve with { ok: false } — without this the
       // rejection would escape as an unhandled promise rejection with no
       // feedback shown to the user. Optional chaining because a rejection
@@ -66,8 +69,8 @@ export default function DeleteSourceModal({ open, source, targets, onClose, onSu
       message.error(err?.message || 'Delete failed')
     } finally {
       setSubmitting(false)
-      // Refresh the tree even on a partial failure — some targets may have
-      // already been unlinked/deleted before the step that failed.
+      // Refresh the tree even on a partial failure — the targets marked
+      // Delete before the step that failed are gone.
       if (anyChange && !succeeded) onSuccess?.(deletedPaths)
     }
   }

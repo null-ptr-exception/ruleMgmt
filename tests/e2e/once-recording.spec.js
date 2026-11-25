@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test'
-import { removeChart } from './charts.js'
+import { test, expect } from './test.js'
+import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // Once groups and recording rules (#70): the editor's once switch and
 // Alert / Record switch write the rules file, the Alerts page says a once
@@ -36,19 +36,14 @@ async function createChart(request, chart, files) {
 }
 
 async function openGroup(page, chart, group) {
-  await page.goto('/')
-  await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-  await page.locator('.ant-select').first().click()
-  await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
-  await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+  await openTemplateChart(page, chart)
   await page.getByText(group, { exact: true }).first().click()
   await expect(page.getByTestId('group-settings')).toBeVisible({ timeout: 5000 })
 }
 
 const rulesFile = async (request, chart, file) =>
   (await (await request.get(`/api/v2/templates/${chart}`)).json()).rulesFiles[file]
-const template = async (request, chart, name) =>
-  (await (await request.get(`/api/v2/templates/${chart}/${name}`)).json()).content
+const template = async (request, chart, name) => templateFile(chart, name)
 
 test.describe('Template editor', () => {
   const CHART = 'e2e-once-editor'

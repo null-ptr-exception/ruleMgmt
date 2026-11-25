@@ -1,75 +1,30 @@
+import { z } from 'zod'
+import { route, repoName, declaredRoutes } from '../http/route.js'
+import { rulesFiles, migrationMapping } from '../http/templateShapes.js'
 import express from 'express'
-import { diffSchema, describeChange, modelAlerts, groupTypeChanges, groupOnceChanges, groupSelectorChanges, groupSelectorLabelChanges } from '../../src/utils/schemaCompat.js'
-import { findDeploymentsUsing } from '../lib/chartUsage.js'
-import { chartDrift, regenerateProducts, writeChanged, readChartArtifacts } from '../lib/chartFiles.js'
-import { planDeploymentMigration } from '../lib/migrate.js'
-import { readSyncRegistry, isTarget } from '../lib/sync.js'
-import { parseRulesDir, modelToSchema, genSchema } from '../../src/utils/rulesFile.js'
-import { checkRules, saveBlockers } from '../../src/utils/ruleChecks.js'
-import { generateProducts, staleTemplates } from '../../src/utils/drift.js'
-import { isAlertGroup } from '../../src/utils/schemaUtils.js'
-import { ensureChartYaml } from '../../src/utils/chartYaml.js'
-import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
-import fs from 'fs/promises'
+import { holdSyncRegistryLock } from '../repo/lock.js'
+import { readTemplate } from '../lib/chartFiles.js'
+import { UnreadableError } from '../lib/readIfThere.js'
+import { planMigration } from '../lib/migrate.js'
+import { parseRulesDir, modelToSchema } from '../../src/utils/rulesFile.js'
 import path from 'path'
-import yaml from 'js-yaml'
+import { answersWithoutPaths } from '../lib/answerPaths.js'
+import { openRepo } from '../repo/openRepo.js'
+import { planChange, applyChange } from '../repo/changes/index.js'
+import { schemaBefore, modelBefore } from '../repo/changes/rules.js'
 
-const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
-// A rules/ filename: a group file, or _common.yaml. Guards path traversal in
-// the keys of the POST /:chart/rules body, and keeps a group key a name Helm
-// can read (the same rule as GROUP_KEY_RE in rulesFile.js).
-const RULES_FILE_RE = /^(_common|[a-z][a-z0-9_]*)\.yaml$/
-
-/** Groups and per-group columns that are new in `after` vs `before` — mapping
- *  targets for a disappearing column or group in the breaking-change dialog. */
-function addedInSchema(before, after) {
-  const added = { groups: [], columns: {} }
-  const beforeGroups = before?.properties || {}
-  for (const [key, def] of Object.entries(after?.properties || {})) {
-    if (!isAlertGroup(key)) continue
-    if (!beforeGroups[key]) { added.groups.push(key); continue }
-    const oldCols = Object.keys(beforeGroups[key].items?.properties || {})
-    const fresh = Object.keys(def.items?.properties || {}).filter(c => !oldCols.includes(c))
-    if (fresh.length) added.columns[key] = fresh
-  }
-  return added
-}
-
-async function withReadonly(gitopsDir, deployments) {
-  const registry = await readSyncRegistry(gitopsDir)
-  return deployments.map(d => ({ ...d, readonly: isTarget(registry, d.path) }))
-}
+// Every route is about one Template: its name, as paths.js takes a name.
+const CHART = z.object({ chart: repoName('name', { what: 'chart name' }) })
 
 export default function templatesRouter() {
   const router = express.Router()
-
-  router.use('/:chart', (req, res, next) => {
-    if (!NAME_RE.test(req.params.chart)) {
-      return res.status(400).json({ error: 'Invalid chart name' })
-    }
-    next()
-  })
-
-  function chartPaths(req, chart) {
-    const chartsDir = path.join(req.gitopsDir, process.env.CHARTS_DIR || 'charts')
-    const chartDir = path.join(chartsDir, chart)
-    return {
-      chartDir,
-      tmplDir: path.join(chartDir, 'templates'),
-      valuesFile: path.join(chartDir, 'values.yaml'),
-      schemaFile: path.join(chartDir, 'values.schema.json'),
-      chartYamlFile: path.join(chartDir, 'Chart.yaml'),
-    }
-  }
-
-  async function readSchema(schemaFile) {
-    try {
-      const raw = await fs.readFile(schemaFile, 'utf-8')
-      return JSON.parse(raw)
-    } catch {
-      return null
-    }
-  }
+  router.use(answersWithoutPaths)
+  // The migration preview writes nothing, but waits all the same: a save in
+  // progress writes rules/, templates, the schema and every deployment's
+  // values one after another, and a preview read between them would check
+  // values of one version against rules of another. A write through the
+  // writer (changes/) takes the lock only to write, itself.
+  const held = holdSyncRegistryLock
 
   // Get chart-level info: schema + values + Chart.yaml metadata + template file
   // list + product drift.
@@ -77,298 +32,78 @@ export default function templatesRouter() {
   // Opening a chart is the moment a missing Chart.yaml is filled in and missing
   // products are generated (nothing is overwritten either way) — deliberately
   // not the list route, where a write would be a side effect of scrolling past.
-  router.get('/:chart', async (req, res) => {
-    const { chartDir, tmplDir, valuesFile, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
-    try {
-      // Reading a chart that does not exist must not create it — a typo or a
-      // stale saved selection would leave a directory under charts/.
-      try { await fs.access(chartDir) } catch { return res.status(404).json({ error: 'Chart not found' }) }
-      try {
-        await fs.access(chartYamlFile)
-      } catch {
-        const { text } = ensureChartYaml(null, req.params.chart)
-        await fs.writeFile(chartYamlFile, text, 'utf-8')
-      }
-
-      let drift = await chartDrift(chartDir)
-      if (drift.state === 'missing') {
-        await regenerateProducts(chartDir)
-        drift = await chartDrift(chartDir)
-      }
-
-      let templateFiles = []
-      try {
-        const files = await fs.readdir(tmplDir)
-        templateFiles = files.filter(f => f.endsWith('.yaml')).map(f => f.replace(/\.yaml$/, ''))
-      } catch { /* no templates dir */ }
-
-      const schema = await readSchema(schemaFile)
-
-      let values = {}
-      try {
-        const raw = await fs.readFile(valuesFile, 'utf-8')
-        values = yaml.load(raw) || {}
-      } catch { /* use default */ }
-
-      let chartMeta = {}
-      try {
-        const raw = await fs.readFile(chartYamlFile, 'utf-8')
-        chartMeta = yaml.load(raw) || {}
-      } catch { /* use default */ }
-
-      // The editor loads from these; null when the chart has not been migrated
-      // to the rules/ format yet (it falls back to reading `schema`).
-      const { rulesFiles } = await readChartArtifacts(chartDir)
-
-      res.json({ templateFiles, schema, values, chartMeta, drift, rulesFiles })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // --- Chart-level endpoints (must be before /:chart/:template) ---
-
-  // Which deployments are using this chart. Needed before a breaking change,
-  // and to know when an old chart is free to retire.
-  router.get('/:chart/deployments', async (req, res) => {
-    try {
-      res.json({ deployments: await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR) })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // Save a chart's rules/*.yaml source, and regenerate every product from it
-  // in one request.
-  //
-  // The client sends the whole set of rules files as text; the server parses
-  // them, checks them, works out what breaks, generates values.schema.json and
-  // every templates/*.yaml, and writes the lot all-or-nothing — everything is
-  // computed in memory first, so a generation failure leaves the chart
-  // untouched (an I/O failure mid-write is not rolled back; see writeChanged).
-  // Only files whose content changed are written; the rules files
-  // are written through verbatim so hand-added comments survive.
-  router.post('/:chart/rules', async (req, res) => {
-    const { chartDir, tmplDir, schemaFile, chartYamlFile } = chartPaths(req, req.params.chart)
-    const { files, confirmBreaking, migration } = req.body || {}
-
-    if (!files || typeof files !== 'object' || Array.isArray(files)) {
-      return res.status(400).json({ error: 'files object required' })
-    }
-    for (const name of Object.keys(files)) {
-      if (!RULES_FILE_RE.test(name) || typeof files[name] !== 'string') {
-        return res.status(400).json({ error: `Invalid rules file name: ${name}` })
-      }
+  router.get('/:chart', route('templates.get', { params: CHART }, async ({ params: { chart } }, { gitopsDir, res }) => {
+    // Reading a chart that does not exist must not create it — a typo or a
+    // stale saved selection would leave a directory under charts/.
+    let t = await readTemplate(gitopsDir, chart)
+    if (!t) return res.status(404).json({ error: 'Chart not found' })
+    // A GET is not held by the commit's lock, but this one may write: the
+    // writer takes the lock to write, so a commit does not stage half the
+    // products. A file it cannot write is named (409).
+    if (t.findings.some(f => f.code === 'template.chart-absent') || t.drift.state === 'missing') {
+      const filled = await applyChange(await planChange(openRepo(gitopsDir), { kind: 'template-open', chart }))
+      if (filled.status !== 200) return res.status(filled.status).json(filled.body)
+      t = await readTemplate(gitopsDir, chart)
+      if (!t) return res.status(404).json({ error: 'Chart not found' })
     }
 
-    try {
-      const { model, errors } = parseRulesDir(files)
-      if (errors.length) return res.status(400).json({ error: 'Invalid rules', errors })
+    const templateFiles = t.templateNames.map(f => f.replace(/\.yaml$/, ''))
 
-      const before = await readSchema(schemaFile)
+    // The values and Chart.yaml as Helm reads them (`010` is 8). One that
+    // cannot be read or parsed is said, not shown as empty for a Save to
+    // write over.
+    const stop = t.findings.find(f => /^template\.(values|chart)-(unreadable|not-yaml|cannot-tell|not-map)$/.test(f.code))
+    if (stop) throw new UnreadableError(path.join(gitopsDir, stop.file), { reason: stop.detail?.why ?? stop.message })
 
-      // An x-custom-template group has no rules file — carry it over from the
-      // schema so its hand-written template is neither regenerated nor deleted.
-      for (const [key, def] of Object.entries(before?.properties || {})) {
-        if (isAlertGroup(key) && def['x-custom-template'] && !model.groups[key]) {
-          model.groups[key] = { group: key, custom: true }
-        }
-      }
+    // The editor loads from `rulesFiles`; null when the chart has not been
+    // migrated to the rules/ format yet (it falls back to reading `schema`).
+    // A schema that is not JSON is shown as none on a chart with rules/: it
+    // is a product, the drift says it is missing and Save writes it again.
+    res.json({ templateFiles, schema: t.schema, values: t.values, chartMeta: t.chart || {}, drift: t.drift, rulesFiles: t.rulesFiles })
+  }))
 
-      const newSchema = modelToSchema(model, before)
+  // --- Chart-level endpoints ---
 
-      const findings = saveBlockers(checkRules(genSchema(model, before)))
-      if (findings.length) return res.status(400).json({ error: 'Rule checks failed', findings })
-
-      // Schema carries no rule data any more, so rule-removed detection reads
-      // alert names from the model on both sides — the old rules/*.yaml on
-      // disk (absent on a legacy chart's first migration, same as before).
-      const { rulesFiles: oldRulesFiles } = await readChartArtifacts(chartDir)
-      const beforeModel = oldRulesFiles ? parseRulesDir(oldRulesFiles).model : null
-      const { breaking, isBreaking, notices } = diffSchema(before, newSchema, {
-        before: modelAlerts(beforeModel),
-        after: modelAlerts(model),
-      })
-      // A group changing output profile replaces its objects (#65): a notice,
-      // shown with a breaking change or on its own after the save.
-      notices.push(...groupTypeChanges(beforeModel, model), ...groupOnceChanges(beforeModel, model), ...groupSelectorChanges(beforeModel, model), ...groupSelectorLabelChanges(beforeModel, model))
-      const withDesc = list => list.map(c => ({ ...c, description: describeChange(c) }))
-      if (!confirmBreaking && isBreaking) {
-        const deployments = await findDeploymentsUsing(req.gitopsDir, req.params.chart, process.env.DEPLOYMENTS_DIR)
-        if (deployments.length > 0) {
-          return res.status(409).json({
-            error: 'Breaking schema change',
-            breaking: withDesc(breaking),
-            notices: withDesc(notices),
-            added: addedInSchema(before, newSchema),
-            deployments: await withReadonly(req.gitopsDir, deployments),
-          })
-        }
-      }
-
-      // Compute every output before writing anything.
-      let products
-      try {
-        products = generateProducts(model, before, objectMetaFromEnv())
-      } catch (err) {
-        return res.status(500).json({ error: `Generation failed: ${err.message}` })
-      }
-
-      // A confirmed breaking change carries a mapping — rewrite every affected
-      // deployment's values.yaml in the same request.
-      let migratedDeployments = []
-      let migrationWrites = []
-      if (confirmBreaking && migration && isBreaking) {
-        try {
-          const plan = await planDeploymentMigration(req.gitopsDir, req.params.chart, newSchema, migration, { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR })
-          migratedDeployments = plan.deployments
-          migrationWrites = plan.writes
-        } catch (err) {
-          return res.status(500).json({ error: `Deployment migration failed: ${err.message}` })
-        }
-      }
-
-      const rulesDir = path.join(chartDir, 'rules')
-      const entries = [
-        ...Object.entries(files).map(([name, text]) => [path.join(rulesDir, name), text]),
-        ...Object.entries(products.templates).map(([name, text]) => [path.join(tmplDir, name), text]),
-        [schemaFile, products.schemaText],
-        ...migrationWrites,
-      ]
-      let chartYamlRaw = null
-      try { chartYamlRaw = await fs.readFile(chartYamlFile, 'utf-8') } catch { /* absent */ }
-      const { text: chartYamlText, created } = ensureChartYaml(chartYamlRaw, req.params.chart)
-      if (created) entries.push([chartYamlFile, chartYamlText])
-
-      // Files on disk with no counterpart any more: a removed group, or a
-      // _common.yaml for a chart that no longer has common columns. In
-      // templates/ only a generated file is: one a hand-written file sits
-      // next to is left alone (#114).
-      const listYaml = async dir => {
-        try { return (await fs.readdir(dir)).filter(f => f.endsWith('.yaml')) } catch { return [] }
-      }
-      const removed = [
-        ...(await listYaml(rulesDir)).filter(f => !(f in files)).map(f => path.join(rulesDir, f)),
-        ...staleTemplates(await listYaml(tmplDir), products.templates, { schemas: [before], models: [beforeModel, model] })
-          .map(f => path.join(tmplDir, f)),
-      ]
-
-      const wrote = await writeChanged(entries)
-      for (const abs of removed) await fs.rm(abs, { force: true })
-
-      res.json({
-        ok: true,
-        written: [
-          ...wrote.map(p => path.relative(chartDir, p)),
-          ...removed.map(p => `- ${path.relative(chartDir, p)}`),
-        ],
-        notices: withDesc(notices),
-        migrated: migratedDeployments.map(d => ({ deployment: d.deployment, path: d.path, readonly: d.readonly, copiedFrom: d.copiedFrom, rowsChanged: d.rowsChanged })),
-      })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+  // Save a chart's rules/*.yaml source, and everything made from it — the
+  // schema, every template, and on a confirmed breaking change every
+  // affected deployment's values — as one change, all or none
+  // (changes/rules.js). The rules files are written as sent, so hand-added
+  // comments survive; only files whose content changes are written.
+  router.post('/:chart/rules', route('templates.rules', {
+    params: CHART,
+    body: z.object({ files: rulesFiles, confirmBreaking: z.boolean().optional(), migration: migrationMapping.optional() }),
+  }, async ({ params: { chart }, body: { files, confirmBreaking, migration } }, { gitopsDir }) => (
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'rules', chart, files, confirmBreaking, migration }))
+  )))
 
   // What a breaking change plus a mapping would do to every affected
   // deployment — feeds step 3 of the breaking-change dialog. Writes nothing.
-  router.post('/:chart/migration-preview', async (req, res) => {
-    const { schemaFile } = chartPaths(req, req.params.chart)
-    const { files, migration } = req.body || {}
-    if (!files || typeof files !== 'object') return res.status(400).json({ error: 'files object required' })
-    try {
-      const { model, errors } = parseRulesDir(files)
-      if (errors.length) return res.status(400).json({ error: 'Invalid rules', errors })
-      const targetSchema = modelToSchema(model, await readSchema(schemaFile))
-      const { deployments } = await planDeploymentMigration(
-        req.gitopsDir, req.params.chart, targetSchema, migration || {}, { deploymentsDirEnv: process.env.DEPLOYMENTS_DIR })
-      res.json({ deployments })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+  router.post('/:chart/migration-preview', held, route('templates.migration-preview', {
+    params: CHART,
+    body: z.object({ files: rulesFiles, migration: migrationMapping.optional() }),
+  }, async ({ params: { chart }, body: { files, migration } }, { gitopsDir }) => {
+    const { model, errors } = parseRulesDir(files)
+    if (errors.length) return { status: 400, body: { error: 'Invalid rules', errors } }
+    const onDisk = await readTemplate(gitopsDir, chart)
+    const targetSchema = modelToSchema(model, schemaBefore(gitopsDir, onDisk))
+    // Planned as the save plans it, on a snapshot; only its facts are shown.
+    const { deployments } = await planMigration(openRepo(gitopsDir), {
+      chart, targetSchema, migration: migration || {},
+      deploymentsDirEnv: process.env.DEPLOYMENTS_DIR, model, beforeModel: modelBefore(onDisk) })
+    return { status: 200, body: { deployments } }
+  }))
 
-  // Save chart-level default values
-  router.post('/:chart/values', async (req, res) => {
-    const { valuesFile } = chartPaths(req, req.params.chart)
-    const { values } = req.body
-    try {
-      const content = typeof values === 'string' ? values : yaml.dump(values, { lineWidth: -1 })
-      await fs.writeFile(valuesFile, content, 'utf-8')
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
+  // Save a Template's description into its Chart.yaml.
+  // The editor's Save writes the description, and only that: the rest
+  // of Chart.yaml is read from disk, so a page loaded before a pull cannot
+  // write back the version it loaded — every deployment asks for one.
+  // Left out, the description stays as it is; null or '' removes it.
+  router.post('/:chart/chart-meta', route('templates.chart-meta', {
+    params: CHART,
+    body: z.object({ chartMeta: z.object({ description: z.string().nullable().optional() }) }),
+  }, async ({ params: { chart }, body: { chartMeta: { description } } }, { gitopsDir }) => (
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'chart-meta', chart, description }))
+  )))
 
-  // Save Chart.yaml metadata (name, description, version)
-  router.post('/:chart/chart-meta', async (req, res) => {
-    const { chartYamlFile } = chartPaths(req, req.params.chart)
-    const { chartMeta } = req.body
-    try {
-      await fs.writeFile(chartYamlFile, yaml.dump(chartMeta, { lineWidth: -1 }), 'utf-8')
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // Rename a template file
-  router.post('/:chart/:template/rename', async (req, res) => {
-    const { tmplDir } = chartPaths(req, req.params.chart)
-    const { newName } = req.body
-    if (!newName || !NAME_RE.test(newName)) {
-      return res.status(400).json({ error: 'Invalid newName' })
-    }
-    const oldFile = path.join(tmplDir, `${req.params.template}.yaml`)
-    const newFile = path.join(tmplDir, `${newName}.yaml`)
-    try {
-      await fs.rename(oldFile, newFile)
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // --- Template file endpoints ---
-
-  // Get a single template file's content
-  router.get('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req, req.params.chart)
-    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
-    try {
-      const content = await fs.readFile(tmplFile, 'utf-8')
-      res.json({ content })
-    } catch {
-      res.status(404).json({ error: 'Template not found' })
-    }
-  })
-
-  // Save a template file's content
-  router.post('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req, req.params.chart)
-    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
-    const { content } = req.body
-    try {
-      await fs.mkdir(tmplDir, { recursive: true })
-      await fs.writeFile(tmplFile, content, 'utf-8')
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  // Delete a template file
-  router.delete('/:chart/:template', async (req, res) => {
-    const { tmplDir } = chartPaths(req, req.params.chart)
-    const tmplFile = path.join(tmplDir, `${req.params.template}.yaml`)
-    try {
-      await fs.rm(tmplFile, { force: true })
-      res.json({ ok: true })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  return router
+  return declaredRoutes(router)
 }

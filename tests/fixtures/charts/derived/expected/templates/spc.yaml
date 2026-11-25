@@ -1,0 +1,22 @@
+{{- $chunks := chunk 100 ($.Values.spc | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-spc-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: spc
+      rules:
+        {{- range $rows }}
+        - alert: SpcErrors
+          expr: |-
+            rate(spc_errors_total{job="{{ .job }}"}[{{ mul (int64 .freq_num) (add (int64 (dig "spc_point" 3 .)) 2) }}m]) > 0
+          for: {{ mul (int64 .freq_num) 2 }}m
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

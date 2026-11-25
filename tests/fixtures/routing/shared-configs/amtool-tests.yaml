@@ -1,0 +1,7 @@
+# Labels of an alert → the receivers it reaches (see toAlertmanagerConfig).
+- labels: { severity: critical }
+  receivers: [relay-webhook, db-email, other-team]
+- labels: { severity: warning }
+  receivers: [ops-email]
+- labels: { severity: info }
+  receivers: [_drop]

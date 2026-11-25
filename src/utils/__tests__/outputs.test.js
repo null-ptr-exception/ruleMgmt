@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { parseOutputs, PROFILES, ROUTING, profileFor, profileOfObject, profileNames, DEFAULT_TYPE } from '../outputs'
+import { parseOutputs, PROFILES, ROUTING, profileFor, profileOfObject, profileNames, typeNames, canonicalType, isPromQLType, refusesZeroOffset, unknownProfileMark, PROFILE_ANNOTATION_KEYS, DEFAULT_TYPE } from '../outputs'
 
 // config/outputs.json — the format table in #65.
 const good = () => ({
   outputs: {
-    prometheus: { apiVersion: 'monitoring.coreos.com/v1', kind: 'PrometheusRule', validate: 'promtool' },
-    vlogs: { apiVersion: 'operator.victoriametrics.com/v1beta1', kind: 'VMRule', groupFields: { type: 'vlogs' }, validate: 'none' },
+    prometheus2: { apiVersion: 'monitoring.coreos.com/v1', kind: 'PrometheusRule', validate: 'promtool', query: 'promql' },
+    vlogs: { apiVersion: 'operator.victoriametrics.com/v1beta1', kind: 'VMRule', groupFields: { type: 'vlogs' }, validate: 'none', query: 'logsql' },
   },
   routing: { apiVersion: 'monitoring.coreos.com/v1alpha1', kind: 'AlertmanagerConfig' },
 })
@@ -13,8 +13,11 @@ const problems = doc => { try { parseOutputs(doc); return '' } catch (e) { retur
 
 describe('parseOutputs', () => {
   it('accepts the shipped file', () => {
-    expect(profileNames()).toEqual(['prometheus', 'vlogs'])
-    expect(PROFILES.prometheus.kind).toBe('PrometheusRule')
+    expect(profileNames()).toEqual(['prometheus2', 'prometheus3', 'vm', 'vlogs'])
+    expect(typeNames()).toEqual(['prometheus2', 'prometheus3', 'vm', 'vlogs', 'prometheus'])
+    expect(PROFILES.prometheus2.kind).toBe('PrometheusRule')
+    expect(PROFILES.prometheus3).toMatchObject({ kind: 'PrometheusRule', validate: 'promtool3', annotations: { 'alertforge.io/profile': 'prometheus3' } })
+    expect(PROFILE_ANNOTATION_KEYS).toEqual(['alertforge.io/profile'])
   })
 
   it('accepts a well-formed document', () => {
@@ -27,9 +30,44 @@ describe('parseOutputs', () => {
     expect(problems(d)).toMatch(/"outputs.vlogs": unknown key "color"/)
   })
 
-  it('requires the prometheus profile — the one a group with no type gets', () => {
-    const d = good(); delete d.outputs.prometheus
-    expect(problems(d)).toMatch(/"outputs.prometheus" is required/)
+  it('requires the prometheus2 profile — the one a group with no type gets', () => {
+    const d = good(); delete d.outputs.prometheus2
+    expect(problems(d)).toMatch(/"outputs.prometheus2" is required/)
+  })
+
+  it('takes aliases that are no profile and no other profile\'s alias', () => {
+    const d = good(); d.outputs.prometheus2.aliases = ['prometheus']
+    expect(problems(d)).toBe('')
+    d.outputs.vlogs.aliases = ['prometheus', 'vlogs', 'Logs', 'routing']
+    const msg = problems(d)
+    expect(msg).toMatch(/"outputs.vlogs.aliases": "prometheus" is already an alias of prometheus2/)
+    expect(msg).toMatch(/"outputs.vlogs.aliases": "vlogs" is a profile of its own/)
+    expect(msg).toMatch(/"outputs.vlogs.aliases": "Logs" is not a profile name/)
+    expect(msg).toMatch(/"outputs.vlogs.aliases": "routing" is the name of the routing resource/)
+  })
+
+  it('takes groupKeys that are group fields AlertForge writes, in their own order', () => {
+    const d = good(); d.outputs.vlogs.groupKeys = ['labels', 'interval']
+    expect(parseOutputs(d).vlogs.groupKeys).toEqual(['interval', 'labels'])
+    expect(parseOutputs(good()).vlogs.groupKeys).toEqual(['interval', 'limit'])
+    d.outputs.vlogs.groupKeys = ['tenant']
+    expect(problems(d)).toMatch(/"outputs.vlogs.groupKeys" must list group fields AlertForge writes/)
+    const e = good(); e.outputs.vlogs.groupFields = { labels: 'x' }
+    expect(problems(e)).toMatch(/groupFields.labels" is set elsewhere/)
+  })
+
+  it('opens each shipped type its own group fields', () => {
+    expect(PROFILES.prometheus2.groupKeys).toEqual(['interval', 'limit', 'query_offset'])
+    expect(PROFILES.prometheus3.groupKeys).toEqual(['interval', 'limit', 'query_offset', 'labels'])
+    for (const p of [PROFILES.vm, PROFILES.vlogs]) expect(p.groupKeys).toEqual(['interval', 'limit', 'labels', 'eval_offset', 'eval_delay', 'concurrency', 'eval_alignment', 'headers', 'notifier_headers', 'params'])
+  })
+
+  it('takes annotations of non-empty strings under annotation keys', () => {
+    const d = good(); d.outputs.vlogs.annotations = { 'example.com/profile': 'logs' }
+    expect(problems(d)).toBe('')
+    d.outputs.vlogs.annotations = { 'bad key': 'x', 'example.com/empty': '' }
+    expect(problems(d)).toMatch(/"bad key" is not an annotation key/)
+    expect(problems(d)).toMatch(/"outputs.vlogs.annotations.example.com\/empty" must be a non-empty string/)
   })
 
   it('requires apiVersion and kind', () => {
@@ -39,11 +77,20 @@ describe('parseOutputs', () => {
   })
 
   it('requires validate, with no default', () => {
-    const d = good(); delete d.outputs.prometheus.validate
-    expect(problems(d)).toMatch(/"outputs.prometheus.validate" must be one of promtool, vmalert, none/)
-    d.outputs.prometheus.validate = 'kubeconform'
-    expect(problems(d)).toMatch(/must be one of promtool, vmalert, none/)
-    d.outputs.prometheus.validate = 'vmalert'
+    const d = good(); delete d.outputs.prometheus2.validate
+    expect(problems(d)).toMatch(/"outputs.prometheus2.validate" must be one of promtool, promtool3, vmalert, none/)
+    d.outputs.prometheus2.validate = 'kubeconform'
+    expect(problems(d)).toMatch(/must be one of promtool, promtool3, vmalert, none/)
+    d.outputs.prometheus2.validate = 'vmalert'
+    expect(problems(d)).toBe('')
+  })
+
+  it('requires query, with no default', () => {
+    const d = good(); delete d.outputs.vlogs.query
+    expect(problems(d)).toMatch(/"outputs.vlogs.query" must be one of promql, metricsql, logsql — it has no default/)
+    d.outputs.vlogs.query = 'sql'
+    expect(problems(d)).toMatch(/"outputs.vlogs.query" must be one of/)
+    d.outputs.vlogs.query = 'metricsql'
     expect(problems(d)).toBe('')
   })
 
@@ -76,14 +123,44 @@ describe('parseOutputs', () => {
   })
 
   it('lists every problem at once', () => {
-    const d = good(); delete d.outputs.prometheus.kind; d.outputs.vlogs.validate = 'x'
+    const d = good(); delete d.outputs.prometheus2.kind; d.outputs.vlogs.validate = 'x'
     expect(problems(d).split('\n').length).toBe(3)
   })
 })
 
+describe('a profile\'s query language', () => {
+  it('reads PromQL checks from query, not from the checker', () => {
+    expect(PROFILES.prometheus2.query).toBe('promql')
+    expect(PROFILES.prometheus3.query).toBe('promql')
+    expect(isPromQLType('prometheus3')).toBe(true)
+    expect(PROFILES.vlogs.query).toBe('logsql')
+    expect(isPromQLType(undefined)).toBe(true)
+    expect(isPromQLType('vlogs')).toBe(false)
+    expect(PROFILES.vm.query).toBe('metricsql')
+    expect(isPromQLType('vm')).toBe(true)
+    expect(isPromQLType('graphite')).toBe(false)
+  })
+
+  it('refuses offset 0 only where promtool 2 checks the group', () => {
+    expect(refusesZeroOffset(undefined)).toBe(true)
+    expect(refusesZeroOffset('prometheus')).toBe(true)
+    expect(refusesZeroOffset('vlogs')).toBe(false)
+    // Measured: promtool 3.13.5 takes offset 0s.
+    expect(refusesZeroOffset('prometheus3')).toBe(false)
+    // Measured: vmalert takes offset 0s.
+    expect(refusesZeroOffset('vm')).toBe(false)
+  })
+})
+
 describe('finding a profile', () => {
-  it('gives a group with no type the default profile', () => {
+  it('gives a group with no type the default profile, and an alias the profile it names', () => {
+    expect(DEFAULT_TYPE).toBe('prometheus2')
     expect(profileFor(undefined).name).toBe(DEFAULT_TYPE)
+    expect(profileFor('prometheus').name).toBe('prometheus2')
+    expect(canonicalType('prometheus')).toBe('prometheus2')
+    expect(canonicalType(undefined)).toBe('prometheus2')
+    expect(canonicalType('Prometheus3')).toBeNull()
+    expect(canonicalType(false)).toBeNull()
     expect(profileFor('vlogs').kind).toBe('VMRule')
     expect(profileFor('graphite')).toBeNull()
   })
@@ -92,9 +169,20 @@ describe('finding a profile', () => {
     const pr = { apiVersion: 'monitoring.coreos.com/v1', kind: 'PrometheusRule', spec: { groups: [{ name: 'a' }] } }
     const vl = { apiVersion: 'operator.victoriametrics.com/v1beta1', kind: 'VMRule', spec: { groups: [{ name: 'b', type: 'vlogs' }] } }
     const vmNoType = { apiVersion: 'operator.victoriametrics.com/v1beta1', kind: 'VMRule', spec: { groups: [{ name: 'c' }] } }
-    expect(profileOfObject(pr).name).toBe('prometheus')
+    expect(profileOfObject(pr).name).toBe('prometheus2')
+    const marked = v => ({ ...pr, metadata: { annotations: { 'alertforge.io/profile': v, other: 'x' } } })
+    expect(profileOfObject(marked('prometheus3')).name).toBe('prometheus3')
+    // A mark no profile writes is not prometheus3's.
+    expect(profileOfObject(marked('prometheus9')).name).toBe('prometheus2')
+    expect(unknownProfileMark(marked('prometheus9'))).toEqual({ key: 'alertforge.io/profile', value: 'prometheus9' })
+    expect(unknownProfileMark(marked('prometheus3'))).toBeNull()
+    expect(unknownProfileMark(pr)).toBeNull()
     expect(profileOfObject(vl).name).toBe('vlogs')
-    expect(profileOfObject(vmNoType)).toBeNull()
+    // vmalert reads a group with no type as `type: prometheus`: metric rules.
+    expect(profileOfObject(vmNoType).name).toBe('vm')
+    const vm = { ...vl, spec: { groups: [{ name: 'd', type: 'prometheus' }] } }
+    expect(profileOfObject(vm).name).toBe('vm')
+    expect(profileOfObject({ ...vl, spec: { groups: [{ name: 'e', type: 'graphite' }] } })).toBeNull()
     expect(profileOfObject({ kind: 'ConfigMap' })).toBeNull()
     // Not a rule object: no checker (promtool, vmalert) runs on it.
     expect(profileOfObject({ ...ROUTING, spec: { route: { receiver: '_drop' } } })).toBeNull()

@@ -1,0 +1,7 @@
+# Nothing to tell the rows apart by but a number: no label.
+columns:
+  threshold: { type: number, required: true }
+
+rules:
+  - alert: MemHigh
+    expr: mem_used_ratio{env="${env}"} > ${threshold}

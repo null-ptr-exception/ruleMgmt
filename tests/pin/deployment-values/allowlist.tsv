@@ -1,0 +1,155 @@
+# Cells where an entry point disagrees with Helm today, each with why.
+# category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
+# Edited by hand: a fix removes its line; a new disagreement needs one.
+id	entry	kind	category	reason
+integer-col-float	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+string-col-bool	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+enum-miss	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+required-miss	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+required-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+required-empty	save-json	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+required-empty	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+duration-number	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+duration-bad	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+row-negative	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+row-negative	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+row-negative	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+group-not-list	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+common-not-map	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+common-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+common-team-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+y11-yes	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+y11-off-enum	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+dup-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-key	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-key	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+comment-only	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+comment-only	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+empty-file	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+empty-file	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+null-doc	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+null-doc	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+common-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+common-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+common-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+row-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+row-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+row-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+derived-overflow	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+derived-overflow	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+derived-overflow	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+unreadable-dir	save-text	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
+unreadable-dir	common-plan	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
+unreadable-dir	commit	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
+tpl-common-zero	common-plan	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+tpl-common-zero	common-apply	accepts-what-helm-fails	policy	making a _common moves values as they are and checks that Helm renders the same before and after; it does not judge values that already do not deploy
+tpl-common-zero	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+tpl-null-merge	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+tpl-null-merge	gen-rules	accepts-what-helm-fails	out-of-scope	gen-rules checks the Template's own values; the null that fails is the deployment's
+stack-x-null	migration-preview	accepts-what-helm-fails	bug	no issue yet: the migration does not check the values it lists or writes the way a save does
+stack-x-null	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not check the values it lists or writes the way a save does
+layer-common-zero	save-text	accepts-what-helm-fails	bug	no issue yet: the save's derived-value check does not count the Template's or the _common's values
+layer-common-zero	migration-preview	accepts-what-helm-fails	bug	no issue yet: the migration does not check the values it lists or writes the way a save does
+layer-common-zero	migration-apply	accepts-what-helm-fails	bug	no issue yet: the migration does not check the values it lists or writes the way a save does
+layer-group-map	save-text	refuses-what-helm-renders	policy	a _common group that is not a list of rows is refused: every deployment that does not set the group fails
+flat-number-text	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
+flat-not-yaml	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
+flat-empty	save-text	refuses-what-helm-renders	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
+flat-wrapped	migration-apply	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
+flat-wrapped	commit	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
+flat-wrapped	preview	accepts-what-helm-fails	out-of-scope	legacy flat <name>-values.yaml: not supported, folder deployments are
+common-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+common-empty	save-json	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+common-empty	sync	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+common-wrong-type	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+y11-octal-string	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+dup-key-block	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-key-block	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-key-block	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-group	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-group	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-group	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-wrapper	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-wrapper	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-wrapper	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-common-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-common-key	sync	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+dup-common-key	common-plan	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+cond-no	migration-apply	accepts-what-helm-fails	bug	no issue yet: a dependency's condition written no is read as text, not false: AlertForge shows rows Helm does not render
+cond-true	common-plan	refuses-what-helm-renders	out-of-scope	a dependency with a condition is not re-attached to a new _common (the _common plan is not part of the values checks)
+stack-required-empty	save-text	refuses-what-helm-renders	policy	a required column must be filled: the editor's rule, which the Template's schema does not enforce
+layer-dup-key	save-text	refuses-what-helm-renders	policy	a duplicate key is refused as not valid YAML (Helm takes the last one)
+layer-link-outside	commit	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-link-outside	preview	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-link-outside	check-deployment	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-link-outside	check-repo	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+y11-octal-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-octal-010	check-repo	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it), naming the value and what to write (#202); Commit lists it
+y11-octal-010	sync	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-underscore	save-text	refuses-what-helm-renders	policy	Helm reads 1_000 as 1000 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-underscore	check-repo	refuses-what-helm-renders	policy	Helm reads 1_000 as 1000 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it), naming the value and what to write (#202); Commit lists it
+y11-underscore	sync	refuses-what-helm-renders	policy	Helm reads 1_000 as 1000 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-0_7	save-text	refuses-what-helm-renders	policy	Helm reads 0_7 as 7 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-0_7	check-repo	refuses-what-helm-renders	policy	Helm reads 0_7 as 7 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it), naming the value and what to write (#202); Commit lists it
+y11-0_7	sync	refuses-what-helm-renders	policy	Helm reads 0_7 as 7 (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it, naming the value and what to write (#202); Commit lists it
+y11-key	save-text	refuses-what-helm-renders	policy	Helm reads the key y as "true" (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it (#202); Commit lists it
+y11-key	check-repo	refuses-what-helm-renders	policy	Helm reads the key y as "true" (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it) (#202); Commit lists it
+y11-key	sync	refuses-what-helm-renders	policy	Helm reads the key y as "true" (YAML 1.1): what is deployed is not what was written, so a save or sync refuses it (#202); Commit lists it
+unreadable-dir	sync	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo
+link-outside	save-text	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	sync	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	commit	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-x-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
+stack-x-010	check-repo	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so check-repo refuses it (Commit lists it) (#202)
+layer-link-outside	save-text	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-unwrapped	save-text	refuses-what-helm-renders	policy	values not under the chart's name reach no Template: Helm renders only the Template's own, so a save refuses them (#203)
+layer-unwrapped	migration-apply	refuses-what-helm-renders	policy	values not under the chart's name reach no Template: Helm renders only the Template's own, and writing them under the name would change what deploys, so a breaking change waits until the file is fixed (#203)
+layer-unwrapped	check-repo	refuses-what-helm-renders	policy	a _common's values not under the chart's name reach no Template: Helm renders the deployments below without them, so check-repo refuses the _common's file as its save does (#203)
+layer-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
+layer-010	check-repo	refuses-what-helm-renders	policy	Helm reads a _common's 010 as 8 (YAML 1.1): what is deployed is not what was written, so check-repo refuses the _common's file as it does a deployment's own (#202)
+stack-condition-yes	check-repo	refuses-what-helm-renders	policy	Helm reads a _common's enabled: yes as true (YAML 1.1) and renders the dependency: check-repo refuses the _common's file, the same rule as for a deployment's own values: yes is not true to the editor (#202)
+flat-010	save-text	refuses-what-helm-renders	policy	Helm reads 010 as 8 (YAML 1.1): what is deployed is not what was written, so a save refuses it (#202)
+unreadable-dir	migration-apply	refuses-what-helm-renders	policy	a values.yaml that is a folder is named and refused: Helm renders the Template's own values and says nothing, so what is deployed is not in the repo
+unreadable-dir	check-deployment	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
+unreadable-dir	check-repo	refuses-what-helm-renders	policy	a file that cannot be read is said and refused, never taken as absent (Helm ignores a values.yaml that is a folder)
+link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	common-plan	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	check-deployment	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	check-repo	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-link-outside	migration-apply	refuses-what-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-chart-null	migration-preview	accepts-what-helm-fails	bug	no issue yet: a migration does not stop for, or list, a _common above whose chart key is null (Helm stops on it for every deployment below); Commit refuses it
+layer-chart-null	migration-apply	accepts-what-helm-fails	bug	no issue yet: a migration does not stop for, or list, a _common above whose chart key is null (Helm stops on it for every deployment below); Commit refuses it
+tpl-common-partial	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+tpl-common-zero	init	accepts-what-helm-fails	policy	a new deployment is made to be filled in: a required value nothing gives yet (Helm stops on it) is asked for when it is saved, and by Commit
+layer-common-partial	init	accepts-what-helm-fails	policy	a new deployment is made to be filled in: a required value nothing gives yet (Helm stops on it) is asked for when it is saved, and by Commit
+tpl-common-partial	init	accepts-what-helm-fails	policy	a new deployment is made to be filled in: a required value nothing gives yet (Helm stops on it) is asked for when it is saved, and by Commit
+group-null	common-plan	refuses-what-helm-renders	policy	a null moved onto a new _common would deploy differently on Helm 3.15 and 3.19, and its save and Commit would refuse it: the plan refuses it first
+once-group-null	common-plan	refuses-what-helm-renders	policy	a null moved onto a new _common would deploy differently on Helm 3.15 and 3.19, and its save and Commit would refuse it: the plan refuses it first
+layer-cannot-tell	save-text	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell	migration-apply	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell	commit	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell	check-repo	refuses-what-helm-renders	policy	check-repo renders a deployment on a _common AlertForge cannot tell Helm's reading of, and refuses it as Commit does, as it refuses such values of the deployment's own
+common-linked	common-plan	refuses-what-helm-renders	policy	a _common reached through a hand-made link is not supported: making a _common there is refused
+common-linked	save-text	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	sync	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	migration-apply	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	commit	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	preview	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	check-deployment	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	check-repo	refuses-what-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+stack-own-null	migration-preview	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+stack-own-null	migration-apply	accepts-what-helm-fails	policy	a Template change does not stop for a problem the deployment had before it: the preview lists it, and the change migrates the values as they are (#176)
+layer-cannot-tell-rows	save-text	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell-rows	migration-apply	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell-rows	commit	refuses-what-helm-renders	policy	the editor and Commit refuse values AlertForge cannot tell Helm's reading of: written plainly, they are read as Helm reads them
+layer-cannot-tell-rows	check-repo	refuses-what-helm-renders	policy	check-repo renders a deployment on a _common AlertForge cannot tell Helm's reading of, and refuses it as Commit does, as it refuses such values of the deployment's own
+stack-tpl-chart-link-outside	save-text	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-outside	commit	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-outside	preview	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-outside	check-deployment	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-outside	check-repo	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	save-text	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	commit	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	preview	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	check-deployment	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo
+stack-tpl-chart-link-git	check-repo	refuses-what-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo

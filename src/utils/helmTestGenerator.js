@@ -23,14 +23,25 @@
  *
  * A hand-written (raw) rule keeps its place in the order but is not asserted
  * on: its YAML is the rule owner's, not the converter's.
+ *
+ * A group whose rules are too large for one object is split into several
+ * (shardRules in crConverter.js); the suite expects as many documents as the
+ * generator packs, each asserted on its own rules and name. One row is one
+ * row chunk, so every shard is one document.
  */
 
+import { parseDerived, evalDerived } from './derived.js'
 import yaml from 'js-yaml'
-import { groupGenDef } from './rulesFile.js'
-import { normalizeRules } from './templateGenerator.js'
+import { groupGenDef, groupName, modelToSchema } from './rulesFile.js'
+import { createHash } from 'crypto'
+import { normalizeRules, groupShardSizes, rowIdentityColumns, ROW_IDENTITY_LABEL } from './templateGenerator.js'
 import { profileFor } from './outputs.js'
-import { needsQuote } from './yamlScalar.js'
+import { GROUP_FIELD_NAMES, renderedGroupValue } from './groupFields.js'
+import { needsQuote, keyScalar, readsAsNonStringInYaml11, KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
 import { selectorLabelsFor } from './selectorContract.js'
+
+// The release every test renders as, so object names can be asserted.
+const RELEASE = 'unittest'
 
 const VAR_RE = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 
@@ -53,9 +64,9 @@ export function goFloat(value) {
  * ruleModel.js): an integer literal is a Go int and prints as written; any
  * other number is a float64 like a value.
  */
+// A number column renders through toJson, as JSON writes it: as JavaScript does.
 function defaultText(value) {
-  if (typeof value !== 'number') return String(value)
-  return Number.isInteger(value) ? String(value) : goFloat(value)
+  return String(value)
 }
 
 
@@ -84,6 +95,8 @@ function testValues(columns) {
     if (col.enum?.length) values[name] = col.enum[0]
     else if (col.type === 'number' || col.type === 'integer') values[name] = next++
     else if (col.type === 'boolean') values[name] = true
+    // A distinct duration the schema's pattern takes (#117).
+    else if (col.type === 'duration') values[name] = `${next++}m`
     else values[name] = `test-${name.replace(/_/g, '-')}`
   }
   return values
@@ -105,7 +118,46 @@ function labelValue(entry, text) {
  */
 const blockValue = (value, text) => substitute(String(value ?? '').trim(), text)
 
-function ruleAsserts(group, rules, groupText) {
+/**
+ * A label or annotation map as the suite expects it. The generator writes a
+ * key such as `true` or `123` bare, since Kubernetes reads it back as that
+ * text; helm-unittest reads it as a boolean or number key, which a quoted
+ * key in the suite does not equal. Such a key goes into the suite under a
+ * placeholder that the dump writes bare, and is put back bare afterwards.
+ */
+const BARE_KEY = /__alertforge_bare_key_(\d+)__/g
+function expectedMap(entries, bareKeys) {
+  return Object.fromEntries(entries.map(([key, value]) => {
+    if (!readsAsNonStringInYaml11(key) || keyScalar(key) !== key) return [key, value]
+    bareKeys.push(key)
+    return [`__alertforge_bare_key_${bareKeys.length - 1}__`, value]
+  }))
+}
+
+/**
+ * The row identity label's value for these cells, worked out here rather
+ * than read from the template: Go's JSON of the identifying cells the row
+ * sets (keys sorted, no spaces, <, > and & escaped, as Sprig's toJson writes
+ * it), its sha256, the first 16 hex digits.
+ *
+ * JSON.stringify and Go's encoding/json write every string Helm can read the
+ * same way once <, >, &, U+2028 and U+2029 are escaped as Go does: control
+ * characters as \b, \f, \n, \r, \t or \u00XX in both (Go since 1.22; Helm
+ * 3.15.4 is built with Go 1.22.6, 3.19.0 with 1.24.7), everything else as
+ * it is. The two places they would differ — a lone surrogate, bytes that are
+ * not UTF-8 — cannot reach the template: Helm refuses such a values.yaml
+ * ("invalid Unicode character escape code", "invalid leading UTF-8 octet").
+ */
+export function rowIdentityValue(columns, cells) {
+  const str = s => JSON.stringify(s).replace(/[<>&\u2028\u2029]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+  const json = `{${[...columns].sort().filter(c => Object.hasOwn(cells, c)).map(c => {
+    const v = cells[c]
+    return `${str(c)}:${typeof v === 'string' ? str(v) : JSON.stringify(v)}`
+  }).join(',')}}`
+  return createHash('sha256').update(json).digest('hex').slice(0, 16)
+}
+
+function ruleAsserts(group, rules, groupText, bareKeys, identity = null) {
   const asserts = []
   rules.forEach((rule, i) => {
     if (rule.raw) return
@@ -115,7 +167,7 @@ function ruleAsserts(group, rules, groupText) {
       asserts.push({ equal: { path: `${path}.record`, value: rule.record } })
       asserts.push({ equal: { path: `${path}.expr`, value: blockValue(rule.expr, text) } })
       if (rule.labels?.length) {
-        asserts.push({ equal: { path: `${path}.labels`, value: Object.fromEntries(rule.labels.map(e => [e.key, labelValue(e, text)])) } })
+        asserts.push({ equal: { path: `${path}.labels`, value: expectedMap(rule.labels.map(e => [e.key, labelValue(e, text)]), bareKeys) } })
       }
       return
     }
@@ -125,9 +177,10 @@ function ruleAsserts(group, rules, groupText) {
       ? { equal: { path: `${path}.for`, value: substitute(rule.for, text) } }
       : { notExists: { path: `${path}.for` } })
     for (const field of ['labels', 'annotations']) {
-      if (!rule[field]?.length) continue
+      const extra = field === 'labels' && identity ? [[ROW_IDENTITY_LABEL, identity]] : []
+      if (!rule[field]?.length && !extra.length) continue
       const value = field === 'annotations' ? e => blockValue(e.value, text) : e => labelValue(e, text)
-      const expected = Object.fromEntries(rule[field].map(e => [e.key, value(e)]))
+      const expected = expectedMap([...(rule[field] || []).map(e => [e.key, value(e)]), ...extra], bareKeys)
       asserts.push({ equal: { path: `${path}.${field}`, value: expected } })
     }
   })
@@ -155,40 +208,89 @@ function omitDefaults(values, columns) {
   return Object.fromEntries(Object.entries(values).filter(([name]) => !omittable(columns[name])))
 }
 
+// An empty map or list is not written, so it is asserted absent.
+const isEmpty = v => v !== null && typeof v === 'object' && Object.keys(v).length === 0
+function groupFieldAsserts(group) {
+  return GROUP_FIELD_NAMES.filter(k => group[k] !== undefined && group[k] !== '').map(k => {
+    const value = renderedGroupValue(k, group[k])
+    return isEmpty(value)
+      ? { notExists: { path: `spec.groups[0].${k}` } }
+      : { equal: { path: `spec.groups[0].${k}`, value } }
+  })
+}
+
 export function generateHelmUnittestSuite(model) {
-  const groups = Object.entries(model?.groups || {}).filter(([, g]) => !g.custom)
+  const schema = model?.groups ? modelToSchema(model) : null
+  // A group with no rules (`rules: []`) generates no template, so there is
+  // nothing to render or to test.
+  const groups = Object.entries(model?.groups || {})
+    .filter(([, g]) => !g.custom)
+    .map(([key, g]) => [key, g, groupShardSizes(key, groupGenDef(g, model.common), schema)])
+    .filter(([, , sizes]) => sizes.length > 0)
   if (!groups.length) return ''
 
   const commonColumns = model.common?.columns || {}
   const commonValues = testValues(commonColumns)
   const tests = []
+  const bareKeys = []
 
-  for (const [key, group] of groups) {
+  for (const [key, group, sizes] of groups) {
     const template = `templates/${key.replace(/_/g, '-')}.yaml`
-    const rules = normalizeRules(key, groupGenDef(group))
+    const genDef = groupGenDef(group, model.common)
+    const rules = normalizeRules(key, genDef)
+    // The row identity label (when the chart has it on), for a row's cells.
+    const identityColumns = genDef.rowIdentity && !group.once ? rowIdentityColumns(genDef) : []
+    const identityOf = cells => (identityColumns.length ? rowIdentityValue(identityColumns, cells) : null)
+    // The objects the group renders as, each with its slice of the rules.
+    const base = key.replace(/_/g, '-')
+    let start = 0
+    const docs = sizes.map((count, d) => {
+      const doc = { rules: rules.slice(start, start + count), name: `${RELEASE}-${base}-${d + 1}${group.once ? '' : '-1'}` }
+      start += count
+      return doc
+    })
+    const perDocument = asserts => docs.flatMap((doc, d) => asserts(doc).map(a => ({ ...a, documentIndex: d })))
     const ownColumns = group.columns || {}
     const ownValues = testValues(ownColumns)
     const text = Object.fromEntries(
       Object.entries({ ...commonValues, ...ownValues })
-        .map(([name, v]) => [name, typeof v === 'number' ? goFloat(v) : String(v)])
+        .map(([name, v]) => [name, String(v)])
     )
+    // A derived value (#118) renders as what it computes to for these cells.
+    const withDerived = (into, cells) => {
+      for (const [name, d] of Object.entries(group.derived || {})) {
+        const out = evalDerived(parseDerived(d.expr), cells)
+        if (out.value !== undefined) into[name] = `${out.value}${d.unit || ''}`
+      }
+      return into
+    }
+    withDerived(text, { ...commonValues, ...ownValues })
 
     // The resource is the group's output profile (#65): a vlogs group is a
-    // VMRule with `type: vlogs`, and a suite expecting PrometheusRule would
-    // fail a correct chart.
+    // VMRule with `type: vlogs`, a prometheus3 group a PrometheusRule with its
+    // annotation, and a suite expecting PrometheusRule alone would fail a
+    // correct chart or pass a wrong one.
     const profile = profileFor(group.type)
     tests.push({
       it: group.once ? `renders ${key} once, with no rows` : `renders ${key} with every column set`,
       template,
+      release: { name: RELEASE },
       set: setFor(key, commonValues, ownValues, group.once),
       asserts: [
-        { hasDocuments: { count: 1 } },
-        { isKind: { of: profile.kind } },
-        { isAPIVersion: { of: profile.apiVersion } },
-        { equal: { path: 'spec.groups[0].name', value: key.replace(/_/g, '-') } },
-        ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
-        { lengthEqual: { path: 'spec.groups[0].rules', count: rules.length } },
-        ...ruleAsserts(group, rules, text),
+        { hasDocuments: { count: docs.length } },
+        ...perDocument(doc => [
+          { isKind: { of: profile.kind } },
+          { isAPIVersion: { of: profile.apiVersion } },
+          { equal: { path: 'metadata.name', value: doc.name } },
+          { equal: { path: 'spec.groups[0].name', value: groupName(key, group) } },
+          ...Object.entries(profile.groupFields).map(([k, v]) => ({ equal: { path: `spec.groups[0].${k}`, value: v } })),
+          // The template owner's group fields (#182), as the evaluator reads them.
+          ...groupFieldAsserts(group),
+          // The mark a profile is told apart by (prometheus3's annotation).
+          ...Object.entries(profile.annotations).map(([k, v]) => ({ equal: { path: `metadata.annotations["${k}"]`, value: v } })),
+          { lengthEqual: { path: 'spec.groups[0].rules', count: doc.rules.length } },
+          ...ruleAsserts(group, doc.rules, text, bareKeys, identityOf({ ...commonValues, ...ownValues })),
+        ]),
       ],
     })
 
@@ -198,17 +300,25 @@ export function generateHelmUnittestSuite(model) {
 
     const withDefaults = { ...text }
     for (const name of defaulted) withDefaults[name] = defaultText(allColumns[name].default)
+    withDerived(withDefaults, { ...commonValues, ...ownValues, ...Object.fromEntries(defaulted.map(n => [n, allColumns[n].default])) })
     tests.push({
       it: `renders ${key} with defaults for ${defaulted.join(', ')}`,
       template,
+      release: { name: RELEASE },
       set: setFor(key, omitDefaults(commonValues, commonColumns), omitDefaults(ownValues, ownColumns), group.once),
-      asserts: ruleAsserts(group, rules, withDefaults),
+      asserts: perDocument(doc => ruleAsserts(group, doc.rules, withDefaults, bareKeys,
+        identityOf({ ...omitDefaults(commonValues, commonColumns), ...omitDefaults(ownValues, ownColumns) }))),
     })
   }
 
-  return yaml.dump({
+  // helm-unittest v0.8.2 reads a bare 0_7 or 08 in the suite as a number
+  // (yes, y and on stay text), so an expected alert name 0_7 written bare
+  // would be the number 7. Quoting everything YAML 1.1 would misread covers
+  // those and does no harm to the rest.
+  const suite = yaml.dump({
     suite: 'generated alert rule tests',
     templates: groups.map(([key]) => `templates/${key.replace(/_/g, '-')}.yaml`),
     tests,
-  }, { lineWidth: -1, noRefs: true })
+  }, { lineWidth: -1, noRefs: true, schema: KUBERNETES_DUMP_SCHEMA })
+  return suite.replace(BARE_KEY, (_, i) => bareKeys[Number(i)])
 }

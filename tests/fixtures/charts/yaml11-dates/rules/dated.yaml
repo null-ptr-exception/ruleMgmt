@@ -1,0 +1,13 @@
+# Text that YAML 1.1 has other types for: a timestamp, a sexagesimal number,
+# "=". Kubernetes keeps each as the text, but helm-unittest and js-yaml read
+# a bare 2026-11-22 as a date, and a YAML 1.1 reader takes 1:30 for 90 — so
+# the generator quotes them: a group name, an alert name, label values.
+name: "2026-11-22"
+columns:
+  db: { type: string, required: true }
+
+rules:
+  - alert: "2026-11-22 10:00:00"
+    expr: up{db="${db}"} == 0
+    labels: { since: "1:30", op: "=", day: "2026-11-22" }
+    annotations: { at: "2026-11-22T10:00:00Z" }

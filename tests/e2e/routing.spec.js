@@ -1,7 +1,18 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import yaml from 'js-yaml'
 import { removeChart } from './charts.js'
+
+
+// A choice in the config dialog, picked by its radio and seen
+// picked: a click that is lost fails here at once, not later at a field
+// that never shows.
+async function choose(scope, name) {
+  const option = scope.getByRole('radio', { name })
+  await option.check()
+  await expect(option).toBeChecked()
+}
 
 // Routing page (#93): routing.yaml (#92) edited as a table — labels, the
 // configs a cell can notify, and the cells — saved through #92's endpoints
@@ -163,13 +174,99 @@ test('a webhook URL can live in a Secret, with a reminder that it must exist', a
   await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
   await openRouting(page)
   await addConfig(page, 'pager', async dialog => {
-    await dialog.getByText('URL in a Secret').click()
+    await choose(dialog, 'URL in a Secret')
     await expect(dialog.getByText(/Make sure the Secret exists in this deployment's namespace/)).toBeVisible()
-    await dialog.getByLabel('Secret name').fill('pager')
-    await dialog.getByLabel('Secret key').fill('url')
+    await expect(dialog.getByLabel('URL Secret name')).toBeVisible()
+    await dialog.getByLabel('URL Secret name').fill('pager')
+    await dialog.getByLabel('URL Secret key').fill('url')
     await dialog.getByRole('button', { name: 'Add' }).click()
   })
   await expect(page.getByTestId('notification-configs')).toContainText('Secret pager / url')
+})
+
+// #171: what Alertmanager or the operator would refuse, dropping every
+// notification of the deployment, is refused in the dialog, saying why.
+test('a config Alertmanager would refuse cannot be added, and says why', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'relay', async dialog => {
+    await dialog.getByLabel('Webhook URL').fill('http:alert-relay.monitoring.svc')
+    await expect(dialog.getByTestId('config-problems')).toContainText('url must be an http:// or https:// address')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await choose(dialog, 'URL in a Secret')
+    await expect(dialog.getByLabel('URL Secret name')).toBeVisible()
+    await dialog.getByLabel('URL Secret name').fill('My Secret')
+    await dialog.getByLabel('URL Secret key').fill('url')
+    await expect(dialog.getByTestId('config-problems')).toContainText('name must be a Kubernetes name')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Config type').click()
+    await page.locator('.ant-select-item-option').filter({ hasText: /^email$/ }).click()
+    await dialog.getByLabel('Email address').fill('db-team')
+    await expect(dialog.getByTestId('config-problems')).toContainText('to must be an e-mail address')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Email address').fill('db-team@example.com')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await expect(page.getByTestId('notification-configs')).toContainText('db-team@example.com')
+})
+
+// Alertmanager reads a webhook timeout without d, w or y: 1d would stop the
+// whole Alertmanager configuration from loading.
+test('a webhook timeout in days or over 1h cannot be added, and says why', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'relay', async dialog => {
+    await dialog.getByLabel('Webhook URL').fill('http://alert-relay.monitoring.svc:8080')
+    await dialog.getByText('More settings').click()
+    await dialog.getByLabel('Timeout').fill('1d')
+    await expect(dialog.getByTestId('config-problems')).toContainText('timeout "1d" uses d, w or y, which Alertmanager does not read — write it in h, m, s or ms, at most 1h')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Timeout').fill('24h')
+    await expect(dialog.getByTestId('config-problems')).toContainText('timeout "24h" is longer than 1h')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Timeout').fill('30s')
+    await expect(dialog.getByTestId('config-problems')).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await expect(page.getByTestId('notification-configs')).toContainText('relay')
+})
+
+// Alertmanager takes a group with no members and sends to nobody: added,
+// saved, and said — in the dialog, on the save and on the page.
+test('a config that notifies nobody is added and saved, with a warning', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'nobody', async dialog => {
+    await dialog.getByLabel('Config type').click()
+    await page.locator('.ant-select-item-option').filter({ hasText: /^email$/ }).click()
+    await dialog.getByLabel('Email address').fill('undisclosed-recipients:;')
+    await expect(dialog.getByTestId('config-warnings')).toContainText('is a group with no members — this config notifies nobody')
+    await expect(dialog.getByTestId('config-problems')).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await expect(page.getByTestId('notification-configs')).toContainText('undisclosed-recipients:;')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByTestId('routing-warnings')).toContainText('configs.nobody: to "undisclosed-recipients:;" is a group with no members — this config notifies nobody', { timeout: 8000 })
+  const saved = await (await request.get(routingUrl(FOLDER))).json()
+  expect(saved.text).toContain('undisclosed-recipients:;')
+})
+
+// Alertmanager hands a server of the config's own the platform's login:
+// taken, and said.
+test('an SMTP server of its own without its own login is added, with a warning whose login it gets', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { labels: { severity: ['critical'] }, configs: {}, cells: [] } } })
+  await openRouting(page)
+  await addConfig(page, 'relay-mail', async dialog => {
+    await dialog.getByLabel('Config type').click()
+    await page.locator('.ant-select-item-option').filter({ hasText: /^email$/ }).click()
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByText('More settings').click()
+    await dialog.getByLabel('SMTP server').fill('relay.example.com:25')
+    await expect(dialog.getByTestId('config-warnings')).toContainText('smarthost relay.example.com:25 has no login of its own — Alertmanager fills in the platform\'s global SMTP user name and password (and its identity and secret, where set), so they are used with this server')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByTestId('routing-warnings')).toContainText('smarthost relay.example.com:25 has no login of its own', { timeout: 8000 })
 })
 
 test('unsaved changes are confirmed before switching deployments', async ({ page }) => {
@@ -196,9 +293,10 @@ test('Remove routing deletes it, after asking', async ({ page, request }) => {
   expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
 })
 
-// #180: the source's routing is removed even when a target cannot be
-// updated, and the page says which target was left behind.
-test('Remove routing names a sync target it could not update', async ({ page, request }) => {
+// The source and its sync targets are written together, or none of them:
+// a target that cannot be updated stops the removal, and the page names
+// the file.
+test('Remove routing is refused, naming the sync target\'s file it could not update, and removes nothing', async ({ page, request }) => {
   test.skip(typeof process.getuid === 'function' && process.getuid() === 0, 'chmod does not stop root')
   const routing = { labels: { severity: ['critical'] }, configs: {}, cells: [] }
   expect((await request.put(routingUrl(FOLDER), { data: { routing } })).ok()).toBeTruthy()
@@ -211,9 +309,9 @@ test('Remove routing names a sync target it could not update', async ({ page, re
     await page.getByRole('button', { name: 'Remove routing' }).click()
     await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
 
-    await expect(page.getByText(`Routing removed, but this sync target could not be updated and may not match the source: ${OTHER} (EACCES)`)).toBeVisible({ timeout: 8000 })
+    await expect(page.locator('.ant-modal-confirm-error')).toContainText(`${OTHER}/routing.yaml cannot be removed: permission denied`, { timeout: 8000 })
     await expect(page.getByText('Routing removed', { exact: true })).toHaveCount(0)
-    expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
+    expect((await request.get(routingUrl(FOLDER))).status()).toBe(200)
     expect((await request.get(routingUrl(OTHER))).status()).toBe(200)
   } finally {
     await fs.chmod(target, 0o755)
@@ -246,6 +344,29 @@ test('a synced target is read-only', async ({ page, request }) => {
   await expect(page.getByRole('button', { name: 'Remove routing' })).toBeDisabled()
 })
 
+// #179: a sync target's Save is off, and its source may not be behind at all:
+// the page names the source and points to Regenerate in the Git panel.
+test('a synced target whose resource is behind points to its source and Regenerate', async ({ page, request }) => {
+  const routing = {
+    labels: { severity: ['critical'] },
+    configs: { oncall: { type: 'email', to: 'oncall@example.com' } },
+    cells: [{ match: { severity: 'critical' }, configs: ['oncall'] }],
+  }
+  expect((await request.put(routingUrl(FOLDER), { data: { routing } })).ok()).toBeTruthy()
+  expect((await request.post('/api/v2/sync', { data: { source: FOLDER, target: OTHER } })).ok()).toBeTruthy()
+  const cr = path.join(process.env.GITOPS_DIR || 'gitops', OTHER, 'templates', 'alertmanagerconfig.yaml')
+  await fs.writeFile(cr, `# edited by hand\n${await fs.readFile(cr, 'utf8')}`)
+
+  await openRouting(page, OTHER)
+  await expect(page.getByText(`Synced from ${FOLDER}`)).toBeVisible({ timeout: 8000 })
+  await expect(page.getByTestId('routing-stale')).toContainText('use Regenerate there')
+  await expect(page.getByTestId('routing-stale-source')).toHaveText(FOLDER)
+  await page.getByTestId('routing-stale-source').click()
+  await expect(page.getByText(`Synced from ${FOLDER}`)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Remove routing' })).toBeEnabled({ timeout: 8000 })
+  await expect(page.getByTestId('routing-stale')).toHaveCount(0)
+})
+
 // #158: only a routing.yaml that passes the checks is edited here. One that
 // fails — a hand edit, a merge, a sync — is listed, not drawn, and fixed by hand.
 const failing = [
@@ -257,14 +378,21 @@ const failing = [
   ['defaults and cells of the wrong shape', 'labels:\n  severity: [critical]\ndefaults: 5\nconfigs:\n  mail: {type: email, to: a@example.com}\ncells:\n  old: {match: {severity: critical}, configs: [mail]}\n'],
   ['a timing value that is not a duration', 'labels:\n  severity: [critical]\ndefaults: {groupWait: {a: 1}}\nconfigs: {}\ncells: []\n'],
   ['a config type written as a list', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: [email], to: a@example.com}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n'],
+  // #159: a new e-mail field written wrong by hand.
+  ['an SMTP server with no port', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, smarthost: smtp.example.com, authUsername: u, authPassword: {name: s, key: p}}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'smarthost must be host:port'],
+  ['a mail header carrying a credential', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, headers: {Authorization: Bearer abcdef1234567890abcdef12}}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'a credential does not belong in routing.yaml'],
+  ['a sender with a space before it', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com, from: " af@example.com"}\ncells:\n  - {match: {severity: critical}, configs: [mail]}\n', 'from must have no spaces around it'],
+  // #160: a webhook with two kinds of authentication, by hand.
+  ['a webhook with both authorization and basicAuth', 'labels:\n  severity: [critical]\nconfigs:\n  hook:\n    type: webhook\n    url: https://hooks.example.com/a\n    authorization: {credentials: {name: s, key: t}}\n    basicAuth: {username: {name: s, key: u}, password: {name: s, key: p}}\ncells:\n  - {match: {severity: critical}, configs: [hook]}\n', 'either authorization or basicAuth, not both'],
   ['a cell that names a label the table does not have', 'labels:\n  severity: [critical]\nconfigs:\n  mail: {type: email, to: a@example.com}\ncells:\n  - {match: {severity: critical, extra: z}, configs: [mail]}\n'],
 ]
-for (const [what, text] of failing) {
+for (const [what, text, says] of failing) {
   test(`a routing.yaml with ${what} is listed, not edited, and stays as written`, async ({ page }) => {
     const file = path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml')
     await fs.writeFile(file, text)
     await openRouting(page, FOLDER)
     await expect(page.getByTestId('routing-problems')).toContainText('fix it by hand', { timeout: 8000 })
+    if (says) await expect(page.getByTestId('routing-problems')).toContainText(says)
     await expect(page.getByTestId('routes-matrix')).toHaveCount(0)
     await expect(page.getByTestId('notification-configs')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0)
@@ -279,6 +407,18 @@ test('a routing.yaml that fails the checks can still be removed', async ({ page,
   await fs.writeFile(file, 'labels: [critical\n')
   await openRouting(page, FOLDER)
   await page.getByRole('button', { name: 'Remove routing' }).click()
+  await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
+  await expect(page.getByRole('button', { name: 'Set up routing' })).toBeVisible({ timeout: 8000 })
+  expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
+})
+
+test('an AlertmanagerConfig left without its routing.yaml is named, and can be removed', async ({ page, request }) => {
+  const routing = { labels: { severity: ['critical'] }, configs: {}, cells: [] }
+  expect((await request.put(routingUrl(FOLDER), { data: { routing } })).ok()).toBeTruthy()
+  await fs.rm(path.join(process.env.GITOPS_DIR || 'gitops', FOLDER, 'routing.yaml'))
+  await openRouting(page, FOLDER)
+  await expect(page.getByTestId('routing-error')).toContainText('templates/alertmanagerconfig.yaml is there without a routing.yaml', { timeout: 8000 })
+  await page.getByTestId('routing-orphan-remove').click()
   await page.locator('.ant-modal-confirm').getByRole('button', { name: 'Remove' }).click()
   await expect(page.getByRole('button', { name: 'Set up routing' })).toBeVisible({ timeout: 8000 })
   expect((await request.get(routingUrl(FOLDER))).status()).toBe(404)
@@ -516,4 +656,231 @@ test('three labels show as a list, and can be switched to the grid', async ({ pa
   await expect(page.getByTestId('cell-prod-critical-web')).toContainText('ops')
   await expect(page.getByTestId('cell-prod-warning-db')).toContainText('drop')
   await expect(page.getByTestId('cell-prod-warning-web')).toContainText('drop')
+})
+
+// #159: an e-mail config's settings past `to`, in the dialog.
+const ONE_CELL = { labels: { severity: ['critical'] }, configs: {}, cells: [] }
+
+async function previewedConfig(page) {
+  await page.getByRole('button', { name: 'Preview' }).click()
+  const modal = page.locator('.ant-modal').filter({ hasText: 'AlertmanagerConfig' })
+  await expect(modal).toBeVisible({ timeout: 15000 })
+  const docs = yaml.loadAll(await modal.locator('pre').innerText())
+  await modal.locator('.ant-modal-close').click()
+  return docs.find(d => d?.kind === 'AlertmanagerConfig')
+}
+
+async function chooseOption(page, dialog, label, option) {
+  await dialog.getByLabel(label, { exact: true }).click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: new RegExp(`^${option}$`) }).click()
+}
+
+test('an e-mail config takes its sender, server, password and CA from the dialog, and keeps them when edited', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
+  await openRouting(page)
+  await addConfig(page, 'db-email', async dialog => {
+    await chooseOption(page, dialog, 'Config type', 'email')
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByText('More settings').click()
+    await expect(dialog.getByLabel('From')).toHaveAttribute('placeholder', 'platform default')
+    await dialog.getByLabel('From').fill('alertforge')
+    await expect(dialog.getByTestId('config-problems')).toContainText('from must be an e-mail address')
+    await dialog.getByLabel('From').fill('alertforge@example.com')
+    await dialog.getByLabel('SMTP server').fill('smtp.example.com')
+    await expect(dialog.getByTestId('config-problems')).toContainText('smarthost must be host:port')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('SMTP server').fill('smtp.example.com:587')
+    // A server of its own, without its own login, gets the platform's: said, not refused.
+    await expect(dialog.getByTestId('config-warnings')).toContainText('so they are used with this server')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeEnabled()
+    await dialog.getByLabel('SMTP user').fill('alertforge')
+    await dialog.getByLabel('Password Secret name').fill('smtp-auth')
+    await dialog.getByLabel('Password Secret key').fill('password')
+    // With its own login, only the platform's identity and secret are said.
+    await expect(dialog.getByTestId('config-warnings')).toContainText('has its own login, but Alertmanager still uses the platform\'s SMTP identity')
+    await chooseOption(page, dialog, 'Require TLS', 'yes')
+    await dialog.getByLabel('CA Secret name').fill('smtp-ca')
+    await dialog.getByLabel('CA Secret key').fill('ca.crt')
+    await expect(dialog.getByText(/Make sure the Secret exists/)).toBeVisible()
+    // A custom HTML body left empty would save "text only": not allowed.
+    await chooseOption(page, dialog, 'HTML body', 'custom')
+    await expect(dialog.getByTestId('config-problems')).toContainText('the custom HTML body is empty')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await chooseOption(page, dialog, 'HTML body', 'Alertmanager default')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await pick(page, 'cell-critical', ['db-email'])
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+
+  const want = {
+    type: 'email', to: 'db@example.com', from: 'alertforge@example.com', smarthost: 'smtp.example.com:587',
+    authUsername: 'alertforge', authPassword: { name: 'smtp-auth', key: 'password' }, requireTLS: true,
+    tlsConfig: { ca: { secret: { name: 'smtp-ca', key: 'ca.crt' } } },
+  }
+  const saved = await (await request.get(routingUrl(FOLDER))).json()
+  expect(saved.errors).toEqual([])
+  expect(yaml.load(saved.text).configs['db-email']).toEqual(want)
+  const { type: _, ...fields } = want
+  expect((await previewedConfig(page)).spec.receivers.find(r => r.name === 'db-email').emailConfigs).toEqual([fields])
+
+  // Opened and saved untouched, nothing is lost.
+  await page.getByLabel('Edit db-email').click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs['db-email']).toEqual(want)
+})
+
+// An identity and secret of its own take the place of the platform's; each
+// needs the config's own user and password.
+test('an e-mail config takes its own SMTP identity and secret, and the warning names only what is left', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
+  await openRouting(page)
+  await addConfig(page, 'db-email', async dialog => {
+    await chooseOption(page, dialog, 'Config type', 'email')
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByText('More settings').click()
+    await dialog.getByLabel('SMTP server').fill('smtp.example.com:587')
+    // Without a login of its own: refused.
+    await dialog.getByLabel('SMTP identity').fill('alertforge')
+    await expect(dialog.getByTestId('config-problems')).toContainText('authIdentity goes with a login of its own')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('SMTP user').fill('alertforge')
+    await dialog.getByLabel('Password Secret name').fill('smtp-auth')
+    await dialog.getByLabel('Password Secret key').fill('password')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeEnabled()
+    const warnings = dialog.getByTestId('config-warnings')
+    await expect(warnings).toContainText('platform\'s SMTP secret (CRAM-MD5)')
+    await expect(warnings).not.toContainText('SMTP identity (AUTH PLAIN)')
+    await dialog.getByLabel('CRAM-MD5 secret Secret name').fill('smtp-auth')
+    await dialog.getByLabel('CRAM-MD5 secret Secret key').fill('cram')
+    await expect(warnings).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await pick(page, 'cell-critical', ['db-email'])
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  const want = {
+    type: 'email', to: 'db@example.com', smarthost: 'smtp.example.com:587', authUsername: 'alertforge',
+    authPassword: { name: 'smtp-auth', key: 'password' }, authIdentity: 'alertforge', authSecret: { name: 'smtp-auth', key: 'cram' },
+  }
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs['db-email']).toEqual(want)
+  const { type: _, ...fields } = want
+  expect((await previewedConfig(page)).spec.receivers.find(r => r.name === 'db-email').emailConfigs).toEqual([fields])
+})
+
+test('a subject and text with {{ }} reach the AlertmanagerConfig exactly as written', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
+  await openRouting(page)
+  const subject = '[{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}'
+  const text = '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}'
+  await addConfig(page, 'db-email', async dialog => {
+    await chooseOption(page, dialog, 'Config type', 'email')
+    await dialog.getByLabel('Email address').fill('db@example.com')
+    await dialog.getByText('More settings').click()
+    await dialog.getByRole('button', { name: 'New header' }).click()
+    await expect(dialog.getByLabel('Header 1 name')).toHaveValue('Subject')
+    // A credential in a header would be in git: refused, saying why.
+    await dialog.getByLabel('Header 1 name').fill('Authorization')
+    await dialog.getByLabel('Header 1 value').fill('Bearer abcdef1234567890abcdef12')
+    await expect(dialog.getByTestId('config-problems')).toContainText('a credential does not belong in routing.yaml')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Header 1 name').fill('Subject')
+    await dialog.getByLabel('Header 1 value').fill(subject)
+    await dialog.getByLabel('Text body').fill(text)
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await pick(page, 'cell-critical', ['db-email'])
+  const [config] = (await previewedConfig(page)).spec.receivers.find(r => r.name === 'db-email').emailConfigs
+  expect(config).toEqual({ to: 'db@example.com', headers: [{ key: 'Subject', value: subject }], text })
+})
+
+test('an e-mail config turned into a webhook carries none of its e-mail settings', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: {
+    labels: { severity: ['critical'] },
+    configs: { oncall: { type: 'email', to: 'oncall@example.com', from: 'a@example.com', smarthost: 'smtp.example.com:25', authUsername: 'u', authPassword: { name: 's', key: 'p' }, headers: { Subject: 'x' } } },
+    cells: [{ match: { severity: 'critical' }, configs: ['oncall'] }],
+  } } })
+  await openRouting(page)
+  await page.getByLabel('Edit oncall').click()
+  const dialog = page.getByRole('dialog')
+  await chooseOption(page, dialog, 'Config type', 'webhook')
+  await dialog.getByLabel('Webhook URL').fill('http://alert-relay.monitoring.svc:8080')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs.oncall)
+    .toEqual({ type: 'webhook', url: 'http://alert-relay.monitoring.svc:8080' })
+})
+
+// #160: a webhook config's authentication, TLS, timeout and batch size.
+test('a webhook config takes a Bearer token, a CA and a timeout from the dialog, and keeps them when edited', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: ONE_CELL } })
+  await openRouting(page)
+  await addConfig(page, 'ops-webhook', async dialog => {
+    // With More settings open, each Secret's inputs are told apart.
+    await choose(dialog, 'URL in a Secret')
+    await dialog.getByText('More settings').click()
+    await choose(dialog, 'Bearer token')
+    await expect(dialog.getByLabel('URL Secret name')).toBeVisible()
+    await expect(dialog.getByLabel('Token Secret name')).toBeVisible()
+    await dialog.getByLabel('URL Secret name').fill('ops')
+    await dialog.getByLabel('URL Secret key').fill('url')
+    await dialog.getByLabel('Token Secret name').fill('ops')
+    await dialog.getByLabel('Token Secret key').fill('to/ken')
+    await dialog.getByLabel('CA Secret name').fill('ops-ca')
+    await dialog.getByLabel('CA Secret key').fill('ca/crt')
+    // A problem says which Secret it is in.
+    const problems = dialog.getByTestId('config-problems')
+    await expect(problems).toContainText('token Secret: key must be letters')
+    await expect(problems).toContainText('CA Secret: key must be letters')
+    await dialog.getByLabel('Token Secret key').fill('token')
+    await dialog.getByLabel('CA Secret key').fill('ca.crt')
+    await dialog.getByLabel('Timeout').fill('5s1m')
+    await expect(dialog.getByTestId('config-problems')).toContainText('timeout must be a duration')
+    await expect(dialog.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await dialog.getByLabel('Timeout').fill('10s')
+    await dialog.getByLabel('Max alerts').fill('20')
+    await dialog.getByRole('button', { name: 'Add' }).click()
+  })
+  await pick(page, 'cell-critical', ['ops-webhook'])
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+
+  const want = {
+    type: 'webhook', urlSecret: { name: 'ops', key: 'url' }, maxAlerts: 20, timeout: '10s',
+    authorization: { credentials: { name: 'ops', key: 'token' } },
+    tlsConfig: { ca: { secret: { name: 'ops-ca', key: 'ca.crt' } } },
+  }
+  const saved = await (await request.get(routingUrl(FOLDER))).json()
+  expect(saved.errors).toEqual([])
+  expect(yaml.load(saved.text).configs['ops-webhook']).toEqual(want)
+  expect((await previewedConfig(page)).spec.receivers.find(r => r.name === 'ops-webhook').webhookConfigs).toEqual([{
+    urlSecret: { name: 'ops', key: 'url' }, maxAlerts: 20, timeout: '10s',
+    httpConfig: { authorization: { credentials: { name: 'ops', key: 'token' } }, tlsConfig: { ca: { secret: { name: 'ops-ca', key: 'ca.crt' } } } },
+  }])
+
+  await page.getByLabel('Edit ops-webhook').click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs['ops-webhook']).toEqual(want)
+})
+
+test('a webhook config turned into an e-mail carries none of its webhook settings', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: {
+    labels: { severity: ['critical'] },
+    configs: { hook: { type: 'webhook', url: 'https://hooks.example.com/a', maxAlerts: 5, timeout: '10s', authorization: { credentials: { name: 's', key: 't' } }, tlsConfig: { insecureSkipVerify: true } } },
+    cells: [{ match: { severity: 'critical' }, configs: ['hook'] }],
+  } } })
+  await openRouting(page)
+  await page.getByLabel('Edit hook').click()
+  const dialog = page.getByRole('dialog')
+  await chooseOption(page, dialog, 'Config type', 'email')
+  await dialog.getByLabel('Email address').fill('ops@example.com')
+  await dialog.getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).configs.hook).toEqual({ type: 'email', to: 'ops@example.com' })
 })

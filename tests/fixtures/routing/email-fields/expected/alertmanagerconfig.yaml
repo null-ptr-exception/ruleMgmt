@@ -1,0 +1,43 @@
+# Expected output for #159: written by hand from the issue's field table
+# before the generator was run — not produced by the generator.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    receiver: _drop
+    continue: true
+    routes:
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+        receiver: db-email
+      - matchers:
+          - { name: severity, value: warning, matchType: "=" }
+        receiver: web-email
+  receivers:
+    - name: _drop
+    - name: db-email
+      emailConfigs:
+        - to: db@example.com
+          from: alertforge@example.com
+          smarthost: smtp.example.com:587
+          authUsername: alertforge
+          authPassword: { name: smtp-auth, key: password }
+          requireTLS: true
+          tlsConfig:
+            insecureSkipVerify: false
+            ca: { secret: { name: smtp-ca, key: ca.crt } }
+          sendResolved: true
+          # a map in routing.yaml, a list of key and value here
+          headers:
+            - { key: Subject, value: "[{{ .CommonLabels.severity }}] {{ .CommonLabels.alertname }}" }
+            - { key: X-Team, value: db }
+          text: "{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}\n"
+          html: '{{ template "email.default.html" . }}'
+    - name: web-email
+      emailConfigs:
+        - to: web@example.com
+          html: ""

@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MemoryHigh
           expr: |-
-            mem_used_pct{cluster="{{ $row.cluster }}", namespace="{{ $row.namespace }}"} > {{ $row.limit_pct }}
+            mem_used_pct{cluster="{{ $row.cluster }}", namespace="{{ $row.namespace }}"} > {{ $row.limit_pct | toJson }}
           for: 5m
           labels:
             severity: warning

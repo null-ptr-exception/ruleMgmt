@@ -1,0 +1,473 @@
+/**
+ * A deployment's `_common` stack (#75, #100): the deployment depends on a
+ * `_common` chart, which may depend on another one higher up, which depends
+ * on the Template. Helm renders the deployment with every layer's values
+ * under its own: maps merged key by key, a group's rows replaced whole.
+ *
+ *   resolveStack     the Template, the keys, the layers, every file's values,
+ *                    and what keeps Helm from rendering it as AlertForge shows it
+ *   readStackValues  what the layers and the deployment add up to, for the Template
+ *   mergeValues      Helm's merge of two value sets
+ *
+ * What Helm does, measured on Helm 3.15.4 and 3.19.0 (the same on both):
+ * - The deployment's own dependencies are fetched by `helm dependency
+ *   update` (Preview, check-deployment, ArgoCD): a `file://` folder.
+ * - Below that, nothing is fetched. A `_common` chart passes values only to
+ *   the charts in its own `charts/` folder — a link, a folder or a packed
+ *   chart — whatever its Chart.yaml's `repository:` says. With nothing
+ *   there Helm renders nothing, and says nothing.
+ * - A chart in `charts/` is known by its Chart.yaml `name`, not by the
+ *   folder's; its values are under that name, or under the dependency's
+ *   `alias:`. A dependency whose `condition:` or `tags:` is false renders
+ *   nothing. A version asked of a chart in `charts/` is not checked.
+ * - The deployment's dependency must name the `_common` chart by its
+ *   Chart.yaml name, or Helm stops with an error.
+ * The stack is what those files say, not where the folder is: a sync
+ * target renders its source's stack, wherever it is (#180). A deployment
+ * with no `_common` is a stack of none: the Template, under its name.
+ */
+
+import path from 'path'
+import { isCommonChartPath } from '../../src/utils/reservedNames.js'
+import { unwrapPath } from './subchart.js'
+import { openRepo } from '../repo/openRepo.js'
+import { linkOnTheWay } from '../repo/paths.js'
+import { folderEntry } from '../repo/walk.js'
+import { chartDoc, chartNotRead } from '../repo/chart.js'
+
+const chartsDirName = () => process.env.CHARTS_DIR || 'charts'
+// More hops than this is a loop of links, not a stack.
+const MAX_HOPS = 16
+
+const rel = (gitopsDir, abs) => path.relative(gitopsDir, abs).replace(/\\/g, '/') || '.'
+const isPlainObject = v => !!v && typeof v === 'object' && !Array.isArray(v)
+const problem = (kind, description) => ({ kind, description })
+
+// Where a layer's or a Template's files are read: `{ repo, rel }`. In the
+// repo, the request's own snapshot: what a stack is resolved from — a
+// `_common`'s Chart.yaml, its charts/ folder and where its links lead — is
+// among what a write holds the repo to under the lock, and a planned file
+// is read as planned. A folder outside the repo given (a dependency that
+// leads out of it; a deployment checked with no root told) is read by its
+// place on the machine, as it always was.
+function placeIn(repo, gitopsDir, abs) {
+  const inRepo = rel(gitopsDir, abs)
+  if (!inRepo.startsWith('../')) return { repo, rel: inRepo === '.' ? '' : inRepo }
+  const root = path.parse(path.resolve(abs)).root
+  return { repo: repo.memo('outside', root, () => openRepo(root)), rel: path.relative(root, path.resolve(abs)).split(path.sep).join('/') }
+}
+
+/** The Chart.yaml of the chart folder `dir`: the document, undefined when there is none, null when it cannot be read. */
+async function readChart(repo, gitopsDir, dir) {
+  const at = placeIn(repo, gitopsDir, dir)
+  return chartDoc(await at.repo, at.rel)
+}
+
+/** A chart's dependencies that are entries (a hand edit may hold anything). */
+export const dependenciesOf = chart => (Array.isArray(chart?.dependencies) ? chart.dependencies.filter(isPlainObject) : [])
+
+/**
+ * A values.yaml, as the repo's reader reads it (as Helm does): `{ doc }`,
+ * `{ doc: {} }` when there is none, `{ error }` when it cannot be read or
+ * is not YAML Helm reads, `{ doc: {}, cannotTell }` when AlertForge cannot
+ * tell what Helm reads in it (Helm decides: what it renders is shown).
+ */
+async function readValuesDoc(repo, gitopsDir, dir) {
+  const file = rel(gitopsDir, path.join(dir, 'values.yaml'))
+  if (file.startsWith('../')) return { error: 'it is outside the repo' }
+  const loaded = await repo.helmYaml(file)
+  if (loaded.state === 'absent') return { doc: {} }
+  if (loaded.state === 'unreadable') return { error: loaded.why }
+  if (loaded.state === 'invalid') {
+    const why = loaded.findings.map(f => f.message.replace(/^\S+ (line \d+: )?/, '')).join('; ')
+    return loaded.findings.every(f => f.helm === 'unknown') ? { doc: {}, cannotTell: why } : { error: why }
+  }
+  return { doc: loaded.value }
+}
+
+const at = (v, k) => (isPlainObject(v) && isPlainObject(v[k]) ? v[k] : {})
+const getPath = (v, keys) => keys.reduce((o, k) => (isPlainObject(o) ? o[k] : undefined), v)
+
+/**
+ * Whether Helm renders a dependency, from the values its parent chart sees:
+ * the first `condition:` path that is a boolean, else its `tags:`.
+ */
+function enabledBy(dep, seen) {
+  if (typeof dep?.condition === 'string') {
+    for (const p of dep.condition.split(',').map(s => s.trim()).filter(Boolean)) {
+      const v = getPath(seen, p.split('.'))
+      if (typeof v === 'boolean') return { on: v, why: `its condition ${p} is false` }
+    }
+  }
+  if (Array.isArray(dep?.tags) && dep.tags.length && isPlainObject(seen?.tags)) {
+    const vals = dep.tags.map(t => seen.tags[t]).filter(v => typeof v === 'boolean')
+    if (vals.length) return { on: vals.some(Boolean), why: `its tags (${dep.tags.join(', ')}) are false` }
+  }
+  return { on: true }
+}
+
+/**
+ * The charts in a chart folder's own charts/, as Helm loads them: each
+ * `{ name, at, packed }`, `at` where a link leads (as written, so a
+ * `_common` is still one), `name` its Chart.yaml's, `notRead` why that
+ * file is there and is not read. Helm's own `.tgz` downloads in a
+ * deployment's charts/ are not read here.
+ */
+async function chartsIn(repo, gitopsDir, dir) {
+  const folder = path.join(dir, 'charts')
+  const at = placeIn(repo, gitopsDir, folder)
+  const from = await at.repo
+  const listed = await from.dir(at.rel)
+  // Not there, or not to be listed: no charts, as Helm finds none.
+  if (listed.state !== 'ok') return []
+  const out = []
+  for (const [name, kind] of listed.value.entries) {
+    if (name.startsWith('.')) continue
+    const abs = path.join(folder, name)
+    const link = listed.value.links.has(name)
+    if (!link && kind === 'file' && name.endsWith('.tgz')) {
+      out.push({ name: /^(.+?)-v?\d+(?:\.\d+)*[^/]*\.tgz$/.exec(name)?.[1] ?? name, at: abs, packed: true, file: name })
+      continue
+    }
+    if (!link && kind === 'file') {
+      // A link checked out as a text file (git with core.symlinks off, as on
+      // Windows): Helm stops on it.
+      out.push({ name: null, at: abs, file: name, textFile: true })
+      continue
+    }
+    // A folder, or a link that leads to one.
+    if (kind !== 'dir') continue
+    // Where the link is written to lead (so a `_common` is still one), as listed.
+    const to = link ? listed.value.targets.get(name) ?? null : null
+    const target = to !== null ? path.resolve(folder, to) : abs
+    const chart = await readChart(repo, gitopsDir, abs)
+    // A Chart.yaml that is there and is not read: no name to know it by.
+    const where = placeIn(repo, gitopsDir, abs)
+    const notRead = chart === null ? await chartNotRead(await where.repo, where.rel) : null
+    out.push({ name: typeof chart?.name === 'string' ? chart.name : null, at: target, file: name, ...(notRead ? { notRead } : {}) })
+  }
+  return out
+}
+
+/**
+ * The stack under the chart folder `dir` (a deployment, or a `_common`
+ * chart), read once for everything that asks about it:
+ *   chart     the Template at the bottom, null when there is none to tell
+ *   keys      what the folder's own values are wrapped under, outermost
+ *             first: `[chart]` for a deployment with no `_common`
+ *   layers    the `_common` charts it renders on, nearest first:
+ *             `{ path, keys, doc }`, `keys` their own values' wrapping
+ *   doc       the folder's own values.yaml
+ *   problems  why Helm renders none of it, or renders what AlertForge
+ *             cannot show: `{ kind, description }`, naming the layer;
+ *             'values-cannot-tell' alone leaves the render to Helm
+ *             (CANNOT_TELL, blockingProblems)
+ */
+export async function resolveStack(gitopsDir, dir, { repo = openRepo(gitopsDir) } = {}) {
+  const templatesDir = path.resolve(gitopsDir, chartsDirName())
+  // A Template folder: charts/<name>. An alert Template is one AlertForge
+  // made (annotations.app: alertforge); another chart there is followed
+  // only when nothing else is.
+  const isTemplate = (where, name) => path.resolve(where) === path.join(templatesDir, String(name))
+  const templateKind = async (where, name) => {
+    if (!isTemplate(where, name)) return 'other'
+    const chart = await readChart(repo, gitopsDir, where)
+    return chart?.annotations?.app === 'alertforge' ? 'template' : 'plain'
+  }
+  const keys = []
+  const layers = []
+  const problems = []
+  const result = { chart: null, keys, layers, problems, doc: {}, groups: new Set(), dependencyNames: [], claims: null }
+  // The snapshot it was read from: what is read later reads the same.
+  Object.defineProperty(result, 'repo', { value: repo, enumerable: false })
+  // The folder's own values are read only when something needs them: a
+  // stack, or a condition to work out. A deployment with no `_common` is
+  // not read here at all.
+  let own = null
+  const loadOwn = async () => {
+    if (!own) {
+      own = await readValuesDoc(repo, gitopsDir, dir)
+      result.doc = own.doc ?? {}
+      result.docRead = true
+    }
+    return result.doc
+  }
+
+  // The folder's own Chart.yaml, read through the snapshot (so a planned
+  // one, overlaid, is the one read): as readChart answers, undefined when
+  // there is none, null when it cannot be read or is not YAML.
+  async function ownChart() {
+    const own = rel(gitopsDir, dir)
+    if (own === '.' || own.startsWith('../')) return readChart(repo, gitopsDir, dir)
+    const f = await repo.helmYaml(`${own}/Chart.yaml`)
+    if (f.state === 'absent' || (f.state === 'unreadable' && f.kind === 'not-a-folder')) return undefined
+    return f.state === 'ok' ? f.value : null
+  }
+
+  // The deployment's own dependencies: what `helm dependency update` fetches.
+  async function firstHop() {
+    const deps = dependenciesOf(await ownChart())
+    result.dependencyNames = deps.map(d => d.name).filter(n => typeof n === 'string')
+    if (!deps.length) return null
+    const targets = []
+    for (const d of deps) {
+      const repo = typeof d.repository === 'string' ? d.repository : ''
+      const where = repo.startsWith('file://') ? path.resolve(dir, repo.slice('file://'.length)) : !repo ? path.join(dir, 'charts', String(d.name ?? '')) : null
+      const kind = !where ? 'remote' : isCommonChartPath(where) ? 'common'
+        : await templateKind(repo === '' ? path.join(templatesDir, String(d.name)) : where, d.name)
+      targets.push({ d, where, kind })
+    }
+    const commons = targets.filter(t => t.kind === 'common')
+    const templates = targets.filter(t => t.kind === 'template')
+    if (commons.length + templates.length > 1) {
+      problems.push(problem('stack-unsupported', `it depends on ${[...commons, ...templates].map(t => t.d.name).join(' and ')}: Helm renders each of them, AlertForge can show only one — keep one dependency on a _common chart or a Template`))
+    }
+    // A `_common` first, then a Template, else the first (a Template that
+    // is not in the repo is the commit checks' to name).
+    const first = commons[0] ?? templates[0] ?? targets.find(t => t.kind === 'plain') ?? targets[0]
+    const key = first.d.alias || first.d.name
+    if (typeof key !== 'string') return null
+    keys.push(key)
+    if (first.kind === 'common' || first.d.condition || first.d.tags) seen = await loadOwn()
+    const off = enabledBy(first.d, seen)
+    if (!off.on) problems.push(problem('stack-off', `its dependency ${key} is not rendered: ${off.why}`))
+    if (first.kind !== 'common') {
+      result.chart = first.d.name
+      return null
+    }
+    // The _common it names, whatever state it is in: a sync target's mark
+    // (#103) still says which one it follows.
+    result.firstLayerPath = rel(gitopsDir, first.where)
+    const layerChart = await readChart(repo, gitopsDir, first.where)
+    if (layerChart === undefined || layerChart?.name !== first.d.name) lastLayerFolder = first.where
+    if (layerChart === undefined) {
+      problems.push(problem('template-missing', `its _common chart ${rel(gitopsDir, first.where)} is not in the repo`))
+      return null
+    }
+    if (layerChart?.name !== first.d.name) {
+      problems.push(problem('stack-name', `its Chart.yaml depends on ${first.d.name}, but the _common chart ${rel(gitopsDir, first.where)} is named ${JSON.stringify(layerChart?.name ?? null)}, so Helm stops with an error — name them the same (common)`))
+      return null
+    }
+    return { key, cur: first.where }
+  }
+  // The `_common` folder the stack stopped at, when it did.
+  let lastLayerFolder = null
+
+  // A `_common` chart's own stack starts at its charts/, as for any layer.
+  const startsAsLayer = isCommonChartPath(dir)
+  let seen = startsAsLayer ? await loadOwn() : {}
+  let key
+  let cur = dir
+  const visited = new Set()
+  let stopped = false
+  if (!startsAsLayer) {
+    const first = await firstHop()
+    if (first) {
+      ;({ key, cur } = first)
+      visited.add(path.resolve(dir))
+    } else stopped = true
+  }
+
+  walk: for (let hop = 1; !stopped && hop < MAX_HOPS; hop++) {
+    const self = startsAsLayer && hop === 1
+    const layerPath = rel(gitopsDir, cur)
+    if (visited.has(path.resolve(cur))) {
+      problems.push(problem('stack-cycle', `the _common chart ${layerPath} is reached again through its own charts/`))
+      break walk
+    }
+    visited.add(path.resolve(cur))
+    // A _common reached through a hand-made link (a _common folder, or one
+    // above it, that is a link): not followed, here as by every route that
+    // is asked for it. AlertForge's own links, in a _common's charts/, lead
+    // to where the next one is.
+    const link = !self && !layerPath.startsWith('../') && (await folderEntry(repo, layerPath)).link ? await linkOnTheWay(gitopsDir, layerPath) : null
+    if (link) {
+      lastLayerFolder = cur
+      problems.push(stackLinkProblem(layerPath, link))
+      break walk
+    }
+    const values = await readValuesDoc(repo, gitopsDir, cur)
+    // Named, and the stack still followed: what it renders on is still known.
+    if (values.error) problems.push(problem('values-unreadable', `${layerPath}/values.yaml cannot be read (${values.error}), so Helm cannot render it`))
+    // Not a reason to say Helm renders nothing: Helm decides, and what it
+    // inherits from there is not shown as if known.
+    if (values.cannotTell) problems.push(problem('values-cannot-tell', `${layerPath}/values.yaml: ${values.cannotTell}, so what it gives is not shown — Helm decides what deploys`))
+    const layerDoc = values.doc ?? {}
+    if (!self) layers.push({ path: layerPath, doc: layerDoc })
+    seen = self ? layerDoc : mergeValues(layerDoc, at(seen, key))
+
+    const layerDeps = dependenciesOf(await readChart(repo, gitopsDir, cur))
+    const found = await chartsIn(repo, gitopsDir, cur)
+    // A file named as a chart it depends on: a link checked out as text.
+    const textFile = found.find(c => c.textFile && layerDeps.some(d => d.name === c.file))
+    if (textFile) {
+      problems.push(problem('stack-link-file', `the _common chart ${layerPath} has charts/${textFile.file} as a file, not a link (a checkout with symlinks turned off, as Git on Windows may make): Helm stops with an error — check it out with links, or make the link again`))
+      break walk
+    }
+    const packed = found.filter(c => c.packed)
+    if (packed.length) {
+      problems.push(problem('stack-unsupported', `the _common chart ${layerPath} holds a packed chart (charts/${packed[0].file}), which AlertForge cannot read — put a link to the chart there instead`))
+      break walk
+    }
+    const usable = []
+    for (const c of found.filter(c => !c.textFile)) {
+      const d = layerDeps.find(x => x.name === c.name)
+      usable.push({ ...c, d, enabled: enabledBy(d, seen), kind: isCommonChartPath(c.at) ? 'common' : await templateKind(c.at, c.name) })
+    }
+    const alerting = usable.filter(c => (c.kind === 'common' || c.kind === 'template') && c.enabled.on)
+    const on = alerting.length ? alerting : usable.filter(c => c.kind === 'plain' && c.enabled.on).slice(0, 1)
+    if (on.length > 1) {
+      problems.push(problem('stack-unsupported', `the _common chart ${layerPath} passes its values to ${on.map(c => `charts/${c.file}`).join(' and ')}: Helm renders each of them, AlertForge can show only one`))
+      break walk
+    }
+    if (!on.length) {
+      const offOne = usable.find(c => c.kind !== 'other' && !c.enabled.on)
+      if (offOne) {
+        problems.push(problem('stack-off', `the _common chart ${layerPath} does not render charts/${offOne.file}: ${offOne.enabled.why}`))
+        break walk
+      }
+      // A chart is in charts/, with a Chart.yaml that is not read: said as
+      // that file, where the link leads when that is in the repo.
+      const unread = usable.find(c => c.notRead)
+      if (unread) {
+        const to = rel(gitopsDir, unread.at)
+        const file = to.startsWith('../') ? `${layerPath}/charts/${unread.file}/Chart.yaml` : `${to}/Chart.yaml`
+        problems.push(problem('template-missing', `the _common chart ${layerPath}: ${file} cannot be read (${unread.notRead}), so Helm cannot render it`))
+        break walk
+      }
+      // Nothing in charts/ to pass the values to: Helm renders nothing.
+      const name = layerDeps[0]?.name
+      const wants = typeof name === 'string'
+        ? (await readChart(repo, gitopsDir, path.join(templatesDir, name)) !== undefined ? `its Template ${name}` : `the chart ${name}`)
+        : 'the chart it depends on'
+      problems.push(problem('template-missing', `the _common chart ${layerPath} has no link to ${wants} in its charts/ (charts/${typeof name === 'string' ? name : '…'}), so Helm renders nothing`))
+      break walk
+    }
+    const next = on[0]
+    key = next.d?.alias || next.name
+    keys.push(key)
+    if (next.kind !== 'common') {
+      result.chart = next.name
+      break
+    }
+    cur = next.at
+  }
+  // Each layer's own values are wrapped under the keys below it.
+  layers.forEach((layer, i) => { layer.keys = keys.slice(i + 1) })
+  // A stack that does not reach a Template still says which one it is for:
+  // a `_common` folder is named after its Template (`_common/<chart>`).
+  // Who uses a Template counts it (a breaking change, a chart's delete).
+  if (!result.chart) {
+    const named = [...layers.map(l => path.posix.basename(l.path)), ...(lastLayerFolder ? [path.basename(lastLayerFolder)] : [])]
+    for (const name of named.reverse()) {
+      if ((await readChart(repo, gitopsDir, path.join(templatesDir, name)))?.annotations?.app === 'alertforge') { result.claims = name; break }
+    }
+  }
+
+  // What each file holds that Helm reads differently by version, or fails on.
+  // Only on a stack: a deployment with no `_common` is read as before.
+  if (!layers.length && !startsAsLayer) return result
+  const groups = await templateGroups(repo, result.chart)
+  result.groups = groups
+  if (own?.error) problems.push(problem('values-unreadable', `${rel(gitopsDir, dir)}/values.yaml cannot be read (${own.error}), so Helm cannot render it`))
+  if (own?.cannotTell) problems.push(problem('values-cannot-tell', `${rel(gitopsDir, dir)}/values.yaml: ${own.cannotTell}, so what it gives is not shown — Helm decides what deploys`))
+  return result
+}
+
+// The Template's groups: the keys its values.yaml gives a list of rows.
+async function templateGroups(repo, chart) {
+  if (!chart) return new Set()
+  const t = await repo.template(chart)
+  const doc = t.state === 'ok' ? t.value.defaults : {}
+  return new Set(Object.entries(isPlainObject(doc) ? doc : {}).filter(([, v]) => Array.isArray(v)).map(([k]) => k))
+}
+
+/** A `_common` reached through a link made by hand: refused by every entry point. */
+export const STACK_LINK = 'stack-link'
+// The problem of a stack that reaches the _common chart at `layerPath`
+// through `link` (linkOnTheWay's): `real` is the _common chart it leads to
+// in the repo, when it leads to one.
+const stackLinkProblem = (layerPath, link) => ({
+  ...problem(STACK_LINK, `its _common chart ${layerPath}: ${link.why} — a _common reached through a link made by hand is not supported, and nothing is written to it: replace the link with a folder of its own in git${link.real && isCommonChartPath(link.real) ? `, or depend on ${link.real}` : ''}`),
+  real: link.real && isCommonChartPath(link.real) ? link.real : null,
+})
+/**
+ * The link a `_common` chart at `commonRel` is reached through (the
+ * `_common` folder, or one above it, is a link made by hand), as
+ * linkOnTheWay gives it, or null.
+ */
+export async function linkToCommon(repo, commonRel) {
+  return (await folderEntry(repo, commonRel)).link ? linkOnTheWay(repo.root, commonRel) : null
+}
+/**
+ * What a write says that would put `rel` (a new deployment, or the folder a
+ * `_common` is made or removed in) on the `_common` chart at `commonRel`,
+ * reached through `link`: linkedStackRefusal's answer, in the same words.
+ */
+export const linkedCommonRefusal = (rel, commonRel, link) => linkedStackRefusal({ problems: [stackLinkProblem(commonRel, link)] }, rel)
+/**
+ * What a write that touches the deployment at `rel` (its `stack`) says when
+ * it renders on a `_common` reached through a link: 409, nothing written;
+ * null otherwise. The one sentence every write answers it with.
+ */
+export const linkedStackRefusal = (stack, rel) => {
+  const p = stack?.problems.find(x => x.kind === STACK_LINK)
+  return p ? { status: 409, body: { error: `${rel}: ${p.description}`, file: rel } } : null
+}
+
+/** The problem kind that leaves what deploys to Helm: AlertForge cannot tell a layer's values. */
+export const CANNOT_TELL = 'values-cannot-tell'
+/** The problems that keep Helm from rendering it as AlertForge shows it (all but CANNOT_TELL). */
+export const blockingProblems = stack => stack.problems.filter(p => p.kind !== CANNOT_TELL)
+
+/** `values` wrapped under `keys`, outermost first. */
+export function wrapPath(values, keys) {
+  return keys.reduceRight((inner, k) => ({ [k]: inner }), values)
+}
+
+/** `doc` with the values under `keys` replaced by `values`; the rest kept. */
+export function replaceAtPath(doc, keys, values) {
+  if (!keys.length) return values
+  const [k, ...rest] = keys
+  const base = isPlainObject(doc) ? doc : {}
+  return { ...base, [k]: replaceAtPath(base[k], rest, values) }
+}
+
+/** Helm's merge: maps key by key, anything else (a group's rows) replaced. */
+export function mergeValues(base, over) {
+  if (!isPlainObject(base) || !isPlainObject(over)) return over === undefined ? base : over
+  const out = { ...base }
+  for (const [k, v] of Object.entries(over)) out[k] = k in base ? mergeValues(base[k], v) : v
+  return out
+}
+
+
+
+/**
+ * What the layers and the folder's own values add up to, as the Template
+ * sees them (its own values.yaml left out), bare: `{ layers: [{ path,
+ * values }], own, merged }`, layers nearest first. Each chart passes
+ * down only what is under the next one's key. `own` may be given (what is
+ * about to be written) instead of the file's.
+ */
+export function stackValues(stack, { own } = {}) {
+  const doc = own === undefined ? stack.doc : replaceAtPath(stack.doc, stack.keys, own)
+  let seen = doc
+  for (const [i, layer] of stack.layers.entries()) seen = mergeValues(layer.doc, at(seen, stack.keys[i]))
+  const merged = stack.keys.length ? at(seen, stack.keys[stack.keys.length - 1]) : {}
+  return {
+    // What each layer passes down: only what is under the next key.
+    layers: stack.layers.map(l => ({ path: l.path, values: l.keys.reduce(at, l.doc) })),
+    own: own === undefined ? unwrapPath(stack.doc, stack.keys) : own,
+    merged,
+  }
+}
+
+/** The same, reading the folder's own values when resolveStack did not need them. */
+export async function readStackValues(gitopsDir, dir, stack, options) {
+  if (!stack.docRead) {
+    stack.doc = (await readValuesDoc(stack.repo ?? openRepo(gitopsDir), gitopsDir, dir)).doc ?? {}
+    stack.docRead = true
+  }
+  return stackValues(stack, options)
+}

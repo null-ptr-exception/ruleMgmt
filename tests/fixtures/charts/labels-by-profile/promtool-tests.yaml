@@ -1,0 +1,45 @@
+# rule_files is filled in by the harness: one file per rendered object.
+# Only the PrometheusRule: promtool cannot read the VMRule's LogsQL, which
+# vmalert -dryRun checks.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # every request between 1s and 2s: p99 is 1.99s
+      - series: 'http_request_duration_seconds_bucket{job="checkout", pod="c-1", le="1"}'
+        values: '0x20'
+      - series: 'http_request_duration_seconds_bucket{job="checkout", pod="c-1", le="2"}'
+        values: '0+60x20'
+      - series: 'http_request_duration_seconds_bucket{job="checkout", pod="c-1", le="+Inf"}'
+        values: '0+60x20'
+    alert_rule_test:
+      # The first rate is at 1m; for: 10m.
+      - eval_time: 10m
+        alertname: SlowRequests
+        exp_alerts: []
+      - eval_time: 11m
+        alertname: SlowRequests
+        exp_alerts:
+          - exp_labels: { severity: warning }
+
+  - interval: 1m
+    input_series:
+      # every request under 1s: p99 is 0.99s
+      - series: 'http_request_duration_seconds_bucket{job="checkout", pod="c-1", le="1"}'
+        values: '0+60x20'
+      - series: 'http_request_duration_seconds_bucket{job="checkout", pod="c-1", le="2"}'
+        values: '0+60x20'
+      - series: 'http_request_duration_seconds_bucket{job="checkout", pod="c-1", le="+Inf"}'
+        values: '0+60x20'
+      # slow, but no row
+      - series: 'http_request_duration_seconds_bucket{job="search", pod="s-1", le="1"}'
+        values: '0x20'
+      - series: 'http_request_duration_seconds_bucket{job="search", pod="s-1", le="2"}'
+        values: '0+6000x20'
+      - series: 'http_request_duration_seconds_bucket{job="search", pod="s-1", le="+Inf"}'
+        values: '0+6000x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: SlowRequests
+        exp_alerts: []

@@ -1,0 +1,26 @@
+{{- $chunks := chunk 100 ($.Values.dated | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-dated-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: "2026-11-22"
+      rules:
+        {{- range $rows }}
+        - alert: "2026-11-22 10:00:00"
+          expr: |-
+            up{db="{{ .db }}"} == 0
+          labels:
+            since: "1:30"
+            op: "="
+            day: "2026-11-22"
+          annotations:
+            at: |-
+              2026-11-22T10:00:00Z
+        {{- end }}
+{{- end }}

@@ -1,0 +1,16 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# A key "<kind> <name>" is an object of that kind; a bare name is a PrometheusRule.
+blind-api-errors-1-1:
+  - name: api-errors
+    interval: 1m
+    rules:
+      - alert: ApiErrors
+        expr: 'rate(http_errors_total{job="api"}[5m] offset 0s) > 1'
+        for: 2m
+        labels: { severity: warning, service.name: api }
+        annotations: { summary: '{{ $labels.job }}: {{ $value }} errors/s' }
+      - alert: ApiErrors
+        expr: 'rate(http_errors_total{job="web"}[5m] offset 10m) > 2'
+        for: 2m
+        labels: { severity: warning, service.name: web }
+        annotations: { summary: '{{ $labels.job }}: {{ $value }} errors/s' }

@@ -1,0 +1,21 @@
+{{- $chunks := chunk 100 ($.Values.mariadb_cpu | default list) }}
+{{- range $chunkIndex, $rows := $chunks }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}-mariadb-cpu-1-{{ add1 $chunkIndex }}
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  groups:
+    - name: MariaDB CPU 使用率
+      rules:
+        {{- range $rows }}
+        - alert: MariaDBCpuHigh
+          expr: |-
+            cpu{db="{{ .db }}"} > 90
+          labels:
+            severity: warning
+        {{- end }}
+{{- end }}

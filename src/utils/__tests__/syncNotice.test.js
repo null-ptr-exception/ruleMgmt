@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { syncFailedNotice } from '../syncNotice.js'
+import { syncFailedNotice, syncResultLine, reasonLine } from '../syncNotice.js'
 
 describe('syncFailedNotice', () => {
   it('is nothing when every target was updated', () => {
@@ -8,17 +8,44 @@ describe('syncFailedNotice', () => {
   })
 
   it('names one target and why', () => {
-    expect(syncFailedNotice([{ target: 'team/dr', error: 'EACCES' }]))
-      .toBe('Saved, but this sync target could not be updated and may not match the source: team/dr (EACCES)')
+    expect(syncFailedNotice([{ target: 'team/dr', error: 'not a deployment on disk' }]))
+      .toBe('Saved, but this sync target could not be updated and may not match the source — team/dr: not a deployment on disk')
   })
 
   it('says what was done, when it was not a save', () => {
-    expect(syncFailedNotice([{ target: 'team/dr', error: 'EACCES' }], 'Routing removed'))
-      .toBe('Routing removed, but this sync target could not be updated and may not match the source: team/dr (EACCES)')
+    expect(syncFailedNotice([{ target: 'team/dr', error: 'not a deployment on disk' }], 'Routing removed'))
+      .toBe('Routing removed, but this sync target could not be updated and may not match the source — team/dr: not a deployment on disk')
   })
 
-  it('names every target', () => {
-    expect(syncFailedNotice([{ target: 'a', error: 'EACCES' }, { target: 'b', error: 'not a deployment on disk' }]))
-      .toBe('Saved, but these sync targets could not be updated and may not match the source: a (EACCES), b (not a deployment on disk)')
+  it('names every target, each with its reason, a sentence with its own brackets and colons kept apart from the next', () => {
+    expect(syncFailedNotice([{ target: 'team/a', error: 'team/src/Chart.yaml cannot be read (permission denied): once it can, save team/src again' }, { target: 'team/b', error: 'not a deployment on disk' }]))
+      .toBe('Saved, but these sync targets could not be updated and may not match the source — team/a: team/src/Chart.yaml cannot be read (permission denied): once it can, save team/src again; team/b: not a deployment on disk')
+  })
+})
+
+describe('syncResultLine', () => {
+  it('a target synced', () => {
+    expect(syncResultLine({ target: 'team/dr', ok: true })).toBe('team/dr: OK')
+  })
+  it('a reason that does not name the target is put after it', () => {
+    expect(syncResultLine({ target: 'team/dr', ok: false, error: 'team/dr/values.yaml cannot be written: permission denied' }))
+      .toBe('team/dr: team/dr/values.yaml cannot be written: permission denied')
+  })
+  it('a reason that starts with the target is said as it is: the path once', () => {
+    const error = 'team/dr: its _common chart team/_common/demo: team/_common is a link to shop/_common — a _common reached through a link made by hand is not supported'
+    expect(syncResultLine({ target: 'team/dr', ok: false, error })).toBe(error)
+  })
+})
+
+describe('reasonLine', () => {
+  it('a reason that does not name the deployment is put after it', () => {
+    expect(reasonLine('team/a', 'routing.yaml cannot be read')).toBe('team/a: routing.yaml cannot be read')
+  })
+  it('a reason that starts with the deployment is said as it is: the path once', () => {
+    const reason = 'team/a: its _common chart team/_common/demo: team/_common is a link to shop/_common — a _common reached through a link made by hand is not supported'
+    expect(reasonLine('team/a', reason)).toBe(reason)
+  })
+  it('a deployment whose path only begins another\'s is still named', () => {
+    expect(reasonLine('team/a', 'team/a2: something')).toBe('team/a: team/a2: something')
   })
 })

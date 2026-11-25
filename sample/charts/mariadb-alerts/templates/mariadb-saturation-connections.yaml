@@ -16,7 +16,7 @@ spec:
         {{- $row := merge . $common }}
         - alert: MariadbSaturationConnections_WarnPct
           expr: |-
-            (mysql_global_status_threads_connected{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_variables_max_connections{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "warn_pct" 70 $row }}
+            (mysql_global_status_threads_connected{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_variables_max_connections{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "warn_pct" 70 $row | toJson }}
           for: 5m
           labels:
             severity: warning
@@ -27,7 +27,7 @@ spec:
               MariadbSaturationConnections_WarnPct triggered on {{ $row.owner }}
         - alert: MariadbSaturationConnections_CriticalPct
           expr: |-
-            (mysql_global_status_threads_connected{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_variables_max_connections{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "critical_pct" 90 $row }}
+            (mysql_global_status_threads_connected{namespace="{{ dig "namespace" `default` $row }}"} / mysql_global_variables_max_connections{namespace="{{ dig "namespace" `default` $row }}"}) * 100 > {{ dig "critical_pct" 90 $row | toJson }}
           for: 5m
           labels:
             severity: critical

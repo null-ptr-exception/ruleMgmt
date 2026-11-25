@@ -1,79 +1,34 @@
 import { Router } from 'express'
-import fs from 'fs/promises'
-import path from 'path'
-import os from 'os'
-import git from '../lib/git.js'
-import { checkRules } from '../../src/utils/ruleChecks.js'
-import { chartDrift, readChartArtifacts } from '../lib/chartFiles.js'
-import { blocksCommit } from '../../src/utils/drift.js'
-import { parseRulesDir, genSchema } from '../../src/utils/rulesFile.js'
+import { planChange, applyChange } from '../repo/changes/index.js'
+import { openRepo } from '../repo/openRepo.js'
+import { z } from 'zod'
+import { route, declaredRoutes } from '../http/route.js'
+import git, { pushWithToken } from '../lib/git.js'
+import { deploymentCommitBlockers } from '../lib/commitChecks.js'
+import { chartCommitBlockers } from '../lib/chartChecks.js'
+import { getSourceForTarget, getTargetsForSource } from '../lib/sync.js'
+import { withSyncRegistryLock, holdSyncRegistryLock } from '../repo/lock.js'
+import { syncAnswer } from '../repo/sync.js'
+import { TEMP_PATHSPEC_EXCLUDE, parkedSearch } from '../repo/write.js'
+import { parkedSaid, unlistedSaid } from '../lib/parkedSaid.js'
+import { chartsDir } from '../repo/template.js'
+import { withoutPath, answersWithoutPaths } from '../lib/answerPaths.js'
+import { parsePath, pathProblem } from '../repo/paths.js'
+import { repoGit, filesChanging } from '../repo/git.js'
 
-/**
- * Reasons a commit should be refused, across every chart in the gitops repo —
- * see issue #57. Into git means it is for someone else now.
- *
- * A hand-edited file that never passed through the editor still has to clear
- * the rule checks (reference integrity, the ${}/{{ }} split, "a rule reads no
- * column"). And the products must be current: `stale` (rules/ edited without
- * regenerating) blocks. A `legacy` chart (never migrated) does not — it is
- * returned in `unconverted`, for the commit to name (#79). Silent when there
- * is no charts directory.
- */
-async function chartCommitBlockers(gitopsDir) {
-  const chartsDir = path.join(gitopsDir, process.env.CHARTS_DIR || 'charts')
-  let entries
-  try {
-    entries = await fs.readdir(chartsDir, { withFileTypes: true })
-  } catch {
-    return { findings: [], unconverted: [] }
-  }
-
-  const findings = []
-  const unconverted = []
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const chartDir = path.join(chartsDir, entry.name)
-
-    // Schema carries no rule data (see modelToSchema in rulesFile.js), so a
-    // migrated chart's rules are checked from rules/*.yaml via `genSchema`,
-    // which rebuilds the old x-rules-per-group shape checkRules expects
-    // without writing it anywhere. A parse error here is left to the drift
-    // check below (`stale`), which already blocks on it.
-    const { rulesFiles, schema } = await readChartArtifacts(chartDir)
-    if (rulesFiles && Object.keys(rulesFiles).length) {
-      const { model, errors } = parseRulesDir(rulesFiles)
-      if (!errors.length) {
-        for (const finding of checkRules(genSchema(model, schema))) {
-          findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
-        }
-      }
-    } else if (schema) {
-      for (const finding of checkRules(schema)) {
-        findings.push({ ...finding, chart: entry.name, description: `${entry.name}/${finding.group}: ${finding.message}` })
-      }
-    }
-
-    const drift = await chartDrift(chartDir)
-    if (blocksCommit(drift.state)) {
-      // rules/ that cannot be read has nothing to regenerate from: say what
-      // is wrong with it, not that the products are behind (#172).
-      const detail = drift.errors?.length
-        ? `rules/ cannot be read (${drift.errors.slice(0, 3).join('; ')}${drift.errors.length > 3 ? `; and ${drift.errors.length - 3} more` : ''}) — fix it before committing`
-        : `products are out of date${drift.files ? ` (${drift.files.join(', ')})` : ''} — regenerate before committing`
-      findings.push({ severity: 'commit', kind: `drift-${drift.state}`, chart: entry.name, description: `${entry.name}: ${detail}` })
-    } else if (drift.state === 'legacy') {
-      unconverted.push(entry.name)
-    }
-  }
-  return { findings, unconverted }
-}
-
+// `git status --porcelain -z`: each entry NUL-ended, the path as it is (no
+// quoting: `café-prod`, `my folder` and `q"x` reach the page as they are,
+// and come back in a diff request as the real path). A rename or copy is
+// followed by its old path, which is not a change of its own.
 function parseStatus(raw) {
   const changes = { modified: [], added: [], deleted: [] }
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue
-    const code = line.slice(0, 2)
-    const file = line.slice(3)
+  const entries = raw.split('\0')
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
+    if (!entry.trim()) continue
+    const code = entry.slice(0, 2)
+    const file = entry.slice(3)
+    if (code.includes('R') || code.includes('C')) i++
     if (code.includes('D')) changes.deleted.push(file)
     else if (code.includes('?') || code.includes('A')) changes.added.push(file)
     else changes.modified.push(file)
@@ -85,19 +40,60 @@ function hasRemote() {
   return !!process.env.GITLAB_TOKEN
 }
 
+// The branch HEAD names — also when it has no commit yet (a repo just made
+// by `git init`), which rev-parse cannot say. A detached HEAD is "HEAD".
 async function getBranch(cwd) {
+  const named = await git(cwd, 'symbolic-ref', '--short', '-q', 'HEAD').catch(() => '')
+  if (named.trim()) return named.trim()
   const result = await git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD')
   return result.trim()
 }
 
+// A file as git names it at a commit: its spelling only.
+function pathAt(file) {
+  const problem = pathProblem(file, 'read')
+  return problem ? { ok: false, error: `Invalid file path: ${problem.why}` } : { ok: true, rel: file.split('/').filter(x => x && x !== '.').join('/') }
+}
+
+const COMMIT_MESSAGE = 'message required: the commit message, as text'
+
+// A count in the query, as parseInt reads it, kept between min and max; one
+// left out or not a number is `fallback`.
+const count = (fallback, min, max) => z.any().transform(v => Math.min(max, Math.max(min, parseInt(v, 10) || fallback))).default(fallback)
+
+// The refusal of a Commit (or Push) while parked content is in the repo:
+// each named, with what to do (parkedSaid). Null when there is none. A parked
+// deployment sync.yaml still names (a delete stopped before sync.yaml was
+// written) is not done with by removing it: the message says to unlink too.
+// A folder that could not be listed may hold some: it refuses too, named.
+async function parkedRefusal(cwd) {
+  const { parked, unlisted } = await parkedSearch(cwd)
+  if (!parked.length && !unlisted.length) return null
+  const notListed = unlisted.map(u => ({ severity: 'commit', kind: 'parked-unknown', regenerable: false, file: u.rel || '.',
+    description: unlistedSaid(u) }))
+  if (!parked.length) return { status: 409, body: { error: 'Commit refused', findings: notListed }, unknownOnly: true }
+  const { registry } = await syncAnswer(openRepo(cwd))
+  const inSync = original => {
+    if (!registry) return ''
+    const source = getSourceForTarget(registry, original)
+    const targets = getTargetsForSource(registry, original)
+    if (!source && !targets.length) return ''
+    const what = source ? `a sync target of ${source}` : `the sync source of ${targets.join(', ')}`
+    return ` — sync.yaml still lists ${original} as ${what}: removed, unlink ${source ? 'it' : 'them'} too (Unlink sync), or Commit refuses that next`
+  }
+  const said = parkedSaid(parked, chartsDir())
+  return { status: 409, body: { error: 'Commit refused', findings: [...parked.map((p, i) => ({ severity: 'commit', kind: 'parked', regenerable: false, file: p.rel,
+    description: `${said[i]}, then commit${inSync(p.original)}` })), ...notListed] } }
+}
+
 export default function gitRouter() {
   const router = Router()
+  router.use(answersWithoutPaths)
 
-  router.get('/status', async (req, res) => {
-    const cwd = req.gitopsDir
+  router.get('/status', route('git.status', {}, async (input, { gitopsDir: cwd, res }) => {
     try {
       const branch = await getBranch(cwd)
-      const raw = await git(cwd, 'status', '--porcelain')
+      const raw = await git(cwd, 'status', '--porcelain', '-z')
       const changes = parseStatus(raw)
       const changeCount = changes.modified.length + changes.added.length + changes.deleted.length
       const remote = hasRemote()
@@ -113,43 +109,99 @@ export default function gitRouter() {
 
       res.json({ branch, changes, changeCount, behindMain, hasRemote: remote })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.post('/commit', async (req, res) => {
-    const cwd = req.gitopsDir
-    const { message } = req.body
-    if (!message) return res.status(400).json({ error: 'message required' })
+  // Make every routing resource that is behind again, and copy each sync
+  // target's from its source (#179). Writes files, commits nothing: the
+  // diff is there to look at before committing.
+  router.post('/routing/regenerate', route('git.regenerate', {}, async (input, { gitopsDir }) => (
+    applyChange(await planChange(openRepo(gitopsDir), { kind: 'regenerate-routing' }))
+  )))
+
+  // The message is text: anything else would be committed as
+  // "[object Object]" or "5".
+  router.post('/commit', route('git.commit', {
+    body: z.object({ message: z.string({ error: COMMIT_MESSAGE }).refine(m => m.trim(), { error: COMMIT_MESSAGE }) }),
+  }, async ({ body: { message } }, { gitopsDir: cwd, res }) => {
 
     try {
-      await git(cwd, 'add', '-A')
-      const statusRaw = await git(cwd, 'status', '--porcelain')
-      if (!statusRaw.trim()) {
-        return res.status(400).json({ error: 'no changes to commit' })
-      }
+      // Add, check, commit in one go: a deployment save or a Regenerate in
+      // between would leave the checks passing on files not in the index.
+      const outcome = await withSyncRegistryLock(cwd, async () => {
+        let charts, deployments
+        // Content a write moved aside and did not put back or remove (a
+        // crash midway, a failed put-back) is never committed by itself.
+        // A folder that could not be listed may hold some: what the checks
+        // below refuse is said first (often the same folder, and why);
+        // when they pass, the commit is still refused, naming the folder.
+        const parked = await parkedRefusal(cwd)
+        if (parked && !parked.unknownOnly) return parked
+        try {
+          try {
+            await git(cwd, 'add', '-A', '--', '.', TEMP_PATHSPEC_EXCLUDE)
+          } catch (err) {
+            // A file git cannot read: the commit is refused naming it, as
+            // the checks name one they cannot read.
+            const unreadable = /open\("([^"]+)"\): ([^\n]+)/.exec(`${err.stderr || err.message}`)
+            if (unreadable) return { status: 409, body: { error: 'Commit refused', findings: [{ severity: 'commit', kind: 'file-unreadable', regenerable: false, description: `${unreadable[1]} cannot be read (${unreadable[2].toLowerCase()})` }] } }
+            throw err
+          }
+          const statusRaw = await git(cwd, 'status', '--porcelain', '--', '.', TEMP_PATHSPEC_EXCLUDE)
+          if (!statusRaw.trim()) return { status: 400, body: { error: 'no changes to commit' } }
 
-      const { findings, unconverted } = await chartCommitBlockers(cwd)
-      if (findings.length) {
-        return res.status(409).json({ error: 'Rule checks failed', findings })
-      }
+          charts = await chartCommitBlockers(cwd)
+          // Notification routing, sync.yaml and the Template each deployment
+          // renders are checked too: a resource behind its routing.yaml would
+          // silently stop notifying (#179).
+          deployments = await deploymentCommitBlockers(cwd)
+        } catch (err) {
+          // Only these steps read the files as they change; a failure in
+          // `git commit` itself (a hook) is never "try again".
+          err.whileReading = true
+          throw err
+        }
+        const findings = [...charts.findings, ...deployments.findings]
+        if (findings.length) {
+          return { status: 409, body: { error: 'Commit refused', findings, regenerable: deployments.regenerable,
+            ...(deployments.unreadable.length ? { unreadable: deployments.unreadable } : {}) } }
+        }
+        if (parked) return { status: parked.status, body: parked.body }
 
-      await git(cwd, 'commit', '-m', message)
-      const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
-      res.json({ sha, message, unconverted })
+        await repoGit(cwd).commit(message)
+        const sha = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
+        return { status: 200, body: { sha, message, unconverted: charts.unconverted,
+          ...(deployments.routingProblems.length ? { routingProblems: deployments.routingProblems } : {}),
+          ...(deployments.routingWarnings?.length ? { routingWarnings: deployments.routingWarnings } : {}),
+          ...(deployments.valueWarnings?.length ? { valueWarnings: deployments.valueWarnings } : {}),
+          ...(charts.warnings?.length ? { templateWarnings: charts.warnings } : {}),
+          ...(deployments.unreadable.length ? { unreadable: deployments.unreadable } : {}) } }
+      })
+      res.status(outcome.status).json(outcome.body)
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      // A file that went away while it was being added or checked: another
+      // tab saving, a chart being deleted (#187). Nothing was committed.
+      if (err?.whileReading && await filesChanging(err, cwd)) {
+        console.error('Commit: files changed, asked to try again', err)
+        return res.status(409).json({ error: 'Files changed while committing — try again', retry: true })
+      }
+      console.error('Commit failed', err)
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.post('/push', async (req, res) => {
-    const cwd = req.gitopsDir
+  // These change the working tree or the index: they wait for a save in
+  // progress, and a save for them, as commit does.
+  router.post('/push', holdSyncRegistryLock, route('git.push', {}, async (input, { gitopsDir: cwd, res }) => {
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
     try {
-      await git(cwd, 'add', '-A')
-      const statusRaw = await git(cwd, 'status', '--porcelain')
+      const parked = await parkedRefusal(cwd)
+      if (parked) return res.status(parked.status).json(parked.body)
+      await git(cwd, 'add', '-A', '--', '.', TEMP_PATHSPEC_EXCLUDE)
+      const statusRaw = await git(cwd, 'status', '--porcelain', '--', '.', TEMP_PATHSPEC_EXCLUDE)
       if (statusRaw.trim()) {
         return res.status(400).json({ error: 'commit changes before pushing' })
       }
@@ -168,29 +220,28 @@ export default function gitRouter() {
         return res.status(401).json({ error: 'Authentication failed: token may have expired', code: 'TOKEN_EXPIRED' })
       }
       if (err.message.includes('permission') || err.message.includes('denied')) {
-        return res.status(403).json({ error: err.message })
+        return res.status(403).json({ error: await withoutPath(err.message, cwd) })
       }
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.post('/discard', async (req, res) => {
-    const cwd = req.gitopsDir
+  router.post('/discard', holdSyncRegistryLock, route('git.discard', {}, async (input, { gitopsDir: cwd, res }) => {
     try {
       await git(cwd, 'checkout', '--', '.')
       await git(cwd, 'clean', '-fd')
       res.json({ status: 'ok' })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.get('/log', async (req, res) => {
-    const cwd = req.gitopsDir
-    // git log -n with a negative number lists everything; keep it to a page.
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20))
-    // skip pages back through history (#81): skip=20&limit=20 is commits 21–40.
-    const skip = Math.max(0, parseInt(req.query.skip, 10) || 0)
+  // git log -n with a negative number lists everything: limit is kept to a
+  // page. skip pages back through history (#81): skip=20&limit=20 is
+  // commits 21–40. A number that is not one is the default.
+  router.get('/log', route('git.log', {
+    query: z.object({ limit: count(20, 1, 100), skip: count(0, 0, Infinity) }),
+  }, async ({ query: { limit, skip } }, { gitopsDir: cwd, res }) => {
 
     try {
       // A repository with no commits yet has no history, not a broken one.
@@ -198,7 +249,7 @@ export default function gitRouter() {
 
       const SEP = '---GIT-LOG-SEP---'
       const format = `%H${SEP}%h${SEP}%s${SEP}%an${SEP}%aI`
-      const raw = await git(cwd, 'log', `--format=${format}`, `--skip=${skip}`, `-n`, `${limit}`)
+      const raw = await repoGit(cwd).log(format, skip, limit)
       const commits = []
 
       for (const line of raw.trim().split('\n')) {
@@ -206,55 +257,54 @@ export default function gitRouter() {
         const [sha, shortSha, message, author, date] = line.split(SEP)
         let files = []
         try {
-          const diffTree = await git(cwd, 'diff-tree', '--no-commit-id', '-r', '--name-status', sha)
-          files = diffTree.trim().split('\n').filter(Boolean).map(l => {
-            const [statusCode, ...parts] = l.split('\t')
-            const file = parts.join('\t')
-            const status = statusCode.startsWith('A') ? 'A' : statusCode.startsWith('D') ? 'D' : 'M'
-            return { file, status }
-          })
+          // -z: the paths as they are, not quoted (see parseStatus).
+          const fields = (await git(cwd, 'diff-tree', '--no-commit-id', '-r', '--name-status', '-z', '--end-of-options', sha)).split('\0')
+          for (let i = 0; i + 1 < fields.length; i += 2) {
+            const statusCode = fields[i]
+            if (!statusCode) break
+            // A rename or copy: its old path, then the new one.
+            if (/^[RC]/.test(statusCode)) i++
+            const file = fields[i + 1]
+            files.push({ file, status: statusCode.startsWith('A') ? 'A' : statusCode.startsWith('D') ? 'D' : 'M' })
+          }
         } catch { /* initial commit has no parent */ }
         commits.push({ sha, shortSha, message, author, date, files })
       }
 
       res.json(commits)
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.get('/diff', async (req, res) => {
-    const cwd = req.gitopsDir
-    const file = req.query.file
-    const ref = req.query.ref
+  // The file and the ref are decided below, as a work-tree path or a path
+  // at a commit (paths.js) and a commit (repo/git.js).
+  router.get('/diff', route('git.diff', {
+    query: z.object({ file: z.any().optional(), ref: z.any().optional() }),
+  }, async ({ query: { file, ref } }, { gitopsDir: cwd, res }) => {
 
-    if (!file || typeof file !== 'string' || file.includes('..') || path.isAbsolute(file)) {
-      return res.status(400).json({ error: 'Invalid file path' })
+    // A tracked file, dot-files and dot-folders among them; never git's
+    // own (paths.js). At a commit git holds what is shown: only the
+    // spelling is checked, nothing on disk; in the work tree, the folder it
+    // is in must really be in the repo.
+    const where = ref === undefined
+      ? await parsePath(file, 'read', { root: cwd, what: 'file path' })
+      : pathAt(file)
+    if (!where.ok) return res.status(400).json({ error: where.error })
+    const g = repoGit(cwd)
+    // A commit the policy allows and git has (repo/git.js).
+    if (ref !== undefined) {
+      const commit = await g.commitOf(ref)
+      if (!commit.ok) return res.status(400).json({ error: `Invalid commit: ${commit.why}` })
     }
 
-    try {
-      let original = ''
-      let modified = ''
+    const [original, modified] = ref
+      ? [await g.show(`${ref}~1`, where.rel), await g.show(ref, where.rel)]
+      : [await g.show('HEAD', where.rel), await g.working(where.rel)]
+    res.json({ file, original, modified })
+  }))
 
-      if (ref) {
-        try { original = await git(cwd, 'show', `${ref}~1:${file}`) } catch { original = '' }
-        try { modified = await git(cwd, 'show', `${ref}:${file}`) } catch { modified = '' }
-      } else {
-        try { original = await git(cwd, 'show', `HEAD:${file}`) } catch { original = '' }
-        try {
-          const filePath = path.join(cwd, file)
-          modified = await fs.readFile(filePath, 'utf8')
-        } catch { modified = '' }
-      }
-
-      res.json({ file, original, modified })
-    } catch (err) {
-      res.status(500).json({ error: err.message })
-    }
-  })
-
-  router.post('/pull', async (req, res) => {
-    const cwd = req.gitopsDir
+  router.post('/pull', holdSyncRegistryLock, route('git.pull', {}, async (input, { gitopsDir: cwd, res }) => {
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
@@ -272,12 +322,11 @@ export default function gitRouter() {
       if (isAuthError(err)) {
         return res.status(401).json({ error: 'Authentication failed: token may have expired', code: 'TOKEN_EXPIRED' })
       }
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  router.post('/sync', async (req, res) => {
-    const cwd = req.gitopsDir
+  router.post('/sync', holdSyncRegistryLock, route('git.sync', {}, async (input, { gitopsDir: cwd, res }) => {
     const remote = hasRemote()
     if (!remote) return res.status(404).json({ error: 'no remote configured' })
 
@@ -293,34 +342,14 @@ export default function gitRouter() {
       const head = (await git(cwd, 'rev-parse', '--short', 'HEAD')).trim()
       res.json({ status: 'ok', head })
     } catch (err) {
-      res.status(500).json({ error: err.message })
+      res.status(500).json({ error: await withoutPath(err.message, cwd) })
     }
-  })
+  }))
 
-  return router
+  return declaredRoutes(router)
 }
 
 function isAuthError(err) {
   const msg = err.message.toLowerCase()
   return msg.includes('authentication failed') || msg.includes('could not read username') || msg.includes('401')
-}
-
-async function pushWithToken(cwd, branch, token) {
-  const { execFile } = await import('child_process')
-  const askpassFile = path.join(os.tmpdir(), `askpass-${process.pid}-${Date.now()}.sh`)
-  await fs.writeFile(askpassFile, `#!/bin/sh\necho "${token}"`, { mode: 0o700 })
-  try {
-    await new Promise((resolve, reject) => {
-      execFile('git', ['push', 'origin', branch], {
-        cwd,
-        env: { ...process.env, GIT_ASKPASS: askpassFile },
-        timeout: 60000,
-      }, (err, stdout, stderr) => {
-        if (err) reject(new Error(stderr?.trim() || err.message))
-        else resolve(stdout)
-      })
-    })
-  } finally {
-    await fs.unlink(askpassFile).catch(() => {})
-  }
 }

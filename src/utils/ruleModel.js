@@ -23,13 +23,36 @@
 const VAR_RE = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g
 const HELM_PASSTHROUGH_RE = /\{\{([\s\S]*?)\}\}/g
 
+// What escapePrometheusTemplates rewrites, leftmost first: a whole
+// `{{ … }}`; else a run of `{` holding a `{{` that no `}}` follows; else one
+// `{` right before a `${var}`, which becomes `{{ … }}` and would make `{{{`.
+const ESCAPED_RE = new RegExp(`${HELM_PASSTHROUGH_RE.source}|\\{\\{+|\\{(?=${VAR_RE.source})`, 'g')
+
 /**
- * Wrap Prometheus templates so `helm template` emits them verbatim.
- * The backtick form is used rather than `{{ "..." }}` because annotation
- * values are usually already inside YAML double quotes.
+ * Wrap Prometheus templates — and any other `{{` — so `helm template` emits
+ * them verbatim. A `}}` on its own is text to Helm and stays.
+ *
+ * A raw string (backticks) holds the text as it is; one holding a backtick
+ * (`{{ \`raw\` }}`) is written as a quoted string instead. (A carriage
+ * return, which a raw string would drop, is refused at save: ruleChecks.) Helm replaces the action before YAML
+ * reads the line, so either form is fine inside a YAML double-quoted label.
  */
 export function escapePrometheusTemplates(str) {
-  return String(str).replace(HELM_PASSTHROUGH_RE, (_, inner) => '{{ `{{' + inner + '}}` }}')
+  return String(str).replace(ESCAPED_RE, text => (text.includes('`')
+    ? `{{ ${JSON.stringify(text)} }}`
+    : '{{ `' + text + '` }}'))
+}
+
+/**
+ * Whether a text has a `{{` with no `}}` after it — a template Prometheus,
+ * vmalert and Alertmanager cannot read. A `}}` on its own is plain text to
+ * them.
+ */
+export function hasUnclosedTemplate(value) {
+  for (let at = value.indexOf('{{'); at >= 0; at = value.indexOf('{{', value.indexOf('}}', at + 2) + 2)) {
+    if (value.indexOf('}}', at + 2) < 0) return true
+  }
+  return false
 }
 
 /**
@@ -55,7 +78,7 @@ export function expandVars(str, vars) {
  * inside a YAML double-quoted scalar, where a nested double quote would break
  * the document.
  */
-function helmLiteral(value) {
+export function helmLiteral(value) {
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return '`' + String(value) + '`'
 }
@@ -70,13 +93,33 @@ function helmLiteral(value) {
  * also replaces 0, "" and false — a row setting a threshold of 0 against a
  * default of 80 rendered `> 80`.
  */
+// A group's compiled derived values (#118) ride on the defaults object under
+// this key, so every renderValue call site sees them without a new
+// parameter threaded through each one.
+export const DERIVED = Symbol('derived')
+
+/**
+ * The number columns of a group, riding on the defaults object as DERIVED
+ * does. Helm reads every number in values.yaml as a float64 and prints one
+ * with %v: 1000000 as 1e+06, 1234567 as 1.234567e+06 — a matcher
+ * `port="1e+06"` matches nothing, a label or a summary says 1e+06. toJson
+ * prints the number as JSON does: 1000000, 0.5, -3; only past 1e21 or
+ * under 1e-6 with an exponent (1e+21, 1e-7), which PromQL reads the same.
+ */
+export const NUMERIC = Symbol('numeric')
+
 export function substituteVars(str, ref = '.', defaults) {
   const dict = ref === '.' ? '.' : ref.replace(/\.$/, '')
+  const derived = defaults?.[DERIVED]
+  const numeric = defaults?.[NUMERIC]
   return String(str).replace(VAR_RE, (_, name) => {
-    const fallback = defaults?.[name]
+    if (derived && Object.hasOwn(derived, name)) return derived[name].helm
+    // Own keys only: a column may be called constructor or valueOf.
+    const fallback = defaults && Object.hasOwn(defaults, name) ? defaults[name] : undefined
+    const asNumber = numeric?.has(name) ? ' | toJson' : ''
     return fallback === undefined
-      ? `{{ ${ref}${name} }}`
-      : `{{ dig "${name}" ${helmLiteral(fallback)} ${dict} }}`
+      ? `{{ ${ref}${name}${asNumber} }}`
+      : `{{ dig "${name}" ${helmLiteral(fallback)} ${dict}${asNumber} }}`
   })
 }
 
@@ -112,6 +155,9 @@ export function prometheusTemplatesIn(str) {
   return String(str).match(HELM_PASSTHROUGH_RE) || []
 }
 
+/** A string with its `${var}` references taken out. */
+export const withoutVars = str => String(str).replace(VAR_RE, '')
+
 /** Every `${var}` name referenced by a string. */
 export function varsIn(str) {
   const names = []
@@ -143,13 +189,18 @@ export function ruleVars(rule) {
  * expandVars does, and, since `${selector}` stands for them, its group's
  * selector columns.
  */
-export function ruleColumns(rule, selectors, vars) {
+export function ruleColumns(rule, selectors, vars, derived) {
   const names = new Set()
+  // A derived value (#118) stands for the columns its expression reads.
+  const addName = name => {
+    if (derived && Object.hasOwn(derived, name)) for (const col of derived[name].columns || []) names.add(col)
+    else names.add(name)
+  }
   for (const name of ruleVars(rule)) {
     if (vars && Object.prototype.hasOwnProperty.call(vars, name)) {
-      for (const inner of varsIn(vars[name])) names.add(inner)
+      for (const inner of varsIn(vars[name])) addName(inner)
     } else {
-      names.add(name)
+      addName(name)
     }
   }
   if (names.has('selector')) for (const name of selectors || []) names.add(name)
@@ -162,7 +213,7 @@ export function ruleColumns(rule, selectors, vars) {
 export function columnUsage(group) {
   const usage = Object.create(null)
   for (const r of group.rules || []) {
-    for (const n of ruleColumns(r, group.selectors, group.vars)) (usage[n] ||= []).push(r.alert || r.record || '(unnamed)')
+    for (const n of ruleColumns(r, group.selectors, group.vars, group.derived)) (usage[n] ||= []).push(r.alert || r.record || '(unnamed)')
   }
   return usage
 }
@@ -173,7 +224,7 @@ export function commonColumnUsage(groups, commonColumns) {
   for (const g of Object.values(groups)) {
     if (g.custom) continue
     for (const r of g.rules || []) {
-      for (const n of ruleColumns(r, g.selectors, g.vars)) {
+      for (const n of ruleColumns(r, g.selectors, g.vars, g.derived)) {
         if (Object.prototype.hasOwnProperty.call(commonColumns, n)) (usage[n] ||= new Set()).add(g.group)
       }
     }

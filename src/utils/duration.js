@@ -39,3 +39,44 @@ export function durationFault(value) {
   if (ns > MAX_NS) return { reason: 'too-long' }
   return { reason: null, zero: ns === 0n }
 }
+
+// A duration column's values (#117): text with a unit, every time. A bare 0
+// or a bare number is refused there — `[21]` is 21 seconds, `for: 21` fails
+// — so it says what to write instead. For a JSON Schema: units only, no
+// lookahead, with `minLength: 1`.
+export const DURATION_COLUMN_PATTERN = '^([0-9]+y)?([0-9]+w)?([0-9]+d)?([0-9]+h)?([0-9]+m)?([0-9]+s)?([0-9]+ms)?$'
+
+/**
+ * Why a duration column's cell is refused, or null. `position` is where its
+ * column goes (derivedPosition): a range or, in PromQL, an offset cannot be
+ * 0; a `for`, `keep_firing_for` and anywhere else can be 0s.
+ */
+export function durationCellFault(value, position) {
+  if (typeof value === 'number') return `${value} is a number — write it with a unit, e.g. ${Number.isInteger(value) && value >= 0 ? value : 30}s`
+  if (value === '0') return '"0" has no unit — write 0s'
+  // Digits only, the commonest slip: say which unit to add, as for a number.
+  if (typeof value === 'string' && /^[0-9]+$/.test(value)) return `"${value}" has no unit — write it with one, e.g. ${value}s or ${value}m`
+  const { reason, zero } = durationFault(value)
+  if (reason === 'format') return `${JSON.stringify(value)} is not a duration — units from the largest down, each once, e.g. 90s, 5m, 1h30m`
+  if (reason === 'too-long') return `"${value}" is longer than a duration can be (about 292 years)`
+  if (zero && position === 'range') return `"${value}" is 0, and a range has to be more than 0`
+  if (zero && position?.includes('offset')) return `"${value}" is 0, and an offset cannot be 0`
+  return null
+}
+
+/**
+ * Why a duration written in a rules file is refused, or null (#172). One
+ * format for both evaluators: vmalert reads more (30m1h, 1.5h, a bare 21),
+ * but everything Prometheus reads it reads the same way.
+ */
+export function ruleDurationProblem(key, value) {
+  const { reason } = durationFault(value)
+  if (reason === 'number') {
+    return value === 0
+      ? `${key} 0 is a number — a duration is text: write '0' or 0s`
+      : `${key} ${value} is a number — a duration is text with a unit, e.g. ${Number.isInteger(value) && value > 0 && durationFault(`${value}s`).reason === null ? value : 30}s`
+  }
+  if (reason === 'format') return `${key} ${JSON.stringify(value)} is not a duration — units from the largest down, each once, e.g. 30s, 5m, 1h30m`
+  if (reason === 'too-long') return `${key} "${value}" is longer than a duration can be (about 292 years)`
+  return null
+}

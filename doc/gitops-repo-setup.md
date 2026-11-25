@@ -11,6 +11,12 @@ Chart.lock
 **/charts/*.tgz
 ```
 
+A repo AlertForge fills with its sample data at the first start gets this
+file with the sample, when it has none: in a new folder both are in the
+repo's first commit; in a repo that was there with no commit of its own
+content they are left for the first Commit. Any other repo is yours: add the
+file yourself.
+
 `**/` matters: a pattern with a `/` in it is matched from the repo's root, so
 `charts/*.tgz` alone would miss `deployments/<chart>/<env>/charts/*.tgz`, the
 one every render writes.

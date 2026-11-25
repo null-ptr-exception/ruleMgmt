@@ -1,111 +1,62 @@
 /**
- * Reading a chart's source and products off disk, and the drift between them
- * — see issue #57. Shared by the templates, render and git routes.
+ * A Template's source and products as the repo loader reads them, and the
+ * drift between them (#57). Shared by the templates, render and git routes
+ * and the command line tools. The server's writes are the writer's
+ * (repo/changes/); the command line tools write with writeToolFiles, below.
  */
 
-import fs from 'fs/promises'
 import path from 'path'
-import { computeDrift, generateProducts } from '../../src/utils/drift.js'
-import { parseRulesDir, schemaToModel } from '../../src/utils/rulesFile.js'
-import { objectMetaFromEnv } from '../../src/utils/objectMeta.js'
+import { UnreadableError } from './readIfThere.js'
+import { openRepo } from '../repo/openRepo.js'
+import { chartsDir } from '../repo/template.js'
+import { openRepoAt } from '../repo/locate.js'
+import { writeFiles } from '../repo/write.js'
+import { linkedFolderProblem, writeRefusal } from '../repo/writePath.js'
 
-async function readOr(file) {
-  try { return await fs.readFile(file, 'utf-8') } catch { return null }
+/**
+ * The Template folder `<CHARTS_DIR>/<name>`, every file of it read once
+ * through the repo loader (server/repo/template.js loadTemplateFiles): its
+ * files, what they add up to, and `findings`. null when there is no such
+ * folder. A folder that cannot be read or leads out of the repo, and a
+ * file nothing can be worked out without (rules/, templates/, a schema
+ * that is the source), is an UnreadableError naming it: taken for none, a
+ * chart's rules/ would make it a legacy or empty chart.
+ */
+export async function readTemplate(gitopsDir, name, repo = openRepo(gitopsDir)) {
+  const base = chartsDir()
+  if (base === null) throw new UnreadableError(String(process.env.CHARTS_DIR), { reason: 'CHARTS_DIR is no folder of the repo' })
+  const t = await repo.templateFiles(`${base}/${name}`)
+  if (t.state === 'absent') return null
+  const bad = t.state === 'unreadable' ? t : t.value.unreadable
+  if (bad) throw new UnreadableError(path.join(gitopsDir, bad.file), { reason: bad.why })
+  return { ...t.value, findings: t.findings }
 }
 
 /**
- * Write only the entries whose on-disk content differs. Returns their paths.
- *
- * Sequential, not transactional. Callers compute every entry before calling
- * this, so a generation, check or breaking-change failure leaves the chart
- * untouched — that is the "all-or-nothing" the save route promises. An I/O
- * failure partway through (disk full, permissions) is not rolled back and
- * leaves the files before it written; ruling that out would take writing to
- * temp files and renaming them into place.
+ * readTemplate of a Template folder given by its path (a command line
+ * tool's argument), in the repo it is in (server/repo/locate.js).
  */
-export async function writeChanged(entries) {
-  const written = []
-  for (const [abs, content] of entries) {
-    if (await readOr(abs) !== content) {
-      await fs.mkdir(path.dirname(abs), { recursive: true })
-      await fs.writeFile(abs, content, 'utf-8')
-      written.push(abs)
-    }
-  }
-  return written
-}
-
-/** { '<name>.yaml': text } for a directory, or null when the directory is absent. */
-async function readYamlDir(dir) {
-  let names
-  try {
-    names = (await fs.readdir(dir)).filter(f => f.endsWith('.yaml'))
-  } catch {
-    return null
-  }
-  const out = {}
-  for (const name of names) out[name] = await fs.readFile(path.join(dir, name), 'utf-8')
-  return out
-}
-
-export async function readChartArtifacts(chartDir) {
-  const rulesFiles = await readYamlDir(path.join(chartDir, 'rules'))
-  const templateFiles = (await readYamlDir(path.join(chartDir, 'templates'))) || {}
-
-  let schema = null
-  try {
-    schema = JSON.parse(await fs.readFile(path.join(chartDir, 'values.schema.json'), 'utf-8'))
-  } catch { /* absent or unparseable */ }
-
-  return { rulesFiles, templateFiles, schema }
+export async function readTemplateAt(chartDir) {
+  const { repo, root, rel } = openRepoAt(chartDir)
+  const t = await repo.templateFiles(rel)
+  if (t.state === 'absent') return null
+  const bad = t.state === 'unreadable' ? t : t.value.unreadable
+  if (bad) throw new UnreadableError(path.join(root, bad.file), { reason: bad.why })
+  return { ...t.value, findings: t.findings, repo, root }
 }
 
 /**
- * The chart's rule model: parsed from rules/ when the chart has one, else
- * adapted from a legacy schema. The schema of a migrated chart carries no
- * rules, so reading it there yields groups with none. `fromRules` says which;
- * `model` is null when there is neither.
+ * Write a command line tool's files ([{ rel, text }], text null to remove)
+ * into the repo at `root`: each whole, all or none (the writer's
+ * writeFiles), so a run stopped part-way leaves no file cut off and one
+ * that cannot be written leaves the others as they were. A file whose
+ * folder is reached through a link is not written. Throws an Error naming
+ * the file in the repo. It takes no lock: the tool runs in its own
+ * process, beside any server on the same repo, as before.
  */
-export async function readChartModel(chartDir) {
-  const { rulesFiles, schema } = await readChartArtifacts(chartDir)
-  const fromRules = !!(rulesFiles && Object.keys(rulesFiles).length)
-  let model = null
-  try {
-    if (fromRules) model = parseRulesDir(rulesFiles).model
-    else if (schema) model = schemaToModel(schema).model
-  } catch { /* an unparseable source: callers go without */ }
-  return { model, fromRules, schema }
-}
-
-/** { state, files?, errors? } — see computeDrift. */
-export async function chartDrift(chartDir) {
-  const { rulesFiles, templateFiles, schema } = await readChartArtifacts(chartDir)
-  return computeDrift({ rulesFiles, schema, templateFiles, objectMeta: objectMetaFromEnv() })
-}
-
-/**
- * Write the products a chart's own `rules/*.yaml` generates that are absent
- * on disk. Used when a chart is opened and some are missing — there is
- * nothing to orphan, so it is not asked. A product that is there but differs
- * (hand-edited, or behind the source) is left alone: that is `stale`, which
- * the editor reports and a Save resolves, not something a read overwrites.
- * Returns null when there is no rules/ source, or { errors } / { written }.
- */
-export async function regenerateProducts(chartDir) {
-  const { rulesFiles, schema } = await readChartArtifacts(chartDir)
-  if (!rulesFiles || !Object.keys(rulesFiles).length) return null
-
-  const { model, errors } = parseRulesDir(rulesFiles)
-  if (errors.length) return { errors }
-
-  const { schemaText, templates } = generateProducts(model, schema, objectMetaFromEnv())
-  const tmplDir = path.join(chartDir, 'templates')
-  const entries = [
-    [path.join(chartDir, 'values.schema.json'), schemaText],
-    ...Object.entries(templates).map(([name, content]) => [path.join(tmplDir, name), content]),
-  ]
-  const absent = []
-  for (const entry of entries) if (await readOr(entry[0]) === null) absent.push(entry)
-  const written = await writeChanged(absent)
-  return { written: written.map(p => path.relative(chartDir, p)) }
+export async function writeToolFiles(root, files) {
+  const linked = await linkedFolderProblem(root, files.map(f => f.rel))
+  if (linked) throw new Error(writeRefusal(linked).body.error)
+  const wrote = await writeFiles(root, files)
+  if (!wrote.ok) throw new Error(wrote.answer.body.error)
 }

@@ -31,7 +31,7 @@
  *     `disableRouteContinueEnforce` is set, and then an unwritten `continue`
  *     would stop every alert here
  *   - a webhook address that carries a credential is refused; it belongs in
- *     a Secret (`urlSecret`)
+ *     a Secret (`urlSecret`). So is a mail header that carries one
  *
  * The output is a complete resource, written into the deployment's
  * templates/ so the deployment chart deploys it. Helm still reads the file as
@@ -41,7 +41,8 @@
 
 import yaml from 'js-yaml'
 import { ROUTING } from './outputs.js'
-import { routingSchema, configSchema, configNameProblem, schemaProblems, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
+import { KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
+import { routingSchema, configSchema, configNameProblem, schemaProblems, sharedConfigsSchema, isSharedRef, isEmptyGroupList, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
 
 // The page marks a timing field with the same check the save makes (#93).
 export { timingProblem } from './routingSchema.js'
@@ -83,10 +84,87 @@ export function urlCredential(url) {
   return null
 }
 
-function credentialProblem(where, config) {
-  if (config.type !== 'webhook' || config.url === undefined) return null
+// Headers that carry a credential by their name alone.
+const CREDENTIAL_HEADERS = new Set(['authorization', 'proxy-authorization'])
+
+/**
+ * Why a mail header must not be written in routing.yaml, or null: it names
+ * a credential, or a word of its value looks like a token (looksLikeToken). An e-mail
+ * config's headers cannot be read from a Secret, so there is nowhere else
+ * to put it. The subject is not judged by its words — it is what people
+ * read, and long names with digits in them are common there.
+ */
+export function headerCredential(name, value) {
+  if (CREDENTIAL_HEADERS.has(name.toLowerCase())) return 'it carries a credential'
+  // Word by word, and a hyphenated word part by part: `db-team-2026` is
+  // words, `xoxb-1-abcdef1234567890abcdef` holds a token.
+  if (name.toLowerCase() !== 'subject' && value.split(/[\s-]+/).some(looksLikeToken)) return 'its value looks like a token'
+  return null
+}
+
+function credentialProblems(where, config) {
+  if (config.type === 'email') {
+    return Object.entries(config.headers ?? {}).flatMap(([name, value]) => {
+      const why = headerCredential(name, value)
+      return why ? [`${where}.headers.${name}: refused because ${why}; a credential does not belong in routing.yaml, which is in git, and a mail header cannot be read from a Secret`] : []
+    })
+  }
+  if (config.url === undefined) return []
   const why = urlCredential(config.url)
-  return why ? `${where}: url is refused because ${why}; put it in a Secret and use urlSecret` : null
+  return why ? [`${where}: url is refused because ${why}; put it in a Secret and use urlSecret`] : []
+}
+
+/**
+ * What a config that passes the checks will do that is worth saying — never
+ * a reason to refuse it: the dialog, the save, the Routing and Shared
+ * configs pages and the commit checks show these and go ahead.
+ */
+export function configWarnings(name, config) {
+  const where = `configs.${name}`
+  const out = []
+  if (config?.type === 'email' && isEmptyGroupList(config.to)) {
+    out.push(`${where}: to "${config.to}" is a group with no members — this config notifies nobody`)
+  }
+  // Alertmanager fills each missing SMTP login field — user name, password,
+  // identity, secret — from its global settings, whatever the server
+  // (measured with Alertmanager 0.27 and 0.28 against a test SMTP server).
+  if (config?.type === 'email' && typeof config.smarthost === 'string') {
+    const anyone = config.tlsConfig?.insecureSkipVerify === true ? ' — and with insecureSkipVerify, to anyone who answers there' : ''
+    if (config.authUsername === undefined && config.authPassword === undefined) {
+      out.push(`${where}: smarthost ${config.smarthost} has no login of its own — Alertmanager fills in the platform's global SMTP user name and password (and its identity and secret, where set), so they are used with this server${anyone}`)
+    } else if (config.authUsername !== undefined && config.authPassword !== undefined) {
+      // One warning, for what the config leaves to the platform: its
+      // identity (AUTH PLAIN), its secret (CRAM-MD5), or both — each sent
+      // only where the platform sets one and the server asks for that.
+      const left = [
+        config.authIdentity === undefined ? ['SMTP identity (AUTH PLAIN)', 'authIdentity (usually the same as authUsername)'] : null,
+        config.authSecret === undefined ? ['SMTP secret (CRAM-MD5)', 'authSecret'] : null,
+      ].filter(Boolean)
+      if (left.length) {
+        out.push(`${where}: smarthost ${config.smarthost} has its own login, but Alertmanager still uses the platform's ${left.map(l => l[0]).join(' and ')}, where set, with this server${anyone} — to use the config's own, write ${left.map(l => l[1]).join(' or ')}`)
+      }
+    }
+    if (config.requireTLS === false) {
+      out.push(`${where}: smarthost ${config.smarthost} with requireTLS: false — no STARTTLS, so a password may cross the network in clear`)
+    }
+  }
+  return out
+}
+
+/** The warnings of a routing's configs, a shared one's under its name too. */
+export function routingWarnings(routing, { shared = null } = {}) {
+  const configs = routing && typeof routing === 'object' && routing.configs && typeof routing.configs === 'object' ? routing.configs : {}
+  return Object.entries(configs).flatMap(([name, c]) => {
+    if (!isSharedRef(c)) return configWarnings(name, c)
+    const used = shared?.configs && Object.hasOwn(shared.configs, name) ? shared.configs[name] : undefined
+    return used ? configWarnings(name, used).map(w => w.replace(`configs.${name}:`, `configs.${name} (shared):`)) : []
+  })
+}
+
+/** The warnings of the shared notification configs. */
+export function sharedConfigWarnings(doc) {
+  const configs = doc && typeof doc === 'object' && doc.configs && typeof doc.configs === 'object' ? doc.configs : {}
+  return Object.entries(configs).flatMap(([name, c]) => configWarnings(name, c))
 }
 
 /** One config's problems — what the Routing page checks before adding it. */
@@ -96,8 +174,120 @@ export function configProblems(name, config) {
   if (why) return [`${where}: ${why}`]
   const errors = schemaProblems(configSchema, config, ['configs', name])
   if (errors.length) return errors
-  const credential = credentialProblem(where, config)
-  return credential ? [credential] : []
+  return credentialProblems(where, config)
+}
+
+// ── the shared notification configs (#123) ──────────────────────────────────
+
+export const SHARED_DIR = '_shared'
+export const SHARED_FILE = `${SHARED_DIR}/notification-configs.yaml`
+
+// What a config reads from a Secret, by where it is written.
+const SECRET_FIELDS = {
+  email: [['authPassword'], ['authSecret'], ['tlsConfig', 'ca']],
+  webhook: [['urlSecret'], ['authorization'], ['basicAuth'], ['tlsConfig', 'ca']],
+}
+
+/**
+ * The fields of a config that read a Secret. A Secret is read from the
+ * namespace of each deployment the config is in, so a shared one would mean
+ * a Secret to keep the same in every namespace, which AlertForge cannot see.
+ */
+export function secretFieldsOf(config) {
+  return (SECRET_FIELDS[config?.type] || [])
+    .filter(path => path.reduce((at, key) => (at && typeof at === 'object' ? at[key] : undefined), config) !== undefined)
+    .map(path => path.join('.'))
+}
+
+function sharedSecretProblems(where, config) {
+  const fields = secretFieldsOf(config)
+  return fields.length
+    ? [`${where}: a shared config cannot read a Secret (${fields.join(', ')}) — a Secret is read from each deployment's own namespace; keep this config in the routing.yaml of each deployment that needs it`]
+    : []
+}
+
+/** One shared config's problems — what the Shared configs page checks before adding it. */
+export function sharedConfigProblems(name, config) {
+  const own = sharedLoginProblems(`configs.${name}`, config)
+  const errors = withoutLoginPairing(configProblems(name, config), `configs.${name}`, own).map(forShared)
+  return errors.length || own.length ? [...own, ...errors] : sharedSecretProblems(`configs.${name}`, config)
+}
+
+// An e-mail identity or secret of its own needs a login of its own — a
+// password or secret, both Secrets — which a shared config cannot read. Said
+// at once, rather than first asking for the login it cannot have.
+const SHARED_LOGIN_KEYS = ['authIdentity', 'authSecret']
+function sharedLoginProblems(where, config) {
+  if (config?.type !== 'email' || !config || typeof config !== 'object') return []
+  const keys = SHARED_LOGIN_KEYS.filter(k => Object.hasOwn(config, k))
+  return keys.length
+    ? [`${where}: a shared config cannot use ${keys.join(' or ')} — ${keys.length > 1 ? 'they go' : 'it goes'} with a login of its own, and a password or secret is read from a Secret in each deployment's namespace; keep this config in the routing.yaml of each deployment that needs it`]
+    : []
+}
+const withoutLoginPairing = (messages, where, own) => (own.length
+  ? messages.filter(m => !SHARED_LOGIN_KEYS.some(k => m.startsWith(`${where}: ${k} goes with a`)))
+  : messages)
+
+// The same refusal, with advice a shared config can follow: it cannot read
+// a Secret, so a credential goes with each deployment's own config.
+const forShared = message => message.replace('put it in a Secret and use urlSecret',
+  'a shared config cannot read a Secret, so keep this webhook in each deployment\'s routing, with urlSecret')
+
+/**
+ * Every problem with the parsed shared notification configs: each config is
+ * checked as a deployment's own is (the same schema and credential checks),
+ * and may not read a Secret.
+ */
+export function checkSharedConfigs(doc) {
+  const shape = schemaProblems(sharedConfigsSchema, doc, [], { file: SHARED_FILE })
+  const configs = doc && typeof doc === 'object' && !Array.isArray(doc) && doc.configs && typeof doc.configs === 'object' ? doc.configs : {}
+  const errors = []
+  let kept = shape
+  for (const [name, config] of Object.entries(configs)) {
+    const own = sharedLoginProblems(`configs.${name}`, config)
+    kept = withoutLoginPairing(kept, `configs.${name}`, own)
+    errors.push(...own)
+    if (own.length || kept.some(m => m.startsWith(`configs.${name}:`) || m.startsWith(`configs.${name}.`))) continue
+    errors.push(...credentialProblems(`configs.${name}`, config).map(forShared), ...sharedSecretProblems(`configs.${name}`, config))
+  }
+  return [...kept, ...errors]
+}
+
+/** The names a routing uses from the shared configs. */
+export function sharedNamesIn(routing) {
+  const configs = routing && typeof routing === 'object' && routing.configs && typeof routing.configs === 'object' ? routing.configs : {}
+  return Object.entries(configs).filter(([, c]) => isSharedRef(c)).map(([name]) => name)
+}
+
+/**
+ * The routing with each `{ shared: true }` replaced by the shared config of
+ * its name, as the resource is generated from it. `shared` is
+ * `{ configs, errors }` as read from the shared file, or null when there is
+ * none; one that cannot be resolved is left, for checkRouting to name.
+ */
+export function resolveShared(routing, shared) {
+  const names = sharedNamesIn(routing)
+  if (!names.length || !shared || shared.errors?.length) return routing
+  const configs = Object.fromEntries(Object.entries(routing.configs).map(([name, c]) => (
+    isSharedRef(c) && Object.hasOwn(shared.configs, name) ? [name, shared.configs[name]] : [name, c]
+  )))
+  return { ...routing, configs }
+}
+
+/**
+ * Each `{ shared: true }` of a routing that the shared configs (`shared`,
+ * as for resolveShared) do not resolve, as messages. `named(where)` leaves
+ * out one the shape check already names.
+ */
+export function sharedRefProblems(routing, shared, named = () => false) {
+  return sharedNamesIn(routing).flatMap(name => {
+    const where = `configs.${name}`
+    if (named(where)) return []
+    if (!shared) return [`${where}: uses the shared config ${name}, but there are no shared configs (${SHARED_FILE})`]
+    if (shared.errors?.length) return [`${where}: uses the shared config ${name}, but ${SHARED_FILE} has problems — fix it first`]
+    if (!Object.hasOwn(shared.configs, name)) return [`${where}: there is no shared config named ${name}`]
+    return []
+  })
 }
 
 /**
@@ -106,54 +296,120 @@ export function configProblems(name, config) {
  *
  * The shape and types first (routingSchema.js); the rules between its parts
  * only for a file of the right shape, so they never meet a value of the
- * wrong type.
+ * wrong type. A config used from the shared configs (`shared`, see
+ * resolveShared) must be there; the shared file is checked on its own.
  */
-export function checkRouting(routing) {
+export function checkRouting(routing, { shared = null } = {}) {
   const shape = schemaProblems(routingSchema, routing)
-  if (shape.length) return shape
+
+  // The checks past the shape run on whatever part is well formed, so a
+  // shape problem does not hide the others (#179). A part that is not well
+  // formed is left to the shape check: judging cells against labels that
+  // are not a map of lists would only add noise.
+  const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v)
+  // A part the shape check already names (its messages start with its path).
+  const named = where => shape.some(m => m === where || m.startsWith(`${where}:`) || m.startsWith(`${where}.`) || m.startsWith(`${where}[`))
+  const r = isMap(routing) ? routing : {}
+  const labelsOk = isMap(r.labels) && Object.values(r.labels).every(Array.isArray) && !named('labels')
+  // One config with a problem leaves the others, and the names, usable.
+  const configsOk = r.configs === undefined || (isMap(r.configs) && !shape.some(m => m.startsWith('configs:')))
+  const labels = labelsOk ? r.labels : {}
+  const configs = configsOk && r.configs ? r.configs : {}
 
   const errors = []
-  const { labels } = routing
-  const configs = routing.configs || {}
   for (const [name, values] of Object.entries(labels)) {
     if (new Set(values).size !== values.length) errors.push(`labels.${name}: a value is listed twice`)
   }
   for (const [name, config] of Object.entries(configs)) {
-    const credential = credentialProblem(`configs.${name}`, config)
-    if (credential) errors.push(credential)
+    if (!isMap(config) || named(`configs.${name}`) || isSharedRef(config)) continue
+    errors.push(...credentialProblems(`configs.${name}`, config))
   }
+  if (configsOk) errors.push(...sharedRefProblems(r, shared, named))
 
   const seen = new Map()
-  ;(routing.cells || []).forEach((cell, i) => {
+  ;(Array.isArray(r.cells) ? r.cells : []).forEach((cell, i) => {
+    if (!isMap(cell)) return
     const where = `cells[${i}]`
-    // A cell that leaves a label out would match every value of it and
-    // cover its neighbours' combinations.
-    // Own keys only: a label may be named constructor or __proto__.
-    for (const name of Object.keys(labels)) {
-      if (!Object.hasOwn(cell.match, name)) errors.push(`${where}: match has no ${name} — a cell names every label`)
+    if (labelsOk && isMap(cell.match) && !named(`${where}.match`)) {
+      // A cell that leaves a label out would match every value of it and
+      // cover its neighbours' combinations.
+      // Own keys only: a label may be named constructor or __proto__.
+      for (const name of Object.keys(labels)) {
+        if (!Object.hasOwn(cell.match, name)) errors.push(`${where}: match has no ${name} — a cell names every label`)
+      }
+      for (const [name, value] of Object.entries(cell.match)) {
+        if (!Object.hasOwn(labels, name)) errors.push(`${where}: match names ${name}, which is not in labels`)
+        else if (!labels[name].includes(value)) errors.push(`${where}: ${name}=${value} is not one of labels.${name}`)
+      }
+      const key = JSON.stringify(Object.keys(labels).map(name => cell.match[name]))
+      if (seen.has(key)) errors.push(`${where}: same match as cells[${seen.get(key)}]`)
+      else seen.set(key, i)
     }
-    for (const [name, value] of Object.entries(cell.match)) {
-      if (!Object.hasOwn(labels, name)) errors.push(`${where}: match names ${name}, which is not in labels`)
-      else if (!labels[name].includes(value)) errors.push(`${where}: ${name}=${value} is not one of labels.${name}`)
+    if (configsOk && Array.isArray(cell.configs) && !named(`${where}.configs`)) {
+      for (const name of cell.configs) {
+        if (!Object.hasOwn(configs, name)) errors.push(`${where}: config "${name}" is not in configs`)
+      }
+      if (new Set(cell.configs).size !== cell.configs.length) errors.push(`${where}: a config is listed twice`)
     }
-    const key = JSON.stringify(Object.keys(labels).map(name => cell.match[name]))
-    if (seen.has(key)) errors.push(`${where}: same match as cells[${seen.get(key)}]`)
-    else seen.set(key, i)
-
-    for (const name of cell.configs) {
-      if (!Object.hasOwn(configs, name)) errors.push(`${where}: config "${name}" is not in configs`)
-    }
-    if (new Set(cell.configs).size !== cell.configs.length) errors.push(`${where}: a config is listed twice`)
   })
-  return errors
+  return [...shape, ...errors]
+}
+
+const secretKey = ref => ({ name: ref.name, key: ref.key })
+
+/** A TLS setting as the resource writes it: the same keys, a CA from a Secret. */
+export function tlsConfigFor(tls) {
+  return {
+    ...(tls.insecureSkipVerify !== undefined ? { insecureSkipVerify: tls.insecureSkipVerify } : {}),
+    ...(tls.ca ? { ca: { secret: secretKey(tls.ca.secret) } } : {}),
+  }
+}
+
+// An e-mail config's fields, in this order; one not written is left to the
+// platform's Alertmanager settings (#159).
+const EMAIL_KEYS = ['to', 'from', 'smarthost', 'authUsername', 'authPassword', 'authIdentity', 'authSecret', 'requireTLS', 'tlsConfig', 'sendResolved', 'headers', 'text', 'html']
+
+function emailConfig(config) {
+  const out = {}
+  for (const key of EMAIL_KEYS) {
+    const value = config[key]
+    if (value === undefined) continue
+    if (key === 'authPassword' || key === 'authSecret') out[key] = secretKey(value)
+    else if (key === 'tlsConfig') out[key] = tlsConfigFor(value)
+    // The resource takes headers as a list of key and value.
+    else if (key === 'headers') {
+      const list = Object.entries(value).map(([k, v]) => ({ key: k, value: v }))
+      if (list.length) out[key] = list
+    } else out[key] = value
+  }
+  return out
 }
 
 function receiverFor(name, config) {
-  if (config.type === 'email') return { name, emailConfigs: [{ to: config.to }] }
-  const webhook = config.urlSecret
-    ? { urlSecret: { name: config.urlSecret.name, key: config.urlSecret.key } }
-    : { url: config.url }
-  return { name, webhookConfigs: [webhook] }
+  if (config.type === 'email') return { name, emailConfigs: [emailConfig(config)] }
+  return { name, webhookConfigs: [webhookConfig(config)] }
+}
+
+// A webhook config's own fields; authentication and TLS go under httpConfig
+// in the resource, where routing.yaml has them beside the address (#160).
+function webhookConfig(config) {
+  const http = {
+    ...(config.authorization ? {
+      authorization: {
+        ...(config.authorization.type !== undefined ? { type: config.authorization.type } : {}),
+        credentials: secretKey(config.authorization.credentials),
+      },
+    } : {}),
+    ...(config.basicAuth ? { basicAuth: { username: secretKey(config.basicAuth.username), password: secretKey(config.basicAuth.password) } } : {}),
+    ...(config.tlsConfig ? { tlsConfig: tlsConfigFor(config.tlsConfig) } : {}),
+  }
+  return {
+    ...(config.urlSecret ? { urlSecret: secretKey(config.urlSecret) } : { url: config.url }),
+    ...(config.sendResolved !== undefined ? { sendResolved: config.sendResolved } : {}),
+    ...(config.maxAlerts !== undefined ? { maxAlerts: config.maxAlerts } : {}),
+    ...(config.timeout !== undefined ? { timeout: config.timeout } : {}),
+    ...(Object.keys(http).length ? { httpConfig: http } : {}),
+  }
 }
 
 function timing(defaults, cell) {
@@ -193,18 +449,24 @@ export function routingSpec(routing) {
 }
 
 // `{{` and `}}` reach the cluster as written: Helm turns `{{ "{{" }}` back
-// into `{{`. One pass, so a replacement is never replaced again.
-export const escapeBraces = text => text.replace(/\{\{|\}\}/g, m => `{{ "${m}" }}`)
+// into `{{`. A whole run of braces is printed at once — escaping only the
+// pair in `{}}` would leave its `{` to join the action that follows, `{{{`,
+// and Helm would fail. A run holding no `{{` or `}}` (`{}`) is no action and
+// stays as it is. One pass, so a replacement is never replaced again.
+export const escapeBraces = text => text.replace(/[{}]{2,}/g, m => (/\{\{|\}\}/.test(m) ? `{{ ${JSON.stringify(m)} }}` : m))
 
 /**
  * The file for templates/: the AlertmanagerConfig for a parsed routing.yaml.
  * `meta` is the object's labels and annotations (objectMeta.js), already
- * resolved for this kind of object. Returns `{ text }`, or `{ errors }` when
+ * resolved for this kind of object; `shared`, the repo's shared configs
+ * (resolveShared), each written into the resource in full. Returns `{ text }`, or `{ errors }` when
  * the routing does not pass checkRouting.
  */
-export function generateRouting(routing, { meta = {} } = {}) {
-  const errors = checkRouting(routing)
+export function generateRouting(routing, { meta = {}, shared = null } = {}) {
+  const errors = checkRouting(routing, { shared })
   if (errors.length) return { errors }
+  const original = routing
+  routing = resolveShared(routing, shared)
   const name = '__ALERTFORGE_NAME__'
   const doc = {
     // prometheus-operator's AlertmanagerConfig — config/outputs.json.
@@ -216,6 +478,6 @@ export function generateRouting(routing, { meta = {} } = {}) {
     },
     spec: routingSpec(routing),
   }
-  const body = escapeBraces(yaml.dump(doc, { lineWidth: -1, noRefs: true }))
-  return { text: GENERATED_HEADER + body.replace(name, () => '{{ .Release.Name }}-routing') }
+  const body = escapeBraces(yaml.dump(doc, { lineWidth: -1, noRefs: true, schema: KUBERNETES_DUMP_SCHEMA }))
+  return { text: GENERATED_HEADER + body.replace(name, () => '{{ .Release.Name }}-routing'), warnings: routingWarnings(original, { shared }) }
 }

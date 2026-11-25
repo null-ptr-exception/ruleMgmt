@@ -1,6 +1,9 @@
 import yaml from 'js-yaml'
 import { varsIn, danglingRefs } from './ruleModel.js'
-import { profileNames } from './outputs.js'
+import { GROUP_FIELD_NAMES } from './groupFields.js'
+import { ROW_IDENTITY_LABEL } from './reservedNames.js'
+import { profileNames, typeNames, profileFor, profileOfObject, unknownProfileMark, PROFILES, PROFILE_ANNOTATION_KEYS, DEFAULT_TYPE } from './outputs.js'
+import { groupNameProblem } from './rulesFile.js'
 
 /**
  * Import Prometheus alerting rules into an editor schema — see issue #57.
@@ -24,6 +27,38 @@ const RULE_FIELDS = ['alert', 'expr', 'for', 'keep_firing_for', 'labels', 'annot
 // What Prometheus gives a recording rule, and so all the model carries (#70).
 const RECORD_FIELDS = ['record', 'expr', 'labels']
 
+// vmalert reads a group with no `type` as `type: prometheus`.
+/**
+ * The AlertForge profile of a group taken from a rendered object (#65): what
+ * its kind, its group's fields and its annotations say, as Preview reads
+ * the object — the group's own `type` there is the evaluator's (vmalert's
+ * `prometheus` or `vlogs`, none being `prometheus`), not a profile name.
+ * Null when no profile writes such a group.
+ *
+ * An unmarked PrometheusRule written for Prometheus 3 outside AlertForge
+ * can carry group labels, which prometheus2 has not: taken in as that, every
+ * alert would lose them. When the object carries no mark at all and another
+ * profile of its kind has every field the group sets, it is that one, and
+ * `because` says which fields decided it.
+ */
+function objectGroupProfile(doc, group) {
+  const one = { apiVersion: doc.apiVersion, kind: doc.kind, metadata: doc.metadata, spec: { groups: [group] } }
+  const profile = profileOfObject(one)
+  if (!profile) return { profile: null }
+  const set = GROUP_FIELD_NAMES.filter(k => group?.[k] !== undefined)
+  const missing = set.filter(k => !profile.groupKeys.includes(k))
+  const marked = PROFILE_ANNOTATION_KEYS.some(k => Object.hasOwn(doc.metadata?.annotations || {}, k))
+  if (!missing.length || marked) return { profile }
+  const fits = Object.values(PROFILES).find(p => p !== profile && p.kind === doc.kind && p.apiVersion === doc.apiVersion &&
+    Object.entries(p.groupFields).every(([k, v]) => (group?.[k] ?? profile.groupFields[k]) === v) &&
+    set.every(k => p.groupKeys.includes(k)))
+  return fits ? { profile: fits, because: missing } : { profile }
+}
+
+/** Whether a document is a rendered object of a kind some profile writes. */
+const isProfileObject = doc => Array.isArray(doc?.spec?.groups) &&
+  Object.values(PROFILES).some(p => p.kind === doc.kind && p.apiVersion === doc.apiVersion)
+
 function asGroups(doc) {
   if (Array.isArray(doc)) return [{ name: null, rules: doc }]
   if (Array.isArray(doc?.spec?.groups)) return doc.spec.groups
@@ -40,6 +75,14 @@ export function toGroupKey(name, index) {
     .replace(/^_+|_+$/g, '')
     .toLowerCase()
   return /^[a-z]/.test(slug) ? slug : `group_${slug}`
+}
+
+// The row identity label is AlertForge's own (a rule's label of that name is
+// refused): rules exported from a chart that had it on come in without it.
+function withoutRowIdentity(rule) {
+  if (!rule?.labels || typeof rule.labels !== 'object' || !Object.hasOwn(rule.labels, ROW_IDENTITY_LABEL)) return null
+  const { [ROW_IDENTITY_LABEL]: _row, ...labels } = rule.labels
+  return { ...rule, labels }
 }
 
 function importRecord(rule, warnings, where) {
@@ -114,26 +157,82 @@ export function importRules(yamlText) {
       warnings.push('A document held no rule groups and was skipped')
       continue
     }
-    for (const group of found) {
-      const where = group.name || `group ${groups.length + 1}`
+    const fromObject = isProfileObject(doc)
+    for (const source of found) {
+      const where = source.name || `group ${groups.length + 1}`
       // A group's type decides what its expr is (#65): a vlogs group taken in
       // as prometheus would carry LogsQL as PromQL, silently broken. One with
-      // no output profile is refused rather than guessed at.
-      if (group.type !== undefined && !profileNames().includes(group.type)) {
-        warnings.push(`${where}: type "${group.type}" has no output profile (${profileNames().join(', ')}) — group skipped`)
+      // no output profile is refused rather than guessed at. In a rendered
+      // object the type is read off the object (a VMRule's `type:
+      // prometheus` is MetricsQL, the vm profile); in a rules file it is
+      // AlertForge's own.
+      let group = source
+      if (fromObject) {
+        const { profile, because } = objectGroupProfile(doc, source)
+        if (!profile) {
+          warnings.push(`${where}: a ${doc.kind} group${source.type !== undefined ? ` of type "${source.type}"` : ''} has no output profile (${profileNames().join(', ')}) — group skipped`)
+          continue
+        }
+        const mark = unknownProfileMark(doc)
+        if (mark) warnings.push(`${where}: annotation ${mark.key} is "${mark.value}", which names no output profile — taken in as ${profile.name}`)
+        if (because) warnings.push(`${where}: has ${because.join(', ')}, which a ${DEFAULT_TYPE} group has not — taken in as ${profile.name}`)
+        group = { ...source }
+        if (profile.name === DEFAULT_TYPE) delete group.type
+        else group.type = profile.name
+      } else if (group.type !== undefined && !typeNames().includes(group.type)) {
+        warnings.push(`${where}: type "${group.type}" has no output profile (${typeNames().join(', ')}) — group skipped`)
         continue
+      } else if (group.type === 'prometheus') {
+        // A vmalert rules file says the same for VictoriaMetrics' metrics.
+        warnings.push(`${where}: type "prometheus" is taken as ${DEFAULT_TYPE} (Prometheus 2) — for a vmalert rules file, make it vm`)
       }
+      let stripped = 0
       const rules = (group.rules || [])
-        .map(rule => importRule(rule, warnings, where))
+        .map(rule => {
+          const without = withoutRowIdentity(rule)
+          if (without) stripped++
+          return importRule(without ?? rule, warnings, where)
+        })
         .filter(Boolean)
+      if (stripped) {
+        warnings.push(`${where}: label ${ROW_IDENTITY_LABEL} left out of ${stripped} rule${stripped === 1 ? '' : 's'} — it is AlertForge's row identity label, which the chart adds itself when Row identity label is on in Common Variables`)
+      }
       if (rules.length === 0) {
         warnings.push(`${where}: no rules found`)
         continue
       }
-      // The rule-group fields travel with it; interval and limit used to be dropped.
-      const fields = Object.fromEntries(['type', 'interval', 'limit']
+      // The rule-group fields travel with it (#182) — those the group's
+      // profile has. One it does not have, or one AlertForge does not write,
+      // is said, not dropped unseen.
+      const opened = profileFor(group.type).groupKeys
+      const fields = Object.fromEntries(['type', ...opened]
         .filter(k => group[k] !== undefined).map(k => [k, group[k]]))
-      groups.push({ key: toGroupKey(group.name, groups.length), name: group.name, ...fields, rules, columns: columnsOf(rules) })
+      const left = Object.keys(group).filter(k => !['name', 'rules', 'type', ...opened].includes(k))
+      const theirs = left.filter(k => GROUP_FIELD_NAMES.includes(k))
+      const unknown = left.filter(k => !GROUP_FIELD_NAMES.includes(k))
+      if (theirs.length) {
+        // The type as written; and where the field is, among the same kind.
+        const own = profileFor(group.type)
+        const others = Object.values(PROFILES).filter(p => p !== own && p.kind === own.kind && theirs.every(k => p.groupKeys.includes(k))).map(p => p.name)
+        warnings.push(`${where}: ${theirs.join(', ')} not taken — a ${group.type ?? own.name} group has no such field${others.length ? ` (a ${others.join(' or ')} group has)` : ''}`)
+      }
+      if (unknown.length) warnings.push(`${where}: ${unknown.join(', ')} not taken — AlertForge does not write ${unknown.length > 1 ? 'these group fields' : 'this group field'}`)
+      // Two groups whose names make one key (`a-b`, `a b`, `A_B`) would be
+      // one file, the last one's: each gets a key of its own instead.
+      const base = toGroupKey(group.name, groups.length)
+      let key = base
+      for (let n = 2; groups.some(g => g.key === key); n++) key = `${base}_${n}`
+      if (key !== base) warnings.push(`${where}: ${base} is already the key of ${groups.find(g => g.key === base).name ?? 'another group'} in this import — taken in as ${key}`)
+      const entry = { key, name: group.name, ...fields, rules, columns: columnsOf(rules) }
+      // Its rule-group name, if another imported group already renders it
+      // (two source files with a group `cpu`), would be refused at save:
+      // this one renders under its key's name, and says so.
+      const rendered = g => (keptName(g) ? g.name : g.key.replace(/_/g, '-'))
+      if (keptName(entry) && groups.some(g => rendered(g) === entry.name)) {
+        entry.nameTaken = true
+        warnings.push(`${where}: another group of this import is already named ${entry.name} — this one is named ${key.replace(/_/g, '-')}`)
+      }
+      groups.push(entry)
     }
   }
   return { groups, warnings }
@@ -154,6 +253,11 @@ function columnType(name, rules) {
   return comparison.test(text) ? 'number' : 'string'
 }
 
+// Whether an imported group keeps its source's rule-group name (`name:`):
+// one the format takes, that the key alone would not render, and not
+// already another imported group's.
+const keptName = group => typeof group.name === 'string' && !group.nameTaken && !groupNameProblem(group.name) && group.name !== group.key.replace(/_/g, '-')
+
 /**
  * One imported group as a rules-model group — what rules/<key>.yaml holds.
  * Its columns are the placeholders its rules reference, less any the chart
@@ -165,13 +269,18 @@ export function modelGroupFromImport(group, commonNames = []) {
   const columns = Object.fromEntries(group.columns
     .filter(name => !common.has(name))
     .map(name => [name, { type: columnType(name, group.rules) }]))
+  // The source's rule-group name stays what it was when the key alone would
+  // render another (`MariaDB traffic`, not mariadb-traffic); one the rules
+  // format refuses (a number, a line break) is left to the key's.
+  const keepName = keptName(group)
   return {
     group: group.key,
+    ...(keepName ? { name: group.name } : {}),
     // A group with no columns of its own renders once in its source file, so
     // it is imported as once (#70) — what it renders stays the same. Nothing
     // is guessed: the template owner turns it per-row when they add columns.
     ...(Object.keys(columns).length ? {} : { once: true }),
-    ...Object.fromEntries(['type', 'interval', 'limit'].filter(k => group[k] !== undefined).map(k => [k, group[k]])),
+    ...Object.fromEntries(['type', ...GROUP_FIELD_NAMES].filter(k => group[k] !== undefined).map(k => [k, group[k]])),
     columns,
     rules: group.rules,
   }

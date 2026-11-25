@@ -1,0 +1,15 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# A site label whose key and value Kubernetes would read as true and 1000,
+# and one whose key false reads back as itself.
+blind-yes-1-1:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    "y": "1_000"
+    "false": x
+  annotations: {}
+blind-off-1:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+    "y": "1_000"
+    "false": x
+  annotations: {}

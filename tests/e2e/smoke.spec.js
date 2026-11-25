@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 test('app loads with AlertForge branding', async ({ page }) => {
   await page.goto('/')

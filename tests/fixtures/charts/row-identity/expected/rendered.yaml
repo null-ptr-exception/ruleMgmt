@@ -1,0 +1,43 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+# alertforge_row is computed by hand, from the identifying cells the row sets
+# (page and team left out are not in it) as JSON — keys sorted, no spaces,
+# <, > and & written as \u003c, \u003e, \u0026 — e.g.
+#   printf '%s' '{"namespace":"prod","team":"db\u0026ops","workload":"api"}' | sha256sum | cut -c1-16
+blind-cpu-1-1:
+  - name: cpu
+    rules:
+      - alert: CpuHigh
+        expr: 'avg_over_time(cpu_usage{namespace="prod", workload="api"}[5m]) > 80'
+        for: 1m
+        labels: { severity: warning, alertforge_row: 9bcd584eefe5c529 }
+        annotations: { page: 'false', owner: 'db&ops' }
+      - alert: CpuStuck
+        expr: 'cpu_usage{namespace="prod", workload="api"} > 50'
+        labels: { alertforge_row: 9bcd584eefe5c529 }
+      - record: 'cpu:avg5m'
+        expr: 'avg_over_time(cpu_usage{namespace="prod", workload="api"}[5m])'
+      - alert: CpuRaw
+        expr: 'cpu_usage{namespace="prod", workload="api"} > 60'
+      # {"namespace":"dev","page":true,"workload":"web"}
+      - alert: CpuHigh
+        expr: 'avg_over_time(cpu_usage{namespace="dev", workload="web"}[10m]) > 90'
+        for: 1m
+        labels: { severity: warning, alertforge_row: 3d4b96ef0896658b }
+        annotations: { page: 'true' }
+      - alert: CpuStuck
+        expr: 'cpu_usage{namespace="dev", workload="web"} > 50'
+        labels: { alertforge_row: 3d4b96ef0896658b }
+      - record: 'cpu:avg5m'
+        expr: 'avg_over_time(cpu_usage{namespace="dev", workload="web"}[5m])'
+      - alert: CpuRaw
+        expr: 'cpu_usage{namespace="dev", workload="web"} > 60'
+blind-mem-1-1:
+  - name: mem
+    rules:
+      - alert: MemHigh
+        expr: 'mem_used_ratio{env="prod-eu"} > 0.9'
+blind-up-1:
+  - name: up
+    rules:
+      - alert: TargetDown
+        expr: 'up{env="prod-eu"} == 0'

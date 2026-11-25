@@ -139,8 +139,8 @@ describe('a schema the editor produced renders through helm', () => {
 
   it('substitutes each row\'s own values', () => {
     const exprs = allRules().map(r => r.expr).join('\n')
-    expect(exprs).toMatch(/namespace="prod".*> 1e\+07/)
-    expect(exprs).toMatch(/namespace="stage".*> 2e\+06/)
+    expect(exprs).toMatch(/namespace="prod".*> 10000000\b/)
+    expect(exprs).toMatch(/namespace="stage".*> 2000000\b/)
   })
 
   it('resolves a column used as the for duration', () => {
@@ -221,7 +221,7 @@ describe('the schema is still editable afterwards', () => {
     // 2 rows x 3 rules, and the new one carries its own threshold
     expect(again).toHaveLength(6)
     const critical = again.filter(r => r.alert === 'NetworkReceiveCritical')
-    expect(critical.map(r => r.expr.match(/> (\S+)$/)[1])).toEqual(['2e+07', '4e+06'])
+    expect(critical.map(r => r.expr.match(/> (\S+)$/)[1])).toEqual(['20000000', '4000000'])
   })
 })
 

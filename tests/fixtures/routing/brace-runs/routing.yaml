@@ -1,0 +1,16 @@
+# A run of braces in a value: escaping only its {{ or }} would leave a lone
+# brace next to the action and break helm template.
+labels:
+  severity: [critical]
+configs:
+  oncall:
+    type: email
+    to: oncall@example.com
+    headers:
+      X-Json: '{"a":{}}'
+      X-Edge: "}{{ .CommonLabels.x }}{"
+    text: "{{{ .CommonLabels.alertname }}} a}}} {}} {"
+    html: '<p style="a{color:red}}">{{- .CommonLabels.x -}}{{/* c */}}</p>'
+cells:
+  - match: { severity: critical }
+    configs: [oncall]

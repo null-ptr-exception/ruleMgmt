@@ -1,0 +1,6 @@
+# Hand-written — never generated. See tests/blind/harness.js.
+blind-svc-1-1:
+  labels:
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    alertforge.io/profile: prometheus3

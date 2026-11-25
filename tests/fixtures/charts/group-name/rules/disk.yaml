@@ -1,0 +1,10 @@
+# Braces and ": " in the name: written as they are, not run by Helm, and
+# vmalert takes the name.
+type: vm
+name: 'Disk {{ .x }} usage: high'
+columns:
+  db: { type: string, required: true }
+
+rules:
+  - alert: DiskFull
+    expr: disk{db="${db}"} > 90

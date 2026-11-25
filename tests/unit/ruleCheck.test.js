@@ -26,6 +26,18 @@ describe('objectsByValidator', () => {
     expect(unchecked).toBe(0)
   })
 
+  // From a hand-written template: vmalert reads no type as `type: prometheus`.
+  it('checks a VMRule whose group has no type with vmalert, as vm', () => {
+    const { objects } = objectsByValidator('apiVersion: operator.victoriametrics.com/v1beta1\nkind: VMRule\nmetadata: { name: v }\nspec: { groups: [{ name: v, rules: [] }] }\n')
+    expect(objects.map(o => [o.doc.metadata.name, o.validator])).toEqual([['v', 'vmalert']])
+  })
+
+  it('says a profile mark that names no profile, and what checked the object', () => {
+    const { objects, notes } = objectsByValidator('apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata: { name: p, annotations: { alertforge.io/profile: prometheus4 } }\nspec: { groups: [{ name: p, rules: [] }] }\n')
+    expect(objects.map(o => o.validator)).toEqual(['promtool'])
+    expect(notes).toEqual(['p: annotation alertforge.io/profile is "prometheus4", which names no output profile — checked as prometheus2, with Promtool'])
+  })
+
   it('counts an object whose profile says validate: none as not syntax-checked', () => {
     const profileOf = doc => doc.kind === 'VMRule' ? { validate: 'none' } : doc.kind === 'PrometheusRule' ? { validate: 'promtool' } : null
     const { objects, unchecked } = objectsByValidator(RENDERED, profileOf)

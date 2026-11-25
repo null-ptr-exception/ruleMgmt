@@ -1,0 +1,3 @@
+# Files of which unit, integration and E2E tests together cover under 80% of
+# the lines: the file, a tab, and why. npm run test:e2e:coverage fails when a
+# file under 80% is not here, and when a file here is no longer under 80%.

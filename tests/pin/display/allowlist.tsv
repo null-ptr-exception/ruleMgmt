@@ -1,0 +1,32 @@
+# Cells where a display disagrees with Helm today, each with why.
+# category: bug (its issue, or "no issue yet"), policy (deliberate), out-of-scope.
+# Edited by hand: a fix removes its line; a new disagreement needs one.
+id	entry	kind	category	reason
+unwrapped	editor	rows-differ+value-differs	bug	no issue yet: values not under the chart's name are shown as the deployment's, and Helm passes none of them to the Template (the page says so beside them)
+unreadable-dir	preview	no-count-helm-renders	bug	no issue yet: Preview renders it and shows the raw YAML with no summary and no word why (the summary's read refuses the values file, only logged); the rule owner page refuses the same file
+link-outside	editor	no-count-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+link-outside	preview	no-count-helm-renders	bug	no issue yet: Preview renders it and shows the raw YAML with no summary and no word why (the summary's read refuses the values file, only logged); the rule owner page refuses the same file
+cond-no	editor	rows-differ+value-differs	policy	the page says the deployment is turned off by its condition (Helm renders none of it) and still opens its rows to edit
+layer-link-outside	preview	no-count-helm-renders	policy	a values file that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo
+layer-unwrapped	editor	value-differs	bug	no issue yet: values not under the chart's name are shown as the deployment's, and Helm passes none of them to the Template (the page says so beside them)
+link-outside	all-list	no-count-helm-renders	policy	a values.yaml that is a link leading outside the repo is never read through the link: the Sync dialogs give no row count for it (Helm on this machine renders through it)
+layer-link-outside	all-list	no-count-helm-renders	policy	a _common values.yaml that is a link leading outside the repo is never read through the link: the Sync dialogs give no row count for the deployments on it (Helm on this machine renders through it)
+layer-cannot-tell	all-list	no-count-helm-renders	policy	a _common whose values.yaml AlertForge cannot tell Helm's reading of is left to Helm: Preview shows what Helm renders without a summary, and no row count is given, as its values are not known
+layer-cannot-tell	preview	no-count-helm-renders	policy	a _common whose values.yaml AlertForge cannot tell Helm's reading of is left to Helm: Preview shows what Helm renders without a summary, and no row count is given, as its values are not known
+common-linked	all-list	no-count-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	editor	no-count-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+common-linked	preview	no-count-helm-renders	policy	a _common folder shared by a hand-made link is not supported: every entry names the link and none follows it (Helm on this machine renders through it)
+layer-cannot-tell-rows	all-list	no-count-helm-renders	policy	a _common whose values.yaml AlertForge cannot tell Helm's reading of is left to Helm: Preview shows what Helm renders without a summary, and no row count is given, as its values are not known
+layer-cannot-tell-rows	preview	no-count-helm-renders	policy	a _common whose values.yaml AlertForge cannot tell Helm's reading of is left to Helm: Preview shows what Helm renders without a summary, and no row count is given, as its values are not known
+tpl-default-rows	editor	rows-differ	bug	no issue yet: the rule owner page shows no rows for a group the deployment does not write, while Helm deploys the Template's own rows of it
+layer-cannot-tell	common-users	no-count-helm-renders	policy	a _common whose values.yaml AlertForge cannot tell Helm's reading of is left to Helm: its users list says what each user inherits from it cannot be told, and gives no row count
+layer-cannot-tell-rows	common-users	no-count-helm-renders	policy	a _common whose values.yaml AlertForge cannot tell Helm's reading of is left to Helm: its users list says what each user inherits from it cannot be told, and gives no row count
+layer-link-outside	common-users	no-count-helm-renders	policy	a _common values.yaml that is a link leading outside the repo is never read through the link: its users list gives no row count for the deployments on it (Helm on this machine renders through it)
+stack-tpl-chart-link-outside	all-list	no-count-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo, so no count or row of it is shown
+stack-tpl-chart-link-outside	editor	rows-differ	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo, so no count or row of it is shown
+stack-tpl-chart-link-outside	preview	no-count-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo, so no count or row of it is shown
+stack-tpl-chart-link-outside	common-users	no-count-helm-renders	policy	a Template's Chart.yaml that is a link leading outside the repo is named and refused: what Helm renders through it is not in the repo, so no count or row of it is shown
+stack-tpl-chart-link-git	all-list	no-count-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo, so no count or row of it is shown
+stack-tpl-chart-link-git	editor	rows-differ	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo, so no count or row of it is shown
+stack-tpl-chart-link-git	preview	no-count-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo, so no count or row of it is shown
+stack-tpl-chart-link-git	common-users	no-count-helm-renders	policy	a Template's Chart.yaml that is a link into git's own folder is named and refused: what Helm renders through it is not in the repo, so no count or row of it is shown

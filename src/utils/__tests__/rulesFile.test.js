@@ -192,12 +192,13 @@ describe('model <-> schema idempotence', () => {
     expect(out['x-migrated-from']).toEqual(from)
   })
 
-  it('a migrated chart still passes gen-chart with only the row defaults added', () => {
+  it('a migrated chart still passes gen-chart with only the row defaults added, and numbers written as JSON', () => {
     const { model } = schemaToModel(sampleSchema)
     const migrated = modelToSchema(model, sampleSchema)
-    // The only difference the migration introduces is per-row Helm defaults,
-    // which the legacy path never emitted (Helm ignores the schema ones).
-    const stripRowDefaults = s => s.replace(/\{\{ dig "(\w+)" (?:`[^`]*`|[^ ]+) \$row \}\}/g, '{{ $row.$1 }}')
+    // The only differences the migration introduces are per-row Helm
+    // defaults, which the legacy path never emitted (Helm ignores the schema
+    // ones), and a number column printed through toJson (1000000, not 1e+06).
+    const stripRowDefaults = s => s.replace(/ \| toJson \}\}/g, ' }}').replace(/\{\{ dig "(\w+)" (?:`[^`]*`|[^ ]+) \$row \}\}/g, '{{ $row.$1 }}')
     let sawDefault = false
     for (const group of Object.keys(migrated.properties).filter(isAlertGroup)) {
       const before = generateGroupTemplate(group, sampleSchema.properties[group], 'rel', sampleSchema)
@@ -270,7 +271,7 @@ rules:
 
   it('refuses a type that is no output profile', () => {
     expect(parseGroupFile(withFields('type: graphite'), 'cpu').errors.join())
-      .toMatch(/type "graphite" is not an output profile — one of prometheus, vlogs/)
+      .toMatch(/type "graphite" is not an output profile — one of prometheus2, prometheus3, vm, vlogs, prometheus/)
     // The routing resource (#92) is not a group's output.
     expect(parseGroupFile(withFields('type: routing'), 'cpu').errors.join())
       .toMatch(/type "routing" is not an output profile/)
@@ -328,6 +329,16 @@ rules:
       expect(errorsOf(rule('    for: ${n}m\n'))).toEqual([])
     })
 
+    // The row's value takes the reference's place; a brace beside it can
+    // only make the result something that is no duration.
+    it('refuses a brace beside a reference in for and keep_firing_for', () => {
+      for (const key of ['for', 'keep_firing_for']) {
+        for (const bad of ["'{${window}}'", "'${window}}}'", "'{{${window}'", "'{{ $value }}${window}'"]) {
+          expect(errorsOf(rule(`    ${key}: ${bad}\n`)).join(), `${key}: ${bad}`).toMatch(new RegExp(`${key} .* is not a duration — a brace beside`))
+        }
+      }
+    })
+
     it('checks a value that only looks like it has a placeholder', () => {
       expect(errorsOf(rule("    for: '30m${'\n")).join()).toMatch(/for .* is not a duration/)
     })
@@ -352,9 +363,10 @@ rules:
     const col = body => `group: cpu\ncolumns:\n  c: ${body}\nrules:\n  - alert: A\n    expr: up == 0\n`
 
     it('refuses a type that is not one the table has a cell for', () => {
-      for (const bad of ['strng', 'String', 'duration', 'array', 'object', '1']) {
+      // duration became one with #117.
+      for (const bad of ['strng', 'String', 'Duration', 'array', 'object', '1']) {
         expect(parseGroupFile(col(`{type: ${bad}}`), 'cpu').errors.join(), bad)
-          .toMatch(/cpu\.yaml columns\.c: type .* is not a column type — one of string, number, integer, boolean/)
+          .toMatch(/cpu\.yaml columns\.c: type .* is not a column type — one of string, number, integer, boolean, duration/)
       }
     })
 
@@ -623,5 +635,65 @@ describe('valueProblems', () => {
   it('refuses a newline in any column', () => {
     expect(cells({ _common: { owner: 'two\nlines' }, cpu: [{ namespace: 'p', pod_regex: 'a\nb' }] }))
       .toEqual(['_common:null:owner', 'cpu:0:pod_regex'])
+  })
+})
+
+// #182: the evaluator's group fields, as each type has them.
+describe('group fields by type', () => {
+  const vm = `group: g
+type: vm
+interval: 1m
+labels: {team: shop, 'on': 'yes'}
+eval_offset: 30s
+concurrency: 2
+eval_alignment: false
+headers: ['X-Scope-OrgID: 1']
+params: {nocache: ['1']}
+columns: {}
+rules:
+  - alert: A
+    expr: up == 0
+`
+  it('reads a vm group\'s fields and writes them back as they were', async () => {
+    const { parseGroupFile: parse, groupFileText } = await import('../rulesFile.js')
+    const { group, errors } = parse(vm, 'g')
+    expect(errors).toEqual([])
+    expect(group).toMatchObject({ labels: { team: 'shop', on: 'yes' }, eval_offset: '30s', concurrency: 2, eval_alignment: false, headers: ['X-Scope-OrgID: 1'], params: { nocache: ['1'] } })
+    const again = parse(groupFileText(group), 'g')
+    expect(again.errors).toEqual([])
+    expect(again.group).toEqual(group)
+  })
+
+  it('refuses a field the type does not have, saying which it has', async () => {
+    const { parseGroupFile: parse } = await import('../rulesFile.js')
+    expect(parse(vm.replace('type: vm', 'type: prometheus2'), 'g').errors).toContain('g.yaml: labels is not a group field of a prometheus2 group — it has interval, limit, query_offset; prometheus3, vm, vlogs have labels')
+    // As the file names the type.
+    expect(parse(vm.replace('type: vm', 'type: prometheus'), 'g').errors).toContain('g.yaml: concurrency is not a group field of a prometheus group — it has interval, limit, query_offset; vm, vlogs have concurrency')
+    expect(parse(vm.replace('type: vm\n', 'type: vm\nquery_offset: 1m\n'), 'g').errors).toEqual([expect.stringMatching(/^g\.yaml: query_offset is not a group field of a vm group — it has interval, limit, labels, eval_offset/)])
+  })
+
+  // A check reading another field reads it in whatever shape it is.
+  it('reports a malformed selectors, selectorLabels or rules beside group labels, never throwing', async () => {
+    const { parseRulesDir: parseDir } = await import('../rulesFile.js')
+    for (const [type, bad, says] of [
+      ['prometheus3', 'selectors: foo\n', 'selectors must be a list'],
+      ['vm', 'selectors: {a: b}\n', 'selectors must be a list'],
+      ['vm', 'selectors: [a]\nselectorLabels: foo\n', 'selectorLabels must map'],
+      ['prometheus3', 'selectors: [a]\nrules: foo\n', 'rules is required and must be a list'],
+    ]) {
+      const text = `type: ${type}\nlabels: {team: x}\n${bad}columns:\n  a: {type: string}\n${bad.includes('rules:') ? '' : 'rules: []\n'}`
+      const { errors } = parseDir({ 'g.yaml': text })
+      expect(errors.join('\n')).toContain(says)
+    }
+  })
+
+  it('says a negative duration is negative, not a format error', async () => {
+    const { parseGroupFile: parse } = await import('../rulesFile.js')
+    expect(parse('type: vm\ninterval: 1m\neval_offset: -30s\ncolumns: {}\nrules: []\n', 'g').errors).toEqual(["g.yaml: eval_offset -30s is negative — a group's eval_offset is 0s or more here"])
+  })
+
+  it('refuses a limit past what is held exactly', async () => {
+    const { parseGroupFile: parse } = await import('../rulesFile.js')
+    expect(parse('limit: 99999999999999999999\ncolumns: {}\nrules: []\n', 'g').errors).toContain('g.yaml: limit 100000000000000000000 must be a whole number, 0 or more')
   })
 })

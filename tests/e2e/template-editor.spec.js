@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 test.describe('Template Editor', () => {
   test('shows chart selector on Templates page', async ({ page }) => {

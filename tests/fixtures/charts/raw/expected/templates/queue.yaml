@@ -13,7 +13,7 @@ spec:
       rules:
         {{- range $rows }}
         - alert: QueueStuck
-          expr: max(queue_oldest_message_age_seconds{queue="{{ .queue }}"}) > {{ .max_age }}
+          expr: max(queue_oldest_message_age_seconds{queue="{{ .queue }}"}) > {{ .max_age | toJson }}
           for: 10m
           labels:
             severity: critical

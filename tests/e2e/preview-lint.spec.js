@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart } from './charts.js'
 
 // #80: promtool exits 0 on a lint problem (duplicate rules, for one), so

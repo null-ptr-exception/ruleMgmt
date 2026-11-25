@@ -1,0 +1,54 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      # orders' limit is 300, billing-v2's 60
+      - series: 'queue_oldest_message_age_seconds{queue="orders", shard="0"}'
+        values: '301x20'
+      - series: 'queue_oldest_message_age_seconds{queue="orders", shard="1"}'
+        values: '10x20'
+      - series: 'queue_oldest_message_age_seconds{queue="billing-v2", shard="0"}'
+        values: '61x20'
+      # no row
+      - series: 'queue_oldest_message_age_seconds{queue="billing", shard="0"}'
+        values: '9999x20'
+      - series: 'queue_depth{queue="orders"}'
+        values: '1001x20'
+      - series: 'queue_depth{queue="billing-v2"}'
+        values: '1000x20'
+      - series: 'queue_depth{queue="billing"}'
+        values: '9999x20'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: QueueStuck
+        exp_alerts: []
+      # The queue label is the rule's. In the summary, $labels is what the expr
+      # returns, and max() without "by" returns no labels: no name there.
+      - eval_time: 10m
+        alertname: QueueStuck
+        exp_alerts:
+          - exp_labels: { severity: critical, queue: orders }
+            exp_annotations: { summary: "oldest message in  is 5m 1s old" }
+          - exp_labels: { severity: critical, queue: billing-v2 }
+            exp_annotations: { summary: "oldest message in  is 1m 1s old" }
+      - eval_time: 4m
+        alertname: QueueDeep
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: QueueDeep
+        exp_alerts:
+          - exp_labels: { severity: warning, queue: orders }
+
+  - interval: 1m
+    input_series:
+      # exactly at each limit
+      - series: 'queue_oldest_message_age_seconds{queue="orders", shard="0"}'
+        values: '300x20'
+      - series: 'queue_oldest_message_age_seconds{queue="billing-v2", shard="0"}'
+        values: '60x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: QueueStuck
+        exp_alerts: []

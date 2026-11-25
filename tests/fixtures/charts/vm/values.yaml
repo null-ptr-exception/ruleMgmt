@@ -1,0 +1,7 @@
+http_errors:
+  # warn and shift from their defaults
+  - job: api
+  # both set
+  - job: web
+    warn: 2
+    shift: 1w

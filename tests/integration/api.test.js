@@ -94,27 +94,16 @@ describe('Templates API', () => {
     expect(data.chartMeta).toBeTruthy()
   })
 
-  it('creates a template file', async () => {
-    const { data } = await api('POST', '/api/v2/templates/test-app/cpu-alert', {
-      content: 'groups:\n  - name: cpu\n    rules: []\n',
-    })
-    expect(data.ok).toBe(true)
-  })
-
-  it('lists template files after creation', async () => {
+  // A hand-written template file is listed with the Template's own.
+  it('lists template files', async () => {
+    await fs.mkdir(path.join(tmpDir, 'charts', 'test-app', 'templates'), { recursive: true })
+    await fs.writeFile(path.join(tmpDir, 'charts', 'test-app', 'templates', 'cpu-alert.yaml'), 'groups:\n  - name: cpu\n    rules: []\n')
     const { data } = await api('GET', '/api/v2/templates/test-app')
-    expect(data.templateFiles).toHaveLength(1)
-    expect(data.templateFiles[0]).toBe('cpu-alert')
-  })
-
-  it('gets template file content', async () => {
-    const { data } = await api('GET', '/api/v2/templates/test-app/cpu-alert')
-    expect(data.content).toContain('groups:')
+    expect(data.templateFiles).toEqual(['cpu-alert'])
   })
 
   // values.schema.json is generated from rules/; nothing writes it directly
-  // any more (#129). The path now reaches the template-file route, which
-  // needs `content`.
+  // any more (#129), and no route takes this path.
   it('does not write values.schema.json from a posted schema', async () => {
     const schemaFile = path.join(tmpDir, 'charts', 'test-app', 'values.schema.json')
     const before = await fs.readFile(schemaFile, 'utf-8')
@@ -126,37 +115,13 @@ describe('Templates API', () => {
     expect(res.ok).toBe(false)
     expect(await fs.readFile(schemaFile, 'utf-8')).toBe(before)
   })
-
-  it('renames a template file', async () => {
-    await api('POST', '/api/v2/templates/test-app/cpu-alert/rename', { newName: 'cpu-sat' })
-    const { data } = await api('GET', '/api/v2/templates/test-app')
-    expect(data.templateFiles[0]).toBe('cpu-sat')
-  })
-
-  it('deletes a template file', async () => {
-    await api('DELETE', '/api/v2/templates/test-app/cpu-sat')
-    const { data } = await api('GET', '/api/v2/templates/test-app')
-    expect(data.templateFiles).toEqual([])
-  })
 })
 
 describe('Deployments API', () => {
-  it('lists deployments (initially empty)', async () => {
-    const { data } = await api('GET', '/api/v2/deployments/test-app')
-    expect(data).toEqual([])
-  })
-
   it('creates a deployment by saving values', async () => {
     const values = { cpu_alert: [{ threshold: 80 }] }
     const { data } = await api('POST', '/api/v2/deployments/test-app/staging', { values })
     expect(data.ok).toBe(true)
-  })
-
-  it('lists deployments after creation', async () => {
-    const { data } = await api('GET', '/api/v2/deployments/test-app')
-    expect(data).toHaveLength(1)
-    expect(data[0].name).toBe('staging')
-    expect(data[0].alertCount).toBe(1)
   })
 
   it('gets deployment values', async () => {
@@ -172,17 +137,9 @@ describe('Deployments API', () => {
     expect(fetched.parsed.cpu_alert[0].threshold).toBe(90)
   })
 
-  it('clones a deployment', async () => {
-    const { data } = await api('POST', '/api/v2/deployments/test-app/staging/clone', { newName: 'prod' })
-    expect(data.ok).toBe(true)
-    const { data: list } = await api('GET', '/api/v2/deployments/test-app')
-    expect(list).toHaveLength(2)
-  })
-
   it('deletes a deployment', async () => {
-    await api('DELETE', '/api/v2/deployments/test-app/prod')
-    const { data } = await api('GET', '/api/v2/deployments/test-app')
-    expect(data).toHaveLength(1)
+    expect((await api('DELETE', '/api/v2/deployments/test-app/staging')).data.ok).toBe(true)
+    expect((await api('GET', '/api/v2/deployments/test-app/staging')).status).toBe(404)
   })
 })
 
@@ -194,11 +151,14 @@ describe('reads and failed writes leave no chart behind', () => {
     await expect(fs.access(path.join(tmpDir, 'charts', 'no-such-chart'))).rejects.toThrow()
   })
 
-  it('a clone that fails part-way is removed, so a retry is not "already exists"', async () => {
+  it('a clone that cannot be made leaves no copy, so a retry is not "already exists"', async () => {
     await api('POST', '/api/v2/charts', { name: 'clone-src' })
+    // no rules/ to generate one from, and none on disk
     await fs.rm(path.join(tmpDir, 'charts', 'clone-src', 'values.schema.json'), { force: true })
-    const { status } = await api('POST', '/api/v2/charts/clone-src/clone', { newName: 'clone-half' })
-    expect(status).toBe(500)
+    const { status, data } = await api('POST', '/api/v2/charts/clone-src/clone', { newName: 'clone-half' })
+    // Refused naming what is missing, before anything is copied.
+    expect(status).toBe(409)
+    expect(data.error).toMatch(/no values\.schema\.json/)
     await expect(fs.access(path.join(tmpDir, 'charts', 'clone-half'))).rejects.toThrow()
     await api('DELETE', '/api/v2/charts/clone-src')
   })

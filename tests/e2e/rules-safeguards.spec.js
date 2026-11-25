@@ -1,8 +1,8 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { WORKSPACE } from './workspace.js'
-import { removeChart } from './charts.js'
+import { removeChart, openTemplateChart } from './charts.js'
 
 // The safeguards around a chart's rules/ source that only had backend or unit
 // coverage (issue #57): a save that would overwrite someone else's change, a
@@ -36,11 +36,7 @@ async function chartInfo(request, chart) {
 }
 
 async function openChart(page, chart, group = 'cpu') {
-  await page.goto('/')
-  await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
-  await page.locator('.ant-select').first().click()
-  await page.locator('.ant-select-item-option').filter({ hasText: chart }).click()
-  await expect(page.getByText('Alert Groups')).toBeVisible({ timeout: 5000 })
+  await openTemplateChart(page, chart)
   await page.getByText(group, { exact: true }).first().click()
   await expect(page.getByPlaceholder('alert name')).toBeVisible({ timeout: 5000 })
 }
@@ -141,7 +137,7 @@ test.describe('Renaming a column', () => {
     await renamed.press('ControlOrMeta+A')
     await page.keyboard.type('namespace')
     await page.keyboard.press('Enter')
-    await expect(page.getByText('There is already a column named "namespace"')).toBeVisible()
+    await expect(page.getByText('"namespace" is already a column\'s name')).toBeVisible()
     await expect(page.locator('input[value="limit_pct"]')).toBeVisible()
   })
 })
@@ -272,13 +268,130 @@ rules:
     await page.goto('/')
     await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
     await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: should be refused')
-    await page.locator('button:has-text("Commit")').click()
+    // Other specs save and delete charts while this one runs: a commit then
+    // answers "try again" (#187), and is tried again, as a person would.
+    const refused = page.getByText(/e2e-safeguard-stale: products are out of date/)
+    const tryAgain = page.getByText('Files changed while committing — try again')
+    for (let i = 0; i < 5; i++) {
+      await page.locator('button:has-text("Commit")').click()
+      await expect(refused.or(tryAgain).first()).toBeVisible({ timeout: 8000 })
+      if (await refused.isVisible()) break
+      await expect(tryAgain).toHaveCount(0, { timeout: 5000 })
+    }
 
     // Not just "Rule checks failed": the person committing has to be able to
     // find the problem.
-    await expect(page.getByText(/e2e-safeguard-stale: products are out of date/)).toBeVisible({ timeout: 8000 })
+    await expect(refused).toBeVisible()
     await expect(page.getByText(/e2e-safeguard-noref\/cpu: .*references none of this group's columns/)).toBeVisible()
     await expect(page.getByText('Changes committed')).toHaveCount(0)
+  })
+})
+
+// #179: a commit refused for routing behind its routing.yaml offers to make
+// it again; the files are written, not committed, and the panel refreshes.
+// Both calls are stubbed, so nothing here touches the shared gitops repo.
+test.describe('A commit refused for routing that is behind', () => {
+  test('offers Regenerate, and says what it made', async ({ page }) => {
+    let regenerated = 0
+    let statusCalls = 0
+    await page.route('**/api/v2/git/status', route => {
+      statusCalls++
+      return route.fulfill({ json: { branch: 'main', changes: { modified: ['deployments/shop/prod/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false } })
+    })
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ status: 409, json: {
+      error: 'Commit refused', regenerable: 1,
+      findings: [{ kind: 'routing-stale', deployment: 'deployments/shop/prod', regenerable: true, description: 'deployments/shop/prod: its AlertmanagerConfig is not what routing.yaml says — regenerate before committing' }],
+    } }))
+    await page.route('**/api/v2/git/routing/regenerate', route => {
+      regenerated++
+      return route.fulfill({ json: { regenerated: ['deployments/shop/prod'], failed: [] } })
+    })
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: refused for routing')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.locator('.ant-modal-confirm').filter({ hasText: 'Commit refused' })
+    await expect(dialog).toBeVisible({ timeout: 8000 })
+    await expect(dialog.getByTestId('commit-findings')).toContainText('deployments/shop/prod: its AlertmanagerConfig is not what routing.yaml says')
+    const before = statusCalls
+    await dialog.getByRole('button', { name: 'Regenerate 1' }).click()
+    await expect(page.getByText('Regenerated 1 — look at the changes, then commit')).toBeVisible({ timeout: 5000 })
+    expect(regenerated).toBe(1)
+    await expect.poll(() => statusCalls).toBeGreaterThan(before)
+  })
+})
+
+// A sync target whose values are not its source's refuses the commit,
+// naming the target, its source and the file; Regenerate (routing only) is
+// not offered for it. Stubbed: nothing touches the shared gitops repo.
+test.describe('A commit refused for a sync target that is not its source\'s copy', () => {
+  test('names the target and its source, and offers no Regenerate for it', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({ json: { branch: 'main', changes: { modified: ['deployments/shop/b/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false } }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ status: 409, json: {
+      error: 'Commit refused', regenerable: 0,
+      findings: [{ severity: 'commit', kind: 'sync-target-differs', deployment: 'deployments/shop/b', regenerable: false, description: 'deployments/shop/b/values.yaml is not its source\'s (deployments/shop/a): demo.cpu differs — sync it again from deployments/shop/a (in AlertForge: save the source, or Sync from…), or unlink it' }],
+    } }))
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: refused for a sync target')
+    await page.locator('button:has-text("Commit")').click()
+    const dialog = page.locator('.ant-modal-confirm').filter({ hasText: 'Commit refused' })
+    await expect(dialog).toBeVisible({ timeout: 8000 })
+    await expect(dialog.getByTestId('commit-findings')).toContainText('deployments/shop/b/values.yaml is not its source\'s (deployments/shop/a): demo.cpu differs — sync it again from deployments/shop/a')
+    await expect(dialog.getByRole('button', { name: /Regenerate/ })).toHaveCount(0)
+  })
+})
+
+// #179: a commit that goes through names a routing.yaml with problems, and
+// the charts still in the old format, both at once. Stubbed: nothing is
+// committed into the shared gitops repo.
+test.describe('A commit that goes through with things to fix', () => {
+  test('names a routing.yaml with problems and an old-format chart together', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({
+      json: { branch: 'main', changes: { modified: ['deployments/shop/prod/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false },
+    }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ json: {
+      sha: 'abc1234', message: 'e2e', unconverted: ['old-format'],
+      routingProblems: [{ deployment: 'deployments/shop/prod', errors: ['routing.yaml is not valid YAML: x'] }],
+    } }))
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: both reminders')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Changes committed' })
+    await expect(dialog.getByTestId('commit-routing-problems')).toContainText('deployments/shop/prod: routing.yaml is not valid YAML', { timeout: 8000 })
+    await expect(dialog).toContainText('old-format')
+  })
+})
+
+// A commit lists the deployment values Helm would not render as written
+// (#202, #203): committed, not refused, under a heading that says what
+// check-repo does with them (refuses what Helm stops on or reads otherwise,
+// warns about the rest, as its table does). Stubbed: nothing is committed
+// into the shared gitops repo.
+test.describe('A commit that lists deployment values to look at', () => {
+  test('names each deployment and what is wrong, as committed', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({
+      json: { branch: 'main', changes: { modified: ['deployments/shop/prod/values.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false },
+    }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ json: {
+      sha: 'abc1234', message: 'e2e', unconverted: [],
+      valueWarnings: [{ deployment: 'deployments/shop/prod', warnings: ['deployments/shop/prod/values.yaml line 4: Helm reads 010 as 8 (YAML 1.1); the editor would write 8. Write 8, or \'010\' in quotes for the text'] }],
+    } }))
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: values to look at')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Changes committed' })
+    await expect(dialog).toContainText('Deployment values to look at', { timeout: 8000 })
+    await expect(dialog).toContainText('check-repo refuses what Helm stops on or reads otherwise, and warns about the rest')
+    await expect(dialog.getByTestId('commit-value-warnings')).toContainText('deployments/shop/prod: deployments/shop/prod/values.yaml line 4: Helm reads 010 as 8')
   })
 })
 
@@ -405,14 +518,14 @@ test.describe('New → From rules…', () => {
     for (const c of [EXISTING, FRESH]) await removeChart(request, c)
   })
 
-  async function importAs(page, name) {
+  async function importAs(page, name, rules = RULES) {
     await page.goto('/')
     await page.locator('.ant-menu-item').filter({ hasText: 'Templates' }).click()
     await page.getByRole('button', { name: /New/ }).first().click()
     await page.getByText('From rules…').click()
     const dialog = page.locator('.ant-modal').filter({ hasText: 'New chart from rules' })
     await dialog.locator('input').first().fill(name)
-    await dialog.locator('textarea').fill(RULES)
+    await dialog.locator('textarea').fill(rules)
     await dialog.getByRole('button', { name: 'Create' }).click()
     return dialog
   }
@@ -422,6 +535,17 @@ test.describe('New → From rules…', () => {
     await expect(page.getByText(`A chart named "${EXISTING}" already exists`)).toBeVisible({ timeout: 5000 })
     await expect(dialog).toBeVisible()
     expect(Object.keys(await rulesOf(request, EXISTING))).toEqual(['keep.yaml'])
+  })
+
+  // Groups whose names make one key: one file each, every rule kept.
+  test('groups named a-b, a b and A_B become three groups, none lost', async ({ page, request }) => {
+    const rules = 'groups:\n  - name: a-b\n    rules:\n      - alert: AlertX\n        expr: up\n  - name: a b\n    rules:\n      - alert: AlertY\n        expr: up\n  - name: A_B\n    rules:\n      - alert: AlertZ\n        expr: up\n'
+    await importAs(page, FRESH, rules)
+    await expect.poll(async () => Object.keys(await rulesOf(request, FRESH) || {}).sort(), { timeout: 8000 }).toEqual(['a_b.yaml', 'a_b_2.yaml', 'a_b_3.yaml'])
+    const files = await rulesOf(request, FRESH)
+    expect(files['a_b.yaml']).toContain('alert: AlertX')
+    expect(files['a_b_2.yaml']).toContain('alert: AlertY')
+    expect(files['a_b_3.yaml']).toContain('alert: AlertZ')
   })
 
   test('a save the server refuses says why, and leaves no empty chart behind', async ({ page, request }) => {
@@ -434,3 +558,28 @@ test.describe('New → From rules…', () => {
     expect(charts.map(c => c.name)).not.toContain(FRESH)
   })
 })
+
+// A commit lists what of a Template it lets through but is worth fixing:
+// a schema missing (opening the Template writes it back), a schema keyword
+// AlertForge does not check. Stubbed: nothing is committed.
+test.describe('A commit that lists Templates to look at', () => {
+  test('names each, as committed', async ({ page }) => {
+    await page.route('**/api/v2/git/status', route => route.fulfill({
+      json: { branch: 'main', changes: { modified: ['charts/demo/rules/cpu.yaml'], added: [], deleted: [] }, changeCount: 1, behindMain: 0, hasRemote: false },
+    }))
+    await page.route('**/api/v2/git/commit', route => route.fulfill({ json: {
+      sha: 'abc1234', message: 'e2e', unconverted: [],
+      templateWarnings: [{ kind: 'template-schema-absent', chart: 'demo', description: 'charts/demo/values.schema.json is not there: Helm does not check the values — open the Template or regenerate to write it' }],
+    } }))
+
+    await page.goto('/')
+    await page.locator('.ant-menu-item').filter({ hasText: 'Git' }).click()
+    await page.locator('textarea[placeholder="Commit message..."]').fill('e2e: Templates to look at')
+    await page.locator('button:has-text("Commit")').click()
+
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Changes committed' })
+    await expect(dialog).toContainText('Templates to look at', { timeout: 8000 })
+    await expect(dialog.getByTestId('commit-template-warnings')).toContainText('charts/demo/values.schema.json is not there')
+  })
+})
+

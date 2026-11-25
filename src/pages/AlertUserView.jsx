@@ -1,34 +1,43 @@
 import { useState, useEffect, useRef } from 'react'
 import useSessionState from '../hooks/useSessionState'
-import { Button, Modal, Typography, Empty, Input, Select, message, Segmented, Alert, Tooltip } from 'antd'
+import { Button, Modal, Typography, Empty, Input, Select, message, Segmented, Alert, Tooltip, Tag, Checkbox } from 'antd'
 import { SaveOutlined, EyeOutlined, PlusOutlined, TableOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import DeploymentTree from '../components/DeploymentTree'
 import TemplateTree from '../components/TemplateTree'
 import OverviewTemplateTree from '../components/OverviewTemplateTree'
-import AlertTable, { RequiredMark } from '../components/AlertTable'
-import { isMissingRequired } from '../utils/valueUtils'
+import AlertTable, { RequiredMark, MissingRequired } from '../components/AlertTable'
+import { isMissingRequired, buildNewRow } from '../utils/valueUtils'
+import { durationCellFault } from '../utils/duration'
 import AlertOverviewWorkspace from '../components/AlertOverviewWorkspace'
 import PreviewModal from '../components/PreviewModal'
+import NewDeploymentModal from '../components/NewDeploymentModal'
 import { schemaAlertNames, schemaToVars, getCommonVars } from '../utils/schemaUtils'
 import { pruneAllValues } from '../utils/valueUtils'
 import { parseRulesDir } from '../utils/rulesFile'
-import { isReservedName, RESERVED_HINT } from '../utils/reservedNames'
+import { isCommonChartPath, COMMON_DIR } from '../utils/reservedNames'
 import { renamedSelectorLabels } from '../utils/selectorContract'
 import { syncFailedNotice } from '../utils/syncNotice'
+import { valuesInEffect, inheritedFromOf, rowsOf } from '../utils/valuesInEffect'
+import { groupMark, commonValueMarks, identityColumnsOf, columnDefaultsOf } from '../utils/commonMarks'
+import CommonRowNotes, { marksSummary, sameWord } from '../components/CommonRowNotes'
 import {
   getChartInfo,
   getDeployment, saveDeployment,
   renderDeployment,
-  listCharts,
   initDeploymentFolder,
-  getSyncSource
+  getSyncSource,
+  getCommonUsers
 } from '../utils/chartApi'
 
 const { Title, Text } = Typography
 
+// A group's name is the Template's: only an object's own entry is it
+// (`constructor`, `toString` are names like any other).
+const ownOf = (o, k) => (o && Object.hasOwn(o, k) ? o[k] : undefined)
+
 /** The defaults of a group's selector columns, _common's included (#60). */
 function selectorDefaultsOf(model, group) {
-  const entry = model?.groups?.[group]
+  const entry = ownOf(model?.groups, group)
   if (!entry?.selectors) return {}
   const cols = { ...(model.common?.columns || {}), ...(entry.columns || {}) }
   return Object.fromEntries(entry.selectors.filter(l => cols[l]?.default !== undefined).map(l => [l, cols[l].default]))
@@ -46,20 +55,36 @@ export default function AlertUserView() {
   // The chart's rules model — for once groups (#70) and selectors (#60).
   const [rulesModel, setRulesModel] = useState(null)
   const [alertNames, setAlertNames] = useState([])
+  // Why the Template cannot be opened, when it cannot: no group is listed.
+  const [chartError, setChartError] = useState(null)
 
   const [allValues, setAllValues] = useState({})
   const [commonValues, setCommonValues] = useState({})
+  // What a deployment on a _common inherits (#102): `{ values, from }`, the
+  // values its layers give and which _common gives each; null when none.
+  const [inherited, setInherited] = useState(null)
+  // What the page was loaded from: a save sends it, and one changed since
+  // (a _common made or removed underneath, another save) is refused (#102).
+  const [loadedVersion, setLoadedVersion] = useState(null)
+  // What keeps Helm from rendering it as shown: a _common that cannot be read, a link gone.
+  const [stackProblems, setStackProblems] = useState(null)
+  // The _common it renders on, and its folder's (#103).
+  const [stackInfo, setStackInfo] = useState(null)
   const [unusedValuesFile, setUnusedValuesFile] = useState(null)
   const [rows, setRows] = useState([])
   const [vars, setVars] = useState([])
   const [filters, setFilters] = useState({})
   const [dirty, setDirty] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
+  const [saveWarnings, setSaveWarnings] = useState([])
+  // What Helm reads otherwise than the file looks (010 is 8): shown as Helm reads it, and said.
+  const [readNotes, setReadNotes] = useState([])
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewYaml, setPreviewYaml] = useState('')
   const [previewCheck, setPreviewCheck] = useState(null)
   const [previewSelfCheck, setPreviewSelfCheck] = useState(null)
   const [previewSummary, setPreviewSummary] = useState(null)
+  const [previewValueWarnings, setPreviewValueWarnings] = useState(null)
 
   const [checkedAlerts, setCheckedAlerts] = useSessionState('alerts:overview:checked', [])
   // Deployments of the selected chart viewed together in Overview (#91), in
@@ -73,11 +98,15 @@ export default function AlertUserView() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const [frozenSource, setFrozenSource] = useState(null)
+  // Why sync.yaml cannot be read, when it cannot: whether this deployment is
+  // a sync target (read-only) is not known, so nothing is offered to edit.
+  const [syncUnknown, setSyncUnknown] = useState(null)
+  // Why the deployment's values cannot be read, when they cannot: nothing is
+  // shown to edit or save over.
+  const [loadError, setLoadError] = useState(null)
 
   const [newDeployOpen, setNewDeployOpen] = useState(false)
   const [newDeployPath, setNewDeployPath] = useState('')
-  const [newDeployChart, setNewDeployChart] = useState(null)
-  const [availableCharts, setAvailableCharts] = useState([])
 
   const [mainScrollContainer, setMainScrollContainer] = useState(null)
 
@@ -110,12 +139,25 @@ export default function AlertUserView() {
   }
 
   useEffect(() => {
+    setChartError(null)
     if (!selectedChart) {
       setSchema(null)
       setAlertNames([])
       return
     }
+    // A slower answer for the Template just left must not land on this one.
+    let stale = false
     getChartInfo(selectedChart).then(info => {
+      if (stale) return
+      if (info.failed) {
+        // Nothing of the Template before stays to fill in.
+        setChartError(info.error || 'The Template cannot be opened')
+        setRulesModel(null)
+        setSchema(null)
+        setOnceGroups([])
+        setAlertNames([])
+        return
+      }
       // A once group (#70) has no rows and so no entry in the schema; it is
       // listed from the chart's rules/ so the rule owner sees it exists.
       let once = []
@@ -133,9 +175,22 @@ export default function AlertUserView() {
         setActiveAlert(null)
       }
     })
+    return () => { stale = true }
   }, [selectedChart])
 
   const folderBasename = selectedFolder ? selectedFolder.split('/').pop() : null
+  // A folder's _common (#101) opens in the same editor; its page says who
+  // inherits from it, and how much.
+  const onCommon = !!selectedFolder && isCommonChartPath(selectedFolder)
+  const [commonUsers, setCommonUsers] = useState(null)
+  const [usersKey, setUsersKey] = useState(0)
+  useEffect(() => {
+    setCommonUsers(null)
+    if (!onCommon) return
+    let stale = false
+    getCommonUsers(selectedFolder).then(users => { if (!stale) setCommonUsers(users) })
+    return () => { stale = true }
+  }, [onCommon, selectedFolder, usersKey])
 
   useEffect(() => {
     if (!selectedChart || !selectedFolder) return
@@ -144,18 +199,32 @@ export default function AlertUserView() {
     setUnusedValuesFile(null)
     getDeployment(selectedChart, folderBasename, selectedFolder).then(data => {
       if (stale) return
+      setLoadError(data.failed && data.status !== 404 ? data.error || 'The values cannot be read' : null)
       setUnusedValuesFile(data.unusedFile || null)
+      setInherited(data.inherited || null)
+      setStackInfo(data.stack || null)
+      setStackProblems(data.stackProblems || null)
+      setLoadedVersion(data.version || null)
+      // What Helm reads otherwise than it looks, and values Helm stops on as a whole.
+      // A group written as anything but a list of rows is said too (its table shows none).
+      setReadNotes((data.findings || []).filter(f => f.code === 'yaml.read-differently' || f.code === 'values.chart-key' || (f.code === 'values.schema' && f.at?.path?.length === 1)).map(f => f.message))
       const parsed = data.parsed || {}
       const { _common, ...rest } = parsed
       setCommonValues(_common || {})
       setAllValues(rest)
       if (activeAlert && activeAlert !== '__common_vars__') {
-        setRows(rest[activeAlert] || [])
+        setRows(rowsOf(rest, activeAlert))
       }
       setDirty(false)
     })
     return () => { stale = true }
   }, [selectedChart, selectedFolder, reloadKey])
+
+  // The _common a group is inherited from, or null: a group no layer gives
+  // (or a deployment with no _common) is the deployment's own, as before.
+  const inheritedFrom = group => inheritedFromOf(inherited, group)
+  const inheritedCommon = inherited?.values?._common || {}
+  const commonFrom = inherited?.from?.common || {}
 
   const viewed = selectedFolder && viewedPaths.includes(selectedFolder) ? viewedPaths : (selectedFolder ? [selectedFolder] : [])
   const multi = mode === 'overview' && viewed.length > 1
@@ -172,11 +241,16 @@ export default function AlertUserView() {
     let stale = false
     const missing = viewed.filter(p => !viewedValues[p])
     // A failed read is not cached: it would show as an empty deployment.
+    // Each shows what is in effect for it, as its own page does: the groups
+    // and Common Values it inherits included.
     Promise.all(missing.map(p => getDeployment(selectedChart, p.split('/').pop(), p)
       .then(data => {
         if (!data.parsed) return [p, null]
-        const { _common, ...rest } = data.parsed
-        return [p, { values: rest, commonValues: _common || {} }]
+        // A stack Helm cannot render as shown (a _common that cannot be
+        // read): said, and nothing inherited is shown as what deploys.
+        if (data.stackProblems?.length) return [p, { ...valuesInEffect(data.parsed, null), stackProblems: data.stackProblems }]
+        // Its own values and what it inherits are kept: the marks against its _common are worked out from them.
+        return [p, { ...valuesInEffect(data.parsed, data.inherited), parsed: data.parsed, inherited: data.inherited || null }]
       })
       .catch(() => [p, null])))
       .then(entries => {
@@ -186,7 +260,6 @@ export default function AlertUserView() {
         setViewedFailed(entries.filter(([, v]) => !v).map(([p]) => p))
       })
     return () => { stale = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [multi, viewedKey, selectedChart, viewedRetry])
 
   const viewedDeployments = multi && viewed.every(p => viewedValues[p])
@@ -207,7 +280,7 @@ export default function AlertUserView() {
   // Sync rows when allValues updates (e.g. after deployment fetch or overview save)
   useEffect(() => {
     if (!activeAlert) return
-    setRows(allValues[activeAlert] || [])
+    setRows(rowsOf(allValues, activeAlert))
   }, [activeAlert, allValues])
 
   // After creating a deployment, if the chart has a required common variable
@@ -219,37 +292,32 @@ export default function AlertUserView() {
     if (!pendingCommonCheckRef.current || !schema) return
     pendingCommonCheckRef.current = false
     const unmet = getCommonVars(schema).some(
-      v => v.required && v.default === undefined && !(v.name in commonValues)
+      v => v.required && v.default === undefined && !Object.hasOwn(commonValues, v.name) && !Object.hasOwn(inheritedCommon, v.name)
     )
     if (unmet) setActiveAlert('__common_vars__')
   }, [schema, commonValues])
 
-  async function handleNewDeployOpen() {
-    const charts = await listCharts()
-    setAvailableCharts(charts)
+  // The dialog asks for the Templates itself; the path starts at the folder open.
+  function handleNewDeployOpen() {
     setNewDeployPath(selectedFolder ? selectedFolder + '/' : '')
-    setNewDeployChart(charts.length > 0 ? charts[0].name : null)
     setNewDeployOpen(true)
   }
 
-  // The deployment being created is the last segment; a reserved one is
-  // refused (#99). An existing folder higher up is the server's to judge.
-  const newDeployReserved = isReservedName(newDeployPath.split('/').filter(Boolean).pop())
-
-  async function handleNewDeployCreate() {
-    if (!newDeployPath || !newDeployChart) return
+  async function handleNewDeployCreate(folderPath, chartName) {
+    if (!folderPath || !chartName) return
     // Creating a deployment jumps the workspace to it — same silent-discard
     // hazard as switching folders in the tree.
     if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
-    const result = await initDeploymentFolder(newDeployPath, newDeployChart)
+    const result = await initDeploymentFolder(folderPath, chartName)
     if (result.error) {
       message.error(result.error)
       return
     }
     setNewDeployOpen(false)
     if (result.status === 'created' || result.status === 'existing') {
-      const chart = result.chart || newDeployChart
-      setSelectedFolder(newDeployPath)
+      const chart = result.chart || chartName
+      clearSaveStatus()
+      setSelectedFolder(folderPath)
       setSelectedChart(chart)
       setActiveAlert(null)
       // A fresh deployment has no _common filled in; clear any left over from
@@ -258,7 +326,9 @@ export default function AlertUserView() {
       setCommonValues({})
       pendingCommonCheckRef.current = true
       setTreeRefreshKey(k => k + 1)
-      message.success(`Deployment created at ${newDeployPath}`)
+      message.success(result.inheritsFrom
+        ? `Deployment created at ${folderPath}, inheriting everything from ${result.inheritsFrom}`
+        : `Deployment created at ${folderPath}`)
     }
   }
 
@@ -270,14 +340,21 @@ export default function AlertUserView() {
   async function refreshFrozenSource(path) {
     frozenSourceFolderRef.current = path
     let source = null
+    let unknown = null
     try {
-      ;({ source } = await getSyncSource(path))
+      const read = await getSyncSource(path)
+      if (read.failed) unknown = read.error
+      else source = read.source
     } catch {
-      // Transport failure — fall through to null. The server enforces
-      // read-only on save regardless, so failing open here can't corrupt a
-      // synced target; it just skips the banner until the next refresh.
+      // An answer that cannot be read — fall through to null. The server
+      // enforces read-only on save regardless, so failing open here can't
+      // corrupt a synced target; it just skips the banner until the next
+      // refresh.
     }
-    if (frozenSourceFolderRef.current === path) setFrozenSource(source)
+    if (frozenSourceFolderRef.current === path) {
+      setFrozenSource(source)
+      setSyncUnknown(unknown)
+    }
   }
 
   // Covers folders restored from session state, which never pass through
@@ -287,7 +364,6 @@ export default function AlertUserView() {
   // effect (the ref check makes the duplicate fetch harmless).
   useEffect(() => {
     if (selectedFolder) refreshFrozenSource(selectedFolder)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFolder])
 
   // Unsaved edits live only in React state — switching folders resets them.
@@ -329,14 +405,19 @@ export default function AlertUserView() {
       setActiveAlert(null)
       setAllValues({})
       setCommonValues({})
+      setInherited(null)
       setRows([])
       setFilters({})
       setCheckedAlerts([])
       setDirty(false)
       setFrozenSource(null)
+      setSyncUnknown(null)
+      clearSaveStatus()
       return
     }
-    if (dirty && !frozenSource && !(await confirmDiscardEdits())) return
+    const waited = await afterSaveInFlight()
+    if (waited === false) return
+    if (!waited && dirty && !frozenSource && !(await confirmDiscardEdits())) return
     const { path, chart } = selection
     setViewedPaths(viewing || [path])
     setSelectedFolder(path)
@@ -344,11 +425,13 @@ export default function AlertUserView() {
     setActiveAlert(null)
     setAllValues({})
     setCommonValues({})
+    setInherited(null)
     setRows([])
     setFilters({})
     if (!keepGroups) setCheckedAlerts([])
     setDirty(false)
     setFrozenSource(null)
+    if (path !== selectedFolder) clearSaveStatus()
     await refreshFrozenSource(path)
   }
 
@@ -357,7 +440,9 @@ export default function AlertUserView() {
   async function handleViewedChange(keys) {
     const next = [...viewed.filter(p => keys.includes(p)), ...keys.filter(k => !viewed.includes(k))]
     if (next.length === 0) return
-    if (!multi && next.length > 1 && dirty && !frozenSource) {
+    const waited = await afterSaveInFlight()
+    if (waited === false) return
+    if (!waited && !multi && next.length > 1 && dirty && !frozenSource) {
       if (!(await confirmDiscardEdits())) return
       setDirty(false)
       setReloadKey(k => k + 1)
@@ -393,18 +478,52 @@ export default function AlertUserView() {
 
   // A proposed row (#60) goes into its group's table; Save is still the
   // owner's to press.
+  // A group it inherits is copied here first, as Add instance does (#102):
+  // a group is inherited whole, and one row alone would drop the rest.
   function addProposedRow(group, row) {
-    if (group === activeAlert) setRows(r => [...r, row])
-    setAllValues(v => ({ ...v, [group]: [...(group === activeAlert ? rows : (v[group] || [])), row] }))
+    const inheritedHere = !Object.hasOwn(allValues, group) && inheritedFrom(group)
+    const current = inheritedHere ? rowsOf(inherited.values, group).map(r => ({ ...r })) : (group === activeAlert ? rows : rowsOf(allValues, group))
+    const next = [...current, row]
+    if (group === activeAlert) setRows(next)
+    setAllValues(v => ({ ...v, [group]: next }))
     setDirty(true)
   }
 
-  // A save refused for specific cells lists them; anything else is still
-  // just "Save failed". Rows that would fix a selector overlap (#60) each
-  // come with a button that adds them.
+  // "Saved at" and what that save said belong to that save: not to one
+  // that failed after it, nor to another deployment.
+  function clearSaveStatus() {
+    setSaveStatus('')
+    setSaveWarnings([])
+  }
+
+  // A save refused as the deployment changed since it was opened: what is
+  // there now is shown again, and the edits here are said to be lost.
+  function reportChanged(result) {
+    Modal.confirm({
+      title: 'Changed since you opened it',
+      content: `${result.error}. A _common may have been made or removed above it, or someone else saved it. Reload shows what is there now — your unsaved edits here are discarded.`,
+      okText: 'Reload',
+      cancelText: 'Keep my edits on screen',
+      onOk: () => { setDirty(false); setReloadKey(k => k + 1) },
+    })
+  }
+
+  // A save refused for specific cells lists them; anything else says the
+  // server's reason (a file that cannot be written, a deployment synced
+  // since). Rows that would fix a selector overlap (#60) each come with a
+  // button that adds them.
   function reportSaveFailure(result) {
+    if (result.unknown) {
+      // As any answer that cannot be read is said (main.jsx).
+      message.error({ content: result.error, duration: 0, key: 'answer-cut-off' })
+      return
+    }
+    if (result.changed) {
+      reportChanged(result)
+      return
+    }
     if (!result.problems?.length) {
-      message.error('Save failed')
+      Modal.error({ title: 'Save failed', content: result.error || 'The server did not save the values.' })
       return
     }
     const dialog = Modal.error({
@@ -429,44 +548,113 @@ export default function AlertUserView() {
     })
   }
 
-  // The deployment was saved; a sync target that was not is named.
+  // The deployment was saved; a sync target that was not is named, and what
+  // the save let through but is worth saying (rows the row identity label
+  // cannot tell apart).
   function warnSyncFailed(result) {
     const notice = syncFailedNotice(result.syncFailed)
     if (notice) message.warning({ content: notice, duration: 10 })
+    setSaveWarnings(result.warnings || [])
+    // The editor wrote what Helm reads: the note on how it read the file is done.
+    setReadNotes([])
   }
 
-  async function handleSave() {
+  // While a save is on its way nothing is edited and no second save is
+  // sent: the answer would overwrite an edit made meanwhile, or leave it
+  // looking saved, and a second save of the old version is refused as
+  // changed since. A ref, so a double click sees the first.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
+  const saveInFlight = useRef(null)
+  async function oneSaveAtATime(save) {
+    if (savingRef.current) return false
+    savingRef.current = true
+    setSaving(true)
+    const sent = save()
+    saveInFlight.current = sent
+    try {
+      return await sent
+    } finally {
+      savingRef.current = false
+      saveInFlight.current = null
+      setSaving(false)
+    }
+  }
+  // Another deployment opened while a save is on its way waits for it: the
+  // edits are being saved, not discarded, and its answer is about this one.
+  // null when no save was on its way; else whether it went through.
+  async function afterSaveInFlight() {
+    const sent = saveInFlight.current
+    if (!sent) return null
+    try {
+      return !!(await sent)
+    } catch {
+      return false
+    }
+  }
+  // The deployment on screen now: a save's answer for one left since is
+  // not put on the page.
+  const shownFolder = useRef(selectedFolder)
+  shownFolder.current = selectedFolder
+
+  const handleSave = () => oneSaveAtATime(saveSingle)
+  async function saveSingle() {
     if (!selectedChart || !selectedFolder) return
     const isCommon = activeAlert === '__common_vars__'
-    const merged = isCommon ? allValues : { ...allValues, [activeAlert]: rows }
+    // An inherited group is written only once it is overridden here (#102).
+    const ownGroup = !isCommon && (Object.hasOwn(allValues, activeAlert) || !inheritedFrom(activeAlert))
+    const merged = ownGroup ? { ...allValues, [activeAlert]: rows } : allValues
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...merged }
       : merged
-    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
+    const folder = selectedFolder
+    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), folder, loadedVersion)
+    if (shownFolder.current !== folder) return savedElsewhere(folder, result)
     if (!result.ok) {
+      clearSaveStatus()
       reportSaveFailure(result)
       return false
     }
     if (!isCommon) setAllValues(merged)
+    if (result.version) setLoadedVersion(result.version)
     setDirty(false)
+    setUsersKey(k => k + 1)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
     warnSyncFailed(result)
     return true
   }
 
-  async function handleOverviewSave() {
+  // The answer of a save for a deployment no longer open: said, and nothing
+  // of it put on the page, which is another deployment's now.
+  function savedElsewhere(folder, result) {
+    if (!result.ok) reportSaveFailure({ ...result, error: `${folder}: ${result.error || 'Save failed'}` })
+    else {
+      message.success(`${folder} saved`)
+      warnSyncFailed(result)
+    }
+    return result.ok
+  }
+
+  const handleOverviewSave = () => oneSaveAtATime(saveOverview)
+  async function saveOverview() {
     if (!selectedChart || !selectedFolder) return false
     const toSave = Object.keys(commonValues).length > 0
       ? { _common: commonValues, ...allValues }
       : allValues
-    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), selectedFolder)
+    const folder = selectedFolder
+    const result = await saveDeployment(selectedChart, folderBasename, pruneAllValues(toSave, schema), folder, loadedVersion)
+    if (shownFolder.current !== folder) return savedElsewhere(folder, result)
     if (!result.ok) {
+      clearSaveStatus()
       reportSaveFailure(result)
       return false
     }
+    if (result.version) setLoadedVersion(result.version)
     setDirty(false)
     setSaveStatus(`Saved at ${new Date().toLocaleTimeString()}`)
     warnSyncFailed(result)
+    // The overview has no line of its own for them.
+    if (result.warnings?.length) message.warning({ content: result.warnings.join('; '), duration: 10 })
     return true
   }
 
@@ -487,6 +675,7 @@ export default function AlertUserView() {
     setPreviewCheck(result.ok ? result.check : null)
     setPreviewSelfCheck(result.ok ? result.selfCheck : null)
     setPreviewSummary(result.ok ? result.summary : null)
+    setPreviewValueWarnings(result.ok ? result.valueWarnings : null)
     setPreviewOpen(true)
   }
 
@@ -502,7 +691,81 @@ export default function AlertUserView() {
     </div>
   )
 
+  // A group a _common gives: shown, dimmed; overridden, it is the
+  // deployment's own; reset, the key goes and the inherited rows show again.
+  const groupFrom = activeAlert && activeAlert !== '__common_vars__' ? inheritedFrom(activeAlert) : null
+  const inheritedRows = groupFrom ? rowsOf(inherited.values, activeAlert) : []
+  const showingInherited = !!groupFrom && !Object.hasOwn(allValues, activeAlert)
+  const copyRows = list => list.map(r => ({ ...r }))
+  function overrideGroup(then = rows => rows) {
+    const copied = then(copyRows(inheritedRows))
+    setAllValues(v => ({ ...v, [activeAlert]: copied }))
+    setRows(copied)
+    setDirty(true)
+  }
+  function addToInherited(newRow) {
+    overrideGroup(list => [...list, newRow])
+    message.info(`The ${inheritedRows.length} inherited row${inheritedRows.length === 1 ? ' was' : 's were'} copied here first: this deployment's ${activeAlert} replaces the one of ${groupFrom} whole`)
+  }
+  // The dimmed inherited rows take no edit: a click or a key on them says
+  // how to change them, and points at the button for a moment. Their
+  // column filters are for reading them: a click or a key there says nothing.
+  const [overrideHint, setOverrideHint] = useState(false)
+  function explainInherited(e) {
+    if (!e?.target?.closest?.('.ant-table-tbody')) return
+    const n = inheritedRows.length
+    const readOnly = !!frozenSource || !!syncUnknown
+    message.info({
+      key: 'inherited-rows-hint',
+      duration: 6,
+      content: readOnly
+        ? `These rows are inherited from ${groupFrom}, and this deployment is read-only here.`
+        : `These rows are inherited from ${groupFrom}. To change one, click "Override here": the ${n} row${n === 1 ? ' is' : 's are'} copied into this deployment to edit.`,
+    })
+    if (readOnly) return
+    setOverrideHint(true)
+    setTimeout(() => setOverrideHint(false), 2500)
+  }
+  const rowText = r => Object.entries(r).map(([k, v]) => `${k}=${v}`).join(', ') || '(empty row)'
+  function resetGroup() {
+    Modal.confirm({
+      title: `Reset ${activeAlert} to what ${groupFrom} gives?`,
+      width: 600,
+      okText: 'Reset',
+      content: (
+        <div data-testid="reset-diff" style={{ fontSize: 12 }}>
+          <div style={{ marginTop: 8 }}><b>This deployment's rows, removed ({rows.length}):</b></div>
+          <ul style={{ paddingLeft: 18, margin: 0 }}>{rows.length ? rows.map((r, i) => <li key={i} style={{ color: '#cf1322' }}>{rowText(r)}</li>) : <li>none — it clears the group</li>}</ul>
+          <div style={{ marginTop: 8 }}><b>Inherited from {groupFrom} ({inheritedRows.length}):</b></div>
+          <ul style={{ paddingLeft: 18, margin: 0 }}>{inheritedRows.length ? inheritedRows.map((r, i) => <li key={i} style={{ color: '#389e0d' }}>{rowText(r)}</li>) : <li>none</li>}</ul>
+          <div style={{ marginTop: 8 }}>Once saved, a later change to {groupFrom} reaches this deployment too.</div>
+        </div>
+      ),
+      onOk: () => {
+        setAllValues(v => { const { [activeAlert]: _, ...rest } = v; return rest })
+        setRows([])
+        setDirty(true)
+      },
+    })
+  }
+
   const isCommonView = activeAlert === '__common_vars__'
+  // The group list's marks: what this deployment does with each group a
+  // _common gives, as the page stands (the open group's rows as edited).
+  const ownNow = mode === 'single' && activeAlert && Object.hasOwn(allValues, activeAlert) ? { ...allValues, [activeAlert]: rows } : allValues
+  const identityOf = group => identityColumnsOf(rulesModel, schema, group)
+  const defaultsOf = group => columnDefaultsOf(rulesModel, schema, group)
+  const groupMarks = Object.fromEntries(alertNames.map(g => [g, groupMark(ownNow, inherited, g, identityOf(g), defaultsOf(g))]).filter(([, m]) => m))
+  // The open group against its _common, row by row.
+  const activeMark = !isCommonView && activeAlert ? ownOf(groupMarks, activeAlert) ?? null : null
+  const commonMarks = commonValueMarks(commonValues, inherited)
+  const commonSetHere = Object.keys(commonMarks).filter(k => commonMarks[k].state === 'overrides')
+  const commonMark = commonSetHere.length
+    ? { word: 'overrides', title: `Sets ${commonSetHere.join(', ')} here, over what ${[...new Set(commonSetHere.map(k => commonMarks[k].from))].join(', ')} gives` }
+    : null
+  // Nothing to edit: a sync target, values that cannot be read, or
+  // sync.yaml that cannot be read (whether it is a target is not known).
+  const locked = !!frozenSource || !!loadError || !!syncUnknown || saving
   const commonVarDefs = schema ? getCommonVars(schema) : []
   const showMain = selectedFolder && selectedChart && activeAlert
 
@@ -527,6 +790,9 @@ export default function AlertUserView() {
             checkChart={selectedChart}
             onCheck={handleViewedChange}
             onRemoved={handleViewedRemoved}
+            onCommonChange={() => { setDirty(false); setReloadKey(k => k + 1); setUsersKey(k => k + 1) }}
+            // Making or removing a _common reloads the page open: asked first.
+            confirmLeave={async () => !dirty || !!frozenSource || confirmDiscardEdits()}
           />
         </div>
         {selectedChart && (
@@ -536,6 +802,10 @@ export default function AlertUserView() {
               <div style={{ padding: '0 16px 4px', fontSize: 11, color: '#6b7280' }}>
                 from <b>{selectedChart}</b>
               </div>
+              {chartError && (
+                <Alert data-testid="chart-load-error" type="error" showIcon style={{ margin: '4px 12px', fontSize: 12 }}
+                  message={`This Template cannot be opened: ${chartError}`} />
+              )}
               <div style={{ padding: '4px 12px 8px' }}>
                 <Segmented
                   size="small"
@@ -558,6 +828,8 @@ export default function AlertUserView() {
                     onSelect={setActiveAlert}
                     showCommonVars={getCommonVars(schema).length > 0}
                     commonVarsLabel="Common Values"
+                    marks={groupMarks}
+                    commonMark={commonMark}
                   />
                 </div>
               ) : (
@@ -565,6 +837,7 @@ export default function AlertUserView() {
                   templates={alertNames.filter(n => !onceGroups.includes(n))}
                   checked={checkedAlerts}
                   onCheckedChange={setCheckedAlerts}
+                  marks={multi ? null : groupMarks}
                 />
               )}
             </div>
@@ -597,6 +870,51 @@ export default function AlertUserView() {
         {frozenSource && selectedFolder && !multi && (
           <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
             Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.
+            {stackInfo?.inheritsFrom && (
+              <span data-testid="target-stack"> What it inherits comes from its source&apos;s <b>{stackInfo.inheritsFrom}</b>{stackInfo.folderCommon && stackInfo.folderCommon !== stackInfo.inheritsFrom ? <>, not this folder&apos;s {stackInfo.folderCommon}</> : null}.</span>
+            )}
+            {!stackInfo?.inheritsFrom && stackInfo?.folderCommon && (
+              <span data-testid="target-stack"> It does not inherit this folder&apos;s {stackInfo.folderCommon}: its source is on the Template directly.</span>
+            )}
+          </div>
+        )}
+        {syncUnknown && selectedFolder && !multi && (
+          <Alert data-testid="sync-unknown" type="error" banner showIcon style={{ fontSize: 12 }}
+            message={`${syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.`} />
+        )}
+        {loadError && selectedFolder && !multi && (
+          <div data-testid="values-load-error" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
+            This deployment&apos;s values cannot be read: {loadError}
+          </div>
+        )}
+        {stackProblems && selectedFolder && !multi && (
+          <div data-testid="stack-problems" style={{ padding: '6px 20px', background: '#fff1f0', borderBottom: '1px solid #ffccc7', fontSize: 12, color: '#a8071a' }}>
+            Helm cannot render this as shown: {stackProblems.join('; ')}
+          </div>
+        )}
+        {onCommon && !multi && (
+          <div data-testid="common-banner" style={{ padding: '6px 20px', background: '#f0f5ff', borderBottom: '1px solid #d6e4ff', fontSize: 12, color: '#1d39c4' }}>
+            The <b>{COMMON_DIR}</b> of <b>{selectedFolder.split('/').slice(0, -2).join('/')}/</b>: what its deployments of {selectedChart} inherit, unless they set their own.{' '}
+            {commonUsers === null ? 'Loading who inherits…' : commonUsers.length === 0 ? 'No deployment inherits from it yet.' : (
+              <>
+                {commonUsers.length} deployment{commonUsers.length > 1 ? 's' : ''} inherit from it:
+                <ul data-testid="common-users" style={{ margin: '2px 0 0', paddingLeft: 18 }}>
+                  {commonUsers.map(u => {
+                    const fromHere = Object.values(u.groups).filter(g => g.from === selectedFolder)
+                    const active = activeAlert && activeAlert !== '__common_vars__' ? ownOf(u.groups, activeAlert) ?? null : null
+                    // No number where Helm's rows cannot be told (rows: null).
+                    const rowsOf = n => (n === null ? 'rows not known' : `${n} row${n === 1 ? '' : 's'}`)
+                    const hereRows = fromHere.some(g => g.rows === null) ? 'rows not known' : `${fromHere.reduce((n, g) => n + (g.rows || 0), 0)} rows`
+                    return (
+                      <li key={u.path} data-testid={`common-user-${u.path}`}>
+                        <b>{u.path}</b>{!u.direct && ' (through a lower _common)'}: {u.told === false ? 'what it inherits from here cannot be told' : <>inherits {fromHere.length} group{fromHere.length === 1 ? '' : 's'} ({hereRows}) from here</>}
+                        {active && <> — {activeAlert}: {active.from === 'own' ? `its own ${rowsOf(active.rows)}` : active.from === selectedFolder ? `${rowsOf(active.rows)} from here` : `${active.rows === null ? 'rows not known' : `${active.rows ?? 'the Template\'s'} rows`} from ${active.from}`}</>}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            )}
           </div>
         )}
         {unusedValuesFile && selectedFolder && !multi && (
@@ -614,17 +932,24 @@ export default function AlertUserView() {
           <AlertOverviewWorkspace
             checkedAlerts={checkedAlerts}
             allValues={allValues}
-            commonValues={commonValues}
-            schema={schema}
+            commonValues={{ ...inheritedCommon, ...commonValues }}
             onAllValuesChange={updated => { setAllValues(updated); setDirty(true) }}
             onSave={handleOverviewSave}
-            onPreview={handlePreview}
+            onPreview={onCommon ? undefined : handlePreview}
             dirty={dirty}
-            saveStatus={saveStatus}
+            saveStatus={saving ? 'Saving…' : saveStatus}
             getVars={getVars}
-            readOnly={!!frozenSource}
-            deployments={viewedDeployments}
+            readOnly={locked}
+            deployments={viewedDeployments && viewedDeployments.map(({ parsed, inherited: theirs, ...d }) => (theirs ? {
+              ...d,
+              marks: Object.fromEntries(alertNames.map(g => [g, groupMark(parsed, theirs, g, identityOf(g), defaultsOf(g))]).filter(([, m]) => m)),
+              commonMarks: commonValueMarks(parsed?._common, theirs),
+            } : d))}
             onOpenDeployment={openViewedDeployment}
+            groupMarks={multi ? null : groupMarks}
+            commonMarks={multi || !inherited ? null : commonMarks}
+            inheritedFrom={multi ? null : inheritedFrom}
+            inheritedRows={group => rowsOf(inherited?.values, group)}
           />
         ) : showMain ? (
           <>
@@ -637,24 +962,43 @@ export default function AlertUserView() {
               {isCommonView ? (
                 <div style={{ maxWidth: 500 }}>
                   <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
-                    Values set here apply to all alert groups in this deployment.
+                    {onCommon
+                      ? 'Values set here apply to all alert groups of every deployment that inherits from this _common, unless the deployment sets its own.'
+                      : 'Values set here apply to all alert groups in this deployment.'}
                   </Text>
                   {commonVarDefs.map(v => {
-                    const missing = !frozenSource && isMissingRequired(v, commonValues[v.name])
-                    const field = v.enum ? (
+                    // A _common may leave a required value to its deployments;
+                    // one a deployment inherits is given (#102).
+                    const own = Object.hasOwn(commonValues, v.name)
+                    const from = !own && Object.hasOwn(inheritedCommon, v.name) ? ownOf(commonFrom, v.name) : null
+                    const missing = !frozenSource && !onCommon && isMissingRequired(v, own ? commonValues[v.name] : inheritedCommon[v.name])
+                    const badDuration = !missing && !frozenSource && v.type === 'duration' && commonValues[v.name]
+                      ? durationCellFault(commonValues[v.name], null) : null
+                    const shownValue = own ? commonValues[v.name] : inheritedCommon[v.name]
+                    // A boolean is a checkbox, as its column is: true or
+                    // false, not the text "true", which a save refuses. One
+                    // inherited shows the inherited value, dimmed.
+                    const field = v.type === 'boolean' ? (
+                        <MissingRequired missing={missing}>
+                          <Checkbox checked={!!shownValue} disabled={locked}
+                            style={from ? { opacity: 0.6 } : undefined}
+                            onChange={e => { setCommonValues({ ...commonValues, [v.name]: e.target.checked }); setDirty(true) }} />
+                        </MissingRequired>
+                      ) : v.enum ? (
                         <Select size="small" value={commonValues[v.name] ?? ''}
                           status={missing ? 'error' : undefined}
                           onChange={val => { setCommonValues({ ...commonValues, [v.name]: val }); setDirty(true) }}
                           style={{ flex: 1 }}
                           options={v.enum.map(opt => ({ value: opt, label: opt }))}
                           allowClear
-                          disabled={!!frozenSource}
+                          disabled={locked}
                           onClear={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}
                         />
                       ) : (
                         <Input size="small" value={commonValues[v.name] ?? ''}
-                          disabled={!!frozenSource}
-                          status={missing ? 'error' : undefined}
+                          placeholder={from ? `${inheritedCommon[v.name]} (inherited)` : undefined}
+                          disabled={locked}
+                          status={missing || badDuration ? 'error' : undefined}
                           onChange={e => {
                             if (e.target.value) {
                               setCommonValues({ ...commonValues, [v.name]: e.target.value }); setDirty(true)
@@ -668,7 +1012,14 @@ export default function AlertUserView() {
                     return (
                       <div key={v.name} data-testid={`common-value-${v.name}`} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                         <Text strong style={{ width: 120, fontSize: 13 }}>{v.name}{v.required && <RequiredMark />}</Text>
-                        {missing ? <Tooltip title="Required">{field}</Tooltip> : field}
+                        {missing && v.type !== 'boolean' ? <Tooltip title="Required">{field}</Tooltip> : badDuration ? <Tooltip title={badDuration}>{field}</Tooltip> : field}
+                        {from && <Tag data-testid={`inherited-from-${v.name}`} style={{ margin: 0, opacity: 0.7 }}>from {from}</Tag>}
+                        {own && Object.hasOwn(inheritedCommon, v.name) && !frozenSource && !syncUnknown && (
+                          <Tooltip title={`Remove it here: ${inheritedCommon[v.name]} from ${commonFrom[v.name]} again`}>
+                            <Button size="small" type="link" data-testid={`reset-${v.name}`} style={{ padding: 0 }}
+                              onClick={() => { const { [v.name]: _, ...rest } = commonValues; setCommonValues(rest); setDirty(true) }}>Reset</Button>
+                          </Tooltip>
+                        )}
                       </div>
                     )
                   })}
@@ -681,31 +1032,73 @@ export default function AlertUserView() {
                   message="No values needed"
                   description="This group renders once per deployment — it has no rows to fill in. Preview shows what it produces."
                 />
+              ) : showingInherited ? (
+                <>
+                  <Alert data-testid="inherited-group" type="info" showIcon style={{ marginBottom: 12 }}
+                    message={<>Inherited from <b>{groupFrom}</b>: {inheritedRows.length} row{inheritedRows.length === 1 ? '' : 's'}</>}
+                    description={`A group is inherited whole. To change any of its rows here, override it: the ${inheritedRows.length} rows are copied into this deployment, and later changes to ${groupFrom}'s ${activeAlert} no longer reach it.`}
+                    action={!frozenSource && !syncUnknown && <Button size="small" type={overrideHint ? 'primary' : 'default'} onClick={() => overrideGroup()}>Override here</Button>} />
+                  <div data-testid="inherited-rows" style={{ opacity: 0.55, cursor: 'help' }} onClick={explainInherited} onKeyDown={explainInherited}>
+                    <AlertTable vars={vars} rows={inheritedRows} plain readOnly commonValues={{ ...inheritedCommon, ...commonValues }}
+                      filters={filters} onFiltersChange={setFilters} onUpdate={() => {}} onDelete={() => {}} onAdd={() => {}}
+                      scrollContainer={mainScrollContainer} />
+                  </div>
+                  {!frozenSource && !syncUnknown && (
+                    <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }}
+                      onClick={() => addToInherited(buildNewRow(vars, { ...inheritedCommon, ...commonValues }))}>
+                      Add instance (copies the {inheritedRows.length} inherited rows here first)
+                    </Button>
+                  )}
+                </>
               ) : (
+                <>
+                {groupFrom && (
+                  <Alert data-testid="overrides-group" type="warning" showIcon style={{ marginBottom: 12 }}
+                    message={rows.length === 0 && inheritedRows.length > 0
+                      ? <>This deployment clears {activeAlert} (it writes no rows): <b>{groupFrom}</b> gives {inheritedRows.length}</>
+                      : <>Overrides <b>{groupFrom}</b> ({inheritedRows.length} row{inheritedRows.length === 1 ? '' : 's'} there){activeMark?.state === 'overrides' && <> · {sameWord(activeMark)}</>}</>}
+                    description={activeMark?.state === 'overrides' && (
+                      <span data-testid="overrides-summary">
+                        {marksSummary(activeMark, activeAlert)} This group no longer follows {groupFrom}: a later change there does not reach this deployment{frozenSource || syncUnknown ? '.' : <> until <b>Reset to inherited</b>.</>}
+                      </span>
+                    )}
+                    action={!frozenSource && !syncUnknown && <Button size="small" onClick={resetGroup}>Reset to inherited</Button>} />
+                )}
                 <AlertTable
                   vars={vars}
                   rows={rows}
-                  selectors={rulesModel?.groups?.[activeAlert]?.selectors || null}
+                  selectors={ownOf(rulesModel?.groups, activeAlert)?.selectors || null}
                   selectorDefaults={selectorDefaultsOf(rulesModel, activeAlert)}
-                  selectorLabels={renamedSelectorLabels(rulesModel?.groups?.[activeAlert])}
-                  commonValues={commonValues}
+                  selectorLabels={renamedSelectorLabels(ownOf(rulesModel?.groups, activeAlert))}
+                  commonValues={{ ...inheritedCommon, ...commonValues }}
                   filters={filters}
                   onFiltersChange={setFilters}
                   onUpdate={updated => { setRows(updated); setDirty(true) }}
                   onDelete={realIndex => { setRows(rows.filter((_, i) => i !== realIndex)); setDirty(true) }}
                   onAdd={newRow => { setRows([...rows, newRow]); setDirty(true) }}
-                  readOnly={!!frozenSource}
+                  readOnly={locked}
                   scrollContainer={mainScrollContainer}
+                  rowMarks={activeMark?.state === 'overrides' && activeMark.aligned ? activeMark.rows : null}
+                  marksFrom={groupFrom}
+                  commonMarks={inherited ? commonMarks : null}
                 />
+                <CommonRowNotes mark={activeMark} group={activeAlert} />
+                </>
               )}
             </div>
             <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
-              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty || !!frozenSource}>Save</Button>
-              {!isCommonView && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!dirty || locked}>Save</Button>
+              {!isCommonView && !onCommon && <Button icon={<EyeOutlined />} onClick={handlePreview}>Preview</Button>}
               {!isCommonView && Object.values(filters).some(f => f && f.value !== '' && f.value != null) && (
                 <Button icon={<CloseOutlined />} size="small" type="text" style={{ color: '#1677ff' }} onClick={() => setFilters({})}>Clear filters</Button>
               )}
-              {saveStatus && <Text type="secondary" style={{ fontSize: 12 }}>{saveStatus}</Text>}
+              {(saving || saveStatus) && <Text type="secondary" style={{ fontSize: 12 }}>{saving ? 'Saving…' : saveStatus}</Text>}
+              {saveWarnings.length > 0 && (
+                <Text type="warning" data-testid="values-warnings" style={{ fontSize: 12 }}>{saveWarnings.join('; ')}</Text>
+              )}
+              {readNotes.length > 0 && !dirty && (
+                <Text type="warning" data-testid="values-read-notes" style={{ fontSize: 12 }}>{readNotes.join('; ')}</Text>
+              )}
             </div>
           </>
         ) : (
@@ -727,26 +1120,25 @@ export default function AlertUserView() {
         check={previewCheck}
         selfCheck={previewSelfCheck}
         summary={previewSummary}
+        valueWarnings={previewValueWarnings}
       />
 
-      <Modal title="New Deployment" open={newDeployOpen} onCancel={() => setNewDeployOpen(false)}
-        onOk={handleNewDeployCreate} okText="Create"
-        okButtonProps={{ disabled: !newDeployPath || !newDeployChart || newDeployReserved }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-          <div>
-            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Folder Path</Text>
-            <Input placeholder="deployments/my-app/production" value={newDeployPath}
-              status={newDeployReserved ? 'error' : undefined}
-              onChange={e => setNewDeployPath(e.target.value)} />
-            {newDeployReserved && <Text type="danger" style={{ fontSize: 12 }}>{RESERVED_HINT}</Text>}
-          </div>
-          <div>
-            <Text style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>Chart</Text>
-            <Select style={{ width: '100%' }} value={newDeployChart} onChange={setNewDeployChart}
-              options={availableCharts.map(c => ({ value: c.name, label: c.name }))} />
-          </div>
-        </div>
-      </Modal>
+      <NewDeploymentModal
+        open={newDeployOpen}
+        initialPath={newDeployPath}
+        onClose={() => setNewDeployOpen(false)}
+        onCreateDeployment={handleNewDeployCreate}
+        confirmLeave={async () => !dirty || !!frozenSource || confirmDiscardEdits()}
+        onCommonDone={() => {
+          // As after the tree's "Add _common...": the tree and the page
+          // open are read again.
+          setNewDeployOpen(false)
+          setDirty(false)
+          setTreeRefreshKey(k => k + 1)
+          setReloadKey(k => k + 1)
+          setUsersKey(k => k + 1)
+        }}
+      />
     </div>
   )
 }

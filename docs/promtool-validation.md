@@ -6,6 +6,11 @@ CI jobs later.
 
 ## Prerequisites
 
+- A source checkout of this repository: the scripts (`scripts/extract_rules.py`,
+  `scripts/render_and_check.py`, `scripts/promtool_test.sh`) are not in the
+  AlertForge image, which has no Python. From the image, use
+  `check-deployment` and `check-repo` instead (see
+  [how-to](../doc/how-to.md#check-a-deployment-from-the-image)).
 - Python 3 with PyYAML
 - Helm 3
 - `promtool` available on `PATH`, or pass `--promtool /path/to/promtool`

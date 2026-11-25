@@ -1,0 +1,22 @@
+# rule_files is filled in by the harness: one file per rendered object.
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'spc_errors_total{job="api"}'
+        values: '0+1x20'
+      - series: 'spc_errors_total{job="worker"}'
+        values: '0+1x20'
+    alert_rule_test:
+      # The rate is over 0 from 1m. worker holds 0s: firing at once.
+      - eval_time: 1m
+        alertname: SpcErrors
+        exp_alerts:
+          - exp_labels: { severity: warning, job: worker }
+      # api holds 5m: firing from 6m.
+      - eval_time: 6m
+        alertname: SpcErrors
+        exp_alerts:
+          - exp_labels: { severity: warning, job: api }
+          - exp_labels: { severity: warning, job: worker }

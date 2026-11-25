@@ -121,7 +121,69 @@ spec:
   it('refuses a group whose type has no output profile, and says why', () => {
     const { groups, warnings } = importRules(vmrule.replace('type: vlogs', 'type: graphite'))
     expect(groups).toEqual([])
-    expect(warnings.join()).toMatch(/panics: type "graphite" has no output profile \(prometheus, vlogs\) — group skipped/)
+    expect(warnings.join()).toMatch(/panics: a VMRule group of type "graphite" has no output profile \(prometheus2, prometheus3, vm, vlogs\) — group skipped/)
+  })
+
+  // A VMRule's `type: prometheus` is vmalert's: MetricsQL, the vm profile —
+  // not AlertForge's PrometheusRule.
+  it('takes a VMRule of metric rules in as vm, with or without the evaluator type', () => {
+    for (const text of [vmrule.replace('type: vlogs', 'type: prometheus'), vmrule.replace('      type: vlogs\n', '')]) {
+      const { groups, warnings } = importRules(text)
+      expect(warnings).toEqual([])
+      expect(groups[0]).toMatchObject({ key: 'panics', type: 'vm', interval: '30s', limit: 5 })
+      expect(modelGroupFromImport(groups[0])).toMatchObject({ type: 'vm' })
+    }
+  })
+
+  // #182: the fields the type has travel; the others are said, not dropped unseen.
+  it('carries the group fields its type has, and says which it leaves', () => {
+    const vm = vmrule.replace('type: vlogs', 'type: prometheus').replace('limit: 5', 'limit: 5\n      labels: {team: x}\n      eval_offset: 10s\n      concurrency: 2\n      query_offset: 1m\n      debug: true')
+    const { groups, warnings } = importRules(vm)
+    expect(groups[0]).toMatchObject({ type: 'vm', labels: { team: 'x' }, eval_offset: '10s', concurrency: 2 })
+    expect(groups[0]).not.toHaveProperty('query_offset')
+    expect(modelGroupFromImport(groups[0])).toMatchObject({ labels: { team: 'x' }, eval_offset: '10s', concurrency: 2 })
+    expect(warnings).toEqual(['panics: query_offset not taken — a vm group has no such field', 'panics: debug not taken — AlertForge does not write this group field'])
+
+    const pr = 'apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nspec:\n  groups:\n    - name: g\n      query_offset: 1m\n      labels: {team: x}\n      rules:\n        - alert: A\n          expr: up == 0\n'
+    // No mark, but group labels, which only prometheus3 has of PrometheusRule:
+    // a Prometheus 3 object made outside AlertForge. Taken as prometheus2,
+    // every alert would lose them.
+    const two = importRules(pr)
+    expect(two.groups[0]).toMatchObject({ type: 'prometheus3', query_offset: '1m', labels: { team: 'x' } })
+    expect(two.warnings).toEqual(['g: has labels, which a prometheus2 group has not — taken in as prometheus3'])
+    // Without them it stays prometheus2.
+    const plain = importRules(pr.replace('      labels: {team: x}\n', ''))
+    expect(plain.groups[0]).not.toHaveProperty('type')
+    expect(plain.warnings).toEqual([])
+    // A field no profile of the kind has with the others: kept as it is, and said.
+    const neither = importRules(pr.replace('query_offset: 1m', 'eval_offset: 1m'))
+    expect(neither.groups[0]).not.toHaveProperty('type')
+    expect(neither.warnings).toEqual(['g: eval_offset, labels not taken — a prometheus2 group has no such field'])
+    const three = importRules(pr.replace('spec:', 'metadata:\n  annotations: {alertforge.io/profile: prometheus3}\nspec:'))
+    expect(three.groups[0]).toMatchObject({ type: 'prometheus3', query_offset: '1m', labels: { team: 'x' } })
+    expect(three.warnings).toEqual([])
+  })
+
+  it('names the type as the rules file wrote it, and where the field is', () => {
+    const file = 'groups:\n  - name: g\n    type: prometheus\n    labels: {team: x}\n    rules:\n      - alert: A\n        expr: up == 0\n'
+    expect(importRules(file).warnings).toEqual([
+      'g: type "prometheus" is taken as prometheus2 (Prometheus 2) — for a vmalert rules file, make it vm',
+      'g: labels not taken — a prometheus group has no such field (a prometheus3 group has)',
+    ])
+  })
+
+  it('says a mark that names no profile, and what the object is taken in as', () => {
+    const pr = 'apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\nmetadata:\n  annotations: {alertforge.io/profile: prometheus4}\nspec:\n  groups:\n    - name: g\n      rules:\n        - alert: A\n          expr: up == 0\n'
+    const { groups, warnings } = importRules(pr)
+    expect(groups[0]).not.toHaveProperty('type')
+    expect(warnings).toEqual(['g: annotation alertforge.io/profile is "prometheus4", which names no output profile — taken in as prometheus2'])
+  })
+
+  it('takes a PrometheusRule in as the default type, and a rules file\'s type as written', () => {
+    const pr = vmrule.replace('operator.victoriametrics.com/v1beta1', 'monitoring.coreos.com/v1').replace('VMRule', 'PrometheusRule').replace('      type: vlogs\n', '')
+    expect(importRules(pr).groups[0]).not.toHaveProperty('type')
+    const file = 'groups:\n  - name: g\n    type: vm\n    rules:\n      - alert: A\n        expr: up == 0\n'
+    expect(importRules(file).groups[0]).toMatchObject({ type: 'vm' })
   })
 })
 
@@ -334,5 +396,35 @@ describe('the raw toggle round-trips a rule', () => {
     const { rule, error } = ruleFromYaml('record: r\nexpr: up\nfor: 5m')
     expect(rule).toBeUndefined()
     expect(error).toMatch(/for/)
+  })
+})
+
+// Groups whose names make one key used to be one file, the last one's: the
+// others' rules were gone with only a "replaces" line. Each now gets a key
+// of its own, said; no rule is lost.
+describe('groups whose names make one key', () => {
+  const text = 'groups:\n  - name: a-b\n    rules:\n      - alert: X\n        expr: up\n  - name: a b\n    rules:\n      - alert: Y\n        expr: up\n  - name: A_B\n    rules:\n      - alert: Z\n        expr: up\n'
+
+  it('get keys of their own, keep their names, and lose no rule', () => {
+    const { groups, warnings } = importRules(text)
+    expect(groups.map(g => g.key)).toEqual(['a_b', 'a_b_2', 'a_b_3'])
+    expect(groups.flatMap(g => g.rules.map(r => r.alert))).toEqual(['X', 'Y', 'Z'])
+    expect(groups.map(g => modelGroupFromImport(g).name)).toEqual([undefined, 'a b', 'A_B'])
+    expect(warnings).toEqual([
+      'a b: a_b is already the key of a-b in this import — taken in as a_b_2',
+      'A_B: a_b is already the key of a-b in this import — taken in as a_b_3',
+    ])
+  })
+
+  it('two groups of one name (two source files): the second renders under its key\'s name, said', () => {
+    const { groups, warnings } = importRules('groups:\n  - name: cpu\n    rules:\n      - alert: A\n        expr: up\n---\ngroups:\n  - name: cpu\n    rules:\n      - alert: B\n        expr: up\n')
+    expect(groups.map(g => [g.key, modelGroupFromImport(g).name])).toEqual([['cpu', undefined], ['cpu_2', undefined]])
+    expect(warnings).toContain('cpu: another group of this import is already named cpu — this one is named cpu-2')
+  })
+
+  it('a single group is as before', () => {
+    const { groups, warnings } = importRules('groups:\n  - name: MariaDB traffic\n    rules:\n      - alert: A\n        expr: up\n')
+    expect(groups.map(g => [g.key, modelGroupFromImport(g).name])).toEqual([['mariadb_traffic', 'MariaDB traffic']])
+    expect(warnings).toEqual([])
   })
 })

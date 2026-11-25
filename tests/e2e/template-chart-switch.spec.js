@@ -1,6 +1,6 @@
 // Two charts picked one after the other in the Template editor: only the
 // latest one's answer is put on the page, whichever comes back first.
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart } from './charts.js'
 
 const FIRST = 'e2e-switch-first'

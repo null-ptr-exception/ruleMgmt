@@ -1,7 +1,7 @@
 // Sync to a deployment on another Template moves it onto the source's
 // (#180): the dialog says so, and how many of its alert rows go, before
 // the overwrite is confirmed.
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { openMenu } from './menu.js'
 import { pickOption, removeChart } from './charts.js'
 

@@ -3,6 +3,7 @@ dist/
 .git/
 .playwright-mcp/
 test-results/
+coverage/
 playwright-report/
 docs/
 mockups/

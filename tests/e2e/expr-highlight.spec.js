@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart, openedDropdown } from './charts.js'
 
 // The expr editor's colours and font (#72). They are read back from the page:

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart } from './charts.js'
 
 // `type: duration` (#117): picked in the Template editor, and a cell that is

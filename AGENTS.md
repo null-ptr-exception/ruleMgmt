@@ -19,6 +19,8 @@ npm test             # vitest unit + integration tests (about a minute; no pins)
 STRESS=1 npx vitest run tests/integration/deployment-writes-stress.test.js tests/integration/template-writes-stress.test.js tests/integration/joined-writes-interaction.test.js   # the writes' 20/50-round stress, each side's and the two beside each other (a round or a few of each in npm test)
 npm run test:pin     # every pin (tests/pin/<slice>/*.pin.test.js): each entry point against real Helm
 npm run test:e2e     # playwright E2E tests
+npm run test:coverage    # npm test with coverage: a summary per folder, and the threshold (CI runs this one); npm test is the same without
+npm run build:coverage && npm run test:e2e:coverage   # after test:coverage: E2E with coverage, added to it, and the thresholds for everything
 npm run lint         # eslint
 node scripts/check-repo.mjs <repo>   # a whole gitops repo, checked as Commit checks it, every deployment rendered; exit 0 / 1 refused / 2 not checked
 ```
@@ -67,7 +69,7 @@ Every change is held to this; an issue's acceptance criteria refer to it rather 
    - add `promtool-tests.yaml` wherever the output is PromQL promtool can evaluate (it runs with promtool3 for a `prometheus3` case)
    - `expected/templates/` and the sample chart's golden may be regenerated (`node tests/blind/update.mjs`, `gen-rules`), and the diff is then reviewed line by line
 4. **Gate before merging:**
-   - `npm test`, `npm run test:pin`, `npm run test:e2e` and `npm run lint` all pass. There are no known failures to ignore; a red test is either fixed or the change is not done.
+   - `npm test`, `npm run test:pin`, `npm run test:e2e` and `npm run lint` all pass, and the two coverage thresholds hold (see Coverage). There are no known failures to ignore; a red test is either fixed or the change is not done.
    - CI is green.
    - Every CodeRabbit finding is fixed, or answered with a reason. Reviews are triggered by commenting `@coderabbitai review` (about one per hour).
 5. **No high or critical advisory in a runtime dependency.** CI runs `npm audit --omit=dev --audit-level=high`; a fix is a dependency upgrade, and this check is its failing test. A new advisory turns every CI run after it red until main is fixed.
@@ -82,6 +84,17 @@ Every change is held to this; an issue's acceptance criteria refer to it rather 
    - `baseline.tsv` holds today's answer of every cell (class, status, file named, server path shown, files changed, and Helm's exit, alert count and rendered value). A cell whose answer changes fails the test, naming it. When the change is meant: `PIN_UPDATE=1 npm run test:pin -- tests/pin/<slice>`, then review the diff of `baseline.tsv` line by line. `PIN_RECORD=<file>` also writes each cell with its message.
    - `allowlist.tsv` lists every cell that disagrees with Helm today (accepts what Helm fails, what promtool refuses, or values whose rows do not all render — fewer alerts than the rows written, as with values not under the chart's name; refuses what Helm renders; a 5xx, the editor showing another value), each with a category — `bug` (its issue, or "no issue yet"), `policy` (deliberate), `out-of-scope` — and a reason. It is edited by hand only. A new disagreement fails until it is fixed or listed; a fix fails until its line is removed, so the list only shrinks visibly.
    - Run it with each Helm version (`HELM_BIN`); the baseline is the same for both, so a difference fails. Without helm or promtool every cell is skipped, and the count is printed; skipped is not passed.
+
+## Coverage
+
+Lines of `src/`, `server/`, `scripts/` and `server.js`: every file, imported by a test or not; only tests and their fixtures are left out, and no source may ask to be (`v8 ignore` and the like fail `tests/unit/coverage.test.js`).
+
+- **`npm run test:coverage`** (the `lint-and-test` job) counts unit and integration tests, and the Node processes they start (the command-line tools, `server.js`; `NODE_V8_COVERAGE`). It fails under 80% of the lines outside `.jsx`, which only a browser runs.
+- **`npm run test:e2e:coverage`** (the `e2e` job) adds what the E2E server and its pages ran to `coverage/unit.json`. It fails under 80% of all lines, and when `tests/coverage/under-80.tsv` is not true: each file under 80% is listed there with its reason, and no other is. Coverage fails it only when every test passed. `node tests/coverage/e2e.mjs --report` judges the last run again.
+- `build:coverage` is the build that ships with source maps beside it (the same files byte for byte); `npm run build` writes no maps.
+- The lines are vitest's (`fromVitest`): the other sources only say which of them ran, so they never change how many there are.
+- A server a test starts and stops with a signal is preloaded with `tests/coverage/on-sigterm.mjs`, or what it ran is lost; a process killed with SIGKILL always loses it. A spec imports `test` from `tests/e2e/test.js`, or what its page ran is not counted.
+- A file is not brought over 80% by a test that asserts nothing: write what the code must do, or list the file with its reason.
 
 ## Disk boundary
 

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 test.describe('Alert Rules navigation', () => {
   test('can navigate to Templates', async ({ page }) => {

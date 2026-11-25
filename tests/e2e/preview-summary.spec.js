@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart } from './charts.js'
 
 // Coverage for things that only ever had backend/unit tests (issue

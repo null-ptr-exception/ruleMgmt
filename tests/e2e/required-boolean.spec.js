@@ -2,7 +2,7 @@
 // hand, or imported): the server refuses the save until it is given, so the
 // table marks it as it marks any required cell left empty. Ticking or
 // unticking the box gives it a value.
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { removeChart } from './charts.js'

@@ -1,7 +1,7 @@
 // What the page says when a sync, a delete or a _common cannot be written
 // (a file or folder that is read-only): the file, by its path in the repo,
 // and nothing changed.
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { openMenu } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'

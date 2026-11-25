@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // A group's own rule-group name: the Name field of the settings row. Empty is

@@ -1,7 +1,7 @@
 // What the user sees when a sync cannot do what it should (#180): Sync to...
 // says why a source is refused, and a save says which sync target's file it
 // could not write.
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { openMenu } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart } from './charts.js'
 
 // The Template editor's Derived and Vars sections: a row keeps what was

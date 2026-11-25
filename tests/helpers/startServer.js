@@ -51,7 +51,7 @@ export async function startServer(tmp, env = {}, { baseEnv = process.env } = {})
   let output = ''
   const full = { ...baseEnv, PORT: String(port), JUPYTERHUB_SERVICE_PREFIX: '', ...env }
   for (const [k, v] of Object.entries(full)) if (v === undefined) delete full[k]
-  const child = spawn(process.execPath, ['--preserve-symlinks', '--preserve-symlinks-main', path.join(app, 'server.js')], {
+  const child = spawn(process.execPath, ['--import', path.join(ROOT, 'tests/coverage/on-sigterm.mjs'), '--preserve-symlinks', '--preserve-symlinks-main', path.join(app, 'server.js')], {
     env: full, stdio: ['ignore', 'pipe', 'pipe'],
   })
   const ended = new Promise(r => child.once('exit', (code, signal) => r({ code, signal })))

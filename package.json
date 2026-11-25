@@ -9,9 +9,11 @@
     "server": "node server.js",
     "test": "vitest run",
     "test:pin": "vitest run --config tests/pin/vitest.config.mjs",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "node tests/coverage/unit.mjs",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:coverage": "node tests/coverage/e2e.mjs",
+    "build:coverage": "vite build --config tests/coverage/vite.config.mjs",
     "lint": "eslint 'src/**/*.{js,jsx}' 'server.js' 'server/**/*.js' 'scripts/**/*.mjs' --no-error-on-unmatched-pattern"
   },
   "dependencies": {

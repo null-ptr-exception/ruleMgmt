@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // Once groups and recording rules (#70): the editor's once switch and

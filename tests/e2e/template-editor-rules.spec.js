@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import yaml from 'js-yaml'
 import fs from 'fs/promises'
 import path from 'path'

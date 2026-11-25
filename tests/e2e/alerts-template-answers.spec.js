@@ -1,7 +1,7 @@
 // The Alerts page and the Template a deployment uses: one that cannot be
 // opened says why, and an answer that arrives after the user has moved to
 // another deployment is not shown on it.
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { removeChart } from './charts.js'

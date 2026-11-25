@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // The row identity label: off by default, turned on in the Template

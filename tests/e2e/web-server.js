@@ -9,6 +9,8 @@
 // failed. A test lasts 30 s at most, so the test server keeps an idle
 // connection open longer than that.
 import http from 'node:http'
+// For npm run test:e2e:coverage; nothing without it.
+import '../coverage/on-sigterm.mjs'
 
 const listen = http.Server.prototype.listen
 http.Server.prototype.listen = function (...args) {

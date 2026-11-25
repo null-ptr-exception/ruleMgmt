@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart } from './charts.js'
 
 // Selector contract (#60): the template owner arranges the hierarchy in the

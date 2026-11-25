@@ -32,7 +32,9 @@ export default defineConfig({
     // tests/e2e/web-server.js keeps an idle connection open longer than a test.
     command: 'node --import ./tests/e2e/web-server.js server.js',
     port: PORT,
-    env: { PORT: String(PORT) },
+    env: { PORT: String(PORT), ...(process.env.COVERAGE_E2E && { NODE_V8_COVERAGE: `${process.env.COVERAGE_E2E}/server` }) },
+    // Playwright kills the server otherwise, before it can write its coverage.
+    ...(process.env.COVERAGE_E2E && { gracefulShutdown: { signal: 'SIGTERM', timeout: 20000 } }),
     reuseExistingServer: process.env.E2E_REUSE_SERVER === '1',
     timeout: 10000,
   },

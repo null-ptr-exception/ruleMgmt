@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 test.describe('Folder creation', () => {
   test('new deployment modal pre-fills path from selected folder', async ({ page }) => {

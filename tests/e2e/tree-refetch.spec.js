@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart } from './charts.js'
 
 // #145: a click on a deployment in the tree fetched the whole tree again

@@ -1,7 +1,7 @@
 // What the Alerts page says when a save of a deployment's values does not
 // go through for a reason that names no cell: the server's reason, with
 // its file. And that "Saved at" never outlives the save it was about.
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { removeChart } from './charts.js'

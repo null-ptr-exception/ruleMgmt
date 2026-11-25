@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart, templateFile } from './charts.js'
 
 // #182: a group's Type picks one of four outputs, and the settings row offers

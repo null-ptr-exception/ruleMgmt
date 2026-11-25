@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 const CHART = 'mariadb-alerts'
 const ROOT = 'deployments/e2e-guard'

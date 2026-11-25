@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 const UPPERCASE_FOLDER = 'deployments/e2e-test/PROD'
 const CHART = 'mariadb-alerts'

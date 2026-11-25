@@ -2,7 +2,7 @@
 // the page waits for the save, says nothing about discarding (the edits are
 // being saved), and then shows the other deployment's own values, which
 // can be saved.
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart } from './charts.js'
 
 const CHART = 'e2e-save-switch'

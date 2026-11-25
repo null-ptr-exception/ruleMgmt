@@ -5,7 +5,7 @@
 //
 // sync.yaml is the whole workspace's: this spec runs on its own, after the
 // rest (playwright.config.js).
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { openMenu } from './menu.js'
 import fs from 'fs/promises'
 import path from 'path'

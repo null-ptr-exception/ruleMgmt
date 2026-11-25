@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart } from './charts.js'
 
 // #147: the server made the save, and its answer was cut off on the way. The
@@ -49,5 +49,19 @@ test.describe('an answer cut off (#147)', () => {
     await expect(page.locator('.ant-message')).toContainText('Reload the page')
     // It was made.
     expect((await (await request.get(valuesUrl)).json()).parsed).toEqual({ cpu: [{ namespace: 'b' }] })
+  })
+
+  // A proxy's login page instead of an answer, on a load whose caller does
+  // not catch: said once, until the page is reloaded, not lost in the console.
+  test('on a load nothing catches says so, once for all of them', async ({ page }) => {
+    const asked = []
+    for (const path of ['user', 'folders', 'sync']) {
+      await page.route(`**/api/v2/${path}**`, route => { asked.push(path); return route.fulfill({ status: 200, contentType: 'text/html', body: '<html>sign in</html>' }) })
+    }
+    await page.goto('/', { waitUntil: 'networkidle' })
+    expect(new Set(asked).size, 'several loads fail').toBeGreaterThan(1)
+    const notices = page.locator('.ant-message-notice').filter({ hasText: 'could not be read' })
+    await expect(notices.first()).toContainText('The server\'s answer could not be read. Reload the page (and sign in again, if asked).')
+    await expect(notices).toHaveCount(1)
   })
 })

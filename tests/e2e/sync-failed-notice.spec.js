@@ -3,7 +3,7 @@
 // reason. The save's answer is the server's own, with the targets it
 // could not update added (a target fails for reasons a test cannot set up
 // beside the source, such as a folder another process holds).
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 const CHART = 'mariadb-alerts'
 const ROOT = 'deployments/e2e-sync-failed-notice'

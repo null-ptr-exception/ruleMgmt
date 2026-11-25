@@ -45,13 +45,25 @@ jobs:
       # still reach Dependabot but do not block a PR.
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
-      - run: npm test
+      # npm test with coverage: 80% of the lines outside .jsx, or it fails.
+      - run: npm run test:coverage
+      # For the e2e job, which adds what E2E ran.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-unit
+          path: coverage/unit.json
+          overwrite: true
+          retention-days: 7
       # Every entry point against real Helm (tests/pin): apart from npm test, which stays short.
       - run: npm run test:pin
 
   e2e:
     runs-on: ubuntu-24.04
     needs: lint-and-test
+    permissions:
+      contents: read
+      # to read lint-and-test's coverage artifact
+      actions: read
     env:
       PROMTOOL3_BIN: /usr/local/bin/promtool3
     steps:
@@ -75,9 +87,16 @@ jobs:
           "$PROMTOOL3_BIN" --version | head -1
           "$PROMTOOL3_BIN" --version | grep -q "version $(sed -n 's/^ARG PROMETHEUS3_VERSION=v//p' Dockerfile) "
       - run: npm ci
-      - run: npm run build
+      # The image's build with source maps beside it: the same files otherwise.
+      - run: npm run build:coverage
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Unit coverage of lint-and-test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name coverage-unit --dir coverage
+      # 80% of all lines with what E2E ran added, or it fails; so does a file
+      # under 80% that tests/coverage/under-80.tsv does not list.
+      - run: npm run test:e2e:coverage
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 
 test.describe('Git Panel', () => {
   test('navigates to Git panel', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './test.js'
 import { removeChart, openTemplateChart } from './charts.js'
 
 // derived (#118): Preview shows each row's values as Helm renders them, and

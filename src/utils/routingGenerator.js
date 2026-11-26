@@ -412,8 +412,12 @@ function webhookConfig(config) {
   }
 }
 
+// A cell's own groupBy and timing, else the defaults', key by key; one
+// written nowhere is left out, so the route takes its parent's.
 function timing(defaults, cell) {
   const out = {}
+  const groupBy = cell.groupBy ?? defaults?.groupBy
+  if (groupBy !== undefined) out.groupBy = [...groupBy]
   for (const key of TIMING_KEYS) {
     const value = cell[key] ?? defaults?.[key]
     if (value !== undefined) out[key] = value

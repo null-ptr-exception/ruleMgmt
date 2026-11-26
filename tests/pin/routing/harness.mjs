@@ -142,6 +142,12 @@ export async function runRow(ws, c) {
   const materialize = async () => {
     for (const [rel, spec] of Object.entries(c.files || {})) await putSpec(root, rel, spec, outside)
     if (subjectSpec !== undefined) await putSpec(root, sub.file, subjectSpec, outside)
+    // Saved from the page: its resource made by the save, and its sync
+    // target's copied.
+    if (c.saved) {
+      const res = await api('PUT', `/api/v2/deployments/demo/${nameOf(sub.dep)}/routing${q(sub.dep)}`, { routing: c.text })
+      if (res.status !== 200) throw new Error(`${c.id}: the save to start from was refused: ${res.text}`)
+    }
   }
   // The reference of the repo as it is now, cached by every file it holds.
   const refNow = async (table, of = sub) => {

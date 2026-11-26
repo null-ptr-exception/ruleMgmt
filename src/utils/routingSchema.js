@@ -23,6 +23,8 @@ import { hasUnclosedTemplate } from './ruleModel.js'
 
 export const DROP_RECEIVER = '_drop'
 export const TIMING_KEYS = ['groupWait', 'groupInterval', 'repeatInterval']
+// Group by every label: Alertmanager's own word for it, written alone.
+export const GROUP_BY_ALL = '...'
 export const CONFIG_TYPES = ['email', 'webhook']
 
 const LABEL_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
@@ -131,6 +133,43 @@ const duration = key => z.string({ error: iss => timingProblem(key, iss.input) }
   .meta({ pattern: DURATION_PATTERN, minLength: 1 })
 
 const timing = Object.fromEntries(TIMING_KEYS.map(key => [key, duration(key).optional()]))
+
+/**
+ * Why a groupBy list is refused, or null — the page marks it with the same
+ * check the save makes. The rules are prometheus-operator's for every route
+ * (v0.95.1 validateRoute: no name twice, `...` alone), which Alertmanager
+ * also refuses (amtool 0.28.1 check-config); an empty list is refused
+ * because Alertmanager reads it as not written (the parent's grouping), so
+ * it would not say what it looks like. A name is a label name as routing.yaml's
+ * labels are: letters, digits and _, not starting with a digit. Alertmanager
+ * 0.28 also takes any other text but an empty one, an older one does not;
+ * alerts from Prometheus 2 carry no other.
+ */
+export function groupByProblem(value) {
+  if (!Array.isArray(value)) return 'groupBy must be a list of label names, e.g. [alertname, instance]'
+  if (value.length === 0) return 'groupBy must name at least one label — leave it out to use the default'
+  const seen = new Set()
+  for (const name of value) {
+    if (typeof name !== 'string') return `groupBy must be a list of label names, as text, not ${JSON.stringify(name)}`
+    if (name !== GROUP_BY_ALL && !LABEL_NAME_RE.test(name)) return `groupBy has ${JSON.stringify(name)}, which is not a label name: letters, digits and _, not starting with a digit (or ... alone, for every label)`
+    if (seen.has(name)) return `groupBy lists ${name} twice`
+    seen.add(name)
+  }
+  if (seen.has(GROUP_BY_ALL) && seen.size > 1) return 'groupBy has ... (every label) with other names: ... is written alone'
+  return null
+}
+
+const groupBy = z.unknown()
+  .superRefine((value, ctx) => {
+    const why = groupByProblem(value)
+    if (why) ctx.addIssue({ code: 'custom', message: why })
+  })
+  // Label names, or `...` alone.
+  .meta({
+    type: 'array', minItems: 1, uniqueItems: true,
+    anyOf: [{ items: { type: 'string', pattern: LABEL_NAME_RE.source } }, { const: [GROUP_BY_ALL] }],
+  })
+  .optional()
 
 // Alertmanager and the operator read the address as it is written. The URL
 // parser here repairs some forms they refuse (`http:example.com`, a tab
@@ -412,6 +451,7 @@ const cell = strictMap({
   }),
   configs: z.array(z.string({ error: iss => `config must be a name (text), not ${JSON.stringify(iss.input)}` }), { error: 'configs lists who is notified' })
     .min(1, { error: 'configs lists who is notified' }),
+  groupBy,
   ...timing,
 }, 'must be a map with match and configs')
 
@@ -423,7 +463,7 @@ export const routingSchema = strictMap({
     nonEmpty: true,
     json: { minProperties: 1, propertyNames: { pattern: LABEL_NAME_RE.source } },
   }),
-  defaults: strictMap(timing, 'must be a map').optional(),
+  defaults: strictMap({ groupBy, ...timing }, 'must be a map').optional(),
   configs: names({
     nameProblem: configNameProblem,
     value: configEntry,

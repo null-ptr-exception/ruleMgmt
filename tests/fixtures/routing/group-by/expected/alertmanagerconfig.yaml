@@ -1,0 +1,44 @@
+# Expected output for #223: written by hand before the generator was run.
+# Each cell's route carries the groupBy it uses — its own, else the defaults'.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    # no groupBy here: what no cell matches stays the platform's
+    receiver: _drop
+    continue: true
+    routes:
+      # its own groupBy on the cell's route; the child routes inherit it
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+          - { name: team, value: db, matchType: "=" }
+        groupBy: [alertname, instance]
+        groupWait: 30s
+        routes:
+          - { receiver: db-email, continue: true }
+          - { receiver: web-hook }
+      # the defaults'
+      - matchers:
+          - { name: severity, value: warning, matchType: "=" }
+          - { name: team, value: db, matchType: "=" }
+        groupBy: [alertname]
+        groupWait: 30s
+        receiver: db-email
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+          - { name: team, value: web, matchType: "=" }
+        groupBy: ["..."]
+        groupWait: 30s
+        receiver: web-hook
+  receivers:
+    - name: _drop
+    - name: db-email
+      emailConfigs:
+        - to: db@example.com
+    - name: web-hook
+      webhookConfigs:
+        - url: http://web-relay.monitoring.svc:8080

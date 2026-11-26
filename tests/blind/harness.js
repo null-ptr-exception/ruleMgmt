@@ -490,6 +490,7 @@ export function toAlertmanagerConfig(spec) {
   const route = r => ({
     ...(r.receiver ? { receiver: r.receiver } : {}),
     ...(r.matchers ? { matchers: r.matchers.map(m => `${m.name}${m.matchType}${JSON.stringify(m.value)}`) } : {}),
+    ...(r.groupBy ? { group_by: r.groupBy } : {}),
     ...(r.groupWait ? { group_wait: r.groupWait } : {}),
     ...(r.groupInterval ? { group_interval: r.groupInterval } : {}),
     ...(r.repeatInterval ? { repeat_interval: r.repeatInterval } : {}),

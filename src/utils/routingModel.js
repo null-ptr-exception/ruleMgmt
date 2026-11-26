@@ -12,7 +12,8 @@
  *     overrides and all
  *   - filling a whole row or column is only a shortcut: it is written as one
  *     cell per combination
- *   - a timing override is kept on its cell; the defaults are not copied in
+ *   - a timing or groupBy override is kept on its cell; the defaults are not
+ *     copied in
  *   - an entry of `cells` that isn't a cell (hand-edited, say) is not in the
  *     table: it stays as written, and is saved after the cells, for the
  *     server's checks to list
@@ -24,6 +25,9 @@
 import yaml from 'js-yaml'
 
 export const TIMING_KEYS = ['groupWait', 'groupInterval', 'repeatInterval']
+// Set and overridden as a timing key is, a list of label names.
+export const GROUP_BY = 'groupBy'
+const CELL_KEYS = [GROUP_BY, ...TIMING_KEYS]
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isCell = v => isMap(v) && isMap(v.match) && Array.isArray(v.configs)
@@ -118,15 +122,19 @@ export function fillConfig(routing, partial, name, { add = true } = {}) {
     })), routing)
 }
 
+// Nothing written: no text, or a groupBy with no names.
+const unset = value => value === undefined || value === '' || (Array.isArray(value) && value.length === 0)
+
 /**
- * Override one timing key on a cell, or with `undefined` go back to the
- * default. An empty cell has nothing to time and is left alone.
+ * Override one timing key, or groupBy, on a cell, or with `undefined` (an
+ * empty list for groupBy) go back to the default. An empty cell has nothing
+ * to time and is left alone.
  */
 export function setCellTiming(routing, match, key, value) {
   if (!cellAt(routing, match)) return routing
   return withCell(routing, match, cell => {
     const next = { ...cell }
-    if (value === undefined || value === '') delete next[key]
+    if (unset(value)) delete next[key]
     else next[key] = value
     return next
   })
@@ -141,10 +149,16 @@ export function cellTiming(routing, match) {
   }]))
 }
 
-/** The defaults, one key at a time; `undefined` removes it. */
+/** A cell's groupBy: the list that applies, and whether the cell writes its own. */
+export function cellGroupBy(routing, match) {
+  const cell = cellAt(routing, match) || {}
+  return { value: cell[GROUP_BY] ?? routing.defaults?.[GROUP_BY], overridden: cell[GROUP_BY] !== undefined }
+}
+
+/** The defaults, one key (a timing key or groupBy) at a time; `undefined` removes it. */
 export function setDefaultTiming(routing, key, value) {
   const defaults = { ...(routing.defaults || {}) }
-  if (value === undefined || value === '') delete defaults[key]
+  if (unset(value)) delete defaults[key]
   else defaults[key] = value
   return { ...routing, defaults }
 }
@@ -167,12 +181,14 @@ export function setLabels(routing, labels) {
 }
 
 // What a cell says, for comparing two (#94): who it notifies, in any order
-// (the same people, only the order differs), and its own timing. An
+// (the same people, only the order differs), its groupBy and its timing. An
 // empty cell says null.
-// Timing is what takes effect: a cell's own value, or the default — a cell
-// that writes the default says the same as one that leaves it out.
+// groupBy and timing are what takes effect: a cell's own value, or the
+// default — a cell that writes the default says the same as one that leaves
+// it out. groupBy in any order: Alertmanager groups by the set of names.
+const sortedOrNull = list => (list ? [...list].sort() : null)
 const contentKey = (cell, defaults = {}) => (cell
-  ? JSON.stringify([[...cell.configs].sort(), ...TIMING_KEYS.map(k => cell[k] ?? defaults[k] ?? null)])
+  ? JSON.stringify([[...cell.configs].sort(), sortedOrNull(cell[GROUP_BY] ?? defaults[GROUP_BY]), ...TIMING_KEYS.map(k => cell[k] ?? defaults[k] ?? null)])
   : null)
 
 const renamed = (obj, names) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [names.get(k) ?? k, v]))
@@ -316,7 +332,8 @@ export const gridMatch = (grid, row, column) => ({ ...row, [grid.columnLabel]: c
 
 /**
  * routing.yaml as the table writes it: cells with no configs left out,
- * cells in table order, match keys in label order, timing after configs.
+ * cells in table order, match keys in label order, groupBy then timing
+ * after configs.
  * Anything else the file holds is kept, after the known keys, and entries
  * that aren't cells after the cells.
  */
@@ -332,8 +349,8 @@ export function toSave(routing) {
       const ordered = Object.fromEntries(labelNames(routing).filter(n => Object.hasOwn(match, n) && match[n] !== undefined).map(n => [n, match[n]]))
       for (const [n, v] of Object.entries(match)) if (!Object.hasOwn(ordered, n)) ordered[n] = v
       const out = { match: ordered, configs }
-      for (const key of TIMING_KEYS) if (rest[key] !== undefined) out[key] = rest[key]
-      for (const [k, v] of Object.entries(rest)) if (!TIMING_KEYS.includes(k)) out[k] = v
+      for (const key of CELL_KEYS) if (rest[key] !== undefined) out[key] = rest[key]
+      for (const [k, v] of Object.entries(rest)) if (!CELL_KEYS.includes(k)) out[k] = v
       return out
     })
   const { labels, defaults, configs, cells: _, ...rest } = routing

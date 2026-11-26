@@ -1126,7 +1126,7 @@ deployment keeps its table in `routing.yaml`, beside `values.yaml`:
 labels:                                          # the table's dimensions, with their values
   severity: [critical, warning]
   team: [db, web]
-defaults: { groupWait: 30s, repeatInterval: 4h } # for a cell that does not set its own
+defaults: { groupWait: 30s, repeatInterval: 4h, groupBy: [alertname] } # for a cell that does not set its own
 configs:                                         # who can be notified
   db-email:    { type: email,   to: db@example.com }
   ops-webhook: { type: webhook, urlSecret: { name: ops, key: url } }
@@ -1134,6 +1134,7 @@ configs:                                         # who can be notified
 cells:                                           # one entry = one filled cell
   - match: { severity: critical, team: db }
     configs: [db-email, ops-webhook]
+    groupBy: [alertname, instance]               # one notification per machine
     repeatInterval: 1h
   - match: { severity: warning, team: db }
     configs: [db-email]
@@ -1146,7 +1147,9 @@ cells:                                           # one entry = one filled cell
 | `configs` | Name → `{ type: email, to }` or `{ type: webhook, url }` / `{ type: webhook, urlSecret: { name, key } }`. Names are lower-case letters, digits and `-`; a name starting with `_` is reserved. An e-mail or webhook config may say more — see [E-mail settings](#e-mail-settings) and [Webhook settings](#webhook-settings) |
 | `cells[].match` | Every label of `labels`, each with one of its values |
 | `cells[].configs` | Who is notified, by name from `configs` |
+| `defaults.groupBy` | The labels whose values put alerts into one notification: `[alertname]` sends one per alert name, `[alertname, instance]` one per alert name and machine, `[...]` (alone) one per distinct alert. Left out, the platform Alertmanager's grouping applies. A `routing.yaml` with `groupBy` is refused by an AlertForge from before it, as an unknown key |
 | `cells[].groupWait` … | Overrides `defaults` for this cell |
+| `cells[].groupBy` | Overrides `defaults.groupBy` for this cell. Each cell's route in the AlertmanagerConfig carries the `groupBy` it uses; with none written anywhere, none is generated |
 
 A combination with no cell is an empty cell: its alerts notify nobody.
 
@@ -1163,6 +1166,7 @@ What is refused when it is saved, and reported when it is read back:
 | An e-mail `to` with no address in it (`@`, `db-team`, `:;`), or with a line break. A `to` written as an Alertmanager template (`{{ .CommonLabels.owner }}`) needs no `@`, and a group with no members (`undisclosed-recipients:;`) is taken, with a warning — see below | Nothing can tell whether an address exists, so only what cannot be one is refused; a line break would add mail headers (`Bcc:`) |
 | A webhook `url` with a user name or password, a credential-like query parameter (`token=`, `key=` …) or a token-like path segment | Credentials belong in a Secret: use `urlSecret`. An in-cluster address such as `http://alert-relay.monitoring.svc:8080` is fine |
 | An e-mail or webhook setting written wrong — see [E-mail settings](#e-mail-settings) and [Webhook settings](#webhook-settings) | |
+| A `groupBy` that names a label twice, has `...` with other names, is empty (`[]`), or has a name that is not a label name — letters, digits and `_`, not starting with a digit (`host-name`, `team, zone`) | The operator refuses a list with a name twice or `...` with other names, for every route, and drops the whole AlertmanagerConfig; Alertmanager refuses them too. An empty list is read as not written, so it would not do what it says: leave it out. Label names are those `labels` takes: Alertmanager 0.28 takes other text, an older one does not, and Prometheus 2 alerts carry no other |
 | Any other key — under `urlSecret` too, which takes only `name` and `key` | Probably a typo; it would be left out of the AlertmanagerConfig |
 
 A `routing.yaml` saved before these three checks, with such a value, is

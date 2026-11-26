@@ -1,0 +1,20 @@
+# groupBy (#223): the defaults' for every cell, a cell's own in its place.
+labels:
+  severity: [critical, warning]
+  team: [db, web]
+defaults: { groupBy: [alertname], groupWait: 30s }
+configs:
+  db-email: { type: email, to: db@example.com }
+  web-hook: { type: webhook, url: http://web-relay.monitoring.svc:8080 }
+cells:
+  # one alert per machine: its own list, on a cell with two configs
+  - match: { severity: critical, team: db }
+    configs: [db-email, web-hook]
+    groupBy: [alertname, instance]
+  # the default's
+  - match: { severity: warning, team: db }
+    configs: [db-email]
+  # every label: one notification per distinct alert
+  - match: { severity: critical, team: web }
+    configs: [web-hook]
+    groupBy: ['...']

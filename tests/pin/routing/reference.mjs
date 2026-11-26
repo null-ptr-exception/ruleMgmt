@@ -4,12 +4,14 @@
 //             the table read as written (a cell's match is its route's
 //             matchers, its configs the receivers), shared configs put in,
 //             checked against the operator's CRD and by `amtool check-config`.
+//             A cell's groupBy, else the defaults', is its route's.
 //             'none' | 'unreadable' | 'not-a-table' | 'unresolved' |
 //             'crd-fails' | 'am-fails' | 'ok'
 //   deployed  what `helm template` of the deployment deploys, read as the
-//             cluster reads it, against that promise: the same receivers and
-//             `amtool config routes test` giving the same receivers for
-//             every combination of the table's labels.
+//             cluster reads it, against that promise: the same receivers,
+//             the same group_by on the same routes, and `amtool config
+//             routes test` giving the same receivers for every combination
+//             of the table's labels (it does not show grouping).
 //             'none' (no routing, nothing deployed) | 'helm-fails' | 'no-amc'
 //             (a routing.yaml, nothing deployed) | 'orphan' (deployed, no
 //             routing.yaml) | 'crd-fails' | 'am-fails' | 'differs' | 'routes'
@@ -66,7 +68,8 @@ export function promisedSpec(doc, shared) {
     if (Object.values(cell.match).some(v => isMap(v) || Array.isArray(v))) return { table: 'not-a-table' }
     const timing = Object.fromEntries(TIMING.filter(k => (cell[k] ?? doc.defaults?.[k]) !== undefined).map(k => [k, cell[k] ?? doc.defaults[k]]))
     const matchers = Object.entries(cell.match).map(([name, value]) => ({ name, value: String(value), matchType: '=' }))
-    const route = { matchers, ...timing }
+    const groupBy = cell.groupBy ?? doc.defaults?.groupBy
+    const route = { matchers, ...(groupBy !== undefined ? { groupBy } : {}), ...timing }
     if (!cell.configs.length) routes.push({ ...route, receiver: DROP })
     else if (cell.configs.length === 1) routes.push({ ...route, receiver: cell.configs[0] })
     else routes.push({ ...route, routes: cell.configs.map((receiver, i) => (i < cell.configs.length - 1 ? { receiver, continue: true } : { receiver })) })
@@ -86,6 +89,16 @@ function labelSets(doc) {
 }
 
 const byName = rs => [...rs].sort((a, b) => (a.name < b.name ? -1 : 1))
+// Every route of an Alertmanager config that says group_by, by its matchers.
+const groupings = config => {
+  const out = []
+  const walk = (r, at) => {
+    if (r.group_by !== undefined) out.push([at, r.group_by])
+    ;(r.routes || []).forEach(c => walk(c, `${at}/${(c.matchers || []).join(',')}`))
+  }
+  walk(config.route, '')
+  return out
+}
 const canon = v => JSON.stringify(v, (k, x) => (isMap(x) ? Object.fromEntries(Object.keys(x).sort().map(key => [key, x[key]])) : x))
 
 /** A file's text, null when it is not there, { unreadable } when it cannot be read. A table sent as JSON is taken as it is. */
@@ -139,6 +152,7 @@ export async function referenceOf(ws, dep, { promise, sharedText, smtp = true, t
   if (!t.spec || !['ok', 'crd-fails', 'am-fails'].includes(t.table)) return { ...out, deployed: 'unjudged' }
   const promised = t.config || toAlertmanager([t.spec], { smtp })
   if (canon(byName(deployed.receivers)) !== canon(byName(promised.receivers))) return { ...out, deployed: 'differs' }
+  if (canon(groupings(deployed)) !== canon(groupings(promised))) return { ...out, deployed: 'differs' }
   const sets = labelSets(t.doc)
   const [a, b] = await Promise.all([amtoolRoutes(deployed, sets, home), amtoolRoutes(promised, sets, home)])
   return { ...out, deployed: canon(a) === canon(b) ? 'routes' : 'differs' }

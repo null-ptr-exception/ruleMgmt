@@ -13,6 +13,8 @@
 // shared: the shared configs' file's content (SH), same forms
 // json:   the table the Routing page would send (optional)
 // files:  other files of the repo, same forms
+// saved:  true — the text is saved through the API first, as the page saves
+//         it, so the resource (and the sync target) are made from it
 // smtp:   false — the platform's Alertmanager has no global mail server
 //         and sender (the reference only: AlertForge cannot see it)
 
@@ -69,6 +71,15 @@ export const CASES = [
   { id: 'reaches-nobody', target: 'A', text: ONE('{ type: email, to: "undisclosed-recipients:;" }') },
   { id: 'smtp-absent', target: 'A', text: ONE('{ type: email, to: db@example.com }'), smtp: false },
   { id: 'templated', target: 'A', text: ONE('{ type: email, to: "{{ .CommonLabels.owner }}@example.com", headers: { Subject: "{{ .Status }} 100%" }, text: "{{ range .Alerts }}{{ .Labels.alertname }} {{ end }}%d" }') },
+  // groupBy (#223): the defaults' for every cell, a cell's own in its place
+  { id: 'groupby', target: 'A', text: R({ defaults: 'defaults: { groupWait: 30s, groupBy: [alertname] }\n', cells: CELLS.replace('    repeatInterval: 1h\n', '    groupBy: [alertname, instance]\n    repeatInterval: 1h\n') }),
+    json: { ...okJ, defaults: { groupWait: '30s', groupBy: ['alertname'] }, cells: [{ ...okJ.cells[0], groupBy: ['alertname', 'instance'] }, okJ.cells[1]] } },
+  { id: 'groupby-saved', target: 'A', saved: true, text: R({ defaults: 'defaults: { groupWait: 30s, groupBy: [alertname] }\n', cells: CELLS.replace('    repeatInterval: 1h\n', '    groupBy: [alertname, instance]\n    repeatInterval: 1h\n') }) },
+  { id: 'groupby-every-label', target: 'A', text: ONE('{ type: email, to: db@example.com }', "    groupBy: ['...']\n") },
+  { id: 'groupby-twice', target: 'A', text: ONE('{ type: email, to: db@example.com }', '    groupBy: [alertname, alertname]\n') },
+  { id: 'groupby-every-label-and-more', target: 'A', text: ONE('{ type: email, to: db@example.com }', "    groupBy: ['...', alertname]\n") },
+  { id: 'groupby-not-legacy-name', target: 'A', text: ONE('{ type: email, to: db@example.com }', '    groupBy: [host-name]\n') },
+  { id: 'groupby-empty', target: 'A', text: R({ defaults: 'defaults: { groupBy: [] }\n' }) },
   { id: 'brace-runs', target: 'A', text: ONE('{ type: email, to: db@example.com, text: "{} {{{ x }}} }}" }') },
   // absent, empty, not YAML, wrong shapes
   { id: 'absent-cr-left', target: 'A', text: { remove: true } },

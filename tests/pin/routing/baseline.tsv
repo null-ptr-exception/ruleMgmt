@@ -226,6 +226,91 @@ templated	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1
 templated	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
 templated	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
 templated	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+groupby	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+groupby	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+groupby	A	put-json	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+groupby	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+groupby	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+groupby	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+groupby	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+groupby	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+groupby	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+groupby	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+groupby	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+groupby	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
+groupby	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+groupby-saved	A	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+groupby-saved	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml	ok	renders	0	1	routes	-	
+groupby-saved	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+groupby-saved	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+groupby-saved	A	shared-put	ok	200	-	no	-	ok	renders	0	1	routes	written=2	
+groupby-saved	A	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+groupby-saved	A	sync	ok	200	-	no	-	ok	renders	0	1	routes	-	
+groupby-saved	A	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+groupby-saved	A	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+groupby-saved	A	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+groupby-saved	A	check-repo	ok	exit 0	-	no	-	ok	renders	0	1	routes	-	
+groupby-saved	A	schema	ok	valid	-	no	-	ok	renders	0	1	routes	-	
+groupby-every-label	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+groupby-every-label	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+groupby-every-label	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+groupby-every-label	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+groupby-every-label	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+groupby-every-label	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+groupby-every-label	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+groupby-every-label	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+groupby-every-label	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+groupby-every-label	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+groupby-every-label	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
+groupby-every-label	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+groupby-twice	A	get	listed	200	-	no	-	am-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+groupby-twice	A	put-text	refused	400	routing.yaml	no	-	am-fails	renders	0	1	differs	-	
+groupby-twice	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+groupby-twice	A	shared-get	not-seen	200	-	no	-	am-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+groupby-twice	A	shared-put	ok	200	-	no	-	am-fails	renders	0	1	differs	written=2	
+groupby-twice	A	regenerate	ok	200	-	no	-	am-fails	renders	0	1	differs	regenerated=no failed=-	
+groupby-twice	A	sync	refused	400	deployments/t/a	no	-	am-fails	renders	0	1	differs	-	
+groupby-twice	A	commit	refused-other	409	-	no	-	am-fails	renders	0	1	differs	-	
+groupby-twice	A	preview	ok	200	-	no	-	am-fails	renders	0	1	differs	amc=1	
+groupby-twice	A	check-deployment	refused	exit 1	routing.yaml	no	-	am-fails	renders	0	1	differs	Routing: routing.yaml has problems   cells[0]: groupBy lists alertname twice	
+groupby-twice	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	am-fails	renders	0	1	differs	refuse:routing.problem	
+groupby-twice	A	schema	refused	invalid	-	no	-	am-fails	renders	0	1	differs	-	
+groupby-every-label-and-more	A	get	listed	200	-	no	-	am-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+groupby-every-label-and-more	A	put-text	refused	400	routing.yaml	no	-	am-fails	renders	0	1	differs	-	
+groupby-every-label-and-more	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+groupby-every-label-and-more	A	shared-get	not-seen	200	-	no	-	am-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+groupby-every-label-and-more	A	shared-put	ok	200	-	no	-	am-fails	renders	0	1	differs	written=2	
+groupby-every-label-and-more	A	regenerate	ok	200	-	no	-	am-fails	renders	0	1	differs	regenerated=no failed=-	
+groupby-every-label-and-more	A	sync	refused	400	deployments/t/a	no	-	am-fails	renders	0	1	differs	-	
+groupby-every-label-and-more	A	commit	refused-other	409	-	no	-	am-fails	renders	0	1	differs	-	
+groupby-every-label-and-more	A	preview	ok	200	-	no	-	am-fails	renders	0	1	differs	amc=1	
+groupby-every-label-and-more	A	check-deployment	refused	exit 1	routing.yaml	no	-	am-fails	renders	0	1	differs	Routing: routing.yaml has problems   cells[0]: groupBy has ... (every label) with other names: ... is written alone	
+groupby-every-label-and-more	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	am-fails	renders	0	1	differs	refuse:routing.problem	
+groupby-every-label-and-more	A	schema	refused	invalid	-	no	-	am-fails	renders	0	1	differs	-	
+groupby-not-legacy-name	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+groupby-not-legacy-name	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+groupby-not-legacy-name	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+groupby-not-legacy-name	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+groupby-not-legacy-name	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+groupby-not-legacy-name	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+groupby-not-legacy-name	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+groupby-not-legacy-name	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+groupby-not-legacy-name	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+groupby-not-legacy-name	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   cells[0]: groupBy has "host-name", which is not a label name: letters, digits and _	
+groupby-not-legacy-name	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
+groupby-not-legacy-name	A	schema	refused	invalid	-	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+groupby-empty	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+groupby-empty	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+groupby-empty	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+groupby-empty	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+groupby-empty	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+groupby-empty	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+groupby-empty	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+groupby-empty	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+groupby-empty	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+groupby-empty	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   defaults: groupBy must name at least one label — leave it out to use the default	
+groupby-empty	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
+groupby-empty	A	schema	refused	invalid	-	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
 brace-runs	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
 brace-runs	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
 brace-runs	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	

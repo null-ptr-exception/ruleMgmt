@@ -1,0 +1,11 @@
+# groupBy changes how alerts are put into notifications, not where they go:
+# each alert reaches the same receivers as without it. amtool also loads the
+# whole config, so it checks every group_by as Alertmanager reads it.
+- labels: { severity: critical, team: db, instance: db-1 }
+  receivers: [db-email, web-hook, other-team]
+- labels: { severity: warning, team: db }
+  receivers: [db-email]
+- labels: { severity: critical, team: web }
+  receivers: [web-hook, other-team]
+- labels: { severity: warning, team: web }
+  receivers: [_drop]

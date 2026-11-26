@@ -59,6 +59,11 @@ describe('matchers in routing.yaml', () => {
     expect(generateRouting(table(list)).errors).toEqual(errors)
   })
 
+  it('says what is wrong with the regex as written, not as Alertmanager wraps it', () => {
+    expect(checkRouting(table([m('region', '=~', '[a')]))).toEqual(['matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: missing closing ]: `[a`'])
+    expect(checkRouting(table([m('region', '=~', '(eu')]))).toEqual(['matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: missing closing ): `(eu`'])
+  })
+
   it('a regex is not checked for = and !=: the value is text', () => {
     expect(checkRouting(table([m('region', '=', '(?=x')]))).toEqual([])
   })

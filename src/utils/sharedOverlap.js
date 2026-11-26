@@ -11,12 +11,13 @@
  * team: db}` match the same alert (`team=db`, critical); `{team: db}` and
  * `{team: web}` never do.
  *
- * A table's own matchers (#225) hold for each of its cells: where a matcher
- * and the other side's value for its label decide it — `region="asia"`
- * against a cell or a matcher `region="eu"`, `region!="asia"`, a regex that
- * does not take `asia` — the cells never meet; where they do not (two
- * regexes, a label the other side says nothing of), they are counted as
- * meeting, so an alert sent twice is never missed.
+ * A table's own matchers (#225) hold for each of its cells. They are
+ * compared without running a regex: `=`, `!=`, and a regex that is plain
+ * text or alternatives of it (`=~"eu|us"`), against each other and the
+ * cells' values — `region="asia"` never meets `region="eu"`,
+ * `region!="asia"`, `region=~"eu|us"` or a cell with `region: eu`. Any other
+ * regex (`eu.*`, `(?i)eu`) counts as meeting everything, so an alert sent
+ * twice is never missed; the page may then warn where it need not.
  *
  * Both routes then notify the shared config, each through a receiver of its
  * own name, which Alertmanager does not merge: the config is notified twice
@@ -27,7 +28,7 @@
 import { isSharedRef } from './routingSchema.js'
 import { checkRouting } from './routingGenerator.js'
 import { describeMatch } from './routingModel.js'
-import { goFullMatch } from './goRegexp.js'
+import { literalAlternatives } from './goRegexp.js'
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isValue = v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
@@ -40,35 +41,46 @@ export function cellsOverlap(a, b) {
   return true
 }
 
-// Whether matcher `m` holds for a label value: true, false, or null when
-// that cannot be told here (a regex goRegexp cannot read safely).
-function holds(m, value) {
-  if (m.matchType === '=') return value === m.value
-  if (m.matchType === '!=') return value !== m.value
-  const re = goFullMatch(m.value, value)
-  if (re === null) return null
-  return m.matchType === '=~' ? re : !re
-}
-
-// The value every alert a cell takes has for a label: its match's, or a
-// `=` matcher's of its table; undefined when it is not one value.
-function valueOf(cell, name) {
-  if (Object.hasOwn(cell.match, name)) return cell.match[name]
-  return cell.matchers.find(m => m.name === name && m.matchType === '=')?.value
+// What a condition says of one label's value, without running a regex: the
+// values it allows ({ only }) or those it rules out ({ not }); null when that
+// cannot be told from its text alone. `=` and `!=` are one value; `=~` and
+// `!~` only when the regex is plain text or alternatives of it (`db|web`).
+// The empty value is "no such label", as Alertmanager reads it.
+function constraintOf(m) {
+  if (m.matchType === '=') return { only: new Set([m.value]) }
+  if (m.matchType === '!=') return { not: new Set([m.value]) }
+  const values = literalAlternatives(m.value)
+  if (!values) return null
+  return m.matchType === '=~' ? { only: values } : { not: values }
 }
 
 /**
- * Whether two cells, each with its table's matchers, can take one alert:
- * false only when a matcher of one is decided false by the value the other
- * fixes for its label.
+ * Whether two cells, each with its table's matchers, can take one alert.
+ * For each label, what either side fixes — a cell's value, or a matcher
+ * whose values can be read from its text — is put together: no value left
+ * that all allow means they never meet. Anything else (a regex such as
+ * `eu.*`) is taken to allow every value, so the two may meet: the page then
+ * warns where it need not, but never misses an alert sent twice.
  */
 export function cellsMeet(a, b) {
   if (!cellsOverlap(a.match, b.match)) return false
-  for (const [x, y] of [[a, b], [b, a]]) {
-    for (const m of x.matchers) {
-      const value = valueOf(y, m.name)
-      if (value !== undefined && holds(m, String(value)) === false) return false
-    }
+  const byLabel = new Map()
+  const add = (name, c) => {
+    if (!c) return
+    if (!byLabel.has(name)) byLabel.set(name, [])
+    byLabel.get(name).push(c)
+  }
+  for (const cell of [a, b]) {
+    for (const [name, value] of Object.entries(cell.match)) add(name, { only: new Set([String(value)]) })
+    for (const m of cell.matchers) add(m.name, constraintOf(m))
+  }
+  for (const constraints of byLabel.values()) {
+    const only = constraints.filter(c => c.only).map(c => c.only)
+    // Nothing but "not these": some other value is left.
+    if (!only.length) continue
+    const not = constraints.filter(c => c.not).flatMap(c => [...c.not])
+    const left = [...only[0]].filter(v => only.every(set => set.has(v)) && !not.includes(v))
+    if (!left.length) return false
   }
   return true
 }

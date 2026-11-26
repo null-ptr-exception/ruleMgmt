@@ -7,7 +7,7 @@ import NotificationConfigs from '../components/NotificationConfigs'
 import SharedConfigs from '../components/SharedConfigs'
 import RoutesMatrix, { describeMatch } from '../components/RoutesMatrix'
 import RoutesList from '../components/RoutesList'
-import { TimingFields, GroupByField } from '../components/RoutingTiming'
+import { TimingFields, GroupByField, PendingNames, usePendingNames } from '../components/RoutingTiming'
 import RoutingLabelsModal from '../components/RoutingLabelsModal'
 import RoutingMergeConflicts from '../components/RoutingMergeConflicts'
 import PreviewModal from '../components/PreviewModal'
@@ -54,6 +54,8 @@ export default function RoutingView() {
   const [preview, setPreview] = useState(null)
   // Grid or list; unset follows the labels — a list from three on.
   const [view, setView] = useState(null)
+  // groupBy names typed and not entered yet: Save takes them.
+  const pending = usePendingNames()
   // The repo's shared notification configs (#123): their own page, and what
   // a deployment's `{ shared: true }` stands for.
   const [showShared, setShowShared] = useSessionState('routing:shared', false)
@@ -290,9 +292,21 @@ export default function RoutingView() {
 
   const handleSave = () => oneSaveAtATime(saveNow)
   async function saveNow() {
+    // A groupBy name typed and not entered is saved too, or stops the save.
+    let current = routing
+    let typed = false
+    if (pending.any()) {
+      const taken = pending.take(routing)
+      if (taken.problems.length) {
+        reportSaveFailure({ error: 'A groupBy name typed cannot be saved', problems: taken.problems })
+        return false
+      }
+      typed = taken.routing !== routing
+      if (typed) { current = taken.routing; edit(current) }
+    }
     // Nothing edited but the resource is out of date: send the file as it
     // is, so its comments stay.
-    const body = dirty ? toSave(routing) : loaded.text
+    const body = dirty || typed ? toSave(current) : loaded.text
     const folder = selectedFolder
     const result = await saveRouting(selectedChart, deployment, folder, body)
     if (!result.ok) {
@@ -348,7 +362,7 @@ export default function RoutingView() {
   // A routing.yaml on disk that fails the checks: only Remove is offered.
   const broken = !routing && !!loaded?.errors?.length
   const hasTable = routing && Object.keys(routing.labels).length > 0
-  const canSave = !readOnly && !saving && hasTable && (dirty || loaded?.stale)
+  const canSave = !readOnly && !saving && hasTable && (dirty || loaded?.stale || pending.any())
   // Nothing is edited while a save is on its way (oneSaveAtATime).
   const locked = readOnly || saving
   const shownView = view || (routing && Object.keys(routing.labels).length >= 3 ? 'list' : 'grid')
@@ -449,7 +463,8 @@ export default function RoutingView() {
             onChange={(key, value) => edit(setDefaultTiming(routing, key, value))} />
           <div style={{ marginTop: 6, maxWidth: 520 }}>
             <GroupByField value={routing.defaults?.[GROUP_BY]} readOnly={locked} label={`default ${GROUP_BY}`}
-              onChange={list => edit(setDefaultTiming(routing, GROUP_BY, list))} />
+              onChange={list => edit(setDefaultTiming(routing, GROUP_BY, list))}
+              current={r => r.defaults?.[GROUP_BY]} put={(r, list) => setDefaultTiming(r, GROUP_BY, list)} />
           </div>
         </section>
       </div>
@@ -457,73 +472,75 @@ export default function RoutingView() {
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
-      <div style={{ width: 300, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflowY: 'auto', background: '#fff' }}>
-        <div style={{ padding: '10px 16px 0' }}>
-          <Button block type={showShared ? 'primary' : 'default'} icon={<ShareAltOutlined />} onClick={openShared}>Shared configs</Button>
+    <PendingNames.Provider value={pending}>
+      <div style={{ height: '100%', display: 'flex', overflow: 'hidden' }}>
+        <div style={{ width: 300, flexShrink: 0, borderRight: '1px solid #f0f0f0', overflowY: 'auto', background: '#fff' }}>
+          <div style={{ padding: '10px 16px 0' }}>
+            <Button block type={showShared ? 'primary' : 'default'} icon={<ShareAltOutlined />} onClick={openShared}>Shared configs</Button>
+          </div>
+          <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af' }}>
+            Deployments
+          </div>
+          <DeploymentTree
+            selectedFolder={selectedFolder}
+            onSelect={handleFolderSelect}
+            refreshKey={treeRefreshKey}
+            onSyncChange={() => selectedFolder && refreshFrozenSource(selectedFolder)}
+          />
         </div>
-        <div style={{ padding: '10px 16px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9ca3af' }}>
-          Deployments
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
+          {!showShared && syncUnknown && selectedFolder && (
+            <Alert data-testid="sync-unknown" type="error" banner showIcon style={{ fontSize: 12 }}
+              message={`${syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.`} />
+          )}
+          {!showShared && frozenSource && selectedFolder && (
+            <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
+              Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.
+            </div>
+          )}
+          {!showShared && selectedFolder && (
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
+              <Title level={4} style={{ margin: 0 }}>{selectedFolder} / Routing</Title>
+            </div>
+          )}
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
+            {main()}
+          </div>
+          {!showShared && routing && (
+            <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
+              <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!canSave}>Save</Button>
+              {!isNew && <Button icon={<EyeOutlined />} onClick={handlePreview} disabled={saving}>Preview</Button>}
+              {(saving || saveStatus) && <Text type="secondary" style={{ fontSize: 12 }}>{saving ? 'Saving…' : saveStatus}</Text>}
+              <span style={{ flex: 1 }} />
+              {isNew
+                ? <Button disabled={saving} onClick={() => { setRouting(null); setDirty(false) }}>Cancel</Button>
+                : <Button danger icon={<DeleteOutlined />} disabled={locked} onClick={handleRemove}>Remove routing</Button>}
+            </div>
+          )}
+          {!showShared && broken && (
+            <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
+              <span style={{ flex: 1 }} />
+              <Button danger icon={<DeleteOutlined />} disabled={locked} onClick={handleRemove}>Remove routing</Button>
+            </div>
+          )}
         </div>
-        <DeploymentTree
-          selectedFolder={selectedFolder}
-          onSelect={handleFolderSelect}
-          refreshKey={treeRefreshKey}
-          onSyncChange={() => selectedFolder && refreshFrozenSource(selectedFolder)}
+
+        {labelsOpen && (
+          <RoutingLabelsModal open labels={routing?.labels} onCancel={() => setLabelsOpen(false)} onOk={applyLabels}
+            title={routing ? 'Route by labels' : 'Set up routing'} />
+        )}
+        {merge && (
+          <RoutingMergeConflicts conflicts={merge.conflicts} labels={merge.labels}
+            onCancel={() => setMerge(null)} onOk={keep => applyLabels(merge.rows, keep)} />
+        )}
+        <PreviewModal
+          open={!!preview}
+          onClose={() => setPreview(null)}
+          yaml={preview?.output || ''}
+          heading={`${ROUTING.kind}, as Helm renders it`}
         />
       </div>
-
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#f8fafc' }}>
-        {!showShared && syncUnknown && selectedFolder && (
-          <Alert data-testid="sync-unknown" type="error" banner showIcon style={{ fontSize: 12 }}
-            message={`${syncUnknown}: whether this deployment is synced from another is not known, so it cannot be edited here.`} />
-        )}
-        {!showShared && frozenSource && selectedFolder && (
-          <div style={{ padding: '6px 20px', background: '#fff7e6', borderBottom: '1px solid #ffe7ba', fontSize: 12, color: '#ad6800' }}>
-            Synced from <b>{frozenSource}</b> — read-only. Unlink from the sidebar to edit independently.
-          </div>
-        )}
-        {!showShared && selectedFolder && (
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
-            <Title level={4} style={{ margin: 0 }}>{selectedFolder} / Routing</Title>
-          </div>
-        )}
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
-          {main()}
-        </div>
-        {!showShared && routing && (
-          <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} disabled={!canSave}>Save</Button>
-            {!isNew && <Button icon={<EyeOutlined />} onClick={handlePreview} disabled={saving}>Preview</Button>}
-            {(saving || saveStatus) && <Text type="secondary" style={{ fontSize: 12 }}>{saving ? 'Saving…' : saveStatus}</Text>}
-            <span style={{ flex: 1 }} />
-            {isNew
-              ? <Button disabled={saving} onClick={() => { setRouting(null); setDirty(false) }}>Cancel</Button>
-              : <Button danger icon={<DeleteOutlined />} disabled={locked} onClick={handleRemove}>Remove routing</Button>}
-          </div>
-        )}
-        {!showShared && broken && (
-          <div style={{ padding: '10px 20px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 12, background: '#fff' }}>
-            <span style={{ flex: 1 }} />
-            <Button danger icon={<DeleteOutlined />} disabled={locked} onClick={handleRemove}>Remove routing</Button>
-          </div>
-        )}
-      </div>
-
-      {labelsOpen && (
-        <RoutingLabelsModal open labels={routing?.labels} onCancel={() => setLabelsOpen(false)} onOk={applyLabels}
-          title={routing ? 'Route by labels' : 'Set up routing'} />
-      )}
-      {merge && (
-        <RoutingMergeConflicts conflicts={merge.conflicts} labels={merge.labels}
-          onCancel={() => setMerge(null)} onOk={keep => applyLabels(merge.rows, keep)} />
-      )}
-      <PreviewModal
-        open={!!preview}
-        onClose={() => setPreview(null)}
-        yaml={preview?.output || ''}
-        heading={`${ROUTING.kind}, as Helm renders it`}
-      />
-    </div>
+    </PendingNames.Provider>
   )
 }

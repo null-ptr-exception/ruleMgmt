@@ -530,7 +530,7 @@ test('groupBy is set for every cell and for one, one name per Enter, and is ther
   await field.fill('  alertname  ')
   await field.press('Enter')
   await expect(field).toHaveValue('')
-  const names = page.getByLabel('default groupBy names')
+  const names = page.getByRole('group', { name: 'default groupBy names' })
   await expect(names.locator('.ant-tag')).toHaveText(['alertname'])
   // Already listed: not added twice, and said.
   await field.fill('alertname')
@@ -568,13 +568,13 @@ test('groupBy is set for every cell and for one, one name per Enter, and is ther
 
   await page.reload()
   await openRouting(page)
-  await expect(page.getByLabel('default groupBy names').locator('.ant-tag')).toHaveText(['alertname'])
+  await expect(page.getByRole('group', { name: 'default groupBy names' }).locator('.ant-tag')).toHaveText(['alertname'])
   const again = page.getByLabel('Timing for severity=warning, team=db')
   await expect(again).toHaveAttribute('data-overridden', 'true')
   await again.click()
-  await expect(page.getByLabel('severity=warning, team=db groupBy names').locator('.ant-tag')).toHaveText(['alertname', 'instance'])
+  await expect(page.getByRole('group', { name: 'severity=warning, team=db groupBy names' }).locator('.ant-tag')).toHaveText(['alertname', 'instance'])
   // Taken off one by one, the cell is back on the default.
-  for (const name of ['alertname', 'instance']) await page.getByLabel(`Remove ${name} from severity=warning, team=db groupBy`).click()
+  for (const name of ['alertname', 'instance']) await page.getByRole('button', { name: `Remove ${name} from severity=warning, team=db groupBy` }).click()
   await expect(again).not.toHaveAttribute('data-overridden')
 
   await page.getByRole('button', { name: 'Preview' }).click()
@@ -582,6 +582,74 @@ test('groupBy is set for every cell and for one, one name per Enter, and is ther
   await expect(preview).toBeVisible({ timeout: 15000 })
   await expect(preview).toContainText(/groupBy:\s+- alertname\s+repeatInterval: 4h/)
   expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).cells[0]).not.toHaveProperty('groupBy')
+})
+
+// A name typed but not yet entered is not lost: Save takes it, or, when the
+// save would refuse it, stops and says why.
+test('a groupBy name typed without Enter is saved, and one the save would refuse stops the save', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  const field = page.getByLabel('default groupBy', { exact: true })
+  await field.fill('instance')
+  await page.getByLabel('default groupWait').fill('10s')
+  // The cell's own, typed and the clock closed without Enter.
+  const clock = page.getByLabel('Timing for severity=warning, team=db')
+  await clock.click()
+  await page.getByLabel('severity=warning, team=db groupBy', { exact: true }).fill('alertname')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  let saved = yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text)
+  expect(saved.defaults).toEqual({ repeatInterval: '4h', groupWait: '10s', groupBy: ['instance'] })
+  expect(saved.cells[0].groupBy).toEqual(['alertname'])
+  await expect(page.getByRole('group', { name: 'default groupBy names' }).locator('.ant-tag')).toHaveText(['instance'])
+  await expect(field).toHaveValue('')
+
+  // Only a name typed: Save is on, and refuses it with the reason.
+  const before = (await (await request.get(routingUrl(FOLDER))).json()).text
+  await field.fill('host-name')
+  await page.getByRole('button', { name: 'Save' }).click()
+  const refused = page.locator('.ant-modal').filter({ hasText: 'default groupBy' })
+  await expect(refused).toContainText('groupBy has "host-name", which is not a label name', { timeout: 8000 })
+  await refused.getByRole('button', { name: 'OK' }).click()
+  expect((await (await request.get(routingUrl(FOLDER))).json()).text).toBe(before)
+  await expect(field).toHaveValue('host-name')
+  await expect(page.getByTestId('routing-defaults')).toContainText('groupBy has "host-name", which is not a label name')
+})
+
+test('groupBy names are taken off with the keyboard alone', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, defaults: { groupBy: ['alertname', 'instance'] },
+    cells: [{ ...TABLE.cells[0], groupBy: ['alertname'] }] } } })
+  await openRouting(page)
+  const names = page.getByRole('group', { name: 'default groupBy names' })
+  await page.getByLabel('default groupBy', { exact: true }).focus()
+  // Backspace in the empty field takes the last name off.
+  await page.keyboard.press('Backspace')
+  await expect(names.locator('.ant-tag')).toHaveText(['alertname'])
+  // Each name's remove button is in the tab order.
+  await page.keyboard.press('Shift+Tab')
+  await expect(page.getByRole('button', { name: 'Remove alertname from default groupBy' })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(names).toHaveCount(0)
+
+  const clock = page.getByLabel('Timing for severity=warning, team=db')
+  await expect(clock).toHaveAttribute('data-overridden', 'true')
+  await clock.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByLabel('severity=warning, team=db groupWait')).toBeFocused()
+  const remove = page.getByRole('button', { name: 'Remove alertname from severity=warning, team=db groupBy' })
+  for (let i = 0; i < 6 && !(await remove.evaluate(el => el === document.activeElement)); i++) await page.keyboard.press('Tab')
+  await expect(remove).toBeFocused()
+  await page.keyboard.press('Space')
+  await expect(clock).not.toHaveAttribute('data-overridden')
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: 'Save' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  const saved = yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text)
+  expect(saved).not.toHaveProperty('defaults')
+  expect(saved.cells[0]).not.toHaveProperty('groupBy')
 })
 
 test('a cell without an override follows the default, and clearing an override goes back to it', async ({ page, request }) => {

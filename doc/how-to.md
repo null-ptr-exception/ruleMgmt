@@ -890,6 +890,19 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    adds a config to — or removes it from — every cell in it; what is saved
    is still one cell per combination. With three or more labels the table
    is a list, one combination per row; **Grid** / **List** switches.
+   **Only these alerts**, above the table, takes conditions for the whole
+   table (`matchers` in `routing.yaml`): **Add condition**, then a label
+   name, how it is compared (`=` equals, `!=` is not, `=~` matches a regex,
+   `!~` does not) and a value. An alert reaches a cell only when it matches
+   every condition; any other goes on to the platform's other routes. An
+   empty value is a label the alert does not have. A regex is the whole
+   value (`eu` does not match `eu-west`; `eu.*` does), as Alertmanager reads
+   it. A condition the save would refuse — a name that is one of the
+   table's labels, the same name and comparison twice, a regex Alertmanager
+   refuses such as `(?=eu)` — says why under it. Each condition has its own
+   remove button. Use them to keep two deployments that share an
+   Alertmanager from both taking an alert (see [Let Alertmanager load the
+   notification routing](#let-alertmanager-load-the-notification-routing)).
 4. **Timing** — `groupWait`, `groupInterval` and `repeatInterval` for every
    cell. The clock in a cell overrides them for that cell alone; a filled
    clock marks a cell that does; a red clock holds a value Alertmanager

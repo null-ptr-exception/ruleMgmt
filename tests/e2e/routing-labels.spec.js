@@ -140,6 +140,28 @@ test.describe('routing labels changed after set-up (#94)', () => {
     await expect(preview).not.toContainText('value: prod')
   })
 
+  // groupBy (#223) is part of what a cell says: the two halves with other
+  // groupBy are asked about, and the dialog shows each one's.
+  test('cells that differ only in groupBy are asked about, each shown with its groupBy', async ({ page, request }) => {
+    const text = THREE.replace('  - match: {severity: critical, team: db, env: dev}\n    configs: [db-email]\n', '  - match: {severity: critical, team: db, env: dev}\n    configs: [db-email]\n    groupBy: [alertname, instance]\n')
+    expect(text).not.toBe(THREE)
+    await open(page, request, text)
+    await page.getByRole('button', { name: 'Labels' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByRole('button', { name: 'Remove label 3' }).click()
+    await dialog.getByRole('button', { name: 'Apply' }).click()
+
+    const conflicts = page.getByTestId('merge-conflict')
+    await expect(conflicts).toHaveCount(1)
+    await expect(conflicts).toContainText('severity=critical · team=db')
+    await expect(conflicts).toContainText('groupBy [alertname, instance]')
+    await page.getByLabel('severity=critical · team=db: keep env=dev').check()
+    await page.getByRole('button', { name: 'Keep these' }).click()
+    await page.getByRole('button', { name: 'Save' }).click()
+    await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+    expect(cellOf(await saved(request), { severity: 'critical', team: 'db' }).groupBy).toEqual(['alertname', 'instance'])
+  })
+
   test('a label added and taken away again before saving leaves no notice', async ({ page, request }) => {
     await open(page, request, TWO)
     await page.getByRole('button', { name: 'Labels' }).click()

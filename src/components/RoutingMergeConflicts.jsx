@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Modal, Radio, Typography } from 'antd'
-import { TIMING_KEYS, describeMatch } from '../utils/routingModel'
+import { TIMING_KEYS, GROUP_BY, describeMatch } from '../utils/routingModel'
 
 const { Text } = Typography
 
@@ -8,7 +8,10 @@ const say = match => describeMatch(match, ' · ')
 
 function content(cell) {
   if (!cell) return <Text type="secondary">nobody (empty: its alerts are dropped)</Text>
-  const timing = TIMING_KEYS.filter(k => cell[k] !== undefined).map(k => `${k} ${cell[k]}`)
+  const timing = [
+    ...(cell[GROUP_BY] !== undefined ? [`${GROUP_BY} [${cell[GROUP_BY].join(', ')}]`] : []),
+    ...TIMING_KEYS.filter(k => cell[k] !== undefined).map(k => `${k} ${cell[k]}`),
+  ]
   return <>{cell.configs.join(', ')}{timing.length > 0 && <Text type="secondary"> ({timing.join(', ')})</Text>}</>
 }
 

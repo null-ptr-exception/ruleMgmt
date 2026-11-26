@@ -521,6 +521,69 @@ test('a cell overrides a default timing, is marked, and its route carries it', a
   expect((await (await request.get(routingUrl(FOLDER))).json()).text).toContain('repeatInterval: 1h')
 })
 
+// groupBy (#223): set for every cell in Timing, and for one cell in its
+// clock; one label name per Enter, as typed but for its ends.
+test('groupBy is set for every cell and for one, one name per Enter, and is there after reopening', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  const field = page.getByLabel('default groupBy', { exact: true })
+  await field.fill('  alertname  ')
+  await field.press('Enter')
+  await expect(field).toHaveValue('')
+  const names = page.getByLabel('default groupBy names')
+  await expect(names.locator('.ant-tag')).toHaveText(['alertname'])
+  // Already listed: not added twice, and said.
+  await field.fill('alertname')
+  await field.press('Enter')
+  await expect(page.getByTestId('routing-defaults')).toContainText('alertname is already listed')
+  await expect(names.locator('.ant-tag')).toHaveCount(1)
+  // A comma or a space is part of the name typed, not a separator: one
+  // name, which is not a label name, so it is not added.
+  await field.fill('team, zone')
+  await field.press('Enter')
+  await expect(page.getByTestId('routing-defaults')).toContainText('groupBy has "team, zone", which is not a label name')
+  await expect(field).toHaveValue('team, zone')
+  await expect(names.locator('.ant-tag')).toHaveCount(1)
+  await field.fill('')
+
+  const clock = page.getByLabel('Timing for severity=warning, team=db')
+  await expect(clock).not.toHaveAttribute('data-overridden')
+  await clock.click()
+  const own = page.getByLabel('severity=warning, team=db groupBy', { exact: true })
+  // Empty, it says what applies: the default.
+  await expect(own).toHaveAttribute('placeholder', 'alertname')
+  for (const name of ['alertname', 'instance']) {
+    await own.fill(name)
+    await own.press('Enter')
+  }
+  await expect(clock).toHaveAttribute('data-overridden', 'true')
+  await page.keyboard.press('Escape')
+
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  const { text } = await (await request.get(routingUrl(FOLDER))).json()
+  const saved = yaml.load(text)
+  expect(saved.defaults).toEqual({ repeatInterval: '4h', groupBy: ['alertname'] })
+  expect(saved.cells).toEqual([{ match: { severity: 'warning', team: 'db' }, configs: ['db-email'], groupBy: ['alertname', 'instance'] }])
+
+  await page.reload()
+  await openRouting(page)
+  await expect(page.getByLabel('default groupBy names').locator('.ant-tag')).toHaveText(['alertname'])
+  const again = page.getByLabel('Timing for severity=warning, team=db')
+  await expect(again).toHaveAttribute('data-overridden', 'true')
+  await again.click()
+  await expect(page.getByLabel('severity=warning, team=db groupBy names').locator('.ant-tag')).toHaveText(['alertname', 'instance'])
+  // Taken off one by one, the cell is back on the default.
+  for (const name of ['alertname', 'instance']) await page.getByLabel(`Remove ${name} from severity=warning, team=db groupBy`).click()
+  await expect(again).not.toHaveAttribute('data-overridden')
+
+  await page.getByRole('button', { name: 'Preview' }).click()
+  const preview = page.locator('.ant-modal').filter({ hasText: 'AlertmanagerConfig' })
+  await expect(preview).toBeVisible({ timeout: 15000 })
+  await expect(preview).toContainText(/groupBy:\s+- alertname\s+repeatInterval: 4h/)
+  expect(yaml.load((await (await request.get(routingUrl(FOLDER))).json()).text).cells[0]).not.toHaveProperty('groupBy')
+})
+
 test('a cell without an override follows the default, and clearing an override goes back to it', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, cells: [
     { match: { severity: 'warning', team: 'db' }, configs: ['db-email'], repeatInterval: '1h' },

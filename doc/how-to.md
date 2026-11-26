@@ -896,8 +896,14 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    refuses (hover it for why). Empty means the default, and with no default either, what
    the platform's Alertmanager sets. A duration is written largest unit
    first, each unit once: `1h30m`, not `30m1h`; `groupInterval` and
-   `repeatInterval` cannot be zero. A cell emptied of configs — by hand or with the brush — is
-   removed, its timing override with it.
+   `repeatInterval` cannot be zero. **groupBy** below them is which labels
+   put alerts into one notification: type a label name and press Enter for
+   each (a space or a comma is not a separator; `...` alone is every
+   label). The cell's clock has its own groupBy too. A cell emptied of
+   configs — by hand or with the brush — is removed, its timing and groupBy
+   overrides with it. Taking a label away merges cells: cells whose groupBy
+   differs are asked about as cells with other timing are; the same names in
+   another order count as the same.
 5. **Save** writes `routing.yaml` and generates the AlertmanagerConfig into
    the deployment's `templates/`. **Preview** shows that resource as Helm
    renders it. Commit both files.

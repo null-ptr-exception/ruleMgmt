@@ -7,11 +7,11 @@ import NotificationConfigs from '../components/NotificationConfigs'
 import SharedConfigs from '../components/SharedConfigs'
 import RoutesMatrix, { describeMatch } from '../components/RoutesMatrix'
 import RoutesList from '../components/RoutesList'
-import { TimingFields } from '../components/RoutingTiming'
+import { TimingFields, GroupByField } from '../components/RoutingTiming'
 import RoutingLabelsModal from '../components/RoutingLabelsModal'
 import RoutingMergeConflicts from '../components/RoutingMergeConflicts'
 import PreviewModal from '../components/PreviewModal'
-import { parseRouting, emptyRouting, reshapeLabels, setDefaultTiming, toSave } from '../utils/routingModel'
+import { parseRouting, emptyRouting, reshapeLabels, setDefaultTiming, toSave, GROUP_BY } from '../utils/routingModel'
 import { getRouting, saveRouting, removeRouting, renderDeployment, getSyncSource, getSharedConfigs } from '../utils/chartApi'
 import { ROUTING } from '../utils/outputs'
 import { syncFailedNotice } from '../utils/syncNotice'
@@ -443,10 +443,14 @@ export default function RoutingView() {
         <section data-testid="routing-defaults">
           <Title level={5} style={{ marginTop: 0 }}>Timing</Title>
           <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-            For every cell, unless the cell overrides it (the clock in a cell; a filled clock overrides).
+            For every cell, unless the cell overrides it (the clock in a cell; a filled clock overrides). An empty one is the platform Alertmanager's.
           </Text>
           <TimingFields values={routing.defaults || {}} readOnly={locked} prefix="default "
             onChange={(key, value) => edit(setDefaultTiming(routing, key, value))} />
+          <div style={{ marginTop: 6, maxWidth: 520 }}>
+            <GroupByField value={routing.defaults?.[GROUP_BY]} readOnly={locked} label={`default ${GROUP_BY}`}
+              onChange={list => edit(setDefaultTiming(routing, GROUP_BY, list))} />
+          </div>
         </section>
       </div>
     )

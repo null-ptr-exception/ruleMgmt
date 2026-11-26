@@ -12,7 +12,7 @@ const { Text } = Typography
  * them, a renamed one keeps them; a value taken away drops its cells, which
  * the page confirms first.
  */
-export default function RoutingLabelsModal({ open, labels, onOk, onCancel, title = 'Route by labels' }) {
+export default function RoutingLabelsModal({ open, labels, matchers = [], onOk, onCancel, title = 'Route by labels' }) {
   // `was`: the name a row had when the dialog opened, so a renamed label
   // keeps its cells (#94). A row added here has none.
   const initial = Object.keys(labels || {}).length
@@ -44,6 +44,10 @@ export default function RoutingLabelsModal({ open, labels, onOk, onCancel, title
     ...(new Set(names).size !== names.length ? ['a label is listed twice'] : []),
     ...checkRouting({ labels: next, configs: {}, cells: [] }),
   ]
+  // A label that is also one of the table's conditions: Save refuses it,
+  // so it is said here, before Apply.
+  const conditions = new Set((Array.isArray(matchers) ? matchers : []).map(m => m?.name))
+  const clash = [...new Set(names)].filter(name => conditions.has(name))
 
   return (
     <Modal open={open} title={title} okText="Apply" onCancel={onCancel}
@@ -78,6 +82,10 @@ export default function RoutingLabelsModal({ open, labels, onOk, onCancel, title
           <Alert type="error" showIcon message="A tab or a line break cannot be typed here: to use one, write it in routing.yaml by hand." />
         )}
         {several.map(v => <Alert key={v} type="info" showIcon message={`"${v}" looks like several values — add them one by one?`} />)}
+        {clash.length > 0 && (
+          <Alert type="warning" showIcon data-testid="labels-condition-clash"
+            message={`${clash.join(', ')} ${clash.length > 1 ? 'are' : 'is'} also a condition in Only these alerts: Save refuses a condition on one of the table's labels. Take the condition away, or route by another label.`} />
+        )}
         {problems.length > 0 && (names.length > 0 ? rows.some(r => r.values.length) : rows.some(r => r.was !== undefined)) && (
           <Alert type="warning" showIcon message={problems.map((p, i) => <div key={i}>{p}</div>)} />
         )}

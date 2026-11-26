@@ -74,7 +74,8 @@ test('conditions are added, checked as the save checks them, saved, shown again 
   await expect(section).toContainText('Every alert reaches the table')
 
   // By the keyboard: the button, then the new row's name has the focus.
-  await section.getByRole('button', { name: 'Add condition' }).focus()
+  // Named by its text alone, not its icon.
+  await section.getByRole('button', { name: 'Add condition', exact: true }).focus()
   await page.keyboard.press('Enter')
   const name1 = page.getByLabel('Condition 1 label name')
   await expect(name1).toBeFocused()
@@ -90,6 +91,9 @@ test('conditions are added, checked as the save checks them, saved, shown again 
   // Go's regex syntax, which JavaScript's would have taken.
   await expect(section).toContainText('value is a regex Alertmanager refuses — error parsing regexp: invalid or unsupported Perl syntax: `(?=`')
   await expect(page.getByLabel('Condition 1 value')).toHaveAttribute('aria-invalid', 'true')
+  // Only the field it is about is marked.
+  await expect(name1).not.toHaveAttribute('aria-invalid')
+  await expect(page.getByLabel('Condition 1 match type')).not.toHaveAttribute('aria-invalid')
   // The save refuses it too, naming it.
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.locator('.ant-modal').filter({ hasText: 'matchers[0]' })).toContainText('invalid or unsupported Perl syntax', { timeout: 8000 })
@@ -133,6 +137,37 @@ test('conditions are added, checked as the save checks them, saved, shown again 
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
   expect(await saved(request)).not.toHaveProperty('matchers')
+})
+
+test('the same name and match type twice marks both of the second row, not its value', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { matchers: [{ name: 'region', matchType: '=', value: 'eu' }], ...TABLE } } })
+  await openRouting(page)
+  await page.getByRole('button', { name: 'Add condition', exact: true }).click()
+  await page.getByLabel('Condition 2 label name').fill('region')
+  await page.getByLabel('Condition 2 value').fill('us')
+  await expect(page.getByTestId('routing-matchers')).toContainText('region= is written twice (matchers[0] too)')
+  await expect(page.getByLabel('Condition 2 label name')).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByLabel('Condition 2 match type')).toHaveAttribute('aria-invalid', 'true')
+  await expect(page.getByLabel('Condition 2 value')).not.toHaveAttribute('aria-invalid')
+  await page.getByLabel('Condition 2 match type').selectOption('!=')
+  await expect(page.getByLabel('Condition 2 match type')).not.toHaveAttribute('aria-invalid')
+})
+
+test('a label named as a condition is warned of in the Labels dialog, before Apply', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { matchers: [{ name: 'region', matchType: '=~', value: 'eu.*' }], ...TABLE } } })
+  await openRouting(page)
+  await page.getByRole('button', { name: 'Labels' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByTestId('labels-condition-clash')).toHaveCount(0)
+  // Renamed to the condition's name.
+  await dialog.getByLabel('Label 2 name').fill('region')
+  await expect(dialog.getByTestId('labels-condition-clash')).toContainText('region is also a condition in Only these alerts')
+  await dialog.getByLabel('Label 2 name').fill('team')
+  await expect(dialog.getByTestId('labels-condition-clash')).toHaveCount(0)
+  // Added with the condition's name.
+  await dialog.getByRole('button', { name: 'Add label' }).click()
+  await dialog.getByLabel('Label 3 name').fill('region')
+  await expect(dialog.getByTestId('labels-condition-clash')).toContainText('region is also a condition')
 })
 
 test('an empty value says it is a label the alert does not have, and is saved as ""', async ({ page, request }) => {

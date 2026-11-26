@@ -40,9 +40,11 @@ export default function RoutingLabelsModal({ open, labels, onOk, onCancel, title
           <div key={i} style={{ display: 'flex', gap: 8 }}>
             <Input aria-label={`Label ${i + 1} name`} placeholder="label, e.g. team" value={row.name} style={{ width: 150 }}
               onChange={e => set(i, { name: e.target.value })} />
-            {/* Only Enter ends a value: a space or a comma is part of it, as
-                routing.yaml and Alertmanager take it. A value typed here loses
-                its outer blanks; one already in the file is kept as written. */}
+            {/* Only Enter ends a value: spaces, commas and other symbols are
+                part of it, as routing.yaml and Alertmanager take them. A value
+                typed here loses its outer blanks (a newline or tab cannot be
+                typed: it is written in routing.yaml); one already in the file
+                is kept as written. */}
             <Select mode="tags" aria-label={`Label ${i + 1} values`} placeholder="type a value, press Enter"
               value={row.values} open={false} style={{ flex: 1 }}
               onChange={values => set(i, {

@@ -3,8 +3,9 @@ import yaml from 'js-yaml'
 import { removeChart } from './charts.js'
 
 // A routing label's value is ended by Enter alone (#222): a space or a comma
-// stays in it, as routing.yaml and Alertmanager take it. Blanks around a
-// typed value go; a value already in the file is kept as written.
+// stays in it, and so does any other symbol, as routing.yaml and
+// Alertmanager take them. Blanks around a typed value go; a value already in
+// the file is kept as written.
 
 const CHART = 'e2e-routing-label-values'
 const FOLDER = `${CHART}/prod`
@@ -15,6 +16,8 @@ rules:
   - alert: CpuHigh
     expr: cpu{ns="\${namespace}"} > 1
 `
+// A double quote, a backslash and Chinese: each kept byte for byte.
+const SYM = 'say "hi" \\ 資料庫'
 const routingUrl = `/api/v2/deployments/${CHART}/prod/routing?folder=${encodeURIComponent(FOLDER)}`
 const valuesUrl = `/api/v2/deployments/${CHART}/prod?folder=${encodeURIComponent(FOLDER)}`
 
@@ -57,25 +60,25 @@ test.describe('routing label values with spaces and commas (#222)', () => {
   }
   const saved = async request => yaml.load((await (await request.get(routingUrl)).json()).text)
 
-  test('a space or a comma stays in the value, outer blanks go, and both files say so', async ({ page, request }) => {
+  test('a space, a comma or another symbol stays in the value, outer blanks go, and both files say so', async ({ page, request }) => {
     await open(page)
     await expect(page.getByTestId('cell-critical-on call')).toContainText('relay')
     await page.getByRole('button', { name: 'Labels' }).click()
     const dialog = page.getByRole('dialog')
     const input = dialog.getByLabel('Label 2 values')
     // ' db ' is db once trimmed, already there; '   ' is nothing.
-    for (const v of ['db team', 'a,b', ' web ', ' db ', '   ']) {
+    for (const v of ['db team', 'a,b', ' web ', ' db ', '   ', SYM]) {
       await input.fill(v)
       await input.press('Enter')
     }
-    await expect(dialog.locator('.ant-select-selection-item')).toHaveText(['critical', 'db', 'on call', 'db team', 'a,b', 'web'])
+    await expect(dialog.locator('.ant-select-selection-item')).toHaveText(['critical', 'db', 'on call', 'db team', 'a,b', 'web', SYM])
     // The hint shows in a row with no value yet.
     await dialog.getByRole('button', { name: 'Add label' }).click()
     await expect(dialog.getByText('type a value, press Enter', { exact: true })).toBeVisible()
     await dialog.getByRole('button', { name: 'Remove label 3' }).click()
     await dialog.getByRole('button', { name: 'Apply' }).click()
 
-    for (const team of ['db team', 'a,b', 'web']) {
+    for (const team of ['db team', 'a,b', 'web', SYM]) {
       await page.getByTestId(`cell-critical-${team}`).locator('.ant-select').click()
       await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: /^relay$/ }).click()
       await page.keyboard.press('Escape')
@@ -86,8 +89,8 @@ test.describe('routing label values with spaces and commas (#222)', () => {
     await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
 
     const routing = await saved(request)
-    expect(routing.labels.team).toEqual(['db', 'on call', 'db team', 'a,b', 'web'])
-    expect(routing.cells.map(c => c.match.team).sort()).toEqual(['a,b', 'db team', 'on call', 'web'])
+    expect(routing.labels.team).toEqual(['db', 'on call', 'db team', 'a,b', 'web', SYM])
+    expect(routing.cells.map(c => c.match.team).sort()).toEqual(['a,b', 'db team', 'on call', SYM, 'web'].sort())
 
     await page.getByRole('button', { name: 'Preview' }).click()
     const preview = page.locator('.ant-modal').filter({ hasText: 'AlertmanagerConfig' })
@@ -99,7 +102,7 @@ test.describe('routing label values with spaces and commas (#222)', () => {
       for (const c of r.routes || []) walk(c)
     }
     walk(amc.spec.route)
-    expect(teams.sort()).toEqual(['a,b', 'db team', 'on call', 'web'])
+    expect(teams.sort()).toEqual(['a,b', 'db team', 'on call', SYM, 'web'].sort())
   })
 
   test('pasted text is one value', async ({ page, context }) => {

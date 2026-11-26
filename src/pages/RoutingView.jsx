@@ -9,6 +9,7 @@ import RoutesMatrix, { describeMatch } from '../components/RoutesMatrix'
 import RoutesList from '../components/RoutesList'
 import { TimingFields, GroupByField, PendingNames, usePendingNames } from '../components/RoutingTiming'
 import RoutingLabelsModal from '../components/RoutingLabelsModal'
+import RoutingMatchers from '../components/RoutingMatchers'
 import RoutingMergeConflicts from '../components/RoutingMergeConflicts'
 import PreviewModal from '../components/PreviewModal'
 import { parseRouting, emptyRouting, reshapeLabels, setDefaultTiming, toSave, GROUP_BY } from '../utils/routingModel'
@@ -458,6 +459,7 @@ export default function RoutingView() {
               message={`Alerts without ${addedLabels.join(' or ')} — or with a value not listed — now match no cell, and nobody here is notified of them.`}
               description="Every cell was copied to each new value, so alerts that carry one of them still go where they did." />
           )}
+          {hasTable && <RoutingMatchers routing={routing} onChange={edit} readOnly={locked} />}
           {!hasTable
             ? <Text type="secondary">Name the labels to route by first.</Text>
             : shownView === 'list'

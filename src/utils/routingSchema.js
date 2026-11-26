@@ -20,7 +20,7 @@
 import { z } from 'zod'
 import { durationFault, durationNs, DURATION_PATTERN } from './duration.js'
 import { hasUnclosedTemplate } from './ruleModel.js'
-import { goRegexpProblem } from './goRegexp.js'
+import { regexpProblemText } from './goRegexp.js'
 
 export const DROP_RECEIVER = '_drop'
 export const TIMING_KEYS = ['groupWait', 'groupInterval', 'repeatInterval']
@@ -476,7 +476,7 @@ export function matchersProblems(matchers, labelNames = []) {
     const twice = list.findIndex((o, j) => j < i && isMap(o) && o.name === name && o.matchType === matchType)
     if (twice >= 0) return `${name}${matchType} is written twice (matchers[${twice}] too): an alert has one value — write it as one${String(matchType).includes('~') ? ' regex' : ''}`
     if ((matchType === '=~' || matchType === '!~') && typeof value === 'string') {
-      const why = goRegexpProblem(value)
+      const why = regexpProblemText(value)
       if (why) return `value is a regex Alertmanager refuses — ${why}`
     }
     return null

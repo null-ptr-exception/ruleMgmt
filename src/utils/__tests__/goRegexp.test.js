@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { goRegexpProblem, goFullMatch, GO_UNICODE_SCRIPTS } from '../goRegexp.js'
-import { SYNTAX, MATCHES, LIMITS, STRICTER } from '../../../tests/fixtures/go-regexp/cases.js'
+import { goRegexpProblem, regexpProblemText, literalAlternatives, GO_UNICODE_SCRIPTS } from '../goRegexp.js'
+import { SYNTAX, LIMITS } from '../../../tests/fixtures/go-regexp/cases.js'
 
 // The expected side is amtool 0.28.1's, recorded in the fixtures.
 
@@ -9,12 +9,8 @@ describe('a regex value, as Alertmanager compiles it', () => {
     expect(goRegexpProblem(value)).toBe(why)
   })
 
-  it.each(LIMITS.map(([v, why]) => [v.slice(0, 24), v, why]))('%s… at Go\'s limits', (_, value, why) => {
+  it.each(LIMITS.map(([v, why]) => [v.slice(0, 24), v.length, v, why]))('%s… (%i characters) at Go\'s limits', (_, __, value, why) => {
     expect(goRegexpProblem(value)).toBe(why)
-  })
-
-  it('refuses the same alternative written thousands of times, which Go counts once', () => {
-    expect(goRegexpProblem(STRICTER[0])).toMatch(/expression too large/)
   })
 
   it('knows every Unicode script name of Go 1.23, and none of Unicode 16', () => {
@@ -29,31 +25,35 @@ describe('a regex value, as Alertmanager compiles it', () => {
   })
 })
 
-describe('whether a regex value matches a label value', () => {
-  it('answers as amtool routes for every pair of the table, or says it cannot tell', () => {
-    const wrong = []
-    let told = 0
-    for (const [value, text, matches] of MATCHES) {
-      const got = goFullMatch(value, text)
-      if (got === null) continue
-      told++
-      if (got !== matches) wrong.push([value, text, matches])
-    }
-    expect(wrong).toEqual([])
-    // Only the case-insensitive é is left untold.
-    expect(MATCHES.length - told).toBe(MATCHES.filter(([v]) => v === '(?i)é').length)
+describe('the message the user sees', () => {
+  it.each([
+    ['(?=eu)', 'error parsing regexp: invalid or unsupported Perl syntax: `(?=`'],
+    ['[a', 'error parsing regexp: missing closing ]: `[a`'],
+    ['(a', 'error parsing regexp: missing closing ): `(a`'],
+    ['a)', 'error parsing regexp: unexpected ): `a)`'],
+    ['\\Qa.b', 'error parsing regexp: missing closing ): `\\Qa.b`'],
+    ['a{1001}', 'error parsing regexp: invalid repeat count: `{1001}`'],
+  ])('%s: about the value as written, in Go\'s words', (value, text) => {
+    expect(regexpProblemText(value)).toBe(text)
   })
 
-  it('cannot tell for a value Alertmanager refuses', () => {
-    expect(goFullMatch('(?=x)', 'x')).toBeNull()
+  it('is null for a value taken', () => {
+    expect(regexpProblemText('eu|eu-.*')).toBeNull()
+  })
+})
+
+describe('plain text alternatives, told without running the regex', () => {
+  it.each([
+    ['db', ['db']],
+    ['db|web', ['db', 'web']],
+    ['db|', ['db', '']],
+    ['', ['']],
+    ['a-b|c_d|e:f', ['a-b', 'c_d', 'e:f']],
+  ])('%j is %j', (value, values) => {
+    expect([...literalAlternatives(value)]).toEqual(values)
   })
 
-  it('is the whole label value, as Alertmanager anchors it', () => {
-    expect(goFullMatch('d', 'db')).toBe(false)
-    expect(goFullMatch('db|web', 'db')).toBe(true)
-    // `|` reaches out of the anchoring group: starts with a, or ends with b.
-    expect(goFullMatch('a)|(b', 'axx')).toBe(true)
-    expect(goFullMatch('a)|(b', 'xxb')).toBe(true)
-    expect(goFullMatch('a)|(b', 'xx')).toBe(false)
+  it.each(['eu.*', '(?i)db', 'db\\.x', 'a{2}', '[ab]', '^db', 'd+', '(db)', 'a{', '(?=x)'])('%j is not told', value => {
+    expect(literalAlternatives(value)).toBeNull()
   })
 })

@@ -142,8 +142,9 @@ const timing = Object.fromEntries(TIMING_KEYS.map(key => [key, duration(key).opt
  * because Alertmanager reads it as not written (the parent's grouping), so
  * it would not say what it looks like. A name is a label name as routing.yaml's
  * labels are: letters, digits and _, not starting with a digit. Alertmanager
- * 0.28 also takes any other text but an empty one, an older one does not;
- * alerts from Prometheus 2 carry no other.
+ * 0.28 also takes any other text but an empty one (`service.name`, `é`), an
+ * older one does not: a Prometheus 3 UTF-8 label name cannot be grouped by
+ * here yet.
  */
 export function groupByProblem(value) {
   if (!Array.isArray(value)) return 'groupBy must be a list of label names, e.g. [alertname, instance]'

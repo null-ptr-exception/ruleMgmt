@@ -128,9 +128,10 @@ describe('groupBy against amtool', () => {
   // Refused by Alertmanager too.
   const REFUSED_BY_AMTOOL = [['alertname', 'alertname'], ['...', 'alertname'], ['alertname', '...'], ['']]
   // Taken by Alertmanager 0.28, which reads any text as a label name, but
-  // not by an older one, nor carried by an alert from Prometheus 2; and an
-  // empty list, which Alertmanager reads as not written.
-  const STRICTER = [['host-name'], ['1abc'], ['café'], ['team, zone'], ['a b'], []]
+  // not by an older one: a Prometheus 3 UTF-8 or dotted label name is not
+  // supported here yet. And an empty list, which Alertmanager reads as not
+  // written.
+  const STRICTER = [['host-name'], ['1abc'], ['1a'], ['café'], ['é'], ['service.name'], ['team, zone'], ['a b'], []]
 
   it.each(TAKEN.map(l => [l]))('takes %j', list => expect(groupByProblem(list)).toBeNull())
   it.each([...REFUSED_BY_AMTOOL, ...STRICTER].map(l => [l]))('refuses %j', list => expect(groupByProblem(list)).not.toBeNull())

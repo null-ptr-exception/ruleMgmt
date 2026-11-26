@@ -539,7 +539,7 @@ export default function RoutingView() {
         </div>
 
         {labelsOpen && (
-          <RoutingLabelsModal open labels={routing?.labels} onCancel={() => setLabelsOpen(false)} onOk={applyLabels}
+          <RoutingLabelsModal open labels={routing?.labels} matchers={routing?.matchers} onCancel={() => setLabelsOpen(false)} onOk={applyLabels}
             title={routing ? 'Route by labels' : 'Set up routing'} />
         )}
         {merge && (

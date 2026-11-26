@@ -13,6 +13,14 @@ const TYPE_NAMES = {
   '!~': '!~ does not match regex',
 }
 
+// The fields of a row a problem of matchersProblems is about.
+function fieldsOf(why) {
+  if (!why) return new Set()
+  if (/ is written twice /.test(why)) return new Set(['name', 'matchType'])
+  if (why.startsWith('value ')) return new Set(['value'])
+  return new Set(['name'])
+}
+
 /**
  * The table's own matchers (#225): only alerts that match every one reach
  * a cell; any other is left to the rest of the platform's routes. Each row
@@ -49,24 +57,27 @@ export default function RoutingMatchers({ routing, onChange, readOnly }) {
         const n = i + 1
         const why = problems[i]
         const errorId = `routing-matcher-${i}-error`
-        const described = why ? { 'aria-invalid': true, 'aria-describedby': errorId } : {}
+        // Which of the row's fields the problem is about.
+        const on = fieldsOf(why)
+        const mark = field => (on.has(field) ? { 'aria-invalid': true, 'aria-describedby': errorId, status: 'error' } : {})
         return (
           <div key={i} data-testid={`routing-matcher-${i}`} style={{ marginBottom: 6 }}>
             <div role="group" aria-label={`Condition ${n}`} style={{ display: 'flex', gap: 6, alignItems: 'center', maxWidth: 640 }}>
               <Input size="small" style={{ width: 160 }} aria-label={`Condition ${n} label name`} placeholder="label name"
-                value={m.name ?? ''} disabled={readOnly} status={why ? 'error' : undefined} {...described}
+                value={m.name ?? ''} disabled={readOnly} {...mark('name')}
                 ref={el => { names.current[i] = el }}
                 onChange={e => change(i, 'name', e.target.value.trim())} />
               <select aria-label={`Condition ${n} match type`} value={m.matchType} disabled={readOnly}
+                aria-invalid={on.has('matchType') ? true : undefined} aria-describedby={on.has('matchType') ? errorId : undefined}
                 onChange={e => change(i, 'matchType', e.target.value)}
-                style={{ height: 24, fontSize: 12, borderRadius: 4, border: '1px solid #d9d9d9', background: readOnly ? '#f5f5f5' : '#fff' }}>
+                style={{ height: 24, fontSize: 12, borderRadius: 4, border: `1px solid ${on.has('matchType') ? '#ff4d4f' : '#d9d9d9'}`, background: readOnly ? '#f5f5f5' : '#fff' }}>
                 {MATCH_TYPES.map(t => <option key={t} value={t}>{TYPE_NAMES[t]}</option>)}
               </select>
               <Input size="small" style={{ flex: 1 }} aria-label={`Condition ${n} value`} placeholder="(empty: no such label)"
-                value={m.value ?? ''} disabled={readOnly} status={why ? 'error' : undefined} {...described}
+                value={m.value ?? ''} disabled={readOnly} {...mark('value')}
                 onChange={e => change(i, 'value', e.target.value)} />
               {!readOnly && (
-                <Button size="small" type="text" icon={<CloseOutlined />} aria-label={`Remove condition ${n}`} onClick={() => remove(i)} />
+                <Button size="small" type="text" icon={<CloseOutlined aria-hidden />} aria-label={`Remove condition ${n}`} onClick={() => remove(i)} />
               )}
             </div>
             {why && <Text id={errorId} type="danger" style={{ fontSize: 12, display: 'block' }}>{why}</Text>}
@@ -74,7 +85,7 @@ export default function RoutingMatchers({ routing, onChange, readOnly }) {
         )
       })}
       {!readOnly && (
-        <Button size="small" icon={<PlusOutlined />} ref={add} onClick={addRow}>Add condition</Button>
+        <Button size="small" icon={<PlusOutlined aria-hidden />} ref={add} onClick={addRow}>Add condition</Button>
       )}
     </div>
   )

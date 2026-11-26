@@ -77,5 +77,3 @@ matchers-table-label	put-text	refuses-what-tool-accepts	policy	a matcher on one 
 matchers-table-label	sync	refuses-what-tool-accepts	policy	a matcher on one of the table's labels is refused: each cell already says its value, so it would only empty cells (Alertmanager takes it)
 matchers-twice	put-text	refuses-what-tool-accepts	policy	the same matcher name and matchType twice is refused: an alert has one value, so two = never both hold and two regexes are one regex (Alertmanager takes it)
 matchers-twice	sync	refuses-what-tool-accepts	policy	the same matcher name and matchType twice is refused: an alert has one value, so two = never both hold and two regexes are one regex (Alertmanager takes it)
-matchers-size-stricter	put-text	refuses-what-tool-accepts	policy	a regex near Go's size limit is judged from a parse tree Go first simplifies: the same alternative written 3400 times is refused, which Go takes as one
-matchers-size-stricter	sync	refuses-what-tool-accepts	policy	a regex near Go's size limit is judged from a parse tree Go first simplifies: the same alternative written 3400 times is refused, which Go takes as one

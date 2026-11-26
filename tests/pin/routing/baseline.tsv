@@ -456,18 +456,18 @@ matchers-value-number	A	preview	ok	200	-	no	-	crd-fails	renders	0	1	differs	amc=
 matchers-value-number	A	check-deployment	refused	exit 1	routing.yaml	no	-	crd-fails	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: value must be text — quote one that YAML reads otherwise (e.g. "true",	
 matchers-value-number	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	crd-fails	renders	0	1	differs	refuse:routing.problem	
 matchers-value-number	A	schema	refused	invalid	-	no	-	crd-fails	renders	0	1	differs	-	
-matchers-size-stricter	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
-matchers-size-stricter	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
-matchers-size-stricter	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
-matchers-size-stricter	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
-matchers-size-stricter	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
-matchers-size-stricter	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
-matchers-size-stricter	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
-matchers-size-stricter	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
-matchers-size-stricter	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
-matchers-size-stricter	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: expressi	
-matchers-size-stricter	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
-matchers-size-stricter	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+matchers-size-one-alternative	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+matchers-size-one-alternative	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-size-one-alternative	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-size-one-alternative	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-size-one-alternative	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers-size-one-alternative	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+matchers-size-one-alternative	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-size-one-alternative	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+matchers-size-one-alternative	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers-size-one-alternative	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+matchers-size-one-alternative	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
+matchers-size-one-alternative	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
 brace-runs	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
 brace-runs	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
 brace-runs	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	

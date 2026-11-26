@@ -4,14 +4,16 @@
 //             the table read as written (a cell's match is its route's
 //             matchers, its configs the receivers), shared configs put in,
 //             checked against the operator's CRD and by `amtool check-config`.
-//             A cell's groupBy, else the defaults', is its route's.
+//             A cell's groupBy, else the defaults', is its route's; the
+//             table's `matchers` are the top route's, as written.
 //             'none' | 'unreadable' | 'not-a-table' | 'unresolved' |
 //             'crd-fails' | 'am-fails' | 'ok'
 //   deployed  what `helm template` of the deployment deploys, read as the
 //             cluster reads it, against that promise: the same receivers,
 //             the same group_by on the same routes, and `amtool config
 //             routes test` giving the same receivers for every combination
-//             of the table's labels (it does not show grouping).
+//             of the table's labels (it does not show grouping), each with
+//             and without labels the table's matchers name.
 //             'none' (no routing, nothing deployed) | 'helm-fails' | 'no-amc'
 //             (a routing.yaml, nothing deployed) | 'orphan' (deployed, no
 //             routing.yaml) | 'crd-fails' | 'am-fails' | 'differs' | 'routes'
@@ -74,10 +76,17 @@ export function promisedSpec(doc, shared) {
     else if (cell.configs.length === 1) routes.push({ ...route, receiver: cell.configs[0] })
     else routes.push({ ...route, routes: cell.configs.map((receiver, i) => (i < cell.configs.length - 1 ? { receiver, continue: true } : { receiver })) })
   }
-  return { spec: { route: { receiver: DROP, ...(routes.length ? { routes } : {}) }, receivers: [{ name: DROP }, ...[...used].map(([n, c]) => receiverOf(n, c))] } }
+  // The table's matchers on the top route, as written: the CRD and amtool
+  // judge them.
+  const top = doc.matchers !== undefined ? { matchers: doc.matchers } : {}
+  return { spec: { route: { receiver: DROP, ...top, ...(routes.length ? { routes } : {}) }, receivers: [{ name: DROP }, ...[...used].map(([n, c]) => receiverOf(n, c))] } }
 }
 
-// Every combination of the table's labels, and one with a value it does not have.
+// Every combination of the table's labels, and one with a value it does not
+// have; each also with the labels the table's matchers name: none of them,
+// and each given its matchers' values in turn (a regex's first alternative
+// with its operators taken out: `eu|eu-.*` gives `eu|eu-.*`, then `eu`),
+// then a value none says. Which of them a matcher takes is amtool's to say.
 function labelSets(doc) {
   let sets = [{}]
   for (const [name, values] of Object.entries(doc.labels)) {
@@ -85,7 +94,20 @@ function labelSets(doc) {
     if (sets.length > 24) sets = sets.slice(0, 24)
   }
   const first = Object.keys(doc.labels)[0]
-  return [...sets, { ...sets[0], [first]: 'not-in-the-table' }].filter(s => Object.keys(s).every(k => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k)))
+  sets = [...sets, { ...sets[0], [first]: 'not-in-the-table' }]
+  const said = new Map()
+  for (const m of Array.isArray(doc.matchers) ? doc.matchers : []) {
+    if (!isMap(m) || typeof m.name !== 'string' || typeof m.value !== 'string' || Object.hasOwn(doc.labels, m.name)) continue
+    if (!said.has(m.name)) said.set(m.name, [])
+    said.get(m.name).push(m.value, m.value.split('|')[0].replace(/[^A-Za-z0-9_-]/g, ''))
+  }
+  if (said.size) {
+    const values = [...said].map(([name, vs]) => [name, [...new Set([...vs.filter(v => v && v.length < 64), 'none-of-these'])]])
+    const rounds = Math.max(...values.map(([, vs]) => vs.length))
+    const variants = [{}, ...Array.from({ length: rounds }, (_, k) => Object.fromEntries(values.map(([name, vs]) => [name, vs[k % vs.length]])))]
+    sets = sets.slice(0, 12).flatMap(s => variants.map(v => ({ ...s, ...v })))
+  }
+  return sets.filter(s => Object.keys(s).every(k => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k)))
 }
 
 const byName = rs => [...rs].sort((a, b) => (a.name < b.name ? -1 : 1))

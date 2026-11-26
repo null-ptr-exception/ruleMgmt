@@ -323,6 +323,151 @@ groupby-empty	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1
 groupby-empty	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   defaults: groupBy must name at least one label — leave it out to use the default	
 groupby-empty	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
 groupby-empty	A	schema	refused	invalid	-	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+matchers	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+matchers	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers	A	put-json	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+matchers	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+matchers	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+matchers	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
+matchers	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+matchers-saved	A	get	ok	200	-	no	-	ok	renders	0	1	routes	errors=0 stale=false warnings=0	
+matchers-saved	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml	ok	renders	0	1	routes	-	
+matchers-saved	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-saved	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	routes	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-saved	A	shared-put	ok	200	-	no	-	ok	renders	0	1	routes	written=2	
+matchers-saved	A	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no failed=-	
+matchers-saved	A	sync	ok	200	-	no	-	ok	renders	0	1	routes	-	
+matchers-saved	A	commit	ok	200	-	no	-	ok	renders	0	1	routes	-	
+matchers-saved	A	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
+matchers-saved	A	check-deployment	ok	exit 0	-	no	-	ok	renders	0	1	routes	Routing: passed	
+matchers-saved	A	check-repo	ok	exit 0	-	no	-	ok	renders	0	1	routes	-	
+matchers-saved	A	schema	ok	valid	-	no	-	ok	renders	0	1	routes	-	
+matchers-namespace	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+matchers-namespace	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-namespace	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-namespace	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-namespace	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers-namespace	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+matchers-namespace	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-namespace	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+matchers-namespace	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers-namespace	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+matchers-namespace	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
+matchers-namespace	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+matchers-empty-value	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+matchers-empty-value	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-empty-value	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-empty-value	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-empty-value	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers-empty-value	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+matchers-empty-value	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-empty-value	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+matchers-empty-value	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers-empty-value	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+matchers-empty-value	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
+matchers-empty-value	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+matchers-js-refuses	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+matchers-js-refuses	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-js-refuses	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-js-refuses	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-js-refuses	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers-js-refuses	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+matchers-js-refuses	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-js-refuses	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+matchers-js-refuses	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers-js-refuses	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+matchers-js-refuses	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
+matchers-js-refuses	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+matchers-go-refuses	A	get	listed	200	-	no	-	am-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+matchers-go-refuses	A	put-text	refused	400	routing.yaml	no	-	am-fails	renders	0	1	differs	-	
+matchers-go-refuses	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-go-refuses	A	shared-get	not-seen	200	-	no	-	am-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-go-refuses	A	shared-put	ok	200	-	no	-	am-fails	renders	0	1	differs	written=2	
+matchers-go-refuses	A	regenerate	ok	200	-	no	-	am-fails	renders	0	1	differs	regenerated=no failed=-	
+matchers-go-refuses	A	sync	refused	400	deployments/t/a	no	-	am-fails	renders	0	1	differs	-	
+matchers-go-refuses	A	commit	refused-other	409	-	no	-	am-fails	renders	0	1	differs	-	
+matchers-go-refuses	A	preview	ok	200	-	no	-	am-fails	renders	0	1	differs	amc=1	
+matchers-go-refuses	A	check-deployment	refused	exit 1	routing.yaml	no	-	am-fails	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: invalid	
+matchers-go-refuses	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	am-fails	renders	0	1	differs	refuse:routing.problem	
+matchers-go-refuses	A	schema	ok	valid	-	no	-	am-fails	renders	0	1	differs	-	accepts-what-tool-refuses
+matchers-repeat-too-big	A	get	listed	200	-	no	-	am-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+matchers-repeat-too-big	A	put-text	refused	400	routing.yaml	no	-	am-fails	renders	0	1	differs	-	
+matchers-repeat-too-big	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-repeat-too-big	A	shared-get	not-seen	200	-	no	-	am-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-repeat-too-big	A	shared-put	ok	200	-	no	-	am-fails	renders	0	1	differs	written=2	
+matchers-repeat-too-big	A	regenerate	ok	200	-	no	-	am-fails	renders	0	1	differs	regenerated=no failed=-	
+matchers-repeat-too-big	A	sync	refused	400	deployments/t/a	no	-	am-fails	renders	0	1	differs	-	
+matchers-repeat-too-big	A	commit	refused-other	409	-	no	-	am-fails	renders	0	1	differs	-	
+matchers-repeat-too-big	A	preview	ok	200	-	no	-	am-fails	renders	0	1	differs	amc=1	
+matchers-repeat-too-big	A	check-deployment	refused	exit 1	routing.yaml	no	-	am-fails	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: invalid	
+matchers-repeat-too-big	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	am-fails	renders	0	1	differs	refuse:routing.problem	
+matchers-repeat-too-big	A	schema	ok	valid	-	no	-	am-fails	renders	0	1	differs	-	accepts-what-tool-refuses
+matchers-table-label	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+matchers-table-label	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+matchers-table-label	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-table-label	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-table-label	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers-table-label	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+matchers-table-label	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+matchers-table-label	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+matchers-table-label	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers-table-label	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: severity is a label of the table: each cell already says its value — a	
+matchers-table-label	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
+matchers-table-label	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+matchers-twice	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+matchers-twice	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+matchers-twice	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-twice	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-twice	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers-twice	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+matchers-twice	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+matchers-twice	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+matchers-twice	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers-twice	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   matchers[1]: region= is written twice (matchers[0] too): an alert has one value — w	
+matchers-twice	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
+matchers-twice	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+matchers-type-unknown	A	get	listed	200	-	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+matchers-type-unknown	A	put-text	refused	400	routing.yaml	no	-	crd-fails	renders	0	1	differs	-	
+matchers-type-unknown	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-type-unknown	A	shared-get	not-seen	200	-	no	-	crd-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-type-unknown	A	shared-put	ok	200	-	no	-	crd-fails	renders	0	1	differs	written=2	
+matchers-type-unknown	A	regenerate	ok	200	-	no	-	crd-fails	renders	0	1	differs	regenerated=no failed=-	
+matchers-type-unknown	A	sync	refused	400	deployments/t/a	no	-	crd-fails	renders	0	1	differs	-	
+matchers-type-unknown	A	commit	refused-other	409	-	no	-	crd-fails	renders	0	1	differs	-	
+matchers-type-unknown	A	preview	ok	200	-	no	-	crd-fails	renders	0	1	differs	amc=1	
+matchers-type-unknown	A	check-deployment	refused	exit 1	routing.yaml	no	-	crd-fails	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: matchType must be one of = != =~ !~	
+matchers-type-unknown	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	crd-fails	renders	0	1	differs	refuse:routing.problem	
+matchers-type-unknown	A	schema	refused	invalid	-	no	-	crd-fails	renders	0	1	differs	-	
+matchers-value-number	A	get	listed	200	-	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	
+matchers-value-number	A	put-text	refused	400	routing.yaml	no	-	crd-fails	renders	0	1	differs	-	
+matchers-value-number	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-value-number	A	shared-get	not-seen	200	-	no	-	crd-fails	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-value-number	A	shared-put	ok	200	-	no	-	crd-fails	renders	0	1	differs	written=2	
+matchers-value-number	A	regenerate	ok	200	-	no	-	crd-fails	renders	0	1	differs	regenerated=no failed=-	
+matchers-value-number	A	sync	refused	400	deployments/t/a	no	-	crd-fails	renders	0	1	differs	-	
+matchers-value-number	A	commit	refused-other	409	-	no	-	crd-fails	renders	0	1	differs	-	
+matchers-value-number	A	preview	ok	200	-	no	-	crd-fails	renders	0	1	differs	amc=1	
+matchers-value-number	A	check-deployment	refused	exit 1	routing.yaml	no	-	crd-fails	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: value must be text — quote one that YAML reads otherwise (e.g. "true",	
+matchers-value-number	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	crd-fails	renders	0	1	differs	refuse:routing.problem	
+matchers-value-number	A	schema	refused	invalid	-	no	-	crd-fails	renders	0	1	differs	-	
+matchers-size-stricter	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
+matchers-size-stricter	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+matchers-size-stricter	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-size-stricter	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-size-stricter	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers-size-stricter	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no failed=-	
+matchers-size-stricter	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
+matchers-size-stricter	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
+matchers-size-stricter	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers-size-stricter	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: expressi	
+matchers-size-stricter	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
+matchers-size-stricter	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
 brace-runs	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
 brace-runs	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
 brace-runs	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
@@ -475,7 +620,7 @@ top-unknown-key	A	regenerate	ok	200	-	no	-	ok	renders	0	1	routes	regenerated=no 
 top-unknown-key	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
 top-unknown-key	A	commit	refused-other	409	-	no	-	ok	renders	0	1	routes	-	
 top-unknown-key	A	preview	ok	200	-	no	-	ok	renders	0	1	routes	amc=1	
-top-unknown-key	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	routes	Routing: routing.yaml has problems   routing.yaml: unknown key "routes" (expected labels, defaults, configs, cells)	refuses-what-tool-accepts
+top-unknown-key	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	routes	Routing: routing.yaml has problems   routing.yaml: unknown key "routes" (expected matchers, labels, defaults, configs, c	refuses-what-tool-accepts
 top-unknown-key	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	routes	refuse:routing.problem	refuses-what-tool-accepts
 top-unknown-key	A	schema	refused	invalid	-	no	-	ok	renders	0	1	routes	-	refuses-what-tool-accepts
 timeout-bad	A	get	listed	200	-	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	

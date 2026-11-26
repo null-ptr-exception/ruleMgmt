@@ -44,6 +44,8 @@ export const BASE = {
   SHARED: 'configs:\n  relay: { type: webhook, url: "http://relay.example.com:8080" }\n',
 }
 
+const MATCH = "matchers:\n  - { name: region, matchType: '=~', value: 'eu|eu-.*' }\n  - { name: env, matchType: '!=', value: dev }\n"
+const MATCH_J = [{ name: 'region', matchType: '=~', value: 'eu|eu-.*' }, { name: 'env', matchType: '!=', value: 'dev' }]
 const okJ = {
   labels: { severity: ['critical', 'warning'], team: ['db', 'web'] },
   defaults: { groupWait: '30s' },
@@ -82,6 +84,19 @@ export const CASES = [
   { id: 'groupby-every-label-and-more', target: 'A', text: ONE('{ type: email, to: db@example.com }', "    groupBy: ['...', alertname]\n") },
   { id: 'groupby-not-legacy-name', target: 'A', text: ONE('{ type: email, to: db@example.com }', '    groupBy: [host-name]\n') },
   { id: 'groupby-empty', target: 'A', text: R({ defaults: 'defaults: { groupBy: [] }\n' }) },
+  // the table's own matchers (#225), on the resource's top route
+  { id: 'matchers', target: 'A', text: `${MATCH}${BASE.A}`, json: { matchers: MATCH_J, ...okJ } },
+  { id: 'matchers-saved', target: 'A', saved: true, text: `${MATCH}${BASE.A}` },
+  { id: 'matchers-namespace', target: 'A', text: `matchers:\n  - { name: namespace, matchType: '=~', value: 'a|b' }\n${BASE.A}` },
+  { id: 'matchers-empty-value', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: '' }\n${BASE.A}` },
+  { id: 'matchers-js-refuses', target: 'A', text: `matchers:\n  - { name: region, matchType: '=~', value: '^*eu' }\n  - { name: zone, matchType: '!~', value: '(?<1a>x)' }\n${BASE.A}` },
+  { id: 'matchers-go-refuses', target: 'A', text: `matchers:\n  - { name: region, matchType: '=~', value: '(?=eu)eu.*' }\n${BASE.A}` },
+  { id: 'matchers-repeat-too-big', target: 'A', text: `matchers:\n  - { name: region, matchType: '!~', value: 'a{1001}' }\n${BASE.A}` },
+  { id: 'matchers-table-label', target: 'A', text: `matchers:\n  - { name: severity, matchType: '=', value: critical }\n${BASE.A}` },
+  { id: 'matchers-twice', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: eu }\n  - { name: region, matchType: '=', value: us }\n${BASE.A}` },
+  { id: 'matchers-type-unknown', target: 'A', text: `matchers:\n  - { name: region, matchType: '==', value: eu }\n${BASE.A}` },
+  { id: 'matchers-value-number', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: 5 }\n${BASE.A}` },
+  { id: 'matchers-size-stricter', target: 'A', text: `matchers:\n  - { name: region, matchType: '=~', value: '${Array(3400).fill('b{1000}').join('|')}' }\n${BASE.A}` },
   { id: 'brace-runs', target: 'A', text: ONE('{ type: email, to: db@example.com, text: "{} {{{ x }}} }}" }') },
   // absent, empty, not YAML, wrong shapes
   { id: 'absent-cr-left', target: 'A', text: { remove: true } },

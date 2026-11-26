@@ -1,3 +1,6 @@
+/*! @license BSD-3-Clause
+ * Copyright 2009 The Go Authors. This file is a port of Go's source (go1.23.7);
+ * the full notice is in public/THIRD_PARTY_NOTICES.md (served with the page). */
 /**
  * Whether Alertmanager takes a matcher's regex value (`=~`, `!~`). It
  * compiles `^(?:<value>)$` with Go's regexp package (Alertmanager 0.28

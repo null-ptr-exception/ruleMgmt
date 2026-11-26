@@ -96,7 +96,8 @@ export const CASES = [
   { id: 'matchers-twice', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: eu }\n  - { name: region, matchType: '=', value: us }\n${BASE.A}` },
   { id: 'matchers-type-unknown', target: 'A', text: `matchers:\n  - { name: region, matchType: '==', value: eu }\n${BASE.A}` },
   { id: 'matchers-value-number', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: 5 }\n${BASE.A}` },
-  { id: 'matchers-size-stricter', target: 'A', text: `matchers:\n  - { name: region, matchType: '=~', value: '${Array(3400).fill('b{1000}').join('|')}' }\n${BASE.A}` },
+  // One alternative to Go, written 3400 times: counted once, as Go counts it
+  { id: 'matchers-size-one-alternative', target: 'A', text: `matchers:\n  - { name: region, matchType: '=~', value: '${Array(3400).fill('b{1000}').join('|')}' }\n${BASE.A}` },
   { id: 'brace-runs', target: 'A', text: ONE('{ type: email, to: db@example.com, text: "{} {{{ x }}} }}" }') },
   // absent, empty, not YAML, wrong shapes
   { id: 'absent-cr-left', target: 'A', text: { remove: true } },

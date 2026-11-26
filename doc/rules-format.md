@@ -1123,6 +1123,8 @@ deployment keeps its table in `routing.yaml`, beside `values.yaml`:
 
 ```yaml
 # deployments/asia/prod/routing.yaml
+matchers:                                        # optional: only these alerts reach the table
+  - { name: region, matchType: '=~', value: 'asia|asia-.*' }
 labels:                                          # the table's dimensions, with their values
   severity: [critical, warning]
   team: [db, web]
@@ -1142,6 +1144,7 @@ cells:                                           # one entry = one filled cell
 
 | Key | Meaning |
 |---|---|
+| `matchers` | Optional. Conditions for the whole table: an alert reaches a cell only when it matches every one; any other goes on to the platform's other routes, as if this table were not there. Each is `name` (a label name), `matchType` and `value` (text). `=` equals, `!=` is not, `=~` matches a regex, `!~` does not. An empty value is a label the alert does not have: `region=""` takes only alerts without `region`, `region!=""` only those with one; an alert without `region` also matches `region!="eu"` and `region!~"eu.*"`. A regex is the whole value, as Alertmanager anchors it (`=~"eu"` does not match `eu-west`; `eu.*` does), written as Go's regular expressions read it (RE2: no `(?=…)` or `\1`). A `routing.yaml` with `matchers` is refused by an AlertForge from before it, as an unknown key. Two deployments whose tables have the same cell both get its alerts; conditions that exclude each other (`region="asia"` in one, `region=~"eu\|eu-.*"` in the other) send each alert to one. See [Let Alertmanager load the notification routing](how-to.md#let-alertmanager-load-the-notification-routing) for what the operator adds to them |
 | `labels` | Label name → its values, in order. Values are kept even when no cell uses them, so a row that is empty on purpose stays in the table |
 | `defaults` | `groupWait`, `groupInterval`, `repeatInterval`: durations such as `30s`, `5m`, `1h30m` — largest unit first, each unit once, as Alertmanager reads them (`30m1h` is refused). `groupInterval` and `repeatInterval` cannot be `0`. Quote a bare number (`'0'`): YAML reads it as a number, not text |
 | `configs` | Name → `{ type: email, to }` or `{ type: webhook, url }` / `{ type: webhook, urlSecret: { name, key } }`. Names are lower-case letters, digits and `-`; a name starting with `_` is reserved. An e-mail or webhook config may say more — see [E-mail settings](#e-mail-settings) and [Webhook settings](#webhook-settings) |
@@ -1167,6 +1170,10 @@ What is refused when it is saved, and reported when it is read back:
 | A webhook `url` with a user name or password, a credential-like query parameter (`token=`, `key=` …) or a token-like path segment | Credentials belong in a Secret: use `urlSecret`. An in-cluster address such as `http://alert-relay.monitoring.svc:8080` is fine |
 | An e-mail or webhook setting written wrong — see [E-mail settings](#e-mail-settings) and [Webhook settings](#webhook-settings) | |
 | A `groupBy` that names a label twice, has `...` with other names, is empty (`[]`), or has a name that is not a label name — letters, digits and `_`, not starting with a digit (`host-name`, `team, zone`) | The operator refuses a list with a name twice or `...` with other names, for every route, and drops the whole AlertmanagerConfig; Alertmanager refuses them too. An empty list is read as not written, so it would not do what it says: leave it out. Label names are those `labels` takes, so `service.name`, `é`, `a-b` and `1a` are refused, though Alertmanager 0.28 takes them (an older one does not): grouping by a Prometheus 3 UTF-8 or dotted label name is not supported here yet |
+| A matcher whose `name` is not a label name (`host-name`, `1a`), whose `matchType` is none of `=` `!=` `=~` `!~` (`==`), or whose `value` is not text (`5`, `true`: quote it) | The operator's resource takes only these |
+| A matcher whose `name` is one of the table's `labels` (`severity` in a table by severity) | Each cell already says its value: the matcher would only empty cells |
+| The same `name` and `matchType` twice (`region="eu"` and `region="us"`) | An alert has one value: two `=` never both hold, and two regexes are one regex |
+| A regex Alertmanager refuses: `(?=eu)`, `(?!us)`, `\1`, `a{1001}`, `[a`, `a**` — said with Go's own message | Alertmanager compiles it with Go's regular expressions and would refuse the whole configuration. JavaScript's regular expressions take some of these, so they are checked as Go reads them (held to amtool 0.28.1). Near Go's own limits — about 1000 nested groups, or millions of steps once repeats are counted — the check is stricter than Go: the same long alternative written thousands of times over is refused, which Go takes as one |
 | Any other key — under `urlSecret` too, which takes only `name` and `key` | Probably a typo; it would be left out of the AlertmanagerConfig |
 
 A `routing.yaml` saved before these three checks, with such a value, is
@@ -1459,6 +1466,7 @@ saved, as [said above](#e-mail-settings).
 
 | `routing.yaml` | AlertmanagerConfig |
 |---|---|
+| `matchers` | the root route's `matchers`, as written and in order; none when there are none |
 | a config some cell uses | a receiver of the same name; one no cell uses is left out |
 | a cell | a route under `spec.route.routes`, matching every label with `=`, with its timings |
 | a cell with several configs | one child route per config, all but the last with `continue: true` |

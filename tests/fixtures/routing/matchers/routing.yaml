@@ -1,0 +1,19 @@
+# Top-level matchers (#225): the table takes only the alerts that match
+# every one of them; the cells are what they are without them.
+matchers:
+  - { name: region, matchType: '=~', value: 'eu|eu-.*' }
+  - { name: env, matchType: '!=', value: dev }
+  - { name: namespace, matchType: '=', value: shop }
+  - { name: tier, matchType: '!~', value: 'test.*' }
+  - { name: owner, matchType: '!=', value: 'a"b\c' }
+labels:
+  severity: [critical, warning]
+  team: [db, web]
+configs:
+  db-email: { type: email, to: db@example.com }
+  web-hook: { type: webhook, url: http://web-relay.monitoring.svc:8080 }
+cells:
+  - match: { severity: critical, team: db }
+    configs: [db-email, web-hook]
+  - match: { severity: warning, team: web }
+    configs: [web-hook]

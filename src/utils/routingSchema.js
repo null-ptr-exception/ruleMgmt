@@ -20,6 +20,7 @@
 import { z } from 'zod'
 import { durationFault, durationNs, DURATION_PATTERN } from './duration.js'
 import { hasUnclosedTemplate } from './ruleModel.js'
+import { goRegexpProblem } from './goRegexp.js'
 
 export const DROP_RECEIVER = '_drop'
 export const TIMING_KEYS = ['groupWait', 'groupInterval', 'repeatInterval']
@@ -442,6 +443,46 @@ export function configNameProblem(name) {
   return null
 }
 
+/**
+ * The table's own matchers (#225), on the AlertmanagerConfig's top route:
+ * only alerts that match every one reach a cell. How Alertmanager compares
+ * (prometheus-operator v0.95.1's CRD enum).
+ */
+export const MATCH_TYPES = ['=', '!=', '=~', '!~']
+const MATCHER_NAME = 'name must be a label name: letters, digits and _, not starting with a digit'
+const matcher = strictMap({
+  name: z.string({ error: MATCHER_NAME }).regex(LABEL_NAME_RE, { error: MATCHER_NAME }),
+  matchType: z.enum(MATCH_TYPES, { error: `matchType must be one of ${MATCH_TYPES.join(' ')}` }),
+  value: z.string({ error: 'value must be text — quote one that YAML reads otherwise (e.g. "true", "1"); "" is a label the alert does not have' }),
+}, 'must be a map with name, matchType and value')
+
+/**
+ * Why each of the table's matchers is refused, past its shape, or null — one
+ * entry per matcher, for the page and the save alike. `labelNames` are the
+ * table's labels: a cell already says the value of each, so a matcher on one
+ * would only empty cells. The same name and matchType twice is refused: an
+ * alert has one value, so two `=` never both hold, and two regexes are one
+ * regex. A regex is checked as Alertmanager compiles it (goRegexp.js).
+ * A `namespace` matcher is taken: with the operator's OnNamespace strategy,
+ * its own namespace matcher is added beside it and an alert must match both.
+ */
+export function matchersProblems(matchers, labelNames = []) {
+  const list = Array.isArray(matchers) ? matchers : []
+  return list.map((m, i) => {
+    if (!isMap(m)) return null
+    const { name, matchType, value } = m
+    if (typeof name === 'string' && !LABEL_NAME_RE.test(name)) return MATCHER_NAME
+    if (labelNames.includes(name)) return `${name} is a label of the table: each cell already says its value — a matcher on it would only empty cells`
+    const twice = list.findIndex((o, j) => j < i && isMap(o) && o.name === name && o.matchType === matchType)
+    if (twice >= 0) return `${name}${matchType} is written twice (matchers[${twice}] too): an alert has one value — write it as one${String(matchType).includes('~') ? ' regex' : ''}`
+    if ((matchType === '=~' || matchType === '!~') && typeof value === 'string') {
+      const why = goRegexpProblem(value)
+      if (why) return `value is a regex Alertmanager refuses — ${why}`
+    }
+    return null
+  })
+}
+
 const labelValues = z.array(text('values must be text — quote one that YAML reads otherwise (e.g. "true", "1")'), { error: 'list its values' })
   .min(1, { error: 'list its values' })
 
@@ -457,6 +498,7 @@ const cell = strictMap({
 }, 'must be a map with match and configs')
 
 export const routingSchema = strictMap({
+  matchers: z.array(matcher, { error: 'must be a list of { name, matchType, value }' }).optional(),
   labels: names({
     nameProblem: name => (LABEL_NAME_RE.test(name) ? null : 'not a valid label name'),
     value: labelValues,

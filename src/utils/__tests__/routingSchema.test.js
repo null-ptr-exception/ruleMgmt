@@ -97,7 +97,7 @@ describe('the shape of routing.yaml', () => {
       'defaults: groupWait must be a duration such as 30s, 5m or 4h',
       'configs.db-email: to is required',
       'cells[0].configs[0]: config must be a name (text), not 1',
-      'routing.yaml: unknown key "extra" (expected labels, defaults, configs, cells)',
+      'routing.yaml: unknown key "extra" (expected matchers, labels, defaults, configs, cells)',
     ])
   })
 
@@ -167,7 +167,7 @@ describe('names the user chose', () => {
   })
 
   it('names an unknown key as written, whatever it contains', () => {
-    expect(checkRouting({ ...full(), 'a; b': 1 })).toContain('routing.yaml: unknown key "a; b" (expected labels, defaults, configs, cells)')
+    expect(checkRouting({ ...full(), 'a; b': 1 })).toContain('routing.yaml: unknown key "a; b" (expected matchers, labels, defaults, configs, cells)')
   })
 
   it('reports a bad label name and its bad values together', () => {

@@ -899,7 +899,10 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    `repeatInterval` cannot be zero. **groupBy** below them is which labels
    put alerts into one notification: type a label name and press Enter for
    each (a space or a comma is not a separator; `...` alone is every
-   label). The cell's clock has its own groupBy too. A cell emptied of
+   label). A name typed and not entered is added when you leave the field or
+   Save; one Save would refuse stops the save and says why. Each name has
+   its own remove button, and Backspace in the empty field takes off the
+   last one. The cell's clock has its own groupBy too. A cell emptied of
    configs — by hand or with the brush — is removed, its timing and groupBy
    overrides with it. Taking a label away merges cells: cells whose groupBy
    differs are asked about as cells with other timing are; the same names in

@@ -1,0 +1,39 @@
+# Expected output for #225: written by hand before the generator was run.
+# The matchers are the resource's own route's, as written, in their order;
+# the cells' routes are as without them.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: blind-routing
+  labels:
+    app.kubernetes.io/managed-by: Helm
+spec:
+  route:
+    receiver: _drop
+    matchers:
+      - { name: region, value: 'eu|eu-.*', matchType: "=~" }
+      - { name: env, value: dev, matchType: "!=" }
+      - { name: namespace, value: shop, matchType: "=" }
+      - { name: tier, value: 'test.*', matchType: "!~" }
+      # the quote and the backslash reach the cluster as written
+      - { name: owner, value: 'a"b\c', matchType: "!=" }
+    continue: true
+    routes:
+      - matchers:
+          - { name: severity, value: critical, matchType: "=" }
+          - { name: team, value: db, matchType: "=" }
+        routes:
+          - { receiver: db-email, continue: true }
+          - { receiver: web-hook }
+      - matchers:
+          - { name: severity, value: warning, matchType: "=" }
+          - { name: team, value: web, matchType: "=" }
+        receiver: web-hook
+  receivers:
+    - name: _drop
+    - name: db-email
+      emailConfigs:
+        - to: db@example.com
+    - name: web-hook
+      webhookConfigs:
+        - url: http://web-relay.monitoring.svc:8080

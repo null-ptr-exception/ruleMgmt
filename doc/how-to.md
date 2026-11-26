@@ -1806,7 +1806,27 @@ The operator puts each AlertmanagerConfig under Alertmanager's root route with
 routes from seeing an alert. It also means two deployments under one
 Alertmanager whose `routing.yaml` cover the same label combination both notify
 for it: keep each deployment's alerts apart by a label, such as one that names
-the deployment.
+the deployment, with the table's own conditions (`matchers` in
+`routing.yaml`, *Only these alerts* on the Routing page): `region="asia"` in
+one and `region=~"eu|eu-.*"` in the other send each alert to one of them.
+
+What the operator does with those conditions depends on
+`alertmanagerConfigMatcherStrategy` (prometheus-operator v0.95.1, read from
+its code, not measured on a cluster):
+
+| Strategy | The AlertmanagerConfig's top route matches |
+|---|---|
+| `None` | the conditions as written |
+| `OnNamespace` (the operator's default) | the conditions **and** `namespace="<the AlertmanagerConfig's namespace>"`, added by the operator |
+| `OnNamespaceExceptForAlertmanagerNamespace` | as `None` for an AlertmanagerConfig in the Alertmanager's own namespace, as `OnNamespace` for any other |
+
+A condition on `namespace` is taken. Under `None` it is what it says:
+`namespace=~"a|b"` in one deployment and `namespace=~"c|d"` in another split
+the alerts by the namespace they come from. Under `OnNamespace` the
+operator's `namespace` matcher is added beside yours and an alert must match
+both: `namespace="other"` in an AlertmanagerConfig released into `shop`
+matches nothing. AlertForge cannot see which strategy the platform uses, so
+it does not judge this for you.
 When both pick the same config — a shared one, say — that config gets the
 alert once for each: each deployment's receiver has a name of its own, and
 Alertmanager does not merge them (measured, Alertmanager 0.28.1; with the

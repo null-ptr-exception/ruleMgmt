@@ -28,6 +28,8 @@ export const TIMING_KEYS = ['groupWait', 'groupInterval', 'repeatInterval']
 // Set and overridden as a timing key is, a list of label names.
 export const GROUP_BY = 'groupBy'
 const CELL_KEYS = [GROUP_BY, ...TIMING_KEYS]
+// The table's own matchers (#225): a list of { name, matchType, value }.
+export const MATCHERS = 'matchers'
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isCell = v => isMap(v) && isMap(v.match) && Array.isArray(v.configs)
@@ -330,8 +332,14 @@ export function gridOf(routing) {
 
 export const gridMatch = (grid, row, column) => ({ ...row, [grid.columnLabel]: column })
 
+/** The table's matchers replaced; an empty list removes them. */
+export function setMatchers(routing, list) {
+  const { [MATCHERS]: _, ...rest } = routing
+  return list?.length ? { [MATCHERS]: list, ...rest } : rest
+}
+
 /**
- * routing.yaml as the table writes it: cells with no configs left out,
+ * routing.yaml as the table writes it: the table's matchers first, cells with no configs left out,
  * cells in table order, match keys in label order, groupBy then timing
  * after configs.
  * Anything else the file holds is kept, after the known keys, and entries
@@ -353,8 +361,10 @@ export function toSave(routing) {
       for (const [k, v] of Object.entries(rest)) if (!CELL_KEYS.includes(k)) out[k] = v
       return out
     })
-  const { labels, defaults, configs, cells: _, ...rest } = routing
+  const { [MATCHERS]: matchers, labels, defaults, configs, cells: _, ...rest } = routing
   return {
+    // Not written when there are none: the file stays as before #225.
+    ...(matchers !== undefined && !(Array.isArray(matchers) && !matchers.length) ? { [MATCHERS]: matchers } : {}),
     labels,
     ...(defaults && Object.keys(defaults).length ? { defaults } : {}),
     configs,

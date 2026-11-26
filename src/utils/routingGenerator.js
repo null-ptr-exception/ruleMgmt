@@ -42,7 +42,7 @@
 import yaml from 'js-yaml'
 import { ROUTING } from './outputs.js'
 import { KUBERNETES_DUMP_SCHEMA } from './yamlScalar.js'
-import { routingSchema, configSchema, configNameProblem, schemaProblems, sharedConfigsSchema, isSharedRef, isEmptyGroupList, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
+import { routingSchema, configSchema, configNameProblem, schemaProblems, sharedConfigsSchema, isSharedRef, isEmptyGroupList, matchersProblems, DROP_RECEIVER, TIMING_KEYS } from './routingSchema.js'
 
 // The page marks a timing field with the same check the save makes (#93).
 export { timingProblem } from './routingSchema.js'
@@ -325,6 +325,11 @@ export function checkRouting(routing, { shared = null } = {}) {
     errors.push(...credentialProblems(`configs.${name}`, config))
   }
   if (configsOk) errors.push(...sharedRefProblems(r, shared, named))
+  if (Array.isArray(r.matchers) && !shape.some(m => m.startsWith('matchers:'))) {
+    matchersProblems(r.matchers, Object.keys(labels)).forEach((why, i) => {
+      if (why && !named(`matchers[${i}]`)) errors.push(`matchers[${i}]: ${why}`)
+    })
+  }
 
   const seen = new Map()
   ;(Array.isArray(r.cells) ? r.cells : []).forEach((cell, i) => {
@@ -441,7 +446,13 @@ export function routingSpec(routing) {
     return route
   })
   return {
-    route: { receiver: DROP_RECEIVER, continue: true, ...(routes.length ? { routes } : {}) },
+    route: {
+      receiver: DROP_RECEIVER,
+      // The table's own matchers (#225): only what matches them reaches a cell.
+      ...(routing.matchers?.length ? { matchers: routing.matchers.map(m => ({ name: m.name, value: m.value, matchType: m.matchType })) } : {}),
+      continue: true,
+      ...(routes.length ? { routes } : {}),
+    },
     receivers: [
       { name: DROP_RECEIVER },
       // In the order configs are declared; one no cell uses is left out.

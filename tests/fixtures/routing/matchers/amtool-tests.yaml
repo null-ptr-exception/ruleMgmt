@@ -1,0 +1,24 @@
+# Only alerts that match every top-level matcher reach a cell; any other
+# goes on to the rest of the platform's routes (other-team takes the
+# critical ones), as if this resource were not there.
+- labels: { severity: critical, team: db, region: eu, namespace: shop }
+  receivers: [db-email, web-hook, other-team]
+- labels: { severity: critical, team: db, region: eu-west, namespace: shop, env: prod, tier: web, owner: x }
+  receivers: [db-email, web-hook, other-team]
+- labels: { severity: warning, team: web, region: eu, namespace: shop }
+  receivers: [web-hook]
+# a cell nobody fills: dropped here
+- labels: { severity: warning, team: db, region: eu, namespace: shop }
+  receivers: [_drop]
+# =~ is the whole value: europe is not eu|eu-.*
+- labels: { severity: warning, team: web, region: europe, namespace: shop }
+  receivers: [platform-default]
+# no region at all: matches no regex that cannot be empty
+- labels: { severity: critical, team: db, namespace: shop }
+  receivers: [other-team]
+- labels: { severity: critical, team: db, region: eu, namespace: shop, env: dev }
+  receivers: [other-team]
+- labels: { severity: critical, team: db, region: eu, namespace: shop, tier: test-1 }
+  receivers: [other-team]
+- labels: { severity: critical, team: db, region: eu, namespace: other }
+  receivers: [other-team]

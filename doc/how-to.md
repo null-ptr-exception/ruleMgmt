@@ -862,7 +862,9 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
 
 1. **Set up routing** — name the alert labels to route by and their values,
    e.g. `severity: critical, warning` and `team: db, web`. Every combination
-   is a cell of the table.
+   is a cell of the table. Type a value and press Enter, one at a time: a
+   space or a comma stays in the value (`db team` is one value), the blanks
+   around it go, and a value already listed is not added again.
 2. **Notify** — add who a cell can notify: an email address, or a webhook. A
    webhook URL with a token or password in it is refused; put the URL in a
    Secret in the deployment's namespace and give its name and key instead

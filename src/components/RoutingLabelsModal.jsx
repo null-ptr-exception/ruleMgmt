@@ -40,9 +40,14 @@ export default function RoutingLabelsModal({ open, labels, onOk, onCancel, title
           <div key={i} style={{ display: 'flex', gap: 8 }}>
             <Input aria-label={`Label ${i + 1} name`} placeholder="label, e.g. team" value={row.name} style={{ width: 150 }}
               onChange={e => set(i, { name: e.target.value })} />
-            <Select mode="tags" aria-label={`Label ${i + 1} values`} placeholder="values — type one, press Enter"
-              value={row.values} onChange={values => set(i, { values })} open={false} tokenSeparators={[',', ' ']}
-              style={{ flex: 1 }} />
+            {/* Only Enter ends a value: a space or a comma is part of it, as
+                routing.yaml and Alertmanager take it. A value typed here loses
+                its outer blanks; one already in the file is kept as written. */}
+            <Select mode="tags" aria-label={`Label ${i + 1} values`} placeholder="type a value, press Enter"
+              value={row.values} open={false} style={{ flex: 1 }}
+              onChange={values => set(i, {
+                values: [...new Set(values.map(v => (row.values.includes(v) ? v : v.trim())).filter(v => v !== ''))],
+              })} />
             <Button type="text" icon={<DeleteOutlined />} aria-label={`Remove label ${i + 1}`} disabled={rows.length === 1}
               onClick={() => setRows(r => r.filter((_, j) => j !== i))} />
           </div>

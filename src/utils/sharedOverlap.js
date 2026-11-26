@@ -11,6 +11,13 @@
  * team: db}` match the same alert (`team=db`, critical); `{team: db}` and
  * `{team: web}` never do.
  *
+ * A table's own matchers (#225) hold for each of its cells: where a matcher
+ * and the other side's value for its label decide it — `region="asia"`
+ * against a cell or a matcher `region="eu"`, `region!="asia"`, a regex that
+ * does not take `asia` — the cells never meet; where they do not (two
+ * regexes, a label the other side says nothing of), they are counted as
+ * meeting, so an alert sent twice is never missed.
+ *
  * Both routes then notify the shared config, each through a receiver of its
  * own name, which Alertmanager does not merge: the config is notified twice
  * (measured, Alertmanager 0.28.1; once with OnNamespace). Only said — what
@@ -20,6 +27,7 @@
 import { isSharedRef } from './routingSchema.js'
 import { checkRouting } from './routingGenerator.js'
 import { describeMatch } from './routingModel.js'
+import { goFullMatch } from './goRegexp.js'
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isValue = v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
@@ -32,19 +40,53 @@ export function cellsOverlap(a, b) {
   return true
 }
 
+// Whether matcher `m` holds for a label value: true, false, or null when
+// that cannot be told here (a regex goRegexp cannot read safely).
+function holds(m, value) {
+  if (m.matchType === '=') return value === m.value
+  if (m.matchType === '!=') return value !== m.value
+  const re = goFullMatch(m.value, value)
+  if (re === null) return null
+  return m.matchType === '=~' ? re : !re
+}
+
+// The value every alert a cell takes has for a label: its match's, or a
+// `=` matcher's of its table; undefined when it is not one value.
+function valueOf(cell, name) {
+  if (Object.hasOwn(cell.match, name)) return cell.match[name]
+  return cell.matchers.find(m => m.name === name && m.matchType === '=')?.value
+}
+
 /**
- * A routing's cells that pick a shared config: [{ config, match }]. Only a
+ * Whether two cells, each with its table's matchers, can take one alert:
+ * false only when a matcher of one is decided false by the value the other
+ * fixes for its label.
+ */
+export function cellsMeet(a, b) {
+  if (!cellsOverlap(a.match, b.match)) return false
+  for (const [x, y] of [[a, b], [b, a]]) {
+    for (const m of x.matchers) {
+      const value = valueOf(y, m.name)
+      if (value !== undefined && holds(m, String(value)) === false) return false
+    }
+  }
+  return true
+}
+
+/**
+ * A routing's cells that pick a shared config: [{ config, match, matchers }]. Only a
  * routing the save takes is read (checkRouting): a cell that leaves a label
  * out, or holds a list or null for one, would match more than it says.
  */
 function sharedCells(routing) {
   const labelNames = Object.keys(routing.labels)
+  const matchers = Array.isArray(routing.matchers) ? routing.matchers : []
   const out = []
   for (const cell of routing.cells || []) {
     if (!Object.values(cell.match).every(isValue)) continue
     const match = Object.fromEntries(labelNames.map(name => [name, String(cell.match[name])]))
     for (const config of new Set(cell.configs)) {
-      if (Object.hasOwn(routing.configs, config) && isSharedRef(routing.configs[config])) out.push({ config, match })
+      if (Object.hasOwn(routing.configs, config) && isSharedRef(routing.configs[config])) out.push({ config, match, matchers })
     }
   }
   return out
@@ -79,9 +121,9 @@ export function sharedCellOverlaps(users, shared = null) {
   for (const { deployment, routing, syncedFrom } of users || []) {
     if (syncedFrom) { synced++; continue }
     if (!isMap(routing) || checkRouting(routing, { shared }).length) { unchecked.push(deployment); continue }
-    for (const { config, match } of sharedCells(routing)) {
+    for (const { config, match, matchers } of sharedCells(routing)) {
       if (!byConfig.has(config)) byConfig.set(config, [])
-      byConfig.get(config).push({ deployment, match })
+      byConfig.get(config).push({ deployment, match, matchers })
     }
   }
   const overlaps = []
@@ -91,7 +133,7 @@ export function sharedCellOverlaps(users, shared = null) {
     for (let i = 0; i < cells.length; i++) {
       if (involved.has(i)) continue
       for (let j = 0; j < cells.length; j++) {
-        if (i === j || cells[i].deployment === cells[j].deployment || !cellsOverlap(cells[i].match, cells[j].match)) continue
+        if (i === j || cells[i].deployment === cells[j].deployment || !cellsMeet(cells[i], cells[j])) continue
         involved.add(i)
         involved.add(j)
         break

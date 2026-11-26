@@ -1012,7 +1012,13 @@ name. Open **Routing** → **Shared configs**:
   one of them has is no condition for the other. `shop/a`'s
   `{severity: critical}` and `shop/b`'s `{severity: critical, team: db}` can
   (a critical `team=db` alert reaches both); two cells with `team: db` and
-  `team: web` cannot. With `alertmanagerConfigMatcherStrategy: None`, as set
+  `team: web` cannot. A table's own conditions (*Only these alerts*) count
+  for each of its cells: `region="asia"` in one and `region=~"eu|eu-.*"`,
+  `region!="asia"` or a cell with `region: eu` in the other cannot meet.
+  Where the conditions do not decide it — two regexes (`=~"asia|apac"` and
+  `!~"asia|apac"`), or a case-insensitive regex with letters outside ASCII —
+  the cells are listed as if they could: a false hint, never a missed one.
+  With `alertmanagerConfigMatcherStrategy: None`, as set
   up [below](#let-alertmanager-load-the-notification-routing), the config is notified once
   per deployment. All the deployments of one shared config are one line —
   the first 20, then how many more. A sync target is not listed: its

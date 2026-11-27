@@ -76,6 +76,17 @@ describe('saving a routing.yaml with matchers', () => {
     expect(got.body).toMatchObject({ errors: [], stale: false })
   })
 
+  // Every one must hold, and can: amtool 0.28.1 and the operator take them.
+  it('takes one label in != twice, and writes both', async () => {
+    const dir = makeDeployment('asia/prod')
+    const text = ROUTING.replace("{ name: env, matchType: '!=', value: dev }", "{ name: env, matchType: '!=', value: dev }\n  - { name: env, matchType: '!=', value: test }")
+    expect((await putRouting('asia/prod', text)).status).toBe(200)
+    expect(specOf(read(dir, CR)).route.matchers.filter(m => m.name === 'env')).toEqual([
+      { name: 'env', value: 'dev', matchType: '!=' },
+      { name: 'env', value: 'test', matchType: '!=' },
+    ])
+  })
+
   it('takes the table, as the page sends it', async () => {
     const dir = makeDeployment('asia/prod')
     expect((await putRouting('asia/prod', toSave(parseRouting(ROUTING)))).status).toBe(200)
@@ -84,7 +95,7 @@ describe('saving a routing.yaml with matchers', () => {
   })
 
   it.each([
-    ["{ name: env, matchType: '!=', value: dev }", "{ name: env, matchType: '!=', value: dev }\n  - { name: env, matchType: '!=', value: test }", 'matchers[2]: env!= is written twice (matchers[1] too)'],
+    ["{ name: region, matchType: '=~', value: 'eu|eu-.*' }", "{ name: region, matchType: '=', value: eu }\n  - { name: region, matchType: '=', value: eu-1 }", 'matchers[1]: region= is written twice (matchers[0] too): an alert has one value of region'],
     ["{ name: env, matchType: '!=', value: dev }", "{ name: team, matchType: '!=', value: dev }", 'matchers[1]: team is a label of the table'],
     ["value: 'eu|eu-.*'", "value: '(?!us)'", 'matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: invalid or unsupported Perl syntax: `(?!`'],
     ["matchType: '=~'", "matchType: '~='", 'matchers[0]: matchType must be one of = != =~ !~'],

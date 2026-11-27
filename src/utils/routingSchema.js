@@ -461,9 +461,12 @@ const matcher = strictMap({
  * Why each of the table's matchers is refused, past its shape, or null — one
  * entry per matcher, for the page and the save alike. `labelNames` are the
  * table's labels: a cell already says the value of each, so a matcher on one
- * would only empty cells. The same name and matchType twice is refused: an
- * alert has one value, so two `=` never both hold, and two regexes are one
- * regex. A regex is checked as Alertmanager compiles it (goRegexp.js).
+ * would only empty cells. Two `=` on one name are refused: an alert has one
+ * value of a label, so with different values they never both hold, and with
+ * the same value one is a plain repeat. Any other comparison may be written
+ * more than once (`env!="dev"` and `env!="test"`): every one must hold, and
+ * Alertmanager and the operator take them. A regex is checked as
+ * Alertmanager compiles it (goRegexp.js).
  * A `namespace` matcher is taken: with the operator's OnNamespace strategy,
  * its own namespace matcher is added beside it and an alert must match both.
  */
@@ -474,8 +477,12 @@ export function matchersProblems(matchers, labelNames = []) {
     const { name, matchType, value } = m
     if (typeof name === 'string' && !LABEL_NAME_RE.test(name)) return MATCHER_NAME
     if (labelNames.includes(name)) return `${name} is a label of the table: each cell already says its value — a matcher on it would only empty cells`
-    const twice = list.findIndex((o, j) => j < i && isMap(o) && o.name === name && o.matchType === matchType)
-    if (twice >= 0) return `${name}${matchType} is written twice (matchers[${twice}] too): an alert has one value — write it as one${String(matchType).includes('~') ? ' regex' : ''}`
+    const twice = matchType === '=' ? list.findIndex((o, j) => j < i && isMap(o) && o.name === name && o.matchType === '=') : -1
+    if (twice >= 0) {
+      const other = list[twice].value
+      if (other === value) return `${name}="${value}" is written twice (matchers[${twice}] too): keep one`
+      return `${name}= is written twice (matchers[${twice}] too): an alert has one value of ${name}, so ${name}="${other}" and ${name}="${value}" never both hold and no alert would reach the table`
+    }
     // Dumped as a \uD800 escape into the resource, which Helm refuses to read.
     if (typeof value === 'string' && hasLoneSurrogate(value)) return 'value has a broken character (a lone UTF-16 surrogate)'
     if ((matchType === '=~' || matchType === '!~') && typeof value === 'string') {

@@ -900,7 +900,7 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    with it; the field's hint says which. A regex is the whole
    value (`eu` does not match `eu-west`; `eu.*` does), as Alertmanager reads
    it. A condition the save would refuse — a name that is one of the
-   table's labels, the same name and comparison twice, a regex Alertmanager
+   table's labels, two `=` on one name, a regex Alertmanager
    refuses such as `(?=eu)` — says why under it. Each condition has its own
    remove button. Use them to keep two deployments that share an
    Alertmanager from both taking an alert (see [Let Alertmanager load the

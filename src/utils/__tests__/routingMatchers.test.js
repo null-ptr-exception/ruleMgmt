@@ -71,6 +71,15 @@ describe('matchers in routing.yaml', () => {
     expect(errors).toContainEqual(expect.stringMatching(/^labels\.team: /))
   })
 
+  // Written to the resource as a \uD800 escape, which Helm refuses to read.
+  it.each(['=', '!=', '=~', '!~'])('a lone surrogate in a %s value is refused; a pair and "" are not', type => {
+    for (const value of ['a\ud800', '\udc00b', 'x\ud800\ud800']) {
+      expect(checkRouting(table([m('region', type, value)]))).toEqual([expect.stringMatching(/^matchers\[0\]: value has a broken character \(a lone UTF-16 surrogate\)/)])
+    }
+    expect(checkRouting(table([m('region', type, 'db\u{1f600}')]))).toEqual([])
+    expect(checkRouting(table([m('region', type, '')]))).toEqual([])
+  })
+
   it('a regex is not checked for = and !=: the value is text', () => {
     expect(checkRouting(table([m('region', '=', '(?=x')]))).toEqual([])
   })

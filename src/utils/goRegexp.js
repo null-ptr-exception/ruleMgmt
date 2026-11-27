@@ -45,14 +45,17 @@ const ERR = {
   utf8: 'invalid UTF-8',
 }
 
+// `at` is where expr starts in the whole expression.
 class GoRegexpError extends Error {
-  constructor(code, expr) {
+  constructor(code, expr, at) {
     super(`error parsing regexp: ${code}: \`${expr}\``)
     this.code = code
     this.expr = expr
+    this.at = at
   }
 }
-const fail = (code, expr) => { throw new GoRegexpError(code, expr) }
+// Go's error about s[from:to].
+const fail = (code, s, from = 0, to = s.length) => { throw new GoRegexpError(code, s.slice(from, to), from) }
 // Go's panics for the limits, turned into errors about the whole expression.
 const LARGE = Symbol('ErrLarge')
 const NESTING = Symbol('ErrNestingDepth')
@@ -526,11 +529,11 @@ class Parser {
     let flags = this.flags
     const s = this.whole
     if (after < s.length && s[after] === '?') { after++; flags ^= NonGreedy }
-    if (lastRepeat >= 0) fail(ERR.repeatOp, s.slice(lastRepeat, after))
+    if (lastRepeat >= 0) fail(ERR.repeatOp, s, lastRepeat, after)
     const n = this.stack.length
-    if (n === 0) fail(ERR.missingRepeatArgument, s.slice(before, after))
+    if (n === 0) fail(ERR.missingRepeatArgument, s, before, after)
     const sub = this.stack[n - 1]
-    if (sub.op >= opPseudo) fail(ERR.missingRepeatArgument, s.slice(before, after))
+    if (sub.op >= opPseudo) fail(ERR.missingRepeatArgument, s, before, after)
     const re = this.newRegexp(op)
     re.min = min
     re.max = max
@@ -538,7 +541,7 @@ class Parser {
     re.sub = [sub]
     this.stack[n - 1] = re
     this.checkLimits(re)
-    if (op === OpRepeat && (min >= 2 || max >= 2) && !repeatIsValid(re, 1000)) fail(ERR.repeatSize, s.slice(before, after))
+    if (op === OpRepeat && (min >= 2 || max >= 2) && !repeatIsValid(re, 1000)) fail(ERR.repeatSize, s, before, after)
     return after
   }
 
@@ -790,7 +793,7 @@ class Parser {
 function nextRune(s, i) {
   if (i >= s.length) return [0xfffd, i]
   const cp = s.codePointAt(i)
-  if (cp >= 0xd800 && cp <= 0xdfff) fail(ERR.utf8, s.slice(i))
+  if (cp >= 0xd800 && cp <= 0xdfff) fail(ERR.utf8, s, i)
   return [cp, i + (cp > 0xffff ? 2 : 1)]
 }
 const checkUTF8 = (s, from, to) => { for (let i = from; i < to;) i = nextRune(s, i)[1] }
@@ -803,10 +806,10 @@ function parse(s) {
   function parseEscape(i) {
     const start = i
     i++
-    if (i >= s.length) fail(ERR.trailingBackslash, '')
+    if (i >= s.length) fail(ERR.trailingBackslash, s, i)
     let c
     ;[c, i] = nextRune(s, i)
-    const bad = () => fail(ERR.escape, s.slice(start, i))
+    const bad = () => fail(ERR.escape, s, start, i)
     if (c < 0x80 && !isAlnum(c)) return [c, i]
     if (c >= 0x31 && c <= 0x37 && !(i < s.length && s[i] >= '0' && s[i] <= '7')) return bad()
     if (c >= 0x30 && c <= 0x37) {
@@ -863,14 +866,14 @@ function parse(s) {
       name = s.slice(i + 2, j)
     } else {
       const end = s.indexOf('}', i)
-      if (end < 0) { checkUTF8(s, i, s.length); fail(ERR.charRange, s.slice(i)) }
+      if (end < 0) { checkUTF8(s, i, s.length); fail(ERR.charRange, s, i) }
       seqEnd = end + 1
       name = s.slice(i + 3, end)
       checkUTF8(s, i + 3, end)
     }
     if (name.startsWith('^')) { sign = -sign; name = name.slice(1) }
     const [tab, fold] = unicodeTable(name)
-    if (!tab) fail(ERR.charRange, s.slice(i, seqEnd))
+    if (!tab) fail(ERR.charRange, s, i, seqEnd)
     if (!(p.flags & FoldCase) || !fold) r = sign > 0 ? appendTable(r, tab) : appendNegatedTable(r, tab)
     else {
       const tmp = cleanClass(appendTable(appendTable([], tab), fold))
@@ -891,12 +894,12 @@ function parse(s) {
     if (close < 0) return null
     const name = s.slice(i, close + 2)
     const g = Object.hasOwn(POSIX_GROUPS, name) ? POSIX_GROUPS[name] : null
-    if (!g) fail(ERR.charRange, name)
+    if (!g) fail(ERR.charRange, s, i, close + 2)
     return [appendGroup(r, g), close + 2]
   }
 
   function parseClassChar(i, whole) {
-    if (i >= s.length) fail(ERR.missingBracket, s.slice(whole))
+    if (i >= s.length) fail(ERR.missingBracket, s, whole)
     if (s[i] === '\\') return parseEscape(i)
     return nextRune(s, i)
   }
@@ -926,7 +929,7 @@ function parse(s) {
       let hi = lo
       if (s.length - i >= 2 && s[i] === '-' && s[i + 1] !== ']') {
         ;[hi, i] = parseClassChar(i + 1, whole)
-        if (hi < lo) fail(ERR.charRange, s.slice(rng, i))
+        if (hi < lo) fail(ERR.charRange, s, rng, i)
       }
       cls = p.flags & FoldCase ? appendFoldedRange(cls, lo, hi) : appendRange(cls, lo, hi)
     }
@@ -945,10 +948,10 @@ function parse(s) {
     if (startsWithP || startsWithName) {
       const begin = startsWithName ? 3 : 4
       const end = rest.indexOf('>')
-      if (end < 0) { checkUTF8(s, i, s.length); fail(ERR.namedCapture, rest) }
+      if (end < 0) { checkUTF8(s, i, s.length); fail(ERR.namedCapture, s, i) }
       const name = rest.slice(begin, end)
-      checkUTF8(rest, begin, end)
-      if (!/^[A-Za-z0-9_]+$/.test(name)) fail(ERR.namedCapture, rest.slice(0, end + 1))
+      checkUTF8(s, i + begin, i + end)
+      if (!/^[A-Za-z0-9_]+$/.test(name)) fail(ERR.namedCapture, s, i, i + end + 1)
       p.numCap++
       const re = p.op(opLeftParen)
       re.cap = p.numCap
@@ -978,7 +981,7 @@ function parse(s) {
         return j
       } else break
     }
-    return fail(ERR.perlOp, s.slice(i, j))
+    return fail(ERR.perlOp, s, i, j)
   }
 
   // Go's parseInt: no leading zeros; past 1e8, -1.
@@ -1058,7 +1061,7 @@ function parse(s) {
         t++
       } else {
         const [min, max, after] = r
-        if (min < 0 || min > 1000 || max > 1000 || (max >= 0 && min > max)) fail(ERR.repeatSize, s.slice(before, after))
+        if (min < 0 || min > 1000 || max > 1000 || (max >= 0 && min > max)) fail(ERR.repeatSize, s, before, after)
         t = p.repeat(OpRepeat, min, max, before, after, lastRepeat)
         repeat = before
       }
@@ -1066,7 +1069,7 @@ function parse(s) {
       const k = s[t + 1]
       let done = false
       if (s.length - t >= 2) {
-        if (k === 'A') { p.op(OpBeginText); t += 2; done = true } else if (k === 'b') { p.op(OpWordBoundary); t += 2; done = true } else if (k === 'B') { p.op(OpNoWordBoundary); t += 2; done = true } else if (k === 'C') fail(ERR.escape, s.slice(t, t + 2))
+        if (k === 'A') { p.op(OpBeginText); t += 2; done = true } else if (k === 'b') { p.op(OpWordBoundary); t += 2; done = true } else if (k === 'B') { p.op(OpNoWordBoundary); t += 2; done = true } else if (k === 'C') fail(ERR.escape, s, t, t + 2)
         else if (k === 'Q') {
           const close = s.indexOf('\\E', t + 2)
           const end = close < 0 ? s.length : close
@@ -1109,8 +1112,8 @@ function parseOrThrow(s) {
   try {
     return parse(s)
   } catch (err) {
-    if (err === LARGE) throw new GoRegexpError(ERR.large, s)
-    if (err === NESTING) throw new GoRegexpError(ERR.nestingDepth, s)
+    if (err === LARGE) fail(ERR.large, s)
+    if (err === NESTING) fail(ERR.nestingDepth, s)
     throw err
   }
 }
@@ -1146,13 +1149,12 @@ function regexpError(value) {
 export function regexpProblemText(value) {
   const err = regexpError(value)
   if (!err) return null
-  const whole = anchored(value)
-  let expr = err.expr
-  const at = whole.indexOf(expr)
-  // A part that runs on into the wrapping: only what is the value's.
-  if (expr === whole) expr = value
-  else if (at >= 0 && at + expr.length === whole.length && expr.endsWith(')$')) expr = expr.slice(0, -2)
-  else if (at === 0 && expr.startsWith('^(?:')) expr = expr.slice(4)
+  // Only the part of Go's expr that is in the value: `\x4` is refused as
+  // `\x4)`, the wrapping's ) read as a hex digit; a ) the user wrote stays.
+  const start = '^(?:'.length
+  const from = Math.max(err.at, start)
+  const to = Math.min(err.at + err.expr.length, start + value.length)
+  const expr = to > from ? anchored(value).slice(from, to) : value
   return `error parsing regexp: ${err.code}: \`${expr}\``
 }
 

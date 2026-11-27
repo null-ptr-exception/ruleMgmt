@@ -2,12 +2,15 @@
 
 ## Go
 
-`src/utils/goRegexp.js` is a port of the parser in Go's `regexp/syntax`
-package (go1.23.7), and `src/utils/goUnicode.js` is generated from Go's
-`src/unicode/tables.go` (go1.23.7). Both carry this notice:
+`src/utils/goRegexp.js` is a port of Go's `src/regexp/syntax/parse.go`
+(Copyright 2011 The Go Authors), `src/regexp/syntax/perl_groups.go`
+(Copyright 2013 The Go Authors) and parts of `src/unicode/letter.go`
+(Copyright 2009 The Go Authors), go1.23.7. `src/utils/goUnicode.js` is
+generated from Go's `src/unicode/tables.go` (go1.23.7). Both are under Go's
+license, go1.23.7's `LICENSE`:
 
 ```
-Copyright 2009 The Go Authors.
+Copyright (c) 2009 The Go Authors. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -19,7 +22,7 @@ notice, this list of conditions and the following disclaimer.
 copyright notice, this list of conditions and the following disclaimer
 in the documentation and/or other materials provided with the
 distribution.
-   * Neither the name of Google LLC nor the names of its
+   * Neither the name of Google Inc. nor the names of its
 contributors may be used to endorse or promote products derived from
 this software without specific prior written permission.
 

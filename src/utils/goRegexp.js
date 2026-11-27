@@ -1,6 +1,10 @@
 /*! @license BSD-3-Clause
- * Copyright 2009 The Go Authors. This file is a port of Go's source (go1.23.7);
- * the full notice is in public/THIRD_PARTY_NOTICES.md (served with the page). */
+ * A port of Go's source (go1.23.7), which carries these notices:
+ *   src/regexp/syntax/parse.go: Copyright 2011 The Go Authors. All rights reserved.
+ *   src/regexp/syntax/perl_groups.go: Copyright 2013 The Go Authors. All rights reserved.
+ *   src/unicode/letter.go: Copyright 2009 The Go Authors. All rights reserved.
+ * Use of this source code is governed by a BSD-style license: Go's LICENSE,
+ * in full in public/THIRD_PARTY_NOTICES.md (served with the page). */
 /**
  * Whether Alertmanager takes a matcher's regex value (`=~`, `!~`). It
  * compiles `^(?:<value>)$` with Go's regexp package (Alertmanager 0.28

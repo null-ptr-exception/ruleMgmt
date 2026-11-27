@@ -54,9 +54,11 @@ describe.skipIf(!RUNS)(title(`regex values against amtool ${REFERENCE}`), () => 
   }, 120_000)
 
   it('refuses every other value with the message recorded', () => {
+    // Compared whole; only what a failure prints is cut short.
     const wrong = rows.filter(([, why]) => why !== null)
-      .map(([value, why]) => [value.slice(0, 40), why.slice(0, 120), String(amtoolSays(value)).slice(0, 120)])
+      .map(([value, why]) => [value, why, String(amtoolSays(value))])
       .filter(([, why, said]) => why !== said)
+      .map(([value, why, said]) => [value.slice(0, 40), why.slice(0, 120), said.slice(0, 120), `lengths ${why.length} / ${said.length}`])
     expect(wrong).toEqual([])
   }, 120_000)
 })

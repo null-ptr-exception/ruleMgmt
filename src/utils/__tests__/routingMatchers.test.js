@@ -26,6 +26,13 @@ describe('matchers in routing.yaml', () => {
     [[m('namespace', '=~', 'a|b')]],
     // One name, two ways to compare.
     [[m('region', '=~', 'eu.*'), m('region', '!=', 'eu-test')]],
+    // One name, the same way twice: every one must hold, and can (amtool 0.28.1 and
+    // prometheus-operator v0.95.1 take them).
+    [[m('env', '!=', 'dev'), m('env', '!=', 'test')]],
+    [[m('region', '=~', 'eu.*'), m('region', '=~', '.*-1')]],
+    [[m('region', '!~', 'eu.*'), m('region', '!~', 'us.*')]],
+    // = once beside other comparisons of the same name.
+    [[m('region', '=', 'eu'), m('region', '!=', 'us'), m('region', '=~', 'e.*')]],
     // Taken by Go, though JavaScript refuses it.
     [[m('x', '=~', '^*')]],
     [[]],
@@ -47,8 +54,9 @@ describe('matchers in routing.yaml', () => {
     [['region=a'], 'matchers[0]: must be a map with name, matchType and value'],
     ['region=a', 'matchers: must be a list of { name, matchType, value }'],
     [[m('severity', '=', 'critical')], 'matchers[0]: severity is a label of the table: each cell already says its value'],
-    [[m('region', '=', 'eu'), m('region', '=', 'us')], 'matchers[1]: region= is written twice (matchers[0] too)'],
-    [[m('region', '=~', 'eu.*'), m('region', '=~', '.*-1')], 'matchers[1]: region=~ is written twice (matchers[0] too): an alert has one value — write it as one regex'],
+    // Two = on one label: an alert has one value of it.
+    [[m('region', '=', 'eu'), m('region', '=', 'us')], 'matchers[1]: region= is written twice (matchers[0] too): an alert has one value of region, so region="eu" and region="us" never both hold and no alert would reach the table'],
+    [[m('region', '=', 'eu'), m('env', '!=', 'dev'), m('region', '=', 'eu')], 'matchers[2]: region="eu" is written twice (matchers[0] too): keep one'],
     [[m('region', '=~', '(?=eu)eu.*')], 'matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: invalid or unsupported Perl syntax: `(?=`'],
     [[m('region', '!~', 'a{1001}')], 'matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: invalid repeat count: `{1001}`'],
     [[m('region', '=~', '\\1')], 'matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: invalid escape sequence: `\\1`'],

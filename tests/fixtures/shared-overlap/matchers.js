@@ -35,6 +35,13 @@ export const SCENARIOS = [
   { what: 'plain alternatives of non-ASCII text and = of another', a: { matchers: [m('region', '=~', '東京|大阪')] }, b: { matchers: [m('region', '=', '福岡')] }, amtool: false, said: false },
   { what: 'plain alternatives of non-ASCII text and = of one of them', a: { matchers: [m('region', '=~', '東京|大阪')] }, b: { matchers: [m('region', '=', '大阪')] }, amtool: true, said: true },
   { what: 'a regex of non-ASCII text: not run, counted', a: { matchers: [m('region', '=~', '東京.*')] }, b: { matchers: [m('region', '=', '福岡')] }, amtool: false, said: true },
+  // One label in several conditions (Alertmanager takes them, and all must hold).
+  { what: '!= twice and = of one of them', a: { matchers: [m('env', '!=', 'dev'), m('env', '!=', 'test')] }, b: { matchers: [m('env', '=', 'test')] }, amtool: false, said: false },
+  { what: '!= twice and = of another', a: { matchers: [m('env', '!=', 'dev'), m('env', '!=', 'test')] }, b: { matchers: [m('env', '=', 'prod')] }, amtool: true, said: true },
+  { what: '=~ twice and = of a value only one takes', a: { matchers: [m('region', '=~', 'eu|us'), m('region', '=~', 'us|asia')] }, b: { matchers: [m('region', '=', 'eu')] }, amtool: false, said: false },
+  { what: '=~ twice and = of a value both take', a: { matchers: [m('region', '=~', 'eu|us'), m('region', '=~', 'us|asia')] }, b: { matchers: [m('region', '=', 'us')] }, amtool: true, said: true },
+  { what: '!~ twice and plain alternatives one of which is left', a: { matchers: [m('region', '!~', 'eu|us'), m('region', '!~', 'asia')] }, b: { matchers: [m('region', '=~', 'apac|asia')] }, amtool: true, said: true },
+  { what: '!~ twice and plain alternatives none of which is left', a: { matchers: [m('region', '!~', 'eu|us'), m('region', '!~', 'asia')] }, b: { matchers: [m('region', '=~', 'asia|us')] }, amtool: false, said: false },
   { what: 'a matcher and the other\'s table label', a: { matchers: [m('team', '=', 'db')] }, b: { labels: { ...SEV, team: ['web'] }, cell: { severity: 'critical', team: 'web' } }, amtool: false, said: false },
 ]
 

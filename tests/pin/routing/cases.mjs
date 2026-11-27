@@ -93,6 +93,8 @@ export const CASES = [
   { id: 'matchers-go-refuses', target: 'A', text: `matchers:\n  - { name: region, matchType: '=~', value: '(?=eu)eu.*' }\n${BASE.A}` },
   { id: 'matchers-repeat-too-big', target: 'A', text: `matchers:\n  - { name: region, matchType: '!~', value: 'a{1001}' }\n${BASE.A}` },
   { id: 'matchers-table-label', target: 'A', text: `matchers:\n  - { name: severity, matchType: '=', value: critical }\n${BASE.A}` },
+  // != twice on one label: both must hold, and can
+  { id: 'matchers-ne-twice', target: 'A', text: `matchers:\n  - { name: env, matchType: '!=', value: dev }\n  - { name: env, matchType: '!=', value: test }\n${BASE.A}` },
   { id: 'matchers-twice', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: eu }\n  - { name: region, matchType: '=', value: us }\n${BASE.A}` },
   { id: 'matchers-type-unknown', target: 'A', text: `matchers:\n  - { name: region, matchType: '==', value: eu }\n${BASE.A}` },
   { id: 'matchers-value-number', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: 5 }\n${BASE.A}` },

@@ -155,7 +155,7 @@ test('a regex problem shows the value as typed, not the ) Alertmanager wraps it 
   await expect(section).toContainText('error parsing regexp: invalid escape sequence: `\\x4)`')
 })
 
-test('the same name and match type twice marks both of the second row, not its value', async ({ page, request }) => {
+test('two = on one label mark both of the second row, not its value; two != are taken', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: { matchers: [{ name: 'region', matchType: '=', value: 'eu' }], ...TABLE } } })
   await openRouting(page)
   await page.getByRole('button', { name: 'Add condition', exact: true }).click()
@@ -167,6 +167,14 @@ test('the same name and match type twice marks both of the second row, not its v
   await expect(page.getByLabel('Condition 2 value')).not.toHaveAttribute('aria-invalid')
   await page.getByLabel('Condition 2 match type').selectOption('!=')
   await expect(page.getByLabel('Condition 2 match type')).not.toHaveAttribute('aria-invalid')
+  // Two != on one label both hold (region is neither eu nor us): taken.
+  await page.getByLabel('Condition 1 match type').selectOption('!=')
+  await expect(page.getByTestId('routing-matchers')).not.toContainText('written twice')
+  await expect(page.getByLabel('Condition 1 match type')).not.toHaveAttribute('aria-invalid')
+  await expect(page.getByLabel('Condition 2 match type')).not.toHaveAttribute('aria-invalid')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
+  expect((await saved(request)).matchers).toEqual([{ name: 'region', matchType: '!=', value: 'eu' }, { name: 'region', matchType: '!=', value: 'us' }])
 })
 
 test('a label named as a condition is warned of in the Labels dialog, before Apply', async ({ page, request }) => {

@@ -420,6 +420,18 @@ matchers-table-label	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1
 matchers-table-label	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   matchers[0]: severity is a label of the table: each cell already says its value — a	
 matchers-table-label	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
 matchers-table-label	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
+matchers-ne-twice	A	get	stale	200	-	no	-	ok	renders	0	1	differs	errors=0 stale=true warnings=0	
+matchers-ne-twice	A	put-text	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-ne-twice	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
+matchers-ne-twice	A	shared-get	not-seen	200	-	no	-	ok	renders	0	1	differs	exists=true errors=0 uses=- overlaps=0 stale=false unreadable=false	
+matchers-ne-twice	A	shared-put	ok	200	-	no	-	ok	renders	0	1	differs	written=2	
+matchers-ne-twice	A	regenerate	ok	200	-	no	deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	regenerated=yes failed=-	
+matchers-ne-twice	A	sync	ok	200	-	no	deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	ok	renders	0	1	routes	-	
+matchers-ne-twice	A	commit	refused	409	deployments/t/a	no	-	ok	renders	0	1	differs	routing-stale	
+matchers-ne-twice	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
+matchers-ne-twice	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: templates/alertmanagerconfig.yaml is not what routing.yaml generates now.   routing.yaml or a shared config it	
+matchers-ne-twice	A	check-repo	refused	exit 1	deployments/t/a/templates/alertmanagerconfig.yaml	no	-	ok	renders	0	1	differs	refuse:routing.stale	
+matchers-ne-twice	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
 matchers-twice	A	get	listed	200	-	no	-	ok	renders	0	1	differs	errors=1 stale=true warnings=0	
 matchers-twice	A	put-text	refused	400	routing.yaml	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
 matchers-twice	A	delete	ok	200	-	no	deployments/t/a/routing.yaml,deployments/t/a/templates/alertmanagerconfig.yaml,deployments/t/b/routing.yaml,deployments/t/b/templates/alertmanagerconfig.yaml	none	renders	0	0	none	-	
@@ -429,7 +441,7 @@ matchers-twice	A	regenerate	ok	200	-	no	-	ok	renders	0	1	differs	regenerated=no 
 matchers-twice	A	sync	refused	400	deployments/t/a	no	-	ok	renders	0	1	differs	-	refuses-what-tool-accepts
 matchers-twice	A	commit	refused-other	409	-	no	-	ok	renders	0	1	differs	-	
 matchers-twice	A	preview	ok	200	-	no	-	ok	renders	0	1	differs	amc=1	
-matchers-twice	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   matchers[1]: region= is written twice (matchers[0] too): an alert has one value — w	
+matchers-twice	A	check-deployment	refused	exit 1	routing.yaml	no	-	ok	renders	0	1	differs	Routing: routing.yaml has problems   matchers[1]: region= is written twice (matchers[0] too): an alert has one value of	
 matchers-twice	A	check-repo	refused	exit 1	deployments/t/a/routing.yaml	no	-	ok	renders	0	1	differs	refuse:routing.problem	
 matchers-twice	A	schema	ok	valid	-	no	-	ok	renders	0	1	differs	-	
 matchers-type-unknown	A	get	listed	200	-	no	-	crd-fails	renders	0	1	differs	errors=1 stale=true warnings=0	

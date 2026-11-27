@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { performance } from 'node:perf_hooks'
 import { goRegexpProblem, regexpProblemText, literalAlternatives, GO_UNICODE_SCRIPTS } from '../goRegexp.js'
 import { SYNTAX, LIMITS } from '../../../tests/fixtures/go-regexp/cases.js'
 
@@ -74,5 +75,14 @@ describe('plain text alternatives, told without running the regex', () => {
 
   it.each(['eu.*', '(?i)db', 'db\\.x', 'a{2}', '[ab]', '^db', 'd+', '(db)', 'a{', '(?=x)', '東京.*', '東京|大阪+', '(?i)東京', '\\x{6771}', 'a\ud800', 'a]b'])('%j is not told', value => {
     expect(literalAlternatives(value)).toBeNull()
+  })
+
+  // Regex syntax says it is not plain text before any parse: \pL 25,458
+  // times took about 0.4 s to parse, for an answer known from its first \.
+  it('answers a long regex at once, without parsing it', () => {
+    const value = '\\pL'.repeat(25458)
+    const start = performance.now()
+    expect(literalAlternatives(value)).toBeNull()
+    expect(performance.now() - start).toBeLessThan(100)
   })
 })

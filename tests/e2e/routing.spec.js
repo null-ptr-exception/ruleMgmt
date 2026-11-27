@@ -617,6 +617,34 @@ test('a groupBy name typed without Enter is saved, and one the save would refuse
   await expect(page.getByTestId('routing-defaults')).toContainText('groupBy has "host-name", which is not a label name')
 })
 
+// A name typed and not entered is an unsaved edit, as a timing value typed
+// is: leaving the page or the deployment asks first.
+for (const [what, field, text] of [['a timing value', 'default groupWait', '10s'], ['a groupBy name not entered', 'default groupBy', 'instance']]) {
+  test(`${what} typed on a saved page is asked about before leaving`, async ({ page, request }) => {
+    await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+    await openRouting(page)
+    await page.getByLabel(field, { exact: true }).fill(text)
+    const asked = []
+    page.on('dialog', d => { asked.push(d.type()); d.accept() })
+    await page.reload()
+    expect(asked).toEqual(['beforeunload'])
+
+    await openRouting(page)
+    await page.getByLabel(field, { exact: true }).fill(text)
+    await selectInTree(page, OTHER)
+    const discard = page.locator('.ant-modal-confirm').filter({ hasText: 'Discard unsaved changes?' })
+    await expect(discard).toBeVisible()
+    // Discarded, it is gone: back on the deployment, nothing is typed or kept.
+    await discard.getByRole('button', { name: 'Discard' }).click()
+    await expect(page.getByText(`${OTHER} / Routing`)).toBeVisible()
+    await selectInTree(page, FOLDER)
+    await expect(page.getByText(`${FOLDER} / Routing`)).toBeVisible()
+    await expect(page.getByLabel(field, { exact: true })).toHaveValue('')
+    await expect(page.getByRole('group', { name: 'default groupBy names' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+}
+
 test('groupBy names are taken off with the keyboard alone', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, defaults: { groupBy: ['alertname', 'instance'] },
     cells: [{ ...TABLE.cells[0], groupBy: ['alertname'] }] } } })

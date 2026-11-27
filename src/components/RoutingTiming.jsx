@@ -61,6 +61,8 @@ export function usePendingNames() {
       // A field's typing: the page asks again whether anything is pending.
       touch: () => setTick(t => t + 1),
       any: () => [...entries.values()].some(e => e.current.draft.trim() !== ''),
+      // Every name typed is let go: the page shows the file as it is again.
+      clear: () => { for (const e of entries.values()) if (e.current.draft) e.current.clear() },
       /**
        * Each pending name added to its list in `routing`, as Enter adds it;
        * one already listed is no change. One the save would refuse is
@@ -112,7 +114,7 @@ export function GroupByField({ value, placeholder, onChange, readOnly, label, cu
   const names = value || []
   const pending = useContext(PendingNames)
   const entry = useRef(null)
-  entry.current = { label, draft, current, put, clear: () => { setDraft(''); setWhy(null) }, refuse: setWhy }
+  entry.current = { label, draft, current, put, clear: () => { setDraft(''); setWhy(null); entry.current = { ...entry.current, draft: '' } }, refuse: setWhy }
   useEffect(() => {
     if (!pending || !current || !put) return
     const key = {}

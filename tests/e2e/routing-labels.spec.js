@@ -155,6 +155,9 @@ test.describe('routing labels changed after set-up (#94)', () => {
     await expect(conflicts).toHaveCount(1)
     await expect(conflicts).toContainText('severity=critical · team=db')
     await expect(conflicts).toContainText('groupBy [alertname, instance]')
+    // A screen reader hears what each option keeps, not only which it is.
+    await expect(page.getByRole('radio', { name: 'severity=critical · team=db: keep env=dev' })).toHaveAccessibleDescription('db-email (groupBy [alertname, instance], repeatInterval 1h)')
+    await expect(page.getByRole('radio', { name: 'severity=critical · team=db: keep env=prod' })).toHaveAccessibleDescription('db-email (repeatInterval 1h)')
     await page.getByLabel('severity=critical · team=db: keep env=dev').check()
     await page.getByRole('button', { name: 'Keep these' }).click()
     await page.getByRole('button', { name: 'Save' }).click()

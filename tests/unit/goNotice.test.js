@@ -6,7 +6,8 @@ import fs from 'fs'
 // BSD licence, whose terms are that its notice is kept as it is. The sha256
 // is that of https://raw.githubusercontent.com/golang/go/go1.23.7/LICENSE.
 const GO_LICENSE_SHA256 = '2d36597f7117c38b006835ae7f537487207d8ec407aa9d9980794b2030cbc067'
-const read = file => fs.readFileSync(new URL(`../../${file}`, import.meta.url), 'utf-8')
+// As committed (LF), also in a checkout that writes CRLF (core.autocrlf).
+const read = file => fs.readFileSync(new URL(`../../${file}`, import.meta.url), 'utf-8').replace(/\r\n/g, '\n')
 
 describe('Go\'s notice with the code ported from it', () => {
   it('public/THIRD_PARTY_NOTICES.md has go1.23.7\'s LICENSE byte for byte', () => {

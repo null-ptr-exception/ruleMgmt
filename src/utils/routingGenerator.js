@@ -326,7 +326,8 @@ export function checkRouting(routing, { shared = null } = {}) {
   }
   if (configsOk) errors.push(...sharedRefProblems(r, shared, named))
   if (Array.isArray(r.matchers) && !shape.some(m => m.startsWith('matchers:'))) {
-    matchersProblems(r.matchers, Object.keys(labels)).forEach((why, i) => {
+    // The names hold even when a label's values are wrong.
+    matchersProblems(r.matchers, isMap(r.labels) ? Object.keys(r.labels) : []).forEach((why, i) => {
       if (why && !named(`matchers[${i}]`)) errors.push(`matchers[${i}]: ${why}`)
     })
   }

@@ -64,6 +64,13 @@ describe('matchers in routing.yaml', () => {
     expect(checkRouting(table([m('region', '=~', '(eu')]))).toEqual(['matchers[0]: value is a regex Alertmanager refuses — error parsing regexp: missing closing ): `(eu`'])
   })
 
+  it('a matcher on a table label is named while another label\'s values are wrong', () => {
+    const r = { ...table([m('severity', '=', 'critical')]), labels: { severity: ['critical'], team: 123 } }
+    const errors = checkRouting(r)
+    expect(errors).toContainEqual(expect.stringMatching(/^matchers\[0\]: severity is a label of the table/))
+    expect(errors).toContainEqual(expect.stringMatching(/^labels\.team: /))
+  })
+
   it('a regex is not checked for = and !=: the value is text', () => {
     expect(checkRouting(table([m('region', '=', '(?=x')]))).toEqual([])
   })

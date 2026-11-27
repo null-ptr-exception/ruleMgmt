@@ -88,9 +88,26 @@ export function promisedSpec(doc, shared) {
 // alternative with its operators taken out: `eu|eu-.*` gives `eu|eu-.*`,
 // then `eu`), and a value none says — every combination of these, so
 // region=eu is tried with env=dev and with no env, and a condition lost on
-// the way changes some route. At most 48 combinations, with as many of the
-// table's as leave about 48 sets. Which of them a matcher takes is amtool's
-// to say.
+// the way changes some route. When there are more than 48 combinations
+// (five or more matcher labels), a set where every label meets its
+// conditions, and that set with each label alone taking each of its other
+// values: a lost condition still changes some route. The table's labels
+// are cut to leave about 48 sets. Which of them a matcher takes is
+// amtool's to say; only which sets are tried is chosen here.
+// Whether a value of `name` (undefined: the label absent, read as "") meets
+// every matcher on it — only to choose a set to try. A regex is read with
+// JavaScript's RegExp, close enough for that; one it cannot read counts as met.
+function meetsAll(matchers, name, x) {
+  const value = x ?? ''
+  return matchers.filter(m => isMap(m) && m.name === name && typeof m.value === 'string').every(m => {
+    if (m.matchType === '=') return value === m.value
+    if (m.matchType === '!=') return value !== m.value
+    let re
+    try { re = new RegExp(`^(?:${m.value})$`, 'u') } catch { return true }
+    return m.matchType === '=~' ? re.test(value) : !re.test(value)
+  })
+}
+
 function labelSets(doc) {
   let sets = [{}]
   for (const [name, values] of Object.entries(doc.labels)) {
@@ -107,9 +124,20 @@ function labelSets(doc) {
   }
   if (said.size) {
     const values = [...said].map(([name, vs]) => [name, [undefined, ...new Set([...vs.filter(v => v && v.length < 64), 'none-of-these'])]])
+    const put = (v, name, x) => {
+      const { [name]: _, ...rest } = v
+      return x === undefined ? rest : { ...rest, [name]: x }
+    }
     let variants = [{}]
-    for (const [name, vs] of values) variants = variants.flatMap(v => vs.map(x => (x === undefined ? v : { ...v, [name]: x })))
-    variants = variants.slice(0, 48)
+    for (const [name, vs] of values) variants = variants.flatMap(v => vs.map(x => put(v, name, x)))
+    if (variants.length > 48) {
+      // By index: a label absent (undefined) may be what meets them.
+      const base = values.reduce((v, [name, vs]) => {
+        const i = vs.findIndex(x => meetsAll(doc.matchers, name, x))
+        return put(v, name, vs[i >= 0 ? i : 1])
+      }, {})
+      variants = [base, ...values.flatMap(([name, vs]) => vs.filter(x => x !== base[name]).map(x => put(base, name, x)))]
+    }
     sets = sets.slice(0, Math.max(1, Math.floor(48 / variants.length))).flatMap(s => variants.map(v => ({ ...s, ...v })))
   }
   return sets.filter(s => Object.keys(s).every(k => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k)))

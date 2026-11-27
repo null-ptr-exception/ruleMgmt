@@ -13,6 +13,15 @@ const TYPE_NAMES = {
   '!~': '!~ does not match regex',
 }
 
+// Alertmanager reads a label an alert lacks as "": an empty value takes the
+// alerts without it for = and =~, those with it for != and !~.
+const EMPTY_HINT = {
+  '=': '(empty: no such label)',
+  '=~': '(empty: no such label)',
+  '!=': '(empty: has the label)',
+  '!~': '(empty: has the label)',
+}
+
 // The fields of a row a problem of matchersProblems is about.
 function fieldsOf(why) {
   if (!why) return new Set()
@@ -50,7 +59,7 @@ export default function RoutingMatchers({ routing, onChange, readOnly }) {
       <Text strong style={{ fontSize: 13 }}>Only these alerts</Text>
       <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
         {list.length
-          ? 'An alert must match every condition to reach a cell; any other goes on to the platform\'s other routes. An empty value is a label the alert does not have.'
+          ? 'An alert must match every condition to reach a cell; any other goes on to the platform\'s other routes. An alert without a label has it as an empty value: region="" takes an alert without the label, region!="" one with it.'
           : 'Every alert reaches the table. Add a condition to take only some, e.g. region =~ eu|eu-.*'}
       </Text>
       {list.map((m, i) => {
@@ -73,7 +82,7 @@ export default function RoutingMatchers({ routing, onChange, readOnly }) {
                 style={{ height: 24, fontSize: 12, borderRadius: 4, border: `1px solid ${on.has('matchType') ? '#ff4d4f' : '#d9d9d9'}`, background: readOnly ? '#f5f5f5' : '#fff' }}>
                 {MATCH_TYPES.map(t => <option key={t} value={t}>{TYPE_NAMES[t]}</option>)}
               </select>
-              <Input size="small" style={{ flex: 1 }} aria-label={`Condition ${n} value`} placeholder="(empty: no such label)"
+              <Input size="small" style={{ flex: 1 }} aria-label={`Condition ${n} value`} placeholder={EMPTY_HINT[m.matchType] ?? EMPTY_HINT['=']}
                 value={m.value ?? ''} disabled={readOnly} {...mark('value')}
                 onChange={e => change(i, 'value', e.target.value)} />
               {!readOnly && (

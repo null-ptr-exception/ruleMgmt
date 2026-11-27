@@ -89,12 +89,14 @@ function labelSets(doc) {
 }
 
 const byName = rs => [...rs].sort((a, b) => (a.name < b.name ? -1 : 1))
-// Every route of an Alertmanager config that says group_by, by its matchers.
+// Every route of an Alertmanager config that says group_by, by its
+// matchers — in any order: a cell's match may name its labels in another
+// order than `labels`, and it is the same route.
 const groupings = config => {
   const out = []
   const walk = (r, at) => {
     if (r.group_by !== undefined) out.push([at, r.group_by])
-    ;(r.routes || []).forEach(c => walk(c, `${at}/${(c.matchers || []).join(',')}`))
+    ;(r.routes || []).forEach(c => walk(c, `${at}/${[...(c.matchers || [])].sort().join(',')}`))
   }
   walk(config.route, '')
   return out

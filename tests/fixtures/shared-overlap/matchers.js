@@ -32,6 +32,9 @@ export const SCENARIOS = [
   // A value outside the BMP against a regex that matches the empty value:
   // once answered wrong by running the regex in JavaScript.
   { what: 'a value outside the BMP and !~ of a regex', a: { labels: { ...SEV, team: ['db😀'] }, cell: { severity: 'critical', team: 'db😀' } }, b: { matchers: [m('team', '!~', 'x?')] }, amtool: true, said: true },
+  { what: 'plain alternatives of non-ASCII text and = of another', a: { matchers: [m('region', '=~', '東京|大阪')] }, b: { matchers: [m('region', '=', '福岡')] }, amtool: false, said: false },
+  { what: 'plain alternatives of non-ASCII text and = of one of them', a: { matchers: [m('region', '=~', '東京|大阪')] }, b: { matchers: [m('region', '=', '大阪')] }, amtool: true, said: true },
+  { what: 'a regex of non-ASCII text: not run, counted', a: { matchers: [m('region', '=~', '東京.*')] }, b: { matchers: [m('region', '=', '福岡')] }, amtool: false, said: true },
   { what: 'a matcher and the other\'s table label', a: { matchers: [m('team', '=', 'db')] }, b: { labels: { ...SEV, team: ['web'] }, cell: { severity: 'critical', team: 'web' } }, amtool: false, said: false },
 ]
 

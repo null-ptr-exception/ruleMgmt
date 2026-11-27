@@ -1158,9 +1158,10 @@ export function regexpProblemText(value) {
   return `error parsing regexp: ${err.code}: \`${expr}\``
 }
 
-// Text that is the same character in Go's regexp syntax: no operator, and
-// none that `{` could start.
-const PLAIN = /^[A-Za-z0-9 _\-:/@,;=!<>'"%&~`#]*$/
+// A character Go's regexp.QuoteMeta escapes (regexp.go's `special`): text
+// without one is the text itself, whatever its script. Without \, ( or [,
+// every | is one between alternatives.
+const SPECIAL = /[\\.+*?()|[\]{}^$]/
 
 /**
  * The label values a regex value matches when it is plain text, or plain
@@ -1171,5 +1172,5 @@ const PLAIN = /^[A-Za-z0-9 _\-:/@,;=!<>'"%&~`#]*$/
 export function literalAlternatives(value) {
   if (typeof value !== 'string' || goRegexpProblem(value)) return null
   const parts = value.split('|')
-  return parts.every(part => PLAIN.test(part)) ? new Set(parts) : null
+  return parts.every(part => !SPECIAL.test(part)) ? new Set(parts) : null
 }

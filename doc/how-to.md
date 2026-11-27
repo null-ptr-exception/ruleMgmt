@@ -1029,7 +1029,8 @@ name. Open **Routing** → **Shared configs**:
   (a critical `team=db` alert reaches both); two cells with `team: db` and
   `team: web` cannot. A table's own conditions (*Only these alerts*) count
   for each of its cells, compared without running a regex: `=`, `!=`, and a
-  regex that is plain text or plain alternatives (`=~"eu|us"`). So
+  regex that is plain text or plain alternatives (`=~"eu|us"`, `=~"東京|大阪"`:
+  none of `\.+*?()[]{}^$`). So
   `region="asia"` in one and `region="eu"`, `region!="asia"`,
   `region=~"eu|us"` or a cell with `region: eu` in the other cannot meet.
   Any other regex (`eu.*`, `(?i)eu`) is taken to allow every value: such

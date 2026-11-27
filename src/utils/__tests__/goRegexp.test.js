@@ -64,11 +64,15 @@ describe('plain text alternatives, told without running the regex', () => {
     ['db|', ['db', '']],
     ['', ['']],
     ['a-b|c_d|e:f', ['a-b', 'c_d', 'e:f']],
+    // no character Go's regexp.QuoteMeta escapes: the text is the value
+    ['東京|大阪', ['東京', '大阪']],
+    ['café|naïve', ['café', 'naïve']],
+    ['db😀|a b#c', ['db😀', 'a b#c']],
   ])('%j is %j', (value, values) => {
     expect([...literalAlternatives(value)]).toEqual(values)
   })
 
-  it.each(['eu.*', '(?i)db', 'db\\.x', 'a{2}', '[ab]', '^db', 'd+', '(db)', 'a{', '(?=x)'])('%j is not told', value => {
+  it.each(['eu.*', '(?i)db', 'db\\.x', 'a{2}', '[ab]', '^db', 'd+', '(db)', 'a{', '(?=x)', '東京.*', '東京|大阪+', '(?i)東京', '\\x{6771}', 'a\ud800', 'a]b'])('%j is not told', value => {
     expect(literalAlternatives(value)).toBeNull()
   })
 })

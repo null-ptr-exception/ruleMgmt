@@ -75,6 +75,8 @@ export const CASES = [
   { id: 'groupby', target: 'A', text: R({ defaults: 'defaults: { groupWait: 30s, groupBy: [alertname] }\n', cells: CELLS.replace('    repeatInterval: 1h\n', '    groupBy: [alertname, instance]\n    repeatInterval: 1h\n') }),
     json: { ...okJ, defaults: { groupWait: '30s', groupBy: ['alertname'] }, cells: [{ ...okJ.cells[0], groupBy: ['alertname', 'instance'] }, okJ.cells[1]] } },
   { id: 'groupby-saved', target: 'A', saved: true, text: R({ defaults: 'defaults: { groupWait: 30s, groupBy: [alertname] }\n', cells: CELLS.replace('    repeatInterval: 1h\n', '    groupBy: [alertname, instance]\n    repeatInterval: 1h\n') }) },
+  // a cell's match written in another order than labels: the same route
+  { id: 'groupby-match-order', target: 'A', text: R({ defaults: 'defaults: { groupBy: [alertname] }\n', cells: 'cells:\n  - match: { team: db, severity: critical }\n    configs: [ops]\n    groupBy: [alertname, instance]\n' }) },
   { id: 'groupby-every-label', target: 'A', text: ONE('{ type: email, to: db@example.com }', "    groupBy: ['...']\n") },
   { id: 'groupby-twice', target: 'A', text: ONE('{ type: email, to: db@example.com }', '    groupBy: [alertname, alertname]\n') },
   { id: 'groupby-every-label-and-more', target: 'A', text: ONE('{ type: email, to: db@example.com }', "    groupBy: ['...', alertname]\n") },

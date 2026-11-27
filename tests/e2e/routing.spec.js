@@ -655,6 +655,21 @@ test('a groupBy name not entered is asked about before opening the shared config
   await expect(page.locator('.ant-modal-confirm').filter({ hasText: 'Discard unsaved changes?' })).toBeVisible()
 })
 
+// Only a name already listed typed: nothing to save, so nothing is written.
+test('Save with only an already-listed groupBy name typed writes nothing', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, defaults: { groupBy: ['alertname'] } } } })
+  await openRouting(page)
+  const puts = []
+  page.on('request', r => { if (r.method() === 'PUT' && r.url().includes('/routing')) puts.push(r.url()) })
+  const field = page.getByLabel('default groupBy', { exact: true })
+  await field.fill('alertname')
+  await page.getByRole('button', { name: 'Save' }).click()
+  await expect(field).toHaveValue('')
+  await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled()
+  await expect(page.getByText(/Saved at/)).toHaveCount(0)
+  expect(puts).toEqual([])
+})
+
 test('groupBy names are taken off with the keyboard alone', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, defaults: { groupBy: ['alertname', 'instance'] },
     cells: [{ ...TABLE.cells[0], groupBy: ['alertname'] }] } } })

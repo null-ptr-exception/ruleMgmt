@@ -312,6 +312,8 @@ export default function RoutingView() {
       typed = taken.routing !== routing
       if (typed) { current = taken.routing; edit(current) }
     }
+    // Only a name already listed was typed: nothing to save.
+    if (!dirty && !typed && !loaded?.stale) return true
     // Nothing edited but the resource is out of date: send the file as it
     // is, so its comments stay.
     const body = dirty || typed ? toSave(current) : loaded.text

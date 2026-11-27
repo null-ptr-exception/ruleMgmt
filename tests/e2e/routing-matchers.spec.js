@@ -170,12 +170,20 @@ test('a label named as a condition is warned of in the Labels dialog, before App
   await expect(dialog.getByTestId('labels-condition-clash')).toContainText('region is also a condition')
 })
 
-test('an empty value says it is a label the alert does not have, and is saved as ""', async ({ page, request }) => {
+test('an empty value says what it takes for each match type, and is saved as ""', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
   await openRouting(page)
   await page.getByRole('button', { name: 'Add condition' }).click()
   await page.getByLabel('Condition 1 label name').fill('region')
-  await expect(page.getByLabel('Condition 1 value')).toHaveAttribute('placeholder', '(empty: no such label)')
+  // As amtool 0.28.1 routes them: region="" and region=~"" take an alert
+  // without region; region!="" and region!~"" one with it.
+  for (const [type, hint] of [['!=', '(empty: has the label)'], ['!~', '(empty: has the label)'], ['=~', '(empty: no such label)'], ['=', '(empty: no such label)']]) {
+    await page.getByLabel('Condition 1 match type').selectOption(type)
+    await expect(page.getByLabel('Condition 1 value')).toHaveAttribute('placeholder', hint)
+  }
+  const hint = page.getByTestId('routing-matchers')
+  await expect(hint).toContainText('region="" takes an alert without the label, region!="" one with it')
+  await expect(hint).not.toContainText('An empty value is a label the alert does not have')
   await page.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText(/Saved at/)).toBeVisible({ timeout: 8000 })
   expect((await saved(request)).matchers).toEqual([{ name: 'region', matchType: '=', value: '' }])

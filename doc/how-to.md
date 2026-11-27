@@ -895,7 +895,9 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    name, how it is compared (`=` equals, `!=` is not, `=~` matches a regex,
    `!~` does not) and a value. An alert reaches a cell only when it matches
    every condition; any other goes on to the platform's other routes. An
-   empty value is a label the alert does not have. A regex is the whole
+   alert without a label has it as an empty value: `region=""` (and
+   `=~""`) takes alerts without `region`, `region!=""` (and `!~""`) those
+   with it; the field's hint says which. A regex is the whole
    value (`eu` does not match `eu-west`; `eu.*` does), as Alertmanager reads
    it. A condition the save would refuse — a name that is one of the
    table's labels, the same name and comparison twice, a regex Alertmanager

@@ -33,8 +33,23 @@ describe('the message the user sees', () => {
     ['a)', 'error parsing regexp: unexpected ): `a)`'],
     ['\\Qa.b', 'error parsing regexp: missing closing ): `\\Qa.b`'],
     ['a{1001}', 'error parsing regexp: invalid repeat count: `{1001}`'],
+    // Go reads the wrapping's ) as the escape's next character: only the value's part is shown
+    ['\\x4', 'error parsing regexp: invalid escape sequence: `\\x4`'],
+    ['\\x{4', 'error parsing regexp: invalid escape sequence: `\\x{4`'],
+    ['\\x', 'error parsing regexp: invalid escape sequence: `\\x`'],
+    // a ) the user wrote stays
+    ['x\\x4)', 'error parsing regexp: invalid escape sequence: `\\x4)`'],
+    ['[a)', 'error parsing regexp: missing closing ]: `[a)`'],
   ])('%s: about the value as written, in Go\'s words', (value, text) => {
     expect(regexpProblemText(value)).toBe(text)
+  })
+
+  it.each([
+    ['\\x4', 'error parsing regexp: invalid escape sequence: `\\x4)`'],
+    ['x\\x4)', 'error parsing regexp: invalid escape sequence: `\\x4)`'],
+    ['[a)', 'error parsing regexp: missing closing ]: `[a))$`'],
+  ])('%s: Go\'s own message keeps the wrapping it is about', (value, text) => {
+    expect(goRegexpProblem(value)).toBe(text)
   })
 
   it('is null for a value taken', () => {

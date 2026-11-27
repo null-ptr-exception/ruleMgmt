@@ -83,10 +83,14 @@ export function promisedSpec(doc, shared) {
 }
 
 // Every combination of the table's labels, and one with a value it does not
-// have; each also with the labels the table's matchers name: none of them,
-// and each given its matchers' values in turn (a regex's first alternative
-// with its operators taken out: `eu|eu-.*` gives `eu|eu-.*`, then `eu`),
-// then a value none says. Which of them a matcher takes is amtool's to say.
+// have; each also with the labels the table's matchers name, each varied on
+// its own: absent, each of its matchers' values (a regex's first
+// alternative with its operators taken out: `eu|eu-.*` gives `eu|eu-.*`,
+// then `eu`), and a value none says — every combination of these, so
+// region=eu is tried with env=dev and with no env, and a condition lost on
+// the way changes some route. At most 48 combinations, with as many of the
+// table's as leave about 48 sets. Which of them a matcher takes is amtool's
+// to say.
 function labelSets(doc) {
   let sets = [{}]
   for (const [name, values] of Object.entries(doc.labels)) {
@@ -102,10 +106,11 @@ function labelSets(doc) {
     said.get(m.name).push(m.value, m.value.split('|')[0].replace(/[^A-Za-z0-9_-]/g, ''))
   }
   if (said.size) {
-    const values = [...said].map(([name, vs]) => [name, [...new Set([...vs.filter(v => v && v.length < 64), 'none-of-these'])]])
-    const rounds = Math.max(...values.map(([, vs]) => vs.length))
-    const variants = [{}, ...Array.from({ length: rounds }, (_, k) => Object.fromEntries(values.map(([name, vs]) => [name, vs[k % vs.length]])))]
-    sets = sets.slice(0, 12).flatMap(s => variants.map(v => ({ ...s, ...v })))
+    const values = [...said].map(([name, vs]) => [name, [undefined, ...new Set([...vs.filter(v => v && v.length < 64), 'none-of-these'])]])
+    let variants = [{}]
+    for (const [name, vs] of values) variants = variants.flatMap(v => vs.map(x => (x === undefined ? v : { ...v, [name]: x })))
+    variants = variants.slice(0, 48)
+    sets = sets.slice(0, Math.max(1, Math.floor(48 / variants.length))).flatMap(s => variants.map(v => ({ ...s, ...v })))
   }
   return sets.filter(s => Object.keys(s).every(k => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k)))
 }

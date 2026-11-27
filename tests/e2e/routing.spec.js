@@ -645,6 +645,16 @@ for (const [what, field, text] of [['a timing value', 'default groupWait', '10s'
   })
 }
 
+// One the field cannot add when it is left (not a label name) stays typed:
+// still an unsaved edit.
+test('a groupBy name not entered is asked about before opening the shared configs', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  await page.getByLabel('default groupBy', { exact: true }).fill('host-name')
+  await page.getByRole('button', { name: 'Shared configs' }).click()
+  await expect(page.locator('.ant-modal-confirm').filter({ hasText: 'Discard unsaved changes?' })).toBeVisible()
+})
+
 test('groupBy names are taken off with the keyboard alone', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: { ...TABLE, defaults: { groupBy: ['alertname', 'instance'] },
     cells: [{ ...TABLE.cells[0], groupBy: ['alertname'] }] } } })

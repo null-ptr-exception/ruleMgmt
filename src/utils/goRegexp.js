@@ -1170,7 +1170,9 @@ const SPECIAL = /[\\.+*?()|[\]{}^$]/
  * which only a matcher could tell.
  */
 export function literalAlternatives(value) {
-  if (typeof value !== 'string' || goRegexpProblem(value)) return null
+  if (typeof value !== 'string') return null
   const parts = value.split('|')
-  return parts.every(part => !SPECIAL.test(part)) ? new Set(parts) : null
+  // Regex syntax first: such a value is not plain, and needs no parse.
+  if (parts.some(part => SPECIAL.test(part))) return null
+  return goRegexpProblem(value) ? null : new Set(parts)
 }

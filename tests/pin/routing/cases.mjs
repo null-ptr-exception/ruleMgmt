@@ -95,6 +95,8 @@ export const CASES = [
   { id: 'matchers-table-label', target: 'A', text: `matchers:\n  - { name: severity, matchType: '=', value: critical }\n${BASE.A}` },
   // != twice on one label: both must hold, and can
   { id: 'matchers-ne-twice', target: 'A', text: `matchers:\n  - { name: env, matchType: '!=', value: dev }\n  - { name: env, matchType: '!=', value: test }\n${BASE.A}` },
+  // five labels in conditions: more combinations than are tried, each condition still tried on its own
+  { id: 'matchers-five', target: 'A', text: `matchers:\n  - { name: r0, matchType: '=', value: a }\n  - { name: r1, matchType: '!=', value: b }\n  - { name: r2, matchType: '=~', value: 'c|d' }\n  - { name: r3, matchType: '!~', value: e }\n  - { name: r4, matchType: '=', value: prod }\n${BASE.A}` },
   { id: 'matchers-twice', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: eu }\n  - { name: region, matchType: '=', value: us }\n${BASE.A}` },
   { id: 'matchers-type-unknown', target: 'A', text: `matchers:\n  - { name: region, matchType: '==', value: eu }\n${BASE.A}` },
   { id: 'matchers-value-number', target: 'A', text: `matchers:\n  - { name: region, matchType: '=', value: 5 }\n${BASE.A}` },

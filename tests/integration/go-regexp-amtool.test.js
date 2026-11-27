@@ -7,8 +7,15 @@ import { execFileSync } from 'child_process'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { HAS_AMTOOL, amtoolTitle } from '../blind/harness.js'
+import { HAS_AMTOOL, AMTOOL_VERSION, amtoolTitle } from '../blind/harness.js'
 import { SYNTAX, LIMITS } from '../fixtures/go-regexp/cases.js'
+
+// The messages are 0.28.1's, its Go's (go1.23.7): another Go takes or words
+// some values otherwise (a newer one takes \p{ASCII}). So this runs only
+// with that amtool; HAS_AMTOOL alone is 0.28 or later.
+const REFERENCE = '0.28.1'
+const RUNS = HAS_AMTOOL && AMTOOL_VERSION === REFERENCE
+const title = name => (RUNS || !HAS_AMTOOL ? amtoolTitle(name) : `${name} [skipped: amtool ${AMTOOL_VERSION} is not ${REFERENCE}, whose messages the table holds — install the version in scripts/install-checkers.sh]`)
 
 // As prometheus-operator writes a matcher (Matcher.String, openMetricsEscape).
 const matcher = value => `x=~"${value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/"/g, '\\"')}"`
@@ -37,7 +44,7 @@ function amtoolSays(value) {
   })
 }
 
-describe.skipIf(!HAS_AMTOOL)(amtoolTitle('regex values against amtool 0.28.1'), () => {
+describe.skipIf(!RUNS)(title(`regex values against amtool ${REFERENCE}`), () => {
   const rows = [...SYNTAX, ...LIMITS]
   it('loads every value taken, in one config', () => {
     const taken = rows.filter(([, why]) => why === null).map(([v]) => v)

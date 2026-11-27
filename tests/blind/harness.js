@@ -195,6 +195,8 @@ export function amtoolStatus() {
 const AMTOOL = amtoolStatus()
 export const HAS_AMTOOL = AMTOOL.ok
 export const AMTOOL_SKIP_REASON = AMTOOL.why ?? null
+/** The amtool's version (`0.28.1`), or null when HAS_AMTOOL is false. */
+export const AMTOOL_VERSION = AMTOOL.version ?? null
 /** A test's title, saying why it is skipped when amtool cannot run it (the reporter shows titles, not logs). */
 export const amtoolTitle = title => (HAS_AMTOOL ? title : `${title} [skipped: ${AMTOOL_SKIP_REASON}]`)
 

@@ -56,6 +56,11 @@ export default function RoutingView() {
   const [view, setView] = useState(null)
   // groupBy names typed and not entered yet: Save takes them.
   const pending = usePendingNames()
+  // What is on screen is the file again: no edit, no name left typed.
+  function forgetEdits() {
+    setDirty(false)
+    pending.clear()
+  }
   // The repo's shared notification configs (#123): their own page, and what
   // a deployment's `{ shared: true }` stands for.
   const [showShared, setShowShared] = useSessionState('routing:shared', false)
@@ -86,13 +91,13 @@ export default function RoutingView() {
     if (state === null) {
       setLoaded({ none: true })
       setRouting(null)
-      setDirty(false)
+      forgetEdits()
       setAddedLabels([])
     } else if (state.error) {
       setLoaded({ error: state.error, file: state.file, unreadable: state.unreadable })
     } else {
       setLoaded(state)
-      setDirty(false)
+      forgetEdits()
       setAddedLabels([])
       // Only a file that passes the server's checks is edited here (#158):
       // the page never writes one that fails, so a failing file came from
@@ -136,12 +141,15 @@ export default function RoutingView() {
     if (selectedFolder) refreshFrozenSource(selectedFolder)
   }, [selectedFolder])
 
+  // An edit not saved yet: a change to the table, or a groupBy name typed
+  // and not entered (which Save would add).
+  const unsaved = dirty || pending.any()
   useEffect(() => {
-    if (!dirty || readOnly) return
+    if (!unsaved || readOnly) return
     const warn = e => { e.preventDefault(); e.returnValue = '' }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [dirty, readOnly])
+  }, [unsaved, readOnly])
 
   function confirm({ title, content, okText, danger = true, cancelText }) {
     return new Promise(resolve => {
@@ -164,8 +172,8 @@ export default function RoutingView() {
   async function openShared() {
     const waited = await afterSaveInFlight()
     if (waited === false) return
-    if (!waited && dirty && !readOnly && !(await confirmDiscardEdits())) return
-    setDirty(false)
+    if (!waited && unsaved && !readOnly && !(await confirmDiscardEdits())) return
+    forgetEdits()
     setShowShared(true)
   }
 
@@ -176,12 +184,12 @@ export default function RoutingView() {
       setSelectedChart(null)
       setRouting(null)
       setLoaded(null)
-      setDirty(false)
+      forgetEdits()
       return
     }
     const waited = await afterSaveInFlight()
     if (waited === false) return
-    if (!waited && dirty && !readOnly && !(await confirmDiscardEdits())) return
+    if (!waited && unsaved && !readOnly && !(await confirmDiscardEdits())) return
     setAddedLabels([])
     if (selection.path !== selectedFolder) {
       setLoaded(null)
@@ -189,7 +197,7 @@ export default function RoutingView() {
       setSaveStatus('')
       setView(null)
     }
-    setDirty(false)
+    forgetEdits()
     setSelectedFolder(selection.path)
     setSelectedChart(selection.chart)
     setFrozenSource(null)
@@ -352,7 +360,7 @@ export default function RoutingView() {
 
   async function handlePreview() {
     const folder = selectedFolder
-    if (dirty && !readOnly && !(await handleSave())) return
+    if (unsaved && !readOnly && !(await handleSave())) return
     if (shownFolder.current !== folder) return
     const result = await renderDeployment(selectedChart, deployment, selectedFolder)
     setPreview({ output: result.ok ? routingDocs(result.output) || 'No AlertmanagerConfig rendered' : `Error: ${result.error || 'Unknown error'}` })
@@ -362,7 +370,7 @@ export default function RoutingView() {
   // A routing.yaml on disk that fails the checks: only Remove is offered.
   const broken = !routing && !!loaded?.errors?.length
   const hasTable = routing && Object.keys(routing.labels).length > 0
-  const canSave = !readOnly && !saving && hasTable && (dirty || loaded?.stale || pending.any())
+  const canSave = !readOnly && !saving && hasTable && (unsaved || loaded?.stale)
   // Nothing is edited while a save is on its way (oneSaveAtATime).
   const locked = readOnly || saving
   const shownView = view || (routing && Object.keys(routing.labels).length >= 3 ? 'list' : 'grid')
@@ -514,7 +522,7 @@ export default function RoutingView() {
               {(saving || saveStatus) && <Text type="secondary" style={{ fontSize: 12 }}>{saving ? 'Saving…' : saveStatus}</Text>}
               <span style={{ flex: 1 }} />
               {isNew
-                ? <Button disabled={saving} onClick={() => { setRouting(null); setDirty(false) }}>Cancel</Button>
+                ? <Button disabled={saving} onClick={() => { setRouting(null); forgetEdits() }}>Cancel</Button>
                 : <Button danger icon={<DeleteOutlined />} disabled={locked} onClick={handleRemove}>Remove routing</Button>}
             </div>
           )}

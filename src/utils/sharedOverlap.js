@@ -19,6 +19,7 @@
 
 import { isSharedRef } from './routingSchema.js'
 import { checkRouting } from './routingGenerator.js'
+import { describeMatch } from './routingModel.js'
 
 const isMap = v => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isValue = v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
@@ -118,7 +119,7 @@ export function sharedCellOverlaps(users, shared = null) {
 }
 
 /** A match as said to a person: `severity=critical, team=db`. */
-export const matchText = match => Object.entries(match).map(([k, v]) => `${k}=${v}`).join(', ')
+export const matchText = match => describeMatch(match)
 
 /** One overlap as one line: `relay: shop/a (severity=critical), shop/b (…) and 3 more deployments`. */
 export function overlapText({ config, deployments, more }) {

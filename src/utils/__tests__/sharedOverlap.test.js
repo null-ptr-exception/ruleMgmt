@@ -42,6 +42,12 @@ describe('sharedCellOverlaps', () => {
     expect(overlapText(got.overlaps[0])).toBe('relay: shop/a (severity=critical), shop/b (severity=critical, team=db) — each of these cells can get an alert a cell of another of these deployments gets too')
   })
 
+  it('quotes a value with a comma or a space, so the cells read apart (#222)', () => {
+    const labels = { team: ['a; b', 'x,y'] }
+    const got = run([one('shop/a', labels, { team: 'x,y' }), one('shop/b', labels, { team: 'x,y' })])
+    expect(overlapText(got.overlaps[0])).toBe('relay: shop/a (team="x,y"), shop/b (team="x,y") — each of these cells can get an alert a cell of another of these deployments gets too')
+  })
+
   it('says nothing when a label both have holds two values, or the cells pick another config', () => {
     expect(run([one('shop/a', SEV_TEAM, { severity: 'critical', team: 'db' }), one('shop/b', SEV_TEAM, { severity: 'critical', team: 'web' })]).overlaps).toEqual([])
     expect(run([one('shop/a', SEV, { severity: 'critical' }), one('shop/b', SEV, { severity: 'critical' }, ['other'], { other: { shared: true } })]).overlaps).toEqual([])

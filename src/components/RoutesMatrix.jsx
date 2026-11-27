@@ -1,11 +1,11 @@
 import { Select, Table, Typography } from 'antd'
-import { gridOf, gridMatch, cellAt, setCellConfigs } from '../utils/routingModel'
+import { gridOf, gridMatch, cellAt, setCellConfigs, describeMatch, cellTestId } from '../utils/routingModel'
 import FillButton from './FillButton'
 import { CellTiming } from './RoutingTiming'
 
 const { Text } = Typography
 
-export const describeMatch = match => Object.entries(match).map(([k, v]) => `${k}=${v}`).join(', ')
+export { describeMatch }
 
 /**
  * One cell: who it notifies, and — when it notifies anyone — its timing.
@@ -15,7 +15,7 @@ export function CellEditor({ routing, match, onChange, readOnly }) {
   const cell = cellAt(routing, match)
   const describe = describeMatch(match)
   return (
-    <div data-testid={`cell-${Object.values(match).join('-')}`} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+    <div data-testid={cellTestId(match)} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
       <Select
         mode="multiple"
         size="small"
@@ -60,7 +60,7 @@ export default function RoutesMatrix({ routing, onChange, readOnly }) {
       title: (
         <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
           <span>{grid.columnLabel}=<b>{value}</b></span>
-          {fill({ [grid.columnLabel]: value }, `${grid.columnLabel}=${value}`)}
+          {fill({ [grid.columnLabel]: value }, describeMatch({ [grid.columnLabel]: value }))}
         </span>
       ),
       key: `col:${value}`,

@@ -865,8 +865,11 @@ kept in its `routing.yaml` next to `values.yaml` (the format is in
    is a cell of the table. Type a value and press Enter, one at a time. A
    value may hold spaces, commas and other symbols: `db team`, `a,b` and
    `say "hi"` are each one value. The spaces around it are removed, and a
-   value already listed is not added again. A newline or a tab cannot be
-   typed here: write such a value in `routing.yaml` by hand.
+   value already listed is not added again. A value with `, ` in it is
+   added, with a hint in case you meant several. A value with a tab or a
+   line break cannot be typed or pasted here (the dialog says so): write it
+   in `routing.yaml` by hand. Where the page names a cell, a value with a
+   comma, `=`, a quote or a space is quoted: `team="a, b"`.
 2. **Notify** — add who a cell can notify: an email address, or a webhook. A
    webhook URL with a token or password in it is refused; put the URL in a
    Secret in the deployment's namespace and give its name and key instead

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import fs from 'fs'
 import yaml from 'js-yaml'
 import { checkRouting, generateRouting, routingSpec } from '../routingGenerator'
 import { matchersProblems } from '../routingSchema'
@@ -112,10 +113,15 @@ describe('the generated resource', () => {
     expect(route.routes).toEqual(routingSpec(table()).route.routes)
   })
 
-  it('without matchers, or with none listed, is what it was', () => {
-    const before = generateRouting(table()).text
-    expect(before).not.toContain('matchers:\n      - name: region')
-    expect(generateRouting(table([])).text).toBe(before)
+  // The resource from before matchers were read: written by the generator
+  // at 975081492 (the commit this work started from), checked in.
+  it('without matchers is what it was before they were read', () => {
+    const before = fs.readFileSync(new URL('../../../tests/fixtures/routing/no-matchers/alertmanagerconfig.yaml', import.meta.url), 'utf-8')
+    expect(generateRouting(table()).text).toBe(before)
+  })
+
+  it('with none listed is the same as without', () => {
+    expect(generateRouting(table([])).text).toBe(generateRouting(table()).text)
     expect(routingSpec(table()).route).toEqual({ receiver: '_drop', continue: true, routes: routingSpec(table()).route.routes })
   })
 

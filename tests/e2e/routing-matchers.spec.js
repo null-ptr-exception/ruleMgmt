@@ -139,6 +139,22 @@ test('conditions are added, checked as the save checks them, saved, shown again 
   expect(await saved(request)).not.toHaveProperty('matchers')
 })
 
+test('a regex problem shows the value as typed, not the ) Alertmanager wraps it in', async ({ page, request }) => {
+  await request.put(routingUrl(FOLDER), { data: { routing: TABLE } })
+  await openRouting(page)
+  const section = page.getByTestId('routing-matchers')
+  await page.getByRole('button', { name: 'Add condition' }).click()
+  await page.getByLabel('Condition 1 label name').fill('region')
+  await page.getByLabel('Condition 1 match type').selectOption('=~')
+  // amtool 0.28.1 says `\x4)`: Go reads the wrapping's ) as a hex digit.
+  await page.getByLabel('Condition 1 value').fill('\\x4')
+  await expect(section).toContainText('error parsing regexp: invalid escape sequence: `\\x4`')
+  await expect(section).not.toContainText('`\\x4)`')
+  // A ) the user typed is shown.
+  await page.getByLabel('Condition 1 value').fill('x\\x4)')
+  await expect(section).toContainText('error parsing regexp: invalid escape sequence: `\\x4)`')
+})
+
 test('the same name and match type twice marks both of the second row, not its value', async ({ page, request }) => {
   await request.put(routingUrl(FOLDER), { data: { routing: { matchers: [{ name: 'region', matchType: '=', value: 'eu' }], ...TABLE } } })
   await openRouting(page)

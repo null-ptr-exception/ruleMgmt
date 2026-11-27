@@ -4,7 +4,7 @@ import yaml from 'js-yaml'
 import {
   emptyRouting, parseRouting, combinations, cellAt, setCellConfigs, fillConfig, setCellTiming, cellTiming,
   setDefaultTiming, setLabels, configUsage, putConfig, removeConfig, gridOf, gridMatch, toSave,
-  sameConfig,
+  sameConfig, describeMatch, cellTestId,
 } from '../routingModel.js'
 import { checkRouting } from '../routingGenerator.js'
 
@@ -225,4 +225,34 @@ describe('sameConfig', () => {
     [{ shared: true }, { shared: true }, true],
     [{ a: 1 }, null, false],
   ])('%j and %j: %s', (a, b, out) => expect(sameConfig(a, b)).toBe(out))
+})
+
+// A label value may hold a comma, `=`, a quote or a space (#222): said to a
+// person, such a value is quoted, so where one label ends stays clear.
+describe('describeMatch', () => {
+  it.each([
+    [{ severity: 'critical', team: 'db' }, 'severity=critical, team=db'],
+    [{ severity: 'critical', team: 'a, severity=warning' }, 'severity=critical, team="a, severity=warning"'],
+    [{ team: 'a,b' }, 'team="a,b"'],
+    [{ team: 'x=y' }, 'team="x=y"'],
+    [{ team: 'db team' }, 'team="db team"'],
+    [{ team: 'say "hi" \\ 資料庫' }, 'team="say \\"hi\\" \\\\ 資料庫"'],
+    [{ team: 'a\tb' }, 'team="a\tb"'],
+    [{ team: 'a\\b' }, 'team=a\\b'],
+    [{ team: '資料庫' }, 'team=資料庫'],
+    [{}, ''],
+  ])('%j says %s', (match, out) => expect(describeMatch(match)).toBe(out))
+  it('takes another separator', () => {
+    expect(describeMatch({ severity: 'critical', team: 'a · b' }, ' · ')).toBe('severity=critical · team="a · b"')
+  })
+})
+
+// A cell's test id tells every combination apart: `x-y` + `z` is not `x` + `y-z`.
+describe('cellTestId', () => {
+  it('keeps plain values as they were', () => {
+    expect(cellTestId({ severity: 'critical', team: 'db' })).toBe('cell-critical-db')
+  })
+  it('gives two combinations that join the same different ids', () => {
+    expect(cellTestId({ a: 'x-y', b: 'z' })).not.toBe(cellTestId({ a: 'x', b: 'y-z' }))
+  })
 })

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { Modal, Radio, Typography } from 'antd'
-import { TIMING_KEYS } from '../utils/routingModel'
+import { TIMING_KEYS, describeMatch } from '../utils/routingModel'
 
 const { Text } = Typography
 
-const say = match => Object.entries(match).map(([k, v]) => `${k}=${v}`).join(' · ')
+const say = match => describeMatch(match, ' · ')
 
 function content(cell) {
   if (!cell) return <Text type="secondary">nobody (empty: its alerts are dropped)</Text>

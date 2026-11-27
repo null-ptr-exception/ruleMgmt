@@ -31,6 +31,19 @@ const valuesOf = values => (Array.isArray(values) ? values : [])
 
 export const emptyRouting = () => ({ labels: {}, configs: {}, cells: [] })
 
+// A label value may hold a comma, `=`, a quote or a space (#222). Said to a
+// person, such a value is quoted (`team="a, b"`, `"` and `\` escaped), so
+// where one label ends stays clear; a plain value is shown as it is.
+const sayValue = v => (/[,="\s]/.test(String(v)) ? `"${String(v).replace(/["\\]/g, '\\$&')}"` : String(v))
+
+/** A match as said to a person: `severity=critical, team="db team"`. */
+export const describeMatch = (match, separator = ', ') =>
+  Object.entries(match).map(([k, v]) => `${k}=${sayValue(v)}`).join(separator)
+
+/** A cell's test id: each value encoded, `-` too, so no two combinations share one. */
+export const cellTestId = match =>
+  `cell-${Object.values(match).map(v => encodeURIComponent(v).replace(/-/g, '%2D')).join('-')}`
+
 /**
  * routing.yaml's text as a routing. Missing parts are filled in empty;
  * anything else is kept as written, so the server's checks still see it.

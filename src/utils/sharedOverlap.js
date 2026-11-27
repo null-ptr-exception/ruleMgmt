@@ -54,8 +54,13 @@ function constraintOf(m) {
   return m.matchType === '=~' ? { only: values } : { not: values }
 }
 
+// A table's matchers as [name, constraint], read once for all its cells.
+const constraintsOf = matchers => matchers.map(m => [m.name, constraintOf(m)])
+
 /**
  * Whether two cells, each with its table's matchers, can take one alert.
+ * A cell is { match, constraints }: its table's matchers, constraintsOf.
+
  * For each label, what either side fixes — a cell's value, or a matcher
  * whose values can be read from its text — is put together: no value left
  * that all allow means they never meet. Anything else (a regex such as
@@ -72,7 +77,7 @@ export function cellsMeet(a, b) {
   }
   for (const cell of [a, b]) {
     for (const [name, value] of Object.entries(cell.match)) add(name, { only: new Set([String(value)]) })
-    for (const m of cell.matchers) add(m.name, constraintOf(m))
+    for (const [name, c] of cell.constraints) add(name, c)
   }
   for (const constraints of byLabel.values()) {
     const only = constraints.filter(c => c.only).map(c => c.only)
@@ -86,19 +91,19 @@ export function cellsMeet(a, b) {
 }
 
 /**
- * A routing's cells that pick a shared config: [{ config, match, matchers }]. Only a
+ * A routing's cells that pick a shared config: [{ config, match, constraints }]. Only a
  * routing the save takes is read (checkRouting): a cell that leaves a label
  * out, or holds a list or null for one, would match more than it says.
  */
 function sharedCells(routing) {
   const labelNames = Object.keys(routing.labels)
-  const matchers = Array.isArray(routing.matchers) ? routing.matchers : []
+  const constraints = constraintsOf(Array.isArray(routing.matchers) ? routing.matchers : [])
   const out = []
   for (const cell of routing.cells || []) {
     if (!Object.values(cell.match).every(isValue)) continue
     const match = Object.fromEntries(labelNames.map(name => [name, String(cell.match[name])]))
     for (const config of new Set(cell.configs)) {
-      if (Object.hasOwn(routing.configs, config) && isSharedRef(routing.configs[config])) out.push({ config, match, matchers })
+      if (Object.hasOwn(routing.configs, config) && isSharedRef(routing.configs[config])) out.push({ config, match, constraints })
     }
   }
   return out
@@ -133,9 +138,9 @@ export function sharedCellOverlaps(users, shared = null) {
   for (const { deployment, routing, syncedFrom } of users || []) {
     if (syncedFrom) { synced++; continue }
     if (!isMap(routing) || checkRouting(routing, { shared }).length) { unchecked.push(deployment); continue }
-    for (const { config, match, matchers } of sharedCells(routing)) {
+    for (const { config, match, constraints } of sharedCells(routing)) {
       if (!byConfig.has(config)) byConfig.set(config, [])
-      byConfig.get(config).push({ deployment, match, matchers })
+      byConfig.get(config).push({ deployment, match, constraints })
     }
   }
   const overlaps = []

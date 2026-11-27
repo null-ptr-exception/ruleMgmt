@@ -58,7 +58,7 @@ export const SELECTOR_PATTERN = `^[^${EDGE_SPACE}${CONTROL}\`]([^\`${CONTROL}]*[
 const SELECTOR_RE = new RegExp(SELECTOR_PATTERN)
 // Not String#isWellFormed, nor a lookbehind: the build targets browsers that
 // predate both. Take out the valid pairs; any surrogate left is a lone one.
-const hasLoneSurrogate = v => /[\uD800-\uDFFF]/.test(v.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''))
+export const hasLoneSurrogate = v => /[\uD800-\uDFFF]/.test(v.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''))
 
 /** Why a selector cell cannot be used, or null. Agrees with SELECTOR_PATTERN. */
 export function selectorCellProblem(v) {

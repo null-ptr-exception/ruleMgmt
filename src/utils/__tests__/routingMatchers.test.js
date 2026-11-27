@@ -114,12 +114,10 @@ describe('the generated resource', () => {
   })
 
   // The resource from before matchers were read: written by the generator
-  // at 975081492 (the commit this work started from), checked in. Both sides
-  // are read with LF, as a CRLF checkout writes the file with CRLF.
+  // at 975081492 (the commit this work started from), checked in.
   it('without matchers is what it was before they were read', () => {
-    const lf = text => text.replace(/\r\n/g, '\n')
     const before = fs.readFileSync(new URL('../../../tests/fixtures/routing/no-matchers/alertmanagerconfig.yaml', import.meta.url), 'utf-8')
-    expect(lf(generateRouting(table()).text)).toBe(lf(before))
+    expect(generateRouting(table()).text).toBe(before)
   })
 
   it('with none listed is the same as without', () => {
